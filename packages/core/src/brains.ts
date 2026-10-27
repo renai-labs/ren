@@ -39,6 +39,7 @@ import {
   Layer,
   Option,
   Redacted,
+  Ref,
   Schedule,
   Schema,
   Struct,
@@ -50,13 +51,13 @@ import { AppResolve } from "./app/resolve.js"
 import { BrainClient } from "./brain-client.js"
 import { CredentialEnv } from "./credential-env.js"
 import { BrainHost } from "./brain-host.js"
+import { ChannelInstallQueries } from "./channel-install/queries.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Credentials } from "./credentials.js"
 import { Environments } from "./environments.js"
 import { Models } from "./models.js"
-import { Primitive } from "./primitive.js"
 import { Settings } from "./settings.js"
-import { SpacePolicy } from "./space/policy.js"
+import { SessionPolicy } from "./session/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 
 export {
@@ -76,6 +77,7 @@ export interface Placement {
 
 export interface Interface {
   readonly start: (input: Session.StartInput, placement: Placement) => Effect.Effect<void, BrainRejectedError>
+  readonly onStartRejected: (listener: (sessionId: Session.ID) => Effect.Effect<void>) => Effect.Effect<void>
   readonly send: (
     input: Session.SendInput,
   ) => Effect.Effect<Session.Accepted, BrainHost.BrainUnavailable | BrainRejectedError | SessionNotStartedError>
@@ -170,8 +172,6 @@ export const StartRun = DurableRunner.make("StartRun", {
     `start:${payload.input.sessionId}:${payload.input.initialMessage?.messageId ?? ""}:${payload.epoch}`,
 })
 
-const spaceGet = Primitive.action(Space.definition, "get")
-
 const failedAsUnavailable = (cause: BrainHost.BrainFailed) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))
 
 export const layer = Layer.effect(
@@ -191,6 +191,7 @@ export const layer = Layer.effect(
     const brainHost = yield* BrainHost.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const prepared = new Map<Brain.ID, number>()
+    const rejectedListeners = yield* Ref.make<ReadonlyArray<(sessionId: Session.ID) => Effect.Effect<void>>>([])
 
     const brainRow = Effect.fnUntraced(function* (brainId: Brain.ID) {
       const row = (yield* database.db
@@ -251,6 +252,7 @@ export const layer = Layer.effect(
         generation,
         url: hand.url,
         workspace: hand.workspace,
+        egress: hand.egress,
       }))
     })
 
@@ -274,7 +276,7 @@ export const layer = Layer.effect(
                 eq(Database.Schema.space.id, placement.spaceId),
                 eq(Database.Schema.space.organization_id, placement.organizationId),
                 isNull(Database.Schema.space.archived_at),
-                SpacePolicy.filter(access.plan(actor, spaceGet)),
+                Access.where(access.plan(actor, SessionPolicy.actions.get), SpaceQueries.where),
               ),
             )
           return visible.length > 0
@@ -346,7 +348,19 @@ export const layer = Layer.effect(
             ),
           ),
           Effect.catchTag("BrainRejectedError", (error) =>
-            Effect.logError(`The brain rejected the start of ${payload.input.sessionId}: ${error.message}`),
+            Effect.logError(`The brain rejected the start of ${payload.input.sessionId}: ${error.message}`).pipe(
+              Effect.andThen(Ref.get(rejectedListeners)),
+              Effect.flatMap((listeners) =>
+                Effect.forEach(
+                  listeners,
+                  (listener) =>
+                    listener(payload.input.sessionId).pipe(
+                      Effect.catchCause((cause) => Effect.logError("A start rejection could not be reported", cause)),
+                    ),
+                  { discard: true },
+                ),
+              ),
+            ),
           ),
           Effect.catchTag("BrainUnavailable", (error) =>
             Effect.logWarning(`The brain of ${payload.input.sessionId} is unavailable; the start retries`).pipe(
@@ -364,6 +378,11 @@ export const layer = Layer.effect(
         yield* DurableRunner.ensure(StartRun, { input, placement, epoch: row.runEpoch }).pipe(
           Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
         )
+      }),
+      onStartRejected: Effect.fn("Brains.onStartRejected")(function* (
+        listener: (sessionId: Session.ID) => Effect.Effect<void>,
+      ) {
+        yield* Ref.update(rejectedListeners, (listeners) => [...listeners, listener])
       }),
       send: Effect.fn("Brains.send")(function* (input: Session.SendInput) {
         yield* validatePrompt(input.prompt)
@@ -491,16 +510,18 @@ export const layer = Layer.effect(
                 .where(inArray(Database.Schema.agent_session.id, [...roots]))
                 .pipe(Effect.orDie)
         const inference = yield* models.inference
+        const channels = yield* database
+          .transaction((transaction) => ChannelInstallQueries.servers(transaction, host.organizationId, host.spaceId))
+          .pipe(Effect.orDie)
         return {
           publicKeys: client.publicKeys,
           ...Option.match(inference, { onNone: () => ({}), onSome: (found) => ({ inference: found }) }),
           ...Option.match(apps, { onNone: () => ({}), onSome: (catalog) => ({ apps: catalog }) }),
+          channels,
           layers: pulled.layers,
           chats: pulled.chats,
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
-          env: {
-            variables: yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation }),
-          },
+          env: yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation }),
         } satisfies PullReply
       }),
       refreshModels: Effect.fn("Brains.refreshModels")(function* (host: CurrentHost["Service"]) {

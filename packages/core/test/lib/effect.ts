@@ -22,15 +22,40 @@ const refuseNetwork = (violations: string[]): typeof fetch =>
     { preconnect: fetch.preconnect },
   )
 
-const run = <A, E, R, E2>(value: Body<A, E, R | Scope.Scope>, layer: Layer.Layer<R, E2>) =>
+const run = <A, E, R, E2>(name: string, value: Body<A, E, R | Scope.Scope>, layer: Layer.Layer<R, E2>) =>
   Effect.gen(function* () {
+    const started = performance.now()
+    let entered: number | undefined
+    let finished: number | undefined
     const violations: string[] = []
-    const exit = yield* body(value).pipe(
+    const exit = yield* Effect.suspend(() => {
+      entered = performance.now()
+      return body(value).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            finished = performance.now()
+          }),
+        ),
+      )
+    }).pipe(
       Effect.scoped,
       Effect.provide(layer),
       Effect.provideService(FetchHttpClient.Fetch, refuseNetwork(violations)),
       Effect.exit,
     )
+    if (process.env.REN_TEST_PROFILE) {
+      const ended = performance.now()
+      process.stderr.write(
+        `${JSON.stringify({
+          harness: "effect",
+          name,
+          setupMs: Math.round((entered ?? ended) - started),
+          bodyMs: entered === undefined ? 0 : Math.round((finished ?? ended) - entered),
+          cleanupMs: finished === undefined ? 0 : Math.round(ended - finished),
+          totalMs: Math.round(ended - started),
+        })}\n`,
+      )
+    }
     if (Exit.isFailure(exit)) {
       for (const err of Cause.prettyErrors(exit.cause)) {
         yield* Effect.logError(err)
@@ -42,22 +67,22 @@ const run = <A, E, R, E2>(value: Body<A, E, R | Scope.Scope>, layer: Layer.Layer
 
 const make = <R, E>(testLayer: Layer.Layer<R, E>, liveLayer: Layer.Layer<R, E>) => {
   const effect = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
-    test(name, () => run(value, testLayer), opts)
+    test(name, () => run(name, value, testLayer), opts)
 
   effect.only = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
-    test.only(name, () => run(value, testLayer), opts)
+    test.only(name, () => run(name, value, testLayer), opts)
 
   effect.todo = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
-    test.todo(name, () => run(value, testLayer), opts)
+    test.todo(name, () => run(name, value, testLayer), opts)
 
   const live = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
-    test(name, () => run(value, liveLayer), opts)
+    test(name, () => run(name, value, liveLayer), opts)
 
   live.only = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
-    test.only(name, () => run(value, liveLayer), opts)
+    test.only(name, () => run(name, value, liveLayer), opts)
 
   live.todo = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
-    test.todo(name, () => run(value, liveLayer), opts)
+    test.todo(name, () => run(name, value, liveLayer), opts)
 
   return { effect, live }
 }

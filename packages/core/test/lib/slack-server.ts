@@ -1,0 +1,188 @@
+export * as SlackServer from "./slack-server.js"
+
+import { createHmac } from "node:crypto"
+
+const signingSecret = "slack-signing"
+
+export const config = (url: string, overrides: Record<string, string> = {}) => ({
+  SLACK_CLIENT_ID: "slack-client",
+  SLACK_CLIENT_SECRET: "slack-secret",
+  SLACK_SIGNING_SECRET: signingSecret,
+  SLACK_API_URL: `${url}/api`,
+  SLACK_URL: url,
+  REN_URL: "https://api.ren.test",
+  ...overrides,
+})
+
+export const sign = (body: string, timestamp: number) => ({
+  "x-slack-request-timestamp": String(timestamp),
+  "x-slack-signature": `v0=${createHmac("sha256", signingSecret).update(`v0:${timestamp}:${body}`).digest("hex")}`,
+})
+
+export interface Grant {
+  readonly team: string
+  readonly teamName: string
+  readonly user: string
+  readonly token: string
+}
+
+interface User {
+  readonly name: string
+  readonly real_name: string
+  readonly email?: string
+}
+
+interface Reply {
+  readonly ts: string
+  readonly user: string
+  readonly text: string
+  readonly bot_id?: string
+}
+
+interface Channel {
+  readonly id: string
+  readonly name: string
+  readonly is_private: boolean
+}
+
+export interface Instance {
+  readonly url: string
+  readonly grants: Map<string, Grant>
+  readonly revoked: Array<string>
+  readonly channels: Array<Channel>
+  readonly uploads: Map<string, string>
+  readonly replies: Array<Reply>
+  readonly users: Map<string, User>
+  readonly files: Map<string, string>
+  readonly posted: Array<{ readonly method: string; readonly token: string; readonly params: Params }>
+  readonly options: { pageSize: number; revokeError: string | undefined; postError: string | undefined }
+  readonly stop: () => void
+}
+
+type State = Omit<Instance, "url" | "stop">
+
+type Params = Partial<Record<string, string>>
+
+const answer = (body: object) => Response.json({ ok: true, ...body })
+
+const refuse = (error: string) => Response.json({ ok: false, error })
+
+const tokenOf = (request: Request) => request.headers.get("authorization")?.replace(/^Bearer /u, "") ?? ""
+
+const known = (state: State, token: string) => [...state.grants.values()].some((grant) => grant.token === token)
+
+const exchange = (state: State, params: Params) => {
+  const grant = state.grants.get(params.code ?? "")
+  if (!grant || params.client_secret !== "slack-secret") return refuse("invalid_code")
+  return answer({
+    access_token: grant.token,
+    token_type: "bot",
+    scope: "chat:write",
+    bot_user_id: "UBOT",
+    team: { id: grant.team, name: grant.teamName },
+    authed_user: { id: grant.user },
+  })
+}
+
+const conversations = (state: State, params: Params) => {
+  const start = Number(params.cursor ?? "0")
+  const next = start + state.options.pageSize
+  return answer({
+    channels: state.channels.slice(start, next),
+    response_metadata: { next_cursor: next < state.channels.length ? String(next) : "" },
+  })
+}
+
+const replies = (state: State, params: Params) => {
+  const start = Number(params.cursor ?? "0")
+  const next = start + Number(params.limit ?? "50")
+  const messages = state.replies.filter((reply) => !params.latest || Number(reply.ts) < Number(params.latest))
+  return answer({
+    messages: messages.slice(start, next),
+    response_metadata: { next_cursor: next < messages.length ? String(next) : "" },
+  })
+}
+
+const lookup = (state: State, name: string, params: Params, origin: string) => {
+  if (name === "users.info") {
+    const found = state.users.get(params.user ?? "")
+    return found
+      ? answer({
+          user: {
+            id: params.user,
+            name: found.name,
+            real_name: found.real_name,
+            profile: { real_name: found.real_name, ...(found.email && { email: found.email }) },
+          },
+        })
+      : refuse("user_not_found")
+  }
+  return name === "chat.getPermalink"
+    ? answer({ permalink: `${origin}/archives/${params.channel}/p${(params.message_ts ?? "").replace(".", "")}` })
+    : undefined
+}
+
+const method = (state: State, name: string, token: string, params: Params, origin: string) => {
+  if (name === "oauth.v2.access") return exchange(state, params)
+  if (!known(state, token)) return refuse("invalid_auth")
+  const looked = lookup(state, name, params, origin)
+  if (looked) return looked
+  switch (name) {
+    case "auth.revoke":
+      if (state.options.revokeError) return refuse(state.options.revokeError)
+      state.revoked.push(token)
+      return answer({ revoked: true })
+    case "files.getUploadURLExternal":
+      return answer({
+        upload_url: `${origin}/upload/F${state.uploads.size + 1}`,
+        file_id: `F${state.uploads.size + 1}`,
+      })
+    case "conversations.replies":
+      return replies(state, params)
+    case "conversations.list":
+      return conversations(state, params)
+    case "conversations.info": {
+      const found = state.channels.find((channel) => channel.id === params.channel)
+      return found ? answer({ channel: found }) : refuse("channel_not_found")
+    }
+    default:
+      state.posted.push({ method: name, token, params })
+      return state.options.postError ? refuse(state.options.postError) : answer({ ts: `${state.posted.length}.0` })
+  }
+}
+
+export const start = (): Instance => {
+  const state: State = {
+    grants: new Map(),
+    revoked: [],
+    channels: [],
+    uploads: new Map(),
+    replies: [],
+    users: new Map(),
+    files: new Map(),
+    posted: [],
+    options: { pageSize: 200, revokeError: undefined, postError: undefined },
+  }
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: async (request) => {
+      const url = new URL(request.url)
+      const uploaded = /^\/upload\/(F\d+)$/u.exec(url.pathname)?.[1]
+      if (uploaded) {
+        state.uploads.set(uploaded, await request.text())
+        return new Response(null, { status: 200 })
+      }
+      const file = /^\/files\/(F\d+)$/u.exec(url.pathname)?.[1]
+      if (file && request.method === "GET")
+        return known(state, tokenOf(request)) && state.files.has(file)
+          ? new Response(state.files.get(file))
+          : new Response(null, { status: 403 })
+      const name = /^\/api\/([\w.]+)$/u.exec(url.pathname)?.[1]
+      if (request.method !== "POST" || !name) return new Response(null, { status: 404 })
+      const params = Object.fromEntries(new URLSearchParams(await request.text()))
+      return method(state, name, tokenOf(request), params, url.origin)
+    },
+  })
+  return { ...state, url: server.url.origin, stop: () => void server.stop(true) }
+}

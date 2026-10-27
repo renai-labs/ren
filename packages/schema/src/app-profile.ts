@@ -27,6 +27,13 @@ export const Kind = Schema.Literals(["shared", "private"]).annotate({
 })
 export type Kind = typeof Kind.Type
 
+export const SpaceShape = Schema.Literals(["shared", "joined", "ownPrivate", "otherPrivate"]).annotate({
+  identifier: "AppProfile.SpaceShape",
+  description:
+    "A space as a list write sees it: a shared space the caller is not in, one they are in, their own private space, or another person’s.",
+})
+export type SpaceShape = typeof SpaceShape.Type
+
 export const ItemStatus = Schema.Literals(["ok", "missing", "reconnect", "unavailable"]).annotate({
   identifier: "AppProfile.ItemStatus",
 })
@@ -90,6 +97,10 @@ export const Info = Schema.Struct({
   }),
   canShareEverySpace: Schema.Boolean.annotate({
     description: "True when the caller may share the profile with every space.",
+  }),
+  canAdd: Schema.Array(SpaceShape).annotate({ description: "The kinds of space the caller may add to the list." }),
+  canRemove: Schema.Array(SpaceShape).annotate({
+    description: "The kinds of space the caller may remove from the list.",
   }),
   links: Schema.Array(Link),
   items: Schema.Array(Item),

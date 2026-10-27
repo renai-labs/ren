@@ -1,7 +1,6 @@
 import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
 import { Effect, Layer } from "effect"
-import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { SkillCache } from "../src/skill/cache.js"
 import { SkillSource } from "../src/skill/source.js"
@@ -12,13 +11,14 @@ const it = testEffect(Layer.empty)
 const skill = (body: string) => `---\ndescription: Fill PDF forms\n---\n${body}\n`
 
 const cacheOf = (github: TestGitHub.Instance) =>
-  SkillSource.make(github.hosts).pipe(
-    Effect.provide(FetchHttpClient.layer),
-    Effect.flatMap((source) => SkillCache.make(source, { refresh: "5 minutes" })),
+  TestGitHub.hostsOf(github).pipe(
+    Effect.flatMap((hosts) => SkillCache.make(SkillSource.make(hosts), { refresh: "5 minutes" })),
   )
 
+const read = (resolved: SkillSource.Resolved) => ({ commit: resolved.lookup.commit, document: resolved.document })
+
 const refReads = (github: TestGitHub.Instance) =>
-  Effect.map(github.requests, (requests) => requests.filter((request) => request.includes("info/refs")).length)
+  Effect.map(github.requests, (requests) => requests.filter((request) => request.includes("git-upload-pack")).length)
 
 it.effect("reads a floating source again only after the refresh interval, and a pinned commit never", () =>
   Effect.gen(function* () {
@@ -27,14 +27,15 @@ it.effect("reads a floating source again only after the refresh interval, and a 
     const cache = yield* cacheOf(github)
     const floating = { url: github.url, path: "." }
     const pinned = { url: github.url, ref: first, path: "." }
-    expect((yield* cache.resolve(floating)).commit).toBe(first)
-    expect((yield* cache.resolve(pinned)).commit).toBe(first)
+    expect((yield* cache.resolve(floating)).lookup.commit).toBe(first)
+    expect((yield* cache.resolve(pinned)).lookup.commit).toBe(first)
     const second = yield* github.commit({ "SKILL.md": skill("second") })
-    expect((yield* cache.resolve(floating)).commit).toBe(first)
-    expect(yield* refReads(github)).toBe(1)
+    expect((yield* cache.resolve(floating)).lookup.commit).toBe(first)
+    expect(yield* refReads(github)).toBe(2)
     yield* TestClock.adjust("5 minutes")
-    expect(yield* cache.resolve(floating)).toEqual({ commit: second, document: skill("second") })
-    expect(yield* cache.resolve(pinned)).toEqual({ commit: first, document: skill("first") })
+    expect(read(yield* cache.resolve(floating))).toEqual({ commit: second, document: skill("second") })
+    expect(read(yield* cache.resolve(pinned))).toEqual({ commit: first, document: skill("first") })
+    expect(yield* refReads(github)).toBe(3)
     expect((yield* github.requests).filter((request) => request.startsWith(`/raw/acme/skills/${first}`)).length).toBe(2)
   }),
 )
@@ -48,7 +49,7 @@ it.effect("keeps the last good read when a later read fails, and a first read th
     yield* cache.resolve(floating)
     yield* github.fail(true)
     yield* TestClock.adjust("5 minutes")
-    expect((yield* cache.resolve(floating)).commit).toBe(first)
+    expect((yield* cache.resolve(floating)).lookup.commit).toBe(first)
     expect((yield* cache.resolve({ url: github.url, ref: "main", path: "." }).pipe(Effect.flip)).message).toBe(
       `GitHub answered 503 for ${github.url}`,
     )
@@ -59,7 +60,7 @@ it.effect("keeps the last good read when a later read fails, and a first read th
     )
     expect(yield* refReads(github)).toBe(before)
     yield* TestClock.adjust("5 minutes")
-    expect((yield* cache.resolve({ url: github.url, ref: "main", path: "." })).commit).toBe(first)
+    expect((yield* cache.resolve({ url: github.url, ref: "main", path: "." })).lookup.commit).toBe(first)
   }),
 )
 
@@ -72,6 +73,6 @@ it.effect("reads a source once for callers that ask at the same time", () =>
       Array.from({ length: 5 }, () => cache.resolve({ url: github.url, path: "." })),
       { concurrency: "unbounded" },
     )
-    expect([new Set(reads.map((read) => read.commit)).size, yield* refReads(github)]).toEqual([1, 1])
+    expect([new Set(reads.map((each) => each.lookup.commit)).size, yield* refReads(github)]).toEqual([1, 1])
   }),
 )

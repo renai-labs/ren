@@ -1,20 +1,27 @@
 export * as EnvironmentTemplatePolicy from "./policy.js"
 
-import { Auth } from "@ren/schema/auth"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
-import { Policy } from "@ren/schema/policy"
+import type { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
+import { SpacePolicy } from "../space/policy.js"
 
-const readActions = Primitive.actions(EnvironmentTemplate.definition, ["list", "get"])
-
-const writeActions = Primitive.actions(EnvironmentTemplate.definition, ["create", "update", "archive"])
-
+// oxlint-disable-next-line ren/no-comments -- access §11: admins write environment templates.
 export const documents = [
   {
-    primitive: EnvironmentTemplate.definition.name,
-    statements: [
-      { actions: readActions, roles: Auth.Role.literals, on: Policy.everywhere },
-      { actions: writeActions, roles: Auth.administratorRoles, on: Policy.everywhere },
+    resource: EnvironmentTemplate.definition.name,
+    rules: [
+      {
+        actions: Primitive.actions(EnvironmentTemplate.definition, ["list", "get"]),
+        effect: "allow",
+        roles: SpacePolicy.organizationRoles,
+        when: [],
+      },
+      {
+        actions: Primitive.actions(EnvironmentTemplate.definition, ["create", "update", "archive"]),
+        effect: "allow",
+        roles: SpacePolicy.administratorRoles,
+        when: [],
+      },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>

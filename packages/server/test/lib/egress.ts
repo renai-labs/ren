@@ -53,7 +53,7 @@ export interface Instance {
   readonly stop: () => Promise<void>
 }
 
-const waitForPort = async (
+export const waitForPort = async (
   port: number,
   process: Bun.Subprocess,
   logs: () => string,

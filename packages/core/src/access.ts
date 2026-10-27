@@ -2,29 +2,32 @@ export * as Access from "./access.js"
 
 import type { Auth } from "@ren/schema/auth"
 import { Policy } from "@ren/schema/policy"
-import type { Space } from "@ren/schema/space"
+import { and, not, or, type SQL, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import type { Actor } from "./actor.js"
 import { AgentPolicy } from "./agent/policy.js"
+import { ChannelInstallPolicy } from "./channel-install/policy.js"
+import { ChannelMappingPolicy } from "./channel-mapping/policy.js"
 import { CredentialPolicy } from "./credential/policy.js"
 import { OAuthAppPolicy } from "./oauth-app/policy.js"
 import { AppPolicy } from "./app/policy.js"
 import { AppProfilePolicy } from "./app/profile-policy.js"
 import { EnvironmentTemplatePolicy } from "./environment-templates/policy.js"
 import { RenInferencePolicy } from "./ren-inference/policy.js"
+import { SchedulePolicy } from "./schedule/policy.js"
 import { SessionPolicy } from "./session/policy.js"
 import { SettingsPolicy } from "./settings/policy.js"
 import { SpacePolicy } from "./space/policy.js"
 import { TaskPolicy } from "./task/policy.js"
 
+// oxlint-disable-next-line ren/no-comments -- access §2: services pass facts; only policy documents decide.
 export interface Resource {
-  readonly relationships: ReadonlyArray<string>
-  readonly spaceId?: Space.ID
-  // oxlint-disable-next-line ren/no-comments -- The owning organization; null for Ren's own records. A statement on all reaches only the actor's.
+  readonly facts: ReadonlyArray<string>
+  // oxlint-disable-next-line ren/no-comments -- Null for Ren's own records; a rule with no facts reaches only the actor's org.
   readonly organizationId?: Auth.OrganizationID | null
 }
 
-export const organization: Resource = { relationships: [] }
+export const organization: Resource = { facts: [] }
 
 export interface Request {
   readonly actor: Actor.Info
@@ -32,10 +35,10 @@ export interface Request {
   readonly resource: Resource
 }
 
+// oxlint-disable-next-line ren/no-comments -- The rules for an actor and an action; `where` turns them into SQL.
 export interface Plan {
-  readonly isAllowedEverywhere: boolean
-  readonly allowedWhere: ReadonlyArray<string>
-  readonly spaceId?: Space.ID
+  readonly allow: ReadonlyArray<ReadonlyArray<string>>
+  readonly deny: ReadonlyArray<ReadonlyArray<string>>
 }
 
 export interface Interface {
@@ -45,50 +48,60 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Access") {}
 
+const holds = (when: ReadonlyArray<string>, facts: ReadonlyArray<string>) => when.every((fact) => facts.includes(fact))
+
 export const make = (documents: ReadonlyArray<Policy.Document>): Interface => {
-  const statements = documents.flatMap((document) => document.statements)
+  const rules = documents.flatMap((document) => document.rules)
   const plan = (actor: Actor.Info, action: string): Plan => {
-    const applicableStatements = statements.filter(
-      (statement) =>
-        statement.actions.includes(action) &&
-        statement.roles.some((role) => actor.roles.includes(role)) &&
-        (!actor.agent || statement.agents),
+    const applicable = rules.filter(
+      (rule) => rule.actions.includes(action) && rule.roles.some((role) => actor.roles.includes(role)),
     )
     return {
-      isAllowedEverywhere: applicableStatements.some((statement) => statement.on === Policy.everywhere),
-      allowedWhere: applicableStatements.map((statement) => statement.on).filter((on) => on !== Policy.everywhere),
-      ...(actor.agent && { spaceId: actor.agent.spaceId }),
+      allow: applicable.filter((rule) => rule.effect === "allow").map((rule) => rule.when),
+      deny: applicable.filter((rule) => rule.effect === "deny").map((rule) => rule.when),
     }
   }
   return {
     plan,
     isAllowed: (request) => {
-      const allowed = plan(request.actor, request.action)
-      if (allowed.spaceId && request.resource.spaceId && allowed.spaceId !== request.resource.spaceId) return false
+      const found = plan(request.actor, request.action)
       const isOwn =
         // ast-grep-ignore: no-nullish-comparison, -- null means Ren's own record.
         request.resource.organizationId === undefined ||
         request.resource.organizationId === request.actor.organizationId
       return (
-        (allowed.isAllowedEverywhere && isOwn) ||
-        allowed.allowedWhere.some((relationship) => request.resource.relationships.includes(relationship))
+        found.allow.some((when) => holds(when, request.resource.facts) && (when.length > 0 || isOwn)) &&
+        !found.deny.some((when) => holds(when, request.resource.facts))
       )
     },
   }
 }
 
+// oxlint-disable-next-line ren/no-comments -- A fact with no SQL denies.
+export const where = (plan: Plan, facts: ReadonlyMap<string, SQL>): SQL => {
+  const all = (when: ReadonlyArray<string>, missing: SQL) =>
+    when.length === 0 ? sql`true` : (and(...when.map((fact) => facts.get(fact) ?? missing)) ?? sql`true`)
+  const allowed = or(...plan.allow.map((when) => all(when, sql`false`))) ?? sql`false`
+  return plan.deny.length === 0
+    ? allowed
+    : (and(allowed, not(or(...plan.deny.map((when) => all(when, sql`true`))) ?? sql`false`)) ?? allowed)
+}
+
 export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...SpacePolicy.documents,
+  ...SessionPolicy.documents,
   ...EnvironmentTemplatePolicy.documents,
   ...SettingsPolicy.documents,
   ...AgentPolicy.documents,
   ...AppPolicy.documents,
   ...AppProfilePolicy.documents,
   ...TaskPolicy.documents,
-  ...SessionPolicy.documents,
   ...CredentialPolicy.documents,
   ...OAuthAppPolicy.documents,
   ...RenInferencePolicy.documents,
+  ...ChannelInstallPolicy.documents,
+  ...ChannelMappingPolicy.documents,
+  ...SchedulePolicy.documents,
 ])
 
 export const layer = Layer.effect(

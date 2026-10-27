@@ -14,6 +14,7 @@ import { BASE_ERROR_CODES, betterAuth } from "better-auth"
 import type { BetterAuthPlugin } from "better-auth"
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
 import { bearer, emailOTP, jwt, organization } from "better-auth/plugins"
+import { genericOAuth } from "better-auth/plugins/generic-oauth"
 import { Effect, Option, Schema } from "effect"
 import { AuthEmail } from "./auth-email.js"
 import { DefaultOrganization } from "./default-organization.js"
@@ -25,6 +26,18 @@ export interface Input {
   readonly baseURL: string
   readonly trustedOrigins: ReadonlyArray<string>
   readonly google: { readonly clientId: string; readonly clientSecret: string }
+  readonly github?: {
+    readonly clientId: string
+    readonly clientSecret: string
+    readonly sync: (userId: string) => Promise<void>
+    readonly disconnect: (userId: string) => Promise<void>
+  }
+  readonly slack?: {
+    readonly clientId: string
+    readonly clientSecret: string
+    readonly api: string
+    readonly web: string
+  }
   readonly appURL: string
   readonly requireEmailVerification: boolean
   readonly mcpResource: string
@@ -161,6 +174,18 @@ const guardRequests = (input: Input) =>
     }
   })
 
+const LeftMember = Schema.Struct({ id: Schema.String, organizationId: Schema.String, userId: Schema.String })
+
+// oxlint-disable-next-line ren/no-comments -- access AC2: Better Auth's leave runs no hook, so Ren offboards here.
+const offboardLeaves = (input: Input) =>
+  createAuthMiddleware(async (ctx) => {
+    if (ctx.path !== "/organization/leave") return
+    const left: unknown = ctx.context.returned
+    if (!Schema.is(LeftMember)(left)) return
+    await input.provisioning.archiveMemberships(left.organizationId, left.userId)
+    await input.provisioning.forgetInferenceMember(left.organizationId, left.id)
+  })
+
 const consentOrganization = (input: Input) =>
   ({
     id: "ren-consent-organization",
@@ -189,6 +214,29 @@ const consentOrganization = (input: Input) =>
       ],
     },
   }) satisfies BetterAuthPlugin
+
+const SlackProfile = Schema.Struct({
+  "https://slack.com/team_id": Schema.String,
+  "https://slack.com/user_id": Schema.String,
+})
+
+const slackSignIn = (slack: NonNullable<Input["slack"]>) => ({
+  providerId: "slack",
+  name: "Slack",
+  authorizationUrl: `${slack.web}/openid/connect/authorize`,
+  tokenUrl: `${slack.api}/openid.connect.token`,
+  userInfoUrl: `${slack.api}/openid.connect.userInfo`,
+  clientId: slack.clientId,
+  clientSecret: slack.clientSecret,
+  scopes: ["openid", "email", "profile"],
+  accountSubject: (context: { readonly profile: unknown }) => {
+    const profile = Schema.decodeUnknownSync(SlackProfile)(context.profile)
+    return `${profile["https://slack.com/team_id"]}:${profile["https://slack.com/user_id"]}`
+  },
+})
+
+const syncGitHub = (input: Input, account: { readonly providerId: string; readonly userId: string }) =>
+  account.providerId === "github" ? input.github?.sync(account.userId) : undefined
 
 const guardAccountCreation =
   (input: Input) =>
@@ -237,7 +285,6 @@ export const make = (input: Input) => {
     baseURL: input.baseURL,
     basePath: "/auth",
     disabledPaths: [
-      "/organization/leave",
       "/email-otp/check-verification-otp",
       "/email-otp/request-password-reset",
       "/email-otp/reset-password",
@@ -270,20 +317,36 @@ export const make = (input: Input) => {
     },
     session: { expiresIn: 60 * 60 * 24 * 90 },
     emailVerification: { sendOnSignIn: true, autoSignInAfterVerification: true },
-    hooks: { before: guardRequests(input) },
+    hooks: { before: guardRequests(input), after: offboardLeaves(input) },
     socialProviders: {
       google: {
         clientId: input.google.clientId,
         clientSecret: input.google.clientSecret,
         requireEmailVerification: true,
       },
+      ...(input.github && {
+        github: { clientId: input.github.clientId, clientSecret: input.github.clientSecret },
+      }),
     },
     account: {
       accountLinking: { enabled: true, trustedProviders: ["google"] },
     },
     databaseHooks: {
       user: { create: { before: guardAccountCreation(input) } },
-      session: { create: { before: provisionOrganization(input) } },
+      session: {
+        create: {
+          before: provisionOrganization(input),
+          after: async (session) => input.github?.sync(session.userId),
+        },
+      },
+      account: {
+        create: { after: async (account) => syncGitHub(input, account) },
+        update: { after: async (account) => syncGitHub(input, account) },
+        delete: {
+          after: async (account) =>
+            account.providerId === "github" ? input.github?.disconnect(account.userId) : undefined,
+        },
+      },
     },
     plugins: [
       bearer(),
@@ -318,6 +381,7 @@ export const make = (input: Input) => {
         }),
       ),
       consentOrganization(input),
+      genericOAuth({ config: input.slack ? [slackSignIn(input.slack)] : [] }),
       indexes,
     ],
     advanced: {

@@ -281,11 +281,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
     return { answered: answered.at(0)?.count ?? 0 }
   }
 
-  test(
-    "behind the egress, the E2B brain answers with the key the egress puts in, and a settings write still reaches it by push",
-    async () => {
-      expect((await pushReaches(await behindEgress())).answered).toBeGreaterThan(0)
-    },
-    900_000,
-  )
+  test("behind the egress, the E2B brain answers with the key the egress puts in, and a settings write still reaches it by push", async () => {
+    expect((await pushReaches(await behindEgress())).answered).toBeGreaterThan(0)
+  }, 900_000)
 })

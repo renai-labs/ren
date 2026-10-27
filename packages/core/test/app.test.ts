@@ -33,6 +33,8 @@ it.live("read access follows reach, while edits and transfers keep owner checks"
     expect(
       (yield* Effect.flip(ProfilesFixture.app(consumer, target, "blocked", { dependsOn: ["private"] })))._tag,
     ).toBe("Primitive.NotFound")
+    yield* members.create(admin, { spaceId: source, userId: admin.userId })
+    yield* members.create(admin, { spaceId: target, userId: admin.userId })
     yield* ProfilesFixture.profile(admin, { appId: app.id, slug: "target", kind: "shared", spaceIds: [target] })
     expect((yield* apps.get(consumer, app.id)).id).toBe(app.id)
     const edit = { ...definition(app), name: "Changed", expectedRevision: app.revision }

@@ -8,10 +8,13 @@ import { SessionID } from "@opencode/schema/session-id"
 import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { EnvironmentSession } from "@ren/brain/environment/session"
+import { EnvironmentCopies } from "@ren/brain/environment/copies"
 import { BrainSettings } from "@ren/brain/settings"
+import { HostMcp } from "@ren/host-api/host-mcp"
 import { AppCatalog } from "@ren/schema/app-catalog"
 import { Models } from "@ren/schema/models"
+import { Channel } from "@ren/schema/channel"
+import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Session } from "@ren/schema/session"
 import {
   Clock,
@@ -35,6 +38,10 @@ import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
 import { OpenCodeMcp } from "./mcp.js"
+import type { GitSources } from "../../git-sources.js"
+import { OpenCodeCopies } from "./copies.js"
+import { OpenCodeEnvironmentTools } from "./environment-tools.js"
+import { OpenCodeReferences } from "./references.js"
 import { OpenCodeSkills } from "./skills.js"
 import type { HarnessConfig } from "../config.js"
 
@@ -53,6 +60,11 @@ const naming: AppCatalog.Naming = {
       source: `OpenCode’s built-in ${slug} tools`,
     })),
     { kind: "mcps" as const, slug: OpenCodeMcp.renServer, source: "Ren’s own tools" },
+    ...Object.keys(HostMcp.channelServers).map((slug) => ({
+      kind: "mcps" as const,
+      slug,
+      source: "Ren’s channel tools",
+    })),
   ],
 }
 
@@ -110,6 +122,50 @@ export const modelRef = (model: Session.Model) => ({
   id: Model.ID.make(model.modelId),
   ...(model.variant && { variant: Model.VariantID.make(model.variant) }),
 })
+
+const decodeOrigin = Schema.decodeUnknownOption(Schema.Struct({ channel: ChannelOrigin.Info }))
+
+const senderOf = (origin: ChannelOrigin.Info) => {
+  if (!origin.handle) return origin.sender
+  if (origin.handle === origin.sender) return `@${origin.handle}`
+  return `${origin.sender} (@${origin.handle})`
+}
+
+const replies: Partial<Record<Channel.Provider, string>> = {
+  github:
+    "Text in this chat is not posted on GitHub. Act on the issue or pull request yourself with gh: comment, review or push.",
+}
+
+const channelPosts = new Set(
+  Object.entries(HostMcp.channelServers).flatMap(([server, found]) => found.posting.map((name) => `${server}_${name}`)),
+)
+
+const channelReplies = Object.entries(HostMcp.channelServers).map(([server, found]) => `${server}_${found.reply}`)
+
+const channelHeader = (origin: ChannelOrigin.Info) =>
+  [
+    [`${Channel.titles[origin.provider]} ${origin.place}`, senderOf(origin), origin.threadUrl]
+      .filter(Predicate.isNotUndefined)
+      .join(" · "),
+    origin.context,
+    origin.trigger
+      ? `Automated run (${origin.trigger}): nobody wrote to you in this thread. Do the work, then post the result there.`
+      : undefined,
+    replies[origin.provider],
+    "---\n\n",
+  ]
+    .filter(Predicate.isNotUndefined)
+    .join("\n")
+
+const withOrigin = (message: Message) =>
+  Option.match(message.role === "user" ? decodeOrigin(message.metadata) : Option.none(), {
+    onNone: () => message,
+    onSome: (found) =>
+      Message.make({
+        ...Struct.omit(message, ["content"]),
+        content: [Message.text(channelHeader(found.channel)), ...message.content],
+      }),
+  })
 
 const withoutModel = (value: unknown) =>
   Predicate.isObject(value) ? Record.filter(value, (_, key) => key !== "model") : value
@@ -192,7 +248,7 @@ export const make = (
   ) => Effect.Effect<ReadonlyArray<{ readonly action: string; readonly resource: string }>, Harness.NotFound>,
   boundaryOf: (location: Plugin.Context["location"]) => OpenCodeExecution.Boundary,
   directoryOf: (sessionId: string) => string,
-  skillSources: OpenCodeSkills.Sources,
+  sources: GitSources.Interface,
   ren: Option.Option<OpenCodeMcp.Ren>,
   members: {
     readonly egress: boolean
@@ -208,7 +264,7 @@ export const make = (
         const provider = context.provider
         if (Option.isNone(connections))
           yield* tool.transform((editor) => {
-            for (const id of OpenCodeSkills.environmentTools) editor.remove(id)
+            for (const id of OpenCodeEnvironmentTools.names) editor.remove(id)
           })
         if (Option.isSome(connections))
           yield* tool.hook("execute.after", (event) =>
@@ -225,7 +281,7 @@ export const make = (
           )
         const folder = context.location.directory
         if (Option.isSome(confinement) && folder.startsWith(`${confinement.value.workspace}/`)) {
-          const allow = confinement.value.allow
+          const allow = [...confinement.value.allow, `${OpenCodeReferences.rootOf(folder)}/`]
           yield* context.permission.hook("evaluate", (event) =>
             Effect.sync(() => {
               if (event.action !== "external_directory" || event.effect === "deny") return
@@ -285,8 +341,30 @@ export const make = (
                 ],
               })
             })
+            event.messages = event.messages.map(withOrigin)
           }),
         )
+        yield* context.session.hook("compaction", (event) =>
+          Effect.sync(() => {
+            event.messages = event.messages.map(withOrigin)
+          }),
+        )
+        if (isSession) {
+          yield* tool.transform((editor) => {
+            for (const name of channelReplies)
+              editor.update(name, (found) => {
+                found.options = {
+                  ...Struct.omit(found.options ?? {}, ["codemode", "pinned"]),
+                  codemode: false,
+                }
+              })
+          })
+          yield* tool.hook("execute.before", (event) =>
+            channelPosts.has(event.tool) && event.sessionID !== sessionId
+              ? Effect.fail(new Tool.Error({ message: "Only the main agent posts in the channel." }))
+              : Effect.void,
+          )
+        }
         const initial = yield* Ref.get(desired)
         const appConflicts = yield* Ref.make(conflictsOf(initial.apps))
         const applied = yield* Ref.make(
@@ -298,23 +376,30 @@ export const make = (
           isSession,
           hasEnvironment: Boolean(workspaceID),
           apps: (yield* Ref.get(applied)).apps,
+          channels: initial.channels,
           sessionId,
           ren,
         })
         const refreshSkills = yield* Ref.make<Effect.Effect<void>>(Effect.void)
+        const copies = Option.map(
+          Option.filter(connections, () => Boolean(workspaceID)),
+          (each) => EnvironmentCopies.make(each, Session.ID.make(sessionId)),
+        )
+        const hasEnvironment = Option.isSome(copies)
         const skills = yield* OpenCodeSkills.make({
           context,
           isSession,
-          files: Option.flatMap(connections, (each) =>
-            workspaceID
-              ? Option.some(
-                  EnvironmentSession.make(each, Session.ID.make(sessionId), RenWorkspaceDriver.killedBySignal).files,
-                )
-              : Option.none(),
-          ),
-          sources: skillSources,
+          hasEnvironment,
+          sources: sources.skills,
           apps: (yield* Ref.get(applied)).apps,
           onPrompt: Effect.flatten(Ref.get(refreshSkills)),
+        })
+        // oxlint-disable-next-line ren/no-comments -- R53: one record of copies for the chat's references and skills.
+        const copySources: Array<() => ReadonlyArray<OpenCodeCopies.Item>> = [skills.items]
+        yield* OpenCodeCopies.make({
+          context,
+          copies,
+          items: () => copySources.flatMap((source) => source()),
         })
         const models = yield* Ref.make(initial.models)
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(models)))
@@ -358,15 +443,15 @@ export const make = (
               })
             editor.default(resolved.primary.name)
           })
-          yield* context.reference.transform((editor) => {
-            for (const reference of Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.references ?? [])
-              editor.add(reference.alias, {
-                type: "git",
-                repository: reference.repository,
-                ...(reference.branch && { branch: reference.branch }),
-                ...(reference.description && { description: reference.description }),
-              })
+          const references = yield* OpenCodeReferences.make({
+            context,
+            hasEnvironment,
+            repositories: sources.repositories,
+            references: Effect.sync(() =>
+              Option.match(Ref.getUnsafe(installed), { onNone: () => [], onSome: (chat) => chat.resolved.references }),
+            ),
           })
+          copySources.push(references.items)
           yield* context.session.hook("context", (event) =>
             Effect.sync(() => {
               const agent = Option.getOrUndefined(agentOf(event.agent))
@@ -420,7 +505,7 @@ export const make = (
           )
           turns.ended.push((sessionID) => Effect.flatMap(Ref.get(shared.turnEnded), (ended) => ended(sessionID)))
           const instance = {
-            reload: Effect.all([context.agent.reload(), context.reference.reload()], { discard: true }),
+            reload: Effect.all([context.agent.reload(), references.refresh], { discard: true }),
             session: context.session,
             installed,
           }
@@ -440,9 +525,8 @@ export const make = (
             delete event.headers[Models.personHeader]
             if (event.kind === "title") return
             if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
-            const memberId = Option.flatMap(
-              yield* members.lastSpeaker(yield* rootOf(event.sessionID)),
-              (speaker) => Option.fromUndefinedOr(speaker.memberID),
+            const memberId = Option.flatMap(yield* members.lastSpeaker(yield* rootOf(event.sessionID)), (speaker) =>
+              Option.fromUndefinedOr(speaker.memberID),
             )
             if (Option.isNone(memberId)) return
             event.headers[Models.personHeader] = members.egress
@@ -485,7 +569,7 @@ export const make = (
               const before = (yield* Ref.get(applied)).apps
               const apps = conflicts.length ? before : snapshot.apps
               yield* Ref.set(applied, { ...snapshot, apps })
-              yield* mcp.apply(apps)
+              yield* mcp.apply(apps, snapshot.channels)
               if (!conflicts.length) yield* skills.apply(prepared)
               yield* synced
             }),

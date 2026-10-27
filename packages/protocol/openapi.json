@@ -5968,6 +5968,22 @@
         "operationId": "label.list",
         "parameters": [
           {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the system labels, the org labels and the labels of this space. Without it, the labels of every space you are in."
+            },
+            "required": false
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -6289,6 +6305,790 @@
         },
         "description": "Archive one label and return it. Archiving an archived label returns it unchanged.",
         "summary": "Archive label"
+      }
+    },
+    "/schedules": {
+      "get": {
+        "tags": ["schedule"],
+        "operationId": "schedule.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Without it, the schedules of every space you are in."
+            },
+            "required": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Schedule.Status"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Part of the name or the message."
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the schedules that the caller can see.",
+        "summary": "List schedules"
+      },
+      "post": {
+        "tags": ["schedule"],
+        "operationId": "schedule.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one schedule.",
+        "summary": "Create schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/schedules/{idOrSlug}": {
+      "get": {
+        "tags": ["schedule"],
+        "operationId": "schedule.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one schedule by ID or slug.",
+        "summary": "Get schedule"
+      }
+    },
+    "/schedules/{id}": {
+      "patch": {
+        "tags": ["schedule"],
+        "operationId": "schedule.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one schedule.",
+        "summary": "Update schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["schedule"],
+        "operationId": "schedule.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one schedule and return it. Archiving an archived schedule returns it unchanged.",
+        "summary": "Archive schedule"
+      }
+    },
+    "/schedules/{id}/pause": {
+      "post": {
+        "tags": ["schedule"],
+        "operationId": "schedule.pause",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the pause action on one schedule.",
+        "summary": "pause schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule.NoInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/schedules/{id}/resume": {
+      "post": {
+        "tags": ["schedule"],
+        "operationId": "schedule.resume",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the resume action on one schedule.",
+        "summary": "resume schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule.NoInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/schedules/{id}/run": {
+      "post": {
+        "tags": ["schedule"],
+        "operationId": "schedule.run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the run action on one schedule.",
+        "summary": "run schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule.NoInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/schedule-runs": {
+      "get": {
+        "tags": ["schedule-run"],
+        "operationId": "schedule-run.list",
+        "parameters": [
+          {
+            "name": "scheduleId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ScheduleRun.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRun.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the schedule-runs that the caller can see.",
+        "summary": "List schedule-runs"
       }
     },
     "/credentials": {
@@ -7942,6 +8742,851 @@
         "description": "Remove one connection. New requests stop using it at once. Only the member who connected it, admins and owners remove (`canManage`).",
         "summary": "Remove a provider connection"
       }
+    },
+    "/channel-installs": {
+      "get": {
+        "tags": ["channel-install"],
+        "operationId": "channel-install.list",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ChannelInstall.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelInstall.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the channel-installs that the caller can see.",
+        "summary": "List channel-installs"
+      }
+    },
+    "/channel-installs/{id}": {
+      "patch": {
+        "tags": ["channel-install"],
+        "operationId": "channel-install.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelInstall.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The link between the organization and one provider workspace. Ren never returns its secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelInstall.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one channel-install.",
+        "summary": "Update channel-install",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelInstall.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/channel-installs/{id}/remove": {
+      "post": {
+        "tags": ["channel-install"],
+        "operationId": "channel-install.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelInstall.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The link between the organization and one provider workspace. Ren never returns its secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelInstall.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the remove action on one channel-install.",
+        "summary": "remove channel-install",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelInstall.RemoveInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/channel-mappings": {
+      "get": {
+        "tags": ["channel-mapping"],
+        "operationId": "channel-mapping.list",
+        "parameters": [
+          {
+            "name": "installId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ChannelInstall.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ChannelMapping.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelMapping.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the channel-mappings that the caller can see.",
+        "summary": "List channel-mappings"
+      },
+      "post": {
+        "tags": ["channel-mapping"],
+        "operationId": "channel-mapping.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The link from one place to a space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelMapping.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one channel-mapping.",
+        "summary": "Create channel-mapping",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelMapping.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/channel-mappings/{id}/remove": {
+      "post": {
+        "tags": ["channel-mapping"],
+        "operationId": "channel-mapping.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelMapping.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The link from one place to a space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelMapping.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the remove action on one channel-mapping.",
+        "summary": "remove channel-mapping",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelMapping.RemoveInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/channel-providers": {
+      "get": {
+        "tags": ["channel-connect"],
+        "operationId": "channel-provider.list",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ChannelInstall.ProviderInfos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelInstall.ProviderInfos"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the providers that this Ren server can install: Slack, Linear or GitHub.",
+        "summary": "List channel providers"
+      }
+    },
+    "/channel-installs/start": {
+      "post": {
+        "tags": ["channel-connect"],
+        "operationId": "channel-install.start",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WriteResult.Redirect",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult.Redirect"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the address of the provider’s install page. The provider sends the person back to Ren, which stores the install. An organization has at most one install per provider.",
+        "summary": "Start a channel install",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelInstall.StartInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/channel-places": {
+      "get": {
+        "tags": ["channel-connect"],
+        "operationId": "channel-place.list",
+        "parameters": [
+          {
+            "name": "installId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelInstall.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ChannelPlace.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelPlace.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the places that an install reaches, sorted by name, each with its mapping: Slack channels, Linear projects or GitHub repositories. Ren reads them from the provider.",
+        "summary": "List channel places"
+      }
+    },
+    "/repositories": {
+      "get": {
+        "tags": ["repository"],
+        "operationId": "repository.list",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GitHost.Listing"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return, for each git host, whether the organization connected it and the repositories that it can read there. A person picks references from them. For GitHub, they are the repositories of the organization’s GitHub App installation.",
+        "summary": "List repositories to read"
+      }
+    },
+    "/sign-in-providers": {
+      "get": {
+        "tags": ["sign-in"],
+        "operationId": "sign-in-provider.list",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Auth.SignInProviders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Auth.SignInProviders"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the accounts that a person can sign in with on this Ren server, besides email.",
+        "summary": "List sign-in providers"
+      }
     }
   },
   "components": {
@@ -8811,6 +10456,20 @@
             "type": "boolean",
             "description": "True when the caller may share the profile with every space."
           },
+          "canAdd": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.SpaceShape"
+            },
+            "description": "The kinds of space the caller may add to the list."
+          },
+          "canRemove": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.SpaceShape"
+            },
+            "description": "The kinds of space the caller may remove from the list."
+          },
           "links": {
             "type": "array",
             "items": {
@@ -8882,6 +10541,8 @@
           "hiddenSpaces",
           "canAccess",
           "canShareEverySpace",
+          "canAdd",
+          "canRemove",
           "links",
           "items",
           "unused",
@@ -9087,6 +10748,11 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
+      "AppProfile.SpaceShape": {
+        "type": "string",
+        "enum": ["shared", "joined", "ownPrivate", "otherPrivate"],
+        "description": "A space as a list write sees it: a shared space the caller is not in, one they are in, their own private space, or another person’s."
+      },
       "AppProfile.UpdateInput": {
         "type": "object",
         "properties": {
@@ -9257,6 +10923,23 @@
         "type": "string",
         "pattern": "^org_"
       },
+      "Auth.SignInProvider": {
+        "type": "string",
+        "enum": ["google", "github", "slack"]
+      },
+      "Auth.SignInProviders": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Auth.SignInProvider"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
+      },
       "Auth.User": {
         "type": "object",
         "properties": {
@@ -9297,9 +10980,517 @@
         "type": "string",
         "pattern": "^usr_"
       },
+      "Auth.UserID_1": {
+        "type": "string",
+        "pattern": "^usr_",
+        "description": "The person who last wrote its instruction. Each run sends the message as this person."
+      },
       "Brain.Scope": {
         "type": "string",
         "enum": ["session", "space"]
+      },
+      "Channel.Provider": {
+        "type": "string",
+        "enum": ["slack", "linear", "github"]
+      },
+      "Channel.Trigger": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Channel.TriggerID"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "defaultPrompt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "title", "description", "defaultPrompt"],
+        "additionalProperties": false,
+        "description": "An event that a mapping can turn on, so that Ren runs a turn with no mention."
+      },
+      "Channel.TriggerID": {
+        "type": "string",
+        "minLength": 1,
+        "description": "A provider’s event that starts a turn with no mention of Ren, such as GitHub’s pull_request_ready."
+      },
+      "Channel.TriggerSetting": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Channel.TriggerID"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Without it, the trigger’s default."
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false,
+        "description": "A trigger that a mapping turned on."
+      },
+      "ChannelInstall.ID": {
+        "type": "string",
+        "pattern": "^chi_"
+      },
+      "ChannelInstall.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ChannelInstall.ID"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          },
+          "workspace": {
+            "type": "string",
+            "description": "The provider’s workspace id: Slack team, Linear organization, GitHub installation."
+          },
+          "name": {
+            "type": "string",
+            "description": "The workspace name, or the GitHub account login."
+          },
+          "installedBy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Auth.UserID"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "defaultSpace": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Space.ID"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where messages from places with no mapping go. Without it, or when it is archived, the oldest active space."
+          },
+          "canUpdate": {
+            "type": "boolean",
+            "description": "The caller installed it, or is an admin."
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "provider", "workspace", "name", "installedBy", "defaultSpace", "canUpdate", "createdAt"],
+        "additionalProperties": false,
+        "description": "The link between the organization and one provider workspace. Ren never returns its secret."
+      },
+      "ChannelInstall.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelInstall.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "ChannelInstall.ProviderInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          },
+          "title": {
+            "type": "string"
+          },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Channel.Trigger"
+            }
+          }
+        },
+        "required": ["id", "title", "triggers"],
+        "additionalProperties": false,
+        "description": "A provider that this Ren server can install."
+      },
+      "ChannelInstall.ProviderInfos": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelInstall.ProviderInfo"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
+      },
+      "ChannelInstall.RemoveInput": {
+        "not": {
+          "type": "null"
+        }
+      },
+      "ChannelInstall.StartInput": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          }
+        },
+        "required": ["provider"],
+        "additionalProperties": false
+      },
+      "ChannelInstall.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "defaultSpaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A space the caller is a member of, or null for the oldest active space."
+          }
+        },
+        "required": ["defaultSpaceId"],
+        "additionalProperties": false
+      },
+      "ChannelMapping.CreateInput": {
+        "type": "object",
+        "properties": {
+          "installId": {
+            "$ref": "#/components/schemas/ChannelInstall.ID"
+          },
+          "place": {
+            "type": "string",
+            "minLength": 1
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, the place reaches the ren agent."
+          },
+          "fallback": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "On by default, and off by default for a public GitHub repository."
+          },
+          "fallbackUserId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A member of the space. Without it, the caller."
+          },
+          "triggers": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Channel.TriggerSetting"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The provider’s triggers to turn on, each at most once. Without it, none: every trigger is off."
+          }
+        },
+        "required": ["installId", "place", "spaceId"],
+        "additionalProperties": false,
+        "description": "Map a place, or replace the space, agent, fallback and triggers of its mapping. The same request twice gives the same mapping."
+      },
+      "ChannelMapping.ID": {
+        "type": "string",
+        "pattern": "^chm_"
+      },
+      "ChannelMapping.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ChannelMapping.ID"
+          },
+          "installId": {
+            "$ref": "#/components/schemas/ChannelInstall.ID"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          },
+          "place": {
+            "type": "string",
+            "description": "The provider’s id of the place: a Slack channel, a Linear project, a GitHub repository."
+          },
+          "placeName": {
+            "type": "string"
+          },
+          "space": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["id", "name"],
+            "additionalProperties": false
+          },
+          "agent": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Agent.ID"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, the place reaches the ren agent."
+          },
+          "fallback": {
+            "type": "boolean",
+            "description": "A sender that Ren cannot match to a member of the space runs as the fallback user. Off: refused."
+          },
+          "fallbackUser": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Auth.UserID"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Channel.TriggerSetting"
+            },
+            "description": "The provider’s triggers that this mapping turned on. Each starts a turn with no mention."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "installId",
+          "provider",
+          "place",
+          "placeName",
+          "space",
+          "agent",
+          "fallback",
+          "fallbackUser",
+          "triggers",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false,
+        "description": "The link from one place to a space."
+      },
+      "ChannelMapping.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelMapping.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "ChannelMapping.RemoveInput": {
+        "not": {
+          "type": "null"
+        }
+      },
+      "ChannelOrigin.Info": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          },
+          "place": {
+            "type": "string"
+          },
+          "threadUrl": {
+            "type": "string"
+          },
+          "sender": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string",
+            "description": "The title of the trigger that started this message, when nobody mentioned Ren."
+          }
+        },
+        "required": ["provider", "place", "sender"],
+        "additionalProperties": false,
+        "description": "Where a message from Slack, Linear or GitHub came from, and what its thread holds."
+      },
+      "ChannelPlace.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The provider’s id of the place: a Slack channel, a Linear project, a GitHub repository."
+          },
+          "name": {
+            "type": "string"
+          },
+          "private": {
+            "type": "boolean"
+          },
+          "anyoneCanWrite": {
+            "type": "boolean",
+            "description": "People outside the install’s workspace can write there, as on a public GitHub repository. A new mapping of an open place starts with the fallback off."
+          },
+          "description": {
+            "type": "string",
+            "description": "The provider’s description of the place, such as a GitHub repository’s."
+          },
+          "url": {
+            "type": "string",
+            "description": "The web address of the place, such as https://github.com/acme/docs."
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelMapping.Info"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "name", "private", "anyoneCanWrite", "mapping"],
+        "additionalProperties": false,
+        "description": "A place that an install reaches."
+      },
+      "ChannelPlace.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelPlace.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
       },
       "ConflictErrorEncoded": {
         "type": "object",
@@ -10521,6 +12712,52 @@
         "required": ["_tag", "message"],
         "additionalProperties": false
       },
+      "GitHost.Kind": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["github"]
+          }
+        ]
+      },
+      "GitHost.Listing": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/GitHost.Kind"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitHost.Repository"
+            }
+          }
+        },
+        "required": ["kind", "installed", "repositories"],
+        "additionalProperties": false
+      },
+      "GitHost.Repository": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/GitHost.Kind"
+          },
+          "url": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": ["kind", "url", "name"],
+        "additionalProperties": false
+      },
       "Health.Info": {
         "type": "object",
         "properties": {
@@ -10643,6 +12880,17 @@
       "Label.CreateInput": {
         "type": "object",
         "properties": {
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Make a space label, which only this space sees. Without it, an org label, which only admins make."
+          },
           "name": {
             "$ref": "#/components/schemas/Label.UserNameEncoded"
           },
@@ -10703,6 +12951,17 @@
               }
             ]
           },
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The space of a space label, which only that space sees. Null for an org label or a system label."
+          },
           "createdAt": {
             "type": "string"
           },
@@ -10720,7 +12979,17 @@
             ]
           }
         },
-        "required": ["id", "name", "color", "isSystem", "organizationId", "createdAt", "updatedAt", "archivedAt"],
+        "required": [
+          "id",
+          "name",
+          "color",
+          "isSystem",
+          "organizationId",
+          "spaceId",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
         "additionalProperties": false
       },
       "Label.NameEncoded": {
@@ -11788,6 +14057,11 @@
         "type": "string",
         "pattern": "^(?!-)(?!.*\\.\\.)(?!.*\\/\\/)(?!.*@\\{)(?!.*\\.lock$)[^\\s~^:?*[\\\\]+(?<![/.])$"
       },
+      "Reference.Description": {
+        "type": "string",
+        "minLength": 1,
+        "description": "What the repository holds. The agent sees a reference only through its description (R24)."
+      },
       "Reference.Info": {
         "type": "object",
         "properties": {
@@ -11801,10 +14075,10 @@
             "$ref": "#/components/schemas/Reference.Branch"
           },
           "description": {
-            "type": "string"
+            "$ref": "#/components/schemas/Reference.Description"
           }
         },
-        "required": ["alias", "repository"],
+        "required": ["alias", "repository", "description"],
         "additionalProperties": false
       },
       "Reference.List": {
@@ -11815,7 +14089,8 @@
       },
       "Reference.Repository": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "pattern": "^https:\\/\\/[^/\\s]+(?:\\/[^/\\s]+){2,}$"
       },
       "RenInference.ConnectInput": {
         "type": "object",
@@ -11957,6 +14232,495 @@
         "type": "string",
         "enum": ["ok", "warn", "error"]
       },
+      "Schedule.CreateInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "message": {
+            "$ref": "#/components/schemas/Schedule.MessageEncoded"
+          },
+          "when": {
+            "$ref": "#/components/schemas/Schedule.WhenInput"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.TargetInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, `new-chat`."
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An agent of the space for a new chat. Without it, the space’s default settings."
+          }
+        },
+        "required": ["spaceId", "name", "message", "when"],
+        "additionalProperties": false
+      },
+      "Schedule.Cron": {
+        "type": "string"
+      },
+      "Schedule.ID": {
+        "type": "string",
+        "pattern": "^sch_"
+      },
+      "Schedule.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Schedule.ID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null: a new chat gets the space’s default settings."
+          },
+          "when": {
+            "$ref": "#/components/schemas/Schedule.When"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Schedule.Target"
+          },
+          "message": {
+            "type": "string"
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Auth.UserID_1"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Schedule.Status"
+          },
+          "pausedReason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.PauseReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextRunAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "spaceId",
+          "name",
+          "agentId",
+          "when",
+          "target",
+          "message",
+          "ownerId",
+          "status",
+          "pausedReason",
+          "nextRunAt",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Schedule.MessageEncoded": {
+        "type": "string"
+      },
+      "Schedule.NoInput": {
+        "not": {
+          "type": "null"
+        }
+      },
+      "Schedule.Once": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": ["at"],
+        "additionalProperties": false
+      },
+      "Schedule.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Schedule.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "Schedule.PauseReason": {
+        "type": "string",
+        "enum": ["user", "owner_left", "agent_removed", "failing"],
+        "description": "`user`: a person paused it. `owner_left`: its owner left the space. `agent_removed`: its agent left the space. `failing`: its last 5 runs failed."
+      },
+      "Schedule.Recurring": {
+        "type": "object",
+        "properties": {
+          "cron": {
+            "$ref": "#/components/schemas/Schedule.Cron"
+          },
+          "timeZone": {
+            "$ref": "#/components/schemas/Schedule.TimeZone"
+          },
+          "until": {
+            "type": "string"
+          }
+        },
+        "required": ["cron", "timeZone"],
+        "additionalProperties": false
+      },
+      "Schedule.Status": {
+        "type": "string",
+        "enum": ["active", "paused", "ended"]
+      },
+      "Schedule.Target": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["new-chat"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "$ref": "#/components/schemas/Session.ID"
+              }
+            },
+            "required": ["sessionId"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "`new-chat` starts a chat at each run. A session ID sends the message to that chat."
+      },
+      "Schedule.TargetInput": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["new-chat"]
+          },
+          {
+            "type": "string",
+            "enum": ["this-chat"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "$ref": "#/components/schemas/Session.ID"
+              }
+            },
+            "required": ["sessionId"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "`new-chat` starts a chat at each run. `this-chat` sends the message to the chat of the agent that calls; a person cannot use it. A session ID sends the message to that chat."
+      },
+      "Schedule.TimeZone": {
+        "type": "string"
+      },
+      "Schedule.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.MessageEncoded"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "when": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.WhenInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.TargetInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Agent.ID"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "description": "A change to the message, the agent, the target or the time makes you its owner."
+      },
+      "Schedule.When": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "cron": {
+                "type": "string"
+              },
+              "timeZone": {
+                "type": "string"
+              },
+              "until": {
+                "type": "string"
+              }
+            },
+            "required": ["cron", "timeZone"],
+            "additionalProperties": false
+          },
+          {
+            "$ref": "#/components/schemas/Schedule.Once"
+          }
+        ],
+        "description": "A cron in a time zone, or one time."
+      },
+      "Schedule.WhenInput": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Schedule.Recurring"
+          },
+          {
+            "$ref": "#/components/schemas/Schedule.Once"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "in": {
+                "type": "string"
+              }
+            },
+            "required": ["in"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "A cron in a time zone, one time, or a delay from now. Ren stores a delay as one time."
+      },
+      "ScheduleOrigin.Info": {
+        "type": "object",
+        "properties": {
+          "scheduleId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scheduledAt": {
+            "type": "string",
+            "description": "The time the run was for, as an ISO 8601 instant."
+          }
+        },
+        "required": ["scheduleId", "name", "scheduledAt"],
+        "additionalProperties": false,
+        "description": "The schedule that sent a message, and the time the run was for."
+      },
+      "ScheduleRun.ID": {
+        "type": "string",
+        "pattern": "^srn_"
+      },
+      "ScheduleRun.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ScheduleRun.ID"
+          },
+          "scheduleId": {
+            "$ref": "#/components/schemas/Schedule.ID"
+          },
+          "scheduledAt": {
+            "type": "string"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ScheduleRun.Trigger"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ScheduleRun.Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleRun.Reason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/Session.ID_1"
+          }
+        },
+        "required": [
+          "id",
+          "scheduleId",
+          "scheduledAt",
+          "startedAt",
+          "trigger",
+          "status",
+          "reason",
+          "error",
+          "sessionId"
+        ],
+        "additionalProperties": false
+      },
+      "ScheduleRun.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleRun.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "ScheduleRun.Reason": {
+        "type": "string",
+        "enum": ["previous_run_busy", "paused", "archived", "owner_left", "agent_removed", "chat_archived"],
+        "description": "Why a run was skipped."
+      },
+      "ScheduleRun.Status": {
+        "type": "string",
+        "enum": ["pending", "started", "skipped", "failed"]
+      },
+      "ScheduleRun.Trigger": {
+        "type": "string",
+        "enum": ["timed", "manual"],
+        "description": "`timed`: its time came. `manual`: a person or an agent ran it now."
+      },
       "Session.ClientAccess": {
         "anyOf": [
           {
@@ -12043,6 +14807,11 @@
       "Session.ID": {
         "type": "string",
         "pattern": "^ses_"
+      },
+      "Session.ID_1": {
+        "type": "string",
+        "pattern": "^ses_",
+        "description": "The chat that the run started or sent to."
       },
       "Session.Info": {
         "type": "object",
@@ -13280,6 +16049,12 @@
           },
           "sender": {
             "$ref": "#/components/schemas/SessionMessage.Sender"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/ChannelOrigin.Info"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ScheduleOrigin.Info"
           }
         },
         "required": ["id", "time", "text", "type"],
@@ -13518,6 +16293,20 @@
           "organizationId": {
             "$ref": "#/components/schemas/Auth.OrganizationID"
           },
+          "kind": {
+            "$ref": "#/components/schemas/Space.Kind"
+          },
+          "ownerUserId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The owner of a private space. Null for a shared space."
+          },
           "name": {
             "type": "string"
           },
@@ -13557,6 +16346,10 @@
           "canUpdate": {
             "type": "boolean"
           },
+          "canJoin": {
+            "type": "boolean",
+            "description": "An admin who is not a member can join this shared space."
+          },
           "canAddMember": {
             "type": "boolean"
           },
@@ -13586,6 +16379,8 @@
         "required": [
           "id",
           "organizationId",
+          "kind",
+          "ownerUserId",
           "name",
           "description",
           "brainScope",
@@ -13593,6 +16388,7 @@
           "membershipId",
           "agentOrder",
           "canUpdate",
+          "canJoin",
           "canAddMember",
           "canRemoveMember",
           "canArchive",
@@ -13601,6 +16397,11 @@
           "archivedAt"
         ],
         "additionalProperties": false
+      },
+      "Space.Kind": {
+        "type": "string",
+        "enum": ["shared", "private"],
+        "description": "A shared space belongs to its members. A private space belongs to its owner, who is its only member; it never changes kind."
       },
       "Space.MembershipID": {
         "type": "string",
@@ -14914,6 +17715,25 @@
         ],
         "additionalProperties": false
       },
+      "TaskEvent.Automation": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["github"]
+          },
+          "cause": {
+            "type": "string",
+            "enum": ["pull_request_merged"]
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": ["provider", "cause", "url"],
+        "additionalProperties": false,
+        "description": "The outside event that changed the status, with no person or agent acting."
+      },
       "TaskEvent.Created": {
         "type": "object",
         "properties": {
@@ -15175,6 +17995,9 @@
           },
           "to": {
             "$ref": "#/components/schemas/Task.Status"
+          },
+          "automation": {
+            "$ref": "#/components/schemas/TaskEvent.Automation"
           }
         },
         "required": ["_tag", "from", "to"],
@@ -15202,7 +18025,7 @@
       },
       "TaskLink.Kind": {
         "type": "string",
-        "enum": ["github_pr", "linear_issue", "slack_thread", "url"]
+        "enum": ["github_pr", "github_issue", "linear_issue", "slack_thread", "url"]
       },
       "TaskLink.Url": {
         "type": "string",
@@ -15351,6 +18174,12 @@
       "name": "label"
     },
     {
+      "name": "schedule"
+    },
+    {
+      "name": "schedule-run"
+    },
+    {
       "name": "credential"
     },
     {
@@ -15364,6 +18193,21 @@
     },
     {
       "name": "ren-inference"
+    },
+    {
+      "name": "channel-install"
+    },
+    {
+      "name": "channel-mapping"
+    },
+    {
+      "name": "channel-connect"
+    },
+    {
+      "name": "repository"
+    },
+    {
+      "name": "sign-in"
     }
   ]
 }

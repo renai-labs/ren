@@ -240,4 +240,5 @@ process.on("SIGTERM", () => {
 
 runtime
   .runPromise(boot.pipe(Effect.tapCause((cause) => Effect.logError("The brain failed to boot", cause))))
+  .then(() => process.send?.({ type: "brain-ready", port: server.port }))
   .catch(() => process.exit(1))

@@ -1,13 +1,17 @@
 import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
 import { Effect, Layer } from "effect"
+import { ReferenceCheck } from "../src/reference-check.js"
 import { Access } from "../src/access.js"
 import { OrganizationSettings } from "../src/organization-settings.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 
 const it = testEffect(
-  OrganizationSettings.layer.pipe(Layer.provideMerge(Access.layer), Layer.provideMerge(Testing.layer)),
+  OrganizationSettings.layer.pipe(
+    Layer.provideMerge(Layer.mergeAll(Access.layer, ReferenceCheck.layerNone)),
+    Layer.provideMerge(Testing.layer),
+  ),
 )
 
 const settings = {

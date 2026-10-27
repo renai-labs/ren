@@ -53,11 +53,16 @@ export const environment = pgTable(
       .$type<EnvironmentTemplate.ID>()
       .notNull()
       .references(() => environment_template.id, { onDelete: "cascade" }),
+    // oxlint-disable-next-line ren/no-comments -- private-spaces PS8: one space per environment; null on older ones.
+    space_id: text()
+      .$type<Space.ID>()
+      .references(() => space.id, { onDelete: "cascade" }),
     binding: jsonb().$type<Schema.Json>(),
     created_at: timestamp().defaultNow().notNull(),
   },
   (table) => [
     index("environment_environment_template_id_created_at_idx").on(table.environment_template_id, table.created_at),
+    index("environment_space_id_idx").on(table.space_id),
   ],
 )
 

@@ -3,9 +3,11 @@ import { Session } from "@opencode/client/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { testEffect } from "@ren/executor/testing"
 import { HostMcp } from "@ren/host-api/host-mcp"
+import type { Channel } from "@ren/schema/channel"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
 import { Effect, Layer, Option, Ref } from "effect"
+import { Base64Url } from "effect/encoding"
 import { HttpServer } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -24,7 +26,11 @@ const stub = Shared.stub()
 
 const open = Effect.fnUntraced(function* (
   ren: Option.Option<OpenCodeMcp.RenAccess>,
-  options: { readonly database?: string; readonly directory?: string } = {},
+  options: {
+    readonly database?: string
+    readonly directory?: string
+    readonly channels?: ReadonlyArray<Channel.Provider>
+  } = {},
 ) {
   const access = Shared.access(undefined, stub.url)
   const directory =
@@ -48,6 +54,7 @@ const open = Effect.fnUntraced(function* (
       directoryOf: (sessionId) => join(directory, sessionId),
       makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
       ren,
+      ...(options.channels && { channels: options.channels }),
     },
   )
   const harness = yield* OpenCodeHarness.make(server, access.endpoints)
@@ -77,11 +84,15 @@ const open = Effect.fnUntraced(function* (
     yield* harness.start({ sessionId, harness: "opencode", interactive: true })
     return sessionId
   })
-  return { call, chat, directory }
+  const prompt = Effect.fnUntraced(function* (sessionId: RenSession.ID, text: string) {
+    yield* server.client.session.prompt({ sessionID: Session.ID.make(sessionId), text }).pipe(Effect.orDie)
+    yield* wait(sessionId)
+  })
+  return { call, chat, directory, prompt }
 })
 
-const renAt = Effect.fnUntraced(function* (token = "host-1") {
-  const peer = yield* McpPeer.make()
+const renAt = Effect.fnUntraced(function* (token = "host-1", tools: ReadonlyArray<string> = []) {
+  const peer = yield* McpPeer.make({ tools })
   const current = yield* Ref.make(Option.some(token))
   const ren: OpenCodeMcp.RenAccess = { address: Effect.succeed(Option.some(peer.url)), token: Ref.get(current) }
   const last = (sessionId: string) =>
@@ -122,15 +133,32 @@ it.live("a prompt from another member calls Ren as that member; a prompt with no
   }),
 )
 
-it.live("a new host token reaches Ren at the next prompt", () =>
+const expiring = (name: string, minutes: number) =>
+  `head.${Base64Url.encode(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + minutes * 60 }))}.${name}`
+
+it.live("a new host token reaches Ren at the next prompt once the token in use is near its expiry", () =>
   Effect.gen(function* () {
-    const ren = yield* renAt()
+    const ren = yield* renAt(expiring("aging", 30))
     const opened = yield* open(Option.some(ren.ren))
     const sessionId = yield* opened.chat()
     yield* opened.call(sessionId, Option.some("usr_ada"))
-    yield* Ref.set(ren.current, Option.some("host-2"))
+    const replacement = expiring("replacement", 120)
+    yield* Ref.set(ren.current, Option.some(replacement))
     yield* opened.call(sessionId, Option.some("usr_ada"))
-    expect(ren.last(sessionId)?.get("authorization")).toBe("Bearer host-2")
+    expect(ren.last(sessionId)?.get("authorization")).toBe(`Bearer ${replacement}`)
+  }),
+)
+
+it.live("a newer host token leaves the Ren and channel servers connected while the token they use is valid", () =>
+  Effect.gen(function* () {
+    const fresh = expiring("fresh", 120)
+    const ren = yield* renAt(fresh)
+    const opened = yield* open(Option.some(ren.ren))
+    const sessionId = yield* opened.chat()
+    yield* opened.call(sessionId, Option.some("usr_ada"))
+    yield* Ref.set(ren.current, Option.some(expiring("newer", 121)))
+    yield* opened.call(sessionId, Option.some("usr_ada"))
+    expect(ren.last(sessionId)?.get("authorization")).toBe(`Bearer ${fresh}`)
   }),
 )
 
@@ -160,4 +188,35 @@ it.live("a brain without Ren has no ren server", () =>
     const sessionId = yield* opened.chat()
     expect(yield* opened.call(sessionId, Option.some("usr_ada"))).toContain("Unknown tool 'ren.marker'")
   }),
+)
+
+it.live(
+  "a space with Slack gets the slack server with its chat and no sender; its reply is a tool of its own that a subagent cannot call",
+  () =>
+    Effect.gen(function* () {
+      const ren = yield* renAt("host-1", ["reply_to_current_thread"])
+      const opened = yield* open(Option.some(ren.ren), { channels: ["slack"] })
+      const sessionId = yield* opened.chat()
+      yield* opened.call(sessionId, Option.some("usr_ada"))
+      const reply = "slack_reply_to_current_thread"
+      const root = stub.script({ tools: [{ name: reply, input: { text: "Rolled back." } }] })
+      yield* opened.prompt(sessionId, `${root.marker} reply`)
+      expect((yield* Effect.promise(() => root.called(1))).tools).toContain(reply)
+      const called = ren.peer.paths.lastIndexOf(HostMcp.channelPath("slack"))
+      expect(ren.peer.calls.at(-1)).toBe("reply_to_current_thread")
+      expect([
+        ren.peer.headers[called]?.get(HostMcp.sessionHeader),
+        ren.peer.headers[called]?.get(HostMcp.userHeader),
+      ]).toEqual([sessionId, null])
+      const child = stub.script({ tools: [{ name: reply, input: { text: "From a helper." } }] })
+      yield* opened.prompt(
+        sessionId,
+        `${stub.script({ tool: { name: "subagent", input: { agent: "general", description: "Help", prompt: `${child.marker} help` } } }).marker} delegate`,
+      )
+      const refused = (yield* Effect.promise(() => child.called(2))).body.messages.findLast(
+        (message) => message.role === "tool",
+      )?.content
+      expect(JSON.stringify(refused)).toContain("Only the main agent posts in the channel.")
+      expect(ren.peer.calls.filter((name) => name === "reply_to_current_thread")).toHaveLength(1)
+    }),
 )

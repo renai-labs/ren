@@ -16,7 +16,7 @@ const table = Database.Schema.credential
 
 const brains = Database.Schema.brain
 
-const chats = Database.Schema.agent_session
+const spaces = Database.Schema.space
 
 const profiles = Database.Schema.app_profile
 
@@ -50,19 +50,6 @@ const remove = Effect.fnUntraced(function* (transaction: Database.Transaction, w
       row.provider ? [{ ...row, provider: row.provider }] : [],
     ),
   }
-})
-
-// oxlint-disable-next-line ren/no-comments -- The session-scope brains of a person in a space. A37: space and person credentials stop resolving there once the person leaves the space, so their cached answers go too.
-const sessionBrains = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  where: { readonly userId: Auth.UserID; readonly spaces: SQL | undefined },
-) {
-  const rows = yield* transaction
-    .selectDistinct({ id: brains.id })
-    .from(brains)
-    .innerJoin(chats, eq(chats.brain_id, brains.id))
-    .where(and(eq(brains.scope, "session"), eq(chats.created_by, where.userId), where.spaces))
-  return rows.map((row) => ({ kind: "brain" as const, id: row.id }))
 })
 
 export const forMember = Effect.fnUntraced(function* (
@@ -102,11 +89,21 @@ export const forMember = Effect.fnUntraced(function* (
         privates.map((row) => row.id),
       ),
     )
-  const workloads = yield* sessionBrains(transaction, {
-    userId,
-    spaces: eq(brains.organization_id, organizationId),
-  })
-  return { ...removed, labels: [...removed.labels, Models.personLabel], workloads } satisfies Removed
+  // oxlint-disable-next-line ren/no-comments -- private-spaces rule 10: person credentials live in the private space.
+  const own = yield* transaction
+    .select({ id: spaces.id })
+    .from(spaces)
+    .where(
+      and(eq(spaces.organization_id, organizationId), eq(spaces.kind, "private"), eq(spaces.owner_user_id, userId)),
+    )
+  return {
+    ...removed,
+    labels: [...removed.labels, Models.personLabel],
+    workloads: yield* spaceBrains(
+      transaction,
+      own.map((row) => row.id),
+    ),
+  } satisfies Removed
 })
 
 // oxlint-disable-next-line ren/no-comments -- A member who leaves a space can no longer be the person of a model request there; every egress answer for PERSON clears, so the next request with their id is refused at once.
@@ -122,24 +119,8 @@ export const forSpaceMember = Effect.fnUntraced(function* (
   return {
     ...removed,
     labels: [...removed.labels, Models.personLabel],
-    workloads: [
-      ...(yield* sessionBrains(transaction, { userId, spaces: eq(brains.space_id, spaceId) })),
-      ...(yield* reachBrains(transaction, spaceId, userId)),
-    ],
+    workloads: yield* spaceBrains(transaction, [spaceId]),
   } satisfies Removed
-})
-
-// oxlint-disable-next-line ren/no-comments -- A member who joins or leaves a space changes the reach of that space and of the person's one-member spaces (profiles.md §7 rule 3, §11).
-export const reachBrains = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  spaceId: Space.ID,
-  userId: Auth.UserID,
-) {
-  const own = yield* transaction
-    .select({ id: Database.Schema.space_member.space_id })
-    .from(Database.Schema.space_member)
-    .where(eq(Database.Schema.space_member.user_id, userId))
-  return yield* spaceBrains(transaction, [...new Set([spaceId, ...own.map((row) => row.id)])])
 })
 
 // oxlint-disable-next-line ren/no-comments -- An archived space leaves every access list (profiles.md §11).
@@ -156,7 +137,7 @@ export const forProfile = Effect.fnUntraced(function* (transaction: Database.Tra
   return { ...removed, workloads: [] } satisfies Removed
 })
 
-// oxlint-disable-next-line ren/no-comments -- Every brain of the spaces, for a reach change (profiles.md §11): a member joins or leaves, or a space is archived.
+// oxlint-disable-next-line ren/no-comments -- Every brain of the spaces, to clear their cached answers.
 export const spaceBrains = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   spaceIds: ReadonlyArray<Space.ID>,

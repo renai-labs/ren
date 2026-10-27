@@ -29,8 +29,7 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   await inviteMember(page.request, invitee)
 
   await page.goto("/app/spaces")
-  await page.getByRole("button", { name: "Create or join a space" }).click()
-  await page.getByRole("menuitem", { name: "Create space" }).click()
+  await page.getByRole("button", { name: "New space" }).click()
   const create = page.getByRole("dialog", { name: "New space" })
   await create.getByRole("textbox", { name: "Name" }).fill("Research")
   await create.getByRole("textbox", { name: "Description" }).fill("Papers and experiments")

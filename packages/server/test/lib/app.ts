@@ -2,6 +2,14 @@ import { BunHttpServer, BunServices } from "@effect/platform-bun"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
+import { ChannelNotice } from "@ren/core/channel-notice"
+import { GitHubApp } from "@ren/core/github-app"
+import { GitHubAccounts } from "@ren/core/github-accounts"
+import { PersonCredentials } from "@ren/core/person-credentials"
+import { ChannelProvider } from "@ren/core/channel-provider"
+import { ChannelSecrets } from "@ren/core/channel-secrets"
+import { ChannelIdentity } from "@ren/core/channel-identity"
+import { ChannelRoute } from "@ren/core/channel-route"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
@@ -23,6 +31,7 @@ import { Clock, ConfigProvider, Effect, Layer, Logger, Schema } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { Routes } from "../../src/routes.js"
 import { Signer } from "@ren/core/signer"
+import { SlackApp } from "@ren/core/slack-app"
 import { EgressControl } from "@ren/core/egress-control"
 import { Access } from "@ren/core/access"
 import { Credentials } from "@ren/core/credentials"
@@ -86,9 +95,14 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
 export const services = Layer.mergeAll(
   Brains.layer.pipe(
     Layer.provideMerge(BrainHost.layerCell),
-    Layer.provide(DurableRunner.layerMemory),
+    Layer.provideMerge(DurableRunner.layerMemory),
     Layer.provide(CredentialEnv.layerNone),
   ),
+  ChannelRoute.layer.pipe(
+    Layer.provide(ChannelIdentity.layer),
+    Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),
+  ),
+  ChannelNotice.layerLog,
   Mailer.layer,
   SignupGuard.layer,
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
@@ -100,7 +114,16 @@ export const services = Layer.mergeAll(
   Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
   Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
   Layer.provideMerge(RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal))),
-  Layer.provideMerge(Credentials.layer),
+  Layer.provideMerge(SlackApp.layer),
+  Layer.provideMerge(
+    Layer.mergeAll(
+      Credentials.layer,
+      PersonCredentials.layer,
+      ChannelSecrets.layer,
+      GitHubAccounts.layerNone,
+      GitHubApp.layerNone,
+    ),
+  ),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
@@ -113,12 +136,13 @@ export const makeApp = (
     readonly baseURL?: string
     readonly config?: Readonly<Record<string, string>>
     readonly logs?: Array<string>
+    readonly database?: typeof Testing.layer
   },
 ) =>
   HttpRouter.toWebHandler(
     routes.pipe(
       Layer.provide(services),
-      Layer.provide(Testing.layer),
+      Layer.provide(options?.database ?? Testing.layer),
       Layer.provide([FetchHttpClient.layer, BunServices.layer]),
       Layer.provide(BunHttpServer.layerHttpServices),
       Layer.provideMerge(

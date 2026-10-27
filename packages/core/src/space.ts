@@ -53,11 +53,7 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
 type Row = Effect.Success<ReturnType<typeof select>>[number]
 
 const actions = {
-  list: Primitive.action(Space.definition, "list"),
-  get: Primitive.action(Space.definition, "get"),
-  create: Primitive.action(Space.definition, "create"),
-  update: Primitive.action(Space.definition, "update"),
-  archive: Primitive.action(Space.definition, "archive"),
+  ...SpacePolicy.actions,
   addMember: Primitive.action(SpaceMember.definition, "create"),
   removeMember: Primitive.action(SpaceMember.definition, "archive"),
 }
@@ -73,27 +69,40 @@ export const layer = Layer.effect(
       and(
         eq(Database.Schema.space.organization_id, actor.organizationId),
         isNull(Database.Schema.space.archived_at),
-        SpacePolicy.filter(access.plan(actor, actions.get)),
+        Access.where(access.plan(actor, actions.get), SpaceQueries.where),
       )
 
+    const resourceOf = (actor: Actor.Info, row: Pick<Row, "membershipId" | "space" | "isFirstOrganizationSpace">) =>
+      SpacePolicy.resource({
+        membershipId: row.membershipId,
+        kind: row.space.kind,
+        isOwner: row.space.owner_user_id === actor.userId,
+        isFirst: row.isFirstOrganizationSpace,
+      })
+
+    // oxlint-disable-next-line ren/no-comments -- private-spaces rule 7: no `read`, list entry only.
     const toInfo =
       (actor: Actor.Info) =>
       (row: Row): Space.Info => {
-        const resource = SpacePolicy.resource(row.membershipId, row.space.id)
+        const resource = resourceOf(actor, row)
         const isAllowed = (action: string) => access.isAllowed({ actor, action, resource })
+        const canRead = isAllowed(actions.read)
         return {
           id: row.space.id,
           organizationId: row.space.organization_id,
+          kind: row.space.kind,
+          ownerUserId: row.space.owner_user_id,
           name: row.space.name,
-          description: row.space.description,
+          description: canRead ? row.space.description : null,
           brainScope: row.space.brain_scope,
           memberCount: row.memberCount,
           membershipId: row.membershipId,
-          agentOrder: row.agentOrder,
+          agentOrder: canRead ? row.agentOrder : [],
           canUpdate: isAllowed(actions.update),
+          canJoin: isAllowed(actions.join),
           canAddMember: isAllowed(actions.addMember),
           canRemoveMember: isAllowed(actions.removeMember),
-          canArchive: isAllowed(actions.archive) && !row.isFirstOrganizationSpace,
+          canArchive: isAllowed(actions.archive),
           createdAt: DateTime.fromDateUnsafe(row.space.created_at),
           updatedAt: DateTime.fromDateUnsafe(row.space.updated_at),
           archivedAt: row.space.archived_at && DateTime.fromDateUnsafe(row.space.archived_at),
@@ -120,7 +129,7 @@ export const layer = Layer.effect(
         .for("update", { of: Database.Schema.space })
       const row = rows.at(0)
       if (!row) return
-      const resource = SpacePolicy.resource(row.membershipId, row.space.id)
+      const resource = resourceOf(actor, row)
       if (!access.isAllowed({ actor, action: actions.get, resource })) return
       return { row, resource }
     })
@@ -229,12 +238,9 @@ export const layer = Layer.effect(
             const visible = yield* findVisible(transaction, actor, id)
             if (!visible) return yield* notFound
             if (visible.row.space.archived_at) return { info: toInfo(actor)(visible.row), removed: Option.none() }
-            if (
-              !access.isAllowed({ actor, action: actions.archive, resource: visible.resource }) ||
-              visible.row.isFirstOrganizationSpace
-            ) {
+            if (!access.isAllowed({ actor, action: actions.archive, resource: visible.resource }))
               return yield* new Primitive.Forbidden({ message: "This space cannot be archived." })
-            }
+            if (visible.row.space.kind === "private") yield* SpaceQueries.archiveOwned(transaction, id)
             const owned = yield* transaction
               .select({ name: Database.Schema.agent.name })
               .from(Database.Schema.agent)
@@ -267,6 +273,13 @@ export const layer = Layer.effect(
                   isNull(Database.Schema.space_pending_member.archived_at),
                 ),
               )
+            yield* transaction
+              .delete(Database.Schema.channel_mapping)
+              .where(eq(Database.Schema.channel_mapping.space_id, id))
+            yield* transaction
+              .update(Database.Schema.schedule)
+              .set({ archived_at: sql`now()`, next_run_at: null, updated_at: sql`now()` })
+              .where(and(eq(Database.Schema.schedule.space_id, id), isNull(Database.Schema.schedule.archived_at)))
             const space = archived.at(0)
             if (!space) return yield* notFound
             const removed = yield* CredentialOffboarding.forSpace(transaction, id)

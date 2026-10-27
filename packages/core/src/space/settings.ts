@@ -8,6 +8,7 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { Access } from "../access.js"
 import type { Actor } from "../actor.js"
 import { Primitive } from "../primitive.js"
+import { ReferenceCheck } from "../reference-check.js"
 import { SettingsPolicy } from "../settings/policy.js"
 import { SettingsRows } from "../settings/rows.js"
 import { SpaceQueries } from "./queries.js"
@@ -28,6 +29,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const access = yield* Access.Service
+    const references = yield* ReferenceCheck.Service
 
     const find = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Space.ID) {
       const row = (yield* transaction
@@ -65,6 +67,9 @@ export const layer = Layer.effect(
         id: Space.ID,
         input: SpaceSettings.UpdateInput,
       ) {
+        const previous = yield* database.transaction((transaction) => find(transaction, actor, id))
+        if (access.isAllowed({ actor, action: actions.update, resource: previous.resource }))
+          yield* references.check(actor.organizationId, previous.info.settings.references, input.settings.references)
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const found = yield* find(transaction, actor, id)

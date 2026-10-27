@@ -10,6 +10,8 @@ export type InvitationState = "pending" | "expired" | "accepted" | "unavailable"
 
 export type SpaceID = string
 
+export type SpaceKind = "shared" | "private"
+
 export type BrainScope = "session" | "space"
 
 export type SpaceMembershipID = string
@@ -31,6 +33,8 @@ export type ReferenceAlias = string
 export type ReferenceRepository = string
 
 export type ReferenceBranch = string
+
+export type ReferenceDescription = string
 
 export type AgentID = string
 
@@ -59,6 +63,8 @@ export type AppProfileID = string
 export type AppProfileSlug = string
 
 export type AppProfileKind = "shared" | "private"
+
+export type AppProfileSpaceShape = "shared" | "joined" | "ownPrivate" | "otherPrivate"
 
 export type CredentialRequirementKind = "oauth" | "provider" | "fields" | "env"
 
@@ -106,6 +112,10 @@ export type SessionMessageFileSource = { type: "inline" } | { type: "uri"; uri: 
 export type SessionMessageMention = { start: number; end: number; text: string }
 
 export type SessionMessageSender = { userId: string }
+
+export type ChannelProvider = "slack" | "linear" | "github"
+
+export type ScheduleOriginInfo = { scheduleId: string; name: string; scheduledAt: string }
 
 export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
 
@@ -156,7 +166,7 @@ export type LabelID = string
 
 export type TaskLinkID = string
 
-export type TaskLinkKind = "github_pr" | "linear_issue" | "slack_thread" | "url"
+export type TaskLinkKind = "github_pr" | "github_issue" | "linear_issue" | "slack_thread" | "url"
 
 export type TaskCommentID = string
 
@@ -165,6 +175,8 @@ export type TaskEventID = string
 export type TaskEventCreated = { _tag: "created" }
 
 export type TaskStartMode = "new" | "continue"
+
+export type TaskEventAutomation = { provider: "github"; cause: "pull_request_merged"; url: string }
 
 export type TaskEventReviewRequested = { _tag: "review_requested"; reason: string }
 
@@ -177,6 +189,28 @@ export type TaskEventLabelsChanged = { _tag: "label"; from: Array<string>; to: A
 export type TaskEventLinksChanged = { _tag: "link"; added: Array<string>; removed: Array<string> }
 
 export type TaskEventArchived = { _tag: "archived" }
+
+export type ScheduleID = string
+
+export type ScheduleOnce = { at: string }
+
+export type ScheduleStatus = "active" | "paused" | "ended"
+
+export type SchedulePauseReason = "user" | "owner_left" | "agent_removed" | "failing"
+
+export type ScheduleRunID = string
+
+export type ScheduleRunTrigger = "timed" | "manual"
+
+export type ScheduleRunStatus = "pending" | "started" | "skipped" | "failed"
+
+export type ScheduleRunReason =
+  | "previous_run_busy"
+  | "paused"
+  | "archived"
+  | "owner_left"
+  | "agent_removed"
+  | "chat_archived"
 
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
@@ -204,6 +238,16 @@ export type RenInferenceTone = "ok" | "warn" | "error"
 
 export type RenInferenceMeter = { key: string; title: string; percent: number | null; resetsAt?: string | null }
 
+export type ChannelInstallID = string
+
+export type ChannelMappingID = string
+
+export type ChannelTriggerID = string
+
+export type GitHostKind = "github"
+
+export type AuthSignInProvider = "google" | "github" | "slack"
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -229,6 +273,8 @@ export type AppProfileSpaceRef = { id: SpaceID; name: string }
 export type SpaceInfo = {
   id: SpaceID
   organizationId: AuthOrganizationID
+  kind: SpaceKind
+  ownerUserId: AuthUserID | null
   name: string
   description: string | null
   brainScope: BrainScope
@@ -236,6 +282,7 @@ export type SpaceInfo = {
   membershipId: SpaceMembershipID | null
   agentOrder: Array<string>
   canUpdate: boolean
+  canJoin: boolean
   canAddMember: boolean
   canRemoveMember: boolean
   canArchive: boolean
@@ -299,7 +346,7 @@ export type ReferenceInfo = {
   alias: ReferenceAlias
   repository: ReferenceRepository
   branch?: ReferenceBranch
-  description?: string
+  description: ReferenceDescription
 }
 
 export type TaskEventAssigned = {
@@ -342,6 +389,8 @@ export type AgentMembershipInfo = {
 }
 
 export type TaskActor = { userId: AuthUserID | null; agentId: AgentID | null; sessionId: SessionID | null }
+
+export type ScheduleTarget = "new-chat" | { sessionId: SessionID }
 
 export type SessionInfo = {
   id: SessionID
@@ -415,6 +464,16 @@ export type SessionMessageAgentAttachment = { name: string; mention?: SessionMes
 
 export type SessionMessageSkillAttachment = { id: string; name: string; text?: string; mention?: SessionMessageMention }
 
+export type ChannelOriginInfo = {
+  provider: ChannelProvider
+  place: string
+  threadUrl?: string
+  sender: string
+  handle?: string
+  context?: string
+  trigger?: string
+}
+
 export type SessionMessageSynthetic = {
   id: SessionMessageID
   time: { created: number }
@@ -477,8 +536,6 @@ export type TaskParent = { id: TaskID; identifier: string; title: string }
 
 export type TaskEventParentChanged = { _tag: "parent"; from: TaskID | null; to: TaskID | null }
 
-export type TaskEventStatusChanged = { _tag: "status"; from: TaskStatus; to: TaskStatus }
-
 export type TaskAgentSession = { id: SessionID; state: TaskSessionState }
 
 export type LabelSummary = { id: LabelID; name: string; color: string | null; isSystem: boolean }
@@ -489,6 +546,7 @@ export type LabelInfo = {
   color: string | null
   isSystem: boolean
   organizationId: AuthOrganizationID | null
+  spaceId: SpaceID | null
   createdAt: string
   updatedAt: string
   archivedAt: string | null
@@ -498,9 +556,30 @@ export type TaskLinkInfo = { id: TaskLinkID; kind: TaskLinkKind; url: string }
 
 export type TaskEventStarted = { _tag: "started"; agentId: AgentID; sessionId: SessionID; mode: TaskStartMode }
 
+export type TaskEventStatusChanged = {
+  _tag: "status"
+  from: TaskStatus
+  to: TaskStatus
+  automation?: TaskEventAutomation
+}
+
 export type TaskEventReviewed = { _tag: "reviewed"; decision: TaskDecision; comment: string | null }
 
 export type TaskEventFieldChanged = { _tag: "field"; field: TaskEventField; from: string | null; to: string | null }
+
+export type ScheduleWhen = { cron: string; timeZone: string; until?: string } | ScheduleOnce
+
+export type ScheduleRunInfo = {
+  id: ScheduleRunID
+  scheduleId: ScheduleID
+  scheduledAt: string
+  startedAt: string | null
+  trigger: ScheduleRunTrigger
+  status: ScheduleRunStatus
+  reason: ScheduleRunReason | null
+  error: string | null
+  sessionId: SessionID
+}
 
 export type CredentialInject =
   | { op: "replace"; in: [CredentialLocation, ...Array<CredentialLocation>] }
@@ -547,6 +626,25 @@ export type RenInferenceConnection = {
   canManage: boolean
   meters: Array<RenInferenceMeter>
 }
+
+export type ChannelInstallInfo = {
+  id: ChannelInstallID
+  provider: ChannelProvider
+  workspace: string
+  name: string
+  installedBy: { id: AuthUserID; name: string } | null
+  defaultSpace: { id: SpaceID; name: string } | null
+  canUpdate: boolean
+  createdAt: string
+}
+
+export type ChannelTriggerSetting = { id: ChannelTriggerID; prompt?: string }
+
+export type ChannelTrigger = { id: ChannelTriggerID; title: string; description: string; defaultPrompt: string }
+
+export type GitHostRepository = { kind: GitHostKind; url: string; name: string; description?: string }
+
+export type AuthSignInProviders = { items: Array<AuthSignInProvider> }
 
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
@@ -648,6 +746,8 @@ export type SessionMessageUser = {
   skills?: Array<SessionMessageSkillAttachment>
   type: "user"
   sender?: SessionMessageSender
+  channel?: ChannelOriginInfo
+  schedule?: ScheduleOriginInfo
 }
 
 export type SessionMessageToolCompleted = {
@@ -666,7 +766,9 @@ export type SessionMessageToolError = {
 }
 
 export type SessionMessageCompaction =
-  SessionMessageCompactionRunning | SessionMessageCompactionCompleted | SessionMessageCompactionFailed
+  | SessionMessageCompactionRunning
+  | SessionMessageCompactionCompleted
+  | SessionMessageCompactionFailed
 
 export type LabelPage = { items: Array<LabelInfo>; page: number; pageSize: number; total: number }
 
@@ -711,7 +813,47 @@ export type TaskEventData =
   | TaskEventParentChanged
   | TaskEventArchived
 
+export type ScheduleInfo = {
+  id: ScheduleID
+  spaceId: SpaceID
+  name: string
+  agentId: AgentID | null
+  when: ScheduleWhen
+  target: ScheduleTarget
+  message: string
+  ownerId: AuthUserID
+  status: ScheduleStatus
+  pausedReason: SchedulePauseReason | null
+  nextRunAt: string | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
+export type ScheduleRunPage = { items: Array<ScheduleRunInfo>; page: number; pageSize: number; total: number }
+
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
+
+export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
+
+export type ChannelMappingInfo = {
+  id: ChannelMappingID
+  installId: ChannelInstallID
+  provider: ChannelProvider
+  place: string
+  placeName: string
+  space: { id: SpaceID; name: string }
+  agent: { id: AgentID; name: string } | null
+  fallback: boolean
+  fallbackUser: { id: AuthUserID; name: string } | null
+  triggers: Array<ChannelTriggerSetting>
+  createdAt: string
+  updatedAt: string
+}
+
+export type ChannelInstallProviderInfo = { id: ChannelProvider; title: string; triggers: Array<ChannelTrigger> }
+
+export type GitHostListing = { kind: GitHostKind; installed: boolean; repositories: Array<GitHostRepository> }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
@@ -743,6 +885,8 @@ export type AppProfileInfo = {
   hiddenSpaces: number
   canAccess: boolean
   canShareEverySpace: boolean
+  canAdd: Array<AppProfileSpaceShape>
+  canRemove: Array<AppProfileSpaceShape>
   links: Array<AppProfileLink>
   items: Array<AppProfileItem>
   unused: Array<{ credentialId: CredentialID; label: CredentialEnvName }>
@@ -754,7 +898,11 @@ export type AppProfileInfo = {
 }
 
 export type CredentialRequirement =
-  CredentialEnv | CredentialSecret | CredentialOAuthApp | CredentialText | CredentialSelect
+  | CredentialEnv
+  | CredentialSecret
+  | CredentialOAuthApp
+  | CredentialText
+  | CredentialSelect
 
 export type CredentialInfo = {
   id: CredentialID
@@ -780,7 +928,10 @@ export type CredentialInfo = {
 }
 
 export type SessionMessageToolState =
-  SessionMessageToolStreaming | SessionMessageToolRunning | SessionMessageToolCompleted | SessionMessageToolError
+  | SessionMessageToolStreaming
+  | SessionMessageToolRunning
+  | SessionMessageToolCompleted
+  | SessionMessageToolError
 
 export type TaskPage = { items: Array<TaskInfo>; page: number; pageSize: number; total: number }
 
@@ -791,6 +942,22 @@ export type TaskEventInfo = {
   actor: TaskActor
   createdAt: string
 }
+
+export type SchedulePage = { items: Array<ScheduleInfo>; page: number; pageSize: number; total: number }
+
+export type ChannelMappingPage = { items: Array<ChannelMappingInfo>; page: number; pageSize: number; total: number }
+
+export type ChannelPlaceInfo = {
+  id: string
+  name: string
+  private: boolean
+  anyoneCanWrite: boolean
+  description?: string
+  url?: string
+  mapping: ChannelMappingInfo | null
+}
+
+export type ChannelInstallProviderInfos = { items: Array<ChannelInstallProviderInfo> }
 
 export type SpaceSettingsInfo = { id: SpaceID; settings: SettingsInfo; canUpdate: boolean; updatedAt: string | null }
 
@@ -863,6 +1030,8 @@ export type SessionMessageTool = {
 export type TaskActivityInfo =
   | { id: TaskEventID; type: "event"; event: TaskEventInfo }
   | { id: TaskCommentID; type: "comment"; comment: TaskCommentInfo }
+
+export type ChannelPlacePage = { items: Array<ChannelPlaceInfo>; page: number; pageSize: number; total: number }
 
 export type AgentPage = { items: Array<AgentInfo>; page: number; pageSize: number; total: number }
 
@@ -1081,7 +1250,8 @@ export type SpaceMemberListOutput = SpaceMemberPage
 
 export type SpaceMemberCreateInput = {
   readonly payload:
-    { readonly spaceId: string; readonly userId: string } | { readonly spaceId: string; readonly email: string }
+    | { readonly spaceId: string; readonly userId: string }
+    | { readonly spaceId: string; readonly email: string }
 }
 
 export type SpaceMemberCreateOutput = SpaceMemberInfo
@@ -1218,7 +1388,7 @@ export type SpaceSettingsUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["settings"]
@@ -1245,7 +1415,7 @@ export type OrganizationSettingsUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["settings"]
@@ -1304,7 +1474,7 @@ export type AgentCreateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["ownerSpaceId"]
@@ -1325,7 +1495,7 @@ export type AgentCreateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["name"]
@@ -1346,7 +1516,7 @@ export type AgentCreateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["description"]
@@ -1367,7 +1537,7 @@ export type AgentCreateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["isSubagent"]
@@ -1388,7 +1558,7 @@ export type AgentCreateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["settings"]
@@ -1414,7 +1584,7 @@ export type AgentUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     } | null
   }["name"]
@@ -1434,7 +1604,7 @@ export type AgentUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     } | null
   }["description"]
@@ -1454,7 +1624,7 @@ export type AgentUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     } | null
   }["isSubagent"]
@@ -1474,7 +1644,7 @@ export type AgentUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     } | null
   }["settings"]
@@ -5265,15 +5435,37 @@ export type TaskActivityListInput = {
 export type TaskActivityListOutput = TaskActivityPage
 
 export type LabelListInput = {
-  readonly page: { readonly page: number; readonly pageSize: number }["page"]
-  readonly pageSize: { readonly page: number; readonly pageSize: number }["pageSize"]
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
 }
 
 export type LabelListOutput = LabelPage
 
 export type LabelCreateInput = {
-  readonly name: { readonly name: string; readonly color?: string | null | null }["name"]
-  readonly color?: { readonly name: string; readonly color?: string | null | null }["color"]
+  readonly spaceId?: {
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly color?: string | null | null
+  }["spaceId"]
+  readonly name: {
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly color?: string | null | null
+  }["name"]
+  readonly color?: {
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly color?: string | null | null
+  }["color"]
 }
 
 export type LabelCreateOutput = LabelInfo
@@ -5289,6 +5481,216 @@ export type LabelUpdateOutput = LabelInfo
 export type LabelArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type LabelArchiveOutput = LabelInfo
+
+export type ScheduleListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("active" | "paused" | "ended") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly status?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("active" | "paused" | "ended") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["status"]
+  readonly search?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("active" | "paused" | "ended") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["search"]
+  readonly page: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("active" | "paused" | "ended") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("active" | "paused" | "ended") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type ScheduleListOutput = SchedulePage
+
+export type ScheduleGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type ScheduleGetOutput = ScheduleInfo
+
+export type ScheduleCreateInput = {
+  readonly spaceId: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["spaceId"]
+  readonly name: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["name"]
+  readonly message: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["message"]
+  readonly when: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["when"]
+  readonly target?: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["target"]
+  readonly agentId?: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["agentId"]
+}
+
+export type ScheduleCreateOutput = ScheduleInfo
+
+export type ScheduleUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly when?:
+      | (
+          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly at: string }
+          | { readonly in: string }
+        )
+      | null
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null | null
+  }["name"]
+  readonly message?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly when?:
+      | (
+          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly at: string }
+          | { readonly in: string }
+        )
+      | null
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null | null
+  }["message"]
+  readonly when?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly when?:
+      | (
+          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly at: string }
+          | { readonly in: string }
+        )
+      | null
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null | null
+  }["when"]
+  readonly target?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly when?:
+      | (
+          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly at: string }
+          | { readonly in: string }
+        )
+      | null
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null | null
+  }["target"]
+  readonly agentId?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly when?:
+      | (
+          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly at: string }
+          | { readonly in: string }
+        )
+      | null
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null | null
+  }["agentId"]
+}
+
+export type ScheduleUpdateOutput = ScheduleInfo
+
+export type ScheduleArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type ScheduleArchiveOutput = ScheduleInfo
+
+export type SchedulePauseInput = { readonly id: { readonly id: string }["id"] }
+
+export type SchedulePauseOutput = ScheduleInfo
+
+export type ScheduleResumeInput = { readonly id: { readonly id: string }["id"] }
+
+export type ScheduleResumeOutput = ScheduleInfo
+
+export type ScheduleRunInput = { readonly id: { readonly id: string }["id"] }
+
+export type ScheduleRunOutput = ScheduleInfo
+
+export type ScheduleRunListInput = {
+  readonly scheduleId: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["scheduleId"]
+  readonly page: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["pageSize"]
+}
+
+export type ScheduleRunListOutput = ScheduleRunPage
 
 export type CredentialListInput = {
   readonly owner?: {
@@ -5784,3 +6186,142 @@ export type RenInferenceConnectionRenameOutput = RenInferenceConnection
 export type RenInferenceConnectionRemoveInput = { readonly id: { readonly id: string }["id"] }
 
 export type RenInferenceConnectionRemoveOutput = void
+
+export type ChannelInstallListInput = {
+  readonly page: { readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: { readonly page: number; readonly pageSize: number }["pageSize"]
+}
+
+export type ChannelInstallListOutput = ChannelInstallPage
+
+export type ChannelInstallUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly defaultSpaceId: { readonly defaultSpaceId: string | null }["defaultSpaceId"]
+}
+
+export type ChannelInstallUpdateOutput = ChannelInstallInfo
+
+export type ChannelInstallRemoveInput = { readonly id: { readonly id: string }["id"] }
+
+export type ChannelInstallRemoveOutput = ChannelInstallInfo
+
+export type ChannelMappingListInput = {
+  readonly installId?: {
+    readonly installId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["installId"]
+  readonly spaceId?: {
+    readonly installId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: {
+    readonly installId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly installId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type ChannelMappingListOutput = ChannelMappingPage
+
+export type ChannelMappingCreateInput = {
+  readonly installId: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+  }["installId"]
+  readonly place: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+  }["place"]
+  readonly spaceId: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+  }["spaceId"]
+  readonly agentId?: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+  }["agentId"]
+  readonly fallback?: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+  }["fallback"]
+  readonly fallbackUserId?: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+  }["fallbackUserId"]
+  readonly triggers?: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+  }["triggers"]
+}
+
+export type ChannelMappingCreateOutput = ChannelMappingInfo
+
+export type ChannelMappingRemoveInput = { readonly id: { readonly id: string }["id"] }
+
+export type ChannelMappingRemoveOutput = ChannelMappingInfo
+
+export type ChannelConnectChannelProviderListOutput = ChannelInstallProviderInfos
+
+export type ChannelConnectChannelInstallStartInput = {
+  readonly provider: { readonly provider: "slack" | "linear" | "github" }["provider"]
+}
+
+export type ChannelConnectChannelInstallStartOutput = WriteResultRedirect
+
+export type ChannelConnectChannelPlaceListInput = {
+  readonly installId: { readonly installId: string; readonly page: number; readonly pageSize: number }["installId"]
+  readonly page: { readonly installId: string; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: { readonly installId: string; readonly page: number; readonly pageSize: number }["pageSize"]
+}
+
+export type ChannelConnectChannelPlaceListOutput = ChannelPlacePage
+
+export type RepositoryListOutput = Array<GitHostListing>
+
+export type SignInSignInProviderListOutput = AuthSignInProviders

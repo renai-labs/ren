@@ -140,6 +140,7 @@ const setup = Effect.gen(function* () {
       ),
     session: (fields: Partial<Effect.Success<Harness.Instance["sessions"]>[number]> = {}) => ({
       id: "root",
+      root: true,
       progress: "0",
       active: false,
       inbox: [],
@@ -316,8 +317,7 @@ test.todo("REN-1486 two alarms that reconcile at once resend a queued prompt onc
     yield* Fiber.join(alarms)
     expect(cell.events.filter((event) => event === "open")).toHaveLength(1)
     expect(cell.events.filter((event) => event.startsWith("resend:"))).toEqual(["resend:first"])
-  }).pipe(Effect.scoped, Effect.provide(TestClock.layer()), Effect.runPromise),
-)
+  }).pipe(Effect.scoped, Effect.provide(TestClock.layer()), Effect.runPromise))
 
 const opencode = testEffect(BrainTest.layer)
 

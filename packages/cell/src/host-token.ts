@@ -8,7 +8,7 @@ import { HttpApiClient } from "effect/http-api"
 import { Fence } from "./fence.js"
 import { ModelStore } from "./model-store.js"
 
-const refreshBefore = Duration.hours(1)
+export const refreshBefore = Duration.hours(1)
 
 export const renAnswersWithin = Duration.seconds(10)
 

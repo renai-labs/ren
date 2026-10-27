@@ -11,8 +11,16 @@ export type Alias = typeof Alias.Type
 
 export const Repository = Schema.String.check(
   Schema.isNonEmpty({ message: "Repository is required." }),
-  Schema.isPattern(/^(?!file:)/iu, { message: "A local file: repository is not supported." }),
+  // oxlint-disable-next-line ren/no-comments -- R48: a host such as GitLab nests groups, so each git host decides how many path segments it accepts.
+  Schema.isPattern(/^https:\/\/[^/\s]+(?:\/[^/\s]+){2,}$/u, {
+    message: "Use the repository’s https://<host>/<owner>/<repo> address.",
+  }),
 ).annotate({ identifier: "Reference.Repository" })
+
+export const Description = Schema.String.check(Schema.isNonEmpty({ message: "Description is required." })).annotate({
+  identifier: "Reference.Description",
+  description: "What the repository holds. The agent sees a reference only through its description (R24).",
+})
 
 export const Branch = Schema.String.check(
   Schema.isPattern(/^(?!-)(?!.*\.\.)(?!.*\/\/)(?!.*@\{)(?!.*\.lock$)[^\s~^:?*[\\]+(?<![/.])$/u, {
@@ -25,7 +33,7 @@ export const Info = Schema.Struct({
   alias: Alias,
   repository: Repository,
   branch: Schema.optionalKey(Branch),
-  description: Schema.optionalKey(Schema.String),
+  description: Description,
 }).annotate({ identifier: "Reference.Info" })
 
 export const List = Schema.Array(Info).annotate({ identifier: "Reference.List" })

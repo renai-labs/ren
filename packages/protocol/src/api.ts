@@ -4,6 +4,9 @@ import { AppGroup } from "./groups/app.js"
 import { AppRegistryGroup } from "./groups/app-registry.js"
 import { AppProfileGroup, AppProfileReachGroup } from "./groups/app-profile.js"
 import { AgentMembershipGroup } from "./groups/agent-membership.js"
+import { ChannelConnectGroup, ChannelInstallGroup, ChannelMappingGroup } from "./groups/channel-install.js"
+import { RepositoryGroup } from "./groups/repository.js"
+import { SignInGroup } from "./groups/sign-in.js"
 import { ChatGroup } from "./groups/chat.js"
 import { CredentialGroup } from "./groups/credential.js"
 import { CredentialConnectGroup } from "./groups/credential-connect.js"
@@ -17,6 +20,7 @@ import { LabelGroup } from "./groups/label.js"
 import { MeGroup } from "./groups/me.js"
 import { OrganizationSettingsGroup } from "./groups/organization-settings.js"
 import { RenInferenceGroup } from "./groups/ren-inference.js"
+import { ScheduleGroup, ScheduleRunGroup } from "./groups/schedule.js"
 import { SessionGroup } from "./groups/session.js"
 import { SpaceGroup } from "./groups/space.js"
 import { SpaceEnvironmentTemplateGroup } from "./groups/space-environment-template.js"
@@ -49,11 +53,18 @@ export const Api = HttpApi.make("server")
   .add(TaskCommentGroup)
   .add(TaskActivityGroup)
   .add(LabelGroup)
+  .add(ScheduleGroup)
+  .add(ScheduleRunGroup)
   .add(CredentialGroup)
   .add(CredentialConnectGroup)
   .add(OAuthSessionGroup)
   .add(OAuthAppGroup)
   .add(RenInferenceGroup)
+  .add(ChannelInstallGroup)
+  .add(ChannelMappingGroup)
+  .add(ChannelConnectGroup)
+  .add(RepositoryGroup)
+  .add(SignInGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren API",

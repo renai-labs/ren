@@ -32,6 +32,7 @@ import {
   Result,
   Schema,
 } from "effect"
+import { Random } from "@ren/util/random"
 import type { Actor } from "./actor.js"
 import { ProfileItems } from "./app/profile-items.js"
 import { ProfileLabel } from "./app/profile-label.js"
@@ -86,8 +87,6 @@ type Discovered = typeof Discovered.Type
 const decodeDiscovered = Schema.decodeUnknownOption(Discovered)
 
 const SealedJson = Schema.fromJsonString(Credentials.Sealed)
-
-const random = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url")
 
 const sha256 = OAuthToken.sha256
 
@@ -404,7 +403,7 @@ export const layer = Layer.effect(
           madeFor,
           provider: transport.provider,
           integration: transport.integration,
-          state: random(),
+          state: Random.token(32),
           callbackUrl,
         })
       const target = targetOf(declaration)
@@ -434,8 +433,8 @@ export const layer = Layer.effect(
         )
       const scopes = scopesOf(discovery, app, auth, existing)
       const client = yield* clientOf(actor, app, auth, discovery)
-      const verifier = random()
-      const state = random()
+      const verifier = Random.token(32)
+      const state = Random.token(32)
       const expiresAt = new Date((yield* Clock.currentTimeMillis) + OAuthSession.lifetimeMinutes * 60_000)
       const id = OAuthSession.ID.create()
       const authorize = authorizeUrl(

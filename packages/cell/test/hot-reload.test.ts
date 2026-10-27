@@ -13,6 +13,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { AppStore } from "../src/app-store.js"
+import { ChannelStore } from "../src/channel-store.js"
 import { BrainKeys } from "../src/brain-keys.js"
 import { BrainStorage } from "../src/brain-storage.js"
 import { Cell } from "../src/cell.js"
@@ -144,7 +145,7 @@ const open = Effect.fnUntraced(function* (
     layers: TestSettings.layers(),
     chats: [],
     deleted: [],
-    env: { variables: {} },
+    env: { variables: {}, placeholders: {} },
   } satisfies PullReply
   const state: {
     reply: PullReply
@@ -242,6 +243,7 @@ const open = Effect.fnUntraced(function* (
         Layer.mergeAll(
           ModelStore.layer,
           AppStore.layer,
+          ChannelStore.layer,
           ChatSettings.layer,
           Cell.activityLayer,
           CredentialEnv.layer,
@@ -285,10 +287,10 @@ const open = Effect.fnUntraced(function* (
 it.live("a pull with the same full state writes nothing and keeps the harness closed (HR9)", () =>
   Effect.gen(function* () {
     const opened = yield* open()
-    opened.answer(catalog, { env: { variables: { NOTES_KEY: "ren:NOTES_KEY" } } })
+    opened.answer(catalog, { env: { variables: {}, placeholders: { NOTES_KEY: "ren:NOTES_KEY" } } })
     yield* opened.reload.pull
     expect(yield* opened.saved).toEqual(catalog)
-    expect(yield* opened.env.current).toEqual({ NOTES_KEY: "ren:NOTES_KEY" })
+    expect((yield* opened.env.current).placeholders).toEqual({ NOTES_KEY: "ren:NOTES_KEY" })
     const written = opened.writes.length
     yield* opened.reload.pull
     expect(opened.writes.slice(written).filter((key) => key !== "ren:public-keys")).toEqual([])
@@ -296,7 +298,7 @@ it.live("a pull with the same full state writes nothing and keeps the harness cl
     opened.answer(empty)
     yield* opened.reload.pull
     expect(yield* opened.saved).toEqual(empty)
-    expect(yield* opened.env.current).toEqual({})
+    expect((yield* opened.env.current).placeholders).toEqual({})
     expect(yield* opened.harness.state).toEqual({ isOpen: false, holders: 0 })
   }),
 )
@@ -305,9 +307,9 @@ it.live("a failed catalog save still applies the rest of the pull and is retried
   Effect.gen(function* () {
     const opened = yield* open()
     yield* Effect.promise(() => mkdir(opened.path))
-    opened.answer(catalog, { env: { variables: { NOTES_KEY: "ren:NOTES_KEY" } } })
+    opened.answer(catalog, { env: { variables: {}, placeholders: { NOTES_KEY: "ren:NOTES_KEY" } } })
     yield* opened.reload.pull
-    expect(yield* opened.env.current).toEqual({ NOTES_KEY: "ren:NOTES_KEY" })
+    expect((yield* opened.env.current).placeholders).toEqual({ NOTES_KEY: "ren:NOTES_KEY" })
     yield* Effect.promise(() => rm(opened.path, { recursive: true }))
     yield* opened.reload.pull
     expect(yield* opened.saved).toEqual(catalog)
@@ -431,6 +433,29 @@ it.live("a busy chat that Ren deleted is interrupted and dropped, and its model 
     held.release()
     expect(yield* harness.transcript.has(sessionId)).toBe(false)
     expect(held.calls).toHaveLength(1)
+  }),
+)
+
+it.live("a pull names only root chats, so Ren never deletes a running subagent that it has not synced yet", () =>
+  Effect.gen(function* () {
+    const opened = yield* open({ active: true })
+    yield* opened.reload.pull
+    const harness = yield* opened.harness.get
+    const sessionId = Session.ID.create()
+    yield* harness.start({ sessionId, harness: "opencode", interactive: true })
+    const client = yield* OpenCodeServer.client(harness.fetch)
+    const stub = Shared.stub()
+    const child = stub.script({ hold: true })
+    yield* Effect.addFinalizer(() => Effect.sync(child.release))
+    const parent = stub.script({
+      tool: { name: "subagent", input: { agent: "general", description: "Help", prompt: `${child.marker} help` } },
+    })
+    yield* client.session
+      .prompt({ sessionID: SessionID.make(sessionId), text: `${parent.marker} go` })
+      .pipe(Effect.orDie)
+    yield* Effect.promise(() => child.called())
+    yield* opened.reload.pull
+    expect(opened.requests.at(-1)?.roots).toEqual([sessionId])
   }),
 )
 

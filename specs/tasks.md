@@ -45,7 +45,7 @@ Rules:
 1. A new task is `todo`.
 2. The first start by any agent sets `todo` to `in_progress`. A human or an agent can also set `in_progress`.
 3. A handoff does not change the status. A task that waits for its next agent is still `in_progress`.
-4. Only a human sets `done` or `dismissed`. An agent tool refuses both values. Later, a merged GitHub pull request that the task links sets `done` with the actor "system" (phase 3; v2 has no GitHub integration yet).
+4. A person sets `done` or `dismissed`, or an agent acting for the person who sent the turn (`runtime/access/README.md` AC10). A merged GitHub pull request that the task links sets `done` with no actor and the `automation` data on the `status` event ([channels piece I](runtime/channels/i-tasks.md), CH43).
 5. Nothing sets `todo` again automatically. A human can reopen a task to `todo` or `in_progress`.
 6. When the status becomes `done` or `dismissed`, Ren turns human review off.
 7. The actionable statuses are `todo` and `in_progress`. The default list shows them (v1 L32).
@@ -65,7 +65,7 @@ The task stores two fields: `humanReview` (boolean) and `humanReviewReason` (tex
 
 - An agent turns review on with the `task_review` tool and a reason, then ends its turn. The session does not wait: a review can take days.
 - A person can also turn review on, with a reason.
-- Only a person turns review off, with a decision: **Approve** (optional comment) or **Request changes** (comment required). Any member of the space who can write to the task decides; the owner is shown as the person expected to act. A message in the agent's session does not close the review.
+- A person, or an agent acting for the person who sent the turn (`runtime/access/README.md` AC10), turns review off, with a decision: **Approve** (optional comment) or **Request changes** (comment required). Any member of the space who can write to the task decides; the owner is shown as the person expected to act. A message in the agent's session does not close the review.
 - Mark done, dismiss and removing the agent are the normal task actions. They also turn review off, with no decision.
 - Before deciding, a person can do anything: comment, edit the description, chat in the session, or check the pull request.
 - The decision takes `start: "continue" | "none"`. With `continue`, Ren continues the agent's latest session with a message: the decision, the comment, and whether the description changed after the request. With `none`, the agent stays idle until someone starts it.
@@ -192,7 +192,7 @@ As in v1 (v1 L89–L97):
 
 As in v1 (v1 L81–L88): a task links GitHub pull requests, Linear issues, Slack threads and plain URLs. Each link has a kind and a canonical key; the pair (task, kind, key) is unique. Links change only with `addLinks` and `removeLinks`. A task has at most 32 links. The `link` events are the only record of who added or removed a link; a link row has no creator. Creating a task with links writes a `link` event for them, by the creator. The app shows links but does not add them (v1 parity).
 
-**TODO (channels):** v1 routes a message in a linked thread to the task's agent (v1 hand-offs). v2 has no channels yet. Links are stored now; routing comes with channels.
+Channels route a message in a linked thread to the task's agent, and follow the task through hand-offs ([channels piece I](runtime/channels/i-tasks.md), CH42). Links also have the kind `github_issue` (CH45).
 
 ## Subtasks (phase 2)
 
@@ -202,7 +202,7 @@ v1 has no subtasks. v2 adds them with the smallest model:
 - `create` and `update` set the parent; `update` with `parentId: null` makes a subtask a task of its own. A change writes a `parent` event on the subtask only. The parent's trail does not change.
 - A subtask is in its parent's space, always. The database holds this: the parent key is (`parent_id`, `space_id`), and it cascades a parent's move to its subtasks. A parent from another space is refused.
 - `assign` with a `spaceId` moves a parent and all its subtasks, archived ones included. Each live subtask gets an `assigned` event. A subtask's agent that is not usable in the new space is cleared, which turns its human review off, and a subtask's owner who is not a member of the new space is cleared. A subtask cannot move alone.
-- A subtask has its own agent, owner, status, human review, priority, labels, due date and links. It moves through the factory on its own. Its links are its own, so a pull request that a subtask opens links to the subtask, and `linkedTo` finds the task that owns the link. When channels exist, routing can also look at the parent's links.
+- A subtask has its own agent, owner, status, human review, priority, labels, due date and links. It moves through the factory on its own. Its links are its own, so a pull request that a subtask opens links to the subtask, and `linkedTo` finds the task that owns the link. Channel routing looks at a task's own links only, not its parent's.
 - The parent's status is not derived from its subtasks. Closing a parent leaves its subtasks as they are. `Task.Info.subtasks` holds the count, `{ total, done }`, for example "2 of 5 done": it counts live subtasks, leaves out dismissed ones, and is null when the task has no live subtasks. A subtask's `parent` holds the parent's ID, identifier and title.
 - Archiving a parent archives its live subtasks, each with an `archived` event.
 - The start message does not name the parent or the subtasks; an agent reads them with `task_get` and `task_list`.
@@ -273,8 +273,8 @@ Deleting an organization deletes all of these. Deleting a user, agent or session
 - A member of a space reads and writes the tasks of that space. Others get "not found", which never says that the task exists (v1 L2, L8).
 - Writes follow the space's existing policy. Read-only roles read only (v1 L7).
 - An archived task leaves every list, and a get returns not found. Its events stay (v1 L9, L10).
-- `done` and `dismissed` need a user actor with no agent.
-- An agent acting in a session gets only the policy statements marked `agents: true`, and only in its session's space: `Access.plan` carries the space, each policy's filter adds it, and `isAllowed` refuses a resource of another space. Any other statement denies agents, so a service that ignores the agent cannot widen its reach. Agents get every task action except `archive`, and also `task-comment.create`, `task-activity.list`, `label.list` and `space.get`. Roles still come from the session's creator, so an admin's agent has admin rights inside its space.
+- `done` and `dismissed` follow the task policy like every other change (`runtime/access/README.md` AC10).
+- An agent acting in a session has the rights of the person who sent the turn, except in that person's private space when the session is elsewhere (`runtime/access/README.md` AC17, AC18).
 
 ## API
 

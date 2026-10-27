@@ -59,6 +59,18 @@ variable "server_environment" {
   description = "Plain environment values of the server, which are not secret."
 }
 
+variable "rate_limit" {
+  type        = number
+  default     = 2000
+  description = "Requests from one address in 5 minutes before the load balancer's firewall blocks it."
+}
+
+variable "blocked_ips" {
+  type        = list(string)
+  default     = []
+  description = "IPv4 ranges (CIDR) the load balancer's firewall blocks."
+}
+
 variable "server_cpu" {
   type    = number
   default = 512

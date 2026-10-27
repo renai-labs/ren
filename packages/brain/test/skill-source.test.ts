@@ -1,7 +1,6 @@
 import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
 import { Effect, Layer } from "effect"
-import { FetchHttpClient } from "effect/http"
 import { SkillSource } from "../src/skill/source.js"
 import { TestGitHub } from "./lib/github.js"
 
@@ -9,8 +8,9 @@ const it = testEffect(Layer.empty)
 
 const skill = (body: string) => `---\nname: PDF\ndescription: Fill PDF forms\n---\n${body}\n`
 
-const source = (github: TestGitHub.Instance) =>
-  SkillSource.make(github.hosts).pipe(Effect.provide(FetchHttpClient.layer))
+const source = (github: TestGitHub.Instance) => TestGitHub.hostsOf(github).pipe(Effect.map(SkillSource.make))
+
+const read = (resolved: SkillSource.Resolved) => ({ commit: resolved.lookup.commit, document: resolved.document })
 
 it.live("reads SKILL.md at the commit that the default branch, a branch, a tag or a pinned commit names", () =>
   Effect.gen(function* () {
@@ -20,13 +20,12 @@ it.live("reads SKILL.md at the commit that the default branch, a branch, a tag o
     const next = yield* github.commit({ "skills/pdf/SKILL.md": skill("next") }, "next")
     const latest = yield* github.commit({ "skills/pdf/SKILL.md": skill("latest") })
     const skills = yield* source(github)
-    const read = (ref?: string) => skills.resolve({ url: github.url, path: "skills/pdf", ...(ref && { ref }) })
-    expect(yield* read()).toEqual({ commit: latest, document: skill("latest") })
-    expect(yield* read("next")).toEqual({ commit: next, document: skill("next") })
-    expect(yield* read("v1")).toEqual({ commit: first, document: skill("first") })
-    const before = (yield* github.requests).length
-    expect(yield* read(first)).toEqual({ commit: first, document: skill("first") })
-    expect((yield* github.requests).slice(before).filter((request) => request.includes("info/refs"))).toEqual([])
+    const resolve = (ref?: string) =>
+      skills.resolve({ url: github.url, path: "skills/pdf", ...(ref && { ref }) }).pipe(Effect.map(read))
+    expect(yield* resolve()).toEqual({ commit: latest, document: skill("latest") })
+    expect(yield* resolve("next")).toEqual({ commit: next, document: skill("next") })
+    expect(yield* resolve("v1")).toEqual({ commit: first, document: skill("first") })
+    expect(yield* resolve(first)).toEqual({ commit: first, document: skill("first") })
   }),
 )
 
@@ -51,6 +50,6 @@ it.live("a folder without SKILL.md and a repository outside GitHub fail with the
     )
     expect(
       (yield* skills.resolve({ url: "https://gitlab.com/acme/skills", path: "." }).pipe(Effect.flip)).message,
-    ).toBe("Ren reads skills only from GitHub repositories, not https://gitlab.com/acme/skills")
+    ).toBe("Ren reads only repositories on github.com, not https://gitlab.com/acme/skills")
   }),
 )

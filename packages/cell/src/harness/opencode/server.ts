@@ -19,15 +19,13 @@ import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
 import type { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { SkillCache } from "@ren/brain/skill/cache"
-import { SkillSource } from "@ren/brain/skill/source"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
 import type { Models } from "@ren/schema/models"
 import type { AppCatalog } from "@ren/schema/app-catalog"
+import type { Channel } from "@ren/schema/channel"
 import {
   Context,
   Deferred,
-  type Duration,
   Effect,
   Fiber,
   Layer,
@@ -49,6 +47,7 @@ import { Credentials } from "./credentials.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
+import { GitSources } from "../../git-sources.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeExecution } from "./execution.js"
 import type { LayerNode } from "@opencode/util/effect/layer-node"
@@ -60,7 +59,8 @@ export interface Options {
   readonly confinement?: RenPlugin.Confinement
   readonly makeDirectory?: (directory: string) => Effect.Effect<void>
   readonly apps?: Option.Option<AppCatalog.Info>
-  readonly skills?: { readonly hosts?: SkillSource.Hosts; readonly refresh?: Duration.Input }
+  readonly channels?: ReadonlyArray<Channel.Provider>
+  readonly sources?: GitSources.Interface
   readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
   readonly egress?: boolean
 }
@@ -159,6 +159,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     revision: 0,
     models: initial,
     apps: options.apps ?? Option.none(),
+    channels: options.channels ?? [],
     chats: Option.isSome(chats) ? yield* Ref.get(chats.value.latest) : new Map(),
   })
   const updates = yield* Semaphore.make(1)
@@ -198,8 +199,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       ),
     )
   const api = yield* client(fetch)
-  const skillSource = yield* SkillSource.make(options.skills?.hosts).pipe(Effect.provide(FetchHttpClient.layer))
-  const skillCache = yield* SkillCache.make(skillSource, { refresh: options.skills?.refresh ?? "5 minutes" })
+  const sources = options.sources ?? (yield* GitSources.make())
   const approvals = (sessionId: string) =>
     located(sessionId, Location.Service).pipe(
       Effect.flatMap((location) => api.permission.saved.list({ projectID: location.project.id }).pipe(Effect.orDie)),
@@ -230,7 +230,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       approvals,
       executions.get,
       options.directoryOf,
-      { source: skillSource, cache: skillCache },
+      sources,
       Option.map(options.ren ?? Option.none(), (access) => ({
         ...access,
         lastSender: (sessionId: string) =>

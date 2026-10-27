@@ -5,10 +5,19 @@ import { Primitive } from "../src/primitive.js"
 const exceptions = new Map([
   ["health", "Server status for clients and load balancers."],
   ["me", "The signed-in user and their active organization."],
+  ["sign-in", "The accounts a person can sign in with, before anyone is signed in."],
   ["invitation", "Invitation preview before the invitee signs in."],
   [
     "environmentProvider",
     "The environment providers of the deployment and the config schema of each, for the environment template form.",
+  ],
+  [
+    "channel-connect",
+    "Lists the providers this server can install, starts an install (a write that returns a redirect), and lists the places an install reaches, read live from a provider that can be unavailable: no primitive operation is either.",
+  ],
+  [
+    "repository",
+    "Lists, for each git host, the repositories that the organization can read, read live from hosts that can be unavailable: not a page of stored records, which no primitive operation is.",
   ],
   [
     "credential-connect",

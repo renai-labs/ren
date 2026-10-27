@@ -7,6 +7,7 @@ import { SessionInbox } from "@opencode/schema/session-inbox"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { BrainSettings } from "@ren/brain/settings"
 import type { AppCatalog } from "@ren/schema/app-catalog"
+import type { Channel } from "@ren/schema/channel"
 import type { SessionCreateInput, SessionListInput, SessionUpdateInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
 import { Environment } from "@ren/schema/environment"
@@ -33,8 +34,10 @@ import { mkdir, rm, stat } from "node:fs/promises"
 import opencode from "../../../node_modules/@opencode/core/package.json"
 import { BrainStorage } from "../../brain-storage.js"
 import { AppStore } from "../../app-store.js"
+import { ChannelStore } from "../../channel-store.js"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
+import { GitSources } from "../../git-sources.js"
 import { HarnessStorage } from "../../harness-storage.js"
 import { HostToken } from "../../host-token.js"
 import { ModelRefresh } from "../../model-refresh.js"
@@ -328,6 +331,19 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
     Effect.orDie,
   )
   if (isSent) return { messageId: input.messageId }
+  if (input.synthetic) {
+    yield* client.session
+      .synthetic({
+        sessionID,
+        id: messageID,
+        text: input.prompt.text,
+        description: input.synthetic.description,
+        metadata: { source: input.synthetic.source },
+        delivery: input.delivery,
+      })
+      .pipe(Effect.orDie)
+    return { messageId: input.messageId }
+  }
   yield* client.session
     .prompt({
       sessionID,
@@ -335,7 +351,12 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
       text: input.prompt.text,
       files: input.prompt.files?.map((file) => ({ uri: file.url, name: file.name })),
       delivery: input.delivery,
-      metadata: { userID: input.sender.userId, ...(input.sender.memberId && { memberID: input.sender.memberId }) },
+      metadata: {
+        userID: input.sender.userId,
+        ...(input.sender.memberId && { memberID: input.sender.memberId }),
+        ...(input.channel && { channel: input.channel }),
+        ...(input.schedule && { schedule: input.schedule }),
+      },
     })
     .pipe(Effect.orDie)
   return { messageId: input.messageId }
@@ -350,8 +371,9 @@ type Opener = (
   config: string,
   settings: Option.Option<ChatSettings.Interface>,
   apps: Option.Option<AppCatalog.Info>,
+  channels: ReadonlyArray<Channel.Provider>,
   ren: Option.Option<OpenCodeMcp.RenAccess>,
-  host: { readonly egress: boolean },
+  host: { readonly egress: boolean; readonly sources: GitSources.Interface },
 ) => Effect.Effect<OpenCodeServer.Instance, Error, Scope.Scope>
 
 const layerWith = (opener: Opener) =>
@@ -363,8 +385,11 @@ const layerWith = (opener: Opener) =>
       const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
       const settings = cell.vars.REN_URL ? yield* Effect.serviceOption(ChatSettings.Service) : Option.none()
       const apps = yield* Effect.serviceOption(AppStore.Service)
+      const channels = yield* Effect.serviceOption(ChannelStore.Service)
       const address = yield* Effect.serviceOption(RenAddress.Service)
       const hostToken = yield* Effect.serviceOption(HostToken.Service)
+      const found = yield* Effect.serviceOption(GitSources.Service)
+      const sources = Option.isSome(found) ? found.value : yield* GitSources.make()
       const ren =
         cell.vars.REN_URL && Option.isSome(address) && Option.isSome(hostToken)
           ? Option.some({ address: address.value.current, token: hostToken.value.current })
@@ -392,8 +417,12 @@ const layerWith = (opener: Opener) =>
                 cell.vars.OPENCODE_CONFIG,
                 settings,
                 Option.isSome(apps) ? yield* apps.value.current : Option.none(),
+                Option.isSome(channels) ? yield* channels.value.current : [],
                 ren,
-                { egress: cell.vars.REN_EGRESS === "1" },
+                {
+                  egress: cell.vars.REN_EGRESS === "1",
+                  sources,
+                },
               )
               return yield* make(server, endpoints, settings, Option.some({ inference, refreshKey }))
             }),
@@ -404,23 +433,27 @@ const layerWith = (opener: Opener) =>
   )
 
 export const layer = (storage: DurableObjectStorage) =>
-  layerWith((endpoints, refreshKey, connections, config, settings, apps, ren, host) =>
+  layerWith((endpoints, refreshKey, connections, config, settings, apps, channels, ren, host) =>
     OpenCodeServer.open(storage, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
       apps,
+      channels,
       ren,
       egress: host.egress,
+      sources: host.sources,
       directoryOf: (sessionId) => `/workspace/${sessionId}`,
     }),
   )
 
 export const layerProcess = (database: string, confinement: RenPlugin.Confinement) =>
-  layerWith((endpoints, refreshKey, connections, config, settings, apps, ren, host) =>
+  layerWith((endpoints, refreshKey, connections, config, settings, apps, channels, ren, host) =>
     OpenCodeServer.openProcess(database, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
       apps,
+      channels,
       ren,
       egress: host.egress,
+      sources: host.sources,
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
       confinement,
       makeDirectory: (directory) => Effect.promise(() => mkdir(directory, { recursive: true })),
@@ -492,6 +525,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     yield* server.configure({
       models,
       ...(update.apps && { apps: update.apps }),
+      ...(update.channels && { channels: update.channels }),
       ...(Option.isSome(server.chats) && { chats: yield* Ref.get(server.chats.value.latest) }),
     })
   })
@@ -671,6 +705,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           )
           return {
             id: info.id,
+            root: true,
             inbox,
             progress: String(DateTime.toEpochMillis(info.time.updated)),
             unfinished: Option.isSome(lastRelevantMessage) && lastRelevantMessage.value.type !== "idle",
@@ -687,13 +722,14 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         ...snapshots,
         ...active
           .filter((id) => !snapshots.some((session) => session.id === id))
-          .map((id) => ({ id, inbox: [], progress: "", unfinished: false })),
+          .map((id) => ({ id, root: false, inbox: [], progress: "", unfinished: false })),
       ].map((session) => {
         const questionAgesMs = forms
           .filter((form) => form.sessionID === session.id)
           .map((form) => now - (state.firstAskedAt.get(form.id) ?? now))
         return {
           id: session.id,
+          root: session.root,
           active: active.includes(session.id),
           progress: session.progress,
           unfinished: session.unfinished,

@@ -107,6 +107,7 @@ const stackOf = async (config: CoreConfig) => {
   return Host.stack({
     port,
     root,
+    keepBrains: true,
     config: {
       ENVIRONMENT_DIRECTORY: remote,
       ENVIRONMENT_TOKEN_LIFETIME: "20 seconds",
@@ -287,6 +288,7 @@ describe("environments of chats on a local sandbox brain", () => {
     )
     spaceId = await database.runPromise(Seed.team(organizationId))
     creator = (await database.runPromise(Seed.user())).id
+    await database.runPromise(Seed.join(spaceId, creator))
     await startRen({ target: machine() })
   }, 240_000)
 

@@ -1,12 +1,13 @@
 import { AppCatalog } from "@ren/schema/app-catalog"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { Channel } from "@ren/schema/channel"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
 import { Signature } from "@ren/schema/signature"
 import type { Space } from "@ren/schema/space"
-import { Context, Schema } from "effect"
+import { Context, Effect, Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
 import { Host } from "./host.js"
 import {
@@ -61,12 +62,17 @@ export const PullRequest = Schema.Struct({
 
 export interface PullEnv extends Schema.Schema.Type<typeof PullEnv> {}
 export const PullEnv = Schema.Struct({
-  variables: Schema.Record(Schema.String, Schema.String),
-}).annotate({
-  identifier: "Host.PullEnv",
-  description:
-    "The credential env vars of the brain: `LABEL=ren:LABEL` for each key that reaches it (A35), and the value of a delivered secret (C9).",
-})
+  variables: Schema.Record(Schema.String, Schema.String).annotate({
+    description:
+      "Env vars that work anywhere: the value of a delivered secret (C9), the git identity, the GitHub URLs.",
+  }),
+  placeholders: Schema.Record(Schema.String, Schema.String)
+    .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({})))
+    .annotate({
+      description:
+        "Env vars that hold a ren:<LABEL> placeholder, which only the egress makes work: `LABEL=ren:LABEL` for each key that reaches the brain (A35), and the git header for GitHub. The brain gives them only to an environment behind the egress (R19).",
+    }),
+}).annotate({ identifier: "Host.PullEnv", description: "The env vars of the brain’s processes." })
 
 export interface PullInference extends Schema.Schema.Type<typeof PullInference> {}
 export const PullInference = Schema.Struct({
@@ -97,6 +103,12 @@ export const PullReply = Schema.Struct({
   apps: Schema.optionalKey(PullApps).annotate({
     description: "The resolved app catalog. Omitted when unsupported or unavailable.",
   }),
+  channels: Schema.optionalKey(
+    Schema.Array(Channel.Provider).annotate({
+      description:
+        "The channels whose bot MCP server reaches the brain’s space (CH54), at REN_URL/mcp/<provider>. Omitted means none.",
+    }),
+  ),
   layers: SessionSettings.Layers,
   chats: Schema.Array(PullChat),
   deleted: Schema.Array(Session.ID).annotate({

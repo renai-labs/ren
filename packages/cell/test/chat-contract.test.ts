@@ -1,4 +1,4 @@
-import { expect, setDefaultTimeout, test } from "bun:test"
+import { expect, test } from "bun:test"
 import { Agent } from "@opencode/schema/agent"
 import { Form } from "@opencode/schema/form"
 import { Permission } from "@opencode/schema/permission"
@@ -12,8 +12,6 @@ import { OpenCodeEvents } from "../src/harness/opencode/events.js"
 import { Translate } from "@ren/opencode-transcript/translate"
 import { BrainTest } from "./lib/brain.js"
 import { Shared } from "./lib/shared.js"
-
-setDefaultTimeout(60_000)
 
 const stub = Shared.stub()
 
@@ -50,7 +48,7 @@ const unreachable = new Set([
 
 test("every allowlisted event, message, inbox item, permission and form OpenCode produces in a session decodes with Ren's schemas", () =>
   Effect.gen(function* () {
-    const brain = yield* BrainTest.make()
+    const brain = yield* BrainTest.make({ plugin: BrainTest.instantRetry })
     yield* brain.start({ interactive: true })
     const sessionID = SessionID.make(brain.id)
     const seen: Array<unknown> = []

@@ -31,12 +31,17 @@ export interface Interface {
   readonly awake: (brainId: Brain.ID) => Effect.Effect<Option.Option<BrainClient.Target>>
   readonly retry: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) => Effect.Effect<void>
-  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<SandboxProvider.Hand>>
+  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Hand>>
   readonly check: (brainId: Brain.ID) => Effect.Effect<void>
   readonly cleanup: Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainLifecycle") {}
+
+// oxlint-disable-next-line ren/no-comments -- The brain's own machine as an environment. It is behind the egress when its brain is (R19).
+export interface Hand extends SandboxProvider.Hand {
+  readonly egress: boolean
+}
 
 const CleanupRun = DurableRunner.make("BrainCleanup", {
   payload: { day: Schema.String },
@@ -621,7 +626,7 @@ export const layer = Layer.effect(
       hand: Effect.fn("BrainLifecycle.hand")(function* (brainId: Brain.ID) {
         const row = yield* read(brainId)
         if (!row.binding) return Option.none()
-        return Option.some(yield* provider.hand(row.binding).pipe(Effect.orDie))
+        return Option.some({ ...(yield* provider.hand(row.binding).pipe(Effect.orDie)), egress: row.egress })
       }),
     })
   }),

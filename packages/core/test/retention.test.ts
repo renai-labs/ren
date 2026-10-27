@@ -1,6 +1,8 @@
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import { Schedule } from "@ren/schema/schedule"
+import { ScheduleRun } from "@ren/schema/schedule-run"
 import { Session } from "@ren/schema/session"
 import { eq, inArray } from "drizzle-orm"
 import { Duration, Effect, Layer } from "effect"
@@ -24,7 +26,7 @@ const daysAgo = (days: number) => new Date(now - Duration.toMillis(Duration.days
 
 describe("Retention", () => {
   it.live(
-    "a chat with no activity for 30 days goes with its subagent chats and transcript, a chat active on day 29 stays, and a row removed 31 days ago goes",
+    "a chat with no activity for 30 days goes with its subagent chats and transcript, a chat active on day 29 stays, and a row removed or a schedule run due 31 days ago goes",
     () =>
       Effect.gen(function* () {
         const database = yield* Database.Service
@@ -65,6 +67,27 @@ describe("Retention", () => {
           .update(Database.Schema.opencode_message)
           .set({ removed_at: daysAgo(1) })
           .where(eq(Database.Schema.opencode_message.id, "msg_kept"))
+        const scheduleId = Schedule.ID.create()
+        yield* database.db.insert(Database.Schema.schedule).values({
+          id: scheduleId,
+          organization_id: owner.organizationId,
+          space_id: owner.spaceId,
+          name: "Digest",
+          owner_id: owner.createdBy,
+          cron: "0 9 * * *",
+          time_zone: "UTC",
+          message: "Digest.",
+        })
+        const runs = [daysAgo(31), daysAgo(29)].map((scheduledAt) => ({
+          id: ScheduleRun.ID.create(),
+          schedule_id: scheduleId,
+          scheduled_at: scheduledAt,
+          trigger: "timed" as const,
+          status: "started" as const,
+          session_id: Session.ID.create(),
+          message_id: Session.MessageID.create(),
+        }))
+        yield* database.db.insert(Database.Schema.schedule_run).values(runs)
         yield* retention.run
         const chats = yield* database.db
           .select({ id: Database.Schema.agent_session.id })
@@ -74,10 +97,15 @@ describe("Retention", () => {
           .select({ id: Database.Schema.opencode_message.id })
           .from(Database.Schema.opencode_message)
           .where(inArray(Database.Schema.opencode_message.session_id, [old, child, recent]))
-        expect([chats.map((row) => row.id), messages.map((row) => row.id).toSorted()]).toEqual([
-          [recent],
-          ["msg_kept", "msg_live"],
-        ])
+        const kept = yield* database.db
+          .select({ id: Database.Schema.schedule_run.id })
+          .from(Database.Schema.schedule_run)
+          .where(eq(Database.Schema.schedule_run.schedule_id, scheduleId))
+        expect([
+          chats.map((row) => row.id),
+          messages.map((row) => row.id).toSorted(),
+          kept.map((row) => row.id),
+        ]).toEqual([[recent], ["msg_kept", "msg_live"], runs.slice(1).map((run) => run.id)])
       }),
   )
 })

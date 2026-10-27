@@ -10,17 +10,26 @@ import { AppRegistry } from "@ren/core/app/registry"
 import { AgentMembership } from "@ren/core/agent/membership"
 import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
+import { ChannelInstalls } from "@ren/core/channel-installs"
+import { ChannelMappings } from "@ren/core/channel-mappings"
+import { SlackBot } from "@ren/core/slack-bot"
+import { ChannelTurns } from "@ren/core/channel-turns"
+import { Channels } from "@ren/core/channels"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { Label } from "@ren/core/label"
 import { OrganizationSettings } from "@ren/core/organization-settings"
+import { ScheduleTrigger } from "@ren/core/schedule-trigger"
+import { Schedules } from "@ren/core/schedules"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
 import { Space } from "@ren/core/space"
 import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
+import { ReferenceCheck } from "@ren/core/reference-check"
+import { RepositoryHosts } from "@ren/core/repository-hosts"
 import { SpaceSettings } from "@ren/core/space/settings"
 import { Task } from "@ren/core/task"
 import { TaskActivity } from "@ren/core/task/activity"
@@ -39,8 +48,12 @@ import { ChatHandler } from "./handlers/api/chat.js"
 import { CredentialHandler } from "./handlers/api/credential.js"
 import { CredentialConnectHandler } from "./handlers/api/credential-connect.js"
 import { OAuthAppHandler } from "./handlers/api/oauth-app.js"
+import { ChannelConnectHandler, ChannelInstallHandler, ChannelMappingHandler } from "./handlers/api/channel-install.js"
+import { RepositoryHandler } from "./handlers/api/repository.js"
+import { SignInHandler } from "./handlers/api/sign-in.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
+import { ChannelRoutes } from "./channel-routes.js"
 import { OAuthApps } from "@ren/core/oauth-apps"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
 import { HealthHandler } from "./handlers/api/health.js"
@@ -50,6 +63,7 @@ import { MeHandler } from "./handlers/api/me.js"
 import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handlers/api/environment-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
+import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
 import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
@@ -67,6 +81,7 @@ import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 import { bodyLimit } from "./middleware/body-limit.js"
 import { RenMcp } from "./ren-mcp.js"
+import { SlackMcp } from "./slack-mcp.js"
 
 // oxlint-disable-next-line react-hooks/rules-of-hooks -- Effect's HttpRouter.use, not a React hook
 const AuthRoute = HttpRouter.use((router) =>
@@ -115,11 +130,18 @@ export const layer = Layer.mergeAll(
         TaskActivityHandler,
         TaskCommentHandler,
         LabelHandler,
+        ScheduleHandler,
+        ScheduleRunHandler,
         CredentialHandler,
         CredentialConnectHandler,
         OAuthSessionHandler,
         OAuthAppHandler,
         RenInferenceHandler,
+        ChannelInstallHandler,
+        ChannelMappingHandler,
+        ChannelConnectHandler,
+        RepositoryHandler,
+        SignInHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
       Layer.provide([
@@ -129,18 +151,25 @@ export const layer = Layer.mergeAll(
         SpaceMember.layer,
         EnvironmentTemplates.layer,
         SpaceEnvironmentTemplate.layer,
-        SpaceSettings.layer,
-        Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
-          Layer.provide(SessionRunner.layer),
-          Layer.provide(BrainRegistry.layer),
+        Layer.mergeAll(SpaceSettings.layer, OrganizationSettings.layer, Agent.layer).pipe(
+          Layer.provide(ReferenceCheck.layer),
+          Layer.provide(RepositoryHosts.layer),
         ),
-        OrganizationSettings.layer,
-        Agent.layer,
+        Layer.mergeAll(
+          Task.layer,
+          TaskActivity.layer,
+          TaskComment.layer,
+          Label.layer,
+          Schedules.layer.pipe(Layer.provide(ScheduleTrigger.layerPostgres)),
+        ).pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,
         Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
         OAuthApps.layer,
+        ChannelInstalls.layer,
+        RepositoryHosts.layer,
+        ChannelMappings.layer,
         CredentialRequirements.layer,
       ]),
     ),
@@ -150,11 +179,22 @@ export const layer = Layer.mergeAll(
     ),
     AuthRoute,
     RenMcp.layer,
+    SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
+    ChannelRoutes.layer.pipe(
+      Layer.provide(Channels.layer),
+      Layer.provide([Task.layer.pipe(Layer.provideMerge(SessionRunner.layer)), ChannelInstalls.layer]),
+      Layer.provide(BrainRegistry.layer),
+    ),
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),
-    Layer.provide([Brains.hostAuthentication, bodyLimit(Sync.maxBodyBytes), SessionSync.layer]),
+    Layer.provide([
+      Brains.hostAuthentication,
+      bodyLimit(Sync.maxBodyBytes),
+      SessionSync.layer,
+      ChannelTurns.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
+    ]),
   ),
   Cors,
 ).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))

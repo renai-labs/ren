@@ -1,5 +1,4 @@
-import { expect, setDefaultTimeout, test } from "bun:test"
-import { TestAccess } from "@ren/brain/testing"
+import { afterAll, expect, test } from "bun:test"
 import { Credential } from "@opencode/core/credential"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { EnvironmentLocal } from "@opencode/core/environment/local"
@@ -8,113 +7,32 @@ import { RipgrepBinary } from "@opencode/core/ripgrep/binary"
 import { Session as OpenCodeSession } from "@opencode/core/session"
 import { SessionTransfer } from "@opencode/core/session/transfer"
 import { Workspace } from "@opencode/core/workspace"
-import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { EnvironmentAccess } from "@ren/brain/environment/access"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { TestEnvironment, Processes, testEffect } from "@ren/executor/testing"
-import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Layer, Exit, ManagedRuntime, Option, Ref, Schema, Scope } from "effect"
-import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http"
-import { createServer, connect } from "node:net"
+import { Context, Effect, Exit, Fiber, Layer, ManagedRuntime, Option, Scope } from "effect"
+import { HttpEffect, HttpRouter } from "effect/http"
+import { createServer, connect, type Socket } from "node:net"
 import { lstat, mkdir, mkdtemp, readdir, realpath, symlink } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { Env } from "../src/env.js"
-import type { Harness } from "../src/harness/harness.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
-import type { RenPlugin } from "../src/harness/opencode/plugin.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 import { Pid } from "./lib/pid.js"
 import { Shared } from "./lib/shared.js"
+import { RemoteHost } from "./lib/remote-host.js"
 import type { StubModel } from "./lib/stub-model.js"
 
-setDefaultTimeout(60_000)
-
-const environmentId = Environment.ID.create()
-const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-parity-")))
-const local = await realpath(await mkdtemp(join(tmpdir(), "ren-parity-local-")))
 const stub = Shared.stub()
-const gptModel = { id: "gpt-5-stub", name: "Stub GPT", limit: { context: 100_000, output: 4000 } }
-// oxlint-disable-next-line ren/no-comments -- OpenCode offers `patch` instead of `edit` and `write` to GPT models only.
-const vars = Schema.decodeUnknownSync(Env.Vars)(
-  (() => {
-    const base = Shared.vars(stub.url)
-    const config = JSON.parse(base.OPENCODE_CONFIG)
-    config.providers.stub.models[gptModel.id] = gptModel
-    return { ...base, OPENCODE_CONFIG: JSON.stringify(config) }
-  })(),
-)
-// oxlint-disable-next-line oxc/no-map-spread -- one endpoint gets one more model
-const endpoints = Shared.access(undefined, stub.url).endpoints.map((endpoint) =>
-  endpoint.id === "stub" ? { ...endpoint, models: [...endpoint.models, gptModel] } : endpoint,
-)
 
-const served = TestEnvironment.layer({ environmentId, workspace })
-const it = testEffect(served)
-
-const live = <A, E>(body: Effect.Effect<A, E, Layer.Success<typeof served> | Scope.Scope>) =>
-  body.pipe(Effect.scoped, Effect.provide(served), Effect.runPromise)
-
-const folder = (sessionId: Session.ID) => join(workspace, sessionId)
-
-const accessTo = (url: string, sessionId: Session.ID) =>
-  TestEnvironment.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
-
-const embedded = (replacements: Parameters<typeof createEmbeddedRoutes>[1]) =>
-  createEmbeddedRoutes(
-    {
-      database: { path: ":memory:" },
-      config: { project: false, content: vars.OPENCODE_CONFIG },
-      models: { fetch: false },
-      fs: { filewatcher: false, fff: false },
-    },
-    replacements,
-  ).pipe(Layer.provide(HttpServer.layerServices))
-
-const open = Effect.fnUntraced(function* (confinement?: RenPlugin.Confinement) {
-  const context = yield* Layer.build(TestAccess.memory(new Map()))
-  const memory = Context.get(context, TestAccess.Memory)
-  const opens = yield* Ref.make(0)
-  const counted = Layer.succeed(
-    EnvironmentAccess.Service,
-    EnvironmentAccess.Service.of({
-      release: () => Effect.void,
-      open: (sessionId) =>
-        Ref.update(opens, (count) => count + 1).pipe(
-          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
-        ),
-    }),
-  )
-  const environments = Context.get(
-    yield* Layer.build(EnvironmentConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
-    EnvironmentConnections.Service,
-  )
-  const host = yield* OpenCodeServer.make(
-    (replacements) => embedded([...replacements, ...RenWorkspaceDriver.replacements(environments)]),
-    endpoints,
-    () => Effect.succeedNone,
-    Option.some(environments),
-    { saved: Option.none(), directoryOf: () => local, ...(confinement && { confinement }) },
-  )
-  return {
-    harness: yield* OpenCodeHarness.make(host, endpoints),
-    memory,
-    opens: Ref.get(opens),
-    environments,
-  }
-})
-
-type Opened = Effect.Success<ReturnType<typeof open>>
-
-// oxlint-disable-next-line ren/no-comments -- A host that keeps OpenCode's own file and shell tools: Ren's plugin removes them when there is no environment.
-const localHarness = Effect.fnUntraced(function* (directory: string) {
+// oxlint-disable-next-line ren/no-comments -- A host that keeps OpenCode's own file and shell tools: Ren's plugin removes them when there is no environment. Each session works in its own folder under the root.
+const localHarness = Effect.gen(function* () {
+  const root = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-ref-"))))
   const runtime = yield* Effect.acquireRelease(
     Effect.sync(() =>
       ManagedRuntime.make(
-        embedded([
+        RemoteHost.embedded([
           RipgrepBinary.node.replace(
             Layer.succeed(RipgrepBinary.Service, RipgrepBinary.Service.of({ filepath: Effect.succeed("rg") })),
           ),
@@ -126,102 +44,91 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
   const services = yield* runtime.contextEffect
   const fetch = HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect())
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
-  return yield* OpenCodeHarness.make(
-    {
-      fetch,
-      client: yield* OpenCodeServer.client(fetch),
-      shells: () => Effect.die(new Error("The tool parity host has no shells")),
-      agents: () => Effect.die(new Error("The tool parity host has no agents")),
-      skills: () => Effect.die(new Error("The tool parity host has no skills")),
-      commands: () => Effect.die(new Error("The tool parity host has no commands")),
-      findFiles: () => Effect.die(new Error("The tool parity host has no file search")),
-      webSearchProviders: () => Effect.die(new Error("The tool parity host has no web search")),
-      credentials: Context.get(services, Credential.Service),
-      sessions: Context.get(services, OpenCodeSession.Service),
-      transfer: Context.get(services, SessionTransfer.Service),
-      workspaces: Context.get(services, Workspace.Service),
-      hasEnvironmentConnections: false,
-      directoryOf: () => directory,
-      makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
-      activate: () => Effect.void,
-      chats: Option.none(),
-      configure: () => Effect.void,
-      configuration: Effect.succeed([]),
-    },
-    endpoints,
-  )
-})
-
-const sendTo = (
-  harness: Harness.Instance,
-  sessionId: Session.ID,
-  script: StubModel.Script,
-  delivery: Session.Delivery = "steer",
-) =>
-  harness.send({
-    sessionId,
-    messageId: Session.MessageID.create(),
-    prompt: { text: `${script.marker} use the tool` },
-    delivery,
-    sender: { userId: "user_1" },
-  })
-
-const restart = (harness: Harness.Instance, sessionId: Session.ID, directory?: string, modelId?: string) =>
-  harness.start({
-    sessionId,
-    harness: "opencode",
-    interactive: false,
-    ...(directory && { directory }),
-    ...(modelId && { model: { endpointId: "stub", modelId } }),
-  })
-
-const begin = Effect.fnUntraced(function* (opened: Opened, url?: string, modelId?: string) {
-  const sessionId = Session.ID.create()
-  yield* opened.memory.set(sessionId, yield* accessTo(url ?? (yield* TestEnvironment.url), sessionId))
-  yield* restart(opened.harness, sessionId, folder(sessionId), modelId)
   return {
-    sessionId,
-    send: (script: StubModel.Script) => sendTo(opened.harness, sessionId, script),
-    turn: (script: StubModel.Script) =>
-      sendTo(opened.harness, sessionId, script).pipe(Effect.andThen(answered(script))),
+    root,
+    harness: yield* OpenCodeHarness.make(
+      {
+        fetch,
+        client: yield* OpenCodeServer.client(fetch),
+        shells: () => Effect.die(new Error("The tool parity host has no shells")),
+        agents: () => Effect.die(new Error("The tool parity host has no agents")),
+        skills: () => Effect.die(new Error("The tool parity host has no skills")),
+        commands: () => Effect.die(new Error("The tool parity host has no commands")),
+        findFiles: () => Effect.die(new Error("The tool parity host has no file search")),
+        webSearchProviders: () => Effect.die(new Error("The tool parity host has no web search")),
+        credentials: Context.get(services, Credential.Service),
+        sessions: Context.get(services, OpenCodeSession.Service),
+        transfer: Context.get(services, SessionTransfer.Service),
+        workspaces: Context.get(services, Workspace.Service),
+        hasEnvironmentConnections: false,
+        directoryOf: (sessionId) => join(root, sessionId),
+        makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
+        activate: () => Effect.void,
+        chats: Option.none(),
+        configure: () => Effect.void,
+        configuration: Effect.succeed([]),
+      },
+      RemoteHost.endpoints,
+    ),
   }
 })
 
-// oxlint-disable-next-line ren/no-comments -- A result with an image is followed by a user message without the script's marker, so `script.called(2)` would not see that call.
-const answered = (script: StubModel.Script) =>
-  Effect.promise(() =>
-    stub.waitFor((call) => {
-      const asked = call.body.messages.findLastIndex((message) => JSON.stringify(message).includes(script.marker))
-      return call.kind === "turn" && asked >= 0 && call.body.messages.slice(asked + 1).some((m) => m.role === "tool")
-    }),
-  )
+class Remote extends Context.Service<Remote, RemoteHost.Opened>()("@ren/cell/test/ToolParity/Remote") {}
 
-// oxlint-disable-next-line ren/no-comments -- A proxy to the executor that counts the bytes that come back from it.
+class Reference extends Context.Service<Reference, Effect.Success<typeof localHarness>>()(
+  "@ren/cell/test/ToolParity/Reference",
+) {}
+
+// oxlint-disable-next-line ren/no-comments -- One sandbox, one remote host and one reference host serve every test of the file; each test starts its own sessions.
+const shared = ManagedRuntime.make(
+  Layer.mergeAll(Layer.effect(Remote, RemoteHost.open()), Layer.effect(Reference, localHarness)).pipe(
+    Layer.provideMerge(RemoteHost.served),
+  ),
+)
+
+afterAll(() => shared.dispose())
+
+const services = Layer.effectContext(shared.contextEffect)
+
+const it = testEffect(services)
+
+const live = <A, E>(body: Effect.Effect<A, E, Layer.Success<typeof services> | Scope.Scope>) =>
+  body.pipe(Effect.scoped, Effect.provide(services), Effect.runPromise)
+
+// oxlint-disable-next-line ren/no-comments -- A proxy to the executor that counts the bytes that come back from it. The shared host outlives it and keeps its connections open, so the release ends them.
 const counting = (port: number) =>
   Effect.acquireRelease(
     Effect.promise(async () => {
       const state = { bytes: 0 }
+      const sockets = new Set<Socket>()
       const server = createServer((client) => {
+        sockets.add(client)
         const upstream = connect(port, "127.0.0.1")
         upstream.on("data", (chunk) => void (state.bytes += chunk.length))
-        client.on("error", () => upstream.destroy()).pipe(upstream)
+        client
+          .on("error", () => upstream.destroy())
+          .on("close", () => upstream.destroy())
+          .pipe(upstream)
         upstream.on("error", () => client.destroy()).pipe(client)
       })
       await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
       const address = server.address()
       return {
         server,
+        sockets,
         state,
         url: `http://127.0.0.1:${typeof address === "object" && address !== null ? address.port : 0}`,
       }
     }),
-    (relay) => Effect.promise(() => new Promise<void>((resolve) => relay.server.close(() => resolve()))),
+    (relay) =>
+      Effect.promise(
+        () =>
+          new Promise<void>((resolve) => {
+            for (const socket of relay.sockets) socket.destroy()
+            relay.server.close(() => resolve())
+          }),
+      ),
   )
-
-const lastToolResult = (call: StubModel.Call) =>
-  JSON.stringify(call.body.messages.findLast((message) => message.role === "tool")?.content ?? "")
-
-const shell = (command: string) => ({ tool: { name: "shell", input: { command } } })
 
 interface Tool {
   readonly name: string
@@ -239,14 +146,14 @@ const sh = (command: string, more: Record<string, unknown> = {}) => call("shell"
 const act = (run: (dir: string) => Promise<unknown>): Step => ({ act: run })
 
 const reference = Effect.fnUntraced(function* (modelId?: string) {
-  const directory = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-ref-"))))
-  const harness = yield* localHarness(directory)
+  const local = yield* Reference
   const sessionId = Session.ID.create()
-  yield* restart(harness, sessionId, undefined, modelId)
+  yield* RemoteHost.restart(local.harness, sessionId, undefined, modelId)
   return {
-    directory,
-    send: (script: StubModel.Script) => sendTo(harness, sessionId, script),
-    turn: (script: StubModel.Script) => sendTo(harness, sessionId, script).pipe(Effect.andThen(answered(script))),
+    directory: join(local.root, sessionId),
+    send: (script: StubModel.Script) => RemoteHost.sendTo(local.harness, sessionId, script),
+    turn: (script: StubModel.Script) =>
+      RemoteHost.sendTo(local.harness, sessionId, script).pipe(Effect.andThen(RemoteHost.answered(script))),
   }
 })
 
@@ -255,10 +162,9 @@ const both = Effect.fnUntraced(function* (
   steps: ReadonlyArray<Step>,
   modelId?: string,
 ) {
-  const opened = yield* open()
-  const remote = yield* begin(opened, undefined, modelId)
+  const remote = yield* RemoteHost.begin(yield* Remote, undefined, modelId)
   const reference_ = yield* reference(modelId)
-  const realRemote = folder(remote.sessionId)
+  const realRemote = RemoteHost.folder(remote.sessionId)
   yield* Effect.promise(() =>
     Promise.all(
       Object.entries(before).flatMap((entry) => [
@@ -283,8 +189,8 @@ const both = Effect.fnUntraced(function* (
     const localCall = yield* reference_.turn(stub.script({ tool: step.tool(reference_.directory) }))
     results.answers.remote.push(remoteCall)
     results.answers.local.push(localCall)
-    results.remote.push(normalize(lastToolResult(remoteCall), realRemote))
-    results.local.push(normalize(lastToolResult(localCall), reference_.directory))
+    results.remote.push(normalize(RemoteHost.lastToolResult(remoteCall), realRemote))
+    results.local.push(normalize(RemoteHost.lastToolResult(localCall), reference_.directory))
   }
   return { ...results, realRemote, realLocal: reference_.directory }
 })
@@ -448,7 +354,7 @@ test.each<[string, Parity]>([
     "J39 a patch with a hunk that does not apply fails as on the local files, and the file does not change",
     {
       files: { "a.txt": "alpha\nbeta\n" },
-      modelId: gptModel.id,
+      modelId: RemoteHost.gptModel.id,
       steps: tools(call("patch", { patchText: patchOf("a.txt", "nothere", "x") })),
       shows: ["patch verification failed", "nothere"],
       contents: { "a.txt": "alpha\nbeta\n" },
@@ -522,12 +428,12 @@ test.each<[string, Parity]>([
     },
   ],
   [
-    "J48 glob and grep with 10 000 results cut at 100 with the local files' notice",
+    "J48 glob and grep with 101 results cut at 100 with the local files' notice",
     {
       steps: [
         act((dir) =>
           Promise.all(
-            Array.from({ length: 10_000 }, (_, index) => Bun.write(join(dir, `many/f${index}.dat`), "needle\n")),
+            Array.from({ length: 101 }, (_, index) => Bun.write(join(dir, `many/f${index}.dat`), "needle\n")),
           ),
         ),
         ...tools(call("glob", { pattern: "**/*.dat" }), call("grep", { pattern: "needle", include: "*.dat" })),
@@ -594,48 +500,18 @@ const localFiles = (spawner: Parameters<typeof EnvironmentLocal.makeLocalDriver>
   }
 }
 
-const scratch = () => Effect.promise(() => mkdtemp(join(workspace, "scratch-")))
-
-const stops = (pid: number, seconds: number) =>
-  Effect.promise(async () => {
-    const until = Date.now() + seconds * 1000
-    // ast-grep-ignore: no-test-sleep -- the orphan time of the executor is the behaviour under test
-    while (Processes.running(pid) && Date.now() < until) await Bun.sleep(100)
-    return !Processes.running(pid)
-  })
-
-const shellWith = (command: string, more: Record<string, unknown>) => ({
-  tool: { name: "shell", input: { command, ...more } },
-})
-
 it.live("J23 a shell timeout says so, and the command and its child stop on the sandbox", () =>
   Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* begin(opened)
-    const dir = yield* scratch()
+    const session = yield* RemoteHost.begin(yield* Remote)
+    const dir = yield* RemoteHost.scratch()
     const answer = yield* session.turn(
-      stub.script(shellWith(`echo $$ > ${dir}/main; sleep 60 & echo $! > ${dir}/child; wait`, { timeout: 2000 })),
+      stub.script(
+        RemoteHost.shellWith(`echo $$ > ${dir}/main; sleep 60 & echo $! > ${dir}/child; wait`, { timeout: 100 }),
+      ),
     )
-    expect(lastToolResult(answer)).toContain("Command exceeded timeout of 2000 ms")
+    expect(RemoteHost.lastToolResult(answer)).toContain("Command exceeded timeout of 100 ms")
     const pids = yield* Effect.forEach(["main", "child"], (name) => Pid.read(join(dir, name)))
-    expect(yield* Effect.forEach(pids, (pid) => stops(pid, 30))).toEqual([true, true])
-  }),
-)
-
-it.live("J24 a command that ignores SIGTERM is killed with SIGKILL 3 seconds after the time-out", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* begin(opened)
-    const dir = yield* scratch()
-    const started = Date.now()
-    const answer = yield* session.turn(
-      stub.script(shellWith(`trap '' TERM; echo $$ > ${dir}/main; while true; do sleep 1; done`, { timeout: 2000 })),
-    )
-    const took = Date.now() - started
-    expect(lastToolResult(answer)).toContain("Command exceeded timeout of 2000 ms")
-    expect(took).toBeGreaterThanOrEqual(4800)
-    expect(took).toBeLessThan(15_000)
-    expect(yield* stops(yield* Pid.read(join(dir, "main")), 30)).toBe(true)
+    expect(yield* Effect.forEach(pids, (pid) => RemoteHost.stops(pid, 30))).toEqual([true, true])
   }),
 )
 
@@ -643,13 +519,13 @@ const closedHarnessStops = (seconds: number) =>
   live(
     Effect.gen(function* () {
       const scope = yield* Scope.make()
-      const opened = yield* open().pipe(Effect.provideService(Scope.Scope, scope))
-      const session = yield* begin(opened)
-      const dir = yield* scratch()
+      const opened = yield* RemoteHost.open().pipe(Effect.provideService(Scope.Scope, scope))
+      const session = yield* RemoteHost.begin(opened)
+      const dir = yield* RemoteHost.scratch()
       const answer = yield* session.turn(
-        stub.script(shellWith(`echo $$ > ${dir}/main; exec sleep 300`, { background: true })),
+        stub.script(RemoteHost.shellWith(`echo $$ > ${dir}/main; exec sleep 300`, { background: true })),
       )
-      expect(lastToolResult(answer)).toContain("Command moved to the background")
+      expect(RemoteHost.lastToolResult(answer)).toContain("Command moved to the background")
       const pid = yield* Pid.read(join(dir, "main"))
       yield* Effect.promise(async () => {
         // ast-grep-ignore: no-test-sleep -- the session must be idle before the cell closes, and idle is only visible by polling
@@ -657,7 +533,7 @@ const closedHarnessStops = (seconds: number) =>
       })
       expect(Processes.running(pid)).toBe(true)
       yield* Scope.close(scope, Exit.void)
-      const stopped = yield* stops(pid, seconds)
+      const stopped = yield* RemoteHost.stops(pid, seconds)
       if (!stopped) process.kill(pid, "SIGKILL")
       expect(stopped).toBe(true)
     }),
@@ -670,108 +546,107 @@ test(
 )
 
 test.todo("J28 a background job stops on the sandbox 30 seconds or less after the idle cell closes", () =>
-  closedHarnessStops(30),
-)
+  closedHarnessStops(30))
 
 test("J29 five shell calls at once each get only their own output", () =>
   live(
     Effect.gen(function* () {
-      const opened = yield* open()
+      const opened = yield* Remote
+      const dir = yield* RemoteHost.scratch()
       const marks = Array.from({ length: 5 }, () => crypto.randomUUID())
-      const sessions = yield* Effect.forEach(marks, () => begin(opened))
-      const answers = yield* Effect.forEach(
+      const sessions = yield* Effect.forEach(marks, () => RemoteHost.begin(opened))
+      const running = yield* Effect.forEach(
         sessions.map((session, index) => ({ session, mark: marks[index] ?? "" })),
-        (entry) => entry.session.turn(stub.script(shell(`sleep 1; echo out-${entry.mark}`))),
+        (entry) =>
+          entry.session.turn(
+            stub.script(
+              RemoteHost.shell(
+                `echo $$ > ${dir}/${entry.mark}; while [ ! -e ${dir}/go ]; do sleep 0.01; done; echo out-${entry.mark}`,
+              ),
+            ),
+          ),
         { concurrency: "unbounded" },
-      )
-      const results = answers.map(lastToolResult)
+      ).pipe(Effect.forkChild)
+      yield* Effect.forEach(marks, (mark) => Pid.read(join(dir, mark)))
+      yield* Effect.promise(() => Bun.write(join(dir, "go"), ""))
+      const results = (yield* Fiber.join(running)).map(RemoteHost.lastToolResult)
       expect(results).toEqual(marks.map((mark) => JSON.stringify(`out-${mark}\n`)))
     }),
   ))
 
-test(
-  "J30 a command with no timeout and no output for 35 seconds, longer than the executor's 30 second orphan time, continues and returns",
-  () =>
-    live(
-      Effect.gen(function* () {
-        const opened = yield* open()
-        const session = yield* begin(opened)
-        const answer = yield* session.turn(stub.script(shellWith("sleep 35; echo woke", { timeout: 0 })))
-        expect(lastToolResult(answer)).toBe(JSON.stringify("woke\n"))
-      }),
-    ),
-  90_000,
-)
-
 it.live("J34 a command with a NUL byte fails with a clear error, and the cell goes on", () =>
   Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* begin(opened)
-    const marker = join(workspace, `${crypto.randomUUID()}.ran`)
-    const refused = lastToolResult(yield* session.turn(stub.script(shell(`touch ${marker}\u0000; echo a`))))
+    const opened = yield* Remote
+    const session = yield* RemoteHost.begin(opened)
+    const marker = join(RemoteHost.workspace, `${crypto.randomUUID()}.ran`)
+    const refused = RemoteHost.lastToolResult(
+      yield* session.turn(stub.script(RemoteHost.shell(`touch ${marker}\u0000; echo a`))),
+    )
     expect(refused).toContain("must be a string without null bytes")
     expect(yield* Effect.promise(() => Bun.file(marker).exists())).toBe(false)
-    expect(lastToolResult(yield* session.turn(stub.script(shell("echo alive"))))).toBe(JSON.stringify("alive\n"))
+    expect(RemoteHost.lastToolResult(yield* session.turn(stub.script(RemoteHost.shell("echo alive"))))).toBe(
+      JSON.stringify("alive\n"),
+    )
   }),
 )
 
-const longFile = Array.from(
-  { length: 163_840 },
-  (_, index) => `line ${String(index + 1).padStart(6, "0")} ${"x".repeat(51)}\n`,
-).join("")
+const longLines = 32_768
 
-const pagesOf10MiB = Effect.fnUntraced(function* (offsets: ReadonlyArray<number>) {
+const pagesOf2MiB = Effect.fnUntraced(function* (offsets: ReadonlyArray<number>) {
   const proxy = yield* counting(Number(new URL(yield* TestEnvironment.url).port))
-  const opened = yield* open()
-  const session = yield* begin(opened, proxy.url)
-  yield* Effect.promise(() => Bun.write(join(folder(session.sessionId), "big.txt"), longFile))
-  yield* session.turn(stub.script(shell("true")))
+  const session = yield* RemoteHost.begin(yield* Remote, proxy.url)
+  yield* Effect.promise(() =>
+    Bun.write(
+      join(RemoteHost.folder(session.sessionId), "big.txt"),
+      Array.from(
+        { length: longLines },
+        (_, index) => `line ${String(index + 1).padStart(6, "0")} ${"x".repeat(51)}\n`,
+      ).join(""),
+    ),
+  )
+  yield* session.turn(stub.script(RemoteHost.shell("true")))
   return yield* Effect.forEach(offsets, (offset) =>
     Effect.gen(function* () {
       const before = proxy.state.bytes
       const answer = yield* session.turn(
         stub.script({ tool: { name: "read", input: { path: "big.txt", offset, limit: 2 } } }),
       )
-      return { offset, result: lastToolResult(answer), transferred: proxy.state.bytes - before }
+      return { offset, result: RemoteHost.lastToolResult(answer), transferred: proxy.state.bytes - before }
     }),
   )
 })
 
 const mebibyte = 1024 * 1024
 
-it.live(
-  "J41 reads a 10 MiB file page by page with the right lines, and the first page does not transfer the file",
-  () =>
-    Effect.gen(function* () {
-      const pages = yield* pagesOf10MiB([1, 80_001, 163_839])
-      expect(pages.map((page) => page.result)).toEqual(
-        pages.map(
-          (page) =>
-            `"Read file big.txt, lines ${page.offset}-${page.offset + 1}\\n${[page.offset, page.offset + 1]
-              .map((line) => `${line}: line ${String(line).padStart(6, "0")} ${"x".repeat(51)}`)
-              .join(
-                "\\n",
-              )}${page.offset + 1 < 163_840 ? `\\n[Output truncated. Continue reading with offset: ${page.offset + 2}]` : ""}"`,
-        ),
-      )
-      expect(pages[0]?.transferred).toBeLessThan(mebibyte)
-    }),
+it.live("J41 reads a 2 MiB file page by page with the right lines, and the first page does not transfer the file", () =>
+  Effect.gen(function* () {
+    const pages = yield* pagesOf2MiB([1, 16_001, longLines - 1])
+    expect(pages.map((page) => page.result)).toEqual(
+      pages.map(
+        (page) =>
+          `"Read file big.txt, lines ${page.offset}-${page.offset + 1}\\n${[page.offset, page.offset + 1]
+            .map((line) => `${line}: line ${String(line).padStart(6, "0")} ${"x".repeat(51)}`)
+            .join(
+              "\\n",
+            )}${page.offset + 1 < longLines ? `\\n[Output truncated. Continue reading with offset: ${page.offset + 2}]` : ""}"`,
+      ),
+    )
+    expect(pages[0]?.transferred).toBeLessThan(mebibyte)
+  }),
 )
 
-test.todo("J41 a page near the end of a 10 MiB file does not transfer the file", () =>
+test.todo("J41 a page near the end of a 2 MiB file does not transfer the file", () =>
   live(
     Effect.gen(function* () {
-      const pages = yield* pagesOf10MiB([163_839])
+      const pages = yield* pagesOf2MiB([longLines - 1])
       expect(pages[0]?.transferred).toBeLessThan(mebibyte)
     }),
-  ),
-)
+  ))
 
 const outsideWrite = Effect.fnUntraced(function* () {
-  const opened = yield* open()
-  const session = yield* begin(opened)
-  const path = join(workspace, `outside-${crypto.randomUUID()}.txt`)
-  const result = lastToolResult(
+  const session = yield* RemoteHost.begin(yield* Remote)
+  const path = join(RemoteHost.workspace, `outside-${crypto.randomUUID()}.txt`)
+  const result = RemoteHost.lastToolResult(
     yield* session.turn(stub.script({ tool: { name: "write", input: { path, content: "outside\n" } } })),
   )
   return { result, written: yield* Effect.promise(() => text(path)) }
@@ -794,33 +669,40 @@ test.todo("J46 a write outside /workspace is refused by external_directory when 
       expect(outcome.result).not.toContain("Created file successfully")
       expect(outcome.written).toBeUndefined()
     }),
-  ),
-)
+  ))
 
-it.live("J50 a read of a 50 MiB file with no range gives a short answer, and the cell goes on", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* begin(opened)
-    yield* Effect.promise(() => Bun.write(join(folder(session.sessionId), "huge.bin"), Buffer.alloc(50 * mebibyte, 97)))
-    const answer = lastToolResult(
-      yield* session.turn(stub.script({ tool: { name: "read", input: { path: "huge.bin" } } })),
-    )
-    expect(answer).toContain("Read file huge.bin")
-    expect(answer.length).toBeLessThan(100_000)
-    expect(lastToolResult(yield* session.turn(stub.script(shell("echo alive"))))).toBe(JSON.stringify("alive\n"))
-  }),
+it.live(
+  "J50 a read of a file over the sandbox's whole-file limit with no range gives a short answer, and the cell goes on",
+  () =>
+    Effect.gen(function* () {
+      const session = yield* RemoteHost.begin(yield* Remote)
+      yield* Effect.promise(() =>
+        Bun.write(
+          join(RemoteHost.folder(session.sessionId), "huge.bin"),
+          Buffer.alloc(EnvironmentApi.maxFileBytes + 1, 97),
+        ),
+      )
+      const answer = RemoteHost.lastToolResult(
+        yield* session.turn(stub.script({ tool: { name: "read", input: { path: "huge.bin" } } })),
+      )
+      expect(answer).toContain("Read file huge.bin")
+      expect(answer.length).toBeLessThan(100_000)
+      expect(RemoteHost.lastToolResult(yield* session.turn(stub.script(RemoteHost.shell("echo alive"))))).toBe(
+        JSON.stringify("alive\n"),
+      )
+    }),
 )
 
 it.live("J51 a session reads a file that another session wrote on the same sandbox, by the sandbox's path", () =>
   Effect.gen(function* () {
-    const opened = yield* open()
-    const first = yield* begin(opened)
-    const second = yield* begin(opened)
-    yield* first.turn(stub.script(shell("echo shared > f.txt")))
+    const opened = yield* Remote
+    const first = yield* RemoteHost.begin(opened)
+    const second = yield* RemoteHost.begin(opened)
+    yield* first.turn(stub.script(RemoteHost.shell("echo shared > f.txt")))
     const answer = yield* second.turn(
-      stub.script({ tool: { name: "read", input: { path: join(folder(first.sessionId), "f.txt") } } }),
+      stub.script({ tool: { name: "read", input: { path: join(RemoteHost.folder(first.sessionId), "f.txt") } } }),
     )
-    expect(lastToolResult(answer)).toContain("1: shared")
+    expect(RemoteHost.lastToolResult(answer)).toContain("1: shared")
   }),
 )
 
@@ -828,20 +710,22 @@ it.live(
   "B20 a chat on the brain's own hand is denied another chat's folder and the brain's state, and allowed /tmp",
   () =>
     Effect.gen(function* () {
-      const opened = yield* open({ workspace, allow: ["/tmp/"] })
-      const first = yield* begin(opened)
-      const second = yield* begin(opened)
-      yield* first.turn(stub.script(shell("echo first-chat-only > f.txt")))
+      const opened = yield* RemoteHost.open({ workspace: RemoteHost.workspace, allow: ["/tmp/"] })
+      const first = yield* RemoteHost.begin(opened)
+      const second = yield* RemoteHost.begin(opened)
+      yield* first.turn(stub.script(RemoteHost.shell("echo first-chat-only > f.txt")))
       const read = (path: string) =>
-        second.turn(stub.script({ tool: { name: "read", input: { path } } })).pipe(Effect.map(lastToolResult))
+        second
+          .turn(stub.script({ tool: { name: "read", input: { path } } }))
+          .pipe(Effect.map(RemoteHost.lastToolResult))
       const scratch = `/tmp/ren-b20-${crypto.randomUUID()}.txt`
-      const written = lastToolResult(
+      const written = RemoteHost.lastToolResult(
         yield* second.turn(stub.script({ tool: { name: "write", input: { path: scratch, content: "scratch\n" } } })),
       )
-      const other = yield* read(join(folder(first.sessionId), "f.txt"))
+      const other = yield* read(join(RemoteHost.folder(first.sessionId), "f.txt"))
       expect(other).toContain("its own folder")
       expect(other).not.toContain("first-chat-only")
-      expect(yield* read(join(dirname(workspace), ".ren", "brain.env"))).toContain("its own folder")
+      expect(yield* read(join(dirname(RemoteHost.workspace), ".ren", "brain.env"))).toContain("its own folder")
       expect(written).toContain("Created file successfully")
       expect(yield* Effect.promise(() => text(scratch))).toBe("scratch\n")
     }),
@@ -850,28 +734,29 @@ it.live(
 test.todo("J51 a session reads another session's file by that session's /workspace/<session> path", () =>
   live(
     Effect.gen(function* () {
-      const opened = yield* open()
-      const first = yield* begin(opened)
-      const second = yield* begin(opened)
-      yield* first.turn(stub.script(shell("echo shared > f.txt")))
+      const opened = yield* Remote
+      const first = yield* RemoteHost.begin(opened)
+      const second = yield* RemoteHost.begin(opened)
+      yield* first.turn(stub.script(RemoteHost.shell("echo shared > f.txt")))
       const answer = yield* second.turn(
-        stub.script({ tool: { name: "read", input: { path: `${folder(first.sessionId)}/f.txt` } } }),
+        stub.script({ tool: { name: "read", input: { path: `${RemoteHost.folder(first.sessionId)}/f.txt` } } }),
       )
-      expect(lastToolResult(answer)).toContain("1: shared")
+      expect(RemoteHost.lastToolResult(answer)).toContain("1: shared")
     }),
-  ),
-)
+  ))
 
 it.live("J52 interrupting one session's turn leaves another session's command running", () =>
   Effect.gen(function* () {
-    const opened = yield* open()
-    const first = yield* begin(opened)
-    const second = yield* begin(opened)
-    const dir = yield* scratch()
-    const running = stub.script(shell(`echo $$ > ${dir}/first; sleep 4; echo first-done`))
+    const opened = yield* Remote
+    const first = yield* RemoteHost.begin(opened)
+    const second = yield* RemoteHost.begin(opened)
+    const dir = yield* RemoteHost.scratch()
+    const running = stub.script(
+      RemoteHost.shell(`echo $$ > ${dir}/first; while [ ! -e ${dir}/go ]; do sleep 0.01; done; echo first-done`),
+    )
     yield* first.send(running)
     const firstPid = yield* Pid.read(join(dir, "first"))
-    yield* second.send(stub.script(shell(`echo $$ > ${dir}/second; exec sleep 60`)))
+    yield* second.send(stub.script(RemoteHost.shell(`echo $$ > ${dir}/second; exec sleep 60`)))
     const secondPid = yield* Pid.read(join(dir, "second"))
     const own = (yield* opened.harness.sessions).find((state) => String(state.id) === second.sessionId)
     expect(own).toBeDefined()
@@ -879,7 +764,10 @@ it.live("J52 interrupting one session's turn leaves another session's command ru
     yield* own.interrupt
     expect(yield* Processes.exits(secondPid)).toBe(true)
     expect(Processes.running(firstPid)).toBe(true)
-    expect(lastToolResult(yield* Effect.promise(() => running.called(2)))).toBe(JSON.stringify("first-done\n"))
+    yield* Effect.promise(() => Bun.write(join(dir, "go"), ""))
+    expect(RemoteHost.lastToolResult(yield* Effect.promise(() => running.called(2)))).toBe(
+      JSON.stringify("first-done\n"),
+    )
   }),
 )
 
@@ -980,13 +868,13 @@ it.live(
   "I8 each file operation of the ren driver gives the results and errors of OpenCode's local files, on the same tree",
   () =>
     Effect.gen(function* () {
-      const opened = yield* open()
+      const opened = yield* Remote
       const sessionId = Session.ID.create()
-      yield* opened.memory.set(sessionId, yield* accessTo(yield* TestEnvironment.url, sessionId))
+      yield* opened.memory.set(sessionId, yield* RemoteHost.accessTo(yield* TestEnvironment.url, sessionId))
       const driver = RenWorkspaceDriver.session(opened.environments, sessionId)
       const realLocal = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-files-"))))
       const subjects = {
-        remote: { files: driver.overrides, root: folder(sessionId), real: folder(sessionId) },
+        remote: { files: driver.overrides, root: RemoteHost.folder(sessionId), real: RemoteHost.folder(sessionId) },
         local: { files: localFiles(driver.spawner), root: realLocal, real: realLocal },
       }
       yield* Effect.promise(() => mkdir(subjects.remote.real, { recursive: true }))

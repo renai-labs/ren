@@ -8,6 +8,7 @@ import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
+import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { eq, sql } from "drizzle-orm"
 import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
 import { EnvironmentProvider } from "../src/environment-provider.js"
@@ -148,6 +149,21 @@ describe("Environments", () => {
       }),
   )
 
+  it.live("an access names the folder that the environment's sessions share and the egress of its provider", () =>
+    Effect.gen(function* () {
+      const egressOf = Effect.fnUntraced(function* (egress: boolean) {
+        const subject = yield* environmentsWith({}, { egress })
+        const organizationId = yield* Seed.organization()
+        const session = yield* subjectIn(organizationId)
+        yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+        const access = yield* subject.environments.access(session, Option.none())
+        return [access.sharedDirectory, access.egress]
+      })
+      expect(yield* egressOf(false)).toEqual(["/workspace/.ren", false])
+      expect(yield* egressOf(true)).toEqual(["/workspace/.ren", true])
+    }),
+  )
+
   it.live("a configured token lifetime is the access's lifetime", () =>
     Effect.gen(function* () {
       const subject = yield* environmentsWith({ ENVIRONMENT_TOKEN_LIFETIME: "20 seconds" })
@@ -166,7 +182,8 @@ describe("Environments", () => {
       const subject = yield* environmentsWith()
       const organizationId = yield* Seed.organization()
       const environmentTemplateId = yield* Seed.environmentTemplate(organizationId, { sessionsPerEnvironment: 2 })
-      const sessions = yield* Effect.all(Array.from({ length: 5 }, () => subjectIn(organizationId)))
+      const spaceId = yield* Seed.team(organizationId)
+      const sessions = yield* Effect.all(Array.from({ length: 5 }, () => Seed.subject(organizationId, spaceId)))
       yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
         discard: true,
       })
@@ -177,6 +194,34 @@ describe("Environments", () => {
       expect(made.map((environment) => environment.sessions).toSorted((left, right) => left - right)).toEqual([1, 2, 2])
       expect((yield* Ref.get(subject.probe.provisions)).length).toBe(3)
     }),
+  )
+
+  it.live(
+    "one template linked to two spaces never puts their sessions in one environment (private-spaces test 10)",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* environmentsWith()
+        const organizationId = yield* Seed.organization()
+        const environmentTemplateId = yield* Seed.environmentTemplate(organizationId, { sessionsPerEnvironment: 4 })
+        const database = yield* Database.Service
+        const shared = yield* subjectIn(organizationId)
+        const otherSpace = yield* Seed.space(organizationId)
+        yield* database.db.insert(Database.Schema.space_environment_template).values({
+          id: SpaceEnvironmentTemplate.ID.create(),
+          space_id: otherSpace,
+          environment_template_id: environmentTemplateId,
+        })
+        const other = yield* Seed.subject(organizationId, otherSpace)
+        yield* Effect.forEach([shared, other], (session) => subject.environments.bind(session, environmentTemplateId), {
+          discard: true,
+        })
+        yield* Effect.forEach([shared, other], (session) => subject.environments.access(session, Option.none()), {
+          discard: true,
+        })
+        expect((yield* environmentsOf(environmentTemplateId)).map((environment) => environment.sessions)).toEqual([
+          1, 1,
+        ])
+      }),
   )
 
   it.live("an environment that is gone is replaced once; the sessions on it get the next generation", () =>

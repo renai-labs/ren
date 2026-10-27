@@ -29,9 +29,20 @@ export const Started = Schema.TaggedStruct("started", {
   mode: Task.StartMode,
 }).annotate({ identifier: "TaskEvent.Started" })
 
+export interface Automation extends Schema.Schema.Type<typeof Automation> {}
+export const Automation = Schema.Struct({
+  provider: Schema.Literal("github"),
+  cause: Schema.Literal("pull_request_merged"),
+  url: Schema.String,
+}).annotate({
+  identifier: "TaskEvent.Automation",
+  description: "The outside event that changed the status, with no person or agent acting.",
+})
+
 export const StatusChanged = Schema.TaggedStruct("status", {
   from: Task.Status,
   to: Task.Status,
+  automation: Schema.optionalKey(Automation),
 }).annotate({ identifier: "TaskEvent.StatusChanged" })
 
 export const ReviewRequested = Schema.TaggedStruct("review_requested", {

@@ -2,10 +2,12 @@ export * as Session from "./session.js"
 
 import { Effect, Schema, Struct } from "effect"
 import { Auth } from "./auth.js"
+import { ChannelOrigin } from "./channel-origin.js"
 import { EnvironmentTemplate } from "./environment-template.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { ScheduleOrigin } from "./schedule-origin.js"
 import { SessionCapabilities } from "./session/capabilities.js"
 import { SessionMessage } from "./session/message.js"
 import { SessionModel } from "./session/model.js"
@@ -21,6 +23,9 @@ export type MessageID = typeof MessageID.Type
 
 export const Harness = Schema.Literals(["opencode"]).annotate({ identifier: "Session.Harness" })
 export type Harness = typeof Harness.Type
+
+// oxlint-disable-next-line ren/no-comments -- The harness of a chat that Ren starts with no person to pick one, such as a schedule run. Replaced by the space runtime (runtime/plan.md D2, D3).
+export const defaultHarness: Harness = "opencode"
 
 export interface Model extends Schema.Schema.Type<typeof Model> {}
 export const Model = Schema.Struct({
@@ -71,9 +76,19 @@ export interface Sender extends Schema.Schema.Type<typeof Sender> {}
 export const Sender = Schema.Struct({
   userId: Schema.NonEmptyString,
   memberId: Schema.optionalKey(Auth.MemberID).annotate({
-    description: "The sender’s membership in the organization. Ren sets it on every send; older stored messages lack it.",
+    description:
+      "The sender’s membership in the organization. Ren sets it on every send; older stored messages lack it.",
   }),
 }).annotate({ identifier: "Session.Sender" })
+
+export interface Synthetic extends Schema.Schema.Type<typeof Synthetic> {}
+export const Synthetic = Schema.Struct({
+  description: Schema.NonEmptyString.annotate({ description: "The notice that the transcript shows for it." }),
+  source: Schema.NonEmptyString.annotate({ description: "What sent it, such as channel." }),
+}).annotate({
+  identifier: "Session.Synthetic",
+  description: "A message from Ren, not from a person: the model reads its text, and the transcript shows a notice.",
+})
 
 export interface SendInput extends Schema.Schema.Type<typeof SendInput> {}
 export const SendInput = Schema.Struct({
@@ -82,6 +97,9 @@ export const SendInput = Schema.Struct({
   prompt: Prompt,
   delivery: Delivery.pipe(Schema.withDecodingDefaultKey(Effect.succeed("steer" as const))),
   sender: Sender,
+  channel: Schema.optionalKey(ChannelOrigin.Info),
+  schedule: Schema.optionalKey(ScheduleOrigin.Info),
+  synthetic: Schema.optionalKey(Synthetic),
 }).annotate({ identifier: "Session.SendInput" })
 
 export interface StartInput extends Schema.Schema.Type<typeof StartInput> {}

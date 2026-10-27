@@ -1,4 +1,4 @@
-import { expect, setDefaultTimeout } from "bun:test"
+import { expect } from "bun:test"
 import { Plugin } from "@opencode/plugin/effect"
 import { Mcp } from "@opencode/schema/mcp"
 import { SessionID } from "@opencode/schema/session-id"
@@ -12,8 +12,6 @@ import { OpenCodeMcp } from "../src/harness/opencode/mcp.js"
 import { BrainTest } from "./lib/brain.js"
 import { McpPeer } from "./lib/mcp.js"
 import { Shared } from "./lib/shared.js"
-
-setDefaultTimeout(20_000)
 
 const it = testEffect(Layer.empty)
 
@@ -329,63 +327,67 @@ it.live(
     }),
 )
 
-it.live("a slow server added by a pull does not hold the pull: settings that come with it apply before it connects (HR19)", () =>
-  Effect.gen(function* () {
-    const slow = yield* McpPeer.make({ holdInitialization: true })
-    const test = yield* observed()
-    const booted = Shared.stub().script()
-    yield* test.prompt(`${booted.marker} boot the chat`)
-    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    yield* test.brain
-      .configure({ apps: Option.some(McpPeer.catalog("slow", [{ slug: "slow", url: slow.url }])) })
-      .pipe(Effect.timeout("1 second"))
-    yield* Queue.take(slow.requests).pipe(Effect.repeat({ until: (request) => request.method === "initialize" }))
-    expect((yield* test.brain.configuration).some((location) => location.appsReloading)).toBe(true)
-    slow.release()
-    yield* Shared.appsSettled({ configuration: test.brain.configuration })
-    const script = McpPeer.execute("slow.marker")
-    yield* test.prompt(`${script.marker} read the marker`)
-    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    expect(McpPeer.result(script)).toBe("first")
-  }),
+it.live(
+  "a slow server added by a pull does not hold the pull: settings that come with it apply before it connects (HR19)",
+  () =>
+    Effect.gen(function* () {
+      const slow = yield* McpPeer.make({ holdInitialization: true })
+      const test = yield* observed()
+      const booted = Shared.stub().script()
+      yield* test.prompt(`${booted.marker} boot the chat`)
+      yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+      yield* test.brain
+        .configure({ apps: Option.some(McpPeer.catalog("slow", [{ slug: "slow", url: slow.url }])) })
+        .pipe(Effect.timeout("1 second"))
+      yield* Queue.take(slow.requests).pipe(Effect.repeat({ until: (request) => request.method === "initialize" }))
+      expect((yield* test.brain.configuration).some((location) => location.appsReloading)).toBe(true)
+      slow.release()
+      yield* Shared.appsSettled({ configuration: test.brain.configuration })
+      const script = McpPeer.execute("slow.marker")
+      yield* test.prompt(`${script.marker} read the marker`)
+      yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+      expect(McpPeer.result(script)).toBe("first")
+    }),
 )
 
-it.live("a server added or removed while a call to it or to another server runs: the other call ends normally, the removed one ends (HR1)", () =>
-  Effect.gen(function* () {
-    const held = yield* McpPeer.make({ hold: true })
-    const added = yield* McpPeer.make()
-    yield* added.change("added")
-    const test = yield* observed()
-    yield* test.brain.configureApps(McpPeer.catalog("first", [{ slug: "held", url: held.url }]))
-    const call = McpPeer.execute("held.marker")
-    yield* test.prompt(`${call.marker} read the held marker`)
-    yield* Queue.take(held.requests).pipe(Effect.repeat({ until: (request) => request.method === "tools/call" }))
-    yield* test.brain.configureApps(
-      McpPeer.catalog("second", [
-        { slug: "held", url: held.url },
-        { slug: "added", url: added.url },
-      ]),
-    )
-    held.release()
-    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    const ended = JSON.stringify((yield* test.brain.opencode.message.list({ sessionID: test.sessionID })).data)
-    expect(ended).toContain('"toolCalls":[{"tool":"held.marker","status":"completed"}]')
-    expect(ended).toContain("tools.added.marker()")
-    expect(call.calls).toHaveLength(1)
-    const next = McpPeer.execute("added.marker")
-    yield* test.prompt(`${next.marker} read the added marker`)
-    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    expect(McpPeer.result(next)).toBe("added")
-    const stuck = yield* McpPeer.make({ hold: true })
-    yield* test.brain.configureApps(McpPeer.catalog("third", [{ slug: "stuck", url: stuck.url }]))
-    const removed = McpPeer.execute("stuck.marker")
-    yield* test.prompt(`${removed.marker} read the stuck marker`)
-    yield* Queue.take(stuck.requests).pipe(Effect.repeat({ until: (request) => request.method === "tools/call" }))
-    yield* test.brain.configureApps(McpPeer.catalog("fourth", []))
-    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID }).pipe(Effect.timeout("10 seconds"))
-    const gone = McpPeer.execute("stuck.marker")
-    yield* test.prompt(`${gone.marker} read the stuck marker again`)
-    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    expect(McpPeer.result(gone)).toContain("Unknown tool 'stuck.marker'")
-  }),
+it.live(
+  "a server added or removed while a call to it or to another server runs: the other call ends normally, the removed one ends (HR1)",
+  () =>
+    Effect.gen(function* () {
+      const held = yield* McpPeer.make({ hold: true })
+      const added = yield* McpPeer.make()
+      yield* added.change("added")
+      const test = yield* observed()
+      yield* test.brain.configureApps(McpPeer.catalog("first", [{ slug: "held", url: held.url }]))
+      const call = McpPeer.execute("held.marker")
+      yield* test.prompt(`${call.marker} read the held marker`)
+      yield* Queue.take(held.requests).pipe(Effect.repeat({ until: (request) => request.method === "tools/call" }))
+      yield* test.brain.configureApps(
+        McpPeer.catalog("second", [
+          { slug: "held", url: held.url },
+          { slug: "added", url: added.url },
+        ]),
+      )
+      held.release()
+      yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+      const ended = JSON.stringify((yield* test.brain.opencode.message.list({ sessionID: test.sessionID })).data)
+      expect(ended).toContain('"toolCalls":[{"tool":"held.marker","status":"completed"}]')
+      expect(ended).toContain("tools.added.marker()")
+      expect(call.calls).toHaveLength(1)
+      const next = McpPeer.execute("added.marker")
+      yield* test.prompt(`${next.marker} read the added marker`)
+      yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+      expect(McpPeer.result(next)).toBe("added")
+      const stuck = yield* McpPeer.make({ hold: true })
+      yield* test.brain.configureApps(McpPeer.catalog("third", [{ slug: "stuck", url: stuck.url }]))
+      const removed = McpPeer.execute("stuck.marker")
+      yield* test.prompt(`${removed.marker} read the stuck marker`)
+      yield* Queue.take(stuck.requests).pipe(Effect.repeat({ until: (request) => request.method === "tools/call" }))
+      yield* test.brain.configureApps(McpPeer.catalog("fourth", []))
+      yield* test.brain.opencode.session.wait({ sessionID: test.sessionID }).pipe(Effect.timeout("10 seconds"))
+      const gone = McpPeer.execute("stuck.marker")
+      yield* test.prompt(`${gone.marker} read the stuck marker again`)
+      yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+      expect(McpPeer.result(gone)).toContain("Unknown tool 'stuck.marker'")
+    }),
 )

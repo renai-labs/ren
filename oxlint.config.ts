@@ -227,7 +227,7 @@ const domProperties = [
 ]
 
 const tailwind = {
-  cwd: "packages/app",
+  cwd: new URL("packages/app", import.meta.url).pathname,
   entryPoint: "src/index.css",
   selectors: [
     ...getDefaultSelectors(),

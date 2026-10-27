@@ -47,12 +47,13 @@ const killed = (signal: string) => new Killed(signal)
 
 const sessionId = Session.ID.create()
 
-const accessAt = (url: string) =>
+const accessAt = (url: string, options: { readonly egress?: boolean } = {}) =>
   TestEnvironment.access({
     url,
     environmentId,
     brain: Brain.ofSession(sessionId),
     directory: join(workspace, sessionId),
+    ...options,
   })
 
 const environmentsWith = (
@@ -770,14 +771,39 @@ it.effect(
 it.live("the host's env vars reach every process a session starts; a change applies at the next start (C21)", () =>
   Effect.gen(function* () {
     const environments = yield* environmentsWith(
-      TestAccess.fixed(new Map([[sessionId, yield* accessAt(yield* TestEnvironment.url)]])),
+      TestAccess.fixed(new Map([[sessionId, yield* accessAt(yield* TestEnvironment.url, { egress: true })]])),
     )
-    const variables = yield* Ref.make<Readonly<Record<string, string>>>({ STRIPE_API_KEY: "ren:STRIPE_API_KEY" })
-    const environment = EnvironmentSession.make({ ...environments, variables: Ref.get(variables) }, sessionId, killed)
+    const env = yield* Ref.make<EnvironmentConnections.Env>({
+      variables: {},
+      placeholders: { STRIPE_API_KEY: "ren:STRIPE_API_KEY" },
+    })
+    const environment = EnvironmentSession.make({ ...environments, env: Ref.get(env) }, sessionId, killed)
     const first = yield* environment.spawner.spawn(ChildProcess.make("sh", ["-c", "echo $STRIPE_API_KEY $LINEAR"]))
     expect(yield* text(first.stdout)).toBe("ren:STRIPE_API_KEY\n")
-    yield* Ref.set(variables, { STRIPE_API_KEY: "ren:STRIPE_API_KEY", LINEAR: "ren:LINEAR" })
+    yield* Ref.set(env, { variables: {}, placeholders: { STRIPE_API_KEY: "ren:STRIPE_API_KEY", LINEAR: "ren:LINEAR" } })
     const second = yield* environment.spawner.spawn(ChildProcess.make("sh", ["-c", "echo $STRIPE_API_KEY $LINEAR"]))
     expect(yield* text(second.stdout)).toBe("ren:STRIPE_API_KEY ren:LINEAR\n")
+  }),
+)
+
+it.live("a process on an environment without an egress gets the real variables and no placeholders (R19)", () =>
+  Effect.gen(function* () {
+    const environments = yield* environmentsWith(
+      TestAccess.fixed(new Map([[sessionId, yield* accessAt(yield* TestEnvironment.url, { egress: false })]])),
+    )
+    const env = Effect.succeed<EnvironmentConnections.Env>({
+      variables: { NOTION_KEY: "secret_1", GIT_AUTHOR_NAME: "ren[bot]" },
+      placeholders: {
+        GH_TOKEN: "ren:GITHUB",
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "http.https://github.com/.extraHeader",
+        GIT_CONFIG_VALUE_0: `Authorization: Basic ${btoa("x-access-token:ren:GITHUB")}`,
+      },
+    })
+    const environment = EnvironmentSession.make({ ...environments, env }, sessionId, killed)
+    const run = yield* environment.spawner.spawn(
+      ChildProcess.make("sh", ["-c", "echo $NOTION_KEY $GIT_AUTHOR_NAME; env | grep -c -e GH_TOKEN -e GIT_CONFIG"]),
+    )
+    expect(yield* text(run.stdout)).toBe("secret_1 ren[bot]\n0\n")
   }),
 )

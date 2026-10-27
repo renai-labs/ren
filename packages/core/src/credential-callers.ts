@@ -6,6 +6,7 @@ import { Signature } from "@ren/schema/signature"
 import { Workload } from "@ren/schema/workload"
 import { and, desc, eq, isNull, lt, sql } from "drizzle-orm"
 import { Clock, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Random } from "@ren/util/random"
 import { Envelope } from "./envelope.js"
 import { Signer } from "./signer.js"
 
@@ -61,8 +62,6 @@ const hash = (password: string) =>
     Effect.map((digest) => Buffer.from(digest).toString("hex")),
   )
 
-const random = (bytes: number) => Buffer.from(crypto.getRandomValues(new Uint8Array(bytes))).toString("base64url")
-
 // oxlint-disable-next-line ren/no-comments -- One row per workload and generation. Issuing a generation revokes the older ones of that workload, so a replaced machine's proof fails at once with generation_retired (§8 Replace).
 export const layer = Layer.effect(
   Service,
@@ -91,7 +90,8 @@ export const layer = Layer.effect(
 
     return Service.of({
       issue: Effect.fn("CredentialCallers.issue")(function* (caller: Caller, kind: ProofKind) {
-        const login = kind === "ProxyLogin" ? { username: `ren-${random(12)}`, password: random(32) } : undefined
+        const login =
+          kind === "ProxyLogin" ? { username: `ren-${Random.token(12)}`, password: Random.token(32) } : undefined
         const passwordHash = login ? yield* hash(login.password) : null
         // oxlint-disable-next-line ren/no-comments -- The provider needs the login again on every resume and network update (C38); Ren keeps it sealed, and checks proofs against the hash.
         const passwordSealed = login

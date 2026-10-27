@@ -6,23 +6,23 @@ import { App } from "./app.js"
 import { AppProfile } from "./app-profile.js"
 import { Channel } from "./channel.js"
 import { Credential } from "./credential.js"
-import { Cron } from "./cron.js"
 import { EnvironmentTemplate } from "./environment-template.js"
 import { OrganizationSettings } from "./organization-settings.js"
 import { Primitive } from "./primitive.js"
+import { Schedule } from "./schedule.js"
 import { Space } from "./space.js"
 import { SpaceSettings } from "./space-settings.js"
 import { Webhook } from "./webhook.js"
 
-const records = ["agents", "apps", "crons", "webhooks", "channels"] as const
+const records = ["agents", "apps", "schedules", "webhooks", "channels"] as const
 
-const runners = { crons: "Cron", webhooks: "Webhook", channels: "Channel" } as const
+const runners = { schedules: "Schedule", webhooks: "Webhook", channels: "Channel" } as const
 
 export const Path = Schema.String.check(
   Schema.isPattern(
     new RegExp(`^spaces/${Primitive.slugPattern}(?:/(?:${records.join("|")})/${Primitive.slugPattern})?$`, "u"),
     {
-      message: "Use spaces/<slug> or spaces/<slug>/<agents|apps|crons|webhooks|channels>/<slug>.",
+      message: "Use spaces/<slug> or spaces/<slug>/<agents|apps|schedules|webhooks|channels>/<slug>.",
     },
   ),
 ).annotate({ identifier: "Infra.Path" })
@@ -46,7 +46,9 @@ export const SpaceDeclaration = Schema.Struct({
   ),
   agents: Schema.Record(Agent.Name, Agent.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   apps: Schema.Record(Primitive.Slug, App.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
-  crons: Schema.Record(Primitive.Slug, Cron.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
+  schedules: Schema.Record(Primitive.Slug, Schedule.Declaration).pipe(
+    Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
+  ),
   webhooks: Schema.Record(Primitive.Slug, Webhook.Declaration).pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
   ),
@@ -143,10 +145,10 @@ export const Spec = Schema.Struct({
         ...spaces.flatMap(([space, declaration]) => {
           const agents = new Set([...Object.keys(declaration.agents), ...declaration.uses.agents])
           return [
-            ...Object.entries(declaration.crons).map(([name, cron]) => ({
-              kind: "crons" as const,
+            ...Object.entries(declaration.schedules).map(([name, schedule]) => ({
+              kind: "schedules" as const,
               name,
-              agent: cron.agent,
+              agent: schedule.agent,
             })),
             ...Object.entries(declaration.webhooks).map(([name, webhook]) => ({
               kind: "webhooks" as const,

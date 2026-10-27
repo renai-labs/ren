@@ -1,6 +1,8 @@
 export * as SessionMessage from "./message.js"
 
 import { Schema } from "effect"
+import { ChannelOrigin } from "../channel-origin.js"
+import { ScheduleOrigin } from "../schedule-origin.js"
 import { Identifier } from "../identifier.js"
 import { SessionError } from "./error.js"
 import { SessionModel } from "./model.js"
@@ -127,6 +129,8 @@ export const User = Schema.Struct({
   ...promptFields,
   type: Schema.tag("user"),
   sender: Schema.optionalKey(Sender),
+  channel: Schema.optionalKey(ChannelOrigin.Info),
+  schedule: Schema.optionalKey(ScheduleOrigin.Info),
 }).annotate({ identifier: "SessionMessage.User" })
 
 export interface SyntheticMetadata extends Schema.Schema.Type<typeof SyntheticMetadata> {}
@@ -343,7 +347,16 @@ export const Info = Schema.Union([
   Idle,
 ]).annotate({ identifier: "SessionMessage.Info" })
 export type Info =
-  AgentSwitched | ModelSwitched | User | Synthetic | System | Skill | Shell | Assistant | Compaction | Idle
+  | AgentSwitched
+  | ModelSwitched
+  | User
+  | Synthetic
+  | System
+  | Skill
+  | Shell
+  | Assistant
+  | Compaction
+  | Idle
 export type Type = Info["type"]
 
 export interface Page extends Schema.Schema.Type<typeof Page> {}

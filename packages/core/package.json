@@ -15,6 +15,7 @@
     "ren:settings": "bun run script/ren-settings.ts",
     "test": "bun ../../script/test.ts",
     "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/brain-host.test.ts test/environment-lifecycle.test.ts",
+    "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo -b tsconfig.json tsconfig.tests.json"
   },
   "dependencies": {
@@ -27,7 +28,8 @@
     "@modelcontextprotocol/client": "catalog:",
     "disposable-email-domains-js": "catalog:",
     "drizzle-orm": "catalog:",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "slackify-markdown": "5.0.0"
   },
   "devDependencies": {
     "@effect/platform-bun": "catalog:",

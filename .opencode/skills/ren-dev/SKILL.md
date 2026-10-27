@@ -34,7 +34,7 @@ REN_URL=http://localhost:4000 bun run --cwd packages/cli dev health
 docker compose exec postgres psql -U ren
 ```
 
-Test databases are named `ren_test_<uuid>` and are dropped when a test finishes. Leftovers mean a test crashed before its scope closed.
+Test databases are named `ren_test_clone_<uuid>`, cloned from a cached migrated template `ren_test_template_<hash>`. A clone is dropped when its test finishes, or by the next test run if its run was killed. Templates stay between runs.
 
 ## Tests
 
@@ -45,6 +45,7 @@ Test databases are named `ren_test_<uuid>` and are dropped when a test finishes.
 - Durations: `bun run test` prints only failures. `bun test <file>` prints each test with its duration. Move a test that takes more than 5 seconds to a `*.slow.test.ts` file, as `AGENTS.md` says.
 - End-to-end: `cd packages/e2e && bun run test`. It starts its own server on port 4010.
 - Everything: `bun turbo test`.
+- `bun run test` runs files in isolated parallel workers and waits when other test runs hold the machine's memory budget. Set `REN_TEST_WORKERS=1` for a serial run and `REN_TEST_PROFILE=1` to print setup, body and cleanup timings.
 
 ## Generated code
 

@@ -74,6 +74,15 @@ import type {
   LabelCreateInput,
   LabelUpdateInput,
   LabelArchiveInput,
+  ScheduleListInput,
+  ScheduleGetInput,
+  ScheduleCreateInput,
+  ScheduleUpdateInput,
+  ScheduleArchiveInput,
+  SchedulePauseInput,
+  ScheduleResumeInput,
+  ScheduleRunInput,
+  ScheduleRunListInput,
   CredentialListInput,
   CredentialGetInput,
   CredentialCreateInput,
@@ -92,6 +101,14 @@ import type {
   RenInferenceConnectInput,
   RenInferenceConnectionRenameInput,
   RenInferenceConnectionRemoveInput,
+  ChannelInstallListInput,
+  ChannelInstallUpdateInput,
+  ChannelInstallRemoveInput,
+  ChannelMappingListInput,
+  ChannelMappingCreateInput,
+  ChannelMappingRemoveInput,
+  ChannelConnectChannelInstallStartInput,
+  ChannelConnectChannelPlaceListInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -800,6 +817,85 @@ export function make(client: ReturnType<typeof Ren.make>) {
           }),
       },
     },
+    schedule: {
+      list: {
+        queryKey: (input?: ScheduleListInput) =>
+          input === undefined ? (["schedule", "list"] as const) : (["schedule", "list", input] as const),
+        queryOptions: (input: ScheduleListInput) =>
+          queryOptions({
+            queryKey: ["schedule", "list", input] as const,
+            queryFn: (context) => client["schedule"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: ScheduleGetInput) =>
+          input === undefined ? (["schedule", "get"] as const) : (["schedule", "get", input] as const),
+        queryOptions: (input: ScheduleGetInput) =>
+          queryOptions({
+            queryKey: ["schedule", "get", input] as const,
+            queryFn: (context) => client["schedule"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["schedule", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "create"] as const,
+            mutationFn: (input: ScheduleCreateInput) => client["schedule"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["schedule", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "update"] as const,
+            mutationFn: (input: ScheduleUpdateInput) => client["schedule"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["schedule", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "archive"] as const,
+            mutationFn: (input: ScheduleArchiveInput) => client["schedule"]["archive"](input),
+          }),
+      },
+      pause: {
+        mutationKey: () => ["schedule", "pause"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "pause"] as const,
+            mutationFn: (input: SchedulePauseInput) => client["schedule"]["pause"](input),
+          }),
+      },
+      resume: {
+        mutationKey: () => ["schedule", "resume"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "resume"] as const,
+            mutationFn: (input: ScheduleResumeInput) => client["schedule"]["resume"](input),
+          }),
+      },
+      run: {
+        mutationKey: () => ["schedule", "run"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "run"] as const,
+            mutationFn: (input: ScheduleRunInput) => client["schedule"]["run"](input),
+          }),
+      },
+    },
+    "schedule-run": {
+      list: {
+        queryKey: (input?: ScheduleRunListInput) =>
+          input === undefined ? (["schedule-run", "list"] as const) : (["schedule-run", "list", input] as const),
+        queryOptions: (input: ScheduleRunListInput) =>
+          queryOptions({
+            queryKey: ["schedule-run", "list", input] as const,
+            queryFn: (context) => client["schedule-run"]["list"](input, { signal: context.signal }),
+          }),
+      },
+    },
     credential: {
       list: {
         queryKey: (input?: CredentialListInput) =>
@@ -970,6 +1066,119 @@ export function make(client: ReturnType<typeof Ren.make>) {
               mutationKey: ["ren-inference", "connection", "remove"] as const,
               mutationFn: (input: RenInferenceConnectionRemoveInput) =>
                 client["ren-inference"]["connection"]["remove"](input),
+            }),
+        },
+      },
+    },
+    "channel-install": {
+      list: {
+        queryKey: (input?: ChannelInstallListInput) =>
+          input === undefined ? (["channel-install", "list"] as const) : (["channel-install", "list", input] as const),
+        queryOptions: (input: ChannelInstallListInput) =>
+          queryOptions({
+            queryKey: ["channel-install", "list", input] as const,
+            queryFn: (context) => client["channel-install"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      update: {
+        mutationKey: () => ["channel-install", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["channel-install", "update"] as const,
+            mutationFn: (input: ChannelInstallUpdateInput) => client["channel-install"]["update"](input),
+          }),
+      },
+      remove: {
+        mutationKey: () => ["channel-install", "remove"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["channel-install", "remove"] as const,
+            mutationFn: (input: ChannelInstallRemoveInput) => client["channel-install"]["remove"](input),
+          }),
+      },
+    },
+    "channel-mapping": {
+      list: {
+        queryKey: (input?: ChannelMappingListInput) =>
+          input === undefined ? (["channel-mapping", "list"] as const) : (["channel-mapping", "list", input] as const),
+        queryOptions: (input: ChannelMappingListInput) =>
+          queryOptions({
+            queryKey: ["channel-mapping", "list", input] as const,
+            queryFn: (context) => client["channel-mapping"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["channel-mapping", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["channel-mapping", "create"] as const,
+            mutationFn: (input: ChannelMappingCreateInput) => client["channel-mapping"]["create"](input),
+          }),
+      },
+      remove: {
+        mutationKey: () => ["channel-mapping", "remove"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["channel-mapping", "remove"] as const,
+            mutationFn: (input: ChannelMappingRemoveInput) => client["channel-mapping"]["remove"](input),
+          }),
+      },
+    },
+    "channel-connect": {
+      "channel-provider": {
+        list: {
+          queryKey: () => ["channel-connect", "channel-provider", "list"] as const,
+          queryOptions: () =>
+            queryOptions({
+              queryKey: ["channel-connect", "channel-provider", "list"] as const,
+              queryFn: (context) => client["channel-connect"]["channel-provider"]["list"]({ signal: context.signal }),
+            }),
+        },
+      },
+      "channel-install": {
+        start: {
+          mutationKey: () => ["channel-connect", "channel-install", "start"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["channel-connect", "channel-install", "start"] as const,
+              mutationFn: (input: ChannelConnectChannelInstallStartInput) =>
+                client["channel-connect"]["channel-install"]["start"](input),
+            }),
+        },
+      },
+      "channel-place": {
+        list: {
+          queryKey: (input?: ChannelConnectChannelPlaceListInput) =>
+            input === undefined
+              ? (["channel-connect", "channel-place", "list"] as const)
+              : (["channel-connect", "channel-place", "list", input] as const),
+          queryOptions: (input: ChannelConnectChannelPlaceListInput) =>
+            queryOptions({
+              queryKey: ["channel-connect", "channel-place", "list", input] as const,
+              queryFn: (context) =>
+                client["channel-connect"]["channel-place"]["list"](input, { signal: context.signal }),
+            }),
+        },
+      },
+    },
+    repository: {
+      list: {
+        queryKey: () => ["repository", "list"] as const,
+        queryOptions: () =>
+          queryOptions({
+            queryKey: ["repository", "list"] as const,
+            queryFn: (context) => client["repository"]["list"]({ signal: context.signal }),
+          }),
+      },
+    },
+    "sign-in": {
+      "sign-in-provider": {
+        list: {
+          queryKey: () => ["sign-in", "sign-in-provider", "list"] as const,
+          queryOptions: () =>
+            queryOptions({
+              queryKey: ["sign-in", "sign-in-provider", "list"] as const,
+              queryFn: (context) => client["sign-in"]["sign-in-provider"]["list"]({ signal: context.signal }),
             }),
         },
       },

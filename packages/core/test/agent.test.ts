@@ -4,6 +4,7 @@ import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
 import { Deferred, Effect, Fiber, Layer } from "effect"
 import { SqlClient } from "effect/sql"
+import { ReferenceCheck } from "../src/reference-check.js"
 import { Access } from "../src/access.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Agent } from "../src/agent.js"
@@ -16,7 +17,7 @@ import { Seed } from "./lib/seed.js"
 const it = testEffect(
   Layer.mergeAll(Agent.layer, AgentMembership.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer)),
-    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, ReferenceCheck.layerNone)),
     Layer.provideMerge(Testing.layer),
   ),
 )
@@ -40,7 +41,8 @@ const org = Effect.gen(function* () {
     admin,
     factory,
     eng,
-    join: (actor: typeof ada, spaceId: typeof factory.id) => members.create(admin, { spaceId, userId: actor.userId }),
+    join: (actor: typeof ada, spaceId: typeof factory.id) =>
+      members.create(spaceId === factory.id ? ada : grace, { spaceId, userId: actor.userId }),
   }
 })
 
@@ -54,6 +56,7 @@ describe("Agent", () => {
         const sql = yield* SqlClient.SqlClient
         const o = yield* org
         const existing = yield* agents.create(o.ada, { ...build, ownerSpaceId: o.factory.id })
+        yield* o.join(o.ada, o.eng.id)
         const locked = yield* Deferred.make<void>()
         const release = yield* Deferred.make<void>()
         const archive = yield* Effect.forkChild(
@@ -69,8 +72,8 @@ describe("Agent", () => {
         const write = yield* Effect.forkChild(
           Effect.result(
             operation === "create"
-              ? agents.create(o.admin, { ...build, name: "other", ownerSpaceId: o.eng.id })
-              : agents.transferOwnership(o.admin, existing.id, { spaceId: o.eng.id }),
+              ? agents.create(o.ada, { ...build, name: "other", ownerSpaceId: o.eng.id })
+              : agents.transferOwnership(o.ada, existing.id, { spaceId: o.eng.id }),
           ),
         )
         yield* sql<{ readonly waiting: number }>`select count(*)::int as waiting from pg_stat_activity
@@ -113,14 +116,14 @@ describe("Agent", () => {
     }),
   )
 
-  it.live("a user in none of the agent's spaces gets NotFound, and an org admin sees all agents", () =>
+  it.live("a user in none of the agent's spaces gets NotFound, an org admin too (AC4)", () =>
     Effect.gen(function* () {
       const agents = yield* Agent.Service
       const o = yield* org
       const created = yield* agents.create(o.ada, { ...build, ownerSpaceId: o.factory.id })
       expect((yield* Effect.flip(agents.get(o.grace, created.id)))._tag).toBe("Primitive.NotFound")
       expect((yield* agents.list(o.grace, page)).items).toEqual([])
-      expect((yield* agents.list(o.admin, page)).items.map((agent) => agent.id)).toEqual([created.id])
+      expect((yield* agents.list(o.admin, page)).items).toEqual([])
     }),
   )
 
@@ -209,8 +212,9 @@ describe("Agent", () => {
       const memberships = yield* AgentMembership.Service
       const o = yield* org
       const created = yield* agents.create(o.ada, { ...build, ownerSpaceId: o.factory.id })
-      yield* agents.transferOwnership(o.admin, created.id, { spaceId: o.eng.id })
-      const entries = (yield* memberships.list(o.admin, { ...page, agentId: created.id })).items
+      yield* o.join(o.ada, o.eng.id)
+      yield* agents.transferOwnership(o.ada, created.id, { spaceId: o.eng.id })
+      const entries = (yield* memberships.list(o.ada, { ...page, agentId: created.id })).items
       expect(entries.map((entry) => ({ spaceId: entry.spaceId, isOwner: entry.isOwner }))).toEqual([
         { spaceId: o.eng.id, isOwner: true },
         { spaceId: o.factory.id, isOwner: false },
@@ -218,20 +222,21 @@ describe("Agent", () => {
     }),
   )
 
-  it.live("a move needs membership in both spaces, or an org admin", () =>
+  it.live("a move needs membership in both spaces; an org admin outside them gets NotFound (AC4)", () =>
     Effect.gen(function* () {
       const agents = yield* Agent.Service
       const memberships = yield* AgentMembership.Service
       const o = yield* org
       const created = yield* agents.create(o.ada, { ...build, ownerSpaceId: o.factory.id })
-      yield* memberships.create(o.admin, { agentId: created.id, spaceId: o.eng.id })
+      yield* o.join(o.grace, o.factory.id)
+      yield* memberships.create(o.grace, { agentId: created.id, spaceId: o.eng.id })
       expect((yield* Effect.flip(agents.transferOwnership(o.ada, created.id, { spaceId: o.eng.id })))._tag).toBe(
         "Primitive.NotFound",
       )
-      expect((yield* Effect.flip(agents.transferOwnership(o.grace, created.id, { spaceId: o.eng.id })))._tag).toBe(
-        "Primitive.Forbidden",
+      expect((yield* Effect.flip(agents.transferOwnership(o.admin, created.id, { spaceId: o.eng.id })))._tag).toBe(
+        "Primitive.NotFound",
       )
-      expect((yield* agents.transferOwnership(o.admin, created.id, { spaceId: o.eng.id })).ownerSpaceId).toBe(o.eng.id)
+      expect((yield* agents.transferOwnership(o.grace, created.id, { spaceId: o.eng.id })).ownerSpaceId).toBe(o.eng.id)
     }),
   )
 
@@ -239,7 +244,7 @@ describe("Agent", () => {
     Effect.gen(function* () {
       const agents = yield* Agent.Service
       const o = yield* org
-      const references = [{ alias: "docs", repository: "acme/docs" }]
+      const references = [{ alias: "docs", repository: "https://github.com/acme/docs", description: "Product docs" }]
       const refused = yield* Effect.flip(
         agents.create(o.ada, {
           name: "explorer",

@@ -17,6 +17,16 @@ import { BrainHost } from "@ren/core/brain-host"
 import { BrainPush } from "@ren/core/brain-push"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
 import { Brains } from "@ren/core/brains"
+import { ChannelNotice } from "@ren/core/channel-notice"
+import { ChannelSecrets } from "@ren/core/channel-secrets"
+import { ChannelProvider } from "@ren/core/channel-provider"
+import { GitHub } from "@ren/core/channel-provider/github"
+import { Slack } from "@ren/core/channel-provider/slack"
+import { GitHubAccounts } from "@ren/core/github-accounts"
+import { GitHubApp } from "@ren/core/github-app"
+import { PersonCredentials } from "@ren/core/person-credentials"
+import { ChannelIdentity } from "@ren/core/channel-identity"
+import { ChannelRoute } from "@ren/core/channel-route"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
@@ -43,6 +53,7 @@ import { tmpdir } from "node:os"
 import { EgressRoutes } from "./egress.js"
 import { Routes } from "./routes.js"
 import { Signer } from "@ren/core/signer"
+import { SlackApp } from "@ren/core/slack-app"
 import { EgressControl } from "@ren/core/egress-control"
 
 const host = Layer.unwrap(
@@ -100,7 +111,9 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(
     Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
   ),
-  Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
+  Layer.provideMerge(GitHubAccounts.layer),
+  Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, PersonCredentials.layer)),
+  Layer.provideMerge(SlackApp.layer.pipe(Layer.provideMerge(ChannelSecrets.layer))),
   Layer.provideMerge(McpProvider.layerCleanup),
   Layer.provideMerge(McpProvider.layer([McpProvider.composio])),
   Layer.provideMerge(Layer.mergeAll(envelope, Access.layer, OAuthFetch.layerPublic)),
@@ -109,9 +122,12 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([
     Layer.mergeAll(
-      Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provide(host), Layer.provide(CredentialEnv.layer)),
+      Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provideMerge(host), Layer.provide(CredentialEnv.layer)),
       Retention.layer,
       RenInferenceRemoval.layer,
+    ),
+    Layer.mergeAll(ChannelNotice.layer, ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer))).pipe(
+      Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider]))),
     ),
     Mailer.layer,
     SignupGuard.layer,
@@ -120,7 +136,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provide([BrainClient.layer, Settings.layer]),
-  Layer.provide([models, Environments.layer]),
+  Layer.provide([models, Environments.layer, GitHubApp.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide([AuthDatabase.layer, Database.layer]),

@@ -4,6 +4,7 @@ import { Session } from "@ren/schema/session"
 import { Clock, Context, DateTime, Duration, Effect, Layer, Option, Ref, Schema, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { AppStore } from "./app-store.js"
+import { ChannelStore } from "./channel-store.js"
 import { BrainKeys } from "./brain-keys.js"
 import { BrainStorage } from "./brain-storage.js"
 import { Cell } from "./cell.js"
@@ -36,6 +37,7 @@ export const layer = Layer.effect(
     const activity = yield* Cell.Activity
     const hostToken = yield* HostToken.Service
     const apps = yield* AppStore.Service
+    const channels = yield* ChannelStore.Service
     const settings = yield* ChatSettings.Service
     const keys = yield* BrainKeys.Service
     const fence = yield* Fence.Service
@@ -76,7 +78,7 @@ export const layer = Layer.effect(
               busy: session.active,
               progress: session.progress,
             })),
-            roots: sessions.map((session) => Session.ID.make(session.id)),
+            roots: sessions.filter((session) => session.root).map((session) => Session.ID.make(session.id)),
           },
         })
         .pipe(HostToken.withToken(token.value), Effect.timeout(HostToken.renAnswersWithin))
@@ -91,8 +93,15 @@ export const layer = Layer.effect(
               ),
             )
         : false
+      const channelsChanged = yield* channels
+        .save(reply.channels ?? [])
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("The brain keeps its last channel servers", error).pipe(Effect.as(false)),
+          ),
+        )
       yield* keys.save(reply.publicKeys)
-      yield* credentialEnv.apply(reply.env.variables)
+      yield* credentialEnv.apply(reply.env)
       const inferenceChanged = yield* inference.saveBaseUrl(Option.fromNullishOr(reply.inference?.baseUrl))
       const settingsChanged = yield* settings.save(reply.layers, reply.chats)
       yield* Effect.scoped(
@@ -100,9 +109,10 @@ export const layer = Layer.effect(
           const current = yield* harness.getIfOpen
           if (Option.isNone(current)) return
           const opened = current.value
-          if (appsChanged || settingsChanged)
+          if (appsChanged || channelsChanged || settingsChanged)
             yield* opened.configure({
               ...(appsChanged && { apps: yield* apps.current }),
+              ...(channelsChanged && { channels: yield* channels.current }),
               ...(settingsChanged && { settings: { layers: yield* settings.layers, chats: yield* settings.chats } }),
             })
           if (inferenceChanged) yield* opened.refreshModels

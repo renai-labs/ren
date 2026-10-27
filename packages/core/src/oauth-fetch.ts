@@ -70,8 +70,7 @@ const fetchPublic: Fetch = async (input, init) => {
   if (url.username || url.password) throw new Error("Sign-in addresses cannot hold a user name or password")
   const hostname = url.hostname.replaceAll(/^\[|\]$/gu, "")
   const literal = isIP(hostname)
-  const addresses =
-    literal === 0 ? await lookup(hostname, { all: true }) : [{ address: hostname, family: literal }]
+  const addresses = literal === 0 ? await lookup(hostname, { all: true }) : [{ address: hostname, family: literal }]
   const target = addresses.at(0)
   if (!target) throw new Error(`No address found for ${hostname}`)
   if (addresses.some(isBlocked)) throw new Error(`${hostname} has a private or reserved address`)

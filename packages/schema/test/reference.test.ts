@@ -27,3 +27,31 @@ describe("Reference.Branch", () => {
     expect(Exit.isSuccess(Schema.decodeUnknownExit(Reference.Branch)(branch))).toBe(false)
   })
 })
+
+describe("Reference.Repository", () => {
+  test.each([
+    "https://github.com/acme/docs",
+    "https://git.acme.dev/acme/docs.git",
+    "https://gitlab.com/acme/group/docs",
+  ])("accepts %s", (repository) => {
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(Reference.Repository)(repository))).toBe(true)
+  })
+
+  test.each([
+    "http://github.com/acme/docs",
+    "file:///home/ada/docs",
+    "github.com/acme/docs",
+    "https://github.com/acme",
+    "https://github.com/acme/docs/",
+  ])("rejects %s", (repository) => {
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(Reference.Repository)(repository))).toBe(false)
+  })
+})
+
+describe("Reference.Info", () => {
+  test("requires a description", () => {
+    const docs = { alias: "docs", repository: "https://github.com/acme/docs" }
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(Reference.Info)(docs))).toBe(false)
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(Reference.Info)({ ...docs, description: "Docs" }))).toBe(true)
+  })
+})

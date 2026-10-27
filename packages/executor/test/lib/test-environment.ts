@@ -43,6 +43,7 @@ export const access = Effect.fnUntraced(function* (options: {
   readonly brain: Brain.ID
   readonly lifetimeMs?: number
   readonly generation?: number
+  readonly egress?: boolean
   readonly issuedAt?: number
 }) {
   const expiresAt = DateTime.makeUnsafe((options.issuedAt ?? Date.now()) + (options.lifetimeMs ?? 600_000))
@@ -58,5 +59,6 @@ export const access = Effect.fnUntraced(function* (options: {
     ),
     expiresAt,
     generation: options.generation ?? 1,
+    egress: options.egress ?? false,
   } satisfies Environment.Access
 })

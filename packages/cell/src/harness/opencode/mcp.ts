@@ -2,10 +2,13 @@ export * as OpenCodeMcp from "./mcp.js"
 
 import type { Plugin } from "@opencode/plugin/effect"
 import { Mcp } from "@opencode/schema/mcp"
+import { BrainToken } from "@ren/host-api/brain-token"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import type { AppCatalog } from "@ren/schema/app-catalog"
+import type { Channel } from "@ren/schema/channel"
 import { Credential } from "@ren/schema/credential"
-import { Duration, Effect, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
+import { Clock, Duration, Effect, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
+import { HostToken } from "../../host-token.js"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
 
@@ -158,31 +161,58 @@ export const make = Effect.fnUntraced(function* (input: {
   readonly isSession: boolean
   readonly hasEnvironment: boolean
   readonly apps: Option.Option<AppCatalog.Info>
+  readonly channels: ReadonlyArray<Channel.Provider>
   readonly sessionId: string
   readonly ren: Option.Option<Ren>
 }) {
   if (!input.isSession) return { apply: () => Effect.void, reloading: Effect.succeed(false) }
   const local = { local: input.hasEnvironment }
   const latest = yield* Ref.make(input.apps)
+  const channels = yield* Ref.make(input.channels)
   const sender = yield* Ref.make(Option.none<string>())
+  const presented = yield* Ref.make(Option.none<string>())
+  const tokenOf = (ren: Ren) =>
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis
+      const kept = Option.filter(yield* Ref.get(presented), (token) =>
+        Option.exists(BrainToken.expiry(token), (exp) => exp * 1000 - now > Duration.toMillis(HostToken.refreshBefore)),
+      )
+      const token = Option.isSome(kept) ? kept : yield* ren.token
+      yield* Ref.set(presented, token)
+      return token
+    })
   const renServers = Effect.gen(function* () {
     if (Option.isNone(input.ren)) return []
     const address = yield* input.ren.value.address
-    const token = yield* input.ren.value.token
+    const token = yield* tokenOf(input.ren.value)
     if (Option.isNone(address) || Option.isNone(token)) return []
     const user = yield* Ref.get(sender)
     const headers = {
       Authorization: `Bearer ${token.value}`,
       [HostMcp.sessionHeader]: input.sessionId,
-      ...(Option.isSome(user) && { [HostMcp.userHeader]: user.value }),
     }
-    const url = `${address.value.replace(/\/$/u, "")}${HostMcp.path}`
+    const base = address.value.replace(/\/$/u, "")
     return [
       {
         name: renServer,
-        config: new Mcp.RemoteConfig({ type: "remote", url, oauth: false, headers }),
+        config: new Mcp.RemoteConfig({
+          type: "remote",
+          url: `${base}${HostMcp.path}`,
+          oauth: false,
+          headers: { ...headers, ...(Option.isSome(user) && { [HostMcp.userHeader]: user.value }) },
+        }),
         within: 2 * openCodeTimeout,
       },
+      ...(yield* Ref.get(channels)).map((provider) => ({
+        name: provider,
+        config: new Mcp.RemoteConfig({
+          type: "remote",
+          url: `${base}${HostMcp.channelPath(provider)}`,
+          oauth: false,
+          headers,
+        }),
+        within: 2 * openCodeTimeout,
+      })),
     ]
   })
   const desired = (apps: Option.Option<AppCatalog.Info>) =>
@@ -308,8 +338,12 @@ export const make = Effect.fnUntraced(function* (input: {
   )
   return {
     // oxlint-disable-next-line ren/no-comments -- HR1, HR19: a catalog change reloads OpenCode's servers in the background, so the caller (a pull) never waits for a server. A running call on a changed or removed server ends.
-    apply: Effect.fnUntraced(function* (apps: Option.Option<AppCatalog.Info>) {
+    apply: Effect.fnUntraced(function* (
+      apps: Option.Option<AppCatalog.Info>,
+      providers: ReadonlyArray<Channel.Provider>,
+    ) {
       yield* Ref.set(latest, apps)
+      yield* Ref.set(channels, providers)
       const before = yield* changed
       if (Option.isNone(before)) return
       yield* Ref.update(pending, (count) => count + 1)

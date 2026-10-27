@@ -76,7 +76,7 @@ const state: { stub: StubModel.Server | undefined } = {
 
 export const stub = () => (state.stub ??= StubModel.start())
 
-export const vars = (baseURL = stub().cellUrl) => ({
+export const vars = (baseURL = stub().cellUrl, models: Readonly<Record<string, unknown>> = {}) => ({
   ...TestToken.vars,
   ALARM_INTERVAL_MS: "1000",
   WAIT_BUDGET_MS: "3000",
@@ -90,6 +90,7 @@ export const vars = (baseURL = stub().cellUrl) => ({
         models: {
           "stub-model": { name: "Stub", limit: { context: 100_000, output: 4000 }, variants: [{ id: "high" }] },
           "stub-other": { name: "Stub Other", limit: { context: 100_000, output: 4000 } },
+          ...models,
         },
       },
       anthropic: {

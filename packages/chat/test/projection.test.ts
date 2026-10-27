@@ -70,6 +70,7 @@ const tool = (
   status: SessionMessage.ToolState["status"],
   input: typeof SessionMessage.Json.Type = {},
   metadata?: typeof SessionMessage.Json.Type,
+  output = "Complete",
 ): SessionMessage.Tool => {
   const states: Record<SessionMessage.ToolState["status"], SessionMessage.ToolState> = {
     streaming: { status: "streaming", input: JSON.stringify(input) },
@@ -77,7 +78,7 @@ const tool = (
     completed: {
       status: "completed",
       input,
-      content: [{ type: "text", text: "Complete" }],
+      content: [{ type: "text", text: output }],
       ...(metadata && { metadata }),
     },
     error: {
@@ -628,6 +629,39 @@ describe("current session timeline rows", () => {
         key: "part:msg_assistant:msg_assistant:text:1",
         ref: { messageID: "msg_assistant", partID: "msg_assistant:text:1" },
       },
+    ])
+  })
+
+  test("shows a reply in the channel thread as its own row between grouped tools, and groups a failed one", () => {
+    const result = Projection.project({
+      messages: [
+        user("msg_user"),
+        assistant(
+          "msg_assistant",
+          [
+            tool("tool_read", "read", "completed"),
+            tool(
+              "tool_reply",
+              "slack_reply_to_current_thread",
+              "completed",
+              { text: "Rolled back." },
+              undefined,
+              '{"provider":"slack","place":"eng"}',
+            ),
+            tool("tool_grep", "grep", "completed"),
+            tool("tool_failed", "slack_reply_to_current_thread", "error", { text: "Again." }),
+          ],
+          { time: { created: at(2) } },
+        ),
+      ],
+      busy: false,
+      reasoning: "hidden",
+    })
+
+    expect(groups(result.rows).map((group) => [group.type, group.key])).toEqual([
+      ["context", "context:msg_assistant:tool_read"],
+      ["part", "part:msg_assistant:tool_reply"],
+      ["context", "context:msg_assistant:tool_grep"],
     ])
   })
 

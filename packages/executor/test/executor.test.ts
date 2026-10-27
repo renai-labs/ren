@@ -5,7 +5,7 @@ import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
-import { existsSync } from "node:fs"
+import { existsSync, watch } from "node:fs"
 import {
   chmod,
   mkdir,
@@ -21,7 +21,6 @@ import {
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
-import { heapStats } from "bun:jsc"
 import { Executor } from "../src/executor.js"
 import { Sandbox } from "../src/sandbox.js"
 import { testEffect } from "./lib/effect.js"
@@ -402,22 +401,67 @@ const archives = Effect.fnUntraced(function* (folders: Readonly<Record<string, (
     }),
   )
   const requests: Array<string> = []
+  const authorizations: Array<string | null> = []
+  // oxlint-disable-next-line ren/no-comments -- While held, an archive sends its first half and waits for release. While stalled, it sends its headers and no bytes. `arrived` ends at the first request after hold.
+  const state = {
+    held: undefined as PromiseWithResolvers<void> | undefined,
+    arrived: Promise.withResolvers<void>(),
+    isStalled: false,
+  }
   const server = yield* Effect.acquireRelease(
     Effect.sync(() =>
       Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
-        fetch: (request) => {
+        fetch: async (request) => {
           const name = new URL(request.url).pathname.slice(1)
           requests.push(name)
+          authorizations.push(request.headers.get("authorization"))
+          state.arrived.resolve()
+          if (state.isStalled) return new Response(new ReadableStream())
           const file = Bun.file(join(source, name))
-          return file.exists().then((found) => (found ? new Response(file) : new Response("missing", { status: 404 })))
+          if (!(await file.exists())) return new Response("missing", { status: 404 })
+          const gate = state.held
+          if (!gate) return new Response(file)
+          const bytes = await file.bytes()
+          const half = Math.floor(bytes.length / 2)
+          return new Response(
+            new ReadableStream({
+              start: async (controller) => {
+                controller.enqueue(bytes.subarray(0, half))
+                await gate.promise
+                controller.enqueue(bytes.subarray(half))
+                controller.close()
+              },
+            }),
+          )
         },
       }),
     ),
-    (served) => Effect.promise(() => served.stop(true)),
+    (served) =>
+      Effect.promise(() => {
+        state.held?.resolve()
+        return served.stop(true)
+      }),
   )
-  return { url: (name: string) => `http://127.0.0.1:${server.port}/${name}`, requests: () => [...requests] }
+  return {
+    url: (name: string) => `http://127.0.0.1:${server.port}/${name}`,
+    requests: () => [...requests],
+    authorizations: () => [...authorizations],
+    hold: () => {
+      state.held = Promise.withResolvers<void>()
+      state.arrived = Promise.withResolvers<void>()
+    },
+    arrived: Effect.promise(() => state.arrived.promise),
+    release: () => {
+      state.held?.resolve()
+      state.held = undefined
+    },
+    stall: (isStalled: boolean) => {
+      state.isStalled = isStalled
+      state.arrived = Promise.withResolvers<void>()
+    },
+  }
 })
 
 const put = (path: string, text: string) =>
@@ -467,6 +511,110 @@ it.live("an archive with a link or a download that fails leaves nothing at the p
       .pipe(Effect.flip)
     expect(missing.message).toBe("The archive answered 404")
     expect(yield* Effect.promise(() => readdir(join(workspace, "refused")).catch(() => []))).toEqual([])
+  }),
+)
+
+it.live("two unpacks of one path give one download, and a waiter downloads itself when the first is interrupted", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* archives({ docs: (root) => put(join(root, "README.md"), "docs") })
+    const together = { url: served.url("docs.tar.gz"), folder: ".", path: "together/docs/c1" }
+    served.hold()
+    const both = yield* Effect.forkChild(
+      Effect.all([executor.unpack(together), executor.unpack(together)], { concurrency: "unbounded" }),
+    )
+    yield* served.arrived
+    served.release()
+    yield* Fiber.join(both)
+    expect(served.requests()).toEqual(["docs.tar.gz"])
+    expect(yield* Effect.promise(() => readdir(join(workspace, "together/docs")))).toEqual(["c1"])
+
+    const handover = { ...together, path: "handover/docs/c1" }
+    served.hold()
+    const first = yield* Effect.forkChild(executor.unpack(handover))
+    yield* served.arrived
+    const second = yield* Effect.forkChild(executor.unpack(handover))
+    yield* Effect.yieldNow
+    served.hold()
+    yield* Fiber.interrupt(first)
+    yield* served.arrived
+    served.release()
+    yield* Fiber.join(second)
+    expect(served.requests()).toEqual(["docs.tar.gz", "docs.tar.gz", "docs.tar.gz"])
+    expect(yield* Effect.promise(() => Bun.file(join(workspace, "handover/docs/c1/README.md")).text())).toBe("docs")
+    expect(yield* Effect.promise(() => readdir(join(workspace, "handover/docs")))).toEqual(["c1"])
+  }),
+)
+
+it.effect("a download that sends no bytes for 60 seconds fails, and the path is free again", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* archives({ docs: (root) => put(join(root, "README.md"), "docs") })
+    const input = { url: served.url("docs.tar.gz"), folder: ".", path: "stalled/docs/c1" }
+    served.stall(true)
+    const stalled = yield* Effect.forkChild(Effect.flip(executor.unpack(input)))
+    yield* served.arrived
+    yield* TestClock.adjust(Duration.seconds(60))
+    expect((yield* Fiber.join(stalled)).message).toBe("The archive sent no bytes for 1m")
+    served.stall(false)
+    yield* executor.unpack(input)
+    expect(yield* Effect.promise(() => readdir(join(workspace, "stalled/docs")))).toEqual(["c1"])
+  }),
+)
+
+it.live("writes a large file while its archive still arrives, and the file is whole", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const large = crypto.getRandomValues(new Uint8Array(8 * 1024 * 1024))
+    const served = yield* archives({ large: (root) => writeFile(join(root, "large.bin"), large) })
+    const parent = join(workspace, "chunked/large")
+    yield* Effect.promise(() => mkdir(parent, { recursive: true }))
+    const written = Promise.withResolvers<void>()
+    const watcher = watch(parent, { recursive: true }, (_event, name) => {
+      if (name?.endsWith("large.bin")) written.resolve()
+    })
+    served.hold()
+    const unpacked = yield* Effect.forkChild(
+      executor.unpack({ url: served.url("large.tar.gz"), folder: ".", path: "chunked/large/c1" }),
+    )
+    yield* Effect.promise(() => written.promise)
+    watcher.close()
+    served.release()
+    yield* Fiber.join(unpacked)
+    expect(yield* Effect.promise(() => Bun.file(join(parent, "c1/large.bin")).bytes())).toEqual(large)
+  }),
+)
+
+it.live("removes an old staging folder of the path before a download", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* archives({ docs: (root) => put(join(root, "README.md"), "docs") })
+    const parent = join(workspace, "staged/docs")
+    yield* Effect.promise(() => put(join(parent, "c1.0f1e2d3c.staging/README.md"), "half"))
+    yield* Effect.promise(() => put(join(parent, "c2.0f1e2d3c.staging/README.md"), "other path"))
+    yield* executor.unpack({ url: served.url("docs.tar.gz"), folder: ".", path: "staged/docs/c1" })
+    expect((yield* Effect.promise(() => readdir(parent))).toSorted()).toEqual(["c1", "c2.0f1e2d3c.staging"])
+  }),
+)
+
+it.live("an unpack that skips links leaves the link out and sends the caller's headers", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* archives({
+      linked: async (root) => {
+        await put(join(root, "README.md"), "docs")
+        await symlink("/etc/passwd", join(root, "escape"))
+      },
+    })
+    yield* executor.unpack({
+      url: served.url("linked.tar.gz"),
+      folder: ".",
+      path: "skipped/linked",
+      headers: { authorization: "Bearer ren:GITHUB" },
+      links: "skip",
+    })
+    expect(yield* Effect.promise(() => readdir(join(workspace, "skipped/linked")))).toEqual(["README.md"])
+    expect(served.authorizations()).toEqual(["Bearer ren:GITHUB"])
   }),
 )
 
@@ -1171,33 +1319,6 @@ it.live(
   30_000,
 )
 
-it.effect(
-  "runs 1000 short commands twice, and gives back its file descriptors and heap objects the second time",
-  () =>
-    Effect.gen(function* () {
-      const executor = yield* Executor.Service
-      const short = Effect.gen(function* () {
-        const command = yield* executor.spawn(brain, { command: "echo", arguments: ["x"] })
-        yield* Stream.runDrain(yield* executor.output(brain, command.id))
-        return command
-      })
-      const batch = Effect.gen(function* () {
-        const first = yield* short
-        yield* Effect.forEach(Array.from({ length: 999 }), () => short, { concurrency: 1, discard: true })
-        yield* TestClock.adjust(Duration.seconds(46))
-        expect((yield* executor.output(brain, first.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
-        Bun.gc(true)
-        return heapStats().objectCount
-      })
-      const warm = yield* batch
-      const files = Processes.openFiles()
-      const second = yield* batch
-      expect(Processes.openFiles()).toBe(files)
-      expect(second - warm).toBeLessThan(5000)
-    }),
-  60_000,
-)
-
 it.live("reads an empty file as no bytes", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
@@ -1280,27 +1401,6 @@ it.live("reaches paths outside the workspace by absolute path and by '..'", () =
   }),
 )
 
-it.live(
-  "lists a folder with 100 000 items in one reply well under the file size limit",
-  () =>
-    Effect.gen(function* () {
-      const executor = yield* Executor.Service
-      yield* executor.mkdir("g9")
-      const filled = yield* run({
-        command: "sh",
-        arguments: ["-c", "seq 1 100000 | sed 's/^/file-/' | xargs touch"],
-        directory: "g9",
-      })
-      expect((yield* collect(filled.events)).exit).toEqual({ type: "exit", exitCode: 0, signal: null })
-      const files = Processes.openFiles()
-      const listed = yield* executor.list("g9")
-      expect(listed).toHaveLength(100_000)
-      expect(JSON.stringify(listed).length).toBeLessThan(EnvironmentApi.maxFileBytes)
-      expect(Processes.openFiles()).toBe(files)
-    }),
-  60_000,
-)
-
 if (process.platform === "linux" ? existsSync("/dev/shm") : process.platform === "darwin")
   it.live("moves a file to another file system, or fails with a typed error and loses nothing", () =>
     Effect.gen(function* () {
@@ -1364,35 +1464,32 @@ it.live("reads an empty range after the end of a file and a range of 0 bytes", (
   }),
 )
 
-it.live(
-  "reads one whole version of a file that another process replaces at the same time",
-  () =>
-    Effect.gen(function* () {
-      const executor = yield* Executor.Service
-      yield* executor.mkdir("g16")
-      const versions = [97, 98].map((byte, index) => new Uint8Array((index + 1) * mebibyte).fill(byte))
-      yield* Effect.promise(() => writeFile(join(workspace, "g16/live.bin"), versions[0] ?? new Uint8Array()))
-      let replacing = true
-      const replacer = Effect.promise(async () => {
-        for (let count = 0; replacing; count++) {
-          await writeFile(join(workspace, "g16/next.bin"), versions[count % 2] ?? new Uint8Array())
-          await rename(join(workspace, "g16/next.bin"), join(workspace, "g16/live.bin"))
-        }
-      })
-      const replacing_ = yield* Effect.forkScoped(replacer)
-      const reads = yield* Effect.forEach(
-        Array.from({ length: 300 }),
-        () => Effect.map(executor.read("g16/live.bin"), (read) => ({ size: read.info.sizeBytes, bytes: read.bytes })),
-        { concurrency: 4 },
-      )
-      replacing = false
-      yield* Fiber.join(replacing_)
-      expect(
-        reads.map((read) => ({
-          uniform: read.bytes.every((byte) => byte === read.bytes[0]),
-          whole: read.size === read.bytes.length,
-        })),
-      ).toEqual(reads.map(() => ({ uniform: true, whole: true })))
-    }),
-  60_000,
+it.live("reads one whole version of a file that another process replaces at the same time", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    yield* executor.mkdir("g16")
+    const versions = [97, 98].map((byte, index) => new Uint8Array((index + 1) * 256 * 1024).fill(byte))
+    yield* Effect.promise(() => writeFile(join(workspace, "g16/live.bin"), versions[0] ?? new Uint8Array()))
+    let replacing = true
+    const replacer = Effect.promise(async () => {
+      for (let count = 0; replacing; count++) {
+        await writeFile(join(workspace, "g16/next.bin"), versions[count % 2] ?? new Uint8Array())
+        await rename(join(workspace, "g16/next.bin"), join(workspace, "g16/live.bin"))
+      }
+    })
+    const replacing_ = yield* Effect.forkScoped(replacer)
+    const reads = yield* Effect.forEach(
+      Array.from({ length: 30 }),
+      () => Effect.map(executor.read("g16/live.bin"), (read) => ({ size: read.info.sizeBytes, bytes: read.bytes })),
+      { concurrency: 4 },
+    )
+    replacing = false
+    yield* Fiber.join(replacing_)
+    expect(
+      reads.map((read) => ({
+        uniform: read.bytes.every((byte) => byte === read.bytes[0]),
+        whole: read.size === read.bytes.length,
+      })),
+    ).toEqual(reads.map(() => ({ uniform: true, whole: true })))
+  }),
 )

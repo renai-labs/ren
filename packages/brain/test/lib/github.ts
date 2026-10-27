@@ -4,10 +4,17 @@ import { Effect } from "effect"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import type { SkillSource } from "../../src/skill/source.js"
+import { FetchHttpClient } from "effect/http"
+import { GitHubHost } from "../../src/git/github.js"
+import { GitHosts } from "../../src/git/hosts.js"
 
-// oxlint-disable-next-line ren/no-comments -- A real Git repository served through the three GitHub endpoints a brain reads: smart-HTTP refs, raw files and commit archives.
-export const make = Effect.fnUntraced(function* (options: { readonly owner?: string; readonly repo?: string } = {}) {
+// oxlint-disable-next-line ren/no-comments -- What GitHub, or the egress before it, answers to the ren:GITHUB placeholder: the egress put a token that reads the repository, the runtime has no egress (401), the space has no credential (403 from the egress) or the token cannot read the repository (404).
+export type Placeholder = "accepted" | "no_egress" | "no_credential" | "no_access"
+
+// oxlint-disable-next-line ren/no-comments -- A real Git repository served through the GitHub endpoints a brain reads: the git protocol v2 `ls-refs` of real `git upload-pack`, raw files, and the API tarball that redirects to a temporary archive link. A private one answers as GitHub does to a request without a token.
+export const make = Effect.fnUntraced(function* (
+  options: { readonly owner?: string; readonly repo?: string; readonly isPrivate?: boolean } = {},
+) {
   const owner = options.owner ?? "acme"
   const repo = options.repo ?? "skills"
   const directory = yield* Effect.acquireRelease(
@@ -33,24 +40,74 @@ export const make = Effect.fnUntraced(function* (options: { readonly owner?: str
       return output.trim()
     })
   yield* git(["init", "--quiet", "--initial-branch=main"])
-  const state = { requests: [] as Array<string>, failing: false }
-  const spawned = (args: ReadonlyArray<string>, prefix: Uint8Array = new Uint8Array()) => {
-    const run = Bun.spawn(["git", ...args], { cwd: directory, stdout: "pipe", stderr: "ignore" })
+  const state = {
+    requests: [] as Array<{ readonly path: string; readonly authorization: string | null }>,
+    bodies: [] as Array<ReadonlyArray<string>>,
+    failing: false,
+    broken: undefined as string | undefined,
+    isPrivate: options.isPrivate ?? false,
+    placeholder: "accepted" as Placeholder,
+    held: undefined as PromiseWithResolvers<void> | undefined,
+    arrived: Promise.withResolvers<void>(),
+  }
+  const spawned = (
+    args: ReadonlyArray<string>,
+    input?: { readonly body: ArrayBuffer; readonly env: Readonly<Record<string, string>> },
+  ) => {
+    const run = Bun.spawn(["git", ...args], {
+      cwd: directory,
+      stdin: input ? new Uint8Array(input.body) : "ignore",
+      stdout: "pipe",
+      stderr: "ignore",
+      env: { ...process.env, ...input?.env },
+    })
     return new Response(run.stdout)
       .arrayBuffer()
-      .then(async (bytes) => ((await run.exited) === 0 ? new Uint8Array([...prefix, ...new Uint8Array(bytes)]) : null))
+      .then(async (bytes) => ((await run.exited) === 0 ? new Uint8Array(bytes) : null))
   }
-  const bodyOf = (pathname: string) => {
-    if (pathname === `/git/${owner}/${repo}.git/info/refs`)
-      return spawned(
-        ["upload-pack", "--stateless-rpc", "--advertise-refs", "."],
-        new TextEncoder().encode("001e# service=git-upload-pack\n0000"),
-      )
+  const temporary = crypto.randomUUID()
+  const listRefs = async (request: Request) => {
+    const body = await request.arrayBuffer()
+    state.bodies.push(new TextDecoder().decode(body).match(/ref-prefix [^\n]+/gu) ?? [])
+    return spawned(["upload-pack", "--stateless-rpc", "."], {
+      body,
+      env: { GIT_PROTOCOL: request.headers.get("git-protocol") ?? "" },
+    })
+  }
+  const answer = (url: URL, request: Request) => {
+    const pathname = url.pathname
+    if (pathname === `/git/${owner}/${repo}.git/git-upload-pack` && request.method === "POST") return listRefs(request)
     const raw = new RegExp(`^/raw/${owner}/${repo}/([^/]+)/(.+)$`, "u").exec(pathname)
     if (raw) return spawned(["show", `${raw[1]}:${raw[2]}`])
-    const archive = new RegExp(`^/archive/${owner}/${repo}/tar\\.gz/([^/]+)$`, "u").exec(pathname)
-    if (archive) return spawned(["archive", "--format=tar.gz", `--prefix=${repo}-${archive[1]}/`, `${archive[1]}`])
+    const tarball = new RegExp(`^/api/repos/${owner}/${repo}/tarball/([^/]+)$`, "u").exec(pathname)
+    if (tarball)
+      return Response.redirect(
+        `${url.origin}/codeload/${owner}/${repo}/legacy.tar.gz/${tarball[1]}?token=${temporary}`,
+        302,
+      )
+    const archive = new RegExp(`^/codeload/${owner}/${repo}/legacy\\.tar\\.gz/([^/]+)$`, "u").exec(pathname)
+    if (archive && archive[1] === state.broken) return Promise.resolve(new Response("unavailable", { status: 503 }))
+    if (archive && (!state.isPrivate || url.searchParams.get("token") === temporary))
+      return spawned([
+        "archive",
+        "--format=tar.gz",
+        `--prefix=${owner}-${repo}-${archive[1]?.slice(0, 7)}/`,
+        `${archive[1]}`,
+      ])
     return Promise.resolve(null)
+  }
+  const refused = (pathname: string, authorization: string | null) => {
+    if (pathname.startsWith("/codeload/")) return null
+    if (authorization === null)
+      return state.isPrivate ? new Response("", { status: pathname.startsWith("/git/") ? 401 : 404 }) : null
+    if (state.placeholder === "no_egress") return new Response("Bad credentials", { status: 401 })
+    if (state.placeholder === "no_credential")
+      return new Response(JSON.stringify({ error: "ren_credential_missing", label: "GITHUB" }), {
+        status: 403,
+        headers: { "x-ren-egress": "credential_missing" },
+      })
+    if (state.placeholder === "no_access") return new Response("Not Found", { status: 404 })
+    return null
   }
   const server = yield* Effect.acquireRelease(
     Effect.sync(() =>
@@ -59,23 +116,60 @@ export const make = Effect.fnUntraced(function* (options: { readonly owner?: str
         port: 0,
         fetch: async (request) => {
           const url = new URL(request.url)
-          state.requests.push(`${url.pathname}${url.search}`)
+          const authorization = request.headers.get("authorization")
+          state.requests.push({ path: `${url.pathname}${url.search}`, authorization })
+          state.arrived.resolve()
+          if (state.held) await state.held.promise
           if (state.failing) return new Response("unavailable", { status: 503 })
-          const body = await bodyOf(url.pathname)
+          const refusal = refused(url.pathname, authorization)
+          if (refusal) return refusal
+          const body = await answer(url, request)
+          if (body instanceof Response) return body
           return body ? new Response(body) : new Response("404: Not Found", { status: 404 })
         },
       }),
     ),
-    (served) => Effect.promise(() => served.stop(true)),
+    (served) =>
+      Effect.promise(() => {
+        state.held?.resolve()
+        return served.stop(true)
+      }),
   )
   const origin = `http://127.0.0.1:${server.port}`
   return {
     url: `https://github.com/${owner}/${repo}`,
-    hosts: { git: `${origin}/git`, raw: `${origin}/raw`, archive: `${origin}/archive` } satisfies SkillSource.Hosts,
-    requests: Effect.sync(() => [...state.requests]),
+    hosts: {
+      host: "github.com",
+      git: `${origin}/git`,
+      api: `${origin}/api`,
+      raw: `${origin}/raw`,
+    } satisfies GitHubHost.Hosts,
+    requests: Effect.sync(() => state.requests.map((request) => request.path)),
+    // oxlint-disable-next-line ren/no-comments -- The ref-prefix lines of each ls-refs request that reached git, in order.
+    bodies: Effect.sync(() => [...state.bodies]),
+    authorizations: Effect.sync(() => state.requests.map((request) => [request.path, request.authorization] as const)),
     fail: (isFailing: boolean) =>
       Effect.sync(() => {
         state.failing = isFailing
+      }),
+    // oxlint-disable-next-line ren/no-comments -- Requests that arrive while held wait until release. `arrived` ends at the first request after hold.
+    hold: Effect.sync(() => {
+      state.held = Promise.withResolvers<void>()
+      state.arrived = Promise.withResolvers<void>()
+    }),
+    arrived: Effect.promise(() => state.arrived.promise),
+    release: Effect.sync(() => {
+      state.held?.resolve()
+      state.held = undefined
+    }),
+    // oxlint-disable-next-line ren/no-comments -- The archive of this commit answers 503 until breakArchive(undefined).
+    breakArchive: (commit: string | undefined) =>
+      Effect.sync(() => {
+        state.broken = commit
+      }),
+    answer: (placeholder: Placeholder) =>
+      Effect.sync(() => {
+        state.placeholder = placeholder
       }),
     commit: Effect.fnUntraced(function* (files: Readonly<Record<string, string | null>>, branch = "main") {
       if (branch !== "main")
@@ -102,3 +196,10 @@ export const make = Effect.fnUntraced(function* (options: { readonly owner?: str
 })
 
 export type Instance = Effect.Success<ReturnType<typeof make>>
+
+// oxlint-disable-next-line ren/no-comments -- The git hosts of a brain, with GitHub at the fake.
+export const hostsOf = (github: Instance) =>
+  GitHubHost.make(Effect.succeed(github.hosts)).pipe(
+    Effect.map((host) => GitHosts.make([host])),
+    Effect.provide(FetchHttpClient.layer),
+  )

@@ -148,6 +148,24 @@ import type {
   LabelUpdateOutput,
   LabelArchiveInput,
   LabelArchiveOutput,
+  ScheduleListInput,
+  ScheduleListOutput,
+  ScheduleGetInput,
+  ScheduleGetOutput,
+  ScheduleCreateInput,
+  ScheduleCreateOutput,
+  ScheduleUpdateInput,
+  ScheduleUpdateOutput,
+  ScheduleArchiveInput,
+  ScheduleArchiveOutput,
+  SchedulePauseInput,
+  SchedulePauseOutput,
+  ScheduleResumeInput,
+  ScheduleResumeOutput,
+  ScheduleRunInput,
+  ScheduleRunOutput,
+  ScheduleRunListInput,
+  ScheduleRunListOutput,
   CredentialListInput,
   CredentialListOutput,
   CredentialGetInput,
@@ -185,6 +203,25 @@ import type {
   RenInferenceConnectionRenameOutput,
   RenInferenceConnectionRemoveInput,
   RenInferenceConnectionRemoveOutput,
+  ChannelInstallListInput,
+  ChannelInstallListOutput,
+  ChannelInstallUpdateInput,
+  ChannelInstallUpdateOutput,
+  ChannelInstallRemoveInput,
+  ChannelInstallRemoveOutput,
+  ChannelMappingListInput,
+  ChannelMappingListOutput,
+  ChannelMappingCreateInput,
+  ChannelMappingCreateOutput,
+  ChannelMappingRemoveInput,
+  ChannelMappingRemoveOutput,
+  ChannelConnectChannelProviderListOutput,
+  ChannelConnectChannelInstallStartInput,
+  ChannelConnectChannelInstallStartOutput,
+  ChannelConnectChannelPlaceListInput,
+  ChannelConnectChannelPlaceListOutput,
+  RepositoryListOutput,
+  SignInSignInProviderListOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -1268,7 +1305,7 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/labels`,
-            query: { page: input["page"], pageSize: input["pageSize"] },
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
             successStatus: 200,
             declaredStatuses: [401, 403],
             empty: false,
@@ -1280,7 +1317,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/labels`,
-            body: { name: input["name"], color: input["color"] },
+            body: { spaceId: input["spaceId"], name: input["name"], color: input["color"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
@@ -1306,6 +1343,135 @@ export function make(options: ClientOptions) {
             path: `/labels/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    schedule: {
+      list: (input: ScheduleListInput, requestOptions?: RequestOptions) =>
+        request<ScheduleListOutput>(
+          {
+            method: "GET",
+            path: `/schedules`,
+            query: {
+              spaceId: input["spaceId"],
+              status: input["status"],
+              search: input["search"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: ScheduleGetInput, requestOptions?: RequestOptions) =>
+        request<ScheduleGetOutput>(
+          {
+            method: "GET",
+            path: `/schedules/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: ScheduleCreateInput, requestOptions?: RequestOptions) =>
+        request<ScheduleCreateOutput>(
+          {
+            method: "POST",
+            path: `/schedules`,
+            body: {
+              spaceId: input["spaceId"],
+              name: input["name"],
+              message: input["message"],
+              when: input["when"],
+              target: input["target"],
+              agentId: input["agentId"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: ScheduleUpdateInput, requestOptions?: RequestOptions) =>
+        request<ScheduleUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/schedules/${encodeURIComponent(input.id)}`,
+            body: {
+              name: input["name"],
+              message: input["message"],
+              when: input["when"],
+              target: input["target"],
+              agentId: input["agentId"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: ScheduleArchiveInput, requestOptions?: RequestOptions) =>
+        request<ScheduleArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/schedules/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      pause: (input: SchedulePauseInput, requestOptions?: RequestOptions) =>
+        request<SchedulePauseOutput>(
+          {
+            method: "POST",
+            path: `/schedules/${encodeURIComponent(input.id)}/pause`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      resume: (input: ScheduleResumeInput, requestOptions?: RequestOptions) =>
+        request<ScheduleResumeOutput>(
+          {
+            method: "POST",
+            path: `/schedules/${encodeURIComponent(input.id)}/resume`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      run: (input: ScheduleRunInput, requestOptions?: RequestOptions) =>
+        request<ScheduleRunOutput>(
+          {
+            method: "POST",
+            path: `/schedules/${encodeURIComponent(input.id)}/run`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "schedule-run": {
+      list: (input: ScheduleRunListInput, requestOptions?: RequestOptions) =>
+        request<ScheduleRunListOutput>(
+          {
+            method: "GET",
+            path: `/schedule-runs`,
+            query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
             empty: false,
           },
           requestOptions,
@@ -1572,6 +1738,154 @@ export function make(options: ClientOptions) {
               declaredStatuses: [400, 401, 403, 404, 503],
               empty: true,
             },
+            requestOptions,
+          ),
+      },
+    },
+    "channel-install": {
+      list: (input: ChannelInstallListInput, requestOptions?: RequestOptions) =>
+        request<ChannelInstallListOutput>(
+          {
+            method: "GET",
+            path: `/channel-installs`,
+            query: { page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: ChannelInstallUpdateInput, requestOptions?: RequestOptions) =>
+        request<ChannelInstallUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/channel-installs/${encodeURIComponent(input.id)}`,
+            body: { defaultSpaceId: input["defaultSpaceId"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      remove: (input: ChannelInstallRemoveInput, requestOptions?: RequestOptions) =>
+        request<ChannelInstallRemoveOutput>(
+          {
+            method: "POST",
+            path: `/channel-installs/${encodeURIComponent(input.id)}/remove`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "channel-mapping": {
+      list: (input: ChannelMappingListInput, requestOptions?: RequestOptions) =>
+        request<ChannelMappingListOutput>(
+          {
+            method: "GET",
+            path: `/channel-mappings`,
+            query: {
+              installId: input["installId"],
+              spaceId: input["spaceId"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: ChannelMappingCreateInput, requestOptions?: RequestOptions) =>
+        request<ChannelMappingCreateOutput>(
+          {
+            method: "POST",
+            path: `/channel-mappings`,
+            body: {
+              installId: input["installId"],
+              place: input["place"],
+              spaceId: input["spaceId"],
+              agentId: input["agentId"],
+              fallback: input["fallback"],
+              fallbackUserId: input["fallbackUserId"],
+              triggers: input["triggers"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      remove: (input: ChannelMappingRemoveInput, requestOptions?: RequestOptions) =>
+        request<ChannelMappingRemoveOutput>(
+          {
+            method: "POST",
+            path: `/channel-mappings/${encodeURIComponent(input.id)}/remove`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "channel-connect": {
+      "channel-provider": {
+        list: (requestOptions?: RequestOptions) =>
+          request<ChannelConnectChannelProviderListOutput>(
+            {
+              method: "GET",
+              path: `/channel-providers`,
+              successStatus: 200,
+              declaredStatuses: [401, 403],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      "channel-install": {
+        start: (input: ChannelConnectChannelInstallStartInput, requestOptions?: RequestOptions) =>
+          request<ChannelConnectChannelInstallStartOutput>(
+            {
+              method: "POST",
+              path: `/channel-installs/start`,
+              body: { provider: input["provider"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      "channel-place": {
+        list: (input: ChannelConnectChannelPlaceListInput, requestOptions?: RequestOptions) =>
+          request<ChannelConnectChannelPlaceListOutput>(
+            {
+              method: "GET",
+              path: `/channel-places`,
+              query: { installId: input["installId"], page: input["page"], pageSize: input["pageSize"] },
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+    },
+    repository: {
+      list: (requestOptions?: RequestOptions) =>
+        request<RepositoryListOutput>(
+          { method: "GET", path: `/repositories`, successStatus: 200, declaredStatuses: [401, 403, 503], empty: false },
+          requestOptions,
+        ),
+    },
+    "sign-in": {
+      "sign-in-provider": {
+        list: (requestOptions?: RequestOptions) =>
+          request<SignInSignInProviderListOutput>(
+            { method: "GET", path: `/sign-in-providers`, successStatus: 200, declaredStatuses: [], empty: false },
             requestOptions,
           ),
       },

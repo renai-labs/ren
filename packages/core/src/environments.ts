@@ -29,6 +29,7 @@ export interface Hand {
   readonly generation: number
   readonly url: string
   readonly workspace: Environment.Directory
+  readonly egress: boolean
 }
 
 interface Bound {
@@ -188,7 +189,12 @@ export const layer = Layer.effect(
                   .select({ id: environments.id })
                   .from(environments)
                   .leftJoin(sessions, and(eq(sessions.environment_id, environments.id), isNull(sessions.idle_at)))
-                  .where(eq(environments.environment_template_id, template.id))
+                  .where(
+                    and(
+                      eq(environments.environment_template_id, template.id),
+                      eq(environments.space_id, session.spaceId),
+                    ),
+                  )
                   .groupBy(environments.id, environments.created_at)
                   .having(sql`${count(sessions.session_id)} < ${template.sessions_per_environment}`)
                   .orderBy(asc(environments.created_at))
@@ -200,7 +206,7 @@ export const layer = Layer.effect(
               const id = Environment.ID.create()
               return transaction
                 .insert(environments)
-                .values({ id, environment_template_id: template.id })
+                .values({ id, environment_template_id: template.id, space_id: session.spaceId })
                 .pipe(Effect.as(id))
             },
           })
@@ -254,6 +260,8 @@ export const layer = Layer.effect(
           ),
           expiresAt: DateTime.makeUnsafe(exp * 1000),
           generation: hand.value.generation,
+          egress: hand.value.egress,
+          sharedDirectory: `${hand.value.workspace}/.ren`,
         } satisfies Environment.Access
       }
       const templateRows = yield* database.db
@@ -313,6 +321,9 @@ export const layer = Layer.effect(
         ),
         expiresAt: DateTime.makeUnsafe(exp * 1000),
         generation: assigned.generation,
+        egress: provider.value.egress,
+        // oxlint-disable-next-line ren/no-comments -- R49, R59: the folder beside the session folders, which every session on the environment shares.
+        sharedDirectory: `${config.directory}/.ren`,
       } satisfies Environment.Access
     })
 

@@ -1,19 +1,37 @@
 export * as Credentials from "./credentials.js"
 
 import { Database } from "@ren/db/database"
+import type { PullEnv } from "@ren/host-api/ren-host-api"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Credential } from "@ren/schema/credential"
 import type { Space } from "@ren/schema/space"
 import type { Workload } from "@ren/schema/workload"
-import { and, asc, count, eq, exists, ilike, inArray, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm"
+import {
+  and,
+  asc,
+  count,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  notInArray,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm"
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { Cause, Clock, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Result, Schema } from "effect"
 import { SqlError } from "effect/sql"
 import { Access } from "./access.js"
-import type { Actor } from "./actor.js"
+import { Actor } from "./actor.js"
 import { AppProfilePolicy } from "./app/profile-policy.js"
+import { AppQueries } from "./app/queries.js"
 import { ProfileItems } from "./app/profile-items.js"
 import { ProfileLabel } from "./app/profile-label.js"
 import { CredentialOffboarding } from "./credential/offboarding.js"
@@ -30,7 +48,7 @@ export type OwnerKind = Credential.OwnerKind | "workload"
 // oxlint-disable-next-line ren/no-comments -- The order applies to loose keys; a profile label is unique among the credentials a workload reaches (profiles.md §13 rule 3).
 export const lookupOrder: ReadonlyArray<OwnerKind> = ["workload", "profile", "person", "space", "org"]
 
-// oxlint-disable-next-line ren/no-comments -- What a workload may use: its own credentials, its org's, its space's while it serves that space, and one person's only when it serves that person alone (README §6.4 rules 2, A37).
+// oxlint-disable-next-line ren/no-comments -- The scope of a workload (README §6.4 rule 2, A37).
 export interface Scope {
   readonly organizationId: Auth.OrganizationID
   readonly workload: Workload.Info
@@ -178,10 +196,7 @@ export interface Interface extends Omit<Methods, "rotate" | "update"> {
     scope: Scope,
     profileIds: ReadonlyArray<AppProfile.ID>,
   ) => Effect.Effect<ReadonlyArray<Candidate>>
-  readonly environment: (
-    scope: Scope,
-    profileIds: ReadonlyArray<AppProfile.ID>,
-  ) => Effect.Effect<Readonly<Record<string, string>>>
+  readonly environment: (scope: Scope, profileIds: ReadonlyArray<AppProfile.ID>) => Effect.Effect<PullEnv>
   readonly open: (id: Credential.ID) => Effect.Effect<Option.Option<Opened>>
   readonly authorize: (
     actor: Actor.Info,
@@ -213,63 +228,33 @@ const members = Database.Schema.space_member
 const profiles = Database.Schema.app_profile
 const listed = Database.Schema.app_profile_space
 
-// oxlint-disable-next-line ren/no-comments -- What a workload may use: its own credentials, its org's, its space's while it serves that space, and one person's only when it serves that person alone (README §6.4 rules 2, A37). Profiles reach by `AppProfiles.reachable` from the same scope.
+const fence = (actor: Actor.Info) => Actor.fenced(actor, members.space_id) ?? sql`true`
+
 export const scopeOf = Effect.fnUntraced(function* (
   client: Pick<Database.Transaction, "select">,
   workload: Workload.Info,
 ) {
   const brainId = workload.kind === "brain" ? workload.id : Brain.ID.make(`brn_${workload.id.slice(4)}`)
-  const brain = (yield* client
-    .select({ brain: Database.Schema.brain })
+  const found = (yield* client
+    .select({ brain: Database.Schema.brain, space: Database.Schema.space })
     .from(Database.Schema.brain)
-    .where(eq(Database.Schema.brain.id, brainId))).at(0)?.brain
-  if (!brain) return Option.none<Scope>()
-  const person =
-    brain.scope === "session"
-      ? Option.fromNullishOr(
-          (yield* client
-            .select({ userId: Database.Schema.agent_session.created_by })
-            .from(Database.Schema.agent_session)
-            .innerJoin(
-              members,
-              and(
-                eq(members.space_id, Database.Schema.agent_session.space_id),
-                eq(members.user_id, Database.Schema.agent_session.created_by),
-                isNull(members.archived_at),
-              ),
-            )
-            .where(
-              and(
-                eq(Database.Schema.agent_session.brain_id, brain.id),
-                isNull(Database.Schema.agent_session.parent_id),
-              ),
-            )
-            .limit(1)).at(0)?.userId,
-        )
-      : Option.none()
-  const servesSpace = brain.scope === "space" || Option.isSome(person)
+    .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.brain.space_id))
+    .where(eq(Database.Schema.brain.id, brainId))).at(0)
+  if (!found) return Option.none<Scope>()
   return Option.some({
-    organizationId: brain.organization_id,
+    organizationId: found.brain.organization_id,
     workload,
-    spaceId: servesSpace ? Option.some(brain.space_id) : Option.none(),
-    person,
+    spaceId: Option.some(found.brain.space_id),
+    person:
+      found.space.kind === "private" && !found.space.archived_at
+        ? Option.fromNullishOr(found.space.owner_user_id)
+        : Option.none(),
   } satisfies Scope)
 })
 
 const notFound = new Primitive.NotFound({ message: "Credential not found." })
 
-const actions = {
-  list: Primitive.action(Credential.definition, "list"),
-  get: Primitive.action(Credential.definition, "get"),
-  create: Primitive.action(Credential.definition, "create"),
-  update: Primitive.action(Credential.definition, "update"),
-  rotate: Primitive.action(Credential.definition, "rotate"),
-  move: Primitive.action(Credential.definition, "move"),
-  copy: Primitive.action(Credential.definition, "copy"),
-  remove: Primitive.action(Credential.definition, "remove"),
-}
-
-const ownerRule = (reason: string, message: string) => new Primitive.Forbidden({ message: `${message} (${reason})` })
+const actions = CredentialPolicy.actions
 
 const ValueJson = Schema.fromJsonString(Sealed)
 const encodeValue = Schema.encodeSync(ValueJson)
@@ -309,9 +294,6 @@ const ownerColumns = (owner: Credential.Owner) => ({
   user_id: owner.kind === "person" ? owner.userId : null,
   profile_id: owner.kind === "profile" ? owner.profileId : null,
 })
-
-const isPasted = (row: { readonly type: Credential.Type; readonly account_user_id: Auth.UserID | null }) =>
-  (row.type === "key" || row.type === "basic" || row.type === "fields") && !row.account_user_id
 
 const labelConstraints: ReadonlyArray<string> = Object.values(Database.Schema.credentialOwnerLabelConstraints)
 
@@ -371,22 +353,32 @@ export const layer = Layer.effect(
           .select({ one: sql`1` })
           .from(members)
           .where(
-            and(eq(members.space_id, table.space_id), eq(members.user_id, actor.userId), isNull(members.archived_at)),
+            and(
+              eq(members.space_id, table.space_id),
+              eq(members.user_id, actor.userId),
+              isNull(members.archived_at),
+              Actor.fenced(actor, members.space_id),
+            ),
           ),
       )
 
-    const conditions = (actor: Actor.Info): ReadonlyMap<string, SQL | undefined> =>
+    // oxlint-disable-next-line ren/no-comments -- The SQL of each credential fact.
+    const facts = (actor: Actor.Info): ReadonlyMap<string, SQL> =>
       new Map([
-        [CredentialPolicy.relationships.org, eq(table.owner, "org")],
-        [CredentialPolicy.relationships.space, eq(table.owner, "space")],
-        [CredentialPolicy.relationships.spaceMember, and(eq(table.owner, "space"), membershipOf(actor))],
-        [CredentialPolicy.relationships.self, and(eq(table.owner, "person"), eq(table.user_id, actor.userId))],
-        [CredentialPolicy.relationships.person, eq(table.owner, "person")],
+        [CredentialPolicy.facts.org, eq(table.owner, "org")],
+        [CredentialPolicy.facts.spaceMember, and(eq(table.owner, "space"), membershipOf(actor)) ?? sql`false`],
         [
-          CredentialPolicy.relationships.profile,
+          CredentialPolicy.facts.self,
+          Actor.isFenced(actor)
+            ? sql`false`
+            : (and(eq(table.owner, "person"), eq(table.user_id, actor.userId)) ?? sql`false`),
+        ],
+        [CredentialPolicy.facts.person, eq(table.owner, "person")],
+        [
+          CredentialPolicy.facts.profile,
           and(
             eq(table.owner, "profile"),
-            // oxlint-disable-next-line ren/no-comments -- profiles.md §10: whoever connects the profile's items.
+            // oxlint-disable-next-line ren/no-comments -- Whoever connects a profile sees its credentials.
             exists(
               database.db
                 .select({ one: sql`1` })
@@ -394,27 +386,39 @@ export const layer = Layer.effect(
                 .where(
                   and(
                     eq(profiles.id, table.profile_id),
-                    AppProfilePolicy.filter(actor, access.plan(actor, AppProfilePolicy.actions.connect)),
+                    Access.where(access.plan(actor, AppProfilePolicy.actions.connect), AppQueries.profileWhere(actor)),
                   ),
                 ),
             ),
-          ),
+          ) ?? sql`false`,
+        ],
+        [CredentialPolicy.facts.inProfile, eq(table.owner, "profile")],
+        [
+          CredentialPolicy.facts.signIn,
+          or(isNotNull(table.account_user_id), notInArray(table.type, ["key", "basic", "fields"])) ?? sql`false`,
+        ],
+        [
+          CredentialPolicy.facts.foreignAccount,
+          and(isNotNull(table.account_user_id), ne(table.account_user_id, actor.userId)) ?? sql`false`,
         ],
       ])
 
-    const visible = (actor: Actor.Info, action: string) => {
-      const plan = access.plan(actor, action)
-      const where = conditions(actor)
-      return and(
+    const visible = (actor: Actor.Info, action: string) =>
+      and(
         eq(table.organization_id, actor.organizationId),
         ne(table.owner, "workload"),
-        or(...plan.allowedWhere.map((relationship) => where.get(relationship))) ?? sql`false`,
+        Access.where(access.plan(actor, action), facts(actor)),
       )
-    }
+
+    const contextFor = (actor: Actor.Info, options: { readonly isSpaceMember: boolean }): CredentialPolicy.Context => ({
+      userId: actor.userId,
+      isSpaceMember: options.isSpaceMember,
+      isFenced: Actor.isFenced(actor),
+    })
 
     const resourceOf = Effect.fnUntraced(function* (actor: Actor.Info, owner: Credential.Owner) {
       if (owner.kind !== "space")
-        return Option.some(CredentialPolicy.resource(owner, { userId: actor.userId, isSpaceMember: false }))
+        return Option.some(CredentialPolicy.resource(owner, contextFor(actor, { isSpaceMember: false })))
       const spaces = yield* database.db
         .select({ id: Database.Schema.space.id, membershipId: members.id })
         .from(Database.Schema.space)
@@ -424,6 +428,7 @@ export const layer = Layer.effect(
             eq(members.space_id, Database.Schema.space.id),
             eq(members.user_id, actor.userId),
             isNull(members.archived_at),
+            Actor.fenced(actor, members.space_id),
           ),
         )
         .where(
@@ -437,7 +442,7 @@ export const layer = Layer.effect(
       const space = spaces.at(0)
       if (!space) return Option.none()
       return Option.some(
-        CredentialPolicy.resource(owner, { userId: actor.userId, isSpaceMember: Boolean(space.membershipId) }),
+        CredentialPolicy.resource(owner, contextFor(actor, { isSpaceMember: Boolean(space.membershipId) })),
       )
     })
 
@@ -450,7 +455,7 @@ export const layer = Layer.effect(
         .select({
           profile: profiles,
           app: Database.Schema.app,
-          isListedMember: sql<boolean>`exists (select 1 from ${listed} inner join ${members} on ${members.space_id} = ${listed.space_id} where ${listed.profile_id} = ${profiles.id} and ${members.user_id} = ${actor.userId} and ${members.archived_at} is null)`,
+          isListedMember: sql<boolean>`exists (select 1 from ${listed} inner join ${members} on ${members.space_id} = ${listed.space_id} where ${listed.profile_id} = ${profiles.id} and ${members.user_id} = ${actor.userId} and ${members.archived_at} is null and ${fence(actor)})`,
         })
         .from(profiles)
         .innerJoin(Database.Schema.app, eq(Database.Schema.app.id, profiles.app_id))
@@ -461,7 +466,7 @@ export const layer = Layer.effect(
         isCreator: row.profile.created_by_user_id === actor.userId,
         isListedMember: row.isListedMember,
         allSpaces: row.profile.all_spaces,
-        isSelf: row.profile.user_id === actor.userId,
+        isSelf: row.profile.user_id === actor.userId && !Actor.isFenced(actor),
       }
       const resource = holds && AppProfilePolicy.resource(holds)
       if (!row || !resource || !isAllowed(actor, AppProfilePolicy.actions.get, resource))
@@ -510,8 +515,8 @@ export const layer = Layer.effect(
     ) {
       if (delivery !== "delivered") return
       const resource = yield* resourceOf(actor, owner)
-      if (Option.isNone(resource) || !isAllowed(actor, CredentialPolicy.actions.deliver, resource.value))
-        return yield* new Primitive.Forbidden({ message: "You cannot choose delivered for this credential." })
+      if (Option.isNone(resource) || !isAllowed(actor, actions.deliver, resource.value))
+        return yield* new Primitive.Forbidden({ message: "You cannot choose delivered for this owner." })
     })
 
     // oxlint-disable-next-line ren/no-comments -- A24: the count runs under a lock on the owner's row, so two creates at 99 cannot both pass.
@@ -568,9 +573,19 @@ export const layer = Layer.effect(
         })
     })
 
-    const toInfo = (row: typeof table.$inferSelect, accountName: string | null): Credential.Info | undefined => {
+    // oxlint-disable-next-line ren/no-comments -- A reader of a space credential is a space member.
+    const toInfo = (
+      actor: Actor.Info,
+      row: typeof table.$inferSelect,
+      accountName: string | null,
+    ): Credential.Info | undefined => {
       const owner = ownerOf(row)
       if (!owner) return undefined
+      const canPreview = isAllowed(
+        actor,
+        actions.preview,
+        CredentialPolicy.resource(owner, contextFor(actor, { isSpaceMember: true })),
+      )
       return {
         id: row.id,
         organizationId: row.organization_id,
@@ -578,7 +593,7 @@ export const layer = Layer.effect(
         label: row.label,
         name: row.name,
         type: row.type,
-        keyPreview: row.key_preview,
+        keyPreview: canPreview ? row.key_preview : null,
         fieldNames: row.field_names,
         hosts: row.hosts,
         inject: row.inject,
@@ -614,9 +629,9 @@ export const layer = Layer.effect(
       return found
     })
 
-    const infoById = Effect.fnUntraced(function* (id: Credential.ID) {
+    const infoById = Effect.fnUntraced(function* (actor: Actor.Info, id: Credential.ID) {
       const found = (yield* selectInfo(eq(table.id, id))).at(0)
-      const info = found && toInfo(found.row, found.accountName)
+      const info = found && toInfo(actor, found.row, found.accountName)
       if (!info) return yield* notFound
       return info
     })
@@ -667,7 +682,7 @@ export const layer = Layer.effect(
             .pipe(Effect.catchTag("EffectDrizzleQueryError", labelTaken))
         }),
       )
-      return yield* infoById(id)
+      return yield* infoById(actor, id)
     })
 
     const reaches = (scope: Scope) =>
@@ -754,7 +769,7 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         const totals = yield* database.db.select({ total: count() }).from(table).where(where).pipe(Effect.orDie)
         return {
-          items: rows.flatMap((row) => toInfo(row.row, row.accountName) ?? []),
+          items: rows.flatMap((row) => toInfo(actor, row.row, row.accountName) ?? []),
           page: input.page,
           pageSize: input.pageSize,
           total: totals.at(0)?.total ?? 0,
@@ -765,7 +780,7 @@ export const layer = Layer.effect(
         const found = yield* find(actor, id, actions.get).pipe(
           Effect.catchTag("Primitive.Forbidden", () => Effect.fail(notFound)),
         )
-        const info = toInfo(found.row, found.accountName)
+        const info = toInfo(actor, found.row, found.accountName)
         if (!info) return yield* notFound
         return info
       }),
@@ -847,7 +862,7 @@ export const layer = Layer.effect(
           .where(eq(table.id, id))
           .pipe(Effect.orDie)
         if (input.hosts || input.delivery) yield* removed([found.row.label])
-        return yield* infoById(id)
+        return yield* infoById(actor, id)
       }),
 
       rotate: Effect.fn("Credentials.rotate")(function* (
@@ -879,7 +894,7 @@ export const layer = Layer.effect(
           .where(eq(table.id, id))
           .pipe(Effect.orDie)
         yield* removed([found.row.label])
-        return yield* infoById(id)
+        return yield* infoById(actor, id)
       }),
 
       move: Effect.fn("Credentials.move")(function* (
@@ -888,31 +903,15 @@ export const layer = Layer.effect(
         input: Credential.MoveInput,
       ) {
         const found = yield* find(actor, id, actions.move)
-        if (found.row.owner === "profile")
-          return yield* ownerRule("profile", "A profile’s credential stays in its profile.")
-        const accountUserId = found.row.account_user_id
-        if (accountUserId) {
-          if (
-            !isAllowed(
-              actor,
-              CredentialPolicy.actions.moveAccount,
-              CredentialPolicy.account({ isHolder: accountUserId === actor.userId }),
-            )
-          )
-            return yield* ownerRule("not_account_holder", "Only the account holder moves an account credential.")
-          if (input.owner.kind === "org")
-            return yield* ownerRule("account_to_org", "An account credential cannot move to the org.")
-          if (input.owner.kind === "person" && input.owner.userId !== actor.userId)
-            return yield* ownerRule("not_account_holder", "An account credential moves back only to its holder.")
-          if (input.owner.kind === "space") {
-            const resource = yield* resourceOf(actor, input.owner)
-            if (
-              Option.isSome(resource) &&
-              !resource.value.relationships.includes(CredentialPolicy.relationships.spaceMember)
-            )
-              return yield* ownerRule("not_space_member", "Move an account credential only to a space you are in.")
-          }
-        }
+        const target = CredentialPolicy.moveTo(
+          { accountUserId: found.row.account_user_id },
+          input.owner,
+          contextFor(actor, { isSpaceMember: false }),
+        )
+        if (!isAllowed(actor, actions.moveTo, target))
+          return yield* new Primitive.Forbidden({
+            message: "An account credential moves only to a space or to its holder.",
+          })
         yield* checkTarget(actor, input.owner, "move")
         yield* checkDelivery(actor, input.owner, found.row.delivery)
         yield* database.transaction((transaction) =>
@@ -926,7 +925,7 @@ export const layer = Layer.effect(
           }),
         )
         yield* removed([found.row.label])
-        return yield* infoById(id)
+        return yield* infoById(actor, id)
       }),
 
       copy: Effect.fn("Credentials.copy")(function* (
@@ -935,10 +934,6 @@ export const layer = Layer.effect(
         input: Credential.MoveInput,
       ) {
         const found = yield* find(actor, id, actions.copy)
-        if (found.row.owner === "profile")
-          return yield* ownerRule("profile", "A profile’s credential stays in its profile.")
-        if (!isPasted(found.row))
-          return yield* ownerRule("copy_rotating", "Only pasted keys can be copied. Move a sign-in instead.")
         yield* checkTarget(actor, input.owner, "copy")
         yield* checkDelivery(actor, input.owner, found.row.delivery)
         const value = yield* openRow(found.row)
@@ -957,7 +952,7 @@ export const layer = Layer.effect(
 
       remove: Effect.fn("Credentials.remove")(function* (actor: Actor.Info, id: Credential.ID) {
         const found = yield* find(actor, id, actions.remove)
-        const info = toInfo(found.row, found.accountName)
+        const info = toInfo(actor, found.row, found.accountName)
         if (!info) return yield* notFound
         yield* database.db.delete(table).where(eq(table.id, id)).pipe(Effect.orDie)
         yield* CredentialOffboarding.invalidate({
@@ -1031,7 +1026,7 @@ export const layer = Layer.effect(
         }))
       }),
 
-      // oxlint-disable-next-line ren/no-comments -- A35: each key that reaches the workload is an env var that holds its placeholder; a delivered key holds its value (C9). The first owner in the lookup order wins a label. Each connected env item of a reached profile is `LABEL=ren:LABEL` (profiles.md §13 rule 4).
+      // oxlint-disable-next-line ren/no-comments -- A35: each key that reaches the workload is an env var that holds its placeholder; a delivered key holds its value (C9). Placeholders are a list of their own, because they work only behind the egress (R19). The first owner in the lookup order wins a label. Each connected env item of a reached profile is `LABEL=ren:LABEL` (profiles.md §13 rule 4).
       environment: Effect.fn("Credentials.environment")(function* (
         scope: Scope,
         profileIds: ReadonlyArray<AppProfile.ID>,
@@ -1046,10 +1041,10 @@ export const layer = Layer.effect(
         )
         const entries = yield* Effect.forEach(ordered, (row) =>
           row.delivery === "egress"
-            ? Effect.succeed([[row.label, Credential.placeholder(row.label)]] as const)
+            ? Effect.succeed([{ label: row.label, value: Credential.placeholder(row.label), isPlaceholder: true }])
             : Effect.map(openRow(row), (value) =>
                 Option.isSome(value) && value.value.type === "key"
-                  ? ([[row.label, Redacted.value(value.value.value)]] as const)
+                  ? [{ label: row.label, value: Redacted.value(value.value.value), isPlaceholder: false }]
                   : [],
               ),
         )
@@ -1071,10 +1066,26 @@ export const layer = Layer.effect(
               )
               .pipe(Effect.orDie)
           : []
-        return Object.fromEntries([
-          ...entries.flat(),
-          ...connected.map((row) => [row.label, Credential.placeholder(row.label)] as const),
-        ])
+        const winners = [
+          ...new Map(
+            [
+              ...entries.flat(),
+              ...connected.map((row) => ({
+                label: row.label,
+                value: Credential.placeholder(row.label),
+                isPlaceholder: true,
+              })),
+            ].map((entry) => [entry.label, entry]),
+          ).values(),
+        ]
+        return {
+          variables: Object.fromEntries(
+            winners.filter((entry) => !entry.isPlaceholder).map((entry) => [entry.label, entry.value]),
+          ),
+          placeholders: Object.fromEntries(
+            winners.filter((entry) => entry.isPlaceholder).map((entry) => [entry.label, entry.value]),
+          ),
+        }
       }),
 
       open: Effect.fn("Credentials.open")(function* (id: Credential.ID) {

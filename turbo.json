@@ -1,12 +1,7 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "agentGuidance": false,
-  "globalDependencies": [
-    "patches/**",
-    "tsconfig.base.json",
-    "bunfig.toml",
-    ".github/actions/setup-bun/**"
-  ],
+  "globalDependencies": ["patches/**", "tsconfig.base.json", "bunfig.toml", ".github/actions/setup-bun/**"],
   "globalEnv": ["CI", "REN_SLOW"],
   "globalPassThroughEnv": ["CI", "DATABASE_URL"],
   "tasks": {
@@ -14,16 +9,31 @@
       "dependsOn": ["^typecheck"]
     },
     "build": {
-      "dependsOn": [],
+      "dependsOn": ["transit"],
       "outputs": ["dist/**"]
+    },
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "lint": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/oxlint.config.ts", "$TURBO_ROOT$/script/oxlint/**"],
+      "outputs": []
     },
     "test": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/script/test.ts", "$TURBO_ROOT$/packages/test-harness/src/**"],
+      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_BUDGET_MIB", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
       "outputs": []
     },
     "@ren/e2e#test": {
       "outputs": [],
       "cache": false
+    },
+    "@ren/app#build": {
+      "dependsOn": ["transit"],
+      "env": ["VITE_*"],
+      "outputs": ["dist/**"]
     }
   }
 }

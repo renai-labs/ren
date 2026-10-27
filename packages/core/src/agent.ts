@@ -12,6 +12,7 @@ import { AgentDefaults } from "./agent/defaults.js"
 import { AgentPolicy } from "./agent/policy.js"
 import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
+import { ReferenceCheck } from "./reference-check.js"
 import { SettingsRows } from "./settings/rows.js"
 
 export type Interface = Primitive.Interface<typeof Agent.definition>
@@ -74,12 +75,9 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const access = yield* Access.Service
+    const references = yield* ReferenceCheck.Service
 
-    const visibleTo = (actor: Actor.Info) => {
-      const plan = access.plan(actor, actions.get)
-      if (plan.isAllowedEverywhere) return
-      return plan.allowedWhere.length > 0 ? AgentQueries.isSpaceMember(actor) : sql`false`
-    }
+    const visibleTo = (actor: Actor.Info) => Access.where(access.plan(actor, actions.get), AgentQueries.where(actor))
 
     const resource = (row: Row, target: { readonly isTargetMember?: boolean } = {}) =>
       AgentPolicy.resource({ isOwnerMember: row.isOwnerMember, isSpaceMember: row.isSpaceMember, ...target })
@@ -149,9 +147,10 @@ export const layer = Layer.effect(
       create: Effect.fn("Agent.create")(function* (actor: Actor.Info, input: Agent.CreateInput) {
         const reason = refused(input)
         if (reason) return yield* new Primitive.Conflict({ message: reason })
+        yield* references.check(actor.organizationId, [], input.settings.references)
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const space = yield* AgentQueries.visibleSpace(transaction, access, actor, input.ownerSpaceId)
+            const space = yield* AgentQueries.visibleSpace(transaction, actor, input.ownerSpaceId)
             if (
               !access.isAllowed({
                 actor,
@@ -184,6 +183,12 @@ export const layer = Layer.effect(
         )
       }),
       update: Effect.fn("Agent.update")(function* (actor: Actor.Info, id: Agent.ID, input: Agent.UpdateInput) {
+        if (input.settings) {
+          const previous = yield* database.transaction((transaction) =>
+            findLive(transaction, actor, eq(Database.Schema.agent.id, id)).pipe(Effect.flatMap(settingsOf)),
+          )
+          yield* references.check(actor.organizationId, previous.references, input.settings.references)
+        }
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* findLive(transaction, actor, eq(Database.Schema.agent.id, id))
@@ -244,7 +249,7 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* findLive(transaction, actor, eq(Database.Schema.agent.id, id))
-            const target = yield* AgentQueries.visibleSpace(transaction, access, actor, input.spaceId)
+            const target = yield* AgentQueries.visibleSpace(transaction, actor, input.spaceId)
             if (
               !access.isAllowed({
                 actor,

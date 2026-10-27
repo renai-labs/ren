@@ -58,7 +58,7 @@ export const kinds = (activity: { readonly items: ReadonlyArray<Activity.Info> }
 
 export const actingAs = (actor: Actor.Info, spaceId: SpaceSchema.ID, agentId: Agent.ID, sessionId: Session.ID) => ({
   ...actor,
-  agent: { agentId, sessionId, spaceId },
+  agent: { agentId, sessionId, spaceId, fence: null },
 })
 
 export const org = Effect.gen(function* () {

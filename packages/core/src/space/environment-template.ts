@@ -24,7 +24,7 @@ const forbidden = new Primitive.Forbidden({ message: "You cannot manage the envi
 const table = Database.Schema.space_environment_template
 
 const actions = {
-  getSpace: Primitive.action(Space.definition, "get"),
+  read: SpacePolicy.actions.read,
   list: Primitive.action(SpaceEnvironmentTemplate.definition, "list"),
   create: Primitive.action(SpaceEnvironmentTemplate.definition, "create"),
   archive: Primitive.action(SpaceEnvironmentTemplate.definition, "archive"),
@@ -60,7 +60,7 @@ export const layer = Layer.effect(
       spaceId: Space.ID,
     ) {
       const rows = yield* transaction
-        .select({ membershipId: SpaceQueries.membership.id })
+        .select({ membershipId: SpaceQueries.membership.id, kind: Database.Schema.space.kind })
         .from(Database.Schema.space)
         .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
         .where(
@@ -73,8 +73,8 @@ export const layer = Layer.effect(
         .for("share", { of: Database.Schema.space })
       const row = rows.at(0)
       if (!row) return
-      const resource = SpacePolicy.resource(row.membershipId, spaceId)
-      if (!access.isAllowed({ actor, action: actions.getSpace, resource })) return
+      const resource = SpacePolicy.resource(row)
+      if (!access.isAllowed({ actor, action: actions.read, resource })) return
       return resource
     })
 

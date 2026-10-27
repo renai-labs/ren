@@ -22,6 +22,7 @@ import type { HarnessConfig } from "./config.js"
 
 interface SessionState extends Reconcile.Snapshot {
   readonly id: string
+  readonly root: boolean
   readonly progress: string
   readonly resend: (id: string) => Effect.Effect<void>
   readonly wait: (ms: number) => Effect.Effect<void>

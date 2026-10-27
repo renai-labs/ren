@@ -80,6 +80,7 @@ const setup = Effect.fnUntraced(function* (declaration: Mcp.Declaration = oauth(
   const organizationId = yield* Seed.organization()
   const actor = yield* Seed.actor(organizationId, "admin")
   const space = yield* Seed.space(organizationId)
+  yield* Seed.join(space, actor.userId)
   const app = yield* apps.create(
     actor,
     Seed.appInput(space, `linear-${crypto.randomUUID().slice(0, 8)}`, { mcps: { linear: declaration } }),
@@ -561,7 +562,7 @@ describe("OAuth refresher (§8; tests 3, 5, 6, 7, 10)", () => {
     }),
   )
 
-  it.live("400 invalid_grant is fatal; 503 with invalid_grant and an object error are temporary", () =>
+  it.live("400 invalid_grant and GitHub's 200 bad_refresh_token are fatal; server errors are temporary", () =>
     Effect.gen(function* () {
       const refresh = yield* CredentialRefresh.Service
       const answers: ReadonlyArray<{
@@ -571,10 +572,13 @@ describe("OAuth refresher (§8; tests 3, 5, 6, 7, 10)", () => {
       }> = [
         { status: 503, body: { error: "invalid_grant" }, after: "ok" },
         { status: 400, body: { error: { code: "x" } }, after: "ok" },
+        { status: 200, body: { error: "bad_refresh_token" }, after: "reconnect" },
         { status: 400, body: { error: "invalid_grant" }, after: "reconnect" },
       ]
       const statuses = yield* Effect.forEach(answers, (answer) =>
         Effect.gen(function* () {
+          const database = yield* Database.Service
+          yield* database.db.delete(Database.Schema.credential)
           const id = yield* signedIn(() => OAuthServer.bearer("tok_1", { refresh_token: "ref_1", expires_in: 3600 }))
           server.options = { token: () => ({ status: answer.status, body: answer.body }) }
           yield* refresh.refresh(id, {})

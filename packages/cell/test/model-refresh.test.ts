@@ -223,25 +223,27 @@ it.effect(
     }),
 )
 
-it.effect("an endpoint that the renewed grant does not name gets the grant's key: one LiteLLM key serves every endpoint (HR29)", () =>
-  Effect.gen(function* () {
-    const subject = yield* make
-    yield* subject.store.write(
-      grant({ stub: Shared.apiKey("stub-old", expiring), anthropic: Shared.apiKey("anthropic-old", expiring) }),
-      hosts.old,
-    )
-    const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
-    const remaining = grant({ anthropic: Shared.apiKey("anthropic-new", renewed) })
-    yield* subject.reply(
-      yield* subject.next,
-      ModelsTest.granted({ access: remaining, hostToken: Redacted.make(hosts.new) }),
-    )
-    expect(Option.map(yield* Fiber.join(pending), (found) => Redacted.value(found.key))).toEqual(
-      Option.some("anthropic-new"),
-    )
-    expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(remaining)))
-    expect(yield* subject.store.readHostToken).toEqual(Option.some(hosts.new))
-  }),
+it.effect(
+  "an endpoint that the renewed grant does not name gets the grant's key: one LiteLLM key serves every endpoint (HR29)",
+  () =>
+    Effect.gen(function* () {
+      const subject = yield* make
+      yield* subject.store.write(
+        grant({ stub: Shared.apiKey("stub-old", expiring), anthropic: Shared.apiKey("anthropic-old", expiring) }),
+        hosts.old,
+      )
+      const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
+      const remaining = grant({ anthropic: Shared.apiKey("anthropic-new", renewed) })
+      yield* subject.reply(
+        yield* subject.next,
+        ModelsTest.granted({ access: remaining, hostToken: Redacted.make(hosts.new) }),
+      )
+      expect(Option.map(yield* Fiber.join(pending), (found) => Redacted.value(found.key))).toEqual(
+        Option.some("anthropic-new"),
+      )
+      expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(remaining)))
+      expect(yield* subject.store.readHostToken).toEqual(Option.some(hosts.new))
+    }),
 )
 
 it.effect("an endpoint that only the stored grant does not name asks Ren, and gets Ren's key for it (HR37)", () =>

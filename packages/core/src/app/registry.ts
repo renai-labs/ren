@@ -179,7 +179,7 @@ export const layer = Layer.effect(
       access.isAllowed({
         actor,
         action: Primitive.action(AppRegistry.definition, operation),
-        resource: { relationships: [] },
+        resource: { facts: [] },
       })
     const listing = Effect.fnUntraced(function* (transaction: Database.Transaction, slug: string) {
       const row = (yield* transaction

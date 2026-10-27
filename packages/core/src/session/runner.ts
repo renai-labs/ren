@@ -7,7 +7,7 @@ import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { and, eq, isNull } from "drizzle-orm"
-import { Context, DateTime, Effect, Layer, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
 import { AgentQueries } from "../agent/queries.js"
 import { BrainHost } from "../brain-host.js"
 import { Brains } from "../brains.js"
@@ -49,6 +49,8 @@ export interface Interface {
     input: Session.SendInput,
   ) => Effect.Effect<Session.Accepted, NotFound | BrainHost.BrainUnavailable | Brains.BrainRejectedError>
   readonly get: (sessionId: Session.ID) => Effect.Effect<Info, NotFound>
+  // oxlint-disable-next-line ren/no-comments -- A started chat whose start the brain refused later; create returns before the brain starts.
+  readonly onStartRejected: (listener: (sessionId: Session.ID) => Effect.Effect<void>) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SessionRunner") {}
@@ -138,7 +140,7 @@ export const layer = Layer.effect(
               yield* brain.start(
                 {
                   ...start,
-                  initialMessage: { messageId: input.messageId, prompt: input.prompt, sender: input.sender },
+                  initialMessage: Struct.omit(input, ["sessionId", "delivery"]),
                 },
                 row,
               )
@@ -147,6 +149,7 @@ export const layer = Layer.effect(
           ),
         )
       }),
+      onStartRejected: brain.onStartRejected,
       get: Effect.fn("SessionRunner.get")(function* (sessionId: Session.ID) {
         const row = (yield* database.transaction((transaction) =>
           transaction

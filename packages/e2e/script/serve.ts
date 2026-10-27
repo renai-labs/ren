@@ -150,13 +150,30 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
 })
 children.push(server)
 
-const app = Bun.spawn(["bunx", "vite", "--host", "127.0.0.1", "--port", String(ports.app), "--strictPort"], {
-  cwd: path.join(root, "app"),
+const build = Bun.spawn([process.execPath, "turbo", "build", "--filter=@ren/app", "--output-logs=errors-only"], {
+  cwd: path.resolve(root, ".."),
   env: { ...process.env, VITE_REN_API_URL: serverURL },
   stdout: "inherit",
   stderr: "inherit",
 })
-children.push(app)
+children.push(build)
+if ((await build.exited) !== 0) {
+  console.error("Building the app failed")
+  await shutdown(1)
+}
+
+const dist = path.join(root, "app", "dist")
+Bun.serve({
+  port: ports.app,
+  hostname: "127.0.0.1",
+  fetch: async (request) => {
+    const pathname = new URL(request.url).pathname
+    if (!pathname.startsWith("/app/")) return new Response("Not found", { status: 404 })
+    const file = Bun.file(path.join(dist, path.normalize(pathname.slice("/app/".length))))
+    if (await file.exists()) return new Response(file)
+    return new Response(Bun.file(path.join(dist, "index.html")), { headers: { "content-type": "text/html" } })
+  },
+})
 
 const decoder = new TextDecoder()
 void (async () => {

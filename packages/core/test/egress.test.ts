@@ -4,7 +4,9 @@ import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { ChannelInstall } from "@ren/schema/channel-install"
 import { Credential } from "@ren/schema/credential"
+import { Environment } from "@ren/schema/environment"
 import { Injection } from "@ren/schema/injection"
 import { Signature } from "@ren/schema/signature"
 import { eq } from "drizzle-orm"
@@ -15,6 +17,7 @@ import { App } from "../src/app.js"
 import { AppProfiles } from "../src/app/profiles.js"
 import { BrainClient } from "../src/brain-client.js"
 import { CredentialCallers } from "../src/credential-callers.js"
+import { CredentialEnv } from "../src/credential-env.js"
 import { CredentialRefresh } from "../src/credential-refresh.js"
 import { CredentialSource } from "../src/credential-source.js"
 import { Credentials } from "../src/credentials.js"
@@ -22,6 +25,8 @@ import { DurableRunner } from "../src/durable-runner.js"
 import { Egress } from "../src/egress.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
+import { GitHubApp } from "../src/github-app.js"
+import { PersonCredentials } from "../src/person-credentials.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
 import { McpProvider } from "../src/mcp-provider.js"
 import { Models } from "../src/models.js"
@@ -30,6 +35,7 @@ import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
+import { GitHubServer } from "./lib/github-server.js"
 import { ProfilesFixture } from "./lib/profiles.js"
 import { Seed } from "./lib/seed.js"
 
@@ -42,6 +48,9 @@ const egress = Bun.serve({
   },
 })
 afterAll(() => egress.stop(true))
+
+const github = GitHubServer.start()
+afterAll(() => github.stop())
 
 const brainKey = await Effect.runPromise(Signature.generate("brain"))
 
@@ -125,7 +134,14 @@ const audited = Logger.layer(
 )
 
 const it = testEffect(
-  Layer.mergeAll(Egress.layer, Space.layer, SpaceMember.layer, SpaceProvisioning.layer, App.layer).pipe(
+  Layer.mergeAll(
+    Egress.layer,
+    CredentialEnv.layer,
+    Space.layer,
+    SpaceMember.layer,
+    SpaceProvisioning.layer,
+    App.layer,
+  ).pipe(
     Layer.provideMerge(AppProfiles.layer),
     Layer.provideMerge(CredentialRefresh.layer),
     Layer.provideMerge(Layer.mergeAll(refreshers, DurableRunner.layerMemory)),
@@ -133,7 +149,9 @@ const it = testEffect(
     Layer.provideMerge(
       Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
     ),
-    Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, models)),
+    Layer.provideMerge(
+      Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, models, PersonCredentials.layer),
+    ),
     Layer.provideMerge(
       Layer.mergeAll(
         Access.layer,
@@ -142,6 +160,7 @@ const it = testEffect(
         Signer.layerLocal,
         OAuthFetch.layerUnchecked,
         McpProvider.layer([McpProvider.composio, timed]),
+        GitHubApp.layer,
       ),
     ),
     Layer.provideMerge(Testing.layer),
@@ -162,6 +181,7 @@ const it = testEffect(
           EGRESS_CONTROL_URLS: `http://127.0.0.1:${egress.port}`,
           REN_URL: "https://api.ren.test",
           COMPOSIO_API_KEY: "composio-project-key",
+          ...GitHubServer.config(github.url, { GITHUB_URL: "https://github.com" }),
         }),
       ),
     ),
@@ -636,44 +656,55 @@ describe("Egress.unauthorized", () => {
       }),
   )
 
-  it.live("Bob joins Ana's Personal Space: its next resolve denies her private profile's label (P42, P44)", () =>
-    Effect.gen(function* () {
-      const resolver = yield* Egress.Service
-      const members = yield* SpaceMember.Service
-      const callers = yield* CredentialCallers.Service
-      const found = yield* setup()
-      const ana = found.ada
-      const app = yield* ProfilesFixture.app(ana, found.space.id, "inbox", {
-        mcps: { gmail: ProfilesFixture.remote("Gmail") },
-      })
-      const mine = yield* ProfilesFixture.profile(ana, { appId: app.id, slug: "ana", kind: "private" })
-      yield* ProfilesFixture.connect(found.organizationId, mine.id, "MCP_GMAIL__ANA", { hosts: ["gmail.example.com"] })
-      const spaces = yield* Space.Service
-      const own = (yield* spaces.list(found.ada, { page: 1, pageSize: 50 })).items.find((space) =>
-        space.name.endsWith("Personal Space"),
-      )
-      if (!own) return yield* Effect.die(new Error("expected Ana's Personal Space"))
-      const brainId = Brain.ID.create()
-      yield* Seed.session({ organizationId: found.organizationId, spaceId: own.id, createdBy: ana.userId, brainId })
-      const placement = yield* callers.issue(
-        { workload: { kind: "brain", id: brainId, generation: 1 }, organizationId: found.organizationId },
-        "ProxyLogin",
-      )
-      if (placement.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
-      const proof: CredentialCallers.Proof = {
-        kind: "ProxyLogin",
-        username: placement.username,
-        password: placement.password,
-      }
-      const resolve = resolver.resolve(all, request(proof, "gmail.example.com", ["ren:MCP_GMAIL__ANA"]))
-      expect((yield* resolve).allow).toBe(true)
-      const bob = yield* Seed.user({ name: "Bob" })
-      yield* Seed.member(found.organizationId, bob.id, "member")
-      invalidations.length = 0
-      yield* members.create(found.ada, { spaceId: own.id, userId: bob.id })
-      expect(yield* resolve).toMatchObject({ allow: false, reason: "credential_missing" })
-      expect(invalidations).toContainEqual({ workload: `brain:${brainId}:` })
-    }),
+  it.live(
+    "Ana's private profile resolves in her private space only: never in a shared space where she is the only member, on either brain scope (private-spaces tests 7, 8)",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const members = yield* SpaceMember.Service
+        const callers = yield* CredentialCallers.Service
+        const spaces = yield* Space.Service
+        const found = yield* setup()
+        const ana = found.ada
+        const app = yield* ProfilesFixture.app(ana, found.space.id, "inbox", {
+          mcps: { gmail: ProfilesFixture.remote("Gmail") },
+        })
+        const mine = yield* ProfilesFixture.profile(ana, { appId: app.id, slug: "ana", kind: "private" })
+        yield* ProfilesFixture.connect(found.organizationId, mine.id, "MCP_GMAIL__ANA", {
+          hosts: ["gmail.example.com"],
+        })
+        const own = (yield* spaces.list(ana, { page: 1, pageSize: 50 })).items.find((space) => space.kind === "private")
+        if (!own) return yield* Effect.die(new Error("expected Ana's private space"))
+        const alone = yield* spaces.create(ana, { name: "Alone" })
+        const resolveIn = Effect.fnUntraced(function* (spaceId: typeof own.id, scope: "space" | "session") {
+          const owner = { organizationId: found.organizationId, spaceId, createdBy: ana.userId }
+          const spaceBrain = Brain.ID.create()
+          const brainId =
+            scope === "space"
+              ? yield* Seed.session({ ...owner, brainId: spaceBrain }).pipe(Effect.as(spaceBrain))
+              : Brain.ofSession(yield* Seed.session(owner))
+          const placement = yield* callers.issue(
+            { workload: { kind: "brain", id: brainId, generation: 1 }, organizationId: found.organizationId },
+            "ProxyLogin",
+          )
+          if (placement.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
+          const proof: CredentialCallers.Proof = {
+            kind: "ProxyLogin",
+            username: placement.username,
+            password: placement.password,
+          }
+          return yield* resolver.resolve(all, request(proof, "gmail.example.com", ["ren:MCP_GMAIL__ANA"]))
+        })
+        expect((yield* resolveIn(own.id, "space")).allow).toBe(true)
+        expect((yield* resolveIn(own.id, "session")).allow).toBe(true)
+        expect(yield* resolveIn(alone.id, "space")).toMatchObject({ allow: false, reason: "credential_missing" })
+        expect(yield* resolveIn(alone.id, "session")).toMatchObject({ allow: false, reason: "credential_missing" })
+        const bob = yield* Seed.user({ name: "Bob" })
+        yield* Seed.member(found.organizationId, bob.id, "member")
+        expect((yield* Effect.flip(members.create(ana, { spaceId: own.id, userId: bob.id })))._tag).toBe(
+          "Primitive.Forbidden",
+        )
+      }),
   )
 
   it.live("a provider route's expiry bounds the life of the egress answer (§14 rule 3)", () =>
@@ -707,25 +738,26 @@ describe("Egress.unauthorized", () => {
       ])
     }),
   )
-
 })
 
 describe("Egress.resolve, the person of a model request", () => {
-  it.live("ren:PERSON of a member who can chat in the brain's space becomes that member's id", () =>
-    Effect.gen(function* () {
-      const resolver = yield* Egress.Service
-      const found = yield* setup()
-      const admin = yield* Seed.user()
-      const adminId = yield* Seed.member(found.organizationId, admin.id, "admin")
-      const model = (memberId: string) =>
-        resolver.resolve(all, request(found.proof, "models.ren.test", ["ren:MODELS", `ren:PERSON.${memberId}`]))
+  it.live(
+    "ren:PERSON of a member of the brain's space becomes that member's id; an admin outside it is refused (AC4)",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const found = yield* setup()
+        const admin = yield* Seed.user()
+        const adminId = yield* Seed.member(found.organizationId, admin.id, "admin")
+        const model = (memberId: string) =>
+          resolver.resolve(all, request(found.proof, "models.ren.test", ["ren:MODELS", `ren:PERSON.${memberId}`]))
 
-      expect(values(yield* model(found.memberId))).toEqual([
-        { op: "replace", placeholder: "ren:MODELS", value: "sk-model", in: ["header"] },
-        { op: "replace", placeholder: `ren:PERSON.${found.memberId}`, value: found.memberId, in: ["header"] },
-      ])
-      expect((yield* model(adminId)).allow).toBe(true)
-    }),
+        expect(values(yield* model(found.memberId))).toEqual([
+          { op: "replace", placeholder: "ren:MODELS", value: "sk-model", in: ["header"] },
+          { op: "replace", placeholder: `ren:PERSON.${found.memberId}`, value: found.memberId, in: ["header"] },
+        ])
+        expect(yield* model(adminId)).toMatchObject({ allow: false, reason: "principal_scope" })
+      }),
   )
 
   it.live("ren:PERSON of someone outside the brain's space is refused with principal_scope and audited", () =>
@@ -742,30 +774,211 @@ describe("Egress.resolve, the person of a model request", () => {
       )
 
       expect(refused).toEqual(Array(3).fill({ allow: false, reason: "principal_scope", label: "PERSON" }))
-      expect(audits.filter((each) => each.message === "Egress refused a model request for a person outside the brain's space")).toMatchObject(
+      expect(
+        audits.filter(
+          (each) => each.message === "Egress refused a model request for a person outside the brain's space",
+        ),
+      ).toMatchObject(
         [outsideSpace, otherOrganization, "mem_unknown"].map((memberId) => ({
-          annotations: { workload: `brain:${found.brainId}:1`, label: "PERSON", member: memberId, host: "models.ren.test" },
+          annotations: {
+            workload: `brain:${found.brainId}:1`,
+            label: "PERSON",
+            member: memberId,
+            host: "models.ren.test",
+          },
         })),
       )
     }),
   )
 
-  it.live("removing a member from the space clears the egress answers, and the next request with their id is refused", () =>
+  it.live(
+    "removing a member from the space clears the egress answers, and the next request with their id is refused",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const members = yield* SpaceMember.Service
+        const found = yield* setup()
+        const grace = yield* Seed.user()
+        const graceId = yield* Seed.member(found.organizationId, grace.id, "member")
+        const added = yield* members.create(found.ada, { spaceId: found.space.id, userId: grace.id })
+        const model = resolver.resolve(
+          all,
+          request(found.proof, "models.ren.test", ["ren:MODELS", `ren:PERSON.${graceId}`]),
+        )
+        expect((yield* model).allow).toBe(true)
+        invalidations.length = 0
+
+        yield* members.archive(found.ada, added.id)
+
+        expect(invalidations).toContainEqual({ label: "PERSON" })
+        expect(yield* model).toEqual({ allow: false, reason: "principal_scope", label: "PERSON" })
+      }),
+  )
+})
+
+const installGitHub = Effect.fnUntraced(function* (
+  organizationId: Auth.OrganizationID,
+  options: { readonly known: boolean } = { known: true },
+) {
+  const database = yield* Database.Service
+  const workspace = String(Math.floor(Math.random() * 1e9))
+  if (options.known) github.installations.set(workspace, "acme")
+  yield* database.db.insert(Database.Schema.channel_install).values({
+    id: ChannelInstall.ID.create(),
+    organization_id: organizationId,
+    provider: "github",
+    workspace,
+    name: "acme",
+  })
+  return workspace
+})
+
+describe("GitHub through the egress", () => {
+  it.live(
+    "a brain or a hand of an org with the GitHub App gets an installation token on GitHub's hosts, minted again after a 401",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const callers = yield* CredentialCallers.Service
+        const found = yield* setup()
+        const workspace = yield* installGitHub(found.organizationId)
+        const reply = yield* resolver.resolve(all, request(found.proof, "api.github.com", ["ren:GITHUB"]))
+        expect(values(reply)).toEqual([
+          {
+            op: "replace",
+            placeholder: "ren:GITHUB",
+            value: `ghs_${workspace}_${github.minted.length}`,
+            in: ["header"],
+          },
+        ])
+        expect(reply).toMatchObject({ expiresAt: Date.parse(github.options.tokenExpiresAt) / 1000 })
+        const hand = yield* callers.issue(
+          {
+            workload: { kind: "hand", id: Environment.ID.make(`env_${found.brainId.slice(4)}`), generation: 1 },
+            organizationId: found.organizationId,
+          },
+          "ProxyLogin",
+        )
+        if (hand.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
+        const fromHand = yield* resolver.resolve(
+          all,
+          request({ kind: "ProxyLogin", username: hand.username, password: hand.password }, "github.com", [
+            "ren:GITHUB",
+          ]),
+        )
+        expect(values(fromHand)).toEqual(values(reply))
+        expect(github.minted.filter((each) => each === workspace)).toHaveLength(1)
+        expect(yield* resolver.resolve(all, request(found.proof, "evil.example.com", ["ren:GITHUB"]))).toEqual({
+          allow: false,
+          reason: "host_not_allowed",
+          label: "GITHUB",
+        })
+        yield* resolver.unauthorized(all, {
+          login: found.login,
+          host: "api.github.com",
+          status: 401,
+          labels: [{ label: "GITHUB", revision: 0 }],
+        })
+        yield* resolver.resolve(all, request(found.proof, "api.github.com", ["ren:GITHUB"]))
+        expect(github.minted.filter((each) => each === workspace)).toHaveLength(2)
+      }),
+  )
+
+  it.live(
+    "in their private space, a person's own GitHub token and git identity win over the App's; in a shared space with only them in it, the App's is used (private-spaces rules 10, 11)",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const callers = yield* CredentialCallers.Service
+        const env = yield* CredentialEnv.Service
+        const people = yield* PersonCredentials.Service
+        const spaces = yield* Space.Service
+        const app = yield* GitHubApp.Service
+        const found = yield* setup()
+        yield* installGitHub(found.organizationId)
+        if (Option.isNone(app.client)) return yield* Effect.die(new Error("GitHub is off"))
+        yield* people.save(
+          found.organizationId,
+          found.ada.userId,
+          GitHubApp.personCredential(
+            app.client.value.settings,
+            { id: 42, login: "ada-gh" },
+            { accessToken: Redacted.make("ghu_ada") },
+            Date.now(),
+          ),
+        )
+        const own = (yield* spaces.list(found.ada, { page: 1, pageSize: 50 })).items.find(
+          (space) => space.kind === "private",
+        )
+        if (!own) return yield* Effect.die(new Error("expected Ada's private space"))
+        const alone = yield* spaces.create(found.ada, { name: "Alone" })
+        const proofIn = Effect.fnUntraced(function* (spaceId: typeof own.id) {
+          const sessionId = yield* Seed.session({
+            organizationId: found.organizationId,
+            spaceId,
+            createdBy: found.ada.userId,
+          })
+          const workload = { kind: "brain", id: Brain.ofSession(sessionId), generation: 1 } as const
+          const placement = yield* callers.issue({ workload, organizationId: found.organizationId }, "ProxyLogin")
+          if (placement.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
+          return {
+            workload,
+            proof: { kind: "ProxyLogin" as const, username: placement.username, password: placement.password },
+          }
+        })
+        const mine = yield* proofIn(own.id)
+        expect(values(yield* resolver.resolve(all, request(mine.proof, "api.github.com", ["ren:GITHUB"])))).toEqual([
+          { op: "replace", placeholder: "ren:GITHUB", value: "ghu_ada", in: ["header"] },
+        ])
+        expect(yield* env.of(mine.workload)).toMatchObject({
+          variables: { GIT_AUTHOR_NAME: "ada-gh", GIT_AUTHOR_EMAIL: "42+ada-gh@users.noreply.github.com" },
+          placeholders: { GITHUB_TOKEN: "ren:GITHUB" },
+        })
+        const shared = yield* proofIn(alone.id)
+        expect(values(yield* resolver.resolve(all, request(shared.proof, "api.github.com", ["ren:GITHUB"])))).toEqual([
+          { op: "replace", placeholder: "ren:GITHUB", value: expect.stringMatching(/^ghs_/u), in: ["header"] },
+        ])
+        expect(yield* env.of(shared.workload)).toMatchObject({ variables: { GIT_AUTHOR_NAME: "ren-test[bot]" } })
+      }),
+  )
+
+  it.live("without the GitHub App, or when GitHub refuses the mint, GITHUB is credential_missing", () =>
     Effect.gen(function* () {
       const resolver = yield* Egress.Service
-      const members = yield* SpaceMember.Service
       const found = yield* setup()
-      const grace = yield* Seed.user()
-      const graceId = yield* Seed.member(found.organizationId, grace.id, "member")
-      const added = yield* members.create(found.ada, { spaceId: found.space.id, userId: grace.id })
-      const model = resolver.resolve(all, request(found.proof, "models.ren.test", ["ren:MODELS", `ren:PERSON.${graceId}`]))
-      expect((yield* model).allow).toBe(true)
-      invalidations.length = 0
-
-      yield* members.archive(found.ada, added.id)
-
-      expect(invalidations).toContainEqual({ label: "PERSON" })
-      expect(yield* model).toEqual({ allow: false, reason: "principal_scope", label: "PERSON" })
+      const missing = { allow: false, reason: "credential_missing", label: "GITHUB" } as const
+      expect(yield* resolver.resolve(all, request(found.proof, "api.github.com", ["ren:GITHUB"]))).toEqual(missing)
+      yield* installGitHub(found.organizationId, { known: false })
+      expect(yield* resolver.resolve(all, request(found.proof, "api.github.com", ["ren:GITHUB"]))).toEqual(missing)
     }),
+  )
+
+  it.live(
+    "a workload of an org with the GitHub App holds placeholders for GitHub apart from the bot's git identity and the GitHub URLs",
+    () =>
+      Effect.gen(function* () {
+        const env = yield* CredentialEnv.Service
+        const found = yield* setup()
+        const workload = { kind: "brain", id: found.brainId, generation: 1 } as const
+        expect(yield* env.of(workload)).toEqual({ variables: {}, placeholders: {} })
+        yield* installGitHub(found.organizationId)
+        expect(yield* env.of(workload)).toEqual({
+          variables: {
+            GITHUB_URL: "https://github.com",
+            GITHUB_API_URL: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+$/u),
+            GIT_AUTHOR_NAME: "ren-test[bot]",
+            GIT_AUTHOR_EMAIL: "9001+ren-test[bot]@users.noreply.github.com",
+            GIT_COMMITTER_NAME: "ren-test[bot]",
+            GIT_COMMITTER_EMAIL: "9001+ren-test[bot]@users.noreply.github.com",
+          },
+          placeholders: {
+            GITHUB_TOKEN: "ren:GITHUB",
+            GH_TOKEN: "ren:GITHUB",
+            GIT_CONFIG_COUNT: "1",
+            GIT_CONFIG_KEY_0: "http.https://github.com/.extraHeader",
+            GIT_CONFIG_VALUE_0: `Authorization: Basic ${Buffer.from("x-access-token:ren:GITHUB").toString("base64")}`,
+          },
+        })
+      }),
   )
 })

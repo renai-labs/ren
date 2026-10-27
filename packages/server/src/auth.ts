@@ -2,9 +2,11 @@ export * as Auth from "./auth.js"
 
 import { fetchClientMetadataResource } from "@better-auth/cimd/node"
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
+import { GitHubAccounts } from "@ren/core/github-accounts"
 import { Mailer } from "@ren/core/mailer"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { SignupGuard } from "@ren/core/signup-guard"
+import { SlackApp } from "@ren/core/slack-app"
 import { SpaceProvisioning } from "@ren/core/space/provisioning"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { type AuthenticatedSession } from "@ren/protocol/middleware/authentication"
@@ -64,6 +66,8 @@ export const layer = Layer.effect(
     const signupGuard = yield* SignupGuard.Service
     const provisioning = yield* SpaceProvisioning.Service
     const inferenceRemoval = yield* RenInferenceRemoval.Service
+    const accounts = yield* GitHubAccounts.Service
+    const slack = yield* SlackApp.Service
     const toProvisioningUser = (user: BetterAuth.ProvisioningUser) => ({ ...user, id: Auth.UserID.make(user.id) })
     const clientMetadataFetch = yield* ClientMetadataFetch
     const run = yield* FiberSet.makeRuntime()
@@ -88,6 +92,28 @@ export const layer = Layer.effect(
       baseURL: config.baseURL,
       trustedOrigins: config.trustedOrigins,
       google: { clientId: config.googleClientId, clientSecret: Redacted.value(config.googleClientSecret) },
+      ...Option.match(accounts.signIn, {
+        onNone: () => ({}),
+        onSome: (app) => ({
+          github: {
+            clientId: app.clientId,
+            clientSecret: Redacted.value(app.clientSecret),
+            sync: (userId: string) => runPromise(accounts.sync(Auth.UserID.make(userId))),
+            disconnect: (userId: string) => runPromise(accounts.disconnect(Auth.UserID.make(userId))),
+          },
+        }),
+      }),
+      ...Option.match(slack.client, {
+        onNone: () => ({}),
+        onSome: (client) => ({
+          slack: {
+            clientId: client.settings.clientId,
+            clientSecret: Redacted.value(client.settings.clientSecret),
+            api: client.settings.api,
+            web: client.settings.web,
+          },
+        }),
+      }),
       appURL: config.appURL,
       mcpResource,
       fetchClientMetadataResource: clientMetadataFetch,

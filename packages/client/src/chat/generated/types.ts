@@ -95,6 +95,10 @@ export type SessionCapabilitiesInfo = {
   files: boolean
 }
 
+export type ChannelProvider = "slack" | "linear" | "github"
+
+export type ScheduleOriginInfo = { scheduleId: string; name: string; scheduledAt: string }
+
 export type SessionMessageText = { type: "text"; text: string }
 
 export type SessionMessageReasoning = {
@@ -729,6 +733,16 @@ export type SessionModelInfo = {
   limit: { context: number; output: number }
 }
 
+export type ChannelOriginInfo = {
+  provider: ChannelProvider
+  place: string
+  threadUrl?: string
+  sender: string
+  handle?: string
+  context?: string
+  trigger?: string
+}
+
 export type SessionStatusInfo = SessionStatusIdle | SessionStatusBusy
 
 export type SessionCatalogFile = { path: string; type: SessionCatalogFileType }
@@ -738,17 +752,6 @@ export type SessionInboxUserPayload = {
   files?: Array<SessionMessageFileAttachment>
   agents?: Array<SessionMessageAgentAttachment>
   skills?: Array<SessionMessageSkillAttachment>
-  sender?: SessionMessageSender
-}
-
-export type SessionMessageUser = {
-  id: SessionMessageID
-  time: { created: number }
-  text: string
-  files?: Array<SessionMessageFileAttachment>
-  agents?: Array<SessionMessageAgentAttachment>
-  skills?: Array<SessionMessageSkillAttachment>
-  type: "user"
   sender?: SessionMessageSender
 }
 
@@ -762,7 +765,9 @@ export type SessionInboxSynthetic = {
 }
 
 export type SessionMessageCompaction =
-  SessionMessageCompactionRunning | SessionMessageCompactionCompleted | SessionMessageCompactionFailed
+  | SessionMessageCompactionRunning
+  | SessionMessageCompactionCompleted
+  | SessionMessageCompactionFailed
 
 export type SessionEventSessionToolSuccess = {
   id: string
@@ -830,7 +835,12 @@ export type SessionInfoInfo = {
 }
 
 export type FormField =
-  FormStringField | FormNumberField | FormIntegerField | FormBooleanField | FormMultiselectField | FormExternalField
+  | FormStringField
+  | FormNumberField
+  | FormIntegerField
+  | FormBooleanField
+  | FormMultiselectField
+  | FormExternalField
 
 export type SessionEventFormReplied = {
   id: string
@@ -840,6 +850,19 @@ export type SessionEventFormReplied = {
 }
 
 export type SessionEventShellCreated = { id: string; created: number; type: "shell.created"; data: { info: ShellInfo } }
+
+export type SessionMessageUser = {
+  id: SessionMessageID
+  time: { created: number }
+  text: string
+  files?: Array<SessionMessageFileAttachment>
+  agents?: Array<SessionMessageAgentAttachment>
+  skills?: Array<SessionMessageSkillAttachment>
+  type: "user"
+  sender?: SessionMessageSender
+  channel?: ChannelOriginInfo
+  schedule?: ScheduleOriginInfo
+}
 
 export type SessionStatusFamily = { [x: string]: SessionStatusInfo }
 
@@ -858,7 +881,10 @@ export type SessionInboxUser = {
 }
 
 export type SessionMessageToolState =
-  SessionMessageToolStreaming | SessionMessageToolRunning | SessionMessageToolCompleted | SessionMessageToolError
+  | SessionMessageToolStreaming
+  | SessionMessageToolRunning
+  | SessionMessageToolCompleted
+  | SessionMessageToolError
 
 export type FormInfo = {
   id: FormID
@@ -959,7 +985,10 @@ export type SessionMessageAssistant = {
 }
 
 export type SessionEventFrame =
-  SessionEventServerConnected | SessionEventServerHeartbeat | SessionEventStreamEnded | SessionEventEvent
+  | SessionEventServerConnected
+  | SessionEventServerHeartbeat
+  | SessionEventStreamEnded
+  | SessionEventEvent
 
 export type SessionMessageInfo =
   | SessionMessageAgentSwitched

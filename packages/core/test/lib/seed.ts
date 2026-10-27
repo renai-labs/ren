@@ -82,11 +82,21 @@ export const space = Effect.fnUntraced(function* (organizationId: Auth.Organizat
   return id
 })
 
+export const join = Effect.fnUntraced(function* (spaceId: Space.ID, userId: Auth.UserID) {
+  const database = yield* Database.Service
+  yield* database.db
+    .insert(Database.Schema.space_member)
+    .values({ id: Space.MembershipID.create(), space_id: spaceId, user_id: userId })
+})
+
+// oxlint-disable-next-line ren/no-comments -- The creator joins the space: roles give nothing inside it (AC4).
 export const owner = Effect.fnUntraced(function* () {
   const organizationId = yield* organization()
   const creator = yield* user()
   const memberId = yield* member(organizationId, creator.id, "owner")
-  return { organizationId, spaceId: yield* space(organizationId), createdBy: creator.id, memberId }
+  const spaceId = yield* space(organizationId)
+  yield* join(spaceId, creator.id)
+  return { organizationId, spaceId, createdBy: creator.id, memberId }
 })
 
 export const ren = Effect.fnUntraced(function* (input: { readonly instructions?: string } = {}) {

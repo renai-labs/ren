@@ -3,6 +3,7 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
+import { ReferenceCheck } from "../src/reference-check.js"
 import { Access } from "../src/access.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Agent } from "../src/agent.js"
@@ -15,7 +16,7 @@ import { Seed } from "./lib/seed.js"
 const it = testEffect(
   Layer.mergeAll(Agent.layer, AgentMembership.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer)),
-    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, ReferenceCheck.layerNone)),
     Layer.provideMerge(Testing.layer),
   ),
 )
@@ -32,6 +33,9 @@ const setup = Effect.gen(function* () {
   const admin = yield* Seed.actor(organizationId, "admin")
   const factory = yield* spaces.create(ada, { name: "Factory" })
   const eng = yield* spaces.create(grace, { name: "Eng" })
+  const bridge = yield* Seed.actor(organizationId, "member")
+  yield* members.create(ada, { spaceId: factory.id, userId: bridge.userId })
+  yield* members.create(grace, { spaceId: eng.id, userId: bridge.userId })
   const agent = yield* agents.create(ada, {
     name: "build",
     isSubagent: false,
@@ -42,15 +46,16 @@ const setup = Effect.gen(function* () {
     ada,
     grace,
     admin,
+    bridge,
     factory,
     eng,
     agent,
-    join: (userId: typeof ada.userId, spaceId: typeof factory.id) => members.create(admin, { spaceId, userId }),
+    join: (userId: typeof ada.userId, spaceId: typeof factory.id) => members.create(bridge, { spaceId, userId }),
   }
 })
 
 describe("AgentMembership", () => {
-  it.live("an add needs membership in both spaces, or an org admin", () =>
+  it.live("an add needs membership in both spaces; an org admin outside them gets NotFound (AC4)", () =>
     Effect.gen(function* () {
       const memberships = yield* AgentMembership.Service
       const s = yield* setup
@@ -58,6 +63,9 @@ describe("AgentMembership", () => {
         "Primitive.NotFound",
       )
       expect((yield* Effect.flip(memberships.create(s.grace, { agentId: s.agent.id, spaceId: s.eng.id })))._tag).toBe(
+        "Primitive.NotFound",
+      )
+      expect((yield* Effect.flip(memberships.create(s.admin, { agentId: s.agent.id, spaceId: s.eng.id })))._tag).toBe(
         "Primitive.NotFound",
       )
       yield* s.join(s.ada.userId, s.eng.id)
@@ -75,7 +83,7 @@ describe("AgentMembership", () => {
         const memberships = yield* AgentMembership.Service
         const agents = yield* Agent.Service
         const s = yield* setup
-        yield* memberships.create(s.admin, { agentId: s.agent.id, spaceId: s.eng.id })
+        yield* memberships.create(s.bridge, { agentId: s.agent.id, spaceId: s.eng.id })
         const review = yield* agents.create(s.grace, {
           name: "review",
           isSubagent: true,
@@ -90,11 +98,11 @@ describe("AgentMembership", () => {
           [s.agent.id, s.eng.id, false],
           [review.id, s.eng.id, true],
         ]
-        const first = yield* memberships.list(s.admin, { page: 1, pageSize: 2 })
-        const second = yield* memberships.list(s.admin, { page: 2, pageSize: 2 })
+        const first = yield* memberships.list(s.bridge, { page: 1, pageSize: 2 })
+        const second = yield* memberships.list(s.bridge, { page: 2, pageSize: 2 })
         expect([first.total, second.total]).toEqual([3, 3])
         expect([...of(first.items), ...of(second.items)]).toEqual(all)
-        expect(of((yield* memberships.list(s.admin, { ...page, spaceId: s.eng.id })).items)).toEqual(all.slice(1))
+        expect(of((yield* memberships.list(s.bridge, { ...page, spaceId: s.eng.id })).items)).toEqual(all.slice(1))
         expect(of((yield* memberships.list(s.grace, page)).items)).toEqual(all)
         expect(yield* memberships.list(s.ada, page)).toMatchObject({ total: 2 })
         expect(of((yield* memberships.list(s.ada, page)).items)).toEqual(all.slice(0, 2))
@@ -122,8 +130,8 @@ describe("AgentMembership", () => {
     Effect.gen(function* () {
       const memberships = yield* AgentMembership.Service
       const s = yield* setup
-      const first = yield* memberships.create(s.admin, { agentId: s.agent.id, spaceId: s.eng.id })
-      expect(yield* memberships.create(s.admin, { agentId: s.agent.id, spaceId: s.eng.id })).toEqual(first)
+      const first = yield* memberships.create(s.bridge, { agentId: s.agent.id, spaceId: s.eng.id })
+      expect(yield* memberships.create(s.bridge, { agentId: s.agent.id, spaceId: s.eng.id })).toEqual(first)
     }),
   )
 
@@ -138,21 +146,26 @@ describe("AgentMembership", () => {
     }),
   )
 
-  it.live("members of that space, of the owner space, or org admins can remove, and others cannot", () =>
-    Effect.gen(function* () {
-      const spaces = yield* Space.Service
-      const memberships = yield* AgentMembership.Service
-      const s = yield* setup
-      const ops = yield* spaces.create(s.admin, { name: "Ops" })
-      const outsider = yield* Seed.actor(s.ada.organizationId, "member")
-      yield* s.join(outsider.userId, ops.id)
-      yield* s.join(s.grace.userId, ops.id)
-      const added = () => memberships.create(s.admin, { agentId: s.agent.id, spaceId: s.eng.id })
-      expect((yield* Effect.flip(memberships.archive(outsider, (yield* added()).id)))._tag).toBe("Primitive.NotFound")
-      yield* memberships.create(s.admin, { agentId: s.agent.id, spaceId: ops.id })
-      expect((yield* Effect.flip(memberships.archive(outsider, (yield* added()).id)))._tag).toBe("Primitive.Forbidden")
-      for (const actor of [s.grace, s.ada, s.admin])
-        expect((yield* memberships.archive(actor, (yield* added()).id)).spaceId).toBe(s.eng.id)
-    }),
+  it.live(
+    "members of that space or of the owner space can remove, and others cannot, an org admin included (AC4)",
+    () =>
+      Effect.gen(function* () {
+        const spaces = yield* Space.Service
+        const memberships = yield* AgentMembership.Service
+        const s = yield* setup
+        const ops = yield* spaces.create(s.bridge, { name: "Ops" })
+        const outsider = yield* Seed.actor(s.ada.organizationId, "member")
+        yield* s.join(outsider.userId, ops.id)
+        yield* s.join(s.grace.userId, ops.id)
+        const added = () => memberships.create(s.bridge, { agentId: s.agent.id, spaceId: s.eng.id })
+        expect((yield* Effect.flip(memberships.archive(outsider, (yield* added()).id)))._tag).toBe("Primitive.NotFound")
+        yield* memberships.create(s.bridge, { agentId: s.agent.id, spaceId: ops.id })
+        expect((yield* Effect.flip(memberships.archive(outsider, (yield* added()).id)))._tag).toBe(
+          "Primitive.Forbidden",
+        )
+        expect((yield* Effect.flip(memberships.archive(s.admin, (yield* added()).id)))._tag).toBe("Primitive.NotFound")
+        for (const actor of [s.grace, s.ada, s.bridge])
+          expect((yield* memberships.archive(actor, (yield* added()).id)).spaceId).toBe(s.eng.id)
+      }),
   )
 })

@@ -14,9 +14,10 @@ import { SessionMessage } from "@ren/schema/session/message"
 import type { Skill } from "@ren/schema/skill"
 import { Context, Effect, Layer, Option, Ref, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
-import { mkdtemp, realpath } from "node:fs/promises"
+import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { GitSources } from "../src/git-sources.js"
 import { Env } from "../src/env.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
@@ -103,7 +104,9 @@ const open = Effect.fnUntraced(function* (github?: TestGitHub.Instance) {
     {
       saved: Option.none(),
       directoryOf: () => local,
-      ...(github && { skills: { hosts: github.hosts, refresh: 0 } }),
+      ...(github && {
+        sources: yield* GitSources.make({ github: Effect.succeed(github.hosts), skills: { refresh: 0 } }),
+      }),
     },
   )
   const harness = yield* OpenCodeHarness.make(host, endpoints)
@@ -236,7 +239,7 @@ it.live(
       const beforeRefresh = (yield* github.requests).length
       const told = yield* session.turn(stub.script(), 1)
       expect(
-        (yield* github.requests).slice(beforeRefresh).filter((request) => request.includes("info/refs")),
+        (yield* github.requests).slice(beforeRefresh).filter((request) => request.includes("git-upload-pack")),
       ).toHaveLength(1)
       expect(told.system).toContain("The skill pdf changed after this chat loaded it")
       const reloaded = result(yield* session.load("pdf"))
@@ -268,7 +271,22 @@ it.live("parallel environment calls wait for a loaded skill's files", () =>
     const results = call.body.messages.filter((message) => message.role === "tool").slice(-2)
     expect(results).toHaveLength(2)
     for (const message of results) expect(JSON.stringify(message.content)).toContain("copied")
-    expect((yield* github.requests).filter((request) => request.startsWith("/archive/"))).toHaveLength(1)
+    expect((yield* github.requests).filter((request) => request.startsWith("/api/repos/"))).toHaveLength(1)
+  }),
+)
+
+it.live("a loaded skill's files deleted on the environment come back at the next turn", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* opened.begin()
+    const marker = crypto.randomUUID()
+    yield* opened.harness.configure({
+      apps: Option.some(catalog({ forms: content("Run scripts/fill.sh", { "scripts/fill.sh": `echo ${marker}\n` }) })),
+    })
+    const base = /Base directory for this skill: ([^\\]+)\\n/u.exec(sent(yield* session.mention("forms")))?.[1] ?? ""
+    expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
+    yield* Effect.promise(() => rm(base, { recursive: true, force: true }))
+    expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
   }),
 )
 

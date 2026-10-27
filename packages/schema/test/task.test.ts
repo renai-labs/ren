@@ -16,7 +16,7 @@ describe("TaskLink.classify", () => {
       "C0123:1712345678.123456",
     ],
     ["https://example.com/a?b=c", "url", "https://example.com/a?b=c"],
-    ["https://github.com/renai-labs/ren/issues/12", "url", "https://github.com/renai-labs/ren/issues/12"],
+    ["https://github.com/RenAI-Labs/Ren/issues/012#issuecomment-1", "github_issue", "renai-labs/ren#12"],
     ["/files/report.md", "url", "/files/report.md"],
   ] as const)("%s is %s %s", (url, kind, key) => {
     expect(TaskLink.classify(url)).toEqual({ kind, key })

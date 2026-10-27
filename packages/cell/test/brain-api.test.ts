@@ -218,6 +218,33 @@ it.live("a start and a send for a new session at the same time: the send is refu
   }),
 )
 
+it.live("a synthetic send starts a turn, shows as a notice in the transcript and is delivered once", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    const script = Shared.stub().script()
+    const input = {
+      messageId: Session.MessageID.create(),
+      synthetic: { description: "Reminder: reply in the thread", source: "channel" },
+    }
+    yield* brain.send(`Reply in the thread. ${script.marker}`, input)
+    yield* brain.send(`Reply in the thread. ${script.marker}`, input)
+    expect((yield* Effect.promise(() => script.called())).text).toBe(`Reply in the thread. ${script.marker}`)
+    const sessionID = SessionID.make(brain.id)
+    yield* brain.opencode.session.wait({ sessionID })
+    const page = yield* brain.chat.session["session.messages"]({ params: { sessionID: brain.id }, query: {} })
+    expect(page.items.filter((message) => message.type === "synthetic" || message.type === "user")).toMatchObject([
+      {
+        id: input.messageId,
+        type: "synthetic",
+        description: "Reminder: reply in the thread",
+        metadata: { source: "channel" },
+      },
+    ])
+    expect(script.calls).toHaveLength(1)
+  }),
+)
+
 it.live(
   "send returns Accepted before completion, preserves sender metadata and deduplicates concurrent and completed sends",
   () =>
@@ -568,8 +595,7 @@ test.todo("REN-1486 an endpoint's base URL and key changed during a turn reach t
         ["/moved/v1/chat/completions", "Bearer moved-key"],
       ])
     }),
-  ),
-)
+  ))
 
 it.live(
   "the cell keeps a ren-host-token only when it expires later than the stored token, and model refresh sends the kept token",

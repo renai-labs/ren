@@ -143,7 +143,7 @@ const failure = <A, E>(exit: Exit.Exit<A, E>) => (Exit.isFailure(exit) ? JSON.st
 
 describe("Credentials: who may do what (owner-access §4)", () => {
   it.live(
-    "members write org and space credentials; admins manage space ones without joining; space B stays hidden",
+    "members write org and space credentials; an admin outside a space does not see its credentials (AC4); space B stays hidden",
     () =>
       Effect.gen(function* () {
         const credentials = yield* Credentials.Service
@@ -159,7 +159,9 @@ describe("Credentials: who may do what (owner-access §4)", () => {
           label: "LINEAR_API_KEY",
           ...key("lin_abcd", ["api.linear.app"]),
         })
-        expect((yield* credentials.update(setup.admin, spaced.id, { name: "Linear" })).name).toBe("Linear")
+        expect(failure(yield* Effect.exit(credentials.update(setup.admin, spaced.id, { name: "Linear" })))).toContain(
+          "Primitive.NotFound",
+        )
         const hidden = yield* credentials.create(setup.grace, {
           owner: { kind: "space", spaceId: setup.other.id },
           label: "OTHER_KEY",
@@ -169,6 +171,16 @@ describe("Credentials: who may do what (owner-access §4)", () => {
         expect(seen).toEqual(["LINEAR_API_KEY", "STRIPE_API_KEY"])
         expect(failure(yield* Effect.exit(credentials.get(setup.ada, hidden.id)))).toContain("Primitive.NotFound")
         expect(JSON.stringify(yield* credentials.list(setup.ada, page))).not.toContain("sk_live_1234")
+        const personal = yield* credentials.create(setup.ada, {
+          owner: { kind: "person", userId: setup.ada.userId },
+          label: "OPENAI_API_KEY",
+          ...key("sk-proj-9876", ["api.openai.com"]),
+        })
+        expect(personal.keyPreview).toBe("9876")
+        expect(yield* credentials.get(setup.admin, personal.id)).toMatchObject({
+          label: "OPENAI_API_KEY",
+          keyPreview: null,
+        })
       }),
   )
 
@@ -427,17 +439,17 @@ describe("Credentials: move and copy (owner-access §4 rules 2 to 4)", () => {
           ),
         ).toContain("Primitive.")
         expect(failure(yield* Effect.exit(credentials.move(setup.ada, id, { owner: { kind: "org" } })))).toContain(
-          "account_to_org",
+          "Primitive.Forbidden",
         )
         const shared = yield* credentials.move(setup.ada, id, { owner: { kind: "space", spaceId: setup.space.id } })
         expect(shared).toMatchObject({ owner: { kind: "space" }, account: { userId: setup.ada.userId } })
         expect(failure(yield* Effect.exit(credentials.move(setup.grace, id, { owner: { kind: "org" } })))).toContain(
-          "not_account_holder",
+          "Primitive.Forbidden",
         )
         const opened = yield* credentials.open(id)
         expect(Option.map(opened, (found) => found.value.type)).toEqual(Option.some("key"))
         expect(failure(yield* Effect.exit(credentials.copy(setup.ada, id, { owner: { kind: "org" } })))).toContain(
-          "copy_rotating",
+          "Primitive.Forbidden",
         )
         const pasted = yield* credentials.create(setup.ada, {
           owner: { kind: "org" },
@@ -527,7 +539,7 @@ describe("Credentials: lookup (README §6.3, §6.4)", () => {
   )
 
   it.live(
-    "a person credential reaches only a session-scope brain of that person; another space's label never does",
+    "a person credential reaches only brains of that person's private space, on either scope; a shared space never; another space's label never does (private-spaces test 7)",
     () =>
       Effect.gen(function* () {
         const credentials = yield* Credentials.Service
@@ -560,15 +572,32 @@ describe("Credentials: lookup (README §6.3, §6.4)", () => {
             if (Option.isNone(scope)) return []
             return (yield* credentials.candidates(scope.value, [])).map((found) => found.label).toSorted()
           })
-        expect(yield* labels(Brain.ofSession(sessionId))).toEqual(["OPENAI_API_KEY"])
+        expect(yield* labels(Brain.ofSession(sessionId))).toEqual([])
         expect(yield* labels(spaceBrain)).toEqual([])
+        const spaces = yield* Space.Service
+        const own = (yield* spaces.list(setup.ada, page)).items.find((space) => space.kind === "private")
+        if (!own) return yield* Effect.die(new Error("expected Ada's private space"))
+        const privateChat = yield* Seed.session({
+          organizationId: setup.organizationId,
+          spaceId: own.id,
+          createdBy: setup.ada.userId,
+        })
+        const privateBrain = Brain.ID.create()
+        yield* Seed.session({
+          organizationId: setup.organizationId,
+          spaceId: own.id,
+          createdBy: setup.ada.userId,
+          brainId: privateBrain,
+        })
+        expect(yield* labels(Brain.ofSession(privateChat))).toEqual(["OPENAI_API_KEY"])
+        expect(yield* labels(privateBrain)).toEqual(["OPENAI_API_KEY"])
       }),
   )
 })
 
 describe("Credentials: offboarding (owner-access §11)", () => {
   it.live(
-    "leaving a space removes the account credentials there and keeps a pasted key; the brain stops reaching space credentials",
+    "leaving a space removes the account credentials there and keeps a pasted key; the chat's brain still serves the space (AC6)",
     () =>
       Effect.gen(function* () {
         const credentials = yield* Credentials.Service
@@ -599,9 +628,7 @@ describe("Credentials: offboarding (owner-access §11)", () => {
           (yield* credentials.list(setup.ada, { ...page, spaceId: setup.space.id })).items.map((info) => info.label),
         ).toEqual(["STRIPE_API_KEY"])
         const after = yield* credentials.scopeOf(brain)
-        expect(Option.map(after, (scope) => Option.isNone(scope.spaceId) && Option.isNone(scope.person))).toEqual(
-          Option.some(true),
-        )
+        expect(Option.map(after, (scope) => scope.spaceId)).toEqual(Option.some(Option.some(setup.space.id)))
         expect(invalidations).toContainEqual({ label: "MCP_GMAIL" })
         expect(invalidations).toContainEqual({ workload: `brain:${brain.id}:` })
       }),
@@ -683,36 +710,42 @@ describe("Credentials: offboarding (owner-access §11)", () => {
 })
 
 describe("Credentials: env vars of a workload (A35, C9)", () => {
-  it.live("each pasted key that reaches a brain becomes LABEL=ren:LABEL; a delivered key gives its value", () =>
-    Effect.gen(function* () {
-      const credentials = yield* Credentials.Service
-      const setup = yield* team()
-      yield* credentials.create(setup.ada, { owner: { kind: "org" }, label: "STRIPE_API_KEY", ...key("sk_live_1234") })
-      yield* credentials.create(setup.admin, {
-        owner: { kind: "org" },
-        label: "PG_PASSWORD",
-        delivery: "delivered",
-        ...key("pg-secret", ["db.acme.dev"]),
-      })
-      yield* credentials.create(setup.ada, {
-        owner: { kind: "org" },
-        label: "JIRA",
-        hosts: ["acme.atlassian.net"],
-        value: { type: "basic", username: "ada", password: Redacted.make("p") },
-      })
-      const brainId = Brain.ID.create()
-      yield* Seed.session({
-        organizationId: setup.organizationId,
-        spaceId: setup.space.id,
-        createdBy: setup.ada.userId,
-        brainId,
-      })
-      const scope = yield* credentials.scopeOf({ kind: "brain", id: brainId, generation: 1 })
-      if (Option.isNone(scope)) return yield* Effect.die(new Error("no scope"))
-      expect(yield* credentials.environment(scope.value, [])).toEqual({
-        STRIPE_API_KEY: "ren:STRIPE_API_KEY",
-        PG_PASSWORD: "pg-secret",
-      })
-    }),
+  it.live(
+    "each pasted key that reaches a brain becomes a placeholder LABEL=ren:LABEL; a delivered key gives its value",
+    () =>
+      Effect.gen(function* () {
+        const credentials = yield* Credentials.Service
+        const setup = yield* team()
+        yield* credentials.create(setup.ada, {
+          owner: { kind: "org" },
+          label: "STRIPE_API_KEY",
+          ...key("sk_live_1234"),
+        })
+        yield* credentials.create(setup.admin, {
+          owner: { kind: "org" },
+          label: "PG_PASSWORD",
+          delivery: "delivered",
+          ...key("pg-secret", ["db.acme.dev"]),
+        })
+        yield* credentials.create(setup.ada, {
+          owner: { kind: "org" },
+          label: "JIRA",
+          hosts: ["acme.atlassian.net"],
+          value: { type: "basic", username: "ada", password: Redacted.make("p") },
+        })
+        const brainId = Brain.ID.create()
+        yield* Seed.session({
+          organizationId: setup.organizationId,
+          spaceId: setup.space.id,
+          createdBy: setup.ada.userId,
+          brainId,
+        })
+        const scope = yield* credentials.scopeOf({ kind: "brain", id: brainId, generation: 1 })
+        if (Option.isNone(scope)) return yield* Effect.die(new Error("no scope"))
+        expect(yield* credentials.environment(scope.value, [])).toEqual({
+          variables: { PG_PASSWORD: "pg-secret" },
+          placeholders: { STRIPE_API_KEY: "ren:STRIPE_API_KEY" },
+        })
+      }),
   )
 })

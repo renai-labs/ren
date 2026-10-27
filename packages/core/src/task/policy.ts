@@ -1,104 +1,103 @@
 export * as TaskPolicy from "./policy.js"
 
 import { Database } from "@ren/db/database"
-import { Auth } from "@ren/schema/auth"
 import { Label } from "@ren/schema/label"
-import { Policy } from "@ren/schema/policy"
+import type { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
-import type { Space } from "@ren/schema/space"
 import { Task } from "@ren/schema/task"
 import { TaskActivity } from "@ren/schema/task-activity"
 import { TaskComment } from "@ren/schema/task-comment"
-import { and, eq, isNotNull } from "drizzle-orm"
+import { isNotNull, type SQL } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import type { Access } from "../access.js"
-import { AccessFilter } from "../access-filter.js"
+import { SpacePolicy } from "../space/policy.js"
 
-const spaceMember = "task.spaceMember"
-
-const commentAuthor = "comment.author"
+export const facts = {
+  spaceMember: "task.spaceMember",
+  author: "comment.author",
+  systemLabel: "label.system",
+  orgLabel: "label.org",
+  spaceLabel: "label.space",
+} as const
 
 export const membership = alias(Database.Schema.space_member, "task_membership")
 
-const statements = (actions: ReadonlyArray<string>, options: { readonly agents: boolean }) => [
-  { actions, roles: Auth.administratorRoles, on: Policy.everywhere, agents: options.agents },
-  { actions, roles: Auth.Role.literals, on: spaceMember, agents: options.agents },
-]
+const every = SpacePolicy.organizationRoles
 
-export const actions = {
-  close: `${Task.definition.name}.close`,
-  decide: `${Task.definition.name}.decide`,
-} as const
+const labelWrites = Primitive.actions(Label.definition, ["create", "update", "archive"])
 
-// oxlint-disable-next-line ren/no-comments -- Only a person closes a task, decides a review or changes their comment.
+// oxlint-disable-next-line ren/no-comments -- access §6: tasks are for space members; org labels for admins, space labels for members.
 export const documents = [
   {
-    primitive: Task.definition.name,
-    statements: [
-      {
-        actions: Primitive.actions(Task.definition, ["list"]),
-        roles: Auth.Role.literals,
-        on: Policy.everywhere,
-        agents: true,
-      },
-      ...statements(Primitive.actions(Task.definition, ["get", "create", "update", "assign", "start", "review"]), {
-        agents: true,
-      }),
-      ...statements([...Primitive.actions(Task.definition, ["archive"]), actions.close, actions.decide], {
-        agents: false,
-      }),
+    resource: Task.definition.name,
+    rules: [
+      { actions: Primitive.actions(Task.definition, ["list"]), effect: "allow", roles: every, when: [] },
+      { actions: Primitive.actions(Task.definition), effect: "allow", roles: every, when: [facts.spaceMember] },
     ],
   },
   {
-    primitive: TaskComment.definition.name,
-    statements: [
-      ...statements(Primitive.actions(TaskComment.definition, ["create"]), { agents: true }),
+    resource: TaskComment.definition.name,
+    rules: [
+      {
+        actions: Primitive.actions(TaskComment.definition, ["create"]),
+        effect: "allow",
+        roles: every,
+        when: [facts.spaceMember],
+      },
       {
         actions: Primitive.actions(TaskComment.definition, ["update", "archive"]),
-        roles: Auth.Role.literals,
-        on: commentAuthor,
+        effect: "allow",
+        roles: every,
+        when: [facts.spaceMember, facts.author],
       },
     ],
   },
   {
-    primitive: TaskActivity.definition.name,
-    statements: statements(Primitive.actions(TaskActivity.definition), { agents: true }),
+    resource: TaskActivity.definition.name,
+    rules: [
+      { actions: Primitive.actions(TaskActivity.definition), effect: "allow", roles: every, when: [facts.spaceMember] },
+    ],
   },
   {
-    primitive: Label.definition.name,
-    statements: [
+    resource: Label.definition.name,
+    rules: [
       {
         actions: Primitive.actions(Label.definition, ["list"]),
-        roles: Auth.Role.literals,
-        on: Policy.everywhere,
-        agents: true,
+        effect: "allow",
+        roles: every,
+        when: [facts.systemLabel],
       },
+      { actions: Primitive.actions(Label.definition, ["list"]), effect: "allow", roles: every, when: [facts.orgLabel] },
       {
-        actions: Primitive.actions(Label.definition, ["create", "update", "archive"]),
-        roles: Auth.Role.literals,
-        on: Policy.everywhere,
+        actions: Primitive.actions(Label.definition, ["list"]),
+        effect: "allow",
+        roles: every,
+        when: [facts.spaceLabel, facts.spaceMember],
       },
+      { actions: labelWrites, effect: "allow", roles: SpacePolicy.administratorRoles, when: [facts.orgLabel] },
+      { actions: labelWrites, effect: "allow", roles: every, when: [facts.spaceLabel, facts.spaceMember] },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
 
-export const comment = (holds: { readonly isAuthor: boolean }, spaceId: Space.ID): Access.Resource => ({
-  relationships: holds.isAuthor ? [commentAuthor] : [],
-  spaceId,
+export const organization: Access.Resource = { facts: [] }
+
+export const resource = (membershipId: string | null): Access.Resource => ({
+  facts: membershipId ? [facts.spaceMember] : [],
 })
 
-export const label = (organizationId: Auth.OrganizationID | null): Access.Resource => ({
-  relationships: [],
-  organizationId,
+export const comment = (membershipId: string | null, options: { readonly isAuthor: boolean }): Access.Resource => ({
+  facts: [...(membershipId ? [facts.spaceMember] : []), ...(options.isAuthor ? [facts.author] : [])],
 })
 
-export const resource = (membershipId: Space.MembershipID | null, spaceId: Space.ID): Access.Resource => ({
-  relationships: membershipId ? [spaceMember] : [],
-  spaceId,
-})
+export const label = (row: {
+  readonly organizationId: string | null
+  readonly spaceId: string | null
+  readonly isMember: boolean
+}): Access.Resource => {
+  if (!row.organizationId) return { facts: [facts.systemLabel] }
+  if (!row.spaceId) return { facts: [facts.orgLabel] }
+  return { facts: [facts.spaceLabel, ...(row.isMember ? [facts.spaceMember] : [])] }
+}
 
-export const filter = (plan: Access.Plan) =>
-  and(
-    plan.spaceId ? eq(Database.Schema.task.space_id, plan.spaceId) : undefined,
-    AccessFilter.where(plan, new Map([[spaceMember, isNotNull(membership.id)]])),
-  )
+export const where: ReadonlyMap<string, SQL> = new Map([[facts.spaceMember, isNotNull(membership.id)]])

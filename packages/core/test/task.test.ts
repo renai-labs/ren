@@ -66,7 +66,7 @@ describe("Task", () => {
     }),
   )
 
-  it.live("only members of the task's space and admins see it; others get NotFound", () =>
+  it.live("only members of the task's space see it; others, admins included (AC4), get NotFound", () =>
     Effect.gen(function* () {
       const tasks = yield* Task.Service
       const o = yield* org
@@ -74,20 +74,19 @@ describe("Task", () => {
       expect((yield* Effect.flip(tasks.get(o.grace, created.id)))._tag).toBe("Primitive.NotFound")
       expect((yield* Effect.flip(tasks.update(o.grace, created.id, { title: "Mine" })))._tag).toBe("Primitive.NotFound")
       expect((yield* tasks.list(o.grace, page)).items).toEqual([])
-      expect((yield* tasks.get(o.admin, created.id)).id).toBe(created.id)
+      expect((yield* Effect.flip(tasks.get(o.admin, created.id)))._tag).toBe("Primitive.NotFound")
       expect((yield* Effect.flip(tasks.create(o.grace, { spaceId: o.factory.id, title: "Sneak" })))._tag).toBe(
         "Primitive.NotFound",
       )
     }),
   )
 
-  it.live("an agent reaches only the tasks of its session's space", () =>
+  it.live("an agent reaches the tasks its sender reaches, in every space the sender is in (AC17)", () =>
     Effect.gen(function* () {
       const tasks = yield* Task.Service
       const members = yield* SpaceMember.Service
       const o = yield* org
-      yield* members.create(o.admin, { spaceId: o.eng.id, userId: o.ada.userId })
-      const elsewhere = yield* tasks.create(o.grace, { spaceId: o.eng.id, title: "Eng work" })
+      const hidden = yield* tasks.create(o.grace, { spaceId: o.eng.id, title: "Eng work" })
       const build = yield* o.agentIn(o.ada, o.factory.id)
       const own = yield* tasks.create(build, { spaceId: o.factory.id, title: "Factory work" })
       expect(own.createdBy).toEqual({
@@ -96,13 +95,10 @@ describe("Task", () => {
         sessionId: build.agent.sessionId,
       })
       expect((yield* tasks.list(build, page)).items.map((task) => task.id)).toEqual([own.id])
-      expect((yield* Effect.flip(tasks.get(build, elsewhere.id)))._tag).toBe("Primitive.NotFound")
-      const adminAgent = TaskFixture.actingAs(o.admin, o.factory.id, build.agent.agentId, build.agent.sessionId)
-      expect((yield* tasks.list(adminAgent, page)).items.map((task) => task.id)).toEqual([own.id])
-      expect((yield* Effect.flip(tasks.get(adminAgent, elsewhere.id)))._tag).toBe("Primitive.NotFound")
-      expect((yield* Effect.flip(tasks.create(build, { spaceId: o.eng.id, title: "Sneak" })))._tag).toBe(
-        "Primitive.NotFound",
-      )
+      expect((yield* Effect.flip(tasks.get(build, hidden.id)))._tag).toBe("Primitive.NotFound")
+      yield* members.create(o.grace, { spaceId: o.eng.id, userId: o.ada.userId })
+      expect((yield* tasks.get(build, hidden.id)).id).toBe(hidden.id)
+      expect((yield* tasks.create(build, { spaceId: o.eng.id, title: "Eng from the factory" })).spaceId).toBe(o.eng.id)
     }),
   )
 
@@ -155,14 +151,14 @@ describe("Task", () => {
     }),
   )
 
-  it.live("a person sets done or dismissed, an agent cannot, and done turns human review off", () =>
+  it.live("a person, or an agent acting for one (AC10), sets done or dismissed, and done turns human review off", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const tasks = yield* Task.Service
       const o = yield* org
       const build = yield* o.agentIn(o.ada, o.factory.id)
       const created = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Add SSO" })
-      expect((yield* Effect.flip(tasks.update(build, created.id, { status: "done" })))._tag).toBe("Primitive.Forbidden")
+      expect((yield* tasks.update(build, created.id, { status: "dismissed" })).status).toBe("dismissed")
       yield* database.db
         .update(Database.Schema.task)
         .set({ human_review: true, human_review_reason: "Ready to merge" })
@@ -181,7 +177,7 @@ describe("Task", () => {
       const labels = yield* Label.Service
       const activity = yield* TaskActivity.Service
       const o = yield* org
-      yield* labels.create(o.ada, { name: "Bug" })
+      yield* labels.create(o.ada, { spaceId: o.factory.id, name: "Bug" })
       const created = yield* tasks.create(o.ada, {
         spaceId: o.factory.id,
         title: "Add SSO",
@@ -349,11 +345,13 @@ describe("Subtasks", () => {
         const parent = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Tasks" })
         const child = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Labels", parentId: parent.id })
         const loose = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Review" })
-        const elsewhere = yield* tasks.create(o.admin, { spaceId: o.eng.id, title: "Eng" })
+        const members = yield* SpaceMember.Service
+        yield* members.create(o.ada, { spaceId: o.factory.id, userId: o.grace.userId })
+        const elsewhere = yield* tasks.create(o.grace, { spaceId: o.eng.id, title: "Eng" })
         const refusals = yield* Effect.all(
           [
-            tasks.create(o.admin, { spaceId: o.eng.id, title: "Elsewhere", parentId: parent.id }),
-            tasks.update(o.admin, loose.id, { parentId: elsewhere.id }),
+            tasks.create(o.grace, { spaceId: o.eng.id, title: "Elsewhere", parentId: parent.id }),
+            tasks.update(o.grace, loose.id, { parentId: elsewhere.id }),
             tasks.update(o.ada, loose.id, { parentId: loose.id }),
             tasks.update(o.ada, loose.id, { parentId: child.id }),
             tasks.update(o.ada, parent.id, { parentId: loose.id }),
@@ -442,7 +440,7 @@ describe("TaskComment", () => {
       const comments = yield* TaskComment.Service
       const members = yield* SpaceMember.Service
       const o = yield* org
-      yield* members.create(o.admin, { spaceId: o.factory.id, userId: o.grace.userId })
+      yield* members.create(o.ada, { spaceId: o.factory.id, userId: o.grace.userId })
       const task = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Add SSO" })
       const comment = yield* comments.create(o.ada, { taskId: task.id, body: "Looks good" })
       expect(comment).toMatchObject({ editedAt: null, canUpdate: true, author: { userId: o.ada.userId } })
@@ -498,35 +496,74 @@ describe("TaskActivity", () => {
 })
 
 describe("Label", () => {
-  it.live("a name is unique in the organization ignoring case, and an archived label frees it", () =>
+  it.live(
+    "an org label is unique in the org and a space label in its space, ignoring case; an archived label frees it",
+    () =>
+      Effect.gen(function* () {
+        const labels = yield* Label.Service
+        const o = yield* org
+        const bug = yield* labels.create(o.admin, { name: "Bug", color: "#d45f5f" })
+        const other = yield* labels.create(o.admin, { name: "Feature" })
+        expect((yield* Effect.flip(labels.create(o.admin, { name: "BUG" })))._tag).toBe("Primitive.Conflict")
+        expect((yield* Effect.flip(labels.update(o.admin, other.id, { name: "bug" })))._tag).toBe("Primitive.Conflict")
+        expect((yield* labels.create(o.ada, { spaceId: o.factory.id, name: "bug" })).spaceId).toBe(o.factory.id)
+        expect((yield* Effect.flip(labels.create(o.ada, { spaceId: o.factory.id, name: "BUG" })))._tag).toBe(
+          "Primitive.Conflict",
+        )
+        yield* labels.archive(o.admin, bug.id)
+        expect((yield* labels.create(o.admin, { name: "bug" })).name).toBe("bug")
+      }),
+  )
+
+  it.live("only admins write org labels; a space label is written by and seen in its space only (AC8)", () =>
     Effect.gen(function* () {
       const labels = yield* Label.Service
       const o = yield* org
-      const bug = yield* labels.create(o.ada, { name: "Bug", color: "#d45f5f" })
-      const other = yield* labels.create(o.ada, { name: "Feature" })
-      expect((yield* Effect.flip(labels.create(o.grace, { name: "BUG" })))._tag).toBe("Primitive.Conflict")
-      expect((yield* Effect.flip(labels.update(o.ada, other.id, { name: "bug" })))._tag).toBe("Primitive.Conflict")
-      yield* labels.archive(o.ada, bug.id)
-      expect((yield* labels.create(o.ada, { name: "bug" })).name).toBe("bug")
+      expect((yield* Effect.flip(labels.create(o.ada, { name: "Org" })))._tag).toBe("Primitive.Forbidden")
+      const shared = yield* labels.create(o.admin, { name: "Org" })
+      expect((yield* Effect.flip(labels.archive(o.ada, shared.id)))._tag).toBe("Primitive.Forbidden")
+      const secret = yield* labels.create(o.ada, { spaceId: o.factory.id, name: "acme-acquisition" })
+      expect((yield* Effect.flip(labels.create(o.grace, { spaceId: o.factory.id, name: "Sneak" })))._tag).toBe(
+        "Primitive.Forbidden",
+      )
+      const names = (actor: typeof o.ada) =>
+        labels.list(actor, page).pipe(Effect.map((result) => result.items.map((label) => label.name)))
+      expect(yield* names(o.ada)).toContain(secret.name)
+      expect(yield* names(o.grace)).not.toContain(secret.name)
+      expect(yield* names(o.admin)).not.toContain(secret.name)
+      expect((yield* Effect.flip(labels.archive(o.grace, secret.id)))._tag).toBe("Primitive.NotFound")
     }),
   )
 
-  it.live("an agent lists labels and puts existing ones on a task, but cannot create or change them", () =>
+  it.live("an agent creates and changes the labels its sender can (AC10); a new name on a task is a space label", () =>
     Effect.gen(function* () {
       const labels = yield* Label.Service
       const tasks = yield* Task.Service
       const o = yield* org
       const build = yield* o.agentIn(o.ada, o.factory.id)
-      const bug = yield* labels.create(o.ada, { name: "Bug" })
-      expect((yield* labels.list(build, page)).items.map((label) => label.name)).toContain("Bug")
-      expect((yield* Effect.flip(labels.create(build, { name: "Feature" })))._tag).toBe("Primitive.Forbidden")
-      expect((yield* Effect.flip(labels.archive(build, bug.id)))._tag).toBe("Primitive.Forbidden")
-      const task = yield* tasks.create(build, { spaceId: o.factory.id, title: "Fix it", labels: ["bug"] })
-      expect(task.labels.map((label) => label.name)).toEqual(["Bug"])
-      expect((yield* Effect.flip(tasks.update(build, task.id, { labels: ["Bug", "Feature"] })))._tag).toBe(
-        "Primitive.Invalid",
+      const task = yield* tasks.create(build, { spaceId: o.factory.id, title: "Fix it", labels: ["Feature"] })
+      expect(task.labels.map((label) => label.name)).toEqual(["Feature"])
+      const feature = (yield* labels.list(build, { ...page, spaceId: o.factory.id })).items.find(
+        (label) => label.name === "Feature",
       )
-      expect((yield* labels.list(o.ada, page)).items.map((label) => label.name)).not.toContain("Feature")
+      expect(feature?.spaceId).toBe(o.factory.id)
+      if (!feature) return yield* Effect.die(new Error("The task made no label"))
+      expect((yield* labels.archive(build, feature.id)).archivedAt).not.toBeNull()
+      expect((yield* Effect.flip(labels.create(build, { name: "Org" })))._tag).toBe("Primitive.Forbidden")
+    }),
+  )
+
+  it.live("a task that moves to another space drops the labels of the space it leaves (AC8)", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const members = yield* SpaceMember.Service
+      const labels = yield* Label.Service
+      const o = yield* org
+      yield* members.create(o.grace, { spaceId: o.eng.id, userId: o.ada.userId })
+      yield* labels.create(o.admin, { name: "Org" })
+      const task = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Move me", labels: ["Org", "Local"] })
+      const moved = yield* tasks.assign(o.ada, task.id, { spaceId: o.eng.id, start: "none" })
+      expect(moved.labels.map((label) => label.name)).toEqual(["Org"])
     }),
   )
 
@@ -534,7 +571,7 @@ describe("Label", () => {
     Effect.gen(function* () {
       const labels = yield* Label.Service
       const o = yield* org
-      const outsider = yield* Seed.actor(yield* Seed.organization(), "member")
+      const outsider = yield* Seed.actor(yield* Seed.organization(), "admin")
       const theirs = yield* labels.create(outsider, { name: "Secret" })
       const system = (yield* labels.list(o.ada, { page: 1, pageSize: 100 })).items.filter((label) => label.isSystem)
       expect(system.map((label) => label.name)).toEqual(["ren-fix", "ren-improve"])

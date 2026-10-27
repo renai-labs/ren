@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
-import { Space } from "@ren/schema/space"
+import type { Space } from "@ren/schema/space"
 import { and, eq, isNull } from "drizzle-orm"
 import { Context, Effect, Layer, Option } from "effect"
 import { Access } from "./access.js"
@@ -12,6 +12,7 @@ import type { Actor } from "./actor.js"
 import { AppProfiles } from "./app/profiles.js"
 import { Credentials } from "./credentials.js"
 import { Primitive } from "./primitive.js"
+import { SessionPolicy } from "./session/policy.js"
 import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 
@@ -22,39 +23,24 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/CredentialRequirements") {}
 
-const members = Database.Schema.space_member
 const chats = Database.Schema.agent_session
-const spaceGet = Primitive.action(Space.definition, "get")
 
 // oxlint-disable-next-line ren/no-comments -- profiles.md P15: the composer pill. A chat reaches what its brain's scope reaches (§7 rule 6); a new chat reaches what its space reaches. Each profile comes with its gaps; one the caller may not see is left out.
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const profiles = yield* AppProfiles.Service
     const access = yield* Access.Service
+    const profiles = yield* AppProfiles.Service
 
-    const member = Effect.fnUntraced(function* (actor: Actor.Info, spaceId: Space.ID) {
+    // oxlint-disable-next-line ren/no-comments -- access AC14: a private space's reach is its owner's only.
+    const space = Effect.fnUntraced(function* (
+      actor: Actor.Info,
+      spaceId: Space.ID,
+      allowed: (found: { readonly kind: Space.Kind; readonly membershipId: Space.MembershipID | null }) => boolean,
+    ) {
       const found = (yield* database.db
-        .select({ id: members.id })
-        .from(members)
-        .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, members.space_id))
-        .where(
-          and(
-            eq(members.space_id, spaceId),
-            eq(members.user_id, actor.userId),
-            eq(Database.Schema.space.organization_id, actor.organizationId),
-            isNull(members.archived_at),
-            isNull(Database.Schema.space.archived_at),
-          ),
-        )
-        .pipe(Effect.orDie)).at(0)
-      if (!found) return yield* new Primitive.NotFound({ message: "Space not found." })
-    })
-
-    const visibleSpace = Effect.fnUntraced(function* (actor: Actor.Info, spaceId: Space.ID) {
-      const found = (yield* database.db
-        .select({ id: Database.Schema.space.id })
+        .select({ kind: Database.Schema.space.kind, membershipId: SpaceQueries.membership.id })
         .from(Database.Schema.space)
         .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
         .where(
@@ -62,11 +48,10 @@ export const layer = Layer.effect(
             eq(Database.Schema.space.id, spaceId),
             eq(Database.Schema.space.organization_id, actor.organizationId),
             isNull(Database.Schema.space.archived_at),
-            SpacePolicy.filter(access.plan(actor, spaceGet)),
           ),
         )
         .pipe(Effect.orDie)).at(0)
-      if (!found) return yield* new Primitive.NotFound({ message: "Space not found." })
+      if (!found || !allowed(found)) return yield* new Primitive.NotFound({ message: "Space not found." })
     })
 
     const reach = Effect.fnUntraced(function* (actor: Actor.Info, scope: AppProfiles.Reach) {
@@ -80,9 +65,10 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      // oxlint-disable-next-line ren/no-comments -- profiles.md §10.
       forSpace: Effect.fn("CredentialRequirements.forSpace")(function* (actor, spaceId) {
-        yield* visibleSpace(actor, spaceId)
+        yield* space(actor, spaceId, (found) =>
+          access.isAllowed({ actor, action: SpacePolicy.actions.reach, resource: SpacePolicy.resource(found) }),
+        )
         return yield* reach(actor, { organizationId: actor.organizationId, spaceId: Option.some(spaceId) })
       }),
       forSession: Effect.fn("CredentialRequirements.forSession")(function* (actor, sessionId) {
@@ -93,7 +79,13 @@ export const layer = Layer.effect(
           .where(and(eq(chats.id, sessionId), eq(chats.organization_id, actor.organizationId)))
           .pipe(Effect.orDie)).at(0)
         if (!chat) return yield* new Primitive.NotFound({ message: "Session not found." })
-        yield* member(actor, chat.spaceId)
+        yield* space(actor, chat.spaceId, (found) =>
+          access.isAllowed({
+            actor,
+            action: SessionPolicy.actions.get,
+            resource: SessionPolicy.resource(found.membershipId),
+          }),
+        )
         if (!chat.brainId || !chat.generation)
           return yield* reach(actor, { organizationId: actor.organizationId, spaceId: Option.some(chat.spaceId) })
         const scope = yield* Credentials.scopeOf(database.db, {

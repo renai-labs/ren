@@ -1,5 +1,7 @@
 import { describe, expect, spyOn } from "bun:test"
 import { DurableRunner } from "@ren/core/durable-runner"
+import { GitHubAccounts } from "@ren/core/github-accounts"
+import { SlackApp } from "@ren/core/slack-app"
 import { Mailer } from "@ren/core/mailer"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
@@ -40,6 +42,7 @@ const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postma
     Layer.provideMerge(
       RenInferenceRemoval.layer.pipe(Layer.provide([RenInference.layerNone, DurableRunner.layerMemory])),
     ),
+    Layer.provideMerge(Layer.mergeAll(GitHubAccounts.layerNone, SlackApp.layerNone)),
     Layer.provideMerge(Testing.layer),
     Layer.provideMerge(Mailer.layer),
     Layer.provideMerge(mail),

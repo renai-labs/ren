@@ -104,14 +104,7 @@
       ]
     }
   },
-  "ignoreDependencies": [
-    "tailwindcss",
-    "@fontsource/ibm-plex-mono",
-    "auth",
-    "turbo",
-    "prettier",
-    "@typescript/native-preview"
-  ],
+  "ignoreDependencies": ["tailwindcss", "@fontsource/ibm-plex-mono", "auth", "turbo", "@typescript/native-preview"],
   "ignoreIssues": {
     "packages/server/src/primitive.ts": [
       "duplicates"

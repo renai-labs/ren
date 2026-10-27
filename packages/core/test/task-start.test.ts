@@ -33,80 +33,78 @@ const sessions = (taskId: TaskSchema.ID) =>
   )
 
 describe("Task start", () => {
-  it.live("the factory scenarios hold: each agent works in its own session, and a person closes each review", () =>
-    Effect.gen(function* () {
-      const tasks = yield* Task.Service
-      const spaces = yield* Space.Service
-      const o = yield* org
-      const plan = yield* o.agent("plan")
-      const build = yield* o.agent("build")
-      const review = yield* o.agent("review")
-      yield* spaces.update(o.ada, o.factory.id, { agentOrder: [plan, build, review] })
-      const script = harness.stub.script()
-      const called = (count: number) => Effect.promise(() => script.called(count))
-      const created = yield* tasks.create(o.ada, {
-        spaceId: o.factory.id,
-        title: `Add SSO ${script.marker}`,
-        description: "Support Okta.",
-      })
-      expect(created).toMatchObject({ agentId: null, session: null, status: "todo", humanReview: false })
+  it.live(
+    "the factory scenarios hold: each agent works in its own session, and a review closes as its sender decides (AC10)",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const spaces = yield* Space.Service
+        const o = yield* org
+        const plan = yield* o.agent("plan")
+        const build = yield* o.agent("build")
+        const review = yield* o.agent("review")
+        yield* spaces.update(o.ada, o.factory.id, { agentOrder: [plan, build, review] })
+        const script = harness.stub.script()
+        const called = (count: number) => Effect.promise(() => script.called(count))
+        const created = yield* tasks.create(o.ada, {
+          spaceId: o.factory.id,
+          title: `Add SSO ${script.marker}`,
+          description: "Support Okta.",
+        })
+        expect(created).toMatchObject({ agentId: null, session: null, status: "todo", humanReview: false })
 
-      const given = yield* tasks.assign(o.ada, created.id, { agentId: plan, start: "none" })
-      expect(given).toMatchObject({ agentId: plan, session: null, status: "todo" })
+        const given = yield* tasks.assign(o.ada, created.id, { agentId: plan, start: "none" })
+        expect(given).toMatchObject({ agentId: plan, session: null, status: "todo" })
 
-      const started = yield* tasks.start(o.ada, created.id, { mode: "continue" })
-      expect(started).toMatchObject({ agentId: plan, status: "in_progress" })
-      const planSession = yield* sessionOf(started)
-      const first = yield* called(1)
-      expect(first.text).toContain(`<task_assignment task_id="${created.id}"`)
-      expect(first.text).toContain(created.identifier)
-      expect(first.text).toContain("Support Okta.")
-      expect(first.text).toMatch(/1\. plan[\s\S]*2\. build[\s\S]*3\. review/u)
+        const started = yield* tasks.start(o.ada, created.id, { mode: "continue" })
+        expect(started).toMatchObject({ agentId: plan, status: "in_progress" })
+        const planSession = yield* sessionOf(started)
+        const first = yield* called(1)
+        expect(first.text).toContain(`<task_assignment task_id="${created.id}"`)
+        expect(first.text).toContain(created.identifier)
+        expect(first.text).toContain("Support Okta.")
+        expect(first.text).toMatch(/1\. plan[\s\S]*2\. build[\s\S]*3\. review/u)
 
-      const planner = TaskFixture.actingAs(o.ada, o.factory.id, plan, planSession)
-      const asked = yield* tasks.review(planner, created.id, { humanReview: true, reason: "Plan approval" })
-      expect(asked).toMatchObject({ humanReview: true, humanReviewReason: "Plan approval", status: "in_progress" })
-      expect(
-        (yield* Effect.flip(tasks.review(planner, created.id, { humanReview: false, decision: "approved" })))._tag,
-      ).toBe("Primitive.Forbidden")
+        const planner = TaskFixture.actingAs(o.ada, o.factory.id, plan, planSession)
+        const asked = yield* tasks.review(planner, created.id, { humanReview: true, reason: "Plan approval" })
+        expect(asked).toMatchObject({ humanReview: true, humanReviewReason: "Plan approval", status: "in_progress" })
+        const approved = yield* tasks.review(planner, created.id, { humanReview: false, decision: "approved" })
+        expect(approved).toMatchObject({ humanReview: false, humanReviewReason: null, session: { id: planSession } })
+        expect((yield* called(2)).text).toContain("approved")
 
-      const approved = yield* tasks.review(o.ada, created.id, { humanReview: false, decision: "approved" })
-      expect(approved).toMatchObject({ humanReview: false, humanReviewReason: null, session: { id: planSession } })
-      expect((yield* called(2)).text).toContain("approved")
+        const built = yield* tasks.assign(planner, created.id, { agentId: build, note: "Build the plan." })
+        const buildSession = yield* sessionOf(built)
+        expect(buildSession).not.toBe(planSession)
+        const handoff = yield* called(3)
+        expect(handoff.text).toContain("Build the plan.")
+        expect(handoff.text).toContain("Support Okta.")
 
-      const built = yield* tasks.assign(planner, created.id, { agentId: build, note: "Build the plan." })
-      const buildSession = yield* sessionOf(built)
-      expect(buildSession).not.toBe(planSession)
-      const handoff = yield* called(3)
-      expect(handoff.text).toContain("Build the plan.")
-      expect(handoff.text).toContain("Support Okta.")
+        const builder = TaskFixture.actingAs(o.ada, o.factory.id, build, buildSession)
+        const reviewed = yield* tasks.assign(builder, created.id, { agentId: review })
+        const reviewer = TaskFixture.actingAs(o.ada, o.factory.id, review, yield* sessionOf(reviewed))
+        yield* called(4)
+        const back = yield* tasks.assign(reviewer, created.id, { agentId: build, note: "Fix the tests." })
+        expect(back.session?.id).toBe(buildSession)
+        expect((yield* called(5)).text).toContain("Fix the tests.")
+        yield* tasks.assign(o.ada, created.id, { ownerId: o.ada.userId })
+        yield* tasks.start(o.ada, created.id, { mode: "continue" })
+        expect((yield* called(6)).text).toContain("Fix the tests.")
 
-      const builder = TaskFixture.actingAs(o.ada, o.factory.id, build, buildSession)
-      const reviewed = yield* tasks.assign(builder, created.id, { agentId: review })
-      const reviewer = TaskFixture.actingAs(o.ada, o.factory.id, review, yield* sessionOf(reviewed))
-      yield* called(4)
-      const back = yield* tasks.assign(reviewer, created.id, { agentId: build, note: "Fix the tests." })
-      expect(back.session?.id).toBe(buildSession)
-      expect((yield* called(5)).text).toContain("Fix the tests.")
-      yield* tasks.assign(o.ada, created.id, { ownerId: o.ada.userId })
-      yield* tasks.start(o.ada, created.id, { mode: "continue" })
-      expect((yield* called(6)).text).toContain("Fix the tests.")
+        const takenOver = yield* tasks.assign(o.ada, created.id, { agentId: null })
+        expect(takenOver).toMatchObject({ agentId: null, ownerId: o.ada.userId, session: null, status: "in_progress" })
 
-      const takenOver = yield* tasks.assign(o.ada, created.id, { agentId: null })
-      expect(takenOver).toMatchObject({ agentId: null, ownerId: o.ada.userId, session: null, status: "in_progress" })
+        const returned = yield* tasks.assign(o.ada, created.id, { agentId: build, start: "continue" })
+        expect(returned.session?.id).toBe(buildSession)
+        expect((yield* called(7)).text).not.toContain("Fix the tests.")
 
-      const returned = yield* tasks.assign(o.ada, created.id, { agentId: build, start: "continue" })
-      expect(returned.session?.id).toBe(buildSession)
-      expect((yield* called(7)).text).not.toContain("Fix the tests.")
-
-      yield* tasks.review(builder, created.id, { humanReview: true, reason: "Ready to merge" })
-      expect(yield* tasks.update(o.ada, created.id, { status: "done" })).toMatchObject({
-        status: "done",
-        humanReview: false,
-        agentId: build,
-      })
-      expect(new Set((yield* sessions(created.id)).map((row) => row.agentId))).toEqual(new Set([plan, build, review]))
-    }),
+        yield* tasks.review(builder, created.id, { humanReview: true, reason: "Ready to merge" })
+        expect(yield* tasks.update(o.ada, created.id, { status: "done" })).toMatchObject({
+          status: "done",
+          humanReview: false,
+          agentId: build,
+        })
+        expect(new Set((yield* sessions(created.id)).map((row) => row.agentId))).toEqual(new Set([plan, build, review]))
+      }),
   )
 
   it.live(
@@ -280,45 +278,44 @@ describe("Task assign", () => {
     }),
   )
 
-  it.live("a member of both spaces moves a task; an owner outside the new space is cleared; an agent cannot move", () =>
-    Effect.gen(function* () {
-      const tasks = yield* Task.Service
-      const members = yield* SpaceMember.Service
-      const activity = yield* TaskActivity.Service
-      const o = yield* org
-      const carol = yield* Seed.actor(o.organizationId, "member")
-      yield* members.create(o.admin, { spaceId: o.factory.id, userId: carol.userId })
-      yield* members.create(o.admin, { spaceId: o.eng.id, userId: o.ada.userId })
-      const plan = yield* o.agent("plan")
-      const engAgent = yield* o.agent("eng-build", o.eng.id)
-      const build = yield* o.agentIn(o.ada, o.factory.id)
-      const created = yield* tasks.create(o.ada, {
-        spaceId: o.factory.id,
-        title: "Move me",
-        agentId: plan,
-        ownerId: carol.userId,
-      })
-      expect((yield* Effect.flip(tasks.assign(build, created.id, { agentId: engAgent, spaceId: o.eng.id })))._tag).toBe(
-        "Primitive.NotFound",
-      )
-      expect((yield* Effect.flip(tasks.assign(o.ada, created.id, { ownerId: null, spaceId: o.eng.id })))._tag).toBe(
-        "Primitive.Invalid",
-      )
-      const moved = yield* tasks.assign(o.ada, created.id, { agentId: engAgent, spaceId: o.eng.id, start: "none" })
-      expect(moved).toMatchObject({ spaceId: o.eng.id, agentId: engAgent, ownerId: null })
-      expect((yield* activity.list(o.ada, { taskId: created.id, ...page })).items.at(-1)).toMatchObject({
-        event: {
-          data: {
-            _tag: "assigned",
-            fromSpaceId: o.factory.id,
-            toSpaceId: o.eng.id,
-            fromOwnerId: carol.userId,
-            toOwnerId: null,
+  it.live(
+    "a member of both spaces, or an agent acting for one (AC17), moves a task; an owner outside the new space is cleared",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const members = yield* SpaceMember.Service
+        const activity = yield* TaskActivity.Service
+        const o = yield* org
+        const carol = yield* Seed.actor(o.organizationId, "member")
+        yield* members.create(o.ada, { spaceId: o.factory.id, userId: carol.userId })
+        yield* members.create(o.grace, { spaceId: o.eng.id, userId: o.ada.userId })
+        const plan = yield* o.agent("plan")
+        const engAgent = yield* o.agent("eng-build", o.eng.id)
+        const build = yield* o.agentIn(o.ada, o.factory.id)
+        const created = yield* tasks.create(o.ada, {
+          spaceId: o.factory.id,
+          title: "Move me",
+          agentId: plan,
+          ownerId: carol.userId,
+        })
+        expect((yield* Effect.flip(tasks.assign(o.ada, created.id, { ownerId: null, spaceId: o.eng.id })))._tag).toBe(
+          "Primitive.Invalid",
+        )
+        const moved = yield* tasks.assign(build, created.id, { agentId: engAgent, spaceId: o.eng.id, start: "none" })
+        expect(moved).toMatchObject({ spaceId: o.eng.id, agentId: engAgent, ownerId: null })
+        expect((yield* activity.list(o.ada, { taskId: created.id, ...page })).items.at(-1)).toMatchObject({
+          event: {
+            data: {
+              _tag: "assigned",
+              fromSpaceId: o.factory.id,
+              toSpaceId: o.eng.id,
+              fromOwnerId: carol.userId,
+              toOwnerId: null,
+            },
           },
-        },
-      })
-      expect((yield* Effect.flip(tasks.get(carol, created.id)))._tag).toBe("Primitive.NotFound")
-    }),
+        })
+        expect((yield* Effect.flip(tasks.get(carol, created.id)))._tag).toBe("Primitive.NotFound")
+      }),
   )
 
   it.live(
@@ -330,8 +327,8 @@ describe("Task assign", () => {
         const activity = yield* TaskActivity.Service
         const o = yield* org
         const carol = yield* Seed.actor(o.organizationId, "member")
-        yield* members.create(o.admin, { spaceId: o.factory.id, userId: carol.userId })
-        yield* members.create(o.admin, { spaceId: o.eng.id, userId: o.ada.userId })
+        yield* members.create(o.ada, { spaceId: o.factory.id, userId: carol.userId })
+        yield* members.create(o.grace, { spaceId: o.eng.id, userId: o.ada.userId })
         const plan = yield* o.agent("plan")
         const parent = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Tasks" })
         const kept = yield* tasks.create(o.ada, {

@@ -83,143 +83,151 @@ it.live("the catalog: server and label per profile, private first; a no-auth MCP
   }),
 )
 
-it.live("each mutation of §11 changes the fingerprint, and clears the egress cache where the table says so", () =>
-  Effect.gen(function* () {
-    const apps = yield* App.Service
-    const profiles = yield* AppProfiles.Service
-    const resolve = yield* AppResolve.Service
-    const credentials = yield* Credentials.Service
-    const members = yield* SpaceMember.Service
-    const spaces = yield* Space.Service
-    const registry = yield* AppRegistry.Service
-    const provisioning = yield* SpaceProvisioning.Service
-    const database = yield* Database.Service
-    const organizationId = yield* Seed.organization()
-    const root = yield* ProfilesFixture.user(organizationId, "Root", "admin")
-    const ana = yield* ProfilesFixture.user(organizationId, "Ana")
-    const bob = yield* ProfilesFixture.user(organizationId, "Bob")
-    const cy = yield* ProfilesFixture.user(organizationId, "Cy")
-    const sales = yield* ProfilesFixture.space(root, "Sales", [ana])
-    const extra = yield* ProfilesFixture.space(root, "Extra", [ana])
-    const app = yield* ProfilesFixture.app(root, root.personal, "mail", {
-      mcps: { gmail: ProfilesFixture.remote("Gmail") },
-      requiredCredentials: [Seed.env("MAIL_KEY")],
-    })
-    yield* owned(root, app.id)
-    const base = yield* ProfilesFixture.app(root, root.personal, "base", {
-      requiredCredentials: [Seed.env("BASE_KEY")],
-    })
-    yield* owned(root, base.id)
-    yield* registry.publish({
-      apps: [
-        Schema.decodeUnknownSync(AppRegistry.Publication)({
-          slug: "docs",
-          name: "Docs",
-          description: "Docs",
-          listing: {},
-        }),
-      ],
-    })
-    const docs = yield* apps.get(root, "docs")
-    yield* ProfilesFixture.profile(root, { appId: docs.id, slug: "all", kind: "shared", allSpaces: true })
-    const scope = (yield* ProfilesFixture.catalog(organizationId, sales)).scope
-    const personal = (yield* ProfilesFixture.catalog(organizationId, ana.personal)).scope
-    yield* ProfilesFixture.catalog(organizationId, extra)
-    const steps: Array<{ step: string; changed: boolean; cleared: boolean }> = []
-    const measure = <R>(
-      step: string,
-      mutation: Effect.Effect<unknown, unknown, R>,
-      watched: Credentials.Scope = scope,
-    ) =>
-      Effect.gen(function* () {
-        const before = (yield* resolve.forScope(watched)).fingerprint
-        ProfilesFixture.invalidated.length = 0
-        yield* Effect.orDie(mutation)
-        steps.push({
-          step,
-          changed: (yield* resolve.forScope(watched)).fingerprint !== before,
-          cleared: ProfilesFixture.invalidated.length > 0,
-        })
+it.live(
+  "each mutation of §11 changes the fingerprint of the spaces it reaches, and clears the egress cache where the table says so; members and other spaces never change a reach (private-spaces rule 17)",
+  () =>
+    Effect.gen(function* () {
+      const apps = yield* App.Service
+      const profiles = yield* AppProfiles.Service
+      const resolve = yield* AppResolve.Service
+      const credentials = yield* Credentials.Service
+      const members = yield* SpaceMember.Service
+      const spaces = yield* Space.Service
+      const registry = yield* AppRegistry.Service
+      const provisioning = yield* SpaceProvisioning.Service
+      const database = yield* Database.Service
+      const organizationId = yield* Seed.organization()
+      const root = yield* ProfilesFixture.user(organizationId, "Root", "admin")
+      const ana = yield* ProfilesFixture.user(organizationId, "Ana")
+      const bob = yield* ProfilesFixture.user(organizationId, "Bob")
+      const cy = yield* ProfilesFixture.user(organizationId, "Cy")
+      const sales = yield* ProfilesFixture.space(root, "Sales", [ana])
+      const extra = yield* ProfilesFixture.space(root, "Extra", [ana])
+      const app = yield* ProfilesFixture.app(root, root.personal, "mail", {
+        mcps: { gmail: ProfilesFixture.remote("Gmail") },
+        requiredCredentials: [Seed.env("MAIL_KEY")],
       })
-    const acme = yield* ProfilesFixture.profile(root, { appId: app.id, slug: "acme", kind: "shared", spaceIds: [] })
-    yield* measure("access add", profiles.access(root, acme.id, { add: [sales] }))
-    yield* measure("rename", profiles.update(root, acme.id, { name: "Acme client" }))
-    const linked = yield* ProfilesFixture.profile(root, { appId: base.id, slug: "b", kind: "shared", spaceIds: [] })
-    yield* database.db.insert(Database.Schema.app_dependency).values({ app_id: app.id, dependency_app_id: base.id })
-    yield* measure("link", profiles.link(root, acme.id, { appId: base.id, profileId: linked.id }))
-    yield* measure("access remove", profiles.access(root, acme.id, { remove: [sales] }))
-    yield* measure("all_spaces", profiles.access(root, acme.id, { allSpaces: true }))
-    yield* measure(
-      "create",
-      ProfilesFixture.profile(root, { appId: app.id, slug: "globex", kind: "shared", spaceIds: [sales, extra] }),
-    )
-    const mine = yield* ProfilesFixture.profile(ana, { appId: app.id, slug: "ana", kind: "private" })
-    yield* measure("promote", profiles.promote(ana, mine.id, {}), personal)
-    yield* measure(
-      "connect",
-      credentials.create(root, {
-        owner: { kind: "profile", profileId: acme.id },
-        item: { env: "MAIL_KEY" },
-        hosts: ["api.mail.example.com"],
-        value: { type: "key", value: Redacted.make("mail-key") },
-      }),
-    )
-    const credentialId = yield* ProfilesFixture.connect(organizationId, acme.id, "MCP_GMAIL__ACME")
-    yield* measure("credential delete", credentials.remove(root, credentialId, {}))
-    yield* ProfilesFixture.connect(organizationId, acme.id, "MCP_GMAIL__ACME", { holder: cy.userId })
-    yield* measure("holder leaves the org", provisioning.archiveMemberships(organizationId, cy.userId))
-    yield* measure("delete", profiles.delete(root, mine.id), personal)
-    const current = yield* apps.get(root, app.id)
-    yield* measure(
-      "app edit",
-      apps.update(root, app.id, {
-        requiredCredentials: current.requiredCredentials,
-        mcps: { gmail: ProfilesFixture.remote("Mail") },
-        skills: {},
-        dependsOn: ["base"],
-        expectedRevision: current.revision,
-      }),
-    )
-    yield* measure(
-      "registry publish",
-      registry.publish({
+      yield* owned(root, app.id)
+      const base = yield* ProfilesFixture.app(root, root.personal, "base", {
+        requiredCredentials: [Seed.env("BASE_KEY")],
+      })
+      yield* owned(root, base.id)
+      yield* registry.publish({
         apps: [
           Schema.decodeUnknownSync(AppRegistry.Publication)({
             slug: "docs",
             name: "Docs",
             description: "Docs",
             listing: {},
-            skills: { guide: Seed.skill("Guide") },
           }),
         ],
-      }),
-    )
-    yield* ProfilesFixture.profile(root, { appId: docs.id, slug: "extra", kind: "shared", spaceIds: [extra] })
-    yield* measure("space archive", spaces.archive(root, extra), personal)
-    yield* measure("member joins", members.create(root, { spaceId: ana.personal, userId: bob.userId }), personal)
-    yield* measure("app archive", apps.archive(root, app.id))
-    expect(steps).toEqual([
-      { step: "access add", changed: true, cleared: true },
-      { step: "rename", changed: true, cleared: true },
-      { step: "link", changed: true, cleared: true },
-      { step: "access remove", changed: true, cleared: true },
-      { step: "all_spaces", changed: true, cleared: true },
-      { step: "create", changed: true, cleared: true },
-      { step: "promote", changed: true, cleared: true },
-      { step: "connect", changed: true, cleared: true },
-      { step: "credential delete", changed: true, cleared: true },
-      { step: "holder leaves the org", changed: true, cleared: true },
-      { step: "delete", changed: true, cleared: true },
-      { step: "app edit", changed: true, cleared: false },
-      { step: "registry publish", changed: true, cleared: false },
-      { step: "space archive", changed: true, cleared: true },
-      { step: "member joins", changed: true, cleared: true },
-      { step: "app archive", changed: true, cleared: false },
-    ])
-    expect(
-      (yield* database.db.select().from(Database.Schema.app).where(eq(Database.Schema.app.id, app.id))).at(0)?.revision,
-    ).toBe(current.revision + 1)
-  }),
+      })
+      const docs = yield* apps.get(root, "docs")
+      yield* ProfilesFixture.profile(root, { appId: docs.id, slug: "all", kind: "shared", allSpaces: true })
+      const scope = (yield* ProfilesFixture.catalog(organizationId, sales)).scope
+      const personal = (yield* ProfilesFixture.catalog(organizationId, ana.personal)).scope
+      yield* ProfilesFixture.catalog(organizationId, extra)
+      const steps: Array<{ step: string; changed: boolean; cleared: boolean }> = []
+      const measure = <R>(
+        step: string,
+        mutation: Effect.Effect<unknown, unknown, R>,
+        watched: Credentials.Scope = scope,
+      ) =>
+        Effect.gen(function* () {
+          const before = (yield* resolve.forScope(watched)).fingerprint
+          ProfilesFixture.invalidated.length = 0
+          yield* Effect.orDie(mutation)
+          steps.push({
+            step,
+            changed: (yield* resolve.forScope(watched)).fingerprint !== before,
+            cleared: ProfilesFixture.invalidated.length > 0,
+          })
+        })
+      const acme = yield* ProfilesFixture.profile(root, {
+        appId: app.id,
+        slug: "acme",
+        kind: "shared",
+        spaceIds: [extra],
+      })
+      yield* measure("access add", profiles.access(root, acme.id, { add: [sales] }))
+      yield* measure("rename", profiles.update(root, acme.id, { name: "Acme client" }))
+      const linked = yield* ProfilesFixture.profile(root, { appId: base.id, slug: "b", kind: "shared", spaceIds: [] })
+      yield* database.db.insert(Database.Schema.app_dependency).values({ app_id: app.id, dependency_app_id: base.id })
+      yield* measure("link", profiles.link(root, acme.id, { appId: base.id, profileId: linked.id }))
+      yield* measure("access remove", profiles.access(root, acme.id, { remove: [sales] }))
+      yield* measure("all_spaces", profiles.access(root, acme.id, { allSpaces: true }))
+      yield* measure(
+        "create",
+        ProfilesFixture.profile(root, { appId: app.id, slug: "globex", kind: "shared", spaceIds: [sales, extra] }),
+      )
+      const mine = yield* ProfilesFixture.profile(ana, { appId: app.id, slug: "ana", kind: "private" })
+      yield* measure("promote", profiles.promote(ana, mine.id, {}), personal)
+      yield* measure(
+        "connect",
+        credentials.create(root, {
+          owner: { kind: "profile", profileId: acme.id },
+          item: { env: "MAIL_KEY" },
+          hosts: ["api.mail.example.com"],
+          value: { type: "key", value: Redacted.make("mail-key") },
+        }),
+      )
+      const credentialId = yield* ProfilesFixture.connect(organizationId, acme.id, "MCP_GMAIL__ACME")
+      yield* measure("credential delete", credentials.remove(root, credentialId, {}))
+      yield* ProfilesFixture.connect(organizationId, acme.id, "MCP_GMAIL__ACME", { holder: cy.userId })
+      yield* measure("holder leaves the org", provisioning.archiveMemberships(organizationId, cy.userId))
+      yield* measure("delete", profiles.delete(root, mine.id), personal)
+      const current = yield* apps.get(root, app.id)
+      yield* measure(
+        "app edit",
+        apps.update(root, app.id, {
+          requiredCredentials: current.requiredCredentials,
+          mcps: { gmail: ProfilesFixture.remote("Mail") },
+          skills: {},
+          dependsOn: ["base"],
+          expectedRevision: current.revision,
+        }),
+      )
+      yield* measure(
+        "registry publish",
+        registry.publish({
+          apps: [
+            Schema.decodeUnknownSync(AppRegistry.Publication)({
+              slug: "docs",
+              name: "Docs",
+              description: "Docs",
+              listing: {},
+              skills: { guide: Seed.skill("Guide") },
+            }),
+          ],
+        }),
+      )
+      yield* ProfilesFixture.profile(root, { appId: docs.id, slug: "extra", kind: "shared", spaceIds: [extra] })
+      yield* measure("member joins", members.create(root, { spaceId: sales, userId: bob.userId }))
+      yield* measure("space archive", spaces.archive(root, extra))
+      yield* measure("app archive", apps.archive(root, app.id))
+      expect(steps).toEqual([
+        { step: "access add", changed: true, cleared: true },
+        { step: "rename", changed: true, cleared: true },
+        { step: "link", changed: true, cleared: true },
+        { step: "access remove", changed: true, cleared: true },
+        { step: "all_spaces", changed: true, cleared: true },
+        { step: "create", changed: true, cleared: true },
+        { step: "promote", changed: true, cleared: true },
+        { step: "connect", changed: true, cleared: true },
+        { step: "credential delete", changed: true, cleared: true },
+        { step: "holder leaves the org", changed: true, cleared: true },
+        { step: "delete", changed: true, cleared: true },
+        { step: "app edit", changed: true, cleared: false },
+        { step: "registry publish", changed: true, cleared: false },
+        { step: "member joins", changed: false, cleared: true },
+        { step: "space archive", changed: false, cleared: true },
+        { step: "app archive", changed: true, cleared: false },
+      ])
+      expect(
+        (yield* database.db.select().from(Database.Schema.app).where(eq(Database.Schema.app.id, app.id))).at(0)
+          ?.revision,
+      ).toBe(current.revision + 1)
+    }),
 )
 
 it.live("a registry publish that clashes leaves out the newer app's part and reports it on its profiles (P25)", () =>

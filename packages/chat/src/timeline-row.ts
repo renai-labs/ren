@@ -47,7 +47,16 @@ export class CompactionQueued extends Data.TaggedClass("CompactionQueued")<{
 }> {}
 
 export type Row =
-  TurnGap | UserMessage | Shell | Notice | TurnDivider | AssistantPart | Thinking | Error | Retry | CompactionQueued
+  | TurnGap
+  | UserMessage
+  | Shell
+  | Notice
+  | TurnDivider
+  | AssistantPart
+  | Thinking
+  | Error
+  | Retry
+  | CompactionQueued
 
 export const key: (row: Row) => string = Match.typeTags<Row>()({
   TurnGap: (row) => `turn-gap:${row.userMessageID}`,

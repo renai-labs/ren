@@ -923,21 +923,25 @@ const adaptGroupTaskActivity = (raw: RawClient["task-activity"]) => ({ list: End
 
 type LabelListRequest = Parameters<RawClient["label"]["label.list"]>[0]
 type LabelListInput = {
+  readonly spaceId?: LabelListRequest["query"]["spaceId"]
   readonly page: LabelListRequest["query"]["page"]
   readonly pageSize: LabelListRequest["query"]["pageSize"]
 }
 const EndpointLabelList = (raw: RawClient["label"]) => (input: LabelListInput) =>
-  raw["label.list"]({ query: { page: input["page"], pageSize: input["pageSize"] } }).pipe(
+  raw["label.list"]({ query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
     Effect.mapError(mapClientError),
   )
 
 type LabelCreateRequest = Parameters<RawClient["label"]["label.create"]>[0]
 type LabelCreateInput = {
+  readonly spaceId?: LabelCreateRequest["payload"]["spaceId"]
   readonly name: LabelCreateRequest["payload"]["name"]
   readonly color?: LabelCreateRequest["payload"]["color"]
 }
 const EndpointLabelCreate = (raw: RawClient["label"]) => (input: LabelCreateInput) =>
-  raw["label.create"]({ payload: { name: input["name"], color: input["color"] } }).pipe(Effect.mapError(mapClientError))
+  raw["label.create"]({ payload: { spaceId: input["spaceId"], name: input["name"], color: input["color"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
 
 type LabelUpdateRequest = Parameters<RawClient["label"]["label.update"]>[0]
 type LabelUpdateInput = {
@@ -961,6 +965,116 @@ const adaptGroupLabel = (raw: RawClient["label"]) => ({
   update: EndpointLabelUpdate(raw),
   archive: EndpointLabelArchive(raw),
 })
+
+type ScheduleListRequest = Parameters<RawClient["schedule"]["schedule.list"]>[0]
+type ScheduleListInput = {
+  readonly spaceId?: ScheduleListRequest["query"]["spaceId"]
+  readonly status?: ScheduleListRequest["query"]["status"]
+  readonly search?: ScheduleListRequest["query"]["search"]
+  readonly page: ScheduleListRequest["query"]["page"]
+  readonly pageSize: ScheduleListRequest["query"]["pageSize"]
+}
+const EndpointScheduleList = (raw: RawClient["schedule"]) => (input: ScheduleListInput) =>
+  raw["schedule.list"]({
+    query: {
+      spaceId: input["spaceId"],
+      status: input["status"],
+      search: input["search"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleGetRequest = Parameters<RawClient["schedule"]["schedule.get"]>[0]
+type ScheduleGetInput = { readonly idOrSlug: ScheduleGetRequest["params"]["idOrSlug"] }
+const EndpointScheduleGet = (raw: RawClient["schedule"]) => (input: ScheduleGetInput) =>
+  raw["schedule.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleCreateRequest = Parameters<RawClient["schedule"]["schedule.create"]>[0]
+type ScheduleCreateInput = {
+  readonly spaceId: ScheduleCreateRequest["payload"]["spaceId"]
+  readonly name: ScheduleCreateRequest["payload"]["name"]
+  readonly message: ScheduleCreateRequest["payload"]["message"]
+  readonly when: ScheduleCreateRequest["payload"]["when"]
+  readonly target?: ScheduleCreateRequest["payload"]["target"]
+  readonly agentId?: ScheduleCreateRequest["payload"]["agentId"]
+}
+const EndpointScheduleCreate = (raw: RawClient["schedule"]) => (input: ScheduleCreateInput) =>
+  raw["schedule.create"]({
+    payload: {
+      spaceId: input["spaceId"],
+      name: input["name"],
+      message: input["message"],
+      when: input["when"],
+      target: input["target"],
+      agentId: input["agentId"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleUpdateRequest = Parameters<RawClient["schedule"]["schedule.update"]>[0]
+type ScheduleUpdateInput = {
+  readonly id: ScheduleUpdateRequest["params"]["id"]
+  readonly name?: ScheduleUpdateRequest["payload"]["name"]
+  readonly message?: ScheduleUpdateRequest["payload"]["message"]
+  readonly when?: ScheduleUpdateRequest["payload"]["when"]
+  readonly target?: ScheduleUpdateRequest["payload"]["target"]
+  readonly agentId?: ScheduleUpdateRequest["payload"]["agentId"]
+}
+const EndpointScheduleUpdate = (raw: RawClient["schedule"]) => (input: ScheduleUpdateInput) =>
+  raw["schedule.update"]({
+    params: { id: input["id"] },
+    payload: {
+      name: input["name"],
+      message: input["message"],
+      when: input["when"],
+      target: input["target"],
+      agentId: input["agentId"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleArchiveRequest = Parameters<RawClient["schedule"]["schedule.archive"]>[0]
+type ScheduleArchiveInput = { readonly id: ScheduleArchiveRequest["params"]["id"] }
+const EndpointScheduleArchive = (raw: RawClient["schedule"]) => (input: ScheduleArchiveInput) =>
+  raw["schedule.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type SchedulePauseRequest = Parameters<RawClient["schedule"]["schedule.pause"]>[0]
+type SchedulePauseInput = { readonly id: SchedulePauseRequest["params"]["id"] }
+const EndpointSchedulePause = (raw: RawClient["schedule"]) => (input: SchedulePauseInput) =>
+  raw["schedule.pause"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleResumeRequest = Parameters<RawClient["schedule"]["schedule.resume"]>[0]
+type ScheduleResumeInput = { readonly id: ScheduleResumeRequest["params"]["id"] }
+const EndpointScheduleResume = (raw: RawClient["schedule"]) => (input: ScheduleResumeInput) =>
+  raw["schedule.resume"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleRunRequest = Parameters<RawClient["schedule"]["schedule.run"]>[0]
+type ScheduleRunInput = { readonly id: ScheduleRunRequest["params"]["id"] }
+const EndpointScheduleRun = (raw: RawClient["schedule"]) => (input: ScheduleRunInput) =>
+  raw["schedule.run"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSchedule = (raw: RawClient["schedule"]) => ({
+  list: EndpointScheduleList(raw),
+  get: EndpointScheduleGet(raw),
+  create: EndpointScheduleCreate(raw),
+  update: EndpointScheduleUpdate(raw),
+  archive: EndpointScheduleArchive(raw),
+  pause: EndpointSchedulePause(raw),
+  resume: EndpointScheduleResume(raw),
+  run: EndpointScheduleRun(raw),
+})
+
+type ScheduleRunListRequest = Parameters<RawClient["schedule-run"]["schedule-run.list"]>[0]
+type ScheduleRunListInput = {
+  readonly scheduleId: ScheduleRunListRequest["query"]["scheduleId"]
+  readonly page: ScheduleRunListRequest["query"]["page"]
+  readonly pageSize: ScheduleRunListRequest["query"]["pageSize"]
+}
+const EndpointScheduleRunList = (raw: RawClient["schedule-run"]) => (input: ScheduleRunListInput) =>
+  raw["schedule-run.list"]({
+    query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupScheduleRun = (raw: RawClient["schedule-run"]) => ({ list: EndpointScheduleRunList(raw) })
 
 type CredentialListRequest = Parameters<RawClient["credential"]["credential.list"]>[0]
 type CredentialListInput = {
@@ -1204,6 +1318,130 @@ const adaptGroupRenInference = (raw: RawClient["ren-inference"]) => ({
   },
 })
 
+type ChannelInstallListRequest = Parameters<RawClient["channel-install"]["channel-install.list"]>[0]
+type ChannelInstallListInput = {
+  readonly page: ChannelInstallListRequest["query"]["page"]
+  readonly pageSize: ChannelInstallListRequest["query"]["pageSize"]
+}
+const EndpointChannelInstallList = (raw: RawClient["channel-install"]) => (input: ChannelInstallListInput) =>
+  raw["channel-install.list"]({ query: { page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type ChannelInstallUpdateRequest = Parameters<RawClient["channel-install"]["channel-install.update"]>[0]
+type ChannelInstallUpdateInput = {
+  readonly id: ChannelInstallUpdateRequest["params"]["id"]
+  readonly defaultSpaceId: ChannelInstallUpdateRequest["payload"]["defaultSpaceId"]
+}
+const EndpointChannelInstallUpdate = (raw: RawClient["channel-install"]) => (input: ChannelInstallUpdateInput) =>
+  raw["channel-install.update"]({
+    params: { id: input["id"] },
+    payload: { defaultSpaceId: input["defaultSpaceId"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ChannelInstallRemoveRequest = Parameters<RawClient["channel-install"]["channel-install.remove"]>[0]
+type ChannelInstallRemoveInput = { readonly id: ChannelInstallRemoveRequest["params"]["id"] }
+const EndpointChannelInstallRemove = (raw: RawClient["channel-install"]) => (input: ChannelInstallRemoveInput) =>
+  raw["channel-install.remove"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupChannelInstall = (raw: RawClient["channel-install"]) => ({
+  list: EndpointChannelInstallList(raw),
+  update: EndpointChannelInstallUpdate(raw),
+  remove: EndpointChannelInstallRemove(raw),
+})
+
+type ChannelMappingListRequest = Parameters<RawClient["channel-mapping"]["channel-mapping.list"]>[0]
+type ChannelMappingListInput = {
+  readonly installId?: ChannelMappingListRequest["query"]["installId"]
+  readonly spaceId?: ChannelMappingListRequest["query"]["spaceId"]
+  readonly page: ChannelMappingListRequest["query"]["page"]
+  readonly pageSize: ChannelMappingListRequest["query"]["pageSize"]
+}
+const EndpointChannelMappingList = (raw: RawClient["channel-mapping"]) => (input: ChannelMappingListInput) =>
+  raw["channel-mapping.list"]({
+    query: {
+      installId: input["installId"],
+      spaceId: input["spaceId"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ChannelMappingCreateRequest = Parameters<RawClient["channel-mapping"]["channel-mapping.create"]>[0]
+type ChannelMappingCreateInput = {
+  readonly installId: ChannelMappingCreateRequest["payload"]["installId"]
+  readonly place: ChannelMappingCreateRequest["payload"]["place"]
+  readonly spaceId: ChannelMappingCreateRequest["payload"]["spaceId"]
+  readonly agentId?: ChannelMappingCreateRequest["payload"]["agentId"]
+  readonly fallback?: ChannelMappingCreateRequest["payload"]["fallback"]
+  readonly fallbackUserId?: ChannelMappingCreateRequest["payload"]["fallbackUserId"]
+  readonly triggers?: ChannelMappingCreateRequest["payload"]["triggers"]
+}
+const EndpointChannelMappingCreate = (raw: RawClient["channel-mapping"]) => (input: ChannelMappingCreateInput) =>
+  raw["channel-mapping.create"]({
+    payload: {
+      installId: input["installId"],
+      place: input["place"],
+      spaceId: input["spaceId"],
+      agentId: input["agentId"],
+      fallback: input["fallback"],
+      fallbackUserId: input["fallbackUserId"],
+      triggers: input["triggers"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ChannelMappingRemoveRequest = Parameters<RawClient["channel-mapping"]["channel-mapping.remove"]>[0]
+type ChannelMappingRemoveInput = { readonly id: ChannelMappingRemoveRequest["params"]["id"] }
+const EndpointChannelMappingRemove = (raw: RawClient["channel-mapping"]) => (input: ChannelMappingRemoveInput) =>
+  raw["channel-mapping.remove"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupChannelMapping = (raw: RawClient["channel-mapping"]) => ({
+  list: EndpointChannelMappingList(raw),
+  create: EndpointChannelMappingCreate(raw),
+  remove: EndpointChannelMappingRemove(raw),
+})
+
+const EndpointChannelConnectChannelProviderList = (raw: RawClient["channel-connect"]) => () =>
+  raw["channel-provider.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type ChannelConnectChannelInstallStartRequest = Parameters<RawClient["channel-connect"]["channel-install.start"]>[0]
+type ChannelConnectChannelInstallStartInput = {
+  readonly provider: ChannelConnectChannelInstallStartRequest["payload"]["provider"]
+}
+const EndpointChannelConnectChannelInstallStart =
+  (raw: RawClient["channel-connect"]) => (input: ChannelConnectChannelInstallStartInput) =>
+    raw["channel-install.start"]({ payload: { provider: input["provider"] } }).pipe(Effect.mapError(mapClientError))
+
+type ChannelConnectChannelPlaceListRequest = Parameters<RawClient["channel-connect"]["channel-place.list"]>[0]
+type ChannelConnectChannelPlaceListInput = {
+  readonly installId: ChannelConnectChannelPlaceListRequest["query"]["installId"]
+  readonly page: ChannelConnectChannelPlaceListRequest["query"]["page"]
+  readonly pageSize: ChannelConnectChannelPlaceListRequest["query"]["pageSize"]
+}
+const EndpointChannelConnectChannelPlaceList =
+  (raw: RawClient["channel-connect"]) => (input: ChannelConnectChannelPlaceListInput) =>
+    raw["channel-place.list"]({
+      query: { installId: input["installId"], page: input["page"], pageSize: input["pageSize"] },
+    }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupChannelConnect = (raw: RawClient["channel-connect"]) => ({
+  "channel-provider": { list: EndpointChannelConnectChannelProviderList(raw) },
+  "channel-install": { start: EndpointChannelConnectChannelInstallStart(raw) },
+  "channel-place": { list: EndpointChannelConnectChannelPlaceList(raw) },
+})
+
+const EndpointRepositoryList = (raw: RawClient["repository"]) => () =>
+  raw["repository.list"]({}).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupRepository = (raw: RawClient["repository"]) => ({ list: EndpointRepositoryList(raw) })
+
+const EndpointSignInSignInProviderList = (raw: RawClient["sign-in"]) => () =>
+  raw["sign-in-provider.list"]({}).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSignIn = (raw: RawClient["sign-in"]) => ({
+  "sign-in-provider": { list: EndpointSignInSignInProviderList(raw) },
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -1227,11 +1465,18 @@ const adaptClient = (raw: RawClient) => ({
   "task-comment": adaptGroupTaskComment(raw["task-comment"]),
   "task-activity": adaptGroupTaskActivity(raw["task-activity"]),
   label: adaptGroupLabel(raw["label"]),
+  schedule: adaptGroupSchedule(raw["schedule"]),
+  "schedule-run": adaptGroupScheduleRun(raw["schedule-run"]),
   credential: adaptGroupCredential(raw["credential"]),
   "credential-connect": adaptGroupCredentialConnect(raw["credential-connect"]),
   "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),
   "oauth-app": adaptGroupOauthApp(raw["oauth-app"]),
   "ren-inference": adaptGroupRenInference(raw["ren-inference"]),
+  "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
+  "channel-mapping": adaptGroupChannelMapping(raw["channel-mapping"]),
+  "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),
+  repository: adaptGroupRepository(raw["repository"]),
+  "sign-in": adaptGroupSignIn(raw["sign-in"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

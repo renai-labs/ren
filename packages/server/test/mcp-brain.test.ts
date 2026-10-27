@@ -111,6 +111,26 @@ describe("Ren MCP for a brain", () => {
       }),
   )
 
+  it.live(
+    "schedule_create with this-chat sets a follow-up for the chat that calls it, owned by its sender (schedules S20)",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* chat()
+        expect(
+          yield* tool(yield* subject.headers(), "schedule_create", {
+            spaceId: subject.spaceId,
+            name: "CI check",
+            message: "Check CI again.",
+            when: { in: "30 minutes" },
+            target: "this-chat",
+          }),
+        ).toMatchObject({
+          isError: false,
+          structuredContent: { target: { sessionId: subject.sessionId }, ownerId: subject.createdBy, status: "active" },
+        })
+      }),
+  )
+
   it.live("answers 401 to a sender that Ren refuses, a host token that it refuses and a call that names no chat", () =>
     Effect.gen(function* () {
       const subject = yield* chat()

@@ -14,14 +14,14 @@ docker compose up -d
 
 ## Development
 
-| Command            | What it does                                              |
-| ------------------ | --------------------------------------------------------- |
-| `bun run dev`      | Start the API server on port 4000 with watch              |
-| `bun run dev:app`  | Start the web app (proxies the API to the server)         |
-| `bun run dev:site` | Start the docs site                                       |
-| `bun run generate` | Regenerate `openapi.json` and the clients                 |
-| `bun run format`   | Format the repo with Prettier                             |
-| `bun run check`    | Lint (oxlint, ast-grep and knip) and typecheck everything |
+| Command            | What it does                                      |
+| ------------------ | ------------------------------------------------- |
+| `bun run dev`      | Start the API server on port 4000 with watch      |
+| `bun run dev:app`  | Start the web app (proxies the API to the server) |
+| `bun run dev:site` | Start the docs site                               |
+| `bun run generate` | Regenerate `openapi.json` and the clients         |
+| `bun run format`   | Format the repo with oxfmt                        |
+| `bun run check`    | Lint, check formatting and typecheck everything   |
 
 The web app and the API run on separate origins. The app is served under `/app/` (`http://localhost:5173/app/` in development, `https://useren.ai/app/` in production) and calls the API directly at `VITE_REN_API_URL` (default `http://localhost:4000` in development, `https://api.useren.ai` in production) with credentials. The server allows the origins in `TRUSTED_ORIGINS` (CORS and Better Auth) and builds email links from `APP_URL`, which includes `/app`.
 

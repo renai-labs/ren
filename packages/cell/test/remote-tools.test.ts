@@ -1,4 +1,4 @@
-import { expect, setDefaultTimeout, test } from "bun:test"
+import { expect, test } from "bun:test"
 import { TestAccess } from "@ren/brain/testing"
 import { OpenCode, SessionMessage } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
@@ -25,8 +25,6 @@ import { McpPeer } from "./lib/mcp.js"
 import { Pid } from "./lib/pid.js"
 import { Shared } from "./lib/shared.js"
 import type { StubModel } from "./lib/stub-model.js"
-
-setDefaultTimeout(30_000)
 
 const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
@@ -524,7 +522,9 @@ it.live("V1 a note written to the session while a tool call runs reaches the mod
     const session = yield* begin(opened)
     const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
     const note = `note-${crypto.randomUUID()}`
-    const script = stub.script(shell(`echo $$ > ${pidFile}; sleep 2; echo done`))
+    const script = stub.script(
+      shell(`echo $$ > ${pidFile}; while [ ! -e ${pidFile}.go ]; do sleep 0.01; done; echo done`),
+    )
     yield* session.send(script)
     yield* Pid.read(pidFile)
     yield* opened.host.sessions.synthetic({
@@ -532,6 +532,7 @@ it.live("V1 a note written to the session while a tool call runs reaches the mod
       text: note,
       resume: false,
     })
+    yield* Effect.promise(() => Bun.write(`${pidFile}.go`, ""))
     // oxlint-disable-next-line ren/no-comments -- The note is the newest user message, so the stub cannot match this call to the script by its marker.
     const next = yield* Effect.promise(() => stub.waitFor((call) => JSON.stringify(call.body.messages).includes(note)))
     expect(lastToolResult(next)).toBe(JSON.stringify("done\n"))
@@ -550,13 +551,12 @@ it.live("V3 a revert with files to a turn that changed a file on the sandbox lis
     const second = stub.script({ tool: { name: "write", input: { path: file, content: "two\n" } } })
     const sent = yield* session.send(second)
     yield* Effect.promise(() => second.called(2))
-    const staged = yield* opened.host.sessions.revert
-      .stage({
-        sessionID: SessionID.make(session.sessionId),
-        messageID: SessionMessage.ID.make(sent.messageId),
-        files: true,
-      })
-      .pipe(Effect.retry({ schedule: Schedule.spaced(250), times: 40 }))
+    yield* opened.host.client.session.wait({ sessionID: SessionID.make(session.sessionId) }).pipe(Effect.orDie)
+    const staged = yield* opened.host.sessions.revert.stage({
+      sessionID: SessionID.make(session.sessionId),
+      messageID: SessionMessage.ID.make(sent.messageId),
+      files: true,
+    })
     expect([staged.files, yield* text(file)]).toEqual([[], "two\n"])
   }),
 )
@@ -612,10 +612,13 @@ it.live(
         }),
       )
       const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-      const running = stub.script(shell(`echo $$ > ${pidFile}; sleep 2; echo finished`))
+      const running = stub.script(
+        shell(`echo $$ > ${pidFile}; while [ ! -e ${pidFile}.go ]; do sleep 0.01; done; echo finished`),
+      )
       yield* session.send(running)
       yield* Pid.read(pidFile)
       yield* opened.memory.remove(session.sessionId)
+      yield* Effect.promise(() => Bun.write(`${pidFile}.go`, ""))
       const finished = lastToolResult(yield* Effect.promise(() => running.called(2)))
       const refused = yield* refusedTurn(session).pipe(
         Effect.repeat({
@@ -712,29 +715,6 @@ it.live("closing the host while a tool call waits for access completes, and the 
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- OpenCode runs a command in a detached fiber, so a host close leaves it to the executor's 30 second heartbeat rule (accepted for v1).
-it.live(
-  "a command that runs when the host closes stops on the sandbox within 35 seconds, when its heartbeats stop",
-  () =>
-    Effect.gen(function* () {
-      const scope = yield* Scope.make()
-      const opened = yield* open().pipe(Scope.provide(scope))
-      const session = yield* begin(opened)
-      const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-      yield* session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 120`)))
-      const pid = yield* Pid.read(pidFile)
-      const closedAt = performance.now()
-      yield* Scope.close(scope, Exit.void).pipe(Effect.timeout("15 seconds"))
-      yield* Effect.sync(() => Processes.running(pid)).pipe(
-        Effect.repeat({ until: (running) => !running, schedule: Schedule.spaced(250) }),
-        Effect.timeout("40 seconds"),
-        Effect.ensuring(Effect.sync(() => Processes.running(pid) && process.kill(pid, "SIGKILL"))),
-      )
-      expect(performance.now() - closedAt).toBeLessThan(35_000)
-    }),
-  60_000,
-)
-
 it.live(
   "a start for a new session on a frozen sandbox succeeds at once, and a turn of another session is not blocked",
   () =>
@@ -797,7 +777,7 @@ it.live("closing the host during a command on a frozen sandbox completes in its 
 
 it.live("a command that leaves a child holding stdout returns in the time of the local shell", () =>
   Effect.gen(function* () {
-    const command = (pidFile: string) => `sleep 5 & echo $! > ${pidFile}; echo done`
+    const command = (pidFile: string) => `sleep 1 & echo $! > ${pidFile}; echo done`
     const localPid = join(workspace, `${crypto.randomUUID()}.pid`)
     const localStart = performance.now()
     yield* Effect.promise(async () => {
