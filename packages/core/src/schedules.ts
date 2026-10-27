@@ -32,7 +32,7 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Sc
 
 export const tickEvery = Duration.seconds(30)
 
-const retryFor = Duration.hours(1)
+const stuckAfter = Duration.minutes(5)
 
 const schedule = Database.Schema.schedule
 
@@ -76,6 +76,8 @@ const problemOf = (stored: ReturnType<typeof storedOf>, at: Date) => {
   if (stored.cron && Result.isFailure(Cron.parse(stored.cron, "UTC")))
     return "Use a cron expression with five fields, for example “0 9 * * *”."
   if (Option.isNone(ScheduleTime.nextFire(stored, at))) return "The schedule would end before it runs."
+  if (stored.cron && ScheduleTime.shortestGap(stored, at) < Duration.toMillis(Schedule.minimumInterval))
+    return "Run at most every 5 minutes."
   return null
 }
 
@@ -236,6 +238,29 @@ export const layer = Layer.effect(
       return stored
     })
 
+    // oxlint-disable-next-line ren/no-comments -- S35: at most 50 schedules per space that are not archived and not ended. The space row lock orders concurrent creates.
+    const full = Effect.fnUntraced(function* (transaction: Database.Transaction, spaceId: Space.ID) {
+      yield* transaction
+        .select({ id: Database.Schema.space.id })
+        .from(Database.Schema.space)
+        .where(eq(Database.Schema.space.id, spaceId))
+        .for("update")
+      const counted = (yield* transaction
+        .select({ total: count() })
+        .from(schedule)
+        .where(
+          and(
+            eq(schedule.space_id, spaceId),
+            isNull(schedule.archived_at),
+            or(isNotNull(schedule.next_run_at), isNotNull(schedule.paused_reason)),
+          ),
+        )).at(0)
+      if ((counted?.total ?? 0) >= Schedule.maximumActive)
+        return yield* new Primitive.Conflict({
+          message: `This space has ${Schedule.maximumActive} schedules. Archive one before you add another.`,
+        })
+    })
+
     const ensure = (runId: ScheduleRun.ID) =>
       DurableRunner.ensure(ScheduleRuns.FireRun, { runId }).pipe(
         Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
@@ -245,8 +270,29 @@ export const layer = Layer.effect(
     // oxlint-disable-next-line ren/no-comments -- S1: the trigger records due fires; every pending run then gets its durable run, also one that a crash left without one.
     const tick = Effect.gen(function* () {
       yield* trigger.claim
-      const pending = yield* database.db.select({ id: run.id }).from(run).where(eq(run.status, "pending"))
-      yield* Effect.forEach(pending, (row) => ensure(row.id), { discard: true })
+      const at = yield* now
+      const pending = yield* database.db
+        .select({ run, schedule })
+        .from(run)
+        .innerJoin(schedule, eq(schedule.id, run.schedule_id))
+        .where(eq(run.status, "pending"))
+      // oxlint-disable-next-line ren/no-comments -- S34: a run still pending 5 minutes past its deadline lost its durable run's result; it fails, so S3 stops counting it.
+      const stuck = pending.filter(
+        (row) =>
+          ScheduleTime.deadlineOf(row.schedule, {
+            scheduledAt: row.run.scheduled_at,
+            claimedAt: row.run.created_at,
+            trigger: row.run.trigger,
+          }).getTime() +
+            Duration.toMillis(stuckAfter) <
+          at.getTime(),
+      )
+      yield* Effect.forEach(stuck, (row) => fail(row.run.id, "The run did not finish."), { discard: true })
+      yield* Effect.forEach(
+        pending.filter((row) => !stuck.includes(row)),
+        (row) => ensure(row.run.id),
+        { discard: true },
+      )
     }).pipe(
       Effect.orDie,
       Effect.catchCause((cause) => Effect.logError("A schedule tick failed", cause)),
@@ -264,12 +310,38 @@ export const layer = Layer.effect(
         })
         .where(and(eq(run.id, runId), eq(run.status, "pending")))
 
+    // oxlint-disable-next-line ren/no-comments -- S36: the last 5 runs that were not skipped all failed.
+    const failing = Effect.fnUntraced(function* (scheduleId: Schedule.ID) {
+      const recent = yield* database.db
+        .select({ status: run.status })
+        .from(run)
+        .where(and(eq(run.schedule_id, scheduleId), or(eq(run.status, "started"), eq(run.status, "failed"))))
+        .orderBy(desc(run.scheduled_at))
+        .limit(Schedule.failuresToPause)
+      return recent.length === Schedule.failuresToPause && recent.every((row) => row.status === "failed")
+    })
+
     const pause = (scheduleId: Schedule.ID, reason: Schedule.PauseReason) =>
       database.db
         .update(schedule)
         .set({ paused_reason: reason, next_run_at: null, updated_at: sql`now()` })
         .where(and(eq(schedule.id, scheduleId), isNull(schedule.archived_at)))
         .pipe(Effect.andThen(trigger.changed(scheduleId)))
+
+    const afterFailure = Effect.fnUntraced(function* (scheduleId: Schedule.ID) {
+      const row = (yield* database.db.select().from(schedule).where(eq(schedule.id, scheduleId))).at(0)
+      if (row && !row.paused_reason && !row.archived_at && (yield* failing(scheduleId)))
+        yield* pause(scheduleId, "failing")
+    })
+
+    const fail = Effect.fnUntraced(function* (runId: ScheduleRun.ID, error: string) {
+      const failed = yield* database.db
+        .update(run)
+        .set({ status: "failed", error })
+        .where(and(eq(run.id, runId), eq(run.status, "pending")))
+        .returning({ scheduleId: run.schedule_id })
+      yield* Effect.forEach(failed, (row) => afterFailure(row.scheduleId), { discard: true })
+    })
 
     // oxlint-disable-next-line ren/no-comments -- S3, S15: a pending earlier run, or the chat of the latest earlier run while it works.
     const previousBusy = Effect.fnUntraced(function* (current: RunRow) {
@@ -291,6 +363,30 @@ export const layer = Layer.effect(
       return Option.isSome(chat) && chat.value.status === "busy"
     })
 
+    // oxlint-disable-next-line ren/no-comments -- S28, S37: a chat target that is gone archives the schedule; a recurring schedule skips while its chat works.
+    const chatBlocked = Effect.fnUntraced(function* (current: RunRow, row: Row, sessionId: Session.ID) {
+      const chat = (yield* database.db
+        .select({ id: Database.Schema.agent_session.id })
+        .from(Database.Schema.agent_session)
+        .where(
+          and(eq(Database.Schema.agent_session.id, sessionId), isNull(Database.Schema.agent_session.archived_at)),
+        )).at(0)
+      if (chat) {
+        if (!row.cron || current.trigger !== "timed") return Option.none<ScheduleRun.Reason>()
+        const target = yield* runner.get(sessionId).pipe(Effect.option)
+        // oxlint-disable-next-line ren/no-comments -- S37: a recurring schedule skips a fire while its chat works; a one-time follow-up still queues.
+        return Option.exists(target, (found) => found.status === "busy")
+          ? Option.some<ScheduleRun.Reason>("previous_run_busy")
+          : Option.none<ScheduleRun.Reason>()
+      }
+      yield* database.db
+        .update(schedule)
+        .set({ archived_at: sql`now()`, next_run_at: null, updated_at: sql`now()` })
+        .where(eq(schedule.id, row.id))
+      yield* trigger.changed(row.id)
+      return Option.some<ScheduleRun.Reason>("chat_archived")
+    })
+
     // oxlint-disable-next-line ren/no-comments -- S10, S11, S28, S3, S27: why a run must not start now; a schedule whose owner, agent or chat is gone changes as it skips.
     const blocked = Effect.fnUntraced(function* (current: RunRow, row: Row) {
       if (row.archived_at) return Option.some<ScheduleRun.Reason>("archived")
@@ -306,24 +402,7 @@ export const layer = Layer.effect(
         yield* pause(row.id, "agent_removed")
         return Option.some<ScheduleRun.Reason>("agent_removed")
       }
-      if (row.target_session_id) {
-        const chat = (yield* database.db
-          .select({ id: Database.Schema.agent_session.id })
-          .from(Database.Schema.agent_session)
-          .where(
-            and(
-              eq(Database.Schema.agent_session.id, row.target_session_id),
-              isNull(Database.Schema.agent_session.archived_at),
-            ),
-          )).at(0)
-        if (chat) return Option.none<ScheduleRun.Reason>()
-        yield* database.db
-          .update(schedule)
-          .set({ archived_at: sql`now()`, next_run_at: null, updated_at: sql`now()` })
-          .where(eq(schedule.id, row.id))
-        yield* trigger.changed(row.id)
-        return Option.some<ScheduleRun.Reason>("chat_archived")
-      }
+      if (row.target_session_id) return yield* chatBlocked(current, row, row.target_session_id)
       if (current.trigger === "timed" && (yield* previousBusy(current)))
         return Option.some<ScheduleRun.Reason>("previous_run_busy")
       return Option.none<ScheduleRun.Reason>()
@@ -381,13 +460,16 @@ export const layer = Layer.effect(
     const fire = Effect.fnUntraced(function* (runId: ScheduleRun.ID) {
       const deadline = Effect.gen(function* () {
         const found = (yield* database.db
-          .select({ next: schedule.next_run_at, scheduledAt: run.scheduled_at, trigger: run.trigger })
+          .select({ run, schedule })
           .from(run)
           .innerJoin(schedule, eq(schedule.id, run.schedule_id))
           .where(eq(run.id, runId))).at(0)
         if (!found) return new Date(0)
-        const fallback = new Date(found.scheduledAt.getTime() + Duration.toMillis(retryFor))
-        return found.trigger === "timed" && found.next ? found.next : fallback
+        return ScheduleTime.deadlineOf(found.schedule, {
+          scheduledAt: found.run.scheduled_at,
+          claimedAt: found.run.created_at,
+          trigger: found.run.trigger,
+        })
       }).pipe(Effect.orDie)
       const outcome = yield* attempt(runId).pipe(
         Effect.retry({
@@ -408,7 +490,9 @@ export const layer = Layer.effect(
             Effect.succeed(Option.some<Outcome>({ status: "skipped", reason: "owner_left" })),
         }),
       )
-      if (Option.isSome(outcome)) yield* finish(runId, outcome.value, yield* now)
+      if (Option.isNone(outcome)) return
+      if (outcome.value.status === "failed") return yield* fail(runId, outcome.value.error)
+      yield* finish(runId, outcome.value, yield* now)
     })
 
     yield* DurableRunner.register(ScheduleRuns.FireRun, (payload) =>
@@ -416,13 +500,28 @@ export const layer = Layer.effect(
         Effect.orDie,
         Effect.catchCause((cause) =>
           now.pipe(
-            Effect.flatMap((at) => finish(payload.runId, { status: "failed", error: Cause.pretty(cause) }, at)),
+            Effect.flatMap(() => fail(payload.runId, Cause.pretty(cause))),
             Effect.orDie,
             Effect.catchCause((failed) => Effect.logError(`The schedule run ${payload.runId} stopped`, failed)),
           ),
         ),
         Effect.annotateLogs({ run: payload.runId }),
       ),
+    )
+
+    // oxlint-disable-next-line ren/no-comments -- S32: the brain refused a start after the run counted it as started.
+    yield* runner.onStartRejected((sessionId) =>
+      database.db
+        .update(run)
+        .set({ status: "failed", error: "The brain refused to start the chat." })
+        .where(and(eq(run.session_id, sessionId), eq(run.status, "started")))
+        .returning({ scheduleId: run.schedule_id })
+        .pipe(
+          Effect.flatMap((rows) => Effect.forEach(rows, (row) => afterFailure(row.scheduleId), { discard: true })),
+          Effect.catchCause((cause) =>
+            Effect.logError(`The rejected start of ${sessionId} could not be recorded`, cause),
+          ),
+        ),
     )
 
     yield* tick.pipe(Effect.andThen(Effect.sleep(tickEvery)), Effect.forever, Effect.forkScoped)
@@ -523,6 +622,7 @@ export const layer = Layer.effect(
               })
             )
               return yield* new Primitive.Forbidden({ message: "You cannot add schedules to this space." })
+            yield* full(transaction, input.spaceId)
             const placement = { organization_id: actor.organizationId, space_id: input.spaceId }
             if (input.agentId && Option.isNone(yield* agentIn(transaction, placement, input.agentId)))
               return yield* new Primitive.NotFound({ message: "Agent not found." })
@@ -561,6 +661,7 @@ export const layer = Layer.effect(
             if (input.agentId != null && Option.isNone(yield* agentIn(transaction, row, input.agentId)))
               return yield* new Primitive.NotFound({ message: "Agent not found." })
             const stored = input.when ? yield* whenOfInput(input.when, at) : undefined
+            if (stored && !row.paused_reason && !row.next_run_at) yield* full(transaction, row.space_id)
             const target = input.target ? yield* targetOf(transaction, actor, row.space_id, input.target) : undefined
             const isWritten = [input.message, input.agentId, input.when, input.target].some(
               // ast-grep-ignore: no-nullish-comparison, -- a null agent is a change: it clears the agent

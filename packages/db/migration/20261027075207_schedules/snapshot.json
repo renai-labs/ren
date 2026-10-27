@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "02662f28-8603-4452-8d5b-abc09952460f",
+  "id": "08eb8baa-92e3-44d7-bae1-7c4321fe7667",
   "prevIds": [
     "0b2ffb2c-ed6a-4e3e-97cc-0f2d2b556485",
     "bb298ef8-dfea-42fc-876c-dd8ee2cde864"
@@ -12958,7 +12958,7 @@
       "table": "schedule"
     },
     {
-      "value": "\"paused_reason\" in ('user', 'owner_left', 'agent_removed')",
+      "value": "\"paused_reason\" in ('user', 'owner_left', 'agent_removed', 'failing')",
       "name": "schedule_paused_reason_check",
       "entityType": "checks",
       "schema": "public",

@@ -43,6 +43,7 @@ Use the loop of [`../e2b-brain/README.md` §2](../e2b-brain/README.md#2-how-to-w
 | 7   | App: schedules page, create and edit dialog, cron builder, time zone                                   | Done (S23–S26)        |
 | 8   | Lifecycle states: Ren down or restarting, brain asleep, waking, mid-turn, down                         | Done (S27–S30)        |
 | 9   | Tests and build order                                                                                  | Done (S31)            |
+| 11  | ren-v1 history review: late rejections, stuck runs, caps, interval, failures, busy chats               | Done (S32–S37)        |
 | 10  | Build: all of §11 in one pull request                                                                  | Built, see §9 and §10 |
 
 ## 4. Words
@@ -198,61 +199,39 @@ A policy document, `core/src/schedule/policy.ts`, allows every action to a space
 | S29 | Archiving a space archives its schedules in the same transaction (`core/src/space.ts:262-278`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | User decision, as channel mappings (`space.ts:276-278`). An archived space never fires.                                                                                                                                                                                                                                                                                                                                                                   |
 | S30 | Daylight saving time follows Temporal Schedules (v1's scheduler). A local time that does not exist (02:30 on the spring-forward day) does not run that day. A local time that happens twice (02:30 on the fall-back day) runs twice, one hour apart. S3 applies to the second run.                                                                                                                                                                                                                                                                                                                                                                                            | User decision: same as Temporal. Temporal `compiledCalendar.next` (`temporalio/temporal`, `service/worker/scheduler/calendar.go`) skips a time that does not exist and tries a repeated hour again with a one-hour offset; issue temporalio/temporal#8205 confirms both. Effect `Cron.next` skips the same times but runs a repeated time once (`repos/effect/packages/effect/test/Cron.test.ts:732-761`), so Ren adds the second run around `Cron.next`. |
 | S31 | Schedules ship in one pull request, with the order of §11 inside it. The done-when checks are those of §1.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | User decision.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| S32 | When the brain refuses a start after the run counted it as `started` (`SessionRunner.onStartRejected`), the run becomes `failed` with "The brain refused to start the chat."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | User decision, as channels. `SessionRunner.create` returns before the brain starts.                                                                                                                                                                                                                                                                                                                                                                       |
+| S33 | A cron whose fires are less than 5 minutes apart is `Invalid` at write, checked over its next 100 fires. A cron that never matches (February 30) is `Invalid`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | User decision: a cost guard. Effect's `Cron.next` throws when no date matches.                                                                                                                                                                                                                                                                                                                                                                            |
+| S34 | A run still `pending` 5 minutes after its retry deadline is `failed` ("The run did not finish.") at the next tick. The deadline of a timed cron run is the cron's next fire after the run was claimed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | User decision. Without it, a run whose result write was lost stays `pending`, and S3 skips every later fire. A claim-based deadline keeps a late catch-up run (S2) from failing at once.                                                                                                                                                                                                                                                                  |
+| S35 | A space has at most 50 schedules that are not archived and not ended. A create or an update that makes an ended schedule active beyond that is a `Conflict`. The space row lock orders concurrent creates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | User decision: limits runaway schedules, for example an agent that creates one in each scheduled run.                                                                                                                                                                                                                                                                                                                                                     |
+| S36 | When the last 5 runs that were not skipped all failed, Ren pauses the schedule with the reason `failing`. A member resumes it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | User decision. ren-v1 paused on failure (`503254b37`) and later stopped (`d529be32d`).                                                                                                                                                                                                                                                                                                                                                                    |
+| S37 | A recurring schedule with an existing-chat target skips a timed fire while that chat works ("previous run busy"). A one-time follow-up still queues.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | User decision. Otherwise an hourly schedule into a busy chat queues one message each hour.                                                                                                                                                                                                                                                                                                                                                                |
 
 ## 7. App
 
-Prior art: ren-v1 `packages/app/src/features/schedule/` (page, card, dialog, `lib/schedule-builder.ts`, `lib/cron-preview.ts`).
+Prior art and parity target: ren-v1 `packages/app/src/features/schedule/` (Scheduled page, schedule card, schedule drawer, `lib/schedule-builder.ts`, `lib/cron-preview.ts`).
 
-### Schedules page (sidebar → Schedules, `/schedules`)
+### Schedules page (sidebar → Schedules, `/schedules`, clock icon)
 
-```
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                                  │
-│  Schedules                                           [ Search ]  [ Space ▾ ]  [ + New schedule ] │
-│  Work that starts at a set time instead of a message.                                            │
-│                                                                                                  │
-│  Name              Space        When                          Next run          Status           │
-│                                                                                                  │
-│  Daily report      Eng          Every day 09:00 Berlin        Oct 28, 09:00     ● Active    ⋯    │
-│  CI check #123     Eng          Once, Oct 27 15:30 Berlin     Oct 27, 15:30     ● Active    ⋯    │
-│                    ↳ in chat "Fix flaky test"                                                    │
-│  Weekly digest     Marketing    Mondays 08:00 New York        —                 ‖ Owner left ⋯   │
-│                                                                                                  │
-└──────────────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-1. The list holds the schedules of every space the person is a member of (S23). Row menu: Run now, Pause or Resume, Edit, Archive.
-2. Status pairs a word with an icon: Active, Paused, Owner left, Agent removed, Ended.
-3. Empty state: "No schedules yet. A schedule starts a chat at a set time." with the New schedule button.
+1. Subtitle "Work that starts on a schedule instead of a message." Toolbar: search, state filter (any, active, paused, ended), space filter, "Create schedule".
+2. A three-column card grid, sorted by name, 9 to a page with numbered pages (ren-v1). A card shows the clock icon, the name, "space · when", and the next run as a relative time; a paused card hides the next run.
+3. Card actions: archive, and a switch that pauses and resumes. An ended schedule's switch is off and disabled, with "It ended. Edit its time to run it again."
+4. A card opens the detail (S24).
+5. Empty state: "No schedules yet. Create one to run a prompt on a recurring cadence."
 
 ### Schedule detail (`/schedules/$scheduleId`)
 
-```
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                                  │
-│  Daily report                                                   [ Run now ]  [ Edit ]  [ ⋯ ]     │
-│  Eng · agent: Reviewer · owner: Alice · every day 09:00 Europe/Berlin                            │
-│                                                                                                  │
-│  Message                                                                                         │
-│  Summarize yesterday's merged PRs and post the summary in the chat.                              │
-│                                                                                                  │
-│  Runs (30 days)                                                                                  │
-│                                                                                                  │
-│  Oct 27, 09:00     Started                          Daily report · Oct 27, 09:00  →              │
-│  Oct 26, 09:00     Skipped: previous run busy                                                    │
-│  Oct 25, 09:00     Failed: brain unavailable                                                     │
-│                                                                                                  │
-└──────────────────────────────────────────────────────────────────────────────────────────────────┘
-```
+The message, the agent, the owner, `when`, Run now, Edit, pause or resume, archive, and the runs of the last 30 days with status, reason and a link to the chat.
 
-### Schedule dialog
+### Schedule drawer
 
-Fields: Space, Agent ("Space defaults" when empty), Name, Message, Repeat (Hourly, Daily, Weekdays, Weekly, Monthly, Custom, Once), Time, Days or Day of month, Date (Once), Cron expression (Custom), Time zone (starts with the browser's zone), End date (not for Once). A preview line gives the next three fire times in the time zone. Submit: "Create schedule" or "Save schedule".
+A side drawer, as ren-v1. Order: space (create only), message (focused, "What should the agent do?"), name, agent ("Space defaults"), repeat and time side by side (every hour, every day, every weekday, every week, every month, custom cron, once), days (several, from a menu of checkboxes), day of month (1–31), cron, date (once), the next run ("Next Oct 28, 9:00 AM GMT+1"), time zone (searchable), until date and time (the time is off until a date is set; a date alone ends at 23:59). Submit: "Create schedule" or "Save".
 
 ### In a chat
 
-1. The chat menu has "Schedule a message" (S25): the same dialog, with Space and the target fixed to this chat and no Agent field.
-2. A fired message shows a header, "Scheduled · Daily report · 09:00", with a link to the schedule (S13), as `ChannelMessageHeader` does (`app/src/features/session/session-transcript.tsx:360`).
+1. The chat menu has "Schedule a message" (S25): the same drawer, with the space and the target fixed to this chat and no agent field.
+2. A fired message shows a header, "Scheduled · Daily report · <time>", with a link to the schedule (S13).
+
+Not ported from ren-v1: the model field (S7), the picker for an end time that happens twice on the fall-back day, the words for a custom cron (ren-v1 used `cronstrue`), and "Delete" (v2 archives, S21).
 
 ## 8. Lifecycle
 

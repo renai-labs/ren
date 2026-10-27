@@ -49,6 +49,8 @@ export interface Interface {
     input: Session.SendInput,
   ) => Effect.Effect<Session.Accepted, NotFound | BrainHost.BrainUnavailable | Brains.BrainRejectedError>
   readonly get: (sessionId: Session.ID) => Effect.Effect<Info, NotFound>
+  // oxlint-disable-next-line ren/no-comments -- A started chat whose start the brain refused later; create returns before the brain starts.
+  readonly onStartRejected: (listener: (sessionId: Session.ID) => Effect.Effect<void>) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SessionRunner") {}
@@ -147,6 +149,7 @@ export const layer = Layer.effect(
           ),
         )
       }),
+      onStartRejected: brain.onStartRejected,
       get: Effect.fn("SessionRunner.get")(function* (sessionId: Session.ID) {
         const row = (yield* database.transaction((transaction) =>
           transaction
