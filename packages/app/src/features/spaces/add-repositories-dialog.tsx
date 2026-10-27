@@ -1,4 +1,3 @@
-import { Pagination } from "@ren/schema/pagination"
 import { Reference } from "@ren/schema/reference"
 import { Button } from "@ren/ui/button"
 import { Combobox } from "@ren/ui/combobox"
@@ -16,7 +15,6 @@ import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
 import type { ReactNode } from "react"
-import { Pages } from "../../lib/pages.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Repositories } from "./repositories.js"
 
@@ -35,8 +33,6 @@ interface Row extends Repositories.Draft {
 }
 
 const isAlias = Schema.is(Reference.Alias)
-
-const page = { page: 1, pageSize: Pagination.maximumPageSize }
 
 // oxlint-disable-next-line ren/no-comments -- §5a: picks from the org's GitHub installation and pasted URLs each add one row; one save sends them all, and a refused one shows its message on its row.
 export function AddRepositoriesDialog(props: {
@@ -229,22 +225,11 @@ export function AddRepositoriesDialog(props: {
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- §5a: the picker lists the repositories of the org's GitHub installation (GET /channel-places); without one, a link to install it.
+// oxlint-disable-next-line ren/no-comments -- §5a, R60: the picker lists the repositories that the org can read (GET /repositories); when the org connected no host, a link to install the GitHub App.
 function usePlaces(): Places {
   const context = RouterContext.useRouterContext()
-  const installs = useQuery(context.api["channel-install"].list.queryOptions(page))
-  const github = installs.data?.items.find((install) => install.provider === "github")
-  const places = useQuery({
-    ...Pages.all((number) =>
-      context.api["channel-connect"]["channel-place"].list.queryOptions({
-        ...page,
-        page: number,
-        installId: github?.id ?? "",
-      }),
-    ),
-    enabled: github !== undefined,
-  })
-  if (installs.isSuccess && !github)
+  const listed = useQuery(context.api.repository.list.queryOptions())
+  if (listed.data?.every((listing) => !listing.installed))
     return {
       kind: "not-installed",
       install: (
@@ -260,9 +245,13 @@ function usePlaces(): Places {
   const states = { pending: "loading", error: "failed", success: "ready" } as const
   return {
     kind: "installed",
-    state: installs.isError ? "failed" : states[places.status],
-    items: (places.data?.items ?? []).flatMap((place) =>
-      place.url ? [{ url: place.url, name: place.name, description: place.description }] : [],
+    state: states[listed.status],
+    items: (listed.data ?? []).flatMap((listing) =>
+      listing.repositories.map((repository) => ({
+        url: repository.url,
+        name: repository.name,
+        description: repository.description,
+      })),
     ),
   }
 }

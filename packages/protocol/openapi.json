@@ -8720,6 +8720,68 @@
         "summary": "List channel places"
       }
     },
+    "/repositories": {
+      "get": {
+        "tags": ["repository"],
+        "operationId": "repository.list",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GitHost.Listing"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return, for each git host, whether the organization connected it and the repositories that it can read there. A person picks references from them. For GitHub, they are the repositories of the organization’s GitHub App installation.",
+        "summary": "List repositories to read"
+      }
+    },
     "/sign-in-providers": {
       "get": {
         "tags": ["sign-in"],
@@ -11861,6 +11923,52 @@
         "required": ["_tag", "message"],
         "additionalProperties": false
       },
+      "GitHost.Kind": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["github"]
+          }
+        ]
+      },
+      "GitHost.Listing": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/GitHost.Kind"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitHost.Repository"
+            }
+          }
+        },
+        "required": ["kind", "installed", "repositories"],
+        "additionalProperties": false
+      },
+      "GitHost.Repository": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/GitHost.Kind"
+          },
+          "url": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": ["kind", "url", "name"],
+        "additionalProperties": false
+      },
       "Health.Info": {
         "type": "object",
         "properties": {
@@ -13193,7 +13301,7 @@
       "Reference.Repository": {
         "type": "string",
         "minLength": 1,
-        "pattern": "^https:\\/\\/[^/\\s]+\\/[^/\\s]+\\/[^/\\s]+$"
+        "pattern": "^https:\\/\\/[^/\\s]+(?:\\/[^/\\s]+){2,}$"
       },
       "RenInference.ConnectInput": {
         "type": "object",
@@ -16802,6 +16910,9 @@
     },
     {
       "name": "channel-connect"
+    },
+    {
+      "name": "repository"
     },
     {
       "name": "sign-in"

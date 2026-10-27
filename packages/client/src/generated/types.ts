@@ -220,6 +220,8 @@ export type ChannelMappingID = string
 
 export type ChannelTriggerID = string
 
+export type GitHostKind = "github"
+
 export type AuthSignInProvider = "google" | "github" | "slack"
 
 export type HealthInfo = { status: HealthStatus; version: string }
@@ -600,6 +602,8 @@ export type ChannelTriggerSetting = { id: ChannelTriggerID; prompt?: string }
 
 export type ChannelTrigger = { id: ChannelTriggerID; title: string; description: string; defaultPrompt: string }
 
+export type GitHostRepository = { kind: GitHostKind; url: string; name: string; description?: string }
+
 export type AuthSignInProviders = { items: Array<AuthSignInProvider> }
 
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
@@ -788,6 +792,8 @@ export type ChannelMappingInfo = {
 }
 
 export type ChannelInstallProviderInfo = { id: ChannelProvider; title: string; triggers: Array<ChannelTrigger> }
+
+export type GitHostListing = { kind: GitHostKind; installed: boolean; repositories: Array<GitHostRepository> }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
@@ -6043,5 +6049,7 @@ export type ChannelConnectChannelPlaceListInput = {
 }
 
 export type ChannelConnectChannelPlaceListOutput = ChannelPlacePage
+
+export type RepositoryListOutput = Array<GitHostListing>
 
 export type SignInSignInProviderListOutput = AuthSignInProviders

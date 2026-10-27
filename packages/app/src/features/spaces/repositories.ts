@@ -20,18 +20,37 @@ const sshUser = /^[^/@]+@/u
 
 const sshPath = /^([^/:]+):(?!\d+(?:\/|$))/u
 
-const tree = /^\/tree\/([^/]+)/u
+// oxlint-disable-next-line ren/no-comments -- R61: the segments where a browse link leaves the repository path: GitLab's "-" and GitHub's views. A host such as GitLab nests groups, so every segment before them stays.
+const views = new Set([
+  "-",
+  "tree",
+  "blob",
+  "pulls",
+  "pull",
+  "issues",
+  "commit",
+  "commits",
+  "compare",
+  "actions",
+  "releases",
+  "tags",
+  "wiki",
+])
 
-// oxlint-disable-next-line ren/no-comments -- §5a step 3, ren-v1 parseGitRepository: a browse link becomes https://<host>/<owner>/<repo>; only /tree/<ref> keeps its branch.
+// oxlint-disable-next-line ren/no-comments -- §5a step 3, ren-v1 parseGitRepository: a browse link becomes https://<host>/<path…>; only /tree/<ref> (GitLab /-/tree/<ref>) keeps its branch.
 export const parse = (input: string): Parsed | undefined => {
   const trimmed = input.trim().split(/[?#]/u).at(0) ?? ""
   const parts = trimmed.replace(scheme, "").replace(sshUser, "").replace(sshPath, "$1/").split("/")
   const host = (parts.at(0) ?? "").replace(/:\d+$/u, "").toLowerCase()
-  const owner = parts.at(1)
-  const repo = parts.at(2)?.replace(/\.git$/iu, "")
-  if (!host.includes(".") || !owner || !repo) return undefined
-  const branch = tree.exec(`/${parts.slice(3).join("/")}`)?.at(1)
-  return { repository: `https://${host}/${owner}/${repo}`, name: repo, ...(branch && { branch }) }
+  const rest = parts.slice(1).filter(Boolean)
+  const end = rest.findIndex((segment, index) => index >= 2 && views.has(segment))
+  const path = end === -1 ? rest : rest.slice(0, end)
+  const name = path.at(-1)?.replace(/\.git$/iu, "")
+  if (!host.includes(".") || path.length < 2 || !name) return undefined
+  const view = end === -1 ? [] : rest.slice(end)
+  const browse = view.at(0) === "-" ? view.slice(1) : view
+  const branch = browse.at(0) === "tree" ? browse.at(1) : undefined
+  return { repository: `https://${host}/${[...path.slice(0, -1), name].join("/")}`, name, ...(branch && { branch }) }
 }
 
 // oxlint-disable-next-line ren/no-comments -- §5a step 4: the repository name in lower case, and -2, -3 for a taken one. An alias has no slash, backslash, space, backtick or comma (Reference.Alias).

@@ -1320,6 +1320,11 @@ const adaptGroupChannelConnect = (raw: RawClient["channel-connect"]) => ({
   "channel-place": { list: EndpointChannelConnectChannelPlaceList(raw) },
 })
 
+const EndpointRepositoryList = (raw: RawClient["repository"]) => () =>
+  raw["repository.list"]({}).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupRepository = (raw: RawClient["repository"]) => ({ list: EndpointRepositoryList(raw) })
+
 const EndpointSignInSignInProviderList = (raw: RawClient["sign-in"]) => () =>
   raw["sign-in-provider.list"]({}).pipe(Effect.mapError(mapClientError))
 
@@ -1358,6 +1363,7 @@ const adaptClient = (raw: RawClient) => ({
   "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
   "channel-mapping": adaptGroupChannelMapping(raw["channel-mapping"]),
   "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),
+  repository: adaptGroupRepository(raw["repository"]),
   "sign-in": adaptGroupSignIn(raw["sign-in"]),
 })
 

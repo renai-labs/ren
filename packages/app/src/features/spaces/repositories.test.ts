@@ -8,6 +8,14 @@ describe("Repositories.parse", () => {
     expect(Repositories.aliasFor(parsed?.name ?? "", [])).toBe("docs")
   })
 
+  test("a nested GitLab tree link keeps every group and gives the branch", () => {
+    expect(Repositories.parse("https://gitlab.com/acme/group/docs/-/tree/release")).toEqual({
+      repository: "https://gitlab.com/acme/group/docs",
+      name: "docs",
+      branch: "release",
+    })
+  })
+
   test.each([
     ["https://github.com/acme/docs/blob/main/README.md", "https://github.com/acme/docs"],
     ["https://github.com/acme/docs/pulls", "https://github.com/acme/docs"],
@@ -15,6 +23,8 @@ describe("Repositories.parse", () => {
     ["https://github.com/Acme/Docs?tab=readme-ov-file#install", "https://github.com/Acme/Docs"],
     ["git@github.com:acme/docs.git", "https://github.com/acme/docs"],
     ["github.com/acme/docs/", "https://github.com/acme/docs"],
+    ["https://gitlab.com/acme/group/docs", "https://gitlab.com/acme/group/docs"],
+    ["https://gitlab.com/acme/group/docs/-/merge_requests", "https://gitlab.com/acme/group/docs"],
   ])("cleans %s without a branch", (input, repository) => {
     expect(Repositories.parse(input)).toEqual({ repository, name: repository.split("/").at(-1) ?? "" })
   })

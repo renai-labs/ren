@@ -5,6 +5,7 @@ import { AppRegistryGroup } from "./groups/app-registry.js"
 import { AppProfileGroup, AppProfileReachGroup } from "./groups/app-profile.js"
 import { AgentMembershipGroup } from "./groups/agent-membership.js"
 import { ChannelConnectGroup, ChannelInstallGroup, ChannelMappingGroup } from "./groups/channel-install.js"
+import { RepositoryGroup } from "./groups/repository.js"
 import { SignInGroup } from "./groups/sign-in.js"
 import { ChatGroup } from "./groups/chat.js"
 import { CredentialGroup } from "./groups/credential.js"
@@ -59,6 +60,7 @@ export const Api = HttpApi.make("server")
   .add(ChannelInstallGroup)
   .add(ChannelMappingGroup)
   .add(ChannelConnectGroup)
+  .add(RepositoryGroup)
   .add(SignInGroup)
   .annotateMerge(
     OpenApi.annotations({

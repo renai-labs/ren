@@ -27,6 +27,7 @@ import { Space } from "@ren/core/space"
 import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
 import { ReferenceCheck } from "@ren/core/reference-check"
+import { RepositoryHosts } from "@ren/core/repository-hosts"
 import { SpaceSettings } from "@ren/core/space/settings"
 import { Task } from "@ren/core/task"
 import { TaskActivity } from "@ren/core/task/activity"
@@ -46,6 +47,7 @@ import { CredentialHandler } from "./handlers/api/credential.js"
 import { CredentialConnectHandler } from "./handlers/api/credential-connect.js"
 import { OAuthAppHandler } from "./handlers/api/oauth-app.js"
 import { ChannelConnectHandler, ChannelInstallHandler, ChannelMappingHandler } from "./handlers/api/channel-install.js"
+import { RepositoryHandler } from "./handlers/api/repository.js"
 import { SignInHandler } from "./handlers/api/sign-in.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
@@ -133,6 +135,7 @@ export const layer = Layer.mergeAll(
         ChannelInstallHandler,
         ChannelMappingHandler,
         ChannelConnectHandler,
+        RepositoryHandler,
         SignInHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
@@ -145,6 +148,7 @@ export const layer = Layer.mergeAll(
         SpaceEnvironmentTemplate.layer,
         Layer.mergeAll(SpaceSettings.layer, OrganizationSettings.layer, Agent.layer).pipe(
           Layer.provide(ReferenceCheck.layer),
+          Layer.provide(RepositoryHosts.layer),
         ),
         Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
           Layer.provide(SessionRunner.layer),
@@ -156,6 +160,7 @@ export const layer = Layer.mergeAll(
         Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
         OAuthApps.layer,
         ChannelInstalls.layer,
+        RepositoryHosts.layer,
         ChannelMappings.layer,
         CredentialRequirements.layer,
       ]),
