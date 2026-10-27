@@ -7,6 +7,7 @@ The `cli-release.yml` workflow publishes CLI binaries and the installer under `/
 ```
 browser ──HTTPS──▶ CloudFront ──▶ S3 (site, /; app, /app/)
 browser ──HTTPS api.<domain>──▶ load balancer ──▶ ECS service server :4100
+browser ──HTTPS POST (form the server signed)──▶ S3 (drives)
 server ──E2B API──▶ sandbox (brain + hand) ──every connection, egress.<domain>:1080──▶ egress (EC2) ──▶ internet
 egress ──mTLS server.<name>.internal:4443──▶ server        server ──mTLS egress.<name>.internal:9443──▶ egress
 ```
@@ -19,6 +20,7 @@ egress ──mTLS server.<name>.internal:4443──▶ server        server ─�
 | `egress.tf`  | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document     |
 | `waf.tf`     | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules         |
 | `app.tf`     | Site and app bucket and CloudFront distribution                                           |
+| `drives.tf`  | Drives bucket, its CORS for the app's uploads, the server's access to it                  |
 | `deploy.tf`  | The role the deploy workflow assumes with GitHub OIDC                                     |
 
 ## Rules
