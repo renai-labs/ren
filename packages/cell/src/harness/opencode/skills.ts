@@ -94,7 +94,6 @@ export const make = Effect.fnUntraced(function* (input: {
             registration.info.id === entry.slug && Equal.equals(registration.source, declaration.upstream),
         )
         const found = yield* input.sources.cache.resolve(declaration.upstream).pipe(
-          Effect.timeout("20 seconds"),
           Effect.tapError((error) =>
             Effect.logWarning(`The skill ${entry.slug} of the app ${entry.appSlug} is not available: ${error.message}`),
           ),
@@ -184,6 +183,9 @@ export const make = Effect.fnUntraced(function* (input: {
   yield* input.context.session.hook("prompt", (event) =>
     Effect.gen(function* () {
       yield* input.onPrompt
+      // oxlint-disable-next-line ren/no-comments -- R44: each turn copies the files of every loaded skill again; the executor answers at once for a folder that exists.
+      for (const registration of loaded.values())
+        if (Option.isSome(registration.files) && hasEnvironment) pending.set(registration.directory, registration)
       const mentioned = event.prompt.skills ?? []
       if (mentioned.length === 0) return
       const session = yield* input.context.session.get({ sessionID: event.sessionID }).pipe(Effect.option)

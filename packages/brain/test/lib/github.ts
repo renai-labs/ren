@@ -42,6 +42,7 @@ export const make = Effect.fnUntraced(function* (
     requests: [] as Array<{ readonly path: string; readonly authorization: string | null }>,
     bodies: [] as Array<ReadonlyArray<string>>,
     failing: false,
+    broken: undefined as string | undefined,
     isPrivate: options.isPrivate ?? false,
     placeholder: "accepted" as Placeholder,
     held: undefined as PromiseWithResolvers<void> | undefined,
@@ -63,16 +64,17 @@ export const make = Effect.fnUntraced(function* (
       .then(async (bytes) => ((await run.exited) === 0 ? new Uint8Array(bytes) : null))
   }
   const temporary = crypto.randomUUID()
-  const answer = async (url: URL, request: Request) => {
+  const listRefs = async (request: Request) => {
+    const body = await request.arrayBuffer()
+    state.bodies.push(new TextDecoder().decode(body).match(/ref-prefix [^\n]+/gu) ?? [])
+    return spawned(["upload-pack", "--stateless-rpc", "."], {
+      body,
+      env: { GIT_PROTOCOL: request.headers.get("git-protocol") ?? "" },
+    })
+  }
+  const answer = (url: URL, request: Request) => {
     const pathname = url.pathname
-    if (pathname === `/git/${owner}/${repo}.git/git-upload-pack` && request.method === "POST") {
-      const body = await request.arrayBuffer()
-      state.bodies.push(new TextDecoder().decode(body).match(/ref-prefix [^\n]+/gu) ?? [])
-      return spawned(["upload-pack", "--stateless-rpc", "."], {
-        body,
-        env: { GIT_PROTOCOL: request.headers.get("git-protocol") ?? "" },
-      })
-    }
+    if (pathname === `/git/${owner}/${repo}.git/git-upload-pack` && request.method === "POST") return listRefs(request)
     const raw = new RegExp(`^/raw/${owner}/${repo}/([^/]+)/(.+)$`, "u").exec(pathname)
     if (raw) return spawned(["show", `${raw[1]}:${raw[2]}`])
     const tarball = new RegExp(`^/api/repos/${owner}/${repo}/tarball/([^/]+)$`, "u").exec(pathname)
@@ -82,6 +84,7 @@ export const make = Effect.fnUntraced(function* (
         302,
       )
     const archive = new RegExp(`^/codeload/${owner}/${repo}/legacy\\.tar\\.gz/([^/]+)$`, "u").exec(pathname)
+    if (archive && archive[1] === state.broken) return Promise.resolve(new Response("unavailable", { status: 503 }))
     if (archive && (!state.isPrivate || url.searchParams.get("token") === temporary))
       return spawned([
         "archive",
@@ -89,7 +92,7 @@ export const make = Effect.fnUntraced(function* (
         `--prefix=${owner}-${repo}-${archive[1]?.slice(0, 7)}/`,
         `${archive[1]}`,
       ])
-    return null
+    return Promise.resolve(null)
   }
   const refused = (pathname: string, authorization: string | null) => {
     if (pathname.startsWith("/codeload/")) return null
@@ -157,6 +160,11 @@ export const make = Effect.fnUntraced(function* (
       state.held?.resolve()
       state.held = undefined
     }),
+    // oxlint-disable-next-line ren/no-comments -- The archive of this commit answers 503 until breakArchive(undefined).
+    breakArchive: (commit: string | undefined) =>
+      Effect.sync(() => {
+        state.broken = commit
+      }),
     answer: (placeholder: Placeholder) =>
       Effect.sync(() => {
         state.placeholder = placeholder

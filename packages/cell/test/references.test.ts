@@ -8,7 +8,7 @@ import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import type { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Layer, Option } from "effect"
+import { Context, Effect, Fiber, Layer, Option } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -105,6 +105,15 @@ const open = Effect.fnUntraced(function* (github: TestGitHub.Instance, reference
     turn,
     tool: (name: string, input: unknown) => turn(stub.script({ tool: { name, input } })),
     replace: (generation: number) => Effect.flatMap(accessOf(generation), (access) => memory.set(sessionId, access)),
+    read: host.client.session.get({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
+    pull: (next: ReadonlyArray<Reference.Info>) =>
+      Effect.gen(function* () {
+        yield* settings.save(TestSettings.layers({ ren: { references: next } }), [])
+        yield* harness.configure({
+          settings: { layers: yield* settings.layers, chats: [{ id: sessionId, agent: null, archived: false }] },
+        })
+        yield* Shared.appsSettled(harness)
+      }),
   }
 })
 
@@ -125,6 +134,9 @@ it.live("a chat reads a file of a public reference with the read tool, at a path
     const call = yield* chat.tool("read", { path: join(pathOf(github, commit), "guide.md") })
     expect(call.system).toContain(pathOf(github, commit))
     expect(call.system).toContain("Product docs")
+    expect(call.system).toContain(
+      "A reference is a copy of a GitHub archive: it has no submodules, no Git LFS file contents, no symlinks and no files marked export-ignore.",
+    )
     expect(result(call)).toContain("Use the docs.")
     expect((yield* github.requests).filter((request) => request.startsWith("/api/repos/"))).toHaveLength(1)
   }),
@@ -186,5 +198,81 @@ it.live("a chat cannot write under the references", () =>
       "is a read-only copy of a reference",
     )
     expect(yield* Effect.promise(() => Bun.file(file).text())).toBe("Use the docs.")
+  }),
+)
+
+// oxlint-disable-next-line ren/no-comments -- The 10 s limit is below the 15 s limit of a lookup: an update that waited for GitHub would fail it.
+it.live(
+  "a settings change ends while GitHub holds the lookup of a new reference, and the next turn lists it",
+  () =>
+    Effect.gen(function* () {
+      const github = yield* fresh()
+      yield* github.commit({ "guide.md": "main" })
+      const release = yield* github.commit({ "guide.md": "release" }, "release")
+      const chat = yield* open(github, [docsOf(github)])
+      yield* chat.turn(stub.script(), 1)
+      yield* github.hold
+      yield* chat.pull([
+        docsOf(github),
+        { alias: "release", repository: github.url, branch: "release", description: "Release docs" },
+      ])
+      yield* github.arrived
+      yield* github.release
+      const call = yield* chat.tool("read", { path: join(pathOf(github, release), "guide.md") })
+      expect(JSON.stringify(call.body.messages)).toContain(pathOf(github, release))
+      expect(result(call)).toContain("release")
+    }),
+  10_000,
+)
+
+// oxlint-disable-next-line ren/no-comments -- The 10 s limit is below the 15 s limit of a lookup: a chat that waited for GitHub at load would fail it.
+it.live(
+  "a chat opens and answers while GitHub holds the lookup, and the first prompt waits for it",
+  () =>
+    Effect.gen(function* () {
+      const github = yield* fresh()
+      const commit = yield* github.commit({ "guide.md": "Use the docs." })
+      yield* github.hold
+      const chat = yield* open(github, [docsOf(github)])
+      yield* github.arrived
+      yield* chat.read
+      const first = yield* Effect.forkChild(chat.tool("read", { path: join(pathOf(github, commit), "guide.md") }))
+      yield* github.release
+      const call = yield* Fiber.join(first)
+      expect(call.system).toContain(pathOf(github, commit))
+      expect(result(call)).toContain("Use the docs.")
+    }),
+  10_000,
+)
+
+it.live("a reference that cannot be copied leaves the tool working with its cause, and the next tool copies it", () =>
+  Effect.gen(function* () {
+    const github = yield* fresh()
+    const commit = yield* github.commit({ "guide.md": "main" })
+    const release = yield* github.commit({ "guide.md": "release" }, "release")
+    const chat = yield* open(github, [
+      docsOf(github),
+      { alias: "release", repository: github.url, branch: "release", description: "Release docs" },
+    ])
+    yield* github.breakArchive(release)
+    const call = yield* chat.tool("read", { path: join(pathOf(github, commit), "guide.md") })
+    expect(result(call)).toContain("main")
+    expect(result(call)).toContain(
+      "The reference release is not on the environment: The archive answered 503. The next environment tool copies it again.",
+    )
+    yield* github.breakArchive(undefined)
+    expect(result(yield* chat.tool("read", { path: join(pathOf(github, release), "guide.md") }))).toContain("release")
+  }),
+)
+
+it.live("files deleted under the root come back at the next turn", () =>
+  Effect.gen(function* () {
+    const github = yield* fresh()
+    const commit = yield* github.commit({ "guide.md": "Use the docs." })
+    const chat = yield* open(github, [docsOf(github)])
+    const file = join(pathOf(github, commit), "guide.md")
+    expect(result(yield* chat.tool("read", { path: file }))).toContain("Use the docs.")
+    yield* Effect.promise(() => rm(root, { recursive: true, force: true }))
+    expect(result(yield* chat.tool("read", { path: file }))).toContain("Use the docs.")
   }),
 )
