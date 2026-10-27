@@ -1,0 +1,39 @@
+---
+import { STEPPER } from "./stepper.js"
+
+const SURFACES = [
+  { id: "app", label: "Web app" },
+  { id: "ask-ren", label: "Ask Ren" },
+  { id: "cli", label: "CLI" },
+] as const
+
+const items = await Promise.all(
+  SURFACES.filter((surface) => Astro.slots.has(surface.id)).map(async ({ id, label }) => ({
+    id,
+    label,
+    html: await Astro.slots.render(id),
+  })),
+)
+
+const [primary, ...others] = items
+if (!primary) {
+  throw new Error(`<SurfaceTabs>: add at least one slot (${SURFACES.map((s) => s.id).join(", ")}).`)
+}
+---
+
+<div class="docs-surfaces my-6">
+  <div class:list={[primary.id === "app" && STEPPER]} set:html={primary.html} />
+  {
+    others.length > 0 && (
+      <details class="docs-alt">
+        <summary>Other ways to do this: {others.map((item) => item.label).join(", ")}</summary>
+        {others.map((item) => (
+          <div class="docs-alt-item">
+            <p class="docs-alt-label">{item.label}</p>
+            <div set:html={item.html} />
+          </div>
+        ))}
+      </details>
+    )
+  }
+</div>

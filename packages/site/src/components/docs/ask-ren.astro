@@ -1,0 +1,37 @@
+---
+import { askRenHref } from "../../lib/links.js"
+
+type Props = { prompt: string }
+
+const href = askRenHref(Astro.props.prompt)
+---
+
+<div class="not-prose ask-ren" data-ui>
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener"
+    class="group flex items-end gap-3 rounded-[28px] border border-[var(--line-chrome)] bg-[var(--line-tertiary)] py-[10.5px] pl-5 pr-2 no-underline"
+  >
+    <p class="min-w-0 flex-1 whitespace-pre-wrap py-1 text-body text-[var(--fg-primary)]">{Astro.props.prompt}</p>
+    <span class="flex shrink-0 items-center gap-3">
+      <span
+        class="text-body-sm text-[var(--fg-tertiary)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+      >
+        Open in Ren
+      </span>
+      <span
+        aria-hidden="true"
+        class="flex size-8 items-center justify-center rounded-full bg-[var(--fg-primary)] text-[var(--site-bg)] transition-transform group-active:scale-95"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+          <path
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M8.70711 1.39644C8.31659 1.00592 7.68342 1.00592 7.2929 1.39644L2.21968 6.46966L1.68935 6.99999L2.75001 8.06065L3.28034 7.53032L7.25001 3.56065V14.25V15H8.75001V14.25V3.56065L12.7197 7.53032L13.25 8.06065L14.3107 6.99999L13.7803 6.46966L8.70711 1.39644Z"
+          ></path>
+        </svg>
+      </span>
+    </span>
+  </a>
+</div>

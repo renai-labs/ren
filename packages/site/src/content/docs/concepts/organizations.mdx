@@ -1,0 +1,128 @@
+---
+title: Organizations
+icon: Building2
+description: Switch between organizations, change organization-wide settings, and invite teammates with a role.
+---
+
+An organization is the account of your company in Ren. It holds your members, billing, labels, organization credentials, and channel connections like Slack and GitHub.
+
+## How Ren creates an organization
+
+If you register without an invitation, Ren creates an organization for you. If Ren recognizes a company email domain, it uses that domain to name the organization. Ren also creates a shared **General** space and a private **Personal** space.
+
+If you register through an invitation, you join the inviting organization instead.
+
+## Switch organizations
+
+You can belong to several organizations, like the organization of your company and the organization of a client. When you switch organizations, you see the chats, spaces, and settings of the other organization.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Select your name at the bottom of the sidebar. The current organization shows under your name.
+2. Select another organization to switch to it.
+
+To add an organization, select **Create organization**, enter a name, and add a logo if you want.
+
+<Screenshot
+  shot="organizations/switcher"
+  alt="The organization menu open from the sidebar profile card, listing two organizations and Create organization"
+  caption="The organization menu shows your organizations and the Create organization option."
+/>
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren org list
+ren org switch <org-id>
+ren org create "Acme"
+```
+
+`ren org create` switches your CLI profile to the new organization.
+
+</Fragment>
+</SurfaceTabs>
+
+## Organization settings
+
+| Setting       | What it changes                                                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name and icon | How the organization shows in the sidebar and the organization menu.                                                                         |
+| Timezone      | The default time zone for new schedules.                                                                                                     |
+| Default model | The model that chats use when the space, the project, and the chat do not pick one.                                                          |
+| Instructions  | Rules that Ren obeys in every chat in the organization. Space and project instructions also apply. See [Projects](/docs/concepts/projects/). |
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Settings → General**.
+2. Edit the name, time zone, or default model. Ren saves each change automatically.
+3. Under **Instructions**, enter guidance for every chat, like the writing style of your company.
+
+<Screenshot
+  shot="organizations/settings-general"
+  alt="Settings General with the organization name, timezone, default model, and instructions"
+  caption="Settings General shows the organization name, timezone, default model, and instructions."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add an organization instruction: write dates as YYYY-MM-DD and use US English." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren orgs update --instructions "Write dates as YYYY-MM-DD and use US English."
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Roles
+
+Every member has one of three roles.
+
+| Role   | What the person can do                                                                                                                                                                                                                 |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Member | Use Ren in the spaces they belong to. Create their own spaces, projects, chats, and tasks.                                                                                                                                             |
+| Admin  | Everything a member can do. Also manage organization settings, members, billing, channel connections, and organization-wide storage and environments. Join any shared space in the organization. See [Spaces](/docs/concepts/spaces/). |
+| Owner  | The same access as an admin, for the people responsible for the organization.                                                                                                                                                          |
+
+## Invite a teammate
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Settings → Members**.
+2. Select **Add member**.
+3. Enter one or more email addresses, separated by commas or new lines.
+4. Choose a **Role**.
+5. Select **Send invite**.
+
+Each invitee gets an email with a link to join. When they join, Ren adds them to the General space and gives them their own personal space. They also join any shared spaces that you added them to while the invitation was pending. See [Spaces](/docs/concepts/spaces/).
+
+<Video
+  clip="organizations/invite-member"
+  title="Inviting a member from Settings Members: enter an email, pick a role, send, then see the pending invite on the Invitations tab"
+  caption="You enter an email, picks a role, sends the invite, and sees it on the Invitations tab."
+/>
+
+</Fragment>
+</SurfaceTabs>
+
+## Manage invitations and members
+
+The **Invitations** tab lists pending invitations. You can copy an invitation link, resend the invitation, or revoke it.
+
+On the **Members** tab, change the role of a person from the **Role** menu. To take a person out of the organization and all of its spaces, select **Remove**.
+
+## Good to know
+
+- Only owners and admins can change organization settings.
+- Invitations expire after seven days.
+- **Remove** takes a person out of the organization and out of all of its spaces.
+- Organization instructions apply together with space and project instructions.
+- The organization timezone is the default time zone for new schedules.

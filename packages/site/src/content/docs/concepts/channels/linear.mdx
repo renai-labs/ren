@@ -1,0 +1,138 @@
+---
+title: Linear
+icon: Linear
+description: Install Ren as a Linear agent, map Linear projects to Ren projects, and give Ren issues when you assign or mention it.
+---
+
+Ren works as a [Linear agent](https://linear.app/docs/agents-in-linear). Assign an issue to Ren or mention Ren in a comment. Ren then posts its progress and its answer on the issue. Use Linear when the request is already an issue, so the team can follow the work there.
+
+## How a Linear issue maps to Ren
+
+Each assignment or mention starts a Linear agent session. Each agent session creates a Ren [chat](/docs/concepts/chats/) in the mapped project. Replies in that agent session continue the same chat.
+
+Ren does not create a Ren [task](/docs/concepts/tasks/) for the issue. But an open Ren task can link the issue and have a project. In that case, the agent session goes to the chat of that task.
+
+## Install Ren in Linear
+
+You connect Linear one time for your organization. The install needs two people:
+
+| Role                         | What they do                                                            |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| **A Ren organization admin** | Starts the install.                                                     |
+| **A Linear workspace admin** | Approves the install. Linear lets only workspace admins install agents. |
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Go to **Settings → Mentions**.
+2. In the **Task management** section, select **Install Ren on Linear**.
+3. Approve the install in Linear.
+
+<Screenshot
+  shot="channels/linear/install"
+  alt="Settings Mentions with the Linear row showing Connected"
+  caption="The Linear row in Settings → Mentions shows Connected after the install."
+/>
+
+</Fragment>
+<Fragment slot="cli">
+
+1. Run this command:
+
+   ```sh
+   ren linear install
+   ```
+
+2. Open the Linear authorization URL that the command prints.
+3. Approve the install.
+
+</Fragment>
+</SurfaceTabs>
+
+After the install, Ren shows in the assignee and mention menus of Linear.
+
+## Map Linear projects to Ren projects
+
+Each Linear project maps to one Ren project. A Ren project can accept several Linear projects. Each mapping needs a **fallback sender**. Ren uses this account when the sender has no matching Ren account, or when the sender is not in the space of the project.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the **@Ren** tab of the project.
+2. On the **Linear** card, pick a Linear project.
+3. Pick a fallback sender. Ren does not save the mapping until you do this.
+
+You can also map projects from **Settings → Mentions → Linear**:
+
+1. Select a Ren project and a Linear project.
+2. Choose a **Session sender**.
+3. Select **Route here**.
+
+For issues outside a Linear project, use **All issues (no project)**.
+
+<Screenshot
+  shot="channels/linear/map-project"
+  frame="detail"
+  alt="The Linear integration dialog with a Linear project selected and the session sender list open"
+  caption="The Linear integration dialog shows the selected Linear project and the open session sender list."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Map the Mobile Linear project to this project, with me as the session sender." />
+
+Mapping needs an organization admin, so ask from an admin account.
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren linear projects
+ren linear mappings create --ren-project-id <project-id> --linear-project-id <linear-project-id> --sender-user-id <user-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Assign an issue to Ren
+
+Assign the issue to Ren in Linear. Ren reads the issue as its prompt. Ren starts an agent session, posts "Working on it…", and then posts its response on the issue.
+
+{/* Media placeholder (clip `channels/linear/assign`): Assign an issue to Ren, see the agent session start with "Working on it…", and read Ren's response on the issue. Answers: what happens after I assign Ren? */}
+
+## Mention Ren in a comment
+
+Mention Ren in a comment on an issue in a mapped Linear project. The comment is the prompt for Ren:
+
+```text
+@Ren check whether this crash also happens on Android 14 and suggest a fix.
+```
+
+If the mention has no other text, Ren reviews the issue and offers help.
+
+## Senders
+
+Anyone in the Linear workspace who can assign issues or write comments can send requests to Ren. Ren matches each sender by the email of their Linear account. If no Ren account matches, or the sender is outside the space of the project, Ren uses the fallback sender of the mapping.
+
+## Troubleshooting
+
+### Ren does not start a chat for an issue
+
+Cause: the Linear project of the issue has no mapping. Ren posts on the issue that no Ren project is mapped to it.
+
+Fix: map the Linear project. For issues outside a Linear project, map **All issues (no project)**.
+
+### Ren skips an action
+
+Cause: Linear chats deny actions that need approval, and continue without them.
+
+Fix: configure [project permissions](/docs/concepts/projects/) before you send requests.
+
+## Good to know
+
+- The Ren app manages one Linear workspace for each organization.
+- You install Linear one time for each organization.
+- Mapping needs an organization admin. This is also true when you ask Ren to map a project.
+- The fallback sender is required. The mapping is not saved without it.
+- Ren does not create a task for a Linear issue.

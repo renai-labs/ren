@@ -1,0 +1,80 @@
+---
+title: WhatsApp
+icon: Whatsapp
+description: Connect your WhatsApp number once, then text Ren's number and get replies in the same WhatsApp chat.
+---
+
+Connect your WhatsApp number to Ren, then text Ren's WhatsApp number like a contact. Your messages run in the **Default** project in your [personal space](/docs/concepts/spaces/), and Ren replies in the same chat. You install nothing and map no project.
+
+## Connect your number
+
+Each person connects their own number. A number connects to one Ren user in one organization.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Go to **Settings → Mentions**.
+2. In the **Communication** section, select **WhatsApp**. The page shows a QR code.
+3. Scan the QR code with the camera of your phone. Or, on a device that has WhatsApp, select **Open WhatsApp**.
+4. In the chat with Ren that WhatsApp opens, send the typed message, such as `link Xq3vN8sKp2Lw`.
+
+Ren replies that your number is now connected. The page shows **Connected to** with your number.
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren whatsapp link-code
+```
+
+Open the `url` that the command prints on a device with WhatsApp. Then send the message that it fills in. To make sure that the link works, run `ren whatsapp me` and look for `linked` set to `true`.
+
+</Fragment>
+</SurfaceTabs>
+
+## Talk to Ren
+
+Send a message. You do not need to mention Ren or reply to a message.
+
+| To                         | Do this                                                                                                                                                           |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Continue a chat            | Send another message. Messages go to the same Ren [chat](/docs/concepts/chats/) until you are quiet for 12 hours. Your next message after that starts a new chat. |
+| Start a new chat now       | Send `/new`. To start the new chat with a request, add text after it, like `/new plan the offsite`.                                                               |
+| Go back to an earlier chat | Swipe to reply to one of Ren's messages from that chat. Only that message goes to the earlier chat. Your next plain message goes to the current chat.             |
+| See the commands           | Send `/help`.                                                                                                                                                     |
+
+Ren sends a longer reply as a few separate messages, one for each paragraph.
+
+## Attachments
+
+Ren receives the files, photos, and voice notes that you send. A voice note arrives as an audio file.
+
+Ren cannot send files on WhatsApp yet. When a reply includes a file, Ren sends a message that names the file. To download the file, open the chat in the [web app](/docs/surfaces/web-app/).
+
+## Disconnect your number
+
+Go to **Settings → Mentions → WhatsApp** and select **Disconnect number**. Ren stops answering messages from that number until you connect it again.
+
+To disconnect from the CLI, run `ren whatsapp unlink`.
+
+## Troubleshooting
+
+### Ren says that your number is not connected
+
+Ren answers only numbers that are connected to a Ren user. Connect your number from **Settings → Mentions → WhatsApp**, then send your message again.
+
+### Ren says that the link code is invalid or expired
+
+A code works one time and expires after 15 minutes. Use the fresh code on the **Settings → Mentions → WhatsApp** page.
+
+### Ren skips an action
+
+WhatsApp chats deny actions that need approval and continue without them. Before you send requests, set the [project permissions](/docs/concepts/projects/) for the **Default** project in your personal space.
+
+## Good to know
+
+- The link code works one time and expires after 15 minutes. While the page is open, it replaces the code with a fresh one.
+- If you connect a number that is already connected somewhere else, Ren moves the number to you, in this organization.
+- Ren skips files over 32 MB and sees a note about each skipped file.
+- Ren cannot message you first or send the results of a [schedule](/docs/concepts/schedules/) to WhatsApp. WhatsApp lets Ren reply only within 24 hours of your last message. For these jobs, use Slack, Telegram, or email.
+- WhatsApp is one-to-one and always runs in your personal space. You cannot add Ren to a WhatsApp group or use a shared project. To send work from a group to a shared project, use [Slack](/docs/concepts/channels/slack/) or [Telegram](/docs/concepts/channels/telegram/).

@@ -1,0 +1,11 @@
+---
+import Screenshot from "./screenshot.astro"
+
+type Props = { title: string; shot: string; alt: string }
+---
+
+<section class="docs-hero not-prose">
+  <h1 class="docs-hero-title">{Astro.props.title}</h1>
+  <div class="docs-hero-lede"><slot /></div>
+  <Screenshot shot={Astro.props.shot} alt={Astro.props.alt} loading="eager" />
+</section>

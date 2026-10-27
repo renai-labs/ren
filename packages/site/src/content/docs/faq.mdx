@@ -1,0 +1,67 @@
+---
+title: FAQ
+icon: BookOpen
+description: Get short answers to common questions about access, credentials, machines, chats, and schedules in Ren.
+---
+
+Short answers to the questions people ask most. Each answer links to the page with the details.
+
+## Access and privacy
+
+### Who can see my chats?
+
+Every member of the space can see the chats of its projects. Only you can see the chats in your personal space. See [Chats](/docs/concepts/chats/).
+
+### Can an organization admin see the credentials of a space?
+
+No. Only the members of a space can see or use its credentials. An admin can join a shared space, and then the admin can use them. Nobody can join a private space. See [Credentials](/docs/concepts/credentials/).
+
+### Can an admin read my personal credentials?
+
+No. Only you can see and use your personal credentials. See [Credentials](/docs/concepts/credentials/).
+
+### Can I read a secret after I save it?
+
+No. The app shows only the last four characters. To change the value, select **Update value**. See [Credentials](/docs/concepts/credentials/).
+
+## Machines
+
+### Where does Ren run commands?
+
+On the machine of the space. All projects and chats in a space share one machine. See [Spaces](/docs/concepts/spaces/).
+
+### How big is the machine?
+
+The default size is **Medium**, with 2 vCPUs and 2 GB of memory. The built-in sizes go up to 8 vCPUs and 8 GB. See [Environments](/docs/concepts/environments/).
+
+### Why did the machine not use my environment change?
+
+A space uses a new build when its machine resumes from pause. The machine pauses when nobody uses it. See [Environments](/docs/concepts/environments/).
+
+## Chats
+
+### Which model does Ren use?
+
+Ren uses the model you pick in the composer. If you pick no model, Ren uses the first default it finds: project, space, organization, then Ren. See [Chats](/docs/concepts/chats/).
+
+### How large can an attachment be?
+
+Each file can be up to 100 MB. Ren reads images, text files, and PDFs up to 10 MB directly. Ren saves larger files to the machine and opens them with its tools. See [Chats](/docs/concepts/chats/).
+
+### How do I see what Ren did?
+
+Select the **Worked for** line above the reply from Ren. It shows each step and tool call, with its input and result. See [Chats](/docs/concepts/chats/).
+
+## Schedules and channels
+
+### Why did a scheduled chat skip an action?
+
+Scheduled chats and channel chats deny actions that need approval. To let the action run, set it to **Allow** in the [project permissions](/docs/concepts/projects/).
+
+### Why did my schedules stop?
+
+Ren pauses schedules when your organization runs out of credits. The schedules run again after someone adds credits. See [Schedules](/docs/concepts/schedules/).
+
+### If I pause a schedule, does its current chat stop?
+
+No. The current chat continues. Chats from earlier runs stay in the chat list. See [Schedules](/docs/concepts/schedules/).

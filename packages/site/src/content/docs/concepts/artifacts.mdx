@@ -1,0 +1,118 @@
+---
+title: Artifacts
+icon: FileText
+description: Ask Ren to build dashboards, reports, and pages at their own link, keep them up to date, and share them.
+---
+
+An artifact is a web page that Ren builds and hosts at a shareable URL, such as a dashboard, a report, or a small tool. To create an artifact, ask Ren for a website or a page. In the API and the CLI, the name is `artifact`.
+
+<Video
+  clip="artifacts/build"
+  title="Ask Ren for a dashboard, then open it from Artifacts"
+  caption="Ren queries the data and publishes the dashboard. The dashboard then shows in Artifacts."
+/>
+
+## Where artifacts live
+
+An artifact belongs to a [space](/docs/concepts/spaces/), not to one project. Any project in that space can build or update the artifact. Every member of the space sees it in the app.
+
+Open **Artifacts** in the sidebar to see the artifacts from every space you belong to. Select a card to open the artifact.
+
+<Screenshot
+  shot="artifacts/grid"
+  alt="The Artifacts page with several artifact cards and one card's menu open"
+  caption="The Artifacts page shows one card for each artifact, with the menu of one card open."
+/>
+
+## Create or update an artifact
+
+Ren builds the page on the machine of the space and publishes it.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Artifacts** and select **Create artifact**.
+2. In the new chat, finish the prompt, such as `Create an artifact for our weekly signups`.
+3. Send the prompt.
+4. When Ren replies with the link, open it.
+
+To change an artifact, ask Ren in a chat in the same space.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Build a dashboard of this month's orders by region from the orders database." />
+
+To change the artifact later, ask Ren again, for example `Add a chart of returns to the orders dashboard.`
+
+</Fragment>
+</SurfaceTabs>
+
+## Keep an artifact up to date
+
+An artifact can read current data each time someone opens it, and Ren does not rebuild the page. If Ren must update that data at regular times, use a [schedule](/docs/concepts/schedules/):
+
+```text
+Every weekday at 8am, refresh the orders dashboard with yesterday's orders.
+```
+
+Ren creates the schedule in the project. Each run starts a new chat that updates the data of the artifact. The data often comes from a [database](/docs/concepts/storage/) in the same space. Open **Scheduled** to see the schedule.
+
+## Share an artifact
+
+Anyone with the link can open an artifact without signing in. Space membership controls who sees the artifact in the app and who can ask for changes.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Artifacts**.
+2. Open the menu of the artifact and select **Copy link**.
+
+<Screenshot
+  shot="artifacts/share"
+  frame="detail"
+  alt="An artifact card's menu with Open, Copy link, and Archive"
+  caption="The menu of an artifact card shows Open, Copy link, and Archive."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Give me the link to the orders dashboard." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren artifacts get <space-id> <artifact-id>
+```
+
+The `url` field is the link.
+
+</Fragment>
+</SurfaceTabs>
+
+## Archive an artifact
+
+When you archive an artifact, Ren takes it down. The link stops working immediately, and the artifact leaves the **Artifacts** page. Ren keeps a backup copy.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Artifacts**.
+2. Open the menu of the artifact and select **Archive**.
+3. Confirm.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Archive the old Q2 dashboard." />
+
+</Fragment>
+</SurfaceTabs>
+
+## Good to know
+
+- Share the link only with people who must see the artifact. The link needs no sign-in.
+- An artifact link cannot change. A new artifact with the same name gets a different link.
+- There is no download button. Ask Ren for the files you need, such as a PDF or a CSV of the data. Ren can save them to a [file store](/docs/concepts/storage/).

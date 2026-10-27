@@ -1,0 +1,111 @@
+---
+title: CLI
+icon: Code
+description: Install the Ren CLI, sign in from your terminal, and manage Ren from a shell or a coding agent.
+---
+
+The Ren CLI, `ren`, manages spaces, projects, tasks, and settings from a terminal or a script. Coding agents with shell access can run it too. The CLI supports more operations than the [MCP server](/docs/surfaces/mcp/).
+
+```sh
+curl -fsSL https://useren.ai/install | bash
+```
+
+## When to use the CLI
+
+| Surface                            | Use it to                                                           |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| CLI                                | Manage Ren from a terminal, a script, or a coding agent             |
+| [Web app](/docs/surfaces/web-app/) | Chat with Ren and review its work                                   |
+| [MCP](/docs/surfaces/mcp/)         | Connect AI tools that cannot run shell commands, like chat websites |
+
+## Install
+
+The installer uses npm and needs Node.js 18 or later. It runs `ren init` after the installation.
+
+```sh
+curl -fsSL https://useren.ai/install | bash
+```
+
+To skip the initialization:
+
+```sh
+curl -fsSL https://useren.ai/install | bash -s -- --no-init
+```
+
+To install version `0.2.4`:
+
+```sh
+curl -fsSL https://useren.ai/install | bash -s -- --version 0.2.4
+```
+
+You can also install the CLI with npm:
+
+```sh
+npm install -g @renai-labs/cli
+```
+
+## Sign in
+
+<Steps>
+
+1. Run `ren init`. It opens Ren in your browser.
+2. Sign in to connect the CLI to your account. To print the sign-in URL instead of opening the browser, use `ren init --no-browser`.
+3. Run `ren whoami` to confirm. It shows your user, your organization, and your role.
+
+</Steps>
+
+## Check it worked
+
+Ask your coding agent:
+
+```text
+Summarize my Ren setup using the ren CLI.
+```
+
+The answer must name your organization and list its spaces and projects.
+
+## Active devices
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+Each connected CLI shows under **Settings → Preferences → Devices** as **CLI ·** followed by the name of the computer. To revoke the access of a CLI, select **Remove**. The change takes effect on the next request of that CLI.
+
+<Screenshot
+  shot="cli/devices"
+  alt="Settings Preferences Devices listing a CLI device row next to the current browser"
+  caption="The Devices list shows a connected CLI next to the current browser."
+/>
+
+</Fragment>
+</SurfaceTabs>
+
+## Profiles
+
+A profile stores a signed-in account. `ren init` creates the first profile as `default`. To add another account, use a different profile name:
+
+```sh
+ren init --profile work
+```
+
+Then list the profiles and switch between them:
+
+```sh
+ren auth profile list
+ren auth profile switch work
+```
+
+| Task                                         | Command                                         |
+| -------------------------------------------- | ----------------------------------------------- |
+| Use a profile for a single command           | Add `--profile <name>`, or set `REN_PROFILE`    |
+| Act in another organization with one account | Run `ren org list`, then `ren org switch <org>` |
+| Remove the sign-in of the active profile     | `ren auth logout` (on this computer only)       |
+
+## Good to know
+
+- The CLI cannot send chat messages. `ren sessions create` creates an empty chat. Send messages from the web app or a channel.
+- You can invite people to your organization only from the web app.
+- When you sign in to an app or a custom MCP with OAuth, the CLI opens your browser.
+- Ren stores profiles in `~/.config/ren/auth.json`.
+- For every command and flag, run `ren --help` or `ren <command> --help`.
+- To update the CLI, run `ren upgrade`.

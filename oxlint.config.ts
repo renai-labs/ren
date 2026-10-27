@@ -356,6 +356,7 @@ const colorRoleClass = {
 }
 
 const siteTailwind = { cwd: new URL("packages/site", import.meta.url).pathname, entryPoint: "src/styles/globals.css" }
+const docsTailwind = { ...siteTailwind, entryPoint: "src/styles/docs.css" }
 
 const appClasses = {
   pattern: `^(?!(?:(?:sm|md|lg):)*(?:${layoutUtilities})$).+$`,
@@ -825,6 +826,13 @@ export default defineConfig({
             restrict: [importantClass, viewportUnitClass, readingOrderClass, fontSmoothingClass, colorRoleClass],
           },
         ],
+      },
+    },
+    {
+      files: ["packages/site/src/components/docs/**", "packages/site/src/layouts/docs.astro"],
+      rules: {
+        ...Object.fromEntries(Object.keys(tailwindRules).map((rule) => [rule, ["error", docsTailwind]])),
+        "better-tailwindcss/no-unknown-classes": ["error", { ...docsTailwind, ignore: ["^docs-"] }],
       },
     },
     {

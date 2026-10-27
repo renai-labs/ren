@@ -1,0 +1,41 @@
+---
+title: Quickstart
+icon: Zap
+description: Make a Ren account, connect Gmail, get a summary of your unread email, and run that summary on a daily schedule.
+---
+
+Ren is an AI agent that works in the tools your team uses. Do these steps to go from a new account to an email summary that runs every weekday.
+
+<Video
+  clip="quickstart/gmail-digest"
+  title="Summarize your unread Gmail, connect it when Ren asks, and schedule it"
+  caption="Ren summarizes unread Gmail, connects Gmail when it asks, and puts the summary on a schedule."
+/>
+
+<Steps>
+
+1. **Make an account.** Open the [sign-up page](https://useren.ai/app/signup). Use your email, or select **Continue with Google** or **Continue with Slack**. If you use your email, type the six-digit code that Ren sends you.
+
+2. **Start a chat.** Select **New chat** in the sidebar.
+
+3. **Connect Gmail.** Send `Connect my Gmail account.` Select **Connect** on the card, sign in to Google, and give access. The card then shows **Connected**.
+
+4. **Give Ren the task.** Send this request in the same chat:
+
+   ```text
+   Summarize my unread Gmail from the last day. Group it by what needs a reply.
+   ```
+
+   Ren reads your unread email and groups each message by whether it needs a reply.
+
+5. **Put it on a schedule.** Send `Run this every weekday at 9am.` Then select **Scheduled** in the sidebar to see the schedule and its next run.
+
+</Steps>
+
+## Good to know
+
+- Each run of the schedule starts a new chat with the summary for that day.
+- To set the time zone, put it in your request, such as `every weekday at 9am Pacific`.
+- A scheduled chat denies an action that needs your approval. To let the action run, set it to **Allow** in the [project permissions](/docs/concepts/projects/).
+- If your organization has no credits, Ren pauses its schedules. The schedules continue when someone adds credits.
+- For a ready-made setup, open the [Blueprints catalog](/blueprints/).

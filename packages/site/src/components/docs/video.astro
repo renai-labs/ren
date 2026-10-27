@@ -1,0 +1,154 @@
+---
+import { getImage } from "astro:assets"
+import { video } from "../../lib/docs/media.js"
+import Frame, { type FrameProps } from "./frame.astro"
+
+type Props = FrameProps & { clip: string; title: string }
+
+const clip = video(Astro.props.clip)
+const poster = await getImage({ src: clip.poster, width: clip.poster.width / 2, quality: 90 })
+---
+
+<Frame frame={Astro.props.frame} caption={Astro.props.caption}>
+  <ren-docs-clip data-clip={Astro.props.clip} class="relative block overflow-hidden bg-black">
+    <div data-stage class="origin-top-left">
+      <video
+        src={clip.src}
+        data-poster={poster.src}
+        title={Astro.props.title}
+        width={clip.poster.width / 2}
+        height={clip.poster.height / 2}
+        muted
+        loop
+        playsinline
+        preload="none"
+        class="block h-auto max-w-full"
+      />
+    </div>
+    <p
+      data-note
+      class="pointer-events-none absolute left-0 top-0 w-max max-w-[60%] rounded-lg bg-white px-3 py-1.5 text-body-sm font-medium text-neutral-900 opacity-0 transition-opacity duration-300"
+    />
+    <button
+      type="button"
+      data-play
+      aria-label={`Play video: ${Astro.props.title}`}
+      class="group absolute inset-0 flex cursor-pointer items-center justify-center bg-black/20 transition-colors duration-200 hover:bg-black/10 data-playing:bg-transparent"
+    >
+      <span class="flex size-14 items-center justify-center rounded-full bg-white/95 text-neutral-900 transition-[opacity,scale] duration-200 group-hover:scale-105 group-active:scale-95 group-data-playing:opacity-0 group-data-playing:group-focus-visible:opacity-100">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="ml-0.5 size-6 group-data-playing:hidden">
+          <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
+        </svg>
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden size-6 group-data-playing:block">
+          <rect x="6" y="5" width="4" height="14" rx="1" />
+          <rect x="14" y="5" width="4" height="14" rx="1" />
+        </svg>
+      </span>
+    </button>
+  </ren-docs-clip>
+</Frame>
+
+<script>
+  import {
+    boxSpring,
+    calloutPoint,
+    cameraSpring,
+    cameraTransform,
+    clipTarget,
+    loopOpacity,
+    type ClipTimeline,
+  } from "../../lib/docs/clip.js"
+
+  const timelines = import.meta.glob<ClipTimeline>("/src/assets/docs/**/*.json", { import: "default" })
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  const CALLOUT_GAP_PX = 10
+
+  async function mount(root: HTMLElement) {
+    const video = root.querySelector("video")
+    const stage = root.querySelector<HTMLElement>("[data-stage]")
+    const note = root.querySelector<HTMLElement>("[data-note]")
+    const play = root.querySelector<HTMLButtonElement>("[data-play]")
+    const load = timelines[`/src/assets/docs/${root.dataset.clip}.json`]
+    if (!video || !stage || !note || !play || !load) return
+    video.poster = video.dataset.poster ?? ""
+    const timeline = await load()
+    const home = { zoom: 1, x: timeline.viewport.width / 2, y: timeline.viewport.height / 2 }
+    const camera = cameraSpring(home)
+    const anchor = boxSpring({ x: 0, y: 0, width: 0, height: 0 })
+    let showing = false
+    let last = performance.now()
+    let frame = 0
+
+    const update = (snap: boolean) => {
+      const now = performance.now()
+      const dt = (now - last) / 1000
+      last = now
+      const target = clipTarget(timeline, video.currentTime)
+      const view = cameraTransform(camera(reducedMotion ? home : target.camera, dt, { snap }), timeline)
+      const opacity = String(loopOpacity(video.currentTime, video.duration))
+      stage.style.transform = view.css
+      stage.style.opacity = opacity
+
+      if (!target.note || !target.anchor) {
+        note.style.opacity = "0"
+        showing = false
+        return
+      }
+      const box = anchor(target.anchor, dt, { snap: snap || !showing })
+      showing = true
+      if (note.textContent !== target.note) note.textContent = target.note
+      const callout = calloutPoint(view, box, timeline)
+      const half = note.offsetWidth / 2 + CALLOUT_GAP_PX
+      const x = (callout.x / 100) * root.clientWidth
+      note.style.left = `${Math.min(root.clientWidth - half, Math.max(half, x))}px`
+      note.style.top = `${callout.y}%`
+      note.style.transform =
+        callout.placement === "below"
+          ? `translate(-50%, ${CALLOUT_GAP_PX}px)`
+          : `translate(-50%, calc(-100% - ${CALLOUT_GAP_PX}px))`
+      note.style.opacity = opacity
+    }
+    const loop = () => {
+      update(false)
+      frame = requestAnimationFrame(loop)
+    }
+    const setPlaying = (playing: boolean) => {
+      play.toggleAttribute("data-playing", playing)
+      play.setAttribute("aria-label", `${playing ? "Pause" : "Play"} video: ${video.title}`)
+    }
+    video.addEventListener("play", () => {
+      setPlaying(true)
+      last = performance.now()
+      frame = requestAnimationFrame(loop)
+    })
+    video.addEventListener("pause", () => {
+      setPlaying(false)
+      cancelAnimationFrame(frame)
+    })
+    video.addEventListener("seeked", () => update(true))
+    play.addEventListener("click", () => (video.paused ? video.play().catch(() => undefined) : video.pause()))
+    new IntersectionObserver((entries) => {
+      if (entries.some((entry) => !entry.isIntersecting)) video.pause()
+    }).observe(video)
+  }
+
+  class RenDocsClip extends HTMLElement {
+    private observed = false
+
+    connectedCallback() {
+      if (this.observed) return
+      this.observed = true
+      const nearby = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) return
+          nearby.disconnect()
+          void mount(this)
+        },
+        { rootMargin: "400px" },
+      )
+      nearby.observe(this)
+    }
+  }
+
+  if (!customElements.get("ren-docs-clip")) customElements.define("ren-docs-clip", RenDocsClip)
+</script>

@@ -1,0 +1,63 @@
+---
+import { ClientRouter } from "astro:transitions"
+import "../styles/docs.css"
+
+interface Props {
+  title: string
+  description: string
+  markdownUrl: string
+}
+
+const site = import.meta.env.SITE
+const path = Astro.url.pathname.replace(/\/$/, "") || "/"
+const backdrop = ([...path].reduce((hash, char) => ((hash * 33) ^ char.charCodeAt(0)) >>> 0, 5381) % 5) + 1
+const title = `${Astro.props.title} | Ren Docs`
+const canonical = `${site}${Astro.url.pathname}`
+---
+
+<!doctype html>
+<html lang="en" class="dark" data-backdrop={backdrop}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={Astro.props.description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" type="text/markdown" href={Astro.props.markdownUrl} />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/ren_logo_dark.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:title" content={Astro.props.title} />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="Ren" />
+    <meta property="og:description" content={Astro.props.description} />
+    <meta property="og:image" content={`${site}/og-image.png`} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={`${site}/og-image.png`} />
+    <script is:inline>
+      ;(() => {
+        const apply = () => {
+          let theme = "dark"
+          try {
+            const stored = localStorage.getItem("theme")
+            if (stored === "light" || stored === "dark") theme = stored
+            else if (stored === "system" && matchMedia("(prefers-color-scheme: light)").matches) theme = "light"
+          } catch {}
+          document.documentElement.classList.toggle("dark", theme === "dark")
+          document.documentElement.classList.toggle("light", theme === "light")
+          document.documentElement.style.colorScheme = theme
+        }
+        apply()
+        document.addEventListener("astro:after-swap", apply)
+      })()
+    </script>
+    <ClientRouter fallback="none" />
+  </head>
+  <body class="flex min-h-dvh flex-col">
+    <slot />
+    <script>
+      import "../components/docs/enhance.js"
+    </script>
+  </body>
+</html>

@@ -1,0 +1,195 @@
+---
+title: Spaces
+icon: Cube
+description: Group the projects of a team or a client in a space, with its own members, instructions, credentials, and machine.
+---
+
+A space is a group of projects for a team or a client. It controls who can get to the work and the credentials of its projects. All the projects in a space run on one machine.
+
+The app shows spaces under **Teams** in the sidebar. In the API and the CLI, the name of a space is `pod`.
+
+## Default spaces
+
+You start with two spaces:
+
+| Space        | Who can see it                   | What it is for                                                                                                                       |
+| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Personal** | Only you                         | Your private projects, chats, and tasks. It comes with a project named **Default**. Slack DMs and WhatsApp messages to Ren run here. |
+| **General**  | Every member of the organization | Work that the whole company shares. There is one per organization, and Ren adds every member to it when they join.                   |
+
+<Screenshot
+  shot="spaces/scope-picker"
+  alt="The space picker listing Personal, General, and one team space"
+  caption="The space picker shows Personal, General, and one team space."
+/>
+
+## Space or project
+
+Create a space when the work needs different members, tool accounts, or a machine. For example, with one space for each client, only the team of a client can get to the work and the accounts of that client.
+
+Create a [project](/docs/concepts/projects/) when the members and the machine stay the same, but the work needs different instructions or tools. For example, Code review and Incident triage can share an Engineering space, with different instructions and apps.
+
+## Create a space
+
+You must give a name. All other settings are optional or have a default.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Select **Teams** in the sidebar, then select **New team**. If you are an organization admin or owner, select **Create or join a team** (**+**), then **Create team**.
+2. Enter a **Name**. You can also pick an icon and add a **Description**.
+3. Under **Visibility**, choose **Organization** for a shared space, or **Private** for a space that only you can use.
+4. Select **Continue**.
+5. Pick the machine for the space. Ren selects **Medium** (2 vCPUs, 2 GB) by default. For heavy work, choose a larger size or a custom [environment](/docs/concepts/environments/).
+6. For a shared space, add members and choose a role for each one. You join as owner.
+7. Examine the details and select **Create team**.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Create a space called Acme for our Acme client work, and add Priya and Jordan as members." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren pods create --name "Acme" --description "Acme client work"
+```
+
+</Fragment>
+</SurfaceTabs>
+
+Ren creates the space with a project that has the name of the space, like **Acme project**. Then Ren starts the machine of the space.
+
+<Video
+  clip="spaces/create-space"
+  title="Creating a team from New team through the Environment step's machine sizes to Create team"
+  caption="You go from New team through the machine sizes of the Environment step to Create team."
+/>
+
+## Members
+
+**Owner** and **Member** have the same access in a space. Both roles can use the resources of the space, manage members, and change settings.
+
+Only people in your organization can join a space. You can also add a person that you [invited to the organization](/docs/concepts/organizations/) before they accept. That person gets no access until they accept. Then they join the space with the role that you chose.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the space from **Teams**.
+2. Open the **Members** tab.
+3. Select **Add member**, pick a person, and choose a role.
+4. Select **Add member**.
+5. To remove a person, select **Remove** on their row.
+
+The members list shows invited people by email, with the status **Pending**, **Invite expired**, or **No active invite**. If you remove an invited person, they do not join the space when they accept.
+
+<Screenshot
+  shot="spaces/add-member"
+  frame="detail"
+  alt="The Add member dialog with a person selected and the Member role"
+  caption="The Add member dialog shows a selected person and the Member role."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add Alex Rivera to the Engineering space." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren pods members add <space-id> --user-id <user-id>
+ren pods members remove <space-id> <user-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+### Join a shared space
+
+Organization admins and owners can add themselves to any shared space in the organization. The admin role does not show you the work of a space until you join it. You join with the **Member** role.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Select **Teams** in the sidebar, then select **Create or join a team** (**+**).
+2. Select **Join team**. The list shows the shared spaces that you are not in.
+3. Search for the space and select it.
+4. Select **Join team**.
+
+Ren opens the space after you join.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add me to the Finance space." />
+
+</Fragment>
+</SurfaceTabs>
+
+## Instructions and default model
+
+Space instructions apply to every chat in the space. Ren reads them after the organization instructions and before the project instructions. See how instructions combine in [Projects](/docs/concepts/projects/).
+
+The default model of the space applies to every project in the space that does not set its own model. It overrides the default model of the organization.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+- To edit the instructions, open the **Instructions** tab of the space.
+- To set the model, open the **Overview** tab and choose a **Default model**. You can also edit the icon, name, and description there.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add an instruction to the Engineering space: every pull request description needs a testing section." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren pods update <space-id> --instructions "Every pull request description needs a testing section."
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Environment
+
+Every space has one machine, and all its projects and chats share it. The machine pauses when nobody uses it. It starts again when the next chat starts.
+
+To change the machine, open the **Environment** tab of the space and select **Change**. Then choose another size or a custom environment. [Environments](/docs/concepts/environments/) tells you what a custom environment can install and when a change takes effect.
+
+## Usage
+
+The **Usage** tab shows the cost of the chats in the space.
+
+| Control         | Options                    |
+| --------------- | -------------------------- |
+| Metric          | **Spend** or **LLM calls** |
+| Period          | The last 7, 30, or 90 days |
+| **Per session** | The cost of each chat      |
+
+## Credentials
+
+A shared space has its own credentials, like the ad account of a client or the GitHub token of a team. Only members of the space can use them, and every project in the space can use them. Manage them in **Settings → Credentials**.
+
+Your personal space has no separate credentials. Ren uses your personal credentials first, then the credentials of your shared spaces, then the organization credentials. [Credentials](/docs/concepts/credentials/) shows the full order that Ren uses.
+
+## Archive a space
+
+1. Open the space.
+2. Select **Team actions** (**⋯**).
+3. Select **Archive team**.
+
+The space and its projects leave your organization. Only the API can restore them.
+
+## Good to know
+
+- You cannot archive the General space or a Personal space.
+- Personal spaces have no **Members** tab.
+- Nobody can join a private space.
+- When you remove a person from a space, they stay in the organization.
+- An invited person keeps their space assignment if the invitation expires or you send it again.

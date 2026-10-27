@@ -1,0 +1,57 @@
+---
+title: Overview
+icon: Dashboard
+description: Organize Ren into spaces for teams or clients, projects for each kind of work, and chats for individual requests.
+---
+
+Ren organizes work in four levels. Each level sits inside the one above it. Use the levels to keep each team or client apart, and to give each kind of work its own setup.
+
+<FactoryDiagram />
+
+## The four levels
+
+| Level                                         | What it is                                           | What it holds or decides                                    |
+| --------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------- |
+| [Organization](/docs/concepts/organizations/) | Your company or account                              | Members, billing, and settings that apply everywhere        |
+| [Space](/docs/concepts/spaces/)               | A team or client inside the organization             | Who can see the work. A space runs on its own machine.      |
+| [Project](/docs/concepts/projects/)           | One kind of work inside a space, such as code review | The instructions, tools, and storage Ren uses for that work |
+| [Chat](/docs/concepts/chats/)                 | One request to Ren inside a project                  | Everything Ren did to answer the request                    |
+
+## Spaces
+
+Each organization starts with a **General** space for all members. Each member gets a private **Personal** space. Add spaces for teams or clients.
+
+## Example: a company's internal agents
+
+Northwind's engineers share the **Engineering** space in their company's organization. Engineering has two projects:
+
+- **Code review**, with the team's repositories and review instructions.
+- **Incident triage**, with access to the on-call tools and a runbook skill.
+
+Code review uses separate chats for the login fix and the new API. Both chats share the repositories and review instructions of the project. Incident triage uses a separate project because it needs different tools and instructions.
+
+## Example: an agency serving clients
+
+Brightline is a marketing agency. Its organization is **Brightline**, with one space per client, like **Acme**. The Acme space has two projects:
+
+- **Campaign reporting**, connected to Acme's ad accounts.
+- **Content production**, with Acme's brand guidelines and assets.
+
+Campaign reporting uses separate chats for weekly reports and campaign comparisons. Only Acme's team joins the Acme space. Acme's tool accounts use space credentials. The space of another client cannot get access to Acme's work or credentials.
+
+## What else you configure
+
+Most features attach to a project or a space.
+
+| Level               | Features                                                                                                                                                                                                                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project             | [Apps](/docs/concepts/apps/), [skills](/docs/concepts/skills/), [custom MCPs](/docs/concepts/custom-mcps/), [repositories](/docs/concepts/projects/), [channels](/docs/concepts/channels/), [schedules](/docs/concepts/schedules/), and [file and memory stores](/docs/concepts/storage/) |
+| Space               | [Databases](/docs/concepts/storage/), [artifacts](/docs/concepts/artifacts/), [environments](/docs/concepts/environments/), and [tasks](/docs/concepts/tasks/)                                                                                                                            |
+| More than one level | [Credentials](/docs/concepts/credentials/) and [instructions](/docs/concepts/projects/)                                                                                                                                                                                                   |
+
+## Good to know
+
+- Tasks attach to a space. You can assign a task to a project.
+- Credentials belong to the organization, a space, or your personal account.
+- You can set instructions on the organization, a space, and a project.
+- [Blueprints](/docs/concepts/blueprints/) add a ready-made project or space to your organization.

@@ -1,4 +1,4 @@
-const APP_URL = `${import.meta.env.SITE}/app`
+export const APP_URL = `${import.meta.env.SITE}/app`
 
 export const BILLING_URL = `${APP_URL}/settings/admin/billing`
 
@@ -17,3 +17,5 @@ const withSource = (url: string, source: string) => {
 export const signupHref = (source: string) => withSource(`${APP_URL}/signup`, source)
 
 export const demoHref = (source: string) => withSource(CALENDLY_URL, source)
+
+export const askRenHref = (prompt: string) => `${APP_URL}/?${new URLSearchParams({ prompt })}`

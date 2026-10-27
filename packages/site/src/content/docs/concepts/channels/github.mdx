@@ -1,0 +1,131 @@
+---
+title: GitHub
+icon: Github
+description: Install the Ren GitHub app, map repositories to a project, and mention @renagent on a pull request to give Ren the work.
+---
+
+With the Ren GitHub app, you give Ren work from a pull request. Install the app in your GitHub organization and map a repository to a [Ren project](/docs/concepts/projects/). Then mention `@renagent` on a pull request. Ren reads the work, replies, and can push commits.
+
+```text
+@renagent the null check in parseConfig is missing. Fix it and add a test.
+```
+
+## Install the Ren GitHub app
+
+You install the Ren GitHub app one time for each GitHub organization, and you choose the repositories it can access. The app has its own identity, separate from your personal GitHub account.
+
+| Where     | Who can install                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------------------- |
+| In Ren    | An organization admin starts the install.                                                            |
+| On GitHub | A person with permission to install apps on the organization. That is usually an organization owner. |
+
+If you cannot install the app yourself, GitHub sends the request to an owner for approval.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Go to **Settings → Mentions**.
+2. In the **Git providers** section, select **Install Ren on GitHub**.
+3. On GitHub, pick the organization.
+4. Choose **All repositories** or **Only select repositories**.
+5. Approve the install. You go back to Ren.
+
+{/* Media placeholder (screenshot `channels/github/install`): GitHub's install screen with repository access set to selected repositories. Answers: which repositories does Ren get access to? */}
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren github install
+```
+
+Open the GitHub URL that the command prints, and finish the install there.
+
+</Fragment>
+</SurfaceTabs>
+
+## Map repositories to a project
+
+A repository reaches Ren only after you map it to a project. Each repository maps to one project, and a project can have several repositories.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Add the repository to the project. See [Projects](/docs/concepts/projects/).
+2. Open the **@Ren** tab of the project.
+3. On the **GitHub** card, pick the repository.
+
+To map several repositories to one project, use **Settings → Mentions → GitHub**. Select a project, then select each repository to route to it.
+
+<Screenshot
+  shot="channels/github/map-repo"
+  frame="detail"
+  alt="The GitHub integration dialog with the project's repository selected"
+  caption="The GitHub integration dialog shows the repository that you select for the project."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Map the acme/storefront GitHub repository to this project." />
+
+Mapping needs an organization admin, so ask from an admin account.
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren github repos
+ren github mappings set <repo-id> --installation-id <id> --repo-full-name acme/storefront --project-id <project-id>
+```
+
+To set a fallback sender, add `--fallback-sender-user-id <user-id>`.
+
+</Fragment>
+</SurfaceTabs>
+
+## Mention @renagent
+
+Mention `@renagent` in a comment on a pull request, or in a review comment on a line of the diff.
+
+When Ren starts, it adds 👀 and underlines `@renagent`. Ren can reply, review the pull request, or push commits. When Ren finishes, it usually replaces 👀 with 🚀.
+
+{/* Media placeholder (clip `channels/github/mention`): Mention @renagent on a pull request, see the 👀 reaction, then Ren's reply and the commit it pushed. Answers: what happens after I mention Ren? */}
+
+Ren replies to mentions on pull requests in mapped repositories. It ignores:
+
+- Ordinary issues
+- Unmapped repositories
+- Comments from other bots
+
+## Chats and branches
+
+Every mention on the same pull request continues one chat. This includes replies to the comments of Ren. A mention on a different pull request starts another chat.
+
+On a pull request, Ren works on the branch of that pull request. In any chat, you can tell Ren which branch to check out.
+
+Ren works on the machine of the project's space. Each chat gets its own working directory there, so several chats can work on the same repository at the same time.
+
+## Who Ren commits as
+
+The author of the commits and comments of Ren depends on the [space](/docs/concepts/spaces/) of the project.
+
+| Space          | Author of commits and comments                |
+| -------------- | --------------------------------------------- |
+| Shared space   | The Ren app, not the person who mentioned Ren |
+| Personal space | Your GitHub account                           |
+
+To connect your GitHub account for a personal space:
+
+1. Open **Settings → Mentions**.
+2. Find the GitHub row marked **Needs attention**.
+3. Select **Connect your GitHub account**.
+
+Ren matches the commenter by their public GitHub email. If no Ren account matches, Ren uses the fallback sender of the repository. If neither belongs to the space of the project, Ren explains the rejection in a comment and does not act. See [Channels](/docs/concepts/channels/).
+
+## Good to know
+
+- To give Ren more repositories later, change the repository access of the app in your GitHub organization settings.
+- GitHub chats deny actions that need approval, and continue without them. Configure [project permissions](/docs/concepts/projects/) before you send requests.
+- Ren ignores mentions on ordinary issues, in unmapped repositories, and from other bots.
+- Mapping a repository needs an organization admin.

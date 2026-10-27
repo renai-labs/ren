@@ -1,0 +1,242 @@
+---
+title: Storage
+icon: Folder
+description: Choose a file store, memory store, or database, see what Ren creates for you, and attach storage to projects.
+---
+
+Storage is where Ren keeps things between chats. Anything that Ren writes outside storage disappears when the chat ends. In the API and the CLI, the three types of storage are `fileStore`, `memoryStore`, and `podDatabase`.
+
+<AskRen prompt="Create a memory store called Support playbook and attach it to this project." />
+
+## Choose a store
+
+File stores hold documents and data files. Memory stores hold information that Ren must remember. Databases hold structured data that Ren queries.
+
+| Store        | Holds                                          | Example                                         | How Ren reaches it                            |
+| ------------ | ---------------------------------------------- | ----------------------------------------------- | --------------------------------------------- |
+| File store   | Files you give Ren or files it produces        | Brand assets, a pricing sheet, exported reports | A folder in every chat of an attached project |
+| Memory store | Facts, decisions, and preferences, as Markdown | Team conventions, a customer's history          | A folder Ren reads when relevant and updates  |
+| Database     | Tables Ren queries with SQL                    | A lead list, daily sales figures                | A SQLite file shared by the space's projects  |
+
+Use a database when you must filter, join, or aggregate rows. File stores and memory stores are good for documents, Markdown, and config files. Do not keep git repositories or SQLite files in them. Use a [repository](/docs/concepts/projects/) or a database.
+
+## What Ren creates for you
+
+| When                         | Ren creates                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Your organization is created | An organization file store and memory store, named after the organization, attached to the General space's **Default** project |
+| You join an organization     | A personal file store and memory store, named after you, attached to the **Default** project in your personal space            |
+| You create a project         | A `<project> Files` file store and a `<project> Memory` memory store, attached to the project                                  |
+
+Every new file store and memory store starts with an empty `AGENTS.md`. Ren reads it when it opens the store. Use it to say what the store is for and how to organize it.
+
+## Ownership and access
+
+A file store or a memory store is organization-wide or private to one person.
+
+| Ownership         | Who can see it | Who can attach it                |
+| ----------------- | -------------- | -------------------------------- |
+| Organization-wide | Every member   | Any project in the organization  |
+| Private           | Only the owner | Only the projects of that person |
+
+Your personal stores are private. The stores of projects in your personal space are also private. Projects can share an attached file store or memory store.
+
+Each database belongs to a space. Every project in the space can query its databases, and only the members of that space can see them.
+
+Only organization admins can open **Settings → Storage**. Any member can attach stores to a project from the **Storage** tab of the project.
+
+## Memory stores
+
+A memory store is a folder of Markdown files. Ren reads it for past context. Ren updates it with decisions, preferences, or customer facts. The project instructions tell Ren what to keep.
+
+Ren sees the attached memory stores, but it does not load all their contents into every chat. When Ren opens a store, it reads `AGENTS.md`, then the files it needs. Your current request has priority over stored memory.
+
+<Screenshot
+  shot="storage/memory-store"
+  alt="A memory store open in the file browser, showing AGENTS.md and fact files"
+  caption="The file browser shows a memory store with its AGENTS.md file and its fact files."
+/>
+
+## Databases
+
+A database is a SQLite file on the machine of the space, at `/home/user/db/<slug>.db`. Ren backs it up all the time, so the database stays when Ren replaces the machine. Use a database when Ren must store rows and query them. For example, track leads across daily runs, or feed an [artifact](/docs/concepts/artifacts/) dashboard.
+
+All projects in a space share its databases. Projects in other spaces cannot get access to them.
+
+## Manage storage
+
+<Screenshot
+  shot="storage/settings"
+  alt="Settings Storage with the Memory, Files, and Databases tabs"
+  caption="Settings → Storage has a tab for memory stores, a tab for file stores, and a tab for databases."
+/>
+
+### Create a file store or memory store
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Settings → Storage** and choose the **Memory** or **Files** tab.
+2. Select **New memory store** or **New file store**.
+3. Choose the location: your organization or a project. If you choose a project, Ren also attaches the store to it.
+4. Enter a **Name**.
+5. Select **Create memory store** or **Create file store**.
+
+<Screenshot
+  shot="storage/new-store"
+  frame="detail"
+  alt="The New memory store drawer with Add to set to the organization and a name entered"
+  caption="The New memory store drawer shows the organization in Add to and a name for the store."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Create a memory store called Support playbook and attach it to this project." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren memory-stores create --name "Support playbook"
+ren file-stores create --name "Brand assets" --visibility private
+```
+
+</Fragment>
+</SurfaceTabs>
+
+### Attach storage to a project
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the project and go to its **Storage** tab.
+2. Choose **Memory** or **Files**.
+3. Select **Attach memory store** or **Attach file store**.
+4. Pick the store and select **Attach**.
+
+To detach a store, open its menu and select **Detach**. The store and its files stay.
+
+<Screenshot
+  shot="storage/attach"
+  frame="detail"
+  alt="The Attach memory store drawer with a store picked and the Attach button"
+  caption="The Attach memory store drawer shows the selected store and the Attach button."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Attach the Brand assets file store to this project." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren projects file-stores add <project-id> --file-store-id <id>
+ren projects memory-stores add <project-id> --memory-store-id <id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+### Upload files
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the **Storage** tab of the project, or **Settings → Storage**.
+2. Open the menu of the store and select **Browse**.
+3. Drop the files into the browser.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+Attach the file to your message:
+
+<AskRen prompt="Save this price list to the Brand assets file store." />
+
+</Fragment>
+<Fragment slot="cli">
+
+1. Run `ren file-stores files start-upload`.
+2. Upload the file to the URL that the command returns.
+3. Run `ren file-stores files finalize-upload`.
+
+For a small text file, use `ren file-stores files write-content` in one call. For memory stores, use the same commands under `ren memory-stores files`.
+
+</Fragment>
+</SurfaceTabs>
+
+### Create a database
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Settings → Storage** and choose the **Databases** tab.
+2. Select **New database**.
+3. Choose the space and enter a **Name**.
+4. Select **Create database**.
+
+To copy the path of a database on the machine, select **Copy path** on the database.
+
+<Screenshot
+  shot="storage/new-database"
+  frame="detail"
+  alt="The New database drawer with the General team selected and a name entered"
+  caption="The New database drawer shows the selected space and a name for the database."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Create a database called leads in this space with a table for company, contact, and stage." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren pod-databases create <space-id> --name Leads
+```
+
+</Fragment>
+</SurfaceTabs>
+
+### Delete a store
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Settings → Storage** and choose the tab.
+2. For a file store or a memory store, select **Delete**. For a database, select **Archive**.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Delete the Old campaign file store." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren file-stores archive <id>
+ren memory-stores archive <id>
+ren pod-databases archive <space-id> <id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+After you delete a file store or a memory store, projects lose access at their next update. Ren keeps the files for 30 days, then deletes them permanently. Archived databases keep their backups.
+
+## Bring memory from another assistant
+
+You can bring your memory from ChatGPT, Claude, or Claude Code. Connect the assistant that you use to Ren. Then ask it to push what it knows about you into a Ren memory store. See [Migrate from Claude Code](/docs/migrate/claude/).
+
+## Good to know
+
+- Each file can be up to 50 MB.
+- An upload that is not finalized does not show in the store.
+- Attachment changes reach chats when the machine of the space gets the update, usually within seconds.
+- A space has no file stores or memory stores of its own, but each database belongs to a space.
+- Your personal memory store can also hold a `WHOAMI.md` profile. Ren writes it when you join, so Ren knows your role from your first chat.
