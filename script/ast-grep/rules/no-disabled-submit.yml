@@ -3,7 +3,6 @@ language: Tsx
 message: Keep submit enabled and show errors after submit. Disabling it until the form is valid hides why it can't be sent.
 severity: error
 files:
-  - packages/ui/**
   - packages/app/**
 rule:
   kind: jsx_attribute

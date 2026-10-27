@@ -1,15 +1,18 @@
 ---
 name: react
-description: Use when writing, reviewing or refactoring React code in packages/ui or packages/app, covering component composition, data loading, updates and rendering performance.
+description: Use when writing, reviewing or refactoring React code in packages/app, covering component composition, data loading, updates and rendering performance.
 ---
 
 # React in Ren
 
-Lint enforces most React rules: run `bun run lint` and follow each message. This skill covers the judgment calls a rule cannot check. Package structure lives in `packages/ui/AGENTS.md` and `packages/app/AGENTS.md`.
+Lint enforces most React rules: run `bun run lint` and follow each message. This skill covers the judgment calls a rule cannot check. Package structure and the data layer live in `packages/app/AGENTS.md` and `packages/app/docs/data-layer-plan.md`.
+
+- The React Compiler is on: no hand-written `useMemo`, `useCallback` or `memo`.
+- Server data goes through TanStack Query with the generated `api` options; live chat through `@ren/chat`. Never copy either into `useState` or a store.
 
 ## Composition
 
-- Build anything with more than one region as compound parts that share context, the way Base UI does: `Composer.Root`, `Composer.Input`, `Composer.Submit`. Parts read context. Consumers pick the parts they need instead of toggling them with props.
+- Build anything with more than one region as compound parts, the way shadcn and Base UI do (`InputGroup`, `InputGroupAddon`, `InputGroupTextarea`). Consumers pick the parts they need instead of toggling them with props.
 - Give a compound context three parts: `state`, `actions` and `meta` (refs and other handles). Parts depend on that interface only.
 - The provider is the only place that knows where state comes from: `useState`, a query, or the sync layer. Swapping the provider must not change the parts.
 - Lift state into the provider when something outside the visual frame needs it, such as a dialog's submit button or a preview. Never sync state upward with effects or read it from refs.
@@ -17,7 +20,7 @@ Lint enforces most React rules: run `bun run lint` and follow each message. This
 
 ## Data and async
 
-- Start independent work together. Route loaders `Promise.all` their `queryClient.query(...)` calls.
+- Start independent work together. Route loaders start every fetch (`void queryClient.query(...)`) without awaiting; pages read with `useSuspenseQuery`.
 - Inside a function, check cheap synchronous conditions first, and move each `await` into the branch that needs it.
 - Place `<Suspense>` around the region that waits, and keep the surrounding layout outside so it paints immediately. Give independently loading regions their own boundaries.
 - Subscribe to the narrowest value: Query `select`, router `useSearch({ select })`, store selectors that return booleans or primitives.
@@ -29,7 +32,7 @@ Lint enforces most React rules: run `bun run lint` and follow each message. This
 - Feed expensive renders that depend on fast-changing input through `useDeferredValue`.
 - Use the functional form `setX((previous) => ...)` whenever the next state depends on the previous one.
 - Keep high-frequency transient values (pointer position, scroll offset, timers) in refs, not state.
-- In the few effects that exist (`src/lib`, `src/platform`, `@ren/ui`):
+- In the few effects that exist (`src/lib`, `src/hooks`):
   - Read the latest props through `useEffectEvent`.
   - Depend on primitives, not objects.
   - Run app-wide initialization once at module level or in `main.tsx`, never in a mount effect.

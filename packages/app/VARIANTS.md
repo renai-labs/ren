@@ -1,0 +1,73 @@
+# Variants Ren uses
+
+The shadcn components in `src/components/ui` keep every variant and size shadcn ships. Ren uses only the set below.
+
+| Component | Variants | Sizes | When |
+| --- | --- | --- | --- |
+| Button | `default` | `default`, `xs`, `icon-sm` | The main action. `default` in dialog footers; `xs` with `h-6.5` (Ren's 26px) in page toolbars; `icon-sm` for an icon-only main action (New task, New space). |
+| Button | `outline` | `default`, `xs`, `sm` | Secondary actions. `xs` with `h-6.5` in settings rows (Change). |
+| Button | `secondary` | `xs` | A quiet filled action on a card: Reconnect on a provider subscription, `xs` at `h-6.5`. |
+| Button | `ghost` | `icon-sm`, `icon-xs`, `xs` | Quiet icon actions in toolbars and rows, muted (`text-muted-foreground`). `icon-xs` for the pencil next to a name. `xs` with `h-6.5` for a quiet text action in a dialog (Edit, Back, Open again). |
+| InputGroupButton | `ghost` (its default), `outline`, `default`, `secondary` | `sm`, `icon-sm` | Prompt input only: `outline` for the add button, `default`/`secondary` for Send (secondary while empty). |
+| Badge | `secondary` | default | A neutral fact: "Private". |
+| Badge | `outline` | default | Labels (filled 24px pill with a color dot) and "Needs review". |
+| Badge | `secondary` | default | `StatusBadge`: every status (providers, apps, keys) at 24px, filled with its tone at 10%: green (`chart-2`) Active and Connected, amber (`chart-3`) Limit reached, "1 not connected" and Delivered, red (`destructive`) Reconnect; neutral keeps the secondary fill ("Laxman's account"). |
+| Avatar | — | `default`, `sm` | `default` for the sidebar profile; `sm` at 20px for people in lists (`PersonAvatar`). |
+| Select | — | `default`, `sm` | `default` in settings rows (ghost-looking) and forms; `sm` filled for the role in tables and display options. |
+| Bubble | `muted`, `ghost` | default | `muted` for the user, `ghost` for Ren. |
+| SidebarMenuButton | default | `default` at `h-9`, `sm` | `sm` only for "Show more". |
+| Button | `destructive` | `default` | Only the confirm button of `ConfirmDialog`, filled red. |
+| Everything else | defaults | defaults | Card, Tabs, Table, Dialog, Sheet (`right`), Popover, Command, Calendar, Field, Item, Empty, Sidebar (`inset`), Message. |
+
+## Call-site overrides
+
+To match useren.ai 1:1, some components get a `className` where they are used. Each is listed here.
+
+| Where | What | Why |
+| --- | --- | --- |
+| `TableCard` (`src/components/ren/page.tsx`) | Cells `px-4 py-3`, no row dividers, column heads normal weight and muted | Ren's tables: 44px rows, quiet heads |
+| `PageTabsList`, `PageTabsTrigger` | No track, 32px pills, active pill filled white 8% and medium, count muted | Ren's page tabs |
+| `Rows`, `Row` | Card fill, rows `px-4 py-3`, min 56px, 12px descriptions | Ren's settings rows |
+| `PersonAvatar` | Avatar `sm` at 20px, one letter, secondary fill | Ren's people in lists |
+| `RowMenu` | `-my-1 flex` on the trigger | A 28px button in a 44px row |
+| Toolbar buttons | `xs` + `h-6.5` for text, `text-muted-foreground` for ghost icons | Ren's 26px toolbar buttons and muted icons |
+| Space cards | Card spacing 24px, gap 16px, 14px title, 12px description, inset footer divider with no fill | Ren's team cards |
+| Task rows | 30px leading gutter, 80px ID column, medium title, muted group controls | Ren's task list |
+| Role select | Filled (`bg-muted`), no border, 12px, 112px wide | Ren's role picker |
+| Settings sidebar | Trigger row, filled search with icon, 20px section labels | Ren's settings sidebar |
+| Menu widths | `w-40` row and actions menus, `w-48` small menus, `w-60` org switcher, `w-64` pickers and filters, `w-72` model picker | Stock content takes the trigger's width; Ren uses fixed widths |
+| `FilterMenu` | 36px property rows, label `mb-1`, separator `my-2` | Ren's filter menus (tasks, spaces, members, keys) |
+| `MenuSearch` | Borderless 40px search row atop a menu | Ren's space and model pickers |
+| Pickers in popovers (task assignee, space) | 56px search row, uppercase 11px headings, 44px rows | Ren's combobox pickers |
+| Property chips (New task) | Outline `xs` buttons, `h-7 rounded-full` | Ren's task composer |
+| `ConfirmDialog` | Destructive button filled | Ren's confirmations |
+| New task dialog | `top-[12%]`, 768px, no padding; search dialog `top-[24%]`, 672px | Ren's positions |
+| Model picker | Search field on top, opens upward, check on the current model | Ren's model picker |
+| Add menu | Plus turns 45 degrees while open, opens upward | Ren's add button |
+| `PageScope` (Page `scope` slot) | Ghost `xs` trigger in a sidebar-colored notch hanging from the panel's top edge, with curved corners | Ren's scope switcher (Members, Credentials) |
+| Page `back`, `media`, `menu` slots | Ghost `xs` back link, 48px icon tile, row menu at the header's end | Ren's detail pages (space) |
+| `EditableText` | Value in foreground with a ghost `icon-xs` pencil | Ren's editable names and descriptions |
+| Theme picker | Radio cards with drawn previews, 2px ring on the chosen one | Ren's Appearance setting |
+| Chat column | Messages 720px; composer 768px and 49px tall; both-edges scrollbar gutter so the column centers | Ren's chat layout |
+| User message | Bubble `px-4 py-2`, 8px top-right corner, 1.6 line height; avatar 22px outside the column; Edit and Copy under it | Ren's user message |
+| Work steps | 28px trigger, rail on the column edge, 32px tool rows with a filled mono chip | Ren's steps |
+| Members Name column | Ghost button with a sort arrow | Ren's sortable column |
+| Apps strip (prompt input) | `sm` InputGroupButton with a 20px avatar stack and an amber count badge; popover lists each profile with its gaps and a secondary `xs` Connect | ren-v2's apps strip (PR #61) |
+| Prompt input status | Spinner and "Starting sandbox…" in 12px muted, or the failure in red with a link Retry, in place of the placeholder | ren-v2's cold start (PR #61) |
+| Providers page | `Page` `aside` with a `default` Connect menu (provider marks, `w-40`); `PageTabs` per provider with its mark and count; cards are Card `border ring-0 gap-3 px-4` with an editable name, a tinted 24px status badge and `· plan`, Reconnect (`secondary` `xs` at `h-6.5`) and a ghost trash in the corner, and 4px Progress meters in `chart-1` on a `secondary` track with tabular percent and "in 4h"; cards rise in 30ms apart (200ms, strong ease-out, none with reduced motion) | ren-v1's Providers page, copied from its source (`features/inference`); the provider marks are Claude's and ChatGPT's real logos |
+| `AppsTable` | Apps in a `TableCard` with the keys table's rhythm: App (32px logo tile, name, account count), Used in (muted), Status (`StatusBadge`: Connected or "1 not connected"), row menu; the whole row opens the app's drawer | Settings → Credentials → Apps and a space's Apps tab, consistent with the keys table |
+| Table menu column | `w-15` (60px) in fixed-layout tables, so the 28px row menu fits its 16px padding and the table never scrolls sideways | Keys and apps tables |
+| `AppRow`, `AppGrid` | Item `px-2 py-2` in two columns, 40px logo tile, 12px caption, amber dot when an account needs attention; the name is a stretched button so the row opens the app and the action stays its own button | ren-v1's Marketplace rows (PR #61), used in the Marketplace and the Add app dialog; not measured |
+| `AppSheet` | After Devin's plugin drawer: the right Sheet at `sm:max-w-3xl`, 28px padding; a 44px logo tile, 18px name with a blue check for Ren's registry, the description with the main action (`default` size) beside it; then plain sections with 16px headings and no cards: Accounts, MCPs (the app's logo tile, transport as `streamable-http`, `stdio` or the provider) and Skills (a 24px Tabler bolt at a 1.5 stroke, muted, on a 40px `bg-muted` tile; two columns), and a two-column Metadata list | Devin's "add from marketplace" drawer (screenshot from the user) |
+| Connect dialog (`ProfileDialog`) | Logo tile header with a ghost Edit; `Rows` with one row per sign-in or key; a key is pasted in place; footer "Connected as …" with Done | ren-v1's connection modal (PR #61); not measured |
+| New profile dialog | shadcn choice cards (RadioGroup in FieldLabel) for Shared or Private, Checkbox list for spaces | ren-v2's profile form (PR #55) |
+| `ToolbarSearch` | InputGroup at 26px (`h-6.5`), 224px wide, beside toolbar actions | Lines up with Ren's 26px toolbar buttons |
+| Add app dialog | Dialog `sm:max-w-3xl` with a search field and a 320px scrolling app grid | ren-v1's "Add an app" |
+| Account menus | `w-48` for Add to space, Spaces and account actions | Ren's small menus |
+| `AppIcon`, `ProviderMark` | Real logos as images (the API's `icon` URL; Claude's and ChatGPT's marks are in `public/icons`), full-bleed in the rounded tile; a letter only when an app has no icon | As Devin shows a plugin's logo; no drawn SVG brand marks |
+| `MembersTable` | The members table in a `TableCard`, shared by Settings → Members and a space's Members tab: sortable Name with avatar and "You", Email, one place-specific column (Role select in Settings; `StatusBadge` Active or Pending in a space), row menu to remove | One members table everywhere |
+| Chats filter (sidebar) | `FilterMenu` with `trigger="sidebar"`: a 20px sidebar-colored trigger beside the Chats "+", blue dot on `ring-sidebar` while a filter is on, menu opening to the start; Space, Status (Working, Idle) and Updated (Today, Past 7 days, Past 30 days) | ren-v1's chat filters, on ren-v2's Session fields |
+| Pasted blocks (prompt input) | `AttachmentGroup` of `sm` Attachments above the input: clipboard icon, "Pasted text", line count in tabular numbers, a trigger that puts the text back in the message and an X that removes it | ren-v2's pasted blocks (a paste of 2,000+ characters or 20+ lines); not measured |
+| Tool steps (chat) | `Marker` rows at 32px; the chevron turns 90° when the output opens (transform only, 150ms ease-out, none with reduced motion) | `emil-design-eng`: motion on `transform`, under 300ms |
+| Tasks | No pagination: every task loads (pages of 100 fetched in one query) and is grouped on screen, as Linear does | The user's call; Linear's list |
+| Auth screens (`AuthLayout`) | No card or logo: a 320px column, 20px title with the muted "Self-improving software" under it, 32px between blocks, the legal line pinned to the bottom (12px). Stock components with call-site sizes: `Button` `h-10 w-full` (Google is `secondary` with Google's colored mark), `Input` `h-10 bg-card` (`border-transparent bg-muted` when read-only), `FieldGroup` `gap-4`; the password field is `InputGroup` + `InputGroupInput` + an `InputGroupButton` eye; the code is `InputOTP` as shadcn's Form example (3 + separator + 3, slots `h-12 w-11 text-xl`) | useren.ai's sign-in and sign-up, measured over CDP |

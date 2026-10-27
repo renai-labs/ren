@@ -139,7 +139,7 @@ const reactMessage =
   "The React Compiler memoizes, ref is a regular prop, `use(Context)` replaces useContext, and children replace Children/cloneElement. Use named imports."
 const effectApis = ["useEffect", "useLayoutEffect", "useInsertionEffect"]
 const effectMessage =
-  "Feature code has no effects: load data in route loaders and queries, derive values during render, put interaction logic in event handlers, and reset state with `key`. Effects live in src/lib or src/platform."
+  "Pages have no effects: load data in route loaders and queries, derive values during render, put interaction logic in event handlers, and reset state with `key`. Effects live in src/lib, src/hooks or src/components."
 
 const authPaths = [
   { name: "better-auth/react", message: "Use better-auth/client and read the session through TanStack Query." },
@@ -157,7 +157,7 @@ const browserPatterns = [
   { regex: "^(zod|yup|joi|valibot|superstruct)(/|$)", message: "Validate with Effect Schema." },
   {
     regex: "^(react-hook-form|@hookform/.*|formik|react-final-form)$",
-    message: "Use the form hook from @ren/ui/form (TanStack Form).",
+    message: "Use shadcn's Field components with plain form state.",
   },
   { regex: "^(swr|axios|ky|ofetch|react-query)$", message: "Use @ren/client through TanStack Query." },
   {
@@ -165,70 +165,44 @@ const browserPatterns = [
       "^(lodash|lodash-es|underscore|ramda|usehooks-ts|react-use|ahooks|@uidotdev/usehooks|fast-deep-equal|classnames|uuid|nanoid)(/|$)",
     message: "Use the platform (crypto.randomUUID, structuredClone, Intl) or a few lines of local code.",
   },
-  { regex: "^(moment|dayjs|date-fns|luxon)(/|$)", message: "Use the formatters in @ren/ui." },
+  { regex: "^(moment|dayjs|luxon)(/|$)", message: "Format dates with Intl in src/lib/format.ts." },
   {
-    regex: "^(@radix-ui|@headlessui|@mui|@chakra-ui|@mantine|@ark-ui|react-aria|react-aria-components|@shadcn)(/|$)",
+    regex: "^(@radix-ui|@headlessui|@mui|@chakra-ui|@mantine|@ark-ui|react-aria|react-aria-components)(/|$)",
     message: "Base UI is the only primitive library.",
   },
   {
     regex: "^(lucide-react|react-icons|@heroicons/.*|@phosphor-icons/.*|@carbon/icons-react)$",
-    message: "Use @ren/ui/icon.",
+    message: "Icons come from @tabler/icons-react (components.json sets iconLibrary to tabler).",
   },
   {
     regex: "^(styled-components|@emotion/.*|@stitches/.*|@vanilla-extract/.*)$",
     message: "Style with Tailwind and design tokens.",
   },
-  { regex: "^(sonner|react-hot-toast|react-toastify|notistack)$", message: "Use the Toast from @ren/ui." },
+  { regex: "^(react-hot-toast|react-toastify|notistack)$", message: "Use the Sonner toast from src/components/ui/sonner." },
   {
     regex: "^(redux|@reduxjs/.*|react-redux|mobx|mobx-react.*|recoil|jotai|valtio|nanostores|@nanostores/.*)$",
-    message: "Server state lives in TanStack Query, URL state in the router, and local state in components.",
+    message:
+      "Server state lives in TanStack Query, URL state in the router, live chat in @ren/chat, shared client state in Zustand (src/stores).",
   },
   {
     regex:
-      "^(posthog-js|@sentry/.*|mermaid|shiki|recharts|@mdxeditor/.*|pdfjs-dist|react-pdf|monaco-editor|@monaco-editor/.*|katex)$",
+      "^(posthog-js|@sentry/.*|mermaid|recharts|@mdxeditor/.*|pdfjs-dist|react-pdf|monaco-editor|@monaco-editor/.*|katex)$",
     message: "Heavy or third-party module: load it with lazy() or import() at the point of use, never statically.",
   },
   { regex: "^xlsx$", message: "Unmaintained on npm with known advisories." },
 ]
 
-const appPatterns = [
-  ...browserPatterns,
-  { regex: "^@base-ui/", message: "Compose @ren/ui components. Base UI is wrapped there." },
-  { regex: "^(class-variance-authority|clsx|tailwind-merge)$", message: "Variants belong in @ren/ui components." },
-  { regex: "^@tabler/", message: "Use @ren/ui/icon." },
-]
-
 const restrictedImports = (apis: string[], message: string, patterns: typeof browserPatterns) =>
   ["error", { paths: [{ name: "react", importNames: apis, message }, ...authPaths], patterns }] as const
 
-const formatMessage = "Format dates and numbers with the shared formatters in @ren/ui."
-const formatGlobals = [{ name: "Intl", message: formatMessage }]
-const formatProperties = ["toLocaleString", "toLocaleDateString", "toLocaleTimeString"].map((property) => ({
-  property,
-  message: `${formatMessage} \`${property}\` builds a new formatter on every call.`,
-}))
-const dateProperties = ["getFullYear", "getMonth", "getDate", "getDay"].map((property) => ({
-  property,
-  message: formatMessage,
-}))
-
-const platformGlobals = [
-  { name: "localStorage", message: "Go through platform storage." },
-  { name: "sessionStorage", message: "Go through platform storage." },
-  { name: "indexedDB", message: "Go through platform storage." },
-  { name: "fetch", message: "Use @ren/client through TanStack Query." },
-  { name: "EventSource", message: "Realtime streams belong in the sync layer, not components." },
-  { name: "WebSocket", message: "Realtime streams belong in the sync layer, not components." },
-  { name: "Notification", message: "Use platform.notify." },
-]
 const dialogGlobals = [
-  { name: "alert", message: "Use a Dialog or Toast from @ren/ui." },
-  { name: "confirm", message: "Use an AlertDialog from @ren/ui." },
-  { name: "prompt", message: "Use a Dialog from @ren/ui." },
+  { name: "alert", message: "Use a Dialog or a toast." },
+  { name: "confirm", message: "Use ConfirmDialog from src/components/ren." },
+  { name: "prompt", message: "Use a Dialog." },
 ]
 const serverGlobals = [
   { name: "Bun", message: "Browser code cannot use Bun APIs." },
-  { name: "process", message: "Browser code has no process. Use import.meta.env or the Platform." },
+  { name: "process", message: "Browser code has no process. Use import.meta.env." },
 ]
 const reflect = {
   name: "Reflect",
@@ -240,52 +214,25 @@ const jsonParse = {
   property: "parse",
   message: "Decode with Effect Schema (Schema.UnknownFromJsonString).",
 }
-const platformProperties = [
-  { object: "window", property: "localStorage", message: "Go through platform storage." },
-  { object: "window", property: "sessionStorage", message: "Go through platform storage." },
-  { object: "window", property: "fetch", message: "Use @ren/client through TanStack Query." },
-  { object: "window", property: "open", message: "Use platform.openExternal." },
-  { object: "document", property: "cookie", message: "Auth cookies belong to the server." },
-]
+
 const domProperties = [
   { object: "document", property: "querySelector", message: "Use a ref." },
   { object: "document", property: "querySelectorAll", message: "Use refs." },
   { object: "document", property: "getElementById", message: "Use a ref." },
   { object: "document", property: "getElementsByClassName", message: "Use refs." },
   { object: "document", property: "startViewTransition", message: "Use React's <ViewTransition>." },
-  { object: "window", property: "alert", message: "Use a Dialog or Toast from @ren/ui." },
-  { object: "window", property: "confirm", message: "Use an AlertDialog from @ren/ui." },
-  { object: "window", property: "prompt", message: "Use a Dialog from @ren/ui." },
+  { object: "window", property: "alert", message: "Use a Dialog or a toast." },
+  { object: "window", property: "confirm", message: "Use ConfirmDialog from src/components/ren." },
+  { object: "window", property: "prompt", message: "Use a Dialog." },
 ]
 
-const forbiddenElements = [
-  ["button", "Button"],
-  ["a", "Link"],
-  ["input", "a field"],
-  ["textarea", "a field"],
-  ["select", "Select"],
-  ["label", "a field"],
-  ["form", "the form hook from @ren/ui/form and Form"],
-  ["dialog", "Dialog"],
-  ["table", "Table"],
-  ["img", "an image component"],
-  ["svg", "Icon"],
-  ["h1", "Text"],
-  ["h2", "Text"],
-  ["h3", "Text"],
-  ["h4", "Text"],
-  ["h5", "Text"],
-  ["h6", "Text"],
-  ["p", "Text"],
-].map((entry) => ({ element: entry[0], message: `Use ${entry[1]} from @ren/ui.` }))
-
 const tailwind = {
-  cwd: "packages/ui",
-  entryPoint: "src/styles/index.css",
+  cwd: "packages/app",
+  entryPoint: "src/index.css",
   selectors: [
     ...getDefaultSelectors(),
-    { kind: SelectorKind.Callee, name: "^composeClasses$", match: [{ type: MatcherType.String }] },
-    { kind: SelectorKind.Callee, name: "^composeClasses$", match: [{ type: MatcherType.ObjectKey }] },
+    { kind: SelectorKind.Callee, name: "^(cn|cva)$", match: [{ type: MatcherType.String }] },
+    { kind: SelectorKind.Callee, name: "^(cn|cva)$", match: [{ type: MatcherType.ObjectKey }] },
   ],
 } satisfies Settings
 
@@ -302,25 +249,6 @@ const tailwindRules = {
   "better-tailwindcss/enforce-consistent-variable-syntax": "error",
   "better-tailwindcss/enforce-consistent-important-position": "error",
 } as const
-
-const spacingStep = "(?:0|1|2|3|4|6|8|12)"
-const layoutUtilities = [
-  "flex|inline-flex|grid|inline-grid|block|inline-block|inline|hidden|contents|invisible|visible",
-  "flex-(?:row|col)|flex-(?:wrap|nowrap|1|none|auto)|grow(?:-0)?|shrink(?:-0)?",
-  "items-(?:start|end|center|baseline|stretch)",
-  "justify-(?:start|end|center|between|around|evenly|stretch|normal)",
-  "self-(?:auto|start|end|center|stretch|baseline)",
-  "content-(?:start|end|center|between|around|evenly|stretch|normal|baseline)",
-  "place-(?:content|items|self)-(?:start|end|center|between|around|evenly|stretch|baseline|auto)",
-  "justify-items-(?:start|end|center|stretch|normal)",
-  "justify-self-(?:auto|start|end|center|stretch)",
-  "grid-(?:cols|rows)-\\d+|(?:col|row)-span-(?:\\d+|full)|col-(?:start|end)-\\d+",
-  "text-(?:left|right|center|start|end)",
-  `(?:gap(?:-[xy])?|[pm][xytrblse]?)-${spacingStep}|m[xytrblse]?-auto`,
-  "(?:w|h|size|max-w|max-h|min-h)-full|(?:min-)?h-dvh|min-[wh]-0|(?:max-)?w-(?:sidebar|dialog|content)",
-  "overflow(?:-[xy])?-(?:auto|hidden|visible|scroll|clip)|overscroll(?:-[xy])?-(?:contain|auto|none)",
-  "relative|sticky|top-0",
-].join("|")
 
 const importantClass = {
   pattern: "^.*!$|^!.*$",
@@ -353,12 +281,6 @@ const colorRoleClass = {
   pattern: `${anyVariant}(?:(?:bg|from|via|to)-(?:text|border)-|(?:text|placeholder|caret|decoration)-(?:background|fill|border|overlay)-|(?:border(?:-[xytrblse])?|ring|outline|divide|inset-ring)-(?:text|background|fill|overlay)-).+$`,
   message:
     "Use colour tokens only in their role: backgrounds take background, fill and overlay; text takes text; borders and rings take border. Accent and status work anywhere. Add a role token in Paper instead of borrowing one.",
-}
-
-const appClasses = {
-  pattern: `^(?!(?:(?:sm|md|lg):)*(?:${layoutUtilities})$).+$`,
-  message:
-    "App code only lays components out with flex, grid, gap, padding, margin, sizing and overflow on the token scale. Visual styling belongs in @ren/ui.",
 }
 
 export default defineConfig({
@@ -624,8 +546,6 @@ export default defineConfig({
       },
     ],
 
-    "ren/story-coverage": "error",
-    "ren/story-location": "error",
     "no-restricted-globals": ["error", reflect],
     "no-restricted-properties": ["error", jsonParse],
     "no-restricted-imports": ["error", { patterns: [vendored] }],
@@ -649,28 +569,8 @@ export default defineConfig({
       rules: { "eslint/no-console": "off" },
     },
     {
-      files: [
-        "**/*.stories.tsx",
-        "**/*.config.ts",
-        "**/*.config.mjs",
-        "**/.storybook/**",
-        "script/oxlint/ren/index.ts",
-      ],
+      files: ["**/*.config.ts", "**/*.config.mjs", "script/oxlint/ren/index.ts"],
       rules: { "import/no-default-export": "off" },
-    },
-    {
-      files: ["**/parity/*.stories.tsx"],
-      rules: {
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-return": "off",
-        "typescript/no-unsafe-argument": "off",
-      },
-    },
-    {
-      files: ["**/*.stories.tsx"],
-      rules: { "jsx-a11y/control-has-associated-label": "off", "jsx-a11y/anchor-has-content": "off" },
     },
     {
       files: ["script/oxlint/**", "oxlint.config.ts"],
@@ -748,74 +648,37 @@ export default defineConfig({
       rules: { "no-restricted-globals": ["error", reflect, ...serverGlobals] },
     },
     {
-      files: ["packages/ui/src/**", "packages/app/src/**"],
+      files: ["packages/app/src/**"],
       rules: {
-        "no-restricted-globals": ["error", reflect, ...serverGlobals, ...platformGlobals, ...dialogGlobals],
-        "no-restricted-properties": ["error", jsonParse, ...platformProperties, ...domProperties, ...formatProperties],
+        "no-restricted-globals": ["error", reflect, ...serverGlobals, ...dialogGlobals],
+        "no-restricted-properties": ["error", jsonParse, ...domProperties],
         "no-restricted-imports": restrictedImports(reactApis, reactMessage, browserPatterns),
       },
     },
     {
-      files: ["packages/app/src/**"],
+      files: ["packages/app/src/**/*.ts", "packages/app/src/**/*.tsx"],
       rules: {
-        "better-tailwindcss/no-restricted-classes": ["error", { restrict: [importantClass, appClasses] }],
-        "ren/feature-boundaries": "error",
-        "ren/narrow-chat-state": "error",
-        "react/forbid-component-props": [
+        "better-tailwindcss/no-restricted-classes": [
           "error",
-          {
-            forbid: [
-              "className",
-              "style",
-              {
-                propName: "viewTransition",
-                message: "Use React's <ViewTransition>. The router's document-level transition interrupts it.",
-              },
-            ],
-          },
+          { restrict: [viewportUnitClass, readingOrderClass, fontSmoothingClass] },
         ],
-        "react/forbid-dom-props": ["error", { forbid: ["style"] }],
-        "react/forbid-elements": ["error", { forbid: forbiddenElements }],
-        "no-restricted-globals": [
-          "error",
-          reflect,
-          ...serverGlobals,
-          ...platformGlobals,
-          ...dialogGlobals,
-          ...formatGlobals,
-        ],
-        "no-restricted-properties": [
-          "error",
-          jsonParse,
-          ...platformProperties,
-          ...domProperties,
-          ...formatProperties,
-          ...dateProperties,
-        ],
-        "no-restricted-imports": restrictedImports(reactApis, reactMessage, appPatterns),
-      },
-    },
-    {
-      files: ["packages/app/src/routes/**", "packages/app/src/features/**"],
-      rules: {
-        "no-restricted-imports": restrictedImports(
-          [...reactApis, ...effectApis],
-          `${effectMessage} ${reactMessage}`,
-          appPatterns,
-        ),
-      },
-    },
-    {
-      files: ["packages/app/src/platform/**"],
-      rules: {
-        "no-restricted-globals": ["error", reflect, ...serverGlobals, ...dialogGlobals, ...formatGlobals],
-        "no-restricted-properties": ["error", jsonParse, ...domProperties, ...formatProperties, ...dateProperties],
+        "react/jsx-max-depth": ["error", { max: 12 }],
+        "eslint/complexity": ["error", 30],
+        "eslint/no-nested-ternary": "off",
       },
     },
     {
       files: ["packages/app/src/main.tsx"],
+      rules: { "no-restricted-properties": ["error", jsonParse] },
+    },
+    {
+      files: ["packages/app/src/routes/**"],
       rules: {
-        "no-restricted-properties": ["error", jsonParse, ...platformProperties, ...formatProperties, ...dateProperties],
+        "no-restricted-imports": restrictedImports(
+          [...reactApis, ...effectApis],
+          `${effectMessage} ${reactMessage}`,
+          browserPatterns,
+        ),
       },
     },
   ],
@@ -829,5 +692,11 @@ export default defineConfig({
     "**/generated/**",
     "packages/db/src/auth.sql.ts",
     ".opencode/**",
+    ".agents/**",
+    ".claude/**",
+    "packages/app/src/components/ui/**",
+    "packages/app/src/hooks/use-highlighted-code.ts",
+    "packages/app/src/hooks/use-mobile.ts",
+    "packages/app/src/lib/highlighter.tsx",
   ],
 })

@@ -1,5 +1,3 @@
-export * as Links from "./links.js"
+export const docsUrl = "https://useren.ai/docs"
 
-export const docs = "https://useren.ai/docs"
-
-export const founderCall = "https://calendly.com/shrey-renai/30min"
+export const founderCallUrl = "https://calendly.com/shrey-renai/30min"

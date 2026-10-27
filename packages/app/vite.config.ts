@@ -1,12 +1,13 @@
 import babel from "@rolldown/plugin-babel"
 import tailwindcss from "@tailwindcss/vite"
-import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import react, { reactCompilerPreset } from "@vitejs/plugin-react"
+import { resolve } from "node:path"
 import { defineConfig, loadEnv } from "vite"
 
 export default defineConfig((env) => ({
   base: "/app/",
-  plugins: [tanstackRouter(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss()],
+  plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss()],
+  resolve: { alias: { "@": resolve(import.meta.dirname, "./src") } },
   define:
     env.command === "serve"
       ? {

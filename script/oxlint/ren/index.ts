@@ -1,7 +1,5 @@
 import { definePlugin } from "@oxlint/plugins"
-import { featureBoundaries } from "./rules/feature-boundaries.ts"
 import { interfaceCopy } from "./rules/interface-copy.ts"
-import { narrowChatState } from "./rules/narrow-chat-state.ts"
 import { noComments } from "./rules/no-comments.ts"
 import { noNodeModulesImport } from "./rules/no-node-modules-import.ts"
 import { noLookupInLoop } from "./rules/no-lookup-in-loop.ts"
@@ -9,13 +7,9 @@ import { noSortForExtremum } from "./rules/no-sort-for-extremum.ts"
 import { requireCompanionClass } from "./rules/require-companion-class.ts"
 import { requirePassiveListener } from "./rules/require-passive-listener.ts"
 import { requireSuppressionReason } from "./rules/require-suppression-reason.ts"
-import { storyCoverage } from "./rules/story-coverage.ts"
-import { storyLocation } from "./rules/story-location.ts"
 
 export const rules = {
-  "feature-boundaries": featureBoundaries,
   "interface-copy": interfaceCopy,
-  "narrow-chat-state": narrowChatState,
   "no-comments": noComments,
   "no-node-modules-import": noNodeModulesImport,
   "no-lookup-in-loop": noLookupInLoop,
@@ -23,8 +17,6 @@ export const rules = {
   "require-companion-class": requireCompanionClass,
   "require-passive-listener": requirePassiveListener,
   "require-suppression-reason": requireSuppressionReason,
-  "story-coverage": storyCoverage,
-  "story-location": storyLocation,
 }
 
 export default definePlugin({ meta: { name: "ren" }, rules })

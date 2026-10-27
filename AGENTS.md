@@ -10,7 +10,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 | Write React or interface code           | The `react` and `interface` skills.                                          |
 | Run, debug or verify Ren                | The `ren-dev` skill.                                                         |
 | Review code or prepare commits          | The `ren-dev` skill (scope, review checkpoints and test selection).          |
-| Change design tokens                    | The `sync-with-paper` skill.                                                 |
+| Change the app's look or components     | `packages/app/AGENTS.md`, the `shadcn` and `emil-design-eng` skills.         |
 | Change lint rules or `oxlint.config.ts` | `script/AGENTS.md`.                                                          |
 | Change Turborepo config                 | `docs/` in the installed `turbo` package. Its behaviour differs from memory. |
 | Write a spec                            | `specs/README.md`.                                                           |
@@ -39,9 +39,9 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 - `executor` runs on an environment's machine and serves the Environment API. It depends only on `schema` and `environment-api`.
 - `brain` holds brain code that is the same on every host and every harness: how a brain reaches its environment. It depends only on `schema` and `environment-api`.
 - `opencode-transcript` translates OpenCode rows and types into the Chat API types. It depends only on `schema`, `@opencode/schema` and `@opencode/core/session/info`. `cell` and `server` use it; `core` never imports it.
-- `client` may depend only on `schema` and `protocol`. `chat` builds on `client`, `schema` and `protocol` and is the live chat runtime for every client platform. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `chat`, `schema`, `ui` and `util`, and uses `better-auth/client` for auth flows.
+- `client` may depend only on `schema` and `protocol`. `chat` builds on `client`, `schema` and `protocol` and is the live chat runtime for every client platform. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `chat`, `schema` and `util`, and uses `better-auth/client` for auth flows.
 - `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`.
-- `client`, `chat`, `sdk`, `cli`, `app` and `ui` never import `core`, `db`, `server`, `host-api` or `environment-api`.
+- `client`, `chat`, `sdk`, `cli` and `app` never import `core`, `db`, `server`, `host-api` or `environment-api`.
 - `httpapi-codegen` stays independent of every Ren package.
 - `repos/` holds read-only copies of external repositories. Prefer their patterns over memory or web search. Do not edit or import them. The one exception is `repos/iron-proxy`, Ren's egress: a subtree of iron-proxy (Go) that Ren builds on and edits, and a workspace (`@ren/egress`). See `repos/iron-proxy/AGENTS.md`.
 

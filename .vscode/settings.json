@@ -16,6 +16,6 @@
     "source.fixAll.oxc": "explicit"
   },
   "oxc.typeAware": true,
-  "tailwindCSS.experimental.configFile": "packages/ui/src/styles/index.css",
-  "tailwindCSS.classFunctions": ["composeClasses", "cva"]
+  "tailwindCSS.experimental.configFile": "packages/app/src/index.css",
+  "tailwindCSS.classFunctions": ["cn", "cva"]
 }

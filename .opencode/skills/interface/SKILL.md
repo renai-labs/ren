@@ -1,15 +1,20 @@
 ---
 name: interface
-description: Use when designing or reviewing screens, layouts, motion, accessibility or interface copy in packages/ui or packages/app.
+description: Use when designing or reviewing screens, layouts, motion, accessibility or interface copy in packages/app.
 ---
 
 # Interface in Ren
 
-Lint and tests enforce the checkable interface rules: colour roles, motion tokens, focus rings, scroll containment, reading order, copy punctuation and banned phrases, page titles and submit buttons. Run `bun run check` and follow each message. This skill covers the judgment calls. Tokens and the look are fixed by `packages/ui/DESIGN.md`; nothing here overrides a token.
+Run `bun run check` and follow each message. This skill covers the judgment calls. The app is built from shadcn components with Ren's theme (`packages/app/src/index.css`); the rules for components, variants and overrides are in `packages/app/AGENTS.md` and `packages/app/VARIANTS.md`.
+
+- Components: use the `shadcn` skill. Check shadcn's registry and docs (`shadcn docs`, `shadcn search`) before writing a component, and keep shadcn's API.
+- Polish and motion: use the `emil-design-eng` skill, and review each page or chat pattern with it before calling it done.
 
 ## Layout
 
-When porting a screen or component, inspect its source and feature usage before editing. Preserve its appearance, interactions and states unless a change is approved. Compare the port in dark and light; report parity as verified only after that comparison runs. Follow `packages/storybook/AGENTS.md` for the parity check.
+When porting a screen or component, inspect its source and feature usage before editing. Preserve its appearance, interactions and states unless a change is approved. Verify it in the running app (`bun run dev:app`) against the local API; report parity as verified only after that check runs.
+
+- Nothing that stays on screen moves when a page, tab or list page changes. The dev build logs any layout shift to the console; fix it.
 
 - Group with space before lines. The gap between groups is at least twice the gap inside one.
 - Give each view one primary action. Move secondary actions into a menu once there are more than three.
@@ -20,7 +25,8 @@ When porting a screen or component, inspect its source and feature usage before 
 
 ## Motion
 
-- Interactions that happen often (typing, row hover, tab switches) get no animation beyond `transition-standard` on colour or opacity.
+- Interactions that happen often (typing, row hover, tab switches, keyboard actions) get no animation beyond a colour or opacity transition.
+- Animate only `transform` and `opacity`, under 300ms, with `ease-out`; exits faster than entries. Respect `prefers-reduced-motion`.
 - Reserve expressive motion for rare moments: first load, success, empty states.
 - Every animated change also leaves a static cue (colour, icon or label). Motion is never the only feedback.
 

@@ -16,7 +16,8 @@ description: Use when reviewing, running, debugging, or verifying Ren, preparing
 
 - Postgres: `docker compose up -d` from the repo root. Connection: `postgres://ren:ren@localhost:54320/ren` (`DATABASE_URL`).
 - API server: `bun run dev` from the repo root (port 4000, override with `PORT`). Logs go to stdout.
-- Web app: `bun run dev:app`. Vite proxies the API routes (`/auth`, `/spaces`, `/me`, …) to the API server; browser page loads (`Accept: text/html`) still get the SPA.
+- Cell daemon (needed for chats): `docker compose up -d celld`.
+- Web app: `bun run dev:app` (port 5173, at `/app/`). It calls the API server directly at `VITE_REN_API_URL` (default `http://localhost:4000`) with credentials; the API's `TRUSTED_ORIGINS` must include the app's origin.
 - Docs site: `bun run dev:site`.
 
 ## Checking the server
