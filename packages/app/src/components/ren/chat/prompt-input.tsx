@@ -66,17 +66,17 @@ function AddMenu(props: { placement: "home" | "chat"; onInsert: (text: string) =
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-52">
         <DropdownMenuGroup>
-          <DropdownMenuItem className="text-muted-foreground" onClick={props.onAttach}>
-            <IconPaperclip className="text-current" />
+          <DropdownMenuItem onClick={props.onAttach}>
+            <IconPaperclip className="text-foreground" />
             Attach files
           </DropdownMenuItem>
-          <DropdownMenuItem className="text-muted-foreground" onClick={() => props.onInsert("/")}>
-            <IconTerminal2 className="text-current" />
+          <DropdownMenuItem onClick={() => props.onInsert("/")}>
+            <IconTerminal2 className="text-foreground" />
             Commands
             <Kbd className="ml-auto">/</Kbd>
           </DropdownMenuItem>
-          <DropdownMenuItem className="text-muted-foreground" onClick={() => props.onInsert("@")}>
-            <IconAt className="text-current" />
+          <DropdownMenuItem onClick={() => props.onInsert("@")}>
+            <IconAt className="text-foreground" />
             Apps
             <Kbd className="ml-auto">@</Kbd>
           </DropdownMenuItem>
