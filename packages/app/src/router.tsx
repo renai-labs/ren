@@ -14,6 +14,7 @@ import { AppShell, SettingsShell } from "@/components/ren/app-shell"
 import { AppBoot } from "@/components/ren/app-boot"
 import { PageSkeleton } from "@/components/ren/page"
 import { RouteError, RouteNotFound } from "@/components/ren/route-error"
+import { ThemeSync } from "@/components/ren/theme-sync"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { api, pageSize, pickerPageSize, queryClient } from "@/lib/api"
@@ -47,6 +48,7 @@ const safeRedirect = (path: string | undefined) =>
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: () => (
     <TooltipProvider>
+      <ThemeSync />
       <Outlet />
       <Toaster />
     </TooltipProvider>

@@ -18,7 +18,7 @@ Ren's web app: stock shadcn components (style `base-nova`, Base UI) with Ren's d
 - Use only the variants in `VARIANTS.md`. Restyle with `className` at the call site, prefer a shared Ren piece in `src/components/ren` when the override repeats, and list every override in `VARIANTS.md`.
 - Every component in `src/components/ui` has a `<name>.md` beside it that says, in plain English, what changed compared with stock shadcn. After `shadcn add`, run `python3 scripts/component-notes.py`. Remove a component and its note when nothing uses it.
 - Chat is built from shadcn's AI Elements patterns (`src/components/ren/chat/`): read the pattern's `.md` (for example `https://ui.shadcn.com/docs/ai-elements/base/tool.md`) and build it from shadcn components, mapping `@ren/chat`'s rows instead of the AI SDK. The chat keeps Ren's own look where the patterns differ.
-- Ren's theme lives in `src/index.css`: Ren's dark values on shadcn's standard variables, Ren's radius scale (`sm` 4, `md`/`lg` 8, `xl` 12, `2xl` 16), SF Pro and IBM Plex Mono. Dark only: `index.html` sets `class="dark"`.
+- Ren's theme lives in `src/index.css`: Ren's light values on `:root` and dark values on `.dark`, on shadcn's standard variables, Ren's radius scale (`sm` 4, `md`/`lg` 8, `xl` 12, `2xl` 16), SF Pro and IBM Plex Mono. The theme (System, Light, Dark; default Dark) lives in the UI store; `ThemeSync` sets the `dark` class, and a script in `index.html` applies it before the app loads.
 - Icons are Tabler (`iconLibrary: "tabler"` in `components.json`).
 
 ## Skills

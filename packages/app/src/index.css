@@ -24,6 +24,46 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  color-scheme: light;
+
+  --background: #f9f9f9;
+  --foreground: #1b1b1b;
+  --card: #ffffff;
+  --card-foreground: #1b1b1b;
+  --popover: #ffffff;
+  --popover-foreground: #1b1b1b;
+  --primary: #1b1b1b;
+  --primary-foreground: #ffffff;
+  --secondary: rgba(0, 0, 0, 0.08);
+  --secondary-foreground: #1b1b1b;
+  --muted: rgba(0, 0, 0, 0.04);
+  --muted-foreground: #5d5d5d;
+  --accent: rgba(0, 0, 0, 0.08);
+  --accent-foreground: #1b1b1b;
+  --destructive: #bd2634;
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.08);
+  --ring: #0065cc;
+
+  --chart-1: #0065cc;
+  --chart-2: #197735;
+  --chart-3: #8a5700;
+  --chart-4: #bd2634;
+  --chart-5: #5d5d5d;
+
+  --radius: 8px;
+
+  --sidebar: #f2f2f2;
+  --sidebar-foreground: #5d5d5d;
+  --sidebar-primary: #1b1b1b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(0, 0, 0, 0.08);
+  --sidebar-accent-foreground: #1b1b1b;
+  --sidebar-border: rgba(0, 0, 0, 0.08);
+  --sidebar-ring: #0065cc;
+}
+
+.dark {
   color-scheme: dark;
 
   --background: #151515;
@@ -50,8 +90,6 @@
   --chart-3: #e0a33a;
   --chart-4: #f47780;
   --chart-5: #a3a3a3;
-
-  --radius: 8px;
 
   --sidebar: #101010;
   --sidebar-foreground: #a3a3a3;

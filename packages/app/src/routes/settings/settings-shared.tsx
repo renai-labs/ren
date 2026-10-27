@@ -18,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { auth } from "@/lib/auth"
 import { roleLabel, type Role, formText } from "@/lib/format"
+import { chooseTheme, useTheme, type Theme } from "@/stores/ui"
 
 const roleList: ReadonlyArray<Role> = ["owner", "admin", "member"]
 
@@ -143,7 +144,7 @@ export function PasswordDialog() {
   )
 }
 
-const themeCards = [
+const themeCards: ReadonlyArray<{ value: Theme; label: string }> = [
   { value: "system", label: "System" },
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
@@ -170,7 +171,7 @@ function ThemePreview(props: { tone: "light" | "dark" }) {
 }
 
 export function ThemePicker() {
-  const [theme, setTheme] = useState("dark")
+  const theme = useTheme()
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
       <span className="text-sm font-medium">Theme</span>
@@ -182,7 +183,7 @@ export function ThemePicker() {
             // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a preview card is the radio, as in Ren
             role="radio"
             aria-checked={theme === card.value}
-            onClick={() => setTheme(card.value)}
+            onClick={() => chooseTheme(card.value)}
             className="group flex flex-col items-center gap-2 text-sm text-muted-foreground aria-checked:font-medium aria-checked:text-foreground"
           >
             <span className="flex h-32 w-full overflow-hidden rounded-lg border group-aria-checked:ring-2 group-aria-checked:ring-foreground">
@@ -199,9 +200,6 @@ export function ThemePicker() {
           </button>
         ))}
       </div>
-      <Button variant="ghost" size="xs" className="h-6.5 self-center">
-        Show more
-      </Button>
     </div>
   )
 }
