@@ -16,6 +16,10 @@ const exceptions = new Map([
     "Lists the providers this server can install, starts an install (a write that returns a redirect), and lists the places an install reaches, read live from a provider that can be unavailable: no primitive operation is either.",
   ],
   [
+    "repository",
+    "Lists, for each git host, the repositories that the organization can read, read live from hosts that can be unavailable: not a page of stored records, which no primitive operation is.",
+  ],
+  [
     "credential-connect",
     "Starts a sign-in for one MCP of a profile: a write that returns a redirect, which no primitive operation is.",
   ],

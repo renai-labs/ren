@@ -1073,6 +1073,16 @@ export function make(client: ReturnType<typeof Ren.make>) {
         },
       },
     },
+    repository: {
+      list: {
+        queryKey: () => ["repository", "list"] as const,
+        queryOptions: () =>
+          queryOptions({
+            queryKey: ["repository", "list"] as const,
+            queryFn: (context) => client["repository"]["list"]({ signal: context.signal }),
+          }),
+      },
+    },
     "sign-in": {
       "sign-in-provider": {
         list: {

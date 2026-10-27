@@ -202,6 +202,7 @@ import type {
   ChannelConnectChannelInstallStartOutput,
   ChannelConnectChannelPlaceListInput,
   ChannelConnectChannelPlaceListOutput,
+  RepositoryListOutput,
   SignInSignInProviderListOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
@@ -1725,6 +1726,13 @@ export function make(options: ClientOptions) {
             requestOptions,
           ),
       },
+    },
+    repository: {
+      list: (requestOptions?: RequestOptions) =>
+        request<RepositoryListOutput>(
+          { method: "GET", path: `/repositories`, successStatus: 200, declaredStatuses: [401, 403, 503], empty: false },
+          requestOptions,
+        ),
     },
     "sign-in": {
       "sign-in-provider": {
