@@ -87,7 +87,7 @@ export function AddRepositoriesDialog(props: {
     add(parsed, { picked: false })
   }
   const problemOf = (row: Row) => {
-    if (!isAlias(row.alias.trim())) return "Use an alias with no slash, backslash, space, backtick or comma."
+    if (!isAlias(row.alias.trim())) return "Use an alias with no slash, backslash, space, backtick, comma or colon."
     if (taken(row.repository).includes(row.alias.trim())) return `Another repository uses the alias ${row.alias}.`
     if (!row.description.trim()) return "Description is required."
     return errors.get(row.alias.trim())

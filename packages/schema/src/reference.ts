@@ -5,7 +5,9 @@ import { Schema } from "effect"
 export const Alias = Schema.String.check(
   Schema.isNonEmpty({ message: "Alias is required." }),
   Schema.isMaxLength(64, { message: "Use 64 characters or fewer." }),
-  Schema.isPattern(/^[^/\\\s`,]+$/u, { message: "An alias has no slash, backslash, space, backtick or comma." }),
+  Schema.isPattern(/^[^/\\\s`,:]+$/u, {
+    message: "An alias has no slash, backslash, space, backtick, comma or colon.",
+  }),
 ).annotate({ identifier: "Reference.Alias" })
 export type Alias = typeof Alias.Type
 

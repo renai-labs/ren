@@ -48,6 +48,13 @@ describe("Reference.Repository", () => {
   })
 })
 
+describe("Reference.Alias", () => {
+  test("refuses a colon, which only an alias that Ren derives has, such as drive:space", () => {
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(Reference.Alias)("docs.v2_main-2"))).toBe(true)
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(Reference.Alias)("drive:space"))).toBe(false)
+  })
+})
+
 describe("Reference.Info", () => {
   test("requires a description", () => {
     const docs = { alias: "docs", repository: "https://github.com/acme/docs" }
