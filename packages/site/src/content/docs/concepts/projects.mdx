@@ -1,0 +1,228 @@
+---
+title: Projects
+icon: CanvasBoard
+description: Set up a project for one kind of work, with its own instructions, repositories, apps, storage, permissions, and channels.
+---
+
+A project groups the chats for one kind of work in a [space](/docs/concepts/spaces/). It holds the instructions, repositories, apps, skills, storage, and permissions for its chats. Channels and schedules send requests to it.
+
+## How projects divide work
+
+Create a project when work needs different instructions or tools. For example, an Engineering space can contain **Plan**, **Build**, **Review**, and **Test** projects. These projects write specs, write code, review pull requests, and run tests.
+
+Each project has its own instructions and permissions. All the projects in a space share the members and the machine of that space. In the API and CLI, the name of a project is `project`.
+
+## Create a project
+
+You need a space and a name. All other fields are optional, and you can change them later.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Select **Teams** in the sidebar and open a space.
+2. Open the **Projects** tab and select **New project**.
+3. Enter a **Name**. You can also pick an icon and add a **Description**, **Instructions**, and repositories.
+4. On the **@Ren** step, choose where work can reach the project, like a Slack channel or an email address. You can skip this step.
+5. On the **Permissions** step, choose what Ren can do without asking.
+6. Select **Create project**.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Create a project called Code review in the Engineering space. Its instructions: review for security issues first, then readability." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren projects create --pod-id <space-id> --name "Code review"
+```
+
+</Fragment>
+</SurfaceTabs>
+
+Ren creates a file store and a memory store for each new project. Both stores use the name of the project, like **Code review Files** and **Code review Memory**. See [Storage](/docs/concepts/storage/).
+
+<Video
+  clip="projects/create-project"
+  title="Creating a project with the wizard steps General, @Ren, and Permissions, ending on the new project's tabs"
+  caption="The wizard goes through the General, @Ren, and Permissions steps, then shows the tabs of the new project."
+/>
+
+## Project settings
+
+On the **Overview** tab, you can edit the icon, the name, the description, and the **Default model**.
+
+| Model source                   | When chats use it                  |
+| ------------------------------ | ---------------------------------- |
+| The model you select in a chat | Always, if you select one          |
+| Project **Default model**      | If you do not select a model       |
+| Space default                  | If the project has no default      |
+| Organization default           | If the space has no default        |
+| Ren's default                  | If the organization has no default |
+
+To archive a project, select **Project actions** (the **⋯** button), then **Archive project**.
+
+<Screenshot
+  shot="projects/overview"
+  alt="A project's Overview tab with the tab row visible"
+  caption="The Overview tab of a project, with the row of project tabs at the top."
+/>
+
+## Instructions
+
+Project instructions are standing rules for every chat in the project, like "Always open a pull request instead of pushing to main." In every chat, Ren reads instructions from three levels, from broad to narrow. All three levels apply.
+
+| Level        | Where you edit it                       | What to put there           |
+| ------------ | --------------------------------------- | --------------------------- |
+| Organization | **Settings → General**                  | Company-wide rules          |
+| Space        | The **Instructions** tab of the space   | Team or client rules        |
+| Project      | The **Instructions** tab of the project | Rules for this kind of work |
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+Open the **Instructions** tab of the project and edit the text.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add to this project's instructions: run the tests before you open a pull request." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren projects update <project-id> --instructions "Run the tests before you open a pull request."
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Repositories
+
+Add the repositories that Ren works on. Ren clones each repository into the project on the machine of the space, so it can read and change the code. A project can have several repositories.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the **Repositories** tab of the project and select **Add repository**.
+2. Search for a repository and select it. You can select several.
+3. Select **Add repository**.
+
+The list shows the GitHub repositories that the Ren GitHub app can reach. In your personal space, the list shows the repositories from your own GitHub account. If GitHub is not connected, the dialog asks you to connect it first. See [GitHub](/docs/concepts/channels/github/).
+
+To change the URL, branch, or alias of a repository, select **Edit** on its row.
+
+<Screenshot
+  shot="projects/add-repository"
+  frame="detail"
+  alt="The Add repository dialog with two GitHub repositories selected"
+  caption="The Add repository dialog, with two GitHub repositories selected."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add the northwind/storefront repository to this project." />
+
+</Fragment>
+</SurfaceTabs>
+
+## Apps, skills, custom MCPs, and storage
+
+Attach tools and stores to a project to make them available to every chat in the project.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+- **Apps, skills, and custom MCPs:** The **Connections** tab of the project groups **Apps**, **Custom MCPs**, and **Skills**. It has the buttons **Add app**, **Add custom MCP**, and **Add skill**. You can also add items through **Marketplace**.
+- **In a chat:** In the composer, select **Connect** beside **+** to add or remove items in these groups. After you attach items, their icons replace **Connect**.
+- **Storage:** Open the **Storage** tab of the project and choose **Memory** or **Files**. Select **Attach memory store** or **Attach file store**. To detach a store, select **Detach** on its row.
+
+<Screenshot
+  shot="projects/connect-menu"
+  frame="detail"
+  alt="The composer's Connect menu with Apps, Custom MCPs, Skills, and Additional keys"
+  caption="The Connect menu in the composer, with Apps, Custom MCPs, Skills, and Additional keys."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add the release-notes skill and the Linear app to this project." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren projects skills add <project-id> --skill-id <skill-id>
+ren projects mcps add <project-id> --mcp-id <mcp-id>
+ren projects file-stores add <project-id> --file-store-id <store-id>
+ren projects memory-stores add <project-id> --memory-store-id <store-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+See [Apps](/docs/concepts/apps/), [Skills](/docs/concepts/skills/), [Custom MCPs](/docs/concepts/custom-mcps/), and [Storage](/docs/concepts/storage/).
+
+## Permissions
+
+Permissions decide which actions Ren does on its own, which actions it asks you about first, and which actions it never does. Each action has the setting **Allow**, **Ask**, or **Deny**.
+
+| Preset         | What Ren does                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------ |
+| **Safe**       | Reads files on its own, asks before most other actions, and never touches folders outside the project. |
+| **Balanced**   | Reads files and uses the internet on its own, and asks before changes and commands.                    |
+| **Autonomous** | Does most things on its own, but asks before it uses folders outside the project.                      |
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the **Permissions** tab of the project.
+2. Pick a preset.
+3. To fine-tune, set **Allow**, **Ask**, or **Deny** for each action in the list, like **Run commands** or **Access websites**.
+4. For rules that match specific commands or paths, select **Advanced**.
+5. Add a rule with a permission, a pattern, and a behavior, or edit the rules as JSON.
+
+You can also change the permissions of the project from a chat. Select **+** in the composer, then **Permissions**.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Let Ren run commands in this project without asking, but never access folders outside it." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren projects update <project-id> --body '{"permission": {"bash": "allow", "external_directory": "deny"}}'
+```
+
+</Fragment>
+</SurfaceTabs>
+
+If an action has the setting **Ask** in a chat that you are in, Ren shows the request above the composer. Choose **Allow once**, **Always allow**, or **Deny**, or type what Ren must do instead.
+
+<Video
+  clip="projects/permissions"
+  title="Choosing the Balanced preset, changing one action, then adding a rule under Advanced on the Permissions tab"
+  caption="On the Permissions tab, the user picks the Balanced preset, changes one action, and adds a rule under Advanced."
+/>
+
+## Channels
+
+The **@Ren** tab maps channels to the project: Slack channels, Linear projects, GitHub repositories, Telegram chats, and the email address of the project. Messages from a mapped channel start chats in this project. See [Channels](/docs/concepts/channels/).
+
+## Usage
+
+The **Usage** tab shows chat costs. Select **Spend** or **LLM calls**, then choose a period of 7, 30, or 90 days. Open **Per session** to see the cost of each chat.
+
+## Good to know
+
+- You cannot archive the **Default** project in your personal space.
+- Channel chats and scheduled chats deny actions set to **Ask** and continue without them. Set the actions they need to **Allow** before the chat starts.
+- If you detach a store, the store stays in your organization.
+- You can mention a repository in the composer by its alias, like `@storefront`.
+- Each new project gets its own file store and memory store.

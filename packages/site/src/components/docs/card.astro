@@ -1,0 +1,11 @@
+---
+import { DocsIcon } from "./icons.js"
+
+type Props = { title: string; icon: string; href: string }
+---
+
+<a href={Astro.props.href} class="docs-card">
+  <DocsIcon name={Astro.props.icon} className="docs-card-icon" />
+  <span class="docs-card-title">{Astro.props.title}</span>
+  <span class="docs-card-body"><slot /></span>
+</a>

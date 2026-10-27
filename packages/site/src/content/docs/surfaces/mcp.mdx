@@ -1,0 +1,123 @@
+---
+title: MCP
+icon: Mcp
+description: Connect a coding agent or a chat website to the Ren MCP server, so that it can manage your Ren setup.
+---
+
+The Ren MCP server lets another AI tool manage your Ren setup. For example, Claude can add a skill to a project or create a task. Add a remote MCP server with Streamable HTTP and this URL:
+
+```text
+https://api.useren.ai/mcp
+```
+
+## When to use the MCP server
+
+| Surface                            | Use it when                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------ |
+| MCP server                         | Another AI tool manages your Ren setup.                                        |
+| [CLI](/docs/surfaces/cli/)         | Your coding agent has a shell. The CLI covers more of Ren than the MCP server. |
+| [Web app](/docs/surfaces/web-app/) | You chat with Ren itself and review its work.                                  |
+
+## Connect a coding agent
+
+For Claude Code and Codex, use the Ren plugin. The plugin installs the MCP server and the Ren skills together. See [Claude Code](/docs/migrate/claude/) and [Codex](/docs/migrate/gpt/).
+
+To add only the MCP server to Claude Code, run:
+
+```sh
+claude mcp add --transport http ren https://api.useren.ai/mcp
+```
+
+For opencode, add the server to `opencode.json`:
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "ren": {
+      "type": "remote",
+      "url": "https://api.useren.ai/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+For a different client, open the MCP settings of that client. Add a remote MCP server with the name `ren` and the URL above.
+
+## Connect a website
+
+Create a custom connector in your client. Use `https://api.useren.ai/mcp` as the server URL and OAuth for authentication.
+
+| Website     | Where to add the custom connector    |
+| ----------- | ------------------------------------ |
+| claude.ai   | **Customize → Connectors**           |
+| chatgpt.com | **Settings → Connectors → Advanced** |
+
+After you add the connector, start a new chat. Then the website loads the Ren tools.
+
+## Sign in
+
+<Steps>
+
+1. Use a Ren tool. Your client opens the authorization page in your browser.
+2. If necessary, sign in.
+3. On the **Authorize access** screen, choose an **Organization**.
+4. Select **Allow**.
+
+</Steps>
+
+<Screenshot
+  shot="mcp/consent"
+  alt="The Authorize access screen with the organization picker and the Allow button"
+  caption="The Authorize access screen, where you choose the organization for the connection."
+/>
+
+The connection can act only in the organization that you choose.
+
+### Use an access key
+
+If your client has no browser authentication, use an [access key](/docs/surfaces/sdk/). The client must support an `Authorization` header. Send the key as a bearer token:
+
+```text
+Authorization: Bearer ren_pat_...
+```
+
+The key acts with its own role, in the organization where you created it.
+
+## Check the connection
+
+Ask your agent:
+
+```text
+Summarize my Ren setup.
+```
+
+The answer must name your organization, spaces, and projects.
+
+## Troubleshooting
+
+### Your client does not show the Ren tools
+
+Examine the connection status of the server in your client. Then start a new chat.
+
+## Limits
+
+The Ren MCP server cannot do these things:
+
+| It cannot                                           | What it can do, or where to go                                                     |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Send a message to Ren in a chat                     | It can create an empty chat. The conversation happens in the web app or a channel. |
+| Set up Slack, GitHub, Linear, Telegram, or WhatsApp | It can only set the email address of a project.                                    |
+| Invite people to your organization                  | Use the web app.                                                                   |
+| Create labels                                       | Use the web app or the CLI.                                                        |
+| Manage environments and databases                   | Use the web app or the CLI.                                                        |
+
+The [web app](/docs/surfaces/web-app/) covers all of these. The [CLI](/docs/surfaces/cli/) also covers channel setup, labels, environments, and databases.
+
+## Good to know
+
+- The server URL is `https://api.useren.ai/mcp` for every client.
+- A website loads the Ren tools only in a new chat, after you add the connector.
+- A connection acts in one organization only. To use a different organization, disconnect and sign in again.
+- If your coding agent has a shell, the CLI covers more of Ren than the MCP server.

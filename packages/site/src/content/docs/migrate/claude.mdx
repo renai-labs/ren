@@ -1,0 +1,113 @@
+---
+title: Claude and Claude Code
+icon: Claude
+description: Move your Claude Code skills and memory, and what Claude.ai knows about you, into Ren.
+---
+
+Move your work from Claude to Ren. Claude Code brings your skills and memory with the Ren plugin. Claude.ai copies its summary of you through the Ren connector.
+
+## Claude Code
+
+Copy your Claude Code skills and memory to Ren. Then use them to run work in the cloud, on a schedule, or with your team.
+
+### Install the Ren plugin
+
+The plugin adds the Ren MCP server and skills to configure and manage Ren.
+
+<Steps>
+
+1. Add the Ren marketplace:
+
+   ```text
+   /plugin marketplace add renai-labs/registry
+   ```
+
+2. Install the plugin:
+
+   ```text
+   /plugin install ren@renai-labs
+   ```
+
+3. Run `/mcp` in Claude Code.
+4. Select `ren`.
+5. Sign in through the browser and approve access. See [MCP](/docs/surfaces/mcp/).
+
+</Steps>
+
+### Run onboarding
+
+Onboarding is a skill in the plugin, not a slash command. Ask for it:
+
+```text
+Use the ren-onboarding skill to set me up on Ren.
+```
+
+Claude Code uses your existing context. It offers a tour, a demo, or help to configure recurring work. For recurring work, it asks what to delegate.
+
+Then it creates a project in your personal space and gives you its web app link. Last, it asks whether to connect any required accounts, like Gmail.
+
+{/* Media placeholder (clip `migrate/claude-code-onboarding`): Claude Code running Ren onboarding, from the first prompt to the link to the new project. Answers: what does onboarding do, and what will it ask me? */}
+
+### Push your skills
+
+Ask Claude Code to copy your local skills into Ren:
+
+```text
+Use the ren-systems-architect skill to push my Claude Code skills from ~/.claude/skills to Ren as personal skills.
+Skip skills that already exist in Ren. List the skills you created.
+```
+
+Claude Code creates one Ren [skill](/docs/concepts/skills/) from each skill folder, with its `SKILL.md` and supporting files. Ren checks each uploaded `SKILL.md` against the skill requirements. Claude Code lists the skills that Ren rejects.
+
+### Push your memory
+
+Ask Claude Code to copy what it remembers about you and your work:
+
+```text
+Use the ren-systems-architect skill to push my Claude Code memory and CLAUDE.md files to my personal memory store in Ren.
+```
+
+Claude Code uploads `CLAUDE.md` and the saved memory files to your personal memory store, such as `Alex Rivera Memory`. The **Default** project of your personal space uses this store. See [Storage](/docs/concepts/storage/).
+
+### Make sure it worked
+
+| What   | Where to look                                                                                                                       |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Skills | In the web app, open **Marketplace → Skills** and switch to **Installed**. Your pushed skills show as personal.                     |
+| Memory | Open the **Default** project of your personal space. Select **Storage → Memory**. Open your memory store to see the uploaded files. |
+
+You can also ask Ren in a new chat:
+
+<AskRen prompt="What do you know about me from my memory store?" />
+
+## Claude.ai
+
+Save the Claude summary of your work and preferences to the Ren memory.
+
+### Connect Ren to Claude.ai
+
+Add Ren as a custom connector in Claude.ai. See [MCP](/docs/surfaces/mcp/).
+
+### Push your memory from Claude.ai
+
+Start a new Claude.ai chat with the Ren connector turned on, and send:
+
+```text
+Record everything you know about me and my work. Include my role, team, projects, tools, and work preferences. Use the
+Ren connector to save claude-memory.md in my personal memory store.
+```
+
+Claude saves the file in your personal memory store, like `Alex Rivera Memory`. The **Default** project of your personal space uses this store.
+
+To review the file, open the **Default** project of your personal space and select **Storage → Memory**. See [Storage](/docs/concepts/storage/).
+
+### Move a Claude project
+
+Create a [Ren project](/docs/concepts/projects/). Copy the instructions of the Claude project into the **Instructions** field of the Ren project.
+
+## Good to know
+
+- Personal skills are visible only to you. To share a skill with your organization, ask Claude Code to create it at the organization level.
+- If Claude Code cannot reach Ren through the MCP server, onboarding installs the [CLI](/docs/surfaces/cli/). Then it asks you to approve a sign-in link in the browser.
+- The Claude.ai file holds the summary that Claude selects, not a complete memory export. Review it before you use it.
+- Automatic project migration is not available.

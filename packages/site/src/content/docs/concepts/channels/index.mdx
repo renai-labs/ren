@@ -1,0 +1,140 @@
+---
+title: Channels
+icon: AtSign
+description: Send work to Ren from Slack, GitHub, Linear, Telegram, WhatsApp, and email, and get replies in the same conversation.
+---
+
+A channel connects a Ren project to Slack, GitHub, Linear, Telegram, WhatsApp, or email. You send requests there, and Ren replies in the same conversation. Use a channel when your whole team must use Ren. Also use it to give work to Ren and read the reply later.
+
+```text
+When you finish this issue, post a two-line summary in our Slack channel.
+```
+
+## How channels work
+
+A channel is another way to reach the same [project](/docs/concepts/projects/). Channel chats use the same project instructions, skills, apps, and storage as web app chats.
+
+- **Project mapping:** You map each channel to a project. People in that conversation can send requests, subject to sender matching and fallback rules. Slack DMs and WhatsApp use your personal space without a mapping. An open [task](/docs/concepts/tasks/) assigned to a project can route its linked conversation to the chat of that task.
+- **Conversation history:** The first message starts a Ren [chat](/docs/concepts/chats/). Later messages in the same conversation continue it with the existing context. The [channel table](#each-channel) lists the conversation boundary of each channel.
+- **Files:** Replies can include files.
+- **Web app:** Every channel chat also shows in the web app, so you can continue it there. What Ren sent to the channel shows as its reply, under a **Sent on** caption that names the channel. Chats from Slack, GitHub, and Linear have an **Open in** link in the chat header. The link takes you back to the original conversation.
+
+## Set up a channel
+
+| Channel               | Install                                               | Mapping                                                                      |
+| --------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Slack, GitHub, Linear | Once for the organization, in **Settings → Mentions** | An organization admin maps them to projects                                  |
+| Telegram, email       | No install                                            | Per project, on the **@Ren** tab of the project                              |
+| WhatsApp              | No install                                            | No mapping. Each person connects their own number in **Settings → Mentions** |
+
+Only an organization admin can install Slack, GitHub, and Linear, or map them to projects. In a shared space, the **@Ren** tab of the project is for organization admins. In your [personal space](/docs/concepts/spaces/), you can turn on email and add Telegram chats yourself.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+Open **Settings → Mentions** to see each channel and its connection status.
+
+<Screenshot
+  shot="channels/overview/settings-mentions"
+  alt="Settings Mentions listing each channel with its connection status"
+  caption="Settings → Mentions lists each channel and shows if it is connected."
+/>
+
+</Fragment>
+</SurfaceTabs>
+
+## Each channel
+
+| Channel                                       | A project maps to               | How you reach Ren                       | One chat is                                       |
+| --------------------------------------------- | ------------------------------- | --------------------------------------- | ------------------------------------------------- |
+| [Slack](/docs/concepts/channels/slack/)       | A Slack channel                 | @mention Ren in a thread, or DM Ren     | A Slack thread                                    |
+| [Linear](/docs/concepts/channels/linear/)     | A Linear project                | Assign an issue to Ren, or @mention Ren | A Linear agent session                            |
+| [GitHub](/docs/concepts/channels/github/)     | A GitHub repository             | Mention `@renagent` on a pull request   | A pull request                                    |
+| [Email](/docs/concepts/channels/email/)       | The project's own email address | Send an email to the address            | An email thread                                   |
+| [Telegram](/docs/concepts/channels/telegram/) | A Telegram group or DM          | @mention the bot, reply to it, or DM it | A reply chain                                     |
+| [WhatsApp](/docs/concepts/channels/whatsapp/) | Nothing: your personal space    | Text Ren's WhatsApp number              | A conversation, until 12 hours of quiet or `/new` |
+
+**Slack:** Ren replies to mentions in mapped channels in threads. DMs use your personal space and need no mapping.
+
+**Linear:** Ren works as a [Linear agent](https://linear.app/docs/agents-in-linear) and posts progress and responses on the issue. One issue can contain several agent sessions, and each agent session has a separate Ren chat.
+
+**GitHub:** Mention `@renagent` in a pull request comment or in a comment on a diff line. Ren reads the pull request, replies, and can push commits.
+
+**Email:** Each project has its own address, such as `acme.support@agents.renai.build`. Put the address in **To**, **CC**, or **BCC**. Ren replies in the email thread.
+
+**Telegram:** A project link adds the bot to a group or a DM. In a group, mention the bot or reply to it. In a DM, send a message. Reply to a Ren message to continue its chat.
+
+**WhatsApp:** Connect your number once, then text Ren's number. Messages run in your personal space. Ren can reply only within 24 hours of your last message, so it cannot post to WhatsApp on its own.
+
+## Work across channels
+
+A project can use every channel that you map to it, not only the channel that a message came from. For example, a project has a Slack channel and a Linear project mapped. A chat that starts from a Linear issue can post a summary to the Slack channel of the project.
+
+Ren can post only to the channels mapped to the project of the chat. It can always reply in the source conversation of the chat, also after a [task](/docs/concepts/tasks/) moves the work to another project.
+
+## Project routing
+
+Ren sends each incoming message to its mapped project. A conversation can link to an open [task](/docs/concepts/tasks/) that has a project. Then Ren sends the message to the chat of that task first.
+
+When nothing matches:
+
+| Channel  | What happens                                                                                               |
+| -------- | ---------------------------------------------------------------------------------------------------------- |
+| Slack    | Ren posts "This channel isn't connected to a Ren project yet." with a **Connect to Ren** button.           |
+| Linear   | Ren posts "No Ren project is mapped to this issue" on the issue.                                           |
+| GitHub   | Ren ignores the mention.                                                                                   |
+| Email    | Ren drops the email and does not reply.                                                                    |
+| Telegram | In a DM, the bot replies that the chat is not connected to a Ren project yet. In a group, it stays silent. |
+| WhatsApp | Ren replies that the number is not connected to Ren yet.                                                   |
+
+## Senders
+
+Ren runs each message as the person who sent it, so the chat belongs to that person. Ren matches the sender to a Ren user in the space of the project:
+
+| Channel  | How Ren matches the sender                                               |
+| -------- | ------------------------------------------------------------------------ |
+| Slack    | Signing in to Ren with Slack, or the email on the sender's Slack profile |
+| Linear   | The email on the sender's Linear account                                 |
+| GitHub   | The sender's public GitHub email                                         |
+| Email    | The sender's email address                                               |
+| Telegram | A Telegram account linked to Ren in **Settings → Mentions → Telegram**   |
+| WhatsApp | The number connected in **Settings → Mentions → WhatsApp**               |
+
+### Fallback sender
+
+Sometimes the sender has no matching Ren account, or does not belong to the [space](/docs/concepts/spaces/) of the project. Then Ren uses the **fallback sender** of the mapping. You choose a space member when you map the channel. GitHub calls this the **default sender**, and Linear calls it the **session sender**.
+
+A fallback sender lets teammates without a Ren account send work to Ren. Ren examines the sender again on every message, so several people can work in the same conversation.
+
+If neither account belongs to the space, Ren does not run the request. Slack, GitHub, and Telegram explain the rejection. Linear and email send no reply. WhatsApp has no fallback sender: only connected numbers reach Ren.
+
+## Attachments
+
+| Channel  | What Ren receives                 | Limits                                      |
+| -------- | --------------------------------- | ------------------------------------------- |
+| Slack    | Files and snippets in the message | Ren skips files over 32 MB and adds a note. |
+| Telegram | Documents and photos              | Ren skips files over 32 MB and adds a note. |
+| WhatsApp | Files, photos, and voice notes    | Ren skips files over 32 MB and adds a note. |
+| Email    | Attachments on the email          | None set by Ren.                            |
+| GitHub   | The comment text only             | Ren reads the pull request itself.          |
+| Linear   | The issue and comment text only   | None.                                       |
+
+Ren reads images, text files, and PDFs directly. Ren saves other file types, such as ZIP archives, to the machine of the space. Ren can open them there with its tools.
+
+## Troubleshooting
+
+### Ren does not ask for permission in a channel
+
+Channel chats deny actions that need approval and continue without them. They also cannot ask clarification questions. Set the necessary actions to **Allow** in the [permissions](/docs/concepts/projects/) of the project.
+
+### Ren does not reply to a message
+
+No project matches the conversation, or the sender and the fallback sender do not belong to the space. See [Project routing](#project-routing) and [Fallback sender](#fallback-sender) for what each channel does.
+
+## Good to know
+
+- Channels bring Ren to everyone in the tools they already use, also to people who never open the web app. Use the [web app](/docs/surfaces/web-app/) for longer work, or when you must answer Ren's questions or approve its actions.
+- A project can have several GitHub repositories, Linear projects, and Telegram chats. The **@Ren** tab maps one Slack channel for each project. Each project has one email address.
+- Each Slack channel, repository, Linear project, Telegram chat, and email address maps to one project at a time.
+- Ren uses the [credentials](/docs/concepts/credentials/) of the space of the project, not those of the sender. In a shared space, Ren uses the credentials of the space, then those of the organization.
+- In the API and CLI, the channel resources are `slack`, `github`, `linear`, `telegram`, `whatsapp`, and `email`.

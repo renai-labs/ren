@@ -1,0 +1,185 @@
+---
+title: SDK
+icon: Developer
+description: Call the Ren API from your own TypeScript code, scripts, and CI with @renai-labs/sdk and an access key.
+---
+
+`@renai-labs/sdk` is the TypeScript client for the Ren API. Use it to create tasks from a script, update a skill in CI,
+or list projects in an internal tool.
+
+```ts
+import { createRenClient, pat } from "@renai-labs/sdk"
+
+const client = createRenClient({
+  baseUrl: "https://api.useren.ai",
+  auth: pat(process.env.REN_ACCESS_KEY!),
+})
+
+const { data: skills } = await client.skill.list()
+```
+
+For one-off changes from a terminal, use the [CLI](/docs/surfaces/cli/). To let another AI tool manage Ren, use
+[MCP](/docs/surfaces/mcp/).
+
+## Install
+
+```bash
+npm install @renai-labs/sdk
+```
+
+## Access keys
+
+An access key is a token that the SDK uses to call the API through your account. It belongs to one organization and has
+its own permission role.
+
+| Role       | Where you can create it | What it can do                                   |
+| ---------- | ----------------------- | ------------------------------------------------ |
+| `readonly` | App or CLI              | Read the organization resources available to you |
+| `member`   | CLI                     | Make changes                                     |
+| `admin`    | CLI                     | Make changes                                     |
+
+Keys that you create in the app are read-only. For a key that makes changes, use the CLI and choose `member` or `admin`.
+
+### Create a key in the app
+
+<Steps>
+
+1. Open **Settings → Access keys**.
+2. On the **Personal tokens** tab, select **Create token**.
+3. Enter a **Token name**, such as `CI pipeline`.
+4. Choose an **Expiration**. The default is 30 days.
+5. Select **Create token**.
+6. Copy the key. It starts with `ren_pat_`.
+
+</Steps>
+
+Ren shows the full key only one time.
+
+### Create a key from the CLI
+
+```sh
+ren pats create --name "CI pipeline" --role member --expires-at 2027-01-01T00:00:00Z
+```
+
+## Quick start
+
+<Steps>
+
+1. **Create a client** with a base URL and your access key:
+
+   ```ts
+   import { createRenClient, pat } from "@renai-labs/sdk"
+
+   const client = createRenClient({
+     baseUrl: "https://api.useren.ai",
+     auth: pat(process.env.REN_ACCESS_KEY!),
+   })
+   ```
+
+2. **Call a resource.** The SDK groups methods by resource. Each method returns `{ data, error, request, response }`:
+
+   ```ts
+   const { data: skills } = await client.skill.list()
+   ```
+
+</Steps>
+
+## Resource names
+
+Some API resources use a different name than the app:
+
+| In the app | In the SDK           |
+| ---------- | -------------------- |
+| Space      | `client.pod`         |
+| Chat       | `client.session`     |
+| Schedule   | `client.cronTrigger` |
+| Access key | `client.pat`         |
+| Database   | `client.podDatabase` |
+
+## Example: create a task from a script
+
+This script creates a high-priority task in the `Support` project. Run it with a `member` key.
+
+```ts title="create-task.ts"
+import { createRenClient, pat } from "@renai-labs/sdk"
+
+const client = createRenClient({
+  baseUrl: "https://api.useren.ai",
+  auth: pat(process.env.REN_ACCESS_KEY!),
+})
+
+const { data: projects } = await client.project.list({ throwOnError: true })
+const project = projects.find((p) => p.name === "Support")
+if (!project) throw new Error("No project named Support")
+
+const { data: task } = await client.task.create({
+  body: {
+    podId: project.podId,
+    projectId: project.id,
+    title: "Draft replies to this week's open support tickets",
+    priority: "high",
+  },
+  throwOnError: true,
+})
+
+console.log(`Created ${task.identifier}: ${task.title}`)
+```
+
+The task shows under **Tasks** in the web app, in the space of the project. See [Tasks](/docs/concepts/tasks/).
+
+## Errors
+
+By default, a non-2xx response does not throw. Examine `error`, or turn on throwing with `throwOnError`:
+
+```ts
+const { data, error } = await client.skill.get({ path: { id } })
+if (error) {
+  // error is typed to the operation's error schema
+}
+
+const { data } = await client.skill.get({ path: { id }, throwOnError: true })
+```
+
+## Configuration
+
+`createRenClient` accepts any `@hey-api/client-fetch` `Config` option: `baseUrl`, `headers`, `fetch`, `credentials`,
+interceptors, and more.
+
+```ts
+createRenClient({
+  baseUrl: "https://api.useren.ai",
+  auth: pat(token),
+  headers: { "X-Request-Id": crypto.randomUUID() },
+  fetch: customFetch,
+})
+```
+
+## Types only
+
+If you need only the types, import from `/types`. This leaves out the client runtime.
+
+```ts
+import type { Skill, SkillCreateData } from "@renai-labs/sdk/types"
+```
+
+## Revoke an access key
+
+When you revoke a key, Ren immediately blocks API calls that use it. This includes calls from running scripts.
+
+<Steps>
+
+1. Open **Settings → Access keys**.
+2. Select the revoke button of the key.
+3. Select **Revoke token**.
+
+</Steps>
+
+From the CLI, run `ren pats list` to find the ID of the key. Then run `ren pats revoke <id>`.
+
+## Good to know
+
+- A new key cannot have a higher role than your current role.
+- If your role changes later, the key keeps its original role.
+- A key works only in the organization where you created it.
+- Revocation is permanent.
+- When you create a task, Ren does not start work on it.

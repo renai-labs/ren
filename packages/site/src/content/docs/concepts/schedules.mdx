@@ -1,0 +1,107 @@
+---
+title: Schedules
+icon: Clock
+description: Run a prompt in a project on a recurring schedule, and pause, edit, or delete it when the work changes.
+---
+
+A schedule is a recurring request to Ren, such as every weekday at 9am. Each run starts a new chat in the project of the schedule. Use a schedule for work that repeats.
+
+For example, a schedule can examine your sales data every morning and update a dashboard [artifact](/docs/concepts/artifacts/). Another schedule can summarize the support tickets of the week every Friday afternoon.
+
+## Settings
+
+| Setting  | What it does                                                                                                        |
+| -------- | ------------------------------------------------------------------------------------------------------------------- |
+| Message  | The request Ren gets on each run.                                                                                   |
+| Project  | Where the chat of each run starts. The run uses the instructions, tools, and permissions of the project.            |
+| Repeat   | **Every hour**, **Every day**, **Every weekday**, **Every week**, **Every month**, or **Custom cron**, with a time. |
+| Timezone | The time zone that the schedule follows. New schedules use the time zone of your organization.                      |
+| Until    | An optional end date. After this date, the schedule stops.                                                          |
+| Model    | An optional model for the runs. Without one, runs use the default model of the project.                             |
+
+## Create a schedule
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Scheduled** in the sidebar.
+2. Select **Create schedule**.
+3. Enter the **Message**, like "Summarize yesterday's support tickets and post the top three issues."
+4. Choose the **Project**.
+5. Choose a repeat interval and a time.
+6. For a custom schedule, select **Custom cron**.
+7. Enter a cron expression, such as `0 9 * * 1-5` for weekdays at 9am.
+8. If you want, change the **Timezone**, set an **Until** date, or pick a **Model**.
+9. Select **Create schedule**. The dialog shows the time of the next run.
+
+<Screenshot
+  shot="schedules/drawer"
+  alt="The New schedule dialog with message, project, repeat, time, timezone, and model filled in"
+  caption="The New schedule dialog with all settings filled in and the time of the next run."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+After Ren does the work one time, send this in the chat:
+
+<AskRen prompt="Run this every weekday at 9am Pacific time." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren cron-triggers create <project-id> \
+  --input-message "Summarize yesterday's support tickets." \
+  --schedule "0 9 * * 1-5" \
+  --timezone "America/Los_Angeles"
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Run history
+
+To find past runs, filter the chat list in the sidebar by the **Scheduled** source. Chats from earlier runs stay in the chat list after you pause, edit, or delete the schedule.
+
+## Edit, pause, resume, or delete a schedule
+
+A paused schedule keeps its settings but does not run. Its card does not show a next run time.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+Open **Scheduled** in the sidebar. To show only **Enabled** or **Paused** schedules, use **Filter schedules**. On the card of the schedule:
+
+- To change the settings, select the edit button, then **Save**.
+- To pause the schedule, select the pause button. To resume it, select the resume button.
+- To remove the schedule, select the delete button, then **Delete**.
+
+<Screenshot
+  shot="schedules/list"
+  alt="The Scheduled page with one active and one paused schedule"
+  caption="The Scheduled page with one active schedule and one paused schedule."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Pause the daily support summary schedule." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren cron-triggers update <project-id> <schedule-id> --is-enabled false
+ren cron-triggers archive <project-id> <schedule-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Good to know
+
+- In the API and CLI, a schedule is a `cronTrigger`.
+- Scheduled chats deny actions set to **Ask**. Set the necessary actions to **Allow** in the permissions of the [project](/docs/concepts/projects/).
+- If your organization has no more credits, Ren pauses its schedules. Ren skips their runs until someone adds credits.
+- When you pause, edit, or delete a schedule, an active chat does not stop.

@@ -1,0 +1,154 @@
+---
+title: Custom MCPs
+icon: Mcp
+description: Add an MCP server that is not in the Marketplace, connect its credentials, and give its tools to a project.
+---
+
+A custom MCP connects Ren to a service outside the [Marketplace](/docs/concepts/apps/). MCP is a protocol that gives agents access to tools. For example, an internal documentation server can give search tools to the projects that use it.
+
+## Custom MCPs and apps
+
+Use an app when one exists, because apps include skills and a tested setup. If no app exists, connect a remote MCP server, or run a local server on the machine of the space.
+
+A custom MCP is one of two kinds:
+
+| Kind       | What it is                                          | Example                                      |
+| ---------- | --------------------------------------------------- | -------------------------------------------- |
+| **Remote** | A server that Ren reaches over HTTP or SSE at a URL | `https://mcp.example.com`                    |
+| **Local**  | A command that runs on the machine of the space     | `npx -y @modelcontextprotocol/server-github` |
+
+## Authentication
+
+For a remote server, choose how it authenticates:
+
+| Authentication                     | What you connect                                         |
+| ---------------------------------- | -------------------------------------------------------- |
+| None (no credential)               | Nothing. Use this for public servers.                    |
+| OAuth                              | A signed-in account, through the provider's sign-in page |
+| API key (bearer)                   | A token Ren sends in a header                            |
+| Basic                              | A username and password                                  |
+| Custom headers or query parameters | Values Ren places in the headers or URL you define       |
+
+## Add a custom MCP
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Marketplace → Custom MCPs** and select **Add custom MCP**.
+2. Choose where to add it: your organization, or a project. If you choose a project, Ren also adds the custom MCP to it.
+3. Pick a **Transport**: **Remote** or **Local**.
+4. For **Remote**, enter the **Server URL** and choose an **Authentication** type.
+5. For **Local**, enter the **Command**.
+6. Add any required **Arguments** and **Environment variables**.
+7. Enter a **Name**, then select **Add MCP**.
+
+<Screenshot
+  shot="custom-mcps/add"
+  alt="The New custom MCP form with Transport set to Remote, a server URL, and the Authentication menu open"
+  caption="The New custom MCP form for a remote server, with the Authentication menu open."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add our docs MCP server at https://mcp.acme.dev as a custom MCP and add it to this project. It uses OAuth." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren mcps create --name "Acme docs" --type remote --mcp-server-url https://mcp.acme.dev --auth oauth
+```
+
+Run `ren mcps create --help` for local commands and other authentication types.
+
+</Fragment>
+</SurfaceTabs>
+
+## Connect its credentials
+
+If the server needs a credential, connect it before Ren uses the server. Ren saves the credential in the space of the project, like an app connection. See [Credentials](/docs/concepts/credentials/).
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Add the custom MCP to a project, or ask Ren to use it in a chat.
+2. When Ren asks, select **Connect** and sign in. Or enter the key, password, or fields that the server needs.
+3. Select **Continue**. The connection shows as connected.
+
+{/* Media placeholder (detail `custom-mcps/connect`): A custom MCP's connect card in a chat asking for its API key, with **Continue**. Answers: how do I give a custom MCP its credential? */}
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Connect the Acme docs MCP." />
+
+Finish the sign-in, or enter the key on the card that Ren shows.
+
+</Fragment>
+<Fragment slot="cli">
+
+For OAuth:
+
+```sh
+ren credentials connect <mcp> --vault-id <vault-id>
+```
+
+For a token, pipe it to `ren credentials create <vault-id> --auth-type bearer --mcp-id <mcp-id> --token-stdin`.
+
+</Fragment>
+</SurfaceTabs>
+
+## Add it to a project
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Marketplace → Custom MCPs** and select the custom MCP.
+2. Select **Add**, choose a project, and select **Add**.
+
+The drawer lists the tools of the server and the credentials that it needs.
+
+<Screenshot
+  shot="custom-mcps/add-to-project"
+  frame="detail"
+  alt="The Add dialog for a custom MCP with the Storefront project chosen"
+  caption="The Add dialog of a custom MCP, with the Storefront project chosen."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add the Acme docs custom MCP to the Support project." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren projects mcps add <project-id> --mcp-id <mcp-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Detach it from a project
+
+To detach a custom MCP, select its trash icon in the **Connect** menu of the composer. You can also run `ren projects mcps remove` or ask Ren. When you detach a custom MCP, Ren keeps its definition.
+
+## Visibility and publishing
+
+| Where you add it                 | Who can see it                                           |
+| -------------------------------- | -------------------------------------------------------- |
+| The organization                 | Every member                                             |
+| A project in your personal space | Only you                                                 |
+| Published                        | Everyone, without authentication settings or credentials |
+
+A credential is never part of the definition of a custom MCP. Thus, when you share the definition, you do not share your account.
+
+To publish a custom MCP, run `ren mcps publish <mcp-id>` or use `mcp_publish`. Publishing is permanent, but you can deprecate it with `ren mcps deprecate`.
+
+## Good to know
+
+- The API resource is `mcp`. CLI commands use `ren mcps`.
+- If the URL is already registered, Ren shows an error with **Add second account**. Select it only to reach the same server with a different account.
+- You cannot undo a publish. You can only deprecate the published definition.

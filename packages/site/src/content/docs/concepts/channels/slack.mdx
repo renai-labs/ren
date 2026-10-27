@@ -1,0 +1,210 @@
+---
+title: Slack
+icon: Slack
+description: Connect Ren to Slack, map channels to projects, and send work to Ren from threads and DMs.
+---
+
+Ren is an app in your Slack workspace. Map a Slack channel to a Ren [project](/docs/concepts/projects/), and people can mention Ren there. Ren replies in a thread, and each thread is one Ren [chat](/docs/concepts/chats/).
+
+```text
+@Ren summarize the open bugs from this week and draft a fix for the top one
+```
+
+## When to use Slack
+
+Use Slack for requests that come up in team conversations, such as summaries, lookups, or drafts. Ren reads the thread context and shares progress and results with the channel. Use the [web app](/docs/surfaces/web-app/) for longer chats or for actions that need approval.
+
+## Install Ren in Slack
+
+You connect Slack one time for your organization. You need:
+
+- **A Ren organization admin:** Only admins can connect Slack and map channels.
+- **Permission to install apps in your Slack workspace:** If your Slack workspace needs app approval, a Slack workspace admin must approve Ren.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Go to **Settings → Mentions**.
+2. In the **Communication** section, select **Install Ren on Slack**.
+3. In Slack, approve the permissions that Ren asks for.
+
+<Screenshot
+  shot="channels/slack/install"
+  alt="Settings Mentions with the Slack row and the Install Ren on Slack button"
+  caption="The Communication section of Settings → Mentions shows the Install Ren on Slack button."
+/>
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren slack install
+```
+
+Open the Slack authorization URL that the command prints, and approve the permissions.
+
+</Fragment>
+</SurfaceTabs>
+
+After the install, Ren joins your public channels and the **Connect your Slack channels** dialog opens. Map channels to projects, or select **Skip for now**. Ren also sends a DM to the person who installed it, with suggestions of work it can do.
+
+## Channel mappings
+
+Ren responds only in channels that you map to a project. Each channel maps to one project.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the project and go to the **@Ren** tab.
+2. On the **Slack** card, pick a channel and an optional fallback sender.
+
+Ren saves the changes automatically. You can also map channels for every project from **Settings → Mentions → Slack**. Select a project, then select the channel to route to it.
+
+<Screenshot
+  shot="channels/slack/map-channel"
+  alt="A project's @Ren tab with a Slack channel selected on the Slack card"
+  caption="The Slack card on the @Ren tab of a project, with a channel selected."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Map the #support Slack channel to the Support project." />
+
+Mapping needs an organization admin, so ask from an admin account.
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren slack channels list
+ren slack channels set <channel-id> --project-id <project-id> --fallback-sender-user-id <user-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+When you map a channel for the first time, Ren posts "This channel is now connected to the Ren project …" in it.
+
+| Channel type | What to do                                                                        |
+| ------------ | --------------------------------------------------------------------------------- |
+| Public       | Nothing. Ren joins the channel by itself when you map it.                         |
+| Private      | Run `/invite @Ren` in the channel first, so that the channel appears in the list. |
+
+## Talk to Ren
+
+In a mapped channel, @mention Ren. You must @mention Ren for each request, follow-ups included.
+
+- **Reply:** Ren replies in a thread under your mention.
+- **Thread context:** When you mention Ren in an existing thread, it reads the messages and files since its last mention. The first time, it reads the whole thread.
+- **Status:** Ren adds 👀 when it starts and ✅ when it replies. Longer requests show a task list.
+- **Follow-up buttons:** A reply can have up to three follow-up buttons. When you select a button, Ren sends that suggestion as your next message.
+
+To continue a chat in more depth, open it in the [web app](/docs/surfaces/web-app/). To go back to the thread, select **Open in Slack** in the chat header.
+
+{/* Media placeholder (clip `channels/slack/mention`): Mention Ren in a channel, watch 👀 and the task list update, get the reply with follow-up buttons, then open the same chat in the web app. Answers: what does working with Ren in Slack look like end to end? */}
+
+## Who Ren acts as
+
+Ren matches you to a Ren user if you signed in to Ren with Slack, or by the email on your Slack profile. You must also be a member of the [space](/docs/concepts/spaces/) of the project.
+
+A chat runs as the **fallback sender** when the writer of the message has no matching Ren account. It also runs as the fallback sender when the writer is not in the space. For more about space membership, see [Channels](/docs/concepts/channels/).
+
+Several people can use one chat through the same Slack thread. Each mention or follow-up selection runs as its sender. If account matching fails, it runs as the fallback sender.
+
+The mapped project supplies the instructions, apps, skills, and storage. The space of the project sets the membership and the [credentials](/docs/concepts/credentials/) that Ren can use. Ren uses the credentials of that space, not the credentials of the sender.
+
+## DMs
+
+Open Ren from the **Messages** tab of the Ren app in Slack, and send a message.
+
+- **Project:** DMs run in the **Default** project in your **personal space**, so they do not need a mapping. They can also use your personal credentials.
+- **Chats:** Each new message at the top level starts a new chat. Reply in its thread to continue it.
+- **Mentions:** You do not need to @mention Ren in DMs.
+- **Account:** Your Slack account must match a Ren account in the organization. Ren matches you when you sign in with Slack, or by the email on your Slack profile. DMs have no fallback sender.
+
+## Automatic summaries, profiles, and suggestions
+
+When you install Slack, Ren starts the member schedules. When you map a channel, Ren starts the channel schedules and tells you that they are active. These schedules run without individual requests.
+
+| Schedule            | When                                       | What Ren does                                                                                                              |
+| ------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Channel summaries   | Each morning                               | Reads new messages in mapped channels and updates their summaries. It does not post a reply.                               |
+| Channel suggestions | Once a week, midweek, during working hours | Can post one suggestion with up to three follow-up buttons. It posts only the suggestions that it is confident are useful. |
+| Member profiles     | Twice a week                               | Builds a private profile of each member from their Slack messages.                                                         |
+| Member suggestions  | Once a week                                | Can send one suggestion in a DM.                                                                                           |
+
+{/* Media placeholder (screenshot `channels/slack/suggestion`): A suggestion Ren posted in a channel, with its follow-up buttons. Answers: what does a default suggestion look like? */}
+
+- **Members:** The member schedules start for existing members at the install, and for new members when they join.
+- **Unanswered suggestions:** Ren waits for a reply before it posts another suggestion. It dismisses unanswered suggestions after 14 days. These suggestions can come back after 30 days. Declined suggestions never come back.
+- **Reduced frequency:** After three consecutive weekly runs without a useful suggestion, Ren checks monthly.
+- **Tasks:** Each suggestion is a [task](/docs/concepts/tasks/). Channel suggestions are tasks in the mapped project, and the space of the project can see them. DM suggestions are tasks in your personal space.
+
+These run as [schedules](/docs/concepts/schedules/) in the mapped project and in the personal space of each member. They use the time zone of the organization. Ren keeps channel summaries and profiles as files in [file stores](/docs/concepts/storage/) in those projects.
+
+To turn them off, ask Ren, or pause or delete the schedules on the **Scheduled** page:
+
+```text
+Stop posting suggestions in #support.
+```
+
+## Disconnect
+
+- **Unmap a channel:** Clear the channel on the **@Ren** tab of the project, or remove it in **Settings → Mentions → Slack**. Ren stops responding to new mentions there.
+- **Disconnect Slack:** In **Settings → Mentions → Slack**, select **Reset mappings**. This clears every channel mapping and uninstalls Ren from Slack. You can connect again later.
+
+When you unmap a channel, disconnect Slack, or connect it again, the default schedules do not stop. They run until you turn them off.
+
+## Troubleshooting
+
+### Ren does not respond at all
+
+- **You replied without a mention:** In channels, each message to Ren needs an @mention, follow-ups in a thread included.
+- **The channel is not mapped, and Ren is not in it:** Map the channel. For a private channel, run `/invite @Ren` first.
+- **Slack is disconnected:** Make sure that Slack shows as **Connected** in **Settings → Mentions**.
+- **Ren started but never replied:** If only the 👀 shows, open the chat in the web app to see what happened.
+
+### "This channel isn't connected to a Ren project yet."
+
+The channel has no mapping. An admin can select **Connect to Ren** under the message, or map the channel in **Settings → Mentions → Slack**.
+
+### A private channel does not appear in the list
+
+Ren can see only the private channels that you invite it to. Run `/invite @Ren` in the channel, then open the list again.
+
+### "Couldn't map your Slack account to a Ren user."
+
+Ren could not match the sender to a Ren user, and the channel has no fallback sender. Sign up for Ren with the same email as your Slack profile. Or ask an admin to set a fallback sender on the channel mapping.
+
+In a DM, there is no fallback sender. Make sure that the email on your Slack profile matches your Ren account.
+
+### "Neither your Slack account nor the channel's fallback user is a member of this project's space."
+
+The project is in a [space](/docs/concepts/spaces/), and neither you nor the fallback sender is a member of it. Add yourself to the space, or pick a fallback sender who is a member.
+
+### "The project connected to this channel no longer exists."
+
+Someone deleted the mapped project. Map the channel to another project.
+
+### "Your private Ren project isn't set up yet."
+
+Your account has no personal space in the organization that installed Ren in Slack. Sign in to Ren in that organization, then send Ren a DM again.
+
+### "Ren hit a snag and couldn't finish"
+
+The chat failed before the end, and Ren marks your message with ❌. Open the chat in the web app to see the error, then mention Ren again to try again. If the message says that your organization has no more credits, add credits in **Settings → Billing & plans**.
+
+### "This Slack workspace is already connected to another Ren organization."
+
+A Slack workspace can connect to only one Ren organization. Disconnect it from the other organization first.
+
+## Good to know
+
+- **Who can send requests:** Anyone in a mapped channel. People without a Ren account use the fallback sender of the channel. DMs need a matching Ren account in the organization.
+- **What Ren posts:** Text, tables, files that it creates, and follow-up buttons. Ren can also post in other channels that are mapped to the same project.
+- **Files:** Ren gets the files and snippets attached to the message that mentions it, and to earlier messages in the thread. Ren skips files over 32 MB and sees a note about each one.
+- **Other bots:** Ren ignores DMs from other bots. In a channel, Ren handles a mention from another app like any mention. It runs as the fallback sender of the channel, because an app has no Ren account.
+- **Approvals:** Slack chats deny actions that need approval and continue without them. Set the [project permissions](/docs/concepts/projects/) before you send requests.
+- **Tasks that link a thread:** While a task is open and has a project, mentions in its linked Slack thread go to the chat of the task. They do not go to the project of the channel. This works also in a channel that is not mapped.
+- **Connect an app:** Ren does not ask you to connect an app from Slack. The **Connect** card for an app shows only in the web app. Open the chat in the web app to connect the app, or connect it from the project first.

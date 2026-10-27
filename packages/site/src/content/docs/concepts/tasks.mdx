@@ -1,0 +1,270 @@
+---
+title: Tasks
+icon: Checklist
+description: Track work for people and Ren in one list, give it to a project, and start Ren on it when you are ready.
+---
+
+A task is a tracked piece of work. You or Ren can create one, also for follow-up work that comes up in a chat. Use a task to track work, hand it between projects, or continue it later. Use a [chat](/docs/concepts/chats/) for a single request.
+
+<AskRen prompt="Create a high-priority task in the Engineering space: add retries to the supplier feed client. Assign it to the Build project." />
+
+## Tasks and chats
+
+A task can span several chats. When Ren continues a task, it can use the work and the comment history of the task.
+
+Every task belongs to a [space](/docs/concepts/spaces/). Everyone in the space can see the task, and nobody else can. If only you must see a task, put it in your personal space.
+
+In the API and CLI, a task is `task`.
+
+## Views
+
+Open **Tasks** in the sidebar. The **Display** button changes the layout:
+
+| Layout    | What it shows                                                                         |
+| --------- | ------------------------------------------------------------------------------------- |
+| **List**  | Tasks grouped by **Project** or by **Status**, in order of creation date or priority. |
+| **Board** | Tasks as cards, grouped by project.                                                   |
+
+<Screenshot
+  shot="tasks/list"
+  alt="The Tasks list showing each task's labels and status"
+  caption="The List layout shows the labels and the status of each task."
+/>
+
+<Screenshot
+  shot="tasks/kanban"
+  alt="The Tasks page in Board layout with one column per project"
+  caption="The Board layout shows one column for each project."
+/>
+
+**Filter tasks** narrows the list by status, priority, project, assignee, or label. By default, the list shows tasks that are **Todo** or **In progress**. Search finds tasks by text.
+
+## Create a task
+
+A task needs a title and a space. All other properties are optional:
+
+| Property                | What it does                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| **Description**         | The details that Ren and your teammates need.                                      |
+| **Status**              | **Todo**, **In progress**, **Done**, or **Dismissed**.                             |
+| **Priority**            | **Low**, **Medium**, or **High**.                                                  |
+| **Assignee**            | A person in the space who owns the task.                                           |
+| **Project**             | The project that Ren uses to work on the task. You must set it before work starts. |
+| **Labels** and due date | Group and schedule the task.                                                       |
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Tasks** and select **New task**, or push `C`. To add a task directly to a project, select the **+** next to the group of the project.
+2. Enter a title and an optional description.
+3. Choose the space.
+4. Set the properties that you need: status, priority, assignee, project, labels, and due date.
+5. Select **Create task**. To keep the dialog open for the next task, turn on **Create more**.
+
+<Video
+  clip="tasks/create-task"
+  title="Creating a task by filling in its title, space, and optional fields"
+  caption="You enter a title, choose a space, and set the optional fields of a new task."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Create a high-priority task in the Engineering space: add retries to the supplier feed client. Assign it to the Build project." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren tasks create --pod-id <space-id> --project-id <project-id> --title "Add retries to the supplier feed client" --priority high
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Labels
+
+Labels group tasks across projects, like `billing` or `customer-request`. Your whole organization shares the labels.
+
+Ren uses two system labels:
+
+| Label                           | Use                                |
+| ------------------------------- | ---------------------------------- |
+| **fix** (`ren-fix`)             | Setup problems that Ren can solve. |
+| **improvement** (`ren-improve`) | Improvements that Ren suggests.    |
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open a task, or open **Labels** in the new task dialog.
+2. Search for a label and select it.
+3. To create a label, type its name, pick a color, and select **Create label**.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add the billing label to the supplier feed task." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren labels create --name billing
+ren tasks update <task-id> --labels billing
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## When Ren starts work
+
+Ren does not start on a task when you create it. Ren also does not start when you change the project of the task in the app. Ren starts when one of these things occurs:
+
+- Someone selects **Start** on the task. See [Start a task](#start-a-task).
+- Someone hands the task to a project with the CLI or the API, or asks Ren to do it. See [Hand a task to another project](#hand-a-task-to-another-project).
+- Someone sends a message to Ren in a thread linked to the task. An example is the Slack thread or GitHub pull request that the task came from. Ren continues the task in its project and does not start a separate chat.
+
+Before Ren can work on a task, the task needs a project. It also needs the status **Todo**, **In progress**, or **In review**.
+
+## Task details
+
+Open a task to see all of its information:
+
+| Section                | What it shows                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Properties**         | Status, priority, assignee, and due date.                                                                                 |
+| **Links**              | The Slack threads, Linear issues, GitHub pull requests, and other URLs that the task points to.                           |
+| **Labels and project** | How the task is grouped, and where Ren works on it.                                                                       |
+| **Activity**           | Every change to the task and who made it, the comments, and the chats that worked on the task. Open a chat from its card. |
+
+Ren adds links while it works. You can add links with the API or CLI. The app shows links but does not add them.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the task.
+2. Type your comment in **Leave a comment...** at the bottom of the activity.
+3. Select **Comment**.
+
+<Video
+  clip="tasks/open-task"
+  title="Opening a task from the list to its detail page"
+  caption="You open a task from the list, and its detail page shows."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Comment on the supplier feed task that the API sandbox is down until Friday." />
+
+</Fragment>
+</SurfaceTabs>
+
+## Start a task
+
+**Start** runs the Ren of the assigned project on the task:
+
+| Option                    | What it does                                                                                       |
+| ------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Start new session**     | Opens a new chat for the task.                                                                     |
+| **Continue last session** | Continues the last chat of the assigned project for this task. If no chat exists, Ren creates one. |
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the task.
+2. Select **Start**.
+3. Choose **Start new session** or **Continue last session**.
+
+The new chat shows in the activity of the task.
+
+<Screenshot
+  shot="tasks/start"
+  frame="detail"
+  alt="A task's Start menu with Start new session and Continue last session"
+  caption="The Start menu of a task shows the two ways to start Ren."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Start the supplier feed task in a new session." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren tasks start <task-id> --mode new
+ren tasks start <task-id> --mode continue
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Hand a task to another project
+
+To hand work from one project to another, change the project of the task and start the task again. The Ren of each project keeps its own chat on the task. For example, you hand the task to **Plan**, then to **Build**, then back to **Plan**. Plan continues its own earlier chat.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the task.
+2. Change its **Project**.
+3. Select **Start**.
+4. Choose **Continue last session**.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Hand the supplier feed task to the Build project. The plan is approved." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren tasks assign <task-id> --project-id <project-id> --description "The plan is approved. Build it."
+```
+
+This one command sets the project. It replaces the description with the instruction for the new project. Then it starts Ren in that project, in its last chat on the task or in a new chat. The `message` in the reply says what changed and if Ren started.
+
+Add `--start new` to open a new chat. Add `--start none` to set the project and not start Ren.
+
+</Fragment>
+</SurfaceTabs>
+
+## Archive a task
+
+Archive a task that you do not need. An archived task leaves the task list, and you cannot start it. Messages in its linked threads do not go to it. Its chats stay in the chat list.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the actions menu of the task (the **⋯** button).
+2. Select **Archive task**.
+
+To archive more than one task, select the tasks in the list. Then choose **Archive** in the bar that shows.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Archive the supplier feed task." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren tasks archive <task-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Good to know
+
+- A task can have up to 16 labels. Each label can have up to 64 characters.
+- You can filter by the system labels, but you cannot edit them. Ren keeps the `ren-` prefix for its own labels.
+- Only the author of a comment can edit or delete it.
+- Task chats cannot ask clarifying questions. A permission request waits in the chat until someone answers it.
+- In the app, you can pick only projects in the space of the task. With the CLI, the API, or Ren, you can pick a project in another space that you belong to. The task then moves to that space.
+- If the assignee is not a member of the new space, Ren removes the assignee.
+- After `ren tasks assign`, do not run `ren tasks start`. That command starts Ren a second time.

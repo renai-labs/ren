@@ -1,0 +1,100 @@
+---
+title: Email
+icon: MailFilled
+description: Give a project its own email address, then send, forward, or CC it, and Ren replies in the same email thread.
+---
+
+Each [project](/docs/concepts/projects/) can have its own email address. Send, forward, CC, or BCC that address, and Ren works on the email and replies in the same thread.
+
+Use email for requests and documents that already arrive by email:
+
+- **Forward requests that arrive by email.** Send a customer's question to the support project, and Ren drafts the answer.
+- **Hand off documents.** Email invoices, contracts, or reports as attachments, and ask Ren to extract or summarize them.
+
+## Set a project's email address
+
+Email is off until you turn it on for a project. You do not install anything.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the project's **@Ren** tab.
+2. On the **Email** card, select **Create project mailbox**.
+
+The card shows **Mailbox enabled**. To find the address, ask Ren for it in the project, or run `ren email list`.
+
+<Screenshot
+  shot="channels/email/address"
+  alt="A project's @Ren tab with the Email card showing Mailbox enabled"
+  caption="The Email card on the @Ren tab shows Mailbox enabled after you create the mailbox."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Turn on email for this project and tell me its address." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren email set <project-id>
+ren email list
+```
+
+`ren email list` shows the address of each project. To choose a fallback sender, add `--fallback-sender-user-id <user-id>` to `ren email set`.
+
+</Fragment>
+</SurfaceTabs>
+
+## The address
+
+Ren makes the address from the organization and project slugs, for example `acme.support@agents.renai.build`. Slugs contain lowercase letters, numbers, and hyphens. If the address is not available, Ren adds a number.
+
+## Senders
+
+Ren accepts email from anyone whose email address matches a Ren user who is a member of the project's space.
+
+| Sender                                                              | What Ren does                                   |
+| ------------------------------------------------------------------- | ----------------------------------------------- |
+| A member of the project's space                                     | Runs the request as that user.                  |
+| Anyone else, with a fallback sender set                             | Runs the request as the fallback sender.        |
+| Anyone else, with no fallback sender                                | Drops the email and does not reply.             |
+| An automated sender, such as a `no-reply` address or a mailing list | Works on the email but does not reply by email. |
+
+Ren receives emails that use its address in **To**, **CC**, or **BCC**. Ren replies only to the person who sent the email, not to everyone on it.
+
+## Email threads and chats
+
+The first email starts a [chat](/docs/concepts/chats/) in the project. Replies in the email thread continue that chat.
+
+Ren reads only the new part of each email, not the quoted history below it.
+
+Several people can email Ren in the same thread. Ren examines each sender separately, and each email continues the same chat. Ren replies to the person who sent the latest email.
+
+## Forward an email to Ren
+
+Forward the email to the project's address, and add a note that says what you want:
+
+```text
+Draft a reply that offers a refund and keeps it under 100 words.
+```
+
+A forward starts a new chat. Ren replies to you, the person who forwarded the email. Your replies to Ren continue the same chat.
+
+## Attachments
+
+Ren receives email attachments. It reads images, text files, and PDFs directly. It saves other files to the space's machine and opens them with its tools.
+
+Ren can attach the files it creates to its replies.
+
+## Turn email off and on
+
+When you disable email, Ren releases the project's address, and the address stops working. When you enable email again, Ren makes a new address. If another project now uses the old address, Ren adds a number.
+
+## Good to know
+
+- If an email uses the addresses of two projects, only the first project receives it.
+- Email chats deny actions that need approval and continue without them. Set the [project permissions](/docs/concepts/projects/) before you send requests.
+- You cannot choose or edit the address of a project.
+- To set a fallback sender, add `--fallback-sender-user-id <user-id>` to `ren email set`.

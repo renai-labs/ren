@@ -1,0 +1,109 @@
+---
+title: Telegram
+icon: Telegram
+description: Talk to Ren from a Telegram group or DM, link your Telegram account, and connect each chat to a project.
+---
+
+Each Telegram group or DM connects to one [Ren project](/docs/concepts/projects/), and Ren replies in the same conversation. One bot serves all organizations, so you do not install anything. A project invite link adds the bot to your conversation.
+
+## Link your Telegram account
+
+When you link your Telegram account, Ren knows which messages are yours. Each Telegram account links to one Ren user in each organization.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Go to **Settings → Mentions**.
+2. In the **Communication** section, select **Connect Telegram**. Ren opens a link to the Ren bot in Telegram.
+3. In Telegram, select **Start**. The bot replies "✅ Your Telegram account is now linked to Ren."
+
+The link works one time and expires after 15 minutes.
+
+<Screenshot
+  shot="channels/telegram/link"
+  alt="Settings Mentions with the Telegram row and the Connect Telegram button"
+  caption="The Communication section in Settings → Mentions shows the Telegram row and the Connect Telegram button."
+/>
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren telegram link-code
+```
+
+Open the link that the command prints on a device with Telegram, and select **Start**.
+
+</Fragment>
+</SurfaceTabs>
+
+## Connect a group
+
+A project invite link adds the bot to a group and maps the group to that project.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the project's **@Ren** tab.
+2. On the **Telegram** card, select **Create invite link for a new chat**.
+3. Select **Open in a group (bot must be admin)**.
+4. Choose the Telegram group.
+5. Make the bot an admin.
+
+The bot posts "✅ This chat is now connected to …" with the name of the project.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Create a Telegram invite link for this project." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren telegram claim-code --project-id <project-id>
+```
+
+Open the group link that the command prints. To move a chat that already connects to another project, run `ren telegram chats set <chat-id> --project-id <project-id>`.
+
+</Fragment>
+</SurfaceTabs>
+
+## Connect a DM
+
+A DM also needs a project mapping. Create a project invite link, and select **Open in a direct message**. If the DM has no mapping, the bot asks you to connect the DM first.
+
+## Start and continue a chat
+
+In a group, Ren reads only the messages that @mention the bot or reply to one of its messages. Ren ignores the rest of the conversation. In a DM, you do not need to mention the bot.
+
+| Action          | In a group                                  | In a DM                         |
+| --------------- | ------------------------------------------- | ------------------------------- |
+| Start a chat    | Mention the bot in a new message.           | Send a new message.             |
+| Continue a chat | Reply to any of Ren's messages in the chat. | Reply to one of Ren's messages. |
+
+{/* Media placeholder (clip `channels/telegram/group`): Mention Ren in a group, get the reply, then reply to Ren's message to continue the chat. Answers: how do I start and continue a chat in a group? */}
+
+## Fallback sender
+
+If a chat has a fallback sender, you do not need to link your account. Your messages without a link run as that fallback sender. To set a fallback sender, create the invite link from **Settings → Mentions → Telegram** with **Add Telegram chat**. Do not use the **@Ren** tab for this.
+
+## Attachments
+
+Ren receives the documents and photos that you send with a message. Ren skips files over 32 MB, and Ren sees a note about each skipped file.
+
+Ren reads images, text files, and PDFs directly. It saves other files to the space's machine and opens them with its tools.
+
+## Files and artifacts from Ren
+
+Ren sends the files it creates, such as a report or a spreadsheet, to the chat as documents after its reply.
+
+An [artifact](/docs/concepts/artifacts/), such as a dashboard or a small game, is a web page. Ask Ren for the link to the artifact, and open the link in the browser on your phone.
+
+## Good to know
+
+- To get reminders, ask Ren to create a [schedule](/docs/concepts/schedules/) in the project. Each run can post to the Telegram chats of that project.
+- Ren cannot talk to other bots. Telegram does not send messages from other bots to Ren.
+- Telegram chats deny actions that need approval and continue without them. Set the [project permissions](/docs/concepts/projects/) before you send requests.
+- The account link works one time and expires after 15 minutes.
+- Ren skips attachments over 32 MB.

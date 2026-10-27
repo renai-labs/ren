@@ -1,0 +1,21 @@
+---
+export interface FrameProps {
+  frame?: "window" | "detail"
+  caption?: string
+}
+
+const placement = Astro.props.frame === "detail" ? "relative flex justify-center px-[10%] py-[8%]" : "relative p-[5%]"
+---
+
+<figure class="not-prose my-8">
+  <div class="relative overflow-hidden">
+    <div class="docs-backdrop-night absolute inset-0"></div>
+    <div class="docs-grain" aria-hidden="true"></div>
+    <div class={placement}>
+      <div class="docs-shot relative overflow-hidden">
+        <slot />
+      </div>
+    </div>
+  </div>
+  {Astro.props.caption && <figcaption class="docs-figcaption mt-2 text-caption">{Astro.props.caption}</figcaption>}
+</figure>

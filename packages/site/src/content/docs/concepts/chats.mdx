@@ -1,0 +1,118 @@
+---
+title: Chats
+icon: MessageSquare
+description: Start a chat in the right project, pick a model and reasoning effort, mention what Ren needs, and attach files.
+---
+
+A chat is a conversation with Ren in a [project](/docs/concepts/projects/). It holds your requests, the replies from Ren, and the actions of Ren. Ren uses the instructions, repositories, apps, skills, storage, and permissions of the project.
+
+<Screenshot
+  shot="chats/transcript"
+  alt="A chat with a request from the user and Ren's reply"
+  caption="A chat with a request from the user and the reply from Ren."
+/>
+
+## Where chats come from
+
+You can start a chat in the web app. A [channel](/docs/concepts/channels/), a [schedule](/docs/concepts/schedules/), or a [task](/docs/concepts/tasks/) can also start a chat. All chats show in the chat list in the sidebar. You can filter the list by source, creator, space, project, or status.
+
+## Who can see a chat
+
+| Location of the project | Who can see its chats                |
+| ----------------------- | ------------------------------------ |
+| A shared space          | Everyone in the space of the project |
+| Your personal space     | Only you                             |
+
+## Start a chat
+
+1. Select **New chat** in the sidebar.
+2. Look at **Working in** below the composer. It shows the space and the project that the chat runs in.
+3. If you want another project, select **Working in** and choose the project.
+4. Type your request and press Enter.
+
+<Video
+  clip="chats/composer"
+  title="Start a chat: choose the project, the model, and the effort, attach a file, mention an app, and send"
+  caption="Choose the project, the model, and the effort, attach a file, and mention an app before you send."
+/>
+
+## Model and reasoning effort
+
+Select the model picker in the composer to choose a model. For models that support it, the same picker sets the reasoning effort. With a higher effort, Ren spends more time on thinking before it answers.
+
+If you do not pick a model, Ren uses the first available default in this order:
+
+1. Project
+2. Space
+3. Organization
+4. Ren
+
+To go back to this behavior, select the default entry in the model picker.
+
+## Mentions
+
+Type `@` in the composer to mention an item. Ren adds the item to the message as context.
+
+| Mention      | What it tells Ren                                                         |
+| ------------ | ------------------------------------------------------------------------- |
+| An app       | Use this app. If it is not connected yet, Ren shows a card to connect it. |
+| A skill      | Use this skill's instructions.                                            |
+| A custom MCP | Use this custom MCP's tools.                                              |
+| A repository | Work in this repository from the project.                                 |
+| A project    | The request is about this project.                                        |
+
+A mention applies to one message. To make an app, a skill, or a custom MCP available in every chat, attach it to the project. See [Projects](/docs/concepts/projects/).
+
+## Attachments
+
+To attach a file, drag it onto the composer. You can also select **+** and then **Upload attachment**.
+
+| File                                 | What Ren does                                                          |
+| ------------------------------------ | ---------------------------------------------------------------------- |
+| Image, text file, or PDF up to 10 MB | Reads the file directly                                                |
+| Larger file, or other format         | Saves the file to the machine of the space and opens it with its tools |
+
+## File viewer
+
+Select a file in the chat to open it in the viewer. This works for files that you attach and for files that Ren creates.
+
+| File type                                                                        | What the viewer does                                   |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Images, PDFs, spreadsheets, Word documents, PowerPoint decks, text or code files | Shows a preview in place                               |
+| Audio and video                                                                  | Plays the file                                         |
+| Other formats                                                                    | Shows the type and size of the file, with **Download** |
+
+## Repositories and permissions
+
+Select **+** in the composer to get to two project settings from the chat:
+
+- **Repositories** adds or removes the repositories of the project. It also sets the branch that Ren uses for each repository.
+- **Permissions** changes what Ren can do without asking.
+
+Both settings apply to every chat in the project. See [Projects](/docs/concepts/projects/).
+
+## Questions and permission requests
+
+When Ren has a question or needs permission, it pauses. It shows the question or the permission request above the composer.
+
+- **Question:** select an answer or enter your own. Then select **Continue**.
+- **Permission request:** choose **Allow once**, **Always allow**, or **Deny**.
+
+You can also type what Ren must do instead.
+
+## See what Ren did
+
+Select the **Worked for** line above the reply from Ren. The line expands and shows each step and tool call that Ren made, with its input and result.
+
+<Screenshot
+  shot="chats/tool-calls"
+  alt="A chat with Ren's tool calls expanded to show what it did"
+  caption="The Worked for line, expanded to show the tool calls of Ren."
+/>
+
+## Good to know
+
+- In the API and CLI, a chat is a `session`.
+- Each attached file can be up to 100 MB.
+- You can change the model between messages. The new choice applies from your next message.
+- Chats from a channel or a schedule deny actions that need approval.

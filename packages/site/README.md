@@ -1,11 +1,12 @@
 # @ren/site
 
-Docs and marketing site (Astro + Starlight).
+Docs and marketing site (Astro, with Fumadocs for the docs).
 
 ## What belongs here
 
 - `src/content/docs/`: documentation pages.
-- Marketing pages and the API reference.
+- `src/lib/docs/nav.ts`: the docs sidebar, section switcher and llms.txt order.
+- Marketing pages.
 
 ## What does not
 
@@ -13,7 +14,7 @@ Docs and marketing site (Astro + Starlight).
 
 ## Dependencies
 
-`astro`, `@astrojs/starlight`.
+`astro`, `@astrojs/mdx`, `fumadocs-core`, `fumadocs-ui`.
 
 ## Commands
 

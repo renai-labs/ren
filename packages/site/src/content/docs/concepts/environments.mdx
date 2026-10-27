@@ -1,0 +1,149 @@
+---
+title: Environments
+icon: EnvVariable
+description: Give the machine of a space more CPU, more memory, or extra packages, build it, and know when the change takes effect.
+---
+
+An environment defines the machine of a [space](/docs/concepts/spaces/): CPU, memory, installed packages, and setup commands. All projects and chats in the space share the machine.
+
+Use a custom environment when you need extra tools or computing resources. For example, video work can need `ffmpeg` and 8 GB of memory. Data analysis can need specific Python packages.
+
+## Built-in sizes
+
+**Medium** is the default: 2 vCPUs and 2 GB of memory. You can switch a space to another built-in size or to a custom environment at any time.
+
+| Built-in size | CPU     | Memory |
+| ------------- | ------- | ------ |
+| Small         | 1 vCPU  | 1 GB   |
+| Medium        | 2 vCPUs | 2 GB   |
+| Large         | 4 vCPUs | 4 GB   |
+| Extra large   | 6 vCPUs | 6 GB   |
+| 2X large      | 8 vCPUs | 8 GB   |
+
+## Environment settings
+
+A custom environment has these settings. Packages and build commands are under **Advanced settings**.
+
+| Setting        | What it controls                                                                        |
+| -------------- | --------------------------------------------------------------------------------------- |
+| Name           | How the environment appears when you pick one for a space                               |
+| Machine size   | CPU (1, 2, 4, 6, or 8 vCPUs) and memory (1 to 8 GB), in any combination                 |
+| Packages       | Packages to install with `apt`, `npm`, `pip`, or `go`                                   |
+| Build commands | Shell commands that run after the packages install, in order, such as `corepack enable` |
+
+## Create an environment
+
+Only organization admins can manage environments in Settings.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Settings → Environment** and select **New environment**.
+2. Enter a **Name** and set the **Machine size**.
+3. Open **Advanced settings** to add **Packages** and **Build commands**.
+4. Leave **Build after creation** on, and select **Create environment**.
+
+<Screenshot
+  shot="environments/create"
+  alt="The New environment dialog with a machine size set and Advanced settings open, showing packages and a build command"
+  caption="The New environment dialog shows a machine size, packages, and a build command."
+/>
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren environments create --name media --body @environment.json
+ren environments builds start <environment-id>
+```
+
+Put the machine size and packages in `environment.json`. Run `ren environments create --help` for the fields.
+
+</Fragment>
+</SurfaceTabs>
+
+## Use an environment in a space
+
+To give a project its own environment, put the project in its own space.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open the space and go to its **Environment** tab.
+2. Select **Change**, pick a built-in size or a custom environment, and confirm.
+
+The tab shows the status, packages, and build commands of the environment, with **Build** or **Rebuild**.
+
+<Screenshot
+  shot="environments/space"
+  alt="A space's Environment tab with a custom environment selected, its status, and the Rebuild button"
+  caption="The Environment tab of a space shows the selected custom environment, its status, and the Rebuild button."
+/>
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren pods update <space-id> --environment-id <environment-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Builds
+
+A build makes a machine image from the environment settings. Start one with **Build**, **Rebuild**, or **Build after creation**. Each environment runs one build at a time, and a build can take several minutes. To list builds, run `ren environments builds list`.
+
+| Status           | Meaning                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Not built        | No build succeeded yet. Spaces stay on their built-in size.                           |
+| Queued, Building | A build is in progress.                                                               |
+| Ready            | The latest build succeeded. Spaces use it when their machines next resume from pause. |
+| Build failed     | The last build failed. Spaces stay on their built-in size or the last ready build.    |
+
+## When changes take effect
+
+The machine of a space pauses after about 10 minutes without activity. A new environment, a new build, or a different built-in size takes effect when the machine next resumes from pause. Ren never swaps a running machine, so chats in progress continue without interruption.
+
+## Edit or delete an environment
+
+After you edit an environment, rebuild it. Spaces use the new build when their machines next resume from pause.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Settings → Environment** and select the environment.
+2. Change its settings and select **Save changes**.
+3. To apply the changes, select **Rebuild** on the environment.
+
+To delete the environment, select the delete icon in the same dialog and confirm. Spaces that used it go back to their built-in size.
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren environments update <environment-id> --body @environment.json
+ren environments builds start <environment-id>
+ren environments archive <environment-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+## Troubleshooting
+
+### A build fails
+
+A package does not install, or a build command exits with an error. Fix the setting and select **Rebuild**.
+
+### A space does not use the new environment yet
+
+The machine of the space did not pause yet. A busy space can delay the change until the machine can pause.
+
+## Good to know
+
+- Only organization admins can manage environments in Settings.
+- Each environment runs one build at a time.
+- If you delete an environment, spaces that used it go back to their built-in size.
+- Files outside [storage](/docs/concepts/storage/) do not transfer to the replacement machine.
+- Projects, storage, and databases stay available when the machine changes.

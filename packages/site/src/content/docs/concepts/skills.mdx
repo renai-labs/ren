@@ -1,0 +1,197 @@
+---
+title: Skills
+icon: Skill
+description: Package instructions that Ren loads only when a task needs them, and add them to your projects.
+---
+
+A skill is a reusable set of instructions for a type of task. Its folder contains `SKILL.md` and optional supporting files, such as templates or scripts. Ren reads the description in every chat, but loads the full instructions only when the request needs them.
+
+This example `SKILL.md` is for release notes:
+
+```md
+---
+name: release-notes
+description: Write release notes from merged pull requests. Use when asked for release notes or a changelog.
+---
+
+Group changes under Features, Fixes, and Internal.
+Link each item to its pull request.
+Skip dependency bumps unless they fix a security issue.
+```
+
+## Skill or instructions
+
+| Use                                              | For                                                                                     | When Ren reads it       |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------- | ----------------------- |
+| Project [instructions](/docs/concepts/projects/) | Rules for every chat in a project, such as tone or which repository to work in          | On every turn           |
+| A skill                                          | A procedure that only some requests need, or a procedure that you want in many projects | When a request needs it |
+| The chat prompt                                  | A one-off request                                                                       | In that chat            |
+
+If you paste the same steps again and again, make them a skill.
+
+## Create a skill
+
+`SKILL.md` needs these frontmatter fields:
+
+| Field         | Rule                                                                    |
+| ------------- | ----------------------------------------------------------------------- |
+| `name`        | Up to 64 characters, with lowercase letters, digits, and single hyphens |
+| `description` | Up to 1,024 characters that say when to use the skill                   |
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Marketplace → Skills** and select **Add skill**.
+2. Choose where to add it: your organization, or a project. If you choose a project, Ren also adds the skill to it.
+3. Drop a skill folder or a `SKILL.md` file into the box, or paste the `SKILL.md` content.
+4. Select **Create skill**.
+
+<Screenshot
+  shot="skills/marketplace"
+  alt="Marketplace Skills with the New skill dialog open, showing the destination and the drop area for a skill folder"
+  caption="The New skill dialog, with the destination and the drop area for a skill folder."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Create a skill called release-notes from the rules I just gave you, and add it to this project." />
+
+Ren writes the `SKILL.md` for you.
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren skills create ./release-notes
+```
+
+To keep the skill to yourself, add `--visibility private`. To use a git repository instead of a folder, see [Sources](#sources).
+
+</Fragment>
+</SurfaceTabs>
+
+## Add a skill to a project
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Marketplace → Skills** and select the skill.
+2. Select **Add**, choose a project, and select **Add**.
+
+If the skill needs a credential, Ren asks you to connect it before Ren adds the skill.
+
+<Screenshot
+  shot="skills/add-to-project"
+  frame="detail"
+  alt="A skill's Add menu searched down to the Storefront project in the General team"
+  caption="The Add menu of a skill, filtered to one project."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add the release-notes skill to the Engineering project." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren projects skills add <project-id> --skill-id <skill-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+To remove a skill from a project, open the capabilities menu in the chat composer of the project. Then select the trash icon of the skill. You can also run `ren projects skills remove`, or ask Ren.
+
+## Sources
+
+| Source           | How it works                                                                                                                                                   | Use it for                         |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Uploaded files   | You upload a folder. Ren stores a copy, and each change is a new version.                                                                                      | Skills you write and edit with Ren |
+| A git repository | You point Ren at an `https://` repository, with an optional branch, tag, or commit, and a path to the skill folder. Ren fetches the files itself, up to 50 MB. | Skills you maintain in git         |
+
+The app creates uploaded skills only. If a git skill tracks a branch, Ren gets new commits without a new version.
+
+To create a git skill, run `ren skills create --source` with the source as JSON:
+
+```sh
+ren skills create --source '{"type":"git","url":"https://github.com/acme/skills","ref":"main","path":"release-notes"}'
+```
+
+To change the repository, branch, or path later, run `ren skills sources update`.
+
+## Versions
+
+Uploaded skills start at `0.0.1`, and each edit makes a new version. Git skills follow their repository. Projects use the latest version, unless you pin a version with `ren projects skills add --skill-version-id`. If you archive the latest version, projects go back to the previous version.
+
+## Edit a skill
+
+You edit uploaded skills through Ren or the CLI. The app cannot edit skill files.
+
+<SurfaceTabs>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Update the release-notes skill to also list breaking changes first." />
+
+Projects get the new version in their next chat.
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren skills pull release-notes ./release-notes
+ren skills versions create <skill-id> ./release-notes --version minor
+```
+
+`--version` takes `major`, `minor`, `patch`, or an exact version such as `1.4.0`.
+
+</Fragment>
+</SurfaceTabs>
+
+## Visibility
+
+| Visibility   | Who can see and use it             |
+| ------------ | ---------------------------------- |
+| Private      | Only you                           |
+| Organization | Every member of your organization  |
+| Published    | Anyone on Ren, in any organization |
+
+Anyone who can see a skill can read its instructions and supporting files. If you add a skill to a project in your personal space, the skill is private. If you add a skill to your organization, or to a project in a shared space, your organization can see it.
+
+To share a private skill with your organization, run `ren skills promote <skill-id>`. To list a skill for everyone, run `ren skills publish`. You cannot undo a publish.
+
+## Delete a skill
+
+When you delete a skill, Ren archives it. The skill then stops loading in every project that uses it.
+
+<SurfaceTabs>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Delete the release-notes skill." />
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren skills archive <skill-id>
+```
+
+</Fragment>
+</SurfaceTabs>
+
+To take a skill out of one project and keep it, see [Add a skill to a project](#add-a-skill-to-a-project).
+
+## Troubleshooting
+
+### Two skills have the same name or similar instructions
+
+If project skills share a `name`, Ren loads only the skill that you created first. Skills with different names but similar instructions both load. Ren then picks one by its description. Fix: make each description say when to use that skill.
+
+## Good to know
+
+- An uploaded skill can contain up to 10 MB of files. For a git skill, Ren fetches up to 50 MB of files.
+- Each edit of an uploaded skill makes a new version.
+- A published skill stays published. You cannot undo a publish.
+- To bring your Claude Code or Codex skills, ask your coding agent to push them to Ren. The agent needs the Ren plugin. See [Claude and Claude Code](/docs/migrate/claude/) or [ChatGPT and Codex](/docs/migrate/gpt/).

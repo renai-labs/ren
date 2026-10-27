@@ -19,21 +19,26 @@
     "@fontsource-variable/jetbrains-mono": "catalog:",
     "@ren/ui": "workspace:*",
     "@tabler/icons-react": "catalog:",
-    "@tailwindcss/vite": "catalog:",
     "astro": "catalog:",
     "clsx": "catalog:",
+    "fumadocs-core": "catalog:",
+    "fumadocs-ui": "catalog:",
     "motion": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "tailwind-merge": "catalog:",
-    "tailwindcss": "catalog:"
+    "tailwind-merge": "catalog:"
   },
   "devDependencies": {
     "@astrojs/check": "catalog:",
+    "@astrojs/markdown-remark": "catalog:",
+    "@astrojs/mdx": "catalog:",
+    "@tailwindcss/vite": "catalog:",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@typescript/native-preview": "catalog:",
+    "sharp": "catalog:",
+    "tailwindcss": "catalog:",
     "typescript": "catalog:"
   }
 }

@@ -1,0 +1,192 @@
+---
+title: Apps
+icon: Cable
+description: Find an app such as Gmail, Linear, or Shopify, add it to a project, connect an account, and use it in chats.
+---
+
+An app connects Ren to a service like Gmail, Linear, HubSpot, or Shopify. For example, Gmail lets Ren read, summarize, and draft email. In the API and CLI, an app is a blueprint with `kind: app`.
+
+```text
+@Gmail summarize my unread email from today.
+```
+
+## How apps work
+
+An app usually gives Ren tools through an MCP server. It can also include [skills](/docs/concepts/skills/) that explain how to use those tools. You connect the account or key that the app needs.
+
+Add an app to a [project](/docs/concepts/projects/) to make it available in every chat of that project. Projects in the same space reuse the connected account.
+
+| Part                                | What it does                           | Linear example                  |
+| ----------------------------------- | -------------------------------------- | ------------------------------- |
+| App                                 | Gives Ren tools                        | Reads and updates issues        |
+| [Channel](/docs/concepts/channels/) | Receives requests and delivers replies | Receives issues assigned to Ren |
+
+If a tool has no app but has an MCP server, add it as a [custom MCP](/docs/concepts/custom-mcps/).
+
+## Find an app
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+Open **Marketplace → Apps** to browse, or search by name. Select an app to see the MCPs and skills that it adds, the publisher, and links to its documentation.
+
+<Screenshot
+  shot="apps/marketplace"
+  alt="Marketplace Apps with an app drawer open, showing its MCPs, skills, and the Add button"
+  caption="The app drawer shows the MCPs and skills of the app, and the Add button."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Is there an app for HubSpot?" />
+
+</Fragment>
+</SurfaceTabs>
+
+You can also browse apps without signing in on the public [Blueprints catalog](/blueprints).
+
+## Add an app to a project
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+<Steps>
+
+1. Open **Marketplace → Apps** and select the app.
+2. Select **Add**, then pick a project.
+3. If the app needs an account, sign in or enter its key. Then select **Add to** and the project name.
+
+</Steps>
+
+Ren attaches the MCPs and skills of the app to the project. They are ready in the next chat of the project.
+
+<Screenshot
+  shot="apps/add-to-project"
+  frame="detail"
+  alt="An app's Add menu searched down to the Storefront project in the General team"
+  caption="The Add menu of an app, with a search that shows the Storefront project."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Add the Linear app to this project." />
+
+If the app needs an account, Ren shows a connect card.
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren blueprints add --source linear --target-project-id <project-id>
+```
+
+`--source` takes the slug of the app. After this, connect its account with `ren credentials connect`.
+
+</Fragment>
+</SurfaceTabs>
+
+## Connect an account
+
+When Ren needs an app that is not connected, it shows a connect card in the chat. If the app is not in the project yet, a connection from the card also adds it.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+<Steps>
+
+1. Select **Connect** on the card in the chat.
+2. Sign in to the account that you want Ren to use, or enter the key that the app asks for.
+3. Go back to Ren. The card shows **Connected**, and Ren continues.
+
+</Steps>
+
+<Video
+  clip="apps/connect-an-app"
+  title="Ask Ren to use Gmail, connect it from the card, and see Ren continue"
+  caption="Ren shows a card when an app is not connected. After you connect it, Ren continues the task."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Connect my Gmail account." />
+
+Select **Connect** on the card that Ren shows, and finish the sign-in.
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren credentials connect <mcp> --vault-id <vault-id>
+```
+
+Use the vault of the space of the project (`ren vaults list`).
+
+</Fragment>
+</SurfaceTabs>
+
+### Where Ren saves the connection
+
+| Project location    | Where Ren saves the connection |
+| ------------------- | ------------------------------ |
+| A shared space      | The space of the project       |
+| Your personal space | Your personal credentials      |
+
+If your organization already has a connection for the app, Ren uses it. The connection dialog then shows **Connected using organization credentials**. For the full lookup order, see [Credentials](/docs/concepts/credentials/).
+
+## Use an app in a chat
+
+Type `@` in the composer and pick the app. The mention tells Ren which app to use for that request:
+
+```text
+@Gmail summarize my unread email from today.
+```
+
+Mentions are optional. Mention an app when more than one service can do the request. If the project does not have the app, Ren shows a connect card to add it.
+
+## Remove an app
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+<Steps>
+
+1. Open **Marketplace → Apps** and select the app.
+2. Select **Add** to open the project list.
+3. Select a project with a check mark to remove the app from that project.
+
+</Steps>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Remove the Linear app from this project." />
+
+</Fragment>
+</SurfaceTabs>
+
+When you remove an app, Ren detaches its MCPs and skills from the project. If no other project in that space needs the credentials of the app, Ren also deletes them from the space. Credentials at the organization level stay.
+
+## Troubleshooting
+
+### The sign-in page does not load
+
+Some apps, such as Figma, Meta Ads, and Shopify, end the sign-in on a page that does not load. This is expected.
+
+1. Copy the full address of that page from the browser.
+2. Paste it into **Paste the address from the sign-in tab** on the card.
+3. Select **Finish**.
+
+### The connect card does not work in a channel
+
+Connect cards work only in the web app, not in channels. Connect the account from a chat in the web app.
+
+## Good to know
+
+- Each space holds one connection for each app. A new connection replaces the old one.
+- To use two accounts for one app, connect one in each space. Or connect one at the organization level and one in the space.
+- If another space that you belong to has a connection, select **Reuse** to copy it into this space. Select **Add new** to connect a different account.
+- In shared spaces, Ren uses the connection of the space before the connection of the organization. In your personal space, your personal connection comes first.
+- The marketplace lists the skills of an app with the app, not under **Marketplace → Skills**.

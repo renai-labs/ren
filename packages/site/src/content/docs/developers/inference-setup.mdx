@@ -1,0 +1,103 @@
+---
+title: Inference setup
+icon: Developer
+description: Connect Claude Code, Codex, OpenCode, Pi, or Hermes to Ren inference with one CLI command.
+---
+
+Ren inference connects local coding tools to the Claude and ChatGPT subscriptions of your organization. Before you set up a tool, you need a connected provider, an inference key, and the Ren CLI.
+
+```bash
+ren inference setup claude-code
+```
+
+## Connect a provider
+
+An organization admin connects the subscriptions that Ren sends requests through.
+
+<Steps>
+
+1. Open **Settings → Providers** and select **Connect**.
+2. Choose **Claude** or **ChatGPT**.
+3. Do the authorization steps for your provider. The table below shows them.
+
+</Steps>
+
+| Provider    | Authorization                                                                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Claude**  | Authorize access in the new tab. Paste the complete authorization code into Ren, including `#`.                                                |
+| **ChatGPT** | First, turn on **Enable device code authorization for Codex** in the security settings of ChatGPT. Then type the one-time code that Ren shows. |
+
+When the connection is complete, the subscription shows on the Providers page.
+
+## Create an inference key
+
+<Steps>
+
+1. Open **Settings → Access keys** and select the **Inference keys** tab.
+2. Select **Create key**.
+3. Give the key the name of the machine or tool that uses it.
+4. Copy the key before you close the dialog. Ren shows it only one time.
+
+</Steps>
+
+## Install the CLI
+
+The installer needs Node.js 18 or later.
+
+```bash
+curl -fsSL https://useren.ai/install | bash
+```
+
+For other options, see [CLI installation](/docs/surfaces/cli/).
+
+## Set up your coding tool
+
+Install your coding tool, then run its setup command. The setup command asks for your inference key, shows a preview of the changes, and makes a backup of each file that it changes.
+
+### Claude Code
+
+```bash
+ren inference setup claude-code
+```
+
+Setup writes Ren models to `~/.claude/settings.json`. To send a test request, run `claude -p 'which model are you?'`.
+
+### Codex
+
+```bash
+ren inference setup codex
+```
+
+Setup adds a `ren` profile under `~/.codex/`. To start Ren inference, run `codex --profile ren`. Plain `codex` continues to use your OpenAI account.
+
+### OpenCode
+
+```bash
+ren inference setup opencode
+```
+
+Setup adds a Ren provider to `~/.config/opencode/opencode.jsonc`. To see the Ren models, use `/models`.
+
+### Pi
+
+```bash
+ren inference setup pi
+```
+
+Setup adds a `ren` provider to `~/.pi/agent/models.json`. To start Pi, run `pi --provider ren`.
+
+### Hermes
+
+```bash
+ren inference setup hermes
+```
+
+Setup writes `~/.hermes/config.yaml` and `~/.hermes/.env`. To send a test request, run `hermes -z 'hello'`.
+
+## Good to know
+
+- Keep the inference key out of repositories.
+- If someone sees your key, revoke it on the **Inference keys** tab and create a new key.
+- To preview the changes without writing files, add `--dry-run` to the setup command.
+- To restore the files from the latest setup, run `ren inference setup --undo`.
+- After you connect another provider, run the setup again to refresh the model list.

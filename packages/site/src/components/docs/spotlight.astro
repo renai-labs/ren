@@ -1,0 +1,14 @@
+---
+import { Image } from "astro:assets"
+import { image } from "../../lib/docs/media.js"
+
+type Props = { title: string; shot: string; alt: string; href: string }
+---
+
+<a href={Astro.props.href} class="docs-spotlight">
+  <span class="docs-spotlight-media">
+    <Image src={image(Astro.props.shot)} alt={Astro.props.alt} width={640} quality={85} class="docs-spotlight-image" />
+  </span>
+  <span class="docs-spotlight-title">{Astro.props.title}</span>
+  <span class="docs-spotlight-body"><slot /></span>
+</a>

@@ -1,0 +1,66 @@
+---
+import { getImage, Image } from "astro:assets"
+import { image } from "../../lib/docs/media.js"
+import Frame, { type FrameProps } from "./frame.astro"
+
+interface Props extends FrameProps {
+  shot: string
+  alt: string
+  loading?: "lazy" | "eager"
+}
+
+const shot = image(Astro.props.shot)
+const full = await getImage({ src: shot, quality: 90 })
+---
+
+<Frame frame={Astro.props.frame} caption={Astro.props.caption}>
+  <button
+    type="button"
+    data-zoom-src={full.src}
+    aria-label={`Enlarge image: ${Astro.props.alt}`}
+    class="block w-full cursor-zoom-in"
+  >
+    <Image
+      src={shot}
+      alt={Astro.props.alt}
+      width={shot.width / 2}
+      densities={[1, 2]}
+      quality={90}
+      loading={Astro.props.loading ?? "lazy"}
+      fetchpriority={Astro.props.loading === "eager" ? "high" : "auto"}
+      class="block h-auto max-w-full"
+    />
+  </button>
+</Frame>
+
+<script>
+  let lightbox: { dialog: HTMLDialogElement; image: HTMLImageElement } | undefined
+
+  function getLightbox() {
+    if (lightbox) return lightbox
+    const dialog = document.createElement("dialog")
+    dialog.className =
+      "m-0 size-full max-h-none max-w-none cursor-zoom-out items-center justify-center bg-transparent p-4 opacity-100 transition-opacity duration-200 backdrop:bg-black/80 open:flex sm:p-10 starting:open:opacity-0"
+    dialog.setAttribute("aria-label", "Enlarged image")
+    const image = document.createElement("img")
+    image.className = "max-h-full max-w-full rounded-lg object-contain"
+    dialog.append(image)
+    dialog.addEventListener("click", () => dialog.close())
+    dialog.addEventListener("close", () => document.documentElement.classList.remove("overflow-hidden"))
+    document.body.append(dialog)
+    lightbox = { dialog, image }
+    return lightbox
+  }
+
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return
+    const trigger = event.target.closest<HTMLElement>("[data-zoom-src]")
+    const src = trigger?.dataset.zoomSrc
+    if (!trigger || src === undefined) return
+    const box = getLightbox()
+    box.image.src = src
+    box.image.alt = trigger.querySelector("img")?.alt ?? ""
+    document.documentElement.classList.add("overflow-hidden")
+    box.dialog.showModal()
+  })
+</script>

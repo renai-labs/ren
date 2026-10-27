@@ -1,0 +1,73 @@
+---
+import { render } from "astro:content"
+import DocsLayout from "../../layouts/docs.astro"
+import AskRen from "../../components/docs/ask-ren.astro"
+import CardGroup from "../../components/docs/card-group.astro"
+import Card from "../../components/docs/card.astro"
+import { DocsShell } from "../../components/docs/docs-shell.js"
+import Entries from "../../components/docs/entries.astro"
+import Entry from "../../components/docs/entry.astro"
+import FactoryDiagram from "../../components/docs/factory-diagram.astro"
+import Hero from "../../components/docs/hero.astro"
+import { MdxPre, MdxTable } from "../../components/docs/mdx.js"
+import Screenshot from "../../components/docs/screenshot.astro"
+import Spotlight from "../../components/docs/spotlight.astro"
+import Spotlights from "../../components/docs/spotlights.astro"
+import Steps from "../../components/docs/steps.astro"
+import SurfaceTabs from "../../components/docs/surface-tabs.astro"
+import Video from "../../components/docs/video.astro"
+import { navTree, sectionLinks, sectionOf } from "../../lib/docs/nav.js"
+import { type DocsPage, editUrl, pageHref, rawMarkdownPath, source } from "../../lib/docs/source.js"
+
+export const getStaticPaths = () =>
+  source.getPages().map((page) => ({ params: { slug: page.slugs.join("/") || undefined }, props: { page } }))
+
+interface Props {
+  page: DocsPage
+}
+
+const page = Astro.props.page
+const content = await render(page.data.entry)
+const section = sectionOf(page)
+const markdownUrl = rawMarkdownPath(page)
+---
+
+<DocsLayout title={page.data.title} description={page.data.description} markdownUrl={markdownUrl}>
+  <DocsShell
+    client:load
+    tree={navTree(section)}
+    pathname={Astro.url.pathname}
+    params={Astro.params}
+    page={{
+      title: page.data.title,
+      toc: content.headings
+        .filter((heading) => heading.depth >= 2 && heading.depth <= 3)
+        .map((heading) => ({ depth: heading.depth, title: heading.text, url: `#${heading.slug}` })),
+      hero: page.data.hero,
+      url: new URL(pageHref(page), Astro.site).href,
+      markdownUrl,
+      editUrl: editUrl(page),
+    }}
+    sections={sectionLinks(section)}
+  >
+    <content.Content
+      components={{
+        pre: MdxPre,
+        table: MdxTable,
+        AskRen,
+        Card,
+        CardGroup,
+        Entries,
+        Entry,
+        FactoryDiagram,
+        Hero,
+        Screenshot,
+        Spotlight,
+        Spotlights,
+        Steps,
+        SurfaceTabs,
+        Video,
+      }}
+    />
+  </DocsShell>
+</DocsLayout>

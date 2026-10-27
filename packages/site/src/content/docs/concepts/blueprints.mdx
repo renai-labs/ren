@@ -1,0 +1,82 @@
+---
+title: Blueprints
+icon: Blueprint
+description: Install a ready-made setup, such as a whole space with its projects, skills, and machine, instead of building it yourself.
+---
+
+A blueprint is an installable Ren setup for a project, a space, or an organization. Use a blueprint when you want a ready-made setup instead of building it yourself. A blueprint can include skills, custom MCPs, instructions, an environment, and schedules.
+
+<AskRen prompt="Install the Software Factory blueprint." />
+
+## Blueprint types
+
+| Blueprint                   | What it adds                         |
+| --------------------------- | ------------------------------------ |
+| Space blueprint             | A new shared space with its projects |
+| Project blueprint           | A project in a space that you pick   |
+| [App](/docs/concepts/apps/) | A single tool in a project           |
+
+The **Software Factory** blueprint creates a space with Plan, Build, Review, QA, and Monitoring projects. Each project has instructions and skills. The projects share a machine that includes the required tools.
+
+## Install a blueprint
+
+Browse blueprints in **Marketplace → Blueprints** in the app. You can install space and project blueprints through Ren, the CLI, or MCP.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+1. Open **Marketplace → Blueprints**.
+2. Select a blueprint.
+3. Ask Ren to install it.
+
+<Video
+  clip="blueprints/install"
+  title="Find a blueprint in the marketplace and ask Ren to install it"
+  caption="Ren installs the blueprint and lists what it created and what is left to do."
+/>
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Install the Software Factory blueprint." />
+
+Ren lists what it created and what you still need to connect. Turn on any schedules you want from **Scheduled**.
+
+</Fragment>
+<Fragment slot="cli">
+
+```sh
+ren registry blueprints list
+ren blueprints add --source software-factory
+```
+
+`--source` takes the slug of the blueprint. A project blueprint also needs `--pod-id` for the space that gets the project.
+
+</Fragment>
+</SurfaceTabs>
+
+## What installing adds
+
+Ren creates editable spaces and projects in your organization.
+
+| Item                                     | What Ren does                                  |
+| ---------------------------------------- | ---------------------------------------------- |
+| Instructions, permissions, default model | Ren gives them to each project                 |
+| Skills and custom MCPs                   | Ren attaches them to the projects              |
+| Schedules                                | Ren creates them **paused**                    |
+| Databases, artifacts, starter tasks      | Ren adds them where the blueprint defines them |
+
+## Finish the setup
+
+After the installation, Ren lists the remaining setup.
+
+1. Connect the required accounts.
+2. Add the listed [channels](/docs/concepts/channels/), such as Slack channels or GitHub repositories.
+3. Turn on the schedules that you want from **Scheduled**.
+
+## Good to know
+
+- Schedules stay paused, so nothing runs until you turn them on.
+- Installing does not overwrite existing resources. In an existing project, Ren appends the instructions of the blueprint and keeps your settings.
+- Later changes to a blueprint do not update your copies. But attached skills and custom MCPs still use their latest versions.
+- The public [Blueprints catalog](/blueprints) lists apps. To add an app, see "Add an app to a project" in [Apps](/docs/concepts/apps/).
