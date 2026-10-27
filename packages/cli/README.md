@@ -28,6 +28,41 @@ bun typecheck
 
 `REN_TOKEN` supplies a bearer token. Help, version and local spec validation work without a connection.
 
+## Install
+
+After the first release is published:
+
+```sh
+export REN2_HOST_URL="https://v2.useren.ai"
+curl -fsSL "${REN2_HOST_URL}/ren2/install.sh" | bash
+```
+
+Pass `--version <version>` to pin a release or `--no-modify-path` to leave shell config alone. The installer verifies SHA-256 and the executable's version before replacing `~/.ren2/bin/ren2`. macOS and glibc Linux are supported on arm64 and x64. Bun and Node are not required.
+
+Rerun the installer to upgrade. Login comes in the next phase; `--no-init` currently skips the getting-started hint.
+
+## Build and release
+
+```sh
+bun run build --version 0.1.0
+bun run build --version 0.1.0 --target linux-x64
+REN_SLOW=1 bun run test
+```
+
+Builds use the current platform by default. `--outdir` defaults to `dist`. `REN2_HOST_URL` sets the generated installer's default host and can also override it at installation time.
+
+```text
+dist/
+  install.sh
+  releases/<version>/
+    ren2-<platform>-<arch>
+    ren2-<platform>-<arch>.sha256
+```
+
+Run the `cli release` GitHub workflow with a stable version (`X.Y.Z`). It builds and tests all four targets natively, uploads immutable artifacts under `/ren2/releases/`, then publishes the installer and `latest.txt`. Existing release versions cannot be overwritten. It uses the `v2-prod` environment's AWS deployment role, app bucket and CloudFront distribution. `REN2_HOST_URL` is an environment variable there, defaulting to `https://v2.useren.ai`.
+
+The npm package is private until its publication name and install format are decided.
+
 ## Architecture
 
 - `src/commands.ts` declares typed Effect commands, arguments and flags.

@@ -2,6 +2,7 @@
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@renai-labs/cli",
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "license": "UNLICENSED",
   "bin": {
@@ -10,13 +11,8 @@
   "exports": {
     "./*": "./src/*.ts"
   },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
+    "build": "bun run script/build.ts",
     "dev": "bun run src/index.ts",
     "test": "bun ../../script/test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
