@@ -81,8 +81,9 @@ export function SpacesPage() {
             onChange={setFilters}
           />
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button size="icon-sm" aria-label="Create or join a space" />}>
-              <IconPlus />
+            <DropdownMenuTrigger render={<Button size="sm" />}>
+              <IconPlus data-icon="inline-start" />
+              New space
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuGroup>
