@@ -152,7 +152,7 @@ function SpaceCard(props: { space: SpaceInfo }) {
   const chatCount = chats.data?.total ?? 0
   const shown = memberCount > 4 ? members.slice(0, 3) : members
   return (
-    <Card className="relative gap-4 border ring-0 transition-colors [--card-spacing:--spacing(6)] hover:bg-muted active:scale-99">
+    <Card className="relative gap-4 border shadow-soft ring-0 transition-colors [--card-spacing:--spacing(6)] hover:bg-muted active:scale-99">
       <CardHeader>
         <div className="mb-3 flex size-12 items-center justify-center rounded-lg bg-secondary">
           <IconCube className="size-8 text-muted-foreground" strokeWidth={1.75} />

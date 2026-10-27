@@ -259,7 +259,7 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
       value={suggest.active ?? ""}
       shouldFilter={false}
       className={cn(
-        "absolute inset-x-0 z-20 h-auto w-full rounded-xl border bg-popover shadow-md",
+        "absolute inset-x-0 z-20 h-auto w-full rounded-xl bg-popover shadow-overlay",
         props.below ? "top-full mt-2" : "bottom-full mb-2",
       )}
     >
@@ -414,7 +414,11 @@ export function PromptInput(props: {
         />
       ) : null}
       <InputGroup
-        className={stacked ? "rounded-xl bg-card dark:bg-card" : "h-12.25 rounded-full bg-card pl-1 dark:bg-card"}
+        className={
+          stacked
+            ? "rounded-xl bg-card shadow-soft dark:bg-card"
+            : "h-12.25 rounded-full bg-card pl-1 shadow-soft dark:bg-card"
+        }
       >
         {stacked ? null : (
           <InputGroupAddon>

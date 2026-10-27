@@ -61,6 +61,9 @@
   --sidebar-accent-foreground: #1b1b1b;
   --sidebar-border: rgba(0, 0, 0, 0.08);
   --sidebar-ring: #0065cc;
+
+  --soft-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(0, 0, 0, 0.14);
+  --overlay-shadow: 0 0 0 1px var(--border), var(--soft-shadow);
 }
 
 .dark {
@@ -99,6 +102,10 @@
   --sidebar-accent-foreground: #f1f1f1;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #268bff;
+
+  --soft-shadow: 0 0 #0000;
+  --overlay-shadow:
+    0 0 0 1px var(--border), 0 16px 48px -6px rgba(20, 20, 20, 0.5), 0 6px 12px -2px rgba(20, 20, 20, 0.5);
 }
 
 @theme inline {
@@ -112,8 +119,8 @@
   --radius-xl: 12px;
   --radius-2xl: 16px;
 
-  --shadow-overlay:
-    0 0 0 1px var(--border), 0 16px 48px -6px rgba(20, 20, 20, 0.5), 0 6px 12px -2px rgba(20, 20, 20, 0.5);
+  --shadow-soft: var(--soft-shadow);
+  --shadow-overlay: var(--overlay-shadow);
   --shadow-dialog: 0 0 0 1px var(--border), 0 16px 48px 0 rgba(20, 20, 20, 0.5);
 
   --color-background: var(--background);
