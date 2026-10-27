@@ -1,11 +1,11 @@
 export * as ReferenceCheck from "./reference-check.js"
 
 import type { Auth } from "@ren/schema/auth"
+import { GitHost } from "@ren/schema/git-host"
 import type { Reference } from "@ren/schema/reference"
-import { Context, Effect, Layer, Option, Schema } from "effect"
-import { HttpClient } from "effect/http"
-import { GitHubApp } from "./github-app.js"
+import { Context, Effect, Layer, Option } from "effect"
 import { Primitive } from "./primitive.js"
+import { RepositoryHosts } from "./repository-hosts.js"
 
 export interface Interface {
   readonly check: (
@@ -19,23 +19,11 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Re
 
 export const layerNone = Layer.succeed(Service, Service.of({ check: () => Effect.void }))
 
-const answerWithin = "10 seconds"
-
-// oxlint-disable-next-line ren/no-comments -- R13, R26: a save reads each new reference from GitHub with the org's installation, or with no token when the org has none. Only a 404 or another host refuses it; a GitHub that does not answer does not block a save.
+// oxlint-disable-next-line ren/no-comments -- R13, R26, R58: a save asks the host of each new reference whether the org can read it. A URL that no host owns is refused.
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const github = yield* GitHubApp.Service
-    const http = yield* HttpClient.HttpClient
-    const web = Option.match(github.client, {
-      onNone: () => "https://github.com",
-      onSome: (found) => found.settings.web,
-    })
-    const api = Option.match(github.client, {
-      onNone: () => "https://api.github.com",
-      onSome: (found) => found.settings.api,
-    })
-    const host = new URL(web).hostname
+    const hosts = yield* RepositoryHosts.Service
     return Service.of({
       check: Effect.fn("ReferenceCheck.check")(function* (
         organizationId: Auth.OrganizationID,
@@ -43,46 +31,26 @@ export const layer = Layer.effect(
         next: Reference.List,
       ) {
         const known = new Set(previous.map((reference) => reference.repository))
-        const added = next.filter((reference) => !known.has(reference.repository))
-        if (added.length === 0) return
-        const installation = yield* github.installationOf(organizationId)
         yield* Effect.forEach(
-          added,
+          next.filter((reference) => !known.has(reference.repository)),
           Effect.fnUntraced(function* (reference) {
-            const field = `references.${reference.alias}`
             const url = new URL(reference.repository)
-            if (url.hostname !== host)
-              return yield* new Primitive.Invalid({
-                message: `Ren reads only repositories on ${host}, not ${reference.repository}.`,
-                field,
-              })
-            const name = url.pathname.slice(1).replace(/\.git$/u, "")
-            const status = yield* Option.match(installation, {
-              onSome: (found) =>
-                found.client.read(found.installation, `/repos/${name}`, Schema.Unknown).pipe(
-                  Effect.as(200),
-                  Effect.catch((error) => Effect.succeed(error.status ?? 0)),
-                ),
+            const unavailable = yield* Option.match(hosts.hostOf(url), {
               onNone: () =>
-                http.get(`${api}/repos/${name}`).pipe(
-                  Effect.map((response) => response.status),
-                  Effect.orElseSucceed(() => 0),
+                Effect.succeed(
+                  Option.some<GitHost.Unavailable>({
+                    reason: "other_host",
+                    name: reference.repository,
+                    detail: hosts.hosts.map((host) => host.host).join(" or "),
+                  }),
                 ),
-            }).pipe(
-              Effect.timeout(answerWithin),
-              Effect.orElseSucceed(() => 0),
-            )
-            if (status === 404)
+              onSome: (host) => host.check(organizationId, url),
+            })
+            if (Option.isSome(unavailable))
               return yield* new Primitive.Invalid({
-                message: Option.isSome(installation)
-                  ? `the GitHub App cannot read ${name}: add the repository to the installation, or ${name} does not exist`
-                  : `this space has no GitHub credential: install the GitHub App or sign in with GitHub, or ${name} does not exist`,
-                field,
+                message: GitHost.message(unavailable.value),
+                field: `references.${reference.alias}`,
               })
-            if (status !== 200)
-              yield* Effect.logWarning(
-                `Saved the reference ${reference.repository} without a check: ${status === 0 ? "GitHub did not answer" : `GitHub answered ${status}`}`,
-              )
           }),
           { concurrency: 4, discard: true },
         )

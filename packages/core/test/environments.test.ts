@@ -149,6 +149,21 @@ describe("Environments", () => {
       }),
   )
 
+  it.live("an access names the folder that the environment's sessions share and the egress of its provider", () =>
+    Effect.gen(function* () {
+      const egressOf = Effect.fnUntraced(function* (egress: boolean) {
+        const subject = yield* environmentsWith({}, { egress })
+        const organizationId = yield* Seed.organization()
+        const session = yield* subjectIn(organizationId)
+        yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+        const access = yield* subject.environments.access(session, Option.none())
+        return [access.sharedDirectory, access.egress]
+      })
+      expect(yield* egressOf(false)).toEqual(["/workspace/.ren", false])
+      expect(yield* egressOf(true)).toEqual(["/workspace/.ren", true])
+    }),
+  )
+
   it.live("a configured token lifetime is the access's lifetime", () =>
     Effect.gen(function* () {
       const subject = yield* environmentsWith({ ENVIRONMENT_TOKEN_LIFETIME: "20 seconds" })

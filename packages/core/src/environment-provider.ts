@@ -32,6 +32,8 @@ interface Definition<Config, Binding> {
   readonly id: EnvironmentProvider.ID
   readonly title: string
   readonly description: string
+  // oxlint-disable-next-line ren/no-comments -- R57: whether the provider routes its machines' traffic through the egress, which replaces ren:<LABEL> placeholders (R19).
+  readonly egress: boolean
   readonly config: Schema.Codec<Config, unknown>
   readonly binding: Schema.Codec<Binding, unknown>
   readonly provision: (input: ProvisionInput<Config>) => Effect.Effect<Binding, Failed>
@@ -41,6 +43,7 @@ interface Definition<Config, Binding> {
 
 export interface Provider {
   readonly info: EnvironmentProvider.Info
+  readonly egress: boolean
   readonly check: (config: unknown) => Effect.Effect<Schema.Json, InvalidConfig>
   readonly provision: (input: ProvisionInput<Schema.Json>) => Effect.Effect<Schema.Json, Failed>
   readonly connect: (binding: Schema.Json) => Effect.Effect<Endpoint, Gone | Failed>
@@ -79,6 +82,7 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
       description: definition.description,
       configSchema: Schema.decodeUnknownSync(Schema.Json)(Schema.toJsonSchemaDocument(definition.config)),
     },
+    egress: definition.egress,
     check: (value) =>
       Schema.decodeUnknownEffect(config)(value).pipe(
         Effect.flatMap(Schema.encodeEffect(config)),

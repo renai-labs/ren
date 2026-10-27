@@ -10,6 +10,7 @@ import { EgressControl } from "../src/egress-control.js"
 import { GitHubApp } from "../src/github-app.js"
 import { Primitive } from "../src/primitive.js"
 import { ReferenceCheck } from "../src/reference-check.js"
+import { RepositoryHosts } from "../src/repository-hosts.js"
 import { Space } from "../src/space.js"
 import { SpaceSettings } from "../src/space/settings.js"
 import { testEffect } from "./lib/effect.js"
@@ -22,6 +23,7 @@ afterAll(() => github.stop())
 const it = testEffect(
   Layer.mergeAll(SpaceSettings.layer, Space.layer).pipe(
     Layer.provideMerge(ReferenceCheck.layer),
+    Layer.provideMerge(RepositoryHosts.layer),
     Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, GitHubApp.layer)),
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
@@ -108,8 +110,12 @@ describe("SpaceSettings", () => {
           }),
         )
         expect(yield* Effect.flip(save(["https://gitlab.com/acme/docs"]))).toMatchObject({
-          message: "Ren reads only repositories on github.com, not https://gitlab.com/acme/docs.",
+          message: "Ren reads only repositories on github.com, not https://gitlab.com/acme/docs",
           field: "references.docs",
+        })
+        expect(yield* Effect.flip(save(["https://github.com/acme/docs/tree/main"]))).toMatchObject({
+          message:
+            "https://github.com/acme/docs/tree/main is not the address of a repository: use https://github.com/<owner>/<repo>",
         })
         github.options.unavailable = true
         const saved = yield* save(["https://github.com/acme/docs", "https://github.com/acme/secret"]).pipe(
@@ -117,5 +123,35 @@ describe("SpaceSettings", () => {
         )
         expect(saved.settings.references.map((each) => each.alias)).toEqual(["docs", "secret"])
       }),
+  )
+
+  it.live("lists the repositories of the org's GitHub installation, and none without one", () =>
+    Effect.gen(function* () {
+      const hosts = yield* RepositoryHosts.Service
+      const organizationId = yield* Seed.organization()
+      expect(yield* hosts.list(organizationId)).toEqual([{ kind: "github", installed: false, repositories: [] }])
+      yield* installGitHub(organizationId)
+      github.repositories.push(
+        {
+          id: 1,
+          full_name: "acme/docs",
+          private: false,
+          description: "Docs",
+          html_url: "https://github.com/acme/docs",
+        },
+        { id: 2, full_name: "acme/api", private: true, description: null, html_url: "https://github.com/acme/api" },
+      )
+      yield* Effect.addFinalizer(() => Effect.sync(() => github.repositories.splice(0)))
+      expect(yield* hosts.list(organizationId)).toEqual([
+        {
+          kind: "github",
+          installed: true,
+          repositories: [
+            { kind: "github", url: "https://github.com/acme/docs", name: "acme/docs", description: "Docs" },
+            { kind: "github", url: "https://github.com/acme/api", name: "acme/api" },
+          ],
+        },
+      ])
+    }),
   )
 })
