@@ -72,6 +72,8 @@ import {
 import { Markdown } from "@/components/ren/chat/markdown"
 import { EmptyState } from "@/components/ren/empty-state"
 import { ImageLightbox } from "@/components/ren/image-lightbox"
+import { withAppMentions } from "@/components/ren/app-mention"
+import { useCatalog } from "@/hooks/use-catalog"
 
 interface Person {
   readonly name: string
@@ -347,6 +349,7 @@ function UserMessage(props: {
   onSave: (text: string) => void
 }) {
   const parts = splitPasted(props.message.text)
+  const apps = useCatalog().apps
   return (
     <Message align="end" className={props.editing ? "-mr-13.5 w-full" : "-mr-13.5 w-auto"}>
       <MessageAvatar className="ml-3.5">
@@ -366,7 +369,7 @@ function UserMessage(props: {
             {parts.typed ? (
               <Bubble variant="muted" align="end">
                 <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
-                  {parts.typed}
+                  {withAppMentions(parts.typed, apps)}
                 </BubbleContent>
               </Bubble>
             ) : null}
@@ -804,6 +807,7 @@ interface Context {
 }
 
 export function Transcript(props: TranscriptProps) {
+  const apps = useCatalog().apps
   const byId: ReadonlyMap<string, SessionMessage.Info> = new Map(props.messages.map((message) => [message.id, message]))
   const turns = Projection.assistantMessagesByParent(props.messages)
   const context: Context = {
@@ -900,7 +904,7 @@ export function Transcript(props: TranscriptProps) {
                       <MessageContent>
                         <Bubble variant="ghost">
                           <BubbleContent className="text-base leading-[1.7]">
-                            <Markdown streaming={block.streaming} className="text-base leading-[1.7]">
+                            <Markdown streaming={block.streaming} apps={apps} className="text-base leading-[1.7]">
                               {block.text}
                             </Markdown>
                           </BubbleContent>

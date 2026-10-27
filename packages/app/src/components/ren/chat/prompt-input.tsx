@@ -10,7 +10,6 @@ import {
   IconAt,
   IconClipboardText,
   IconPaperclip,
-  IconFileText,
   IconLoader2,
   IconPlayerStopFilled,
   IconPlus,
@@ -30,15 +29,17 @@ import {
 } from "@/components/ui/attachment"
 import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Kbd } from "@/components/ui/kbd"
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { AttachmentChips, DropOverlay, useAttachments } from "@/components/ren/chat/attachments"
+import { MentionOverlay } from "@/components/ren/chat/mention-overlay"
+import { AppIcon } from "@/components/ren/app-icon"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group"
@@ -63,21 +64,21 @@ function AddMenu(props: { placement: "home" | "chat"; onInsert: (text: string) =
       >
         <IconPlus />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-64">
+      <DropdownMenuContent side="top" align="start" className="w-52">
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={props.onAttach}>
-            <IconPaperclip />
+            <IconPaperclip className="text-foreground" />
             Attach files
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => props.onInsert("/")}>
-            <IconTerminal2 />
-            Run a command
-            <DropdownMenuShortcut>/</DropdownMenuShortcut>
+            <IconTerminal2 className="text-foreground" />
+            Commands
+            <Kbd className="ml-auto">/</Kbd>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => props.onInsert("@")}>
-            <IconAt />
-            Mention an agent, skill or file
-            <DropdownMenuShortcut>@</DropdownMenuShortcut>
+            <IconAt className="text-foreground" />
+            Apps
+            <Kbd className="ml-auto">@</Kbd>
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>
@@ -268,19 +269,15 @@ function SuggestionMenu(props: { suggest: Suggest; onChoose: (value: string) => 
               onMouseDown={(event) => event.preventDefault()}
               onSelect={() => choose(item.value)}
             >
-              {item.kind === "command" ? <IconTerminal2 /> : item.kind === "file" ? <IconFileText /> : <IconAt />}
-              <span
-                className={
-                  item.kind === "file" ? "min-w-0 flex-1 truncate font-mono text-xs" : "min-w-0 flex-1 truncate"
-                }
-              >
-                {item.label}
+              {item.kind === "command" ? (
+                <IconTerminal2 />
+              ) : (
+                <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-[3px] bg-transparent" />
+              )}
+              <span className="min-w-0 flex-1 truncate">
+                <span className="font-medium text-foreground">{item.label}</span>
+                {item.description ? <span className="text-muted-foreground"> {item.description}</span> : null}
               </span>
-              {item.description ? (
-                <span className="max-w-1/2 shrink-0 truncate pl-3 text-xs text-muted-foreground">
-                  {item.description}
-                </span>
-              ) : null}
             </CommandItem>
           ))}
         </CommandGroup>
@@ -309,6 +306,14 @@ function SendButton(props: { blank: boolean; stop: boolean; sending: boolean; bo
     </InputGroupButton>
   )
 }
+
+const textareaClass = (layout: { stacked: boolean; home: boolean; marked: boolean }) =>
+  cn(
+    layout.stacked
+      ? cn("px-4 pt-4 leading-relaxed", layout.home ? "min-h-24" : "max-h-60 min-h-16")
+      : "min-h-0 px-2 py-3 leading-relaxed",
+    layout.marked && "text-transparent caret-foreground",
+  )
 
 export function PromptInput(props: {
   value: Composer.Draft
@@ -379,6 +384,7 @@ export function PromptInput(props: {
     place(result.text, result.cursor)
   }
   const suggest = props.suggest
+  const marks = suggest?.marks(text) ?? []
   return (
     <div className="relative flex flex-col gap-2">
       {suggest?.open ? <SuggestionMenu suggest={suggest} onChoose={choose} /> : null}
@@ -423,6 +429,7 @@ export function PromptInput(props: {
             <PromptInputStatus boot={status} onRetry={props.onRetry} />
           </span>
         ) : null}
+        <MentionOverlay textarea={textarea} text={text} marks={marks} />
         <InputGroupTextarea
           value={text}
           onChange={(event) => {
@@ -458,22 +465,29 @@ export function PromptInput(props: {
                 return
               }
             }
+            const removed = suggest?.unmention(text, {
+              key: event.key,
+              selectionStart: event.currentTarget.selectionStart,
+              selectionEnd: event.currentTarget.selectionEnd,
+            })
+            if (removed) {
+              event.preventDefault()
+              change(Composer.withText(draft, removed.text))
+              place(removed.text, removed.cursor)
+              return
+            }
             if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
             event.preventDefault()
             submit()
           }}
-          placeholder={status ? "" : "Ask anything, @ to add context"}
+          placeholder={status ? "" : "Ask anything, @ to add an app"}
           aria-label="Message"
           readOnly={props.sending || booting}
           aria-busy={booting || undefined}
           // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer is the page’s one input, as in Ren
           autoFocus
           rows={1}
-          className={
-            stacked
-              ? cn("px-4 pt-4 leading-relaxed", home ? "min-h-24" : "max-h-60 min-h-16")
-              : "min-h-0 px-2 py-3 leading-relaxed"
-          }
+          className={textareaClass({ stacked, home, marked: marks.length > 0 })}
         />
         {stacked ? (
           <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">

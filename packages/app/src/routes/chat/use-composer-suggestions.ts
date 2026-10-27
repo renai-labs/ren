@@ -1,15 +1,25 @@
-import { useDeferredValue, useState } from "react"
+import { useState } from "react"
 import { ClientCommand, Composer, Mentions } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
-import { SessionCatalog } from "@ren/schema/session/catalog"
 import { AsyncResult } from "effect/reactivity"
+import { useCatalog } from "@/hooks/use-catalog"
+import { mentionColor } from "@/lib/apps"
 
 interface SuggestionItem {
   readonly value: string
   readonly kind: "command" | Mentions.Kind
   readonly label: string
   readonly description?: string | undefined
+  readonly icon?: string | null | undefined
+}
+
+export interface MentionMark {
+  readonly start: number
+  readonly end: number
+  readonly label: string
+  readonly icon: string | null
+  readonly color: string
 }
 
 export interface Suggest {
@@ -21,6 +31,11 @@ export interface Suggest {
   readonly onKey: (press: Composer.SuggestionPress) => boolean
   readonly onChoose: (value: string, text: string, cursor: number) => { text: string; cursor: number } | undefined
   readonly onClose: () => void
+  readonly marks: (text: string) => ReadonlyArray<MentionMark>
+  readonly unmention: (
+    text: string,
+    press: { key: string; selectionStart: number; selectionEnd: number },
+  ) => { text: string; cursor: number } | undefined
 }
 
 const listed = <A>(result: AsyncResult.AsyncResult<ReadonlyArray<A>, unknown>) =>
@@ -34,13 +49,16 @@ export function useComposerSuggestions(input: {
 }) {
   const [trigger, setTrigger] = useState<Composer.Trigger>()
   const [active, setActive] = useState<string>()
-  const [picked, setPicked] = useState<ReadonlyArray<Mentions.Item>>([])
-  const query = trigger?.kind === "mention" ? trigger.query : undefined
-  const searched = useDeferredValue(query ?? "")
-  const found = listed(ChatReact.useFiles({ root: input.root, query: searched, type: "file" }))
-  const agents = SessionCatalog.mentionable(listed(ChatReact.useAgents(input.root))).map(Mentions.fromAgent)
-  const skills = Composer.offeredSkills(listed(ChatReact.useSkills(input.root))).map(Mentions.fromSkill)
-  const files = searched && query ? found.map(Mentions.fromFile) : []
+  const query = trigger?.kind === "mention" ? trigger.query.toLowerCase() : undefined
+  const apps = useCatalog().apps
+  const appById = new Map(apps.map((app) => [app.id, app]))
+  const connectors = apps.map((app): Mentions.Item => ({
+    kind: "app",
+    id: app.id,
+    label: app.name,
+    handle: app.slug,
+    description: app.description,
+  }))
   const offered = Composer.offeredCommands(listed(ChatReact.useCommands(input.root)))
   const brain = input.commands ? offered : []
   const runnable = ClientCommand.suggestions(
@@ -48,7 +66,10 @@ export function useComposerSuggestions(input: {
     brain,
     trigger?.kind === "command" ? trigger.query : "",
   )
-  const mentionable = query === undefined ? [] : Mentions.suggest({ agents, skills, files, query })
+  const mentionable =
+    query === undefined
+      ? []
+      : connectors.filter((item) => [item.label, item.handle].some((value) => value.toLowerCase().includes(query)))
   const items: ReadonlyArray<SuggestionItem> =
     trigger?.kind === "command"
       ? runnable.map((item) => ({
@@ -62,17 +83,18 @@ export function useComposerSuggestions(input: {
           kind: item.kind,
           label: item.label,
           description: item.description,
+          icon: appById.get(item.id)?.icon,
         }))
   const ids = items.map((item) => item.value)
   const current = Composer.activeSuggestion(ids, active)
-  const catalog = [...agents, ...skills, ...picked]
+  const tokens = (text: string) => Mentions.tokens(text, connectors)
   const close = () => {
     setTrigger(undefined)
     setActive(undefined)
   }
   const suggest: Suggest = {
     open: trigger !== undefined && items.length > 0,
-    label: trigger?.kind === "command" ? "Commands" : "Mentions",
+    label: trigger?.kind === "command" ? "Commands" : "Connectors",
     items,
     active: current,
     onCursor: (text, cursor) => {
@@ -99,14 +121,25 @@ export function useComposerSuggestions(input: {
       }
       const item = mentionable.find((entry) => Mentions.key(entry) === value)
       if (!item || trigger?.kind !== "mention") return
-      if (item.kind === "file") setPicked([...picked, item])
       return Mentions.insert(text, item, trigger.start, cursor)
     },
     onClose: close,
+    marks: (text) =>
+      tokens(text).map((token) => {
+        const app = appById.get(token.item.id)
+        return {
+          start: token.start,
+          end: token.end,
+          label: token.item.label,
+          icon: app?.icon ?? null,
+          color: mentionColor(app),
+        }
+      }),
+    unmention: (text, press) => Mentions.remove(text, tokens(text), press),
   }
   return {
     suggest,
     slash: (text: string) => Composer.slash(text, brain),
-    resolve: (text: string) => Mentions.resolve(text, Mentions.tokens(text, catalog)),
+    resolve: (text: string) => Mentions.resolve(text, tokens(text)),
   }
 }

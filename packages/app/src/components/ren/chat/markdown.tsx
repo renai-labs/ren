@@ -16,7 +16,9 @@ import {
   CodeBlockLine,
   CodeBlockTitle,
 } from "@/components/ui/code-block"
+import { AppMention, mentionLinks } from "@/components/ren/app-mention"
 import { ImageLightbox } from "@/components/ren/image-lightbox"
+import type { CatalogApp } from "@/lib/apps"
 import { useHighlightedCode } from "@/hooks/use-highlighted-code"
 import { cn } from "@/lib/utils"
 
@@ -67,6 +69,8 @@ function MarkdownImage({ node: _node, src, alt, ...props }: ComponentProps<"img"
 
 const components = { code: MarkdownCode, img: MarkdownImage }
 
+const appLink = "#ren-app:"
+
 const withDataImages = (schema: unknown) => {
   if (typeof schema !== "object" || schema === null || !("protocols" in schema)) return schema
   const protocols = schema.protocols
@@ -81,18 +85,41 @@ const rehypePlugins: Array<(typeof defaultRehypePlugins)[string]> = Object.entri
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)
 
-export function Markdown(props: { children: string; streaming?: boolean | undefined; className?: string | undefined }) {
+export function Markdown(props: {
+  children: string
+  streaming?: boolean | undefined
+  className?: string | undefined
+  apps?: ReadonlyArray<CatalogApp> | undefined
+}) {
+  const apps = props.apps ?? []
+  const withApps =
+    apps.length === 0
+      ? components
+      : {
+          ...components,
+          a: ({ node: _node, href, children, ...rest }: ComponentProps<"a"> & ExtraProps) => {
+            const app = href?.startsWith(appLink)
+              ? apps.find((each) => each.slug === href.slice(appLink.length))
+              : undefined
+            if (app) return <AppMention app={app} />
+            return (
+              <a href={href} target="_blank" rel="noreferrer" className="font-medium underline" {...rest}>
+                {children}
+              </a>
+            )
+          },
+        }
   return (
     <Streamdown
       controls={false}
       tableMaxHeight={0}
       urlTransform={urlTransform}
       rehypePlugins={rehypePlugins}
-      components={components}
+      components={withApps}
       isAnimating={props.streaming === true}
       className={cn("min-w-0 text-sm/relaxed", props.className)}
     >
-      {props.children}
+      {mentionLinks(props.children, apps)}
     </Streamdown>
   )
 }

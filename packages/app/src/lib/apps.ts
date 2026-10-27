@@ -134,6 +134,7 @@ export type CatalogApp = {
   readonly name: string
   readonly description: string
   readonly icon: string | null
+  readonly brandColor: string | null
   readonly source: "registry" | "custom"
   readonly ownerSpaceId: string | null
   readonly mcps: AppInfo["mcps"]
@@ -141,7 +142,11 @@ export type CatalogApp = {
   readonly listing: { readonly body: string | null; readonly examplePrompts: ReadonlyArray<string> } | null
 }
 
+const brandColorOf = (app: object) =>
+  "brandColor" in app && typeof app.brandColor === "string" ? app.brandColor : null
+
 export const fromApp = (app: AppInfo): CatalogApp => ({
+  brandColor: brandColorOf(app),
   id: app.id,
   slug: app.slug,
   name: app.name,
@@ -155,6 +160,7 @@ export const fromApp = (app: AppInfo): CatalogApp => ({
 })
 
 export const fromRegistry = (app: AppRegistryInfo): CatalogApp => ({
+  brandColor: brandColorOf(app),
   id: app.id,
   slug: app.slug,
   name: app.name,
@@ -166,3 +172,5 @@ export const fromRegistry = (app: AppRegistryInfo): CatalogApp => ({
   skills: app.skills,
   listing: { body: app.listing.body, examplePrompts: app.listing.examplePrompts },
 })
+
+export const mentionColor = (app: Pick<CatalogApp, "brandColor"> | undefined) => app?.brandColor ?? "var(--ring)"
