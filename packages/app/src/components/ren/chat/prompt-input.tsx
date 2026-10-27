@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Composer, type ChatSession } from "@ren/chat"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "@/lib/utils"
@@ -173,11 +173,33 @@ function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void
         Reconnecting…
       </span>
     )
+  return <BootLine />
+}
+
+const bootPhrases = [
+  "Waking Ren up",
+  "Pulling up a chair",
+  "Laying out the tools",
+  "Reading the room",
+  "Sharpening pencils",
+  "Almost there",
+]
+
+function BootLine() {
+  const [index, setIndex] = useState(0)
+  useEffect(() => {
+    const timer = window.setInterval(() => setIndex((current) => Math.min(current + 1, bootPhrases.length - 1)), 2400)
+    return () => window.clearInterval(timer)
+  }, [])
   return (
-    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-      <IconLoader2 className="size-3.5 animate-spin" />
-      Starting sandbox…
-    </span>
+    <output className="flex items-center gap-2 text-sm text-muted-foreground">
+      <span
+        key={index}
+        className="shimmer animate-in duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none motion-reduce:shimmer-none"
+      >
+        {bootPhrases[index]}…
+      </span>
+    </output>
   )
 }
 
@@ -222,6 +244,66 @@ function PastedBlocks(props: {
   )
 }
 
+function SuggestionMenu(props: { suggest: Suggest; onChoose: (value: string) => void }) {
+  const suggest = props.suggest
+  const choose = props.onChoose
+  return (
+    <Command
+      value={suggest.active ?? ""}
+      shouldFilter={false}
+      className="absolute bottom-full left-0 mb-2 h-auto w-full max-w-md rounded-xl border bg-popover shadow-md"
+    >
+      <CommandList className="max-h-72">
+        <CommandGroup heading={suggest.label}>
+          {suggest.items.map((item) => (
+            <CommandItem
+              key={item.value}
+              value={item.value}
+              onMouseDown={(event) => event.preventDefault()}
+              onSelect={() => choose(item.value)}
+            >
+              {item.kind === "command" ? <IconTerminal2 /> : item.kind === "file" ? <IconFileText /> : <IconAt />}
+              <span
+                className={
+                  item.kind === "file" ? "min-w-0 flex-1 truncate font-mono text-xs" : "min-w-0 flex-1 truncate"
+                }
+              >
+                {item.label}
+              </span>
+              {item.description ? (
+                <span className="max-w-1/2 shrink-0 truncate pl-3 text-xs text-muted-foreground">
+                  {item.description}
+                </span>
+              ) : null}
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      </CommandList>
+    </Command>
+  )
+}
+
+function SendButton(props: { blank: boolean; stop: boolean; sending: boolean; booting: boolean; onClick: () => void }) {
+  return (
+    <InputGroupButton
+      variant={!props.blank || props.stop ? "default" : "secondary"}
+      size="icon-sm"
+      className={cn("rounded-full", props.booting && "pointer-events-none opacity-50")}
+      aria-disabled={props.booting || undefined}
+      aria-label={props.stop ? "Stop" : "Send"}
+      onClick={props.onClick}
+    >
+      {props.sending ? (
+        <IconLoader2 className="animate-spin" />
+      ) : props.stop ? (
+        <IconPlayerStopFilled />
+      ) : (
+        <IconArrowUp />
+      )}
+    </InputGroupButton>
+  )
+}
+
 export function PromptInput(props: {
   value: Composer.Draft
   onChange: (draft: Composer.Draft) => void
@@ -238,12 +320,13 @@ export function PromptInput(props: {
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
   const draft = props.value
+  const booting = props.boot?._tag === "Starting"
   const text = draft.text
   const blank = Composer.isBlank(draft)
   const change = (next: Composer.Draft) => props.onChange(next)
   const [grown, setGrown] = useState(false)
   const submit = () => {
-    if (props.sending) return
+    if (props.sending || booting) return
     if (blank) {
       if (props.running) props.onStop?.()
       return
@@ -253,18 +336,16 @@ export function PromptInput(props: {
   }
   const home = props.placement === "home"
   const stacked = home || grown || text.includes("\n") || draft.pasted.length > 0
-  const status = props.boot && blank ? props.boot : undefined
+  const status = props.boot && (blank || booting) ? props.boot : undefined
   const stop = props.running && blank && props.onStop
   const send = (
-    <InputGroupButton
-      variant={!blank || stop ? "default" : "secondary"}
-      size="icon-sm"
-      className="rounded-full"
-      aria-label={stop ? "Stop" : "Send"}
+    <SendButton
+      blank={blank}
+      stop={Boolean(stop)}
+      sending={props.sending === true}
+      booting={booting}
       onClick={submit}
-    >
-      {props.sending ? <IconLoader2 className="animate-spin" /> : stop ? <IconPlayerStopFilled /> : <IconArrowUp />}
-    </InputGroupButton>
+    />
   )
   const place = (next: string, cursor: number) =>
     requestAnimationFrame(() => {
@@ -288,40 +369,7 @@ export function PromptInput(props: {
   const suggest = props.suggest
   return (
     <div className="relative flex flex-col gap-2">
-      {suggest?.open ? (
-        <Command
-          value={suggest.active ?? ""}
-          shouldFilter={false}
-          className="absolute bottom-full left-0 mb-2 h-auto w-full max-w-md rounded-xl border bg-popover shadow-md"
-        >
-          <CommandList className="max-h-72">
-            <CommandGroup heading={suggest.label}>
-              {suggest.items.map((item) => (
-                <CommandItem
-                  key={item.value}
-                  value={item.value}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onSelect={() => choose(item.value)}
-                >
-                  {item.kind === "command" ? <IconTerminal2 /> : item.kind === "file" ? <IconFileText /> : <IconAt />}
-                  <span
-                    className={
-                      item.kind === "file" ? "min-w-0 flex-1 truncate font-mono text-xs" : "min-w-0 flex-1 truncate"
-                    }
-                  >
-                    {item.label}
-                  </span>
-                  {item.description ? (
-                    <span className="max-w-1/2 shrink-0 truncate pl-3 text-xs text-muted-foreground">
-                      {item.description}
-                    </span>
-                  ) : null}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      ) : null}
+      {suggest?.open ? <SuggestionMenu suggest={suggest} onChoose={choose} /> : null}
       {draft.pasted.length > 0 ? (
         <PastedBlocks
           pasted={draft.pasted}
@@ -390,7 +438,8 @@ export function PromptInput(props: {
           }}
           placeholder={status ? "" : "Ask anything, @ to add context"}
           aria-label="Message"
-          readOnly={props.sending}
+          readOnly={props.sending || booting}
+          aria-busy={booting || undefined}
           // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer is the page’s one input, as in Ren
           autoFocus
           rows={1}

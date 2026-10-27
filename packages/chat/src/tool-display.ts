@@ -202,9 +202,10 @@ type Subject = (
 const command: Subject = (input, metadata) => text(input.command) ?? text(metadata.command)
 const file: Subject = (input) => basename(input.filePath) ?? basename(input.path)
 const directory: Subject = (input) => text(input.path)
+const workspace = /^.*\/workspace\/[^/]+\/?/u
 const searched: Subject = (input) => {
   const pattern = text(input.pattern)
-  const path = text(input.path)
+  const path = text(input.path)?.replace(workspace, "") || undefined
   return pattern && path ? `${pattern} in ${path}` : (pattern ?? path)
 }
 const files: Subject = (_input, metadata) => count(metadata.files, "file")

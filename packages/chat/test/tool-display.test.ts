@@ -62,6 +62,9 @@ describe("tool display", () => {
     expect(ToolDisplay.subtitle(tool("edit", "completed", { path: "src/a.ts" }))).toBe("a.ts")
     expect(ToolDisplay.subtitle(tool("grep", "completed", { path: "src", pattern: "TODO" }))).toBe("TODO in src")
     expect(ToolDisplay.subtitle(tool("glob", "completed", { pattern: "*.txt" }))).toBe("*.txt")
+    expect(
+      ToolDisplay.subtitle(tool("grep", "completed", { pattern: "TODO", path: "/tmp/brain/workspace/ses_1" })),
+    ).toBe("TODO")
     expect(ToolDisplay.subtitle(tool("webfetch", "completed", { url: "https://ren.ai" }))).toBe("https://ren.ai")
     expect(ToolDisplay.subtitle(tool("websearch", "completed", { query: "effect atoms" }))).toBe("effect atoms")
     expect(ToolDisplay.subtitle(tool("skill", "completed", { name: "pdf" }, { metadata: { name: "PDF" } }))).toBe("PDF")

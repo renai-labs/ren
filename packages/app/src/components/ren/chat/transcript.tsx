@@ -355,6 +355,7 @@ function UserMessage(props: {
         ) : (
           <>
             {props.message.files && props.message.files.length > 0 ? <FileChips files={props.message.files} /> : null}
+            {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
             {parts.typed ? (
               <Bubble variant="muted" align="end">
                 <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
@@ -362,7 +363,6 @@ function UserMessage(props: {
                 </BubbleContent>
               </Bubble>
             ) : null}
-            {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
           </>
         )}
         {props.editing ? null : (
@@ -921,7 +921,7 @@ export function Transcript(props: TranscriptProps) {
             {props.working ? (
               <MessageScrollerItem messageId="working">
                 <Marker>
-                  <MarkerContent>Working on the next step</MarkerContent>
+                  <MarkerContent className="shimmer motion-reduce:shimmer-none">Working on the next step</MarkerContent>
                 </Marker>
               </MessageScrollerItem>
             ) : null}
