@@ -3,10 +3,15 @@ import { Pagination } from "@ren/schema/pagination"
 import { Primitive } from "@ren/schema/primitive"
 import { Schedule } from "@ren/schema/schedule"
 import { Space } from "@ren/schema/space"
+import { Combobox } from "@ren/ui/combobox"
 import { Dialog } from "@ren/ui/dialog"
+import { Field } from "@ren/ui/field"
 import { Form } from "@ren/ui/form"
+import { Menu } from "@ren/ui/menu"
 import { Notice } from "@ren/ui/notice"
-import { localTimeZone, timeZones } from "@ren/ui/time"
+import { Select } from "@ren/ui/select"
+import { Text } from "@ren/ui/text"
+import { localTimeZone, Time, timeZones } from "@ren/ui/time"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Option, Schema } from "effect"
 import { useState } from "react"
@@ -28,6 +33,7 @@ const Fields = Schema.Struct({
   cron: Schema.String,
   date: Schema.String,
   until: Schema.String,
+  untilTime: Schema.String,
   timeZone: Schedule.TimeZone,
 })
 
@@ -45,7 +51,7 @@ const useScheduleForm = (defaultValues: Values, onSubmit: (value: typeof Fields.
 
 type ScheduleForm = ReturnType<typeof useScheduleForm>
 
-const zones = timeZones().map((zone) => ({ value: zone, label: zone.replaceAll("_", " ") }))
+const zones = timeZones().map((zone) => ({ value: zone, label: zone, keywords: [zone.replaceAll("_", " ")] }))
 
 // oxlint-disable-next-line ren/no-comments -- Create or update, and refresh the lists that show schedules.
 function useSave(schedule: ScheduleInfo | undefined, target: ScheduleTarget, onSaved: () => void) {
@@ -112,7 +118,7 @@ const setupOf = (
       pickSpace: false,
       title: "Edit schedule",
       description: "Changing the message, agent or time makes you its owner.",
-      submitLabel: "Save schedule",
+      submitLabel: "Save",
       pendingLabel: "Saving…",
     }
   }
@@ -132,11 +138,11 @@ const setupOf = (
     target: "new-chat" as const,
     isChat: false,
     pickSpace: true,
-    description: "Ren starts a chat with this message at the time you set.",
+    description: "Run an agent on a recurring schedule.",
   }
 }
 
-// oxlint-disable-next-line ren/no-comments -- schedules S25, S26: one dialog creates and edits; from a chat, the space and the chat are fixed and the agent is the chat's.
+// oxlint-disable-next-line ren/no-comments -- schedules S25, S26: one side drawer creates and edits, laid out as ren-v1's; from a chat, the space and the chat are fixed and the agent is the chat's.
 export function ScheduleDialog(props: {
   schedule?: ScheduleInfo
   chat?: { readonly spaceId: string; readonly sessionId: string }
@@ -153,7 +159,7 @@ export function ScheduleDialog(props: {
       }}
       dismissal={saving.pending ? "blocked" : "allowed"}
     >
-      <Dialog.Content size="wide">
+      <Dialog.Content presentation="side" size="medium">
         <Dialog.Header>
           <Dialog.Title>{setup.title}</Dialog.Title>
           <Dialog.Description>{setup.description}</Dialog.Description>
@@ -161,29 +167,27 @@ export function ScheduleDialog(props: {
         <Form.Root form={form} arrangement="contents">
           <Dialog.Body>
             {setup.pickSpace ? <SpaceField form={form} /> : null}
+            <form.AppField name="message">
+              {(field) => (
+                <field.TextArea
+                  label="Message"
+                  placeholder="What should the agent do?"
+                  rows={3}
+                  // oxlint-disable-next-line jsx-a11y/no-autofocus -- the drawer exists to write this message
+                  autoFocus
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="name">
+              {(field) => <field.TextField label="Name" placeholder="Daily report" />}
+            </form.AppField>
             {setup.isChat ? null : (
               <form.Subscribe selector={(state) => state.values.spaceId}>
                 {(spaceId) => <AgentField form={form} spaceId={spaceId} />}
               </form.Subscribe>
             )}
-            <form.AppField name="name">
-              {(field) => (
-                <field.TextField
-                  label="Name"
-                  placeholder="Daily report"
-                  // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog exists to fill this in
-                  autoFocus
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="message">
-              {(field) => <field.TextArea label="Message" placeholder="Summarize yesterday’s merged PRs." rows={3} />}
-            </form.AppField>
-            <form.AppField name="frequency">
-              {(field) => <field.Select label="Repeat" width="full" options={Schedules.frequencyOptions} />}
-            </form.AppField>
-            <form.Subscribe selector={(state) => state.values.frequency}>
-              {(frequency) => <CadenceFields form={form} frequency={frequency} />}
+            <form.Subscribe selector={(state) => state.values}>
+              {(values) => <CadenceFields form={form} cadence={values} />}
             </form.Subscribe>
             <Notice tone="danger" placement="inline">
               {saving.problem}
@@ -252,19 +256,24 @@ function AgentField(props: { form: ScheduleForm; spaceId: string }) {
   )
 }
 
-function CadenceFields(props: { form: ScheduleForm; frequency: Schedules.Frequency }) {
+// oxlint-disable-next-line ren/no-comments -- ren-v1's cadence block: repeat and time side by side, the days, the cron, the next run, the time zone and the end.
+function CadenceFields(props: { form: ScheduleForm; cadence: Schedules.Cadence }) {
   const form = props.form
-  const frequency = props.frequency
+  const frequency = props.cadence.frequency
   return (
     <>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <form.AppField name="frequency">
+          {(field) => <field.Select label="Repeat" width="full" options={Schedules.frequencyOptions} />}
+        </form.AppField>
+        {frequency === "hourly" || frequency === "custom" ? null : (
+          <form.AppField name="time">{(field) => <field.TextField label="Time" type="time" />}</form.AppField>
+        )}
+      </div>
       {frequency === "once" ? (
         <form.AppField name="date">{(field) => <field.TextField label="Date" type="date" />}</form.AppField>
       ) : null}
-      {frequency === "weekly" ? (
-        <form.AppField name="weekday">
-          {(field) => <field.Select label="Day" width="full" options={Schedules.weekdays} />}
-        </form.AppField>
-      ) : null}
+      {frequency === "weekly" ? <WeekdayField form={form} /> : null}
       {frequency === "monthly" ? (
         <form.AppField name="monthDay">
           {(field) => <field.Select label="Day of month" width="full" options={Schedules.monthDays} />}
@@ -282,17 +291,121 @@ function CadenceFields(props: { form: ScheduleForm; frequency: Schedules.Frequen
           )}
         </form.AppField>
       ) : null}
-      {frequency === "hourly" || frequency === "custom" ? null : (
-        <form.AppField name="time">{(field) => <field.TextField label="Time" type="time" />}</form.AppField>
-      )}
-      <form.AppField name="timeZone">
-        {(field) => <field.Select label="Time zone" width="full" options={zones} />}
-      </form.AppField>
-      {frequency === "once" ? null : (
-        <form.AppField name="until">
-          {(field) => <field.TextField label="End date" type="date" necessity="optional" />}
-        </form.AppField>
-      )}
+      <PreviewLine cadence={props.cadence} />
+      <TimeZoneField form={form} />
+      {frequency === "once" ? null : <UntilFields form={form} until={props.cadence.until} />}
     </>
+  )
+}
+
+function PreviewLine(props: { cadence: Schedules.Cadence }) {
+  const preview = Schedules.preview(props.cadence)
+  if (preview.kind === "invalid") return null
+  return (
+    <Text purpose="caption" tone="secondary" element="p">
+      {preview.kind === "never" ? (
+        "No runs left"
+      ) : (
+        <>
+          Next <Time value={preview.at} format="date-time" timeZone={props.cadence.timeZone} />
+        </>
+      )}
+    </Text>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- ren-v1 picked several days for a weekly schedule from a menu of checkboxes.
+function WeekdayField(props: { form: ScheduleForm }) {
+  return (
+    <props.form.AppField name="weekday">
+      {(field) => {
+        const selected = new Set(field.state.value.split(",").filter(Boolean))
+        const toggle = (value: string) => {
+          if (selected.has(value) && selected.size === 1) return
+          const next = new Set(selected)
+          if (next.has(value)) next.delete(value)
+          else next.add(value)
+          field.handleChange(
+            Schedules.weekdays
+              .filter((day) => next.has(day.value))
+              .map((day) => day.value)
+              .join(","),
+          )
+        }
+        return (
+          <Field.Root label="Days">
+            <Menu.Root>
+              <Menu.Trigger
+                render={
+                  <Select.Button label="Days" width="full">
+                    {Schedules.weekdays
+                      .filter((day) => selected.has(day.value))
+                      .map((day) => day.label)
+                      .join(", ")}
+                  </Select.Button>
+                }
+              />
+              <Menu.Popup alignment="start" width="small">
+                {Schedules.weekdays.map((day) => (
+                  <Menu.CheckboxItem
+                    key={day.value}
+                    checked={selected.has(day.value)}
+                    onCheckedChange={() => toggle(day.value)}
+                  >
+                    {day.label}
+                  </Menu.CheckboxItem>
+                ))}
+              </Menu.Popup>
+            </Menu.Root>
+          </Field.Root>
+        )
+      }}
+    </props.form.AppField>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- ren-v1's time zone picker searched by name.
+function TimeZoneField(props: { form: ScheduleForm }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <props.form.AppField name="timeZone">
+      {(field) => (
+        <Field.Root label="Time zone">
+          <Combobox.Popover
+            trigger={
+              <Select.Button label="Time zone" width="full" placeholder="Pick a time zone">
+                {field.state.value}
+              </Select.Button>
+            }
+            open={open}
+            onOpenChange={setOpen}
+            width="trigger"
+            label="Time zone"
+            searchPlaceholder="Search time zones"
+            emptyMessage="No time zone found"
+            items={zones}
+            value={field.state.value}
+            onValueChange={(value) => {
+              if (value !== null) field.handleChange(value)
+              setOpen(false)
+            }}
+          />
+        </Field.Root>
+      )}
+    </props.form.AppField>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- ren-v1's end: a date, then a time that is off until a date is set; a date alone ends at 23:59.
+function UntilFields(props: { form: ScheduleForm; until: string }) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      <props.form.AppField name="until">
+        {(field) => <field.TextField label="Until" type="date" necessity="optional" />}
+      </props.form.AppField>
+      <props.form.AppField name="untilTime">
+        {(field) => <field.TextField label="Until time" type="time" disabled={props.until === ""} />}
+      </props.form.AppField>
+    </div>
   )
 }

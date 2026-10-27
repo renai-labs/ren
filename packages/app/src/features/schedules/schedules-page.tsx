@@ -1,18 +1,24 @@
 import type { ScheduleInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
+import { Card } from "@ren/ui/card"
 import { Icon } from "@ren/ui/icon"
-import { Menu } from "@ren/ui/menu"
+import { IconButton } from "@ren/ui/icon-button"
+import { LoadingMessage } from "@ren/ui/loading-message"
 import { PageShell } from "@ren/ui/page-shell"
+import { Pagination } from "@ren/ui/pagination"
 import { SearchField } from "@ren/ui/search-field"
 import { Select } from "@ren/ui/select"
-import { Table } from "@ren/ui/table"
+import { StateMessage } from "@ren/ui/state-message"
+import { Switch } from "@ren/ui/switch"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
 import { Toolbar } from "@ren/ui/toolbar"
+import { Tooltip } from "@ren/ui/tooltip"
 import { Search } from "@ren/util/search"
 import { useQuery } from "@tanstack/react-query"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { useDeferredValue, useState } from "react"
+import type { ReactNode } from "react"
 import { ScheduleActions } from "../../components/schedule-actions.js"
 import { ScheduleDialog } from "../../components/schedule-dialog.js"
 import { ScheduleWhen } from "../../components/schedule-when.js"
@@ -22,30 +28,50 @@ import { ScheduleQueries } from "./schedule-queries.js"
 
 const allSpaces = "all"
 
-// oxlint-disable-next-line ren/no-comments -- schedules S23: the schedules of every space the person is in, with search and a space filter.
+const pageSize = 9
+
+const stateOptions = [
+  { value: "any", label: "Any state" },
+  { value: "active", label: "Active" },
+  { value: "paused", label: "Paused" },
+  { value: "ended", label: "Ended" },
+] as const
+
+type State = (typeof stateOptions)[number]["value"]
+
+// oxlint-disable-next-line ren/no-comments -- schedules S23, as ren-v1's Scheduled page: search, filters, a three-up card grid by name, nine to a page.
 export function SchedulesPage() {
   const context = RouterContext.useRouterContext()
   const schedules = useQuery({ ...ScheduleQueries.listOptions(context.api), refetchInterval: 10_000 })
   const spaces = useQuery(ScheduleQueries.spaceOptions(context.api))
   const [query, setQuery] = useState("")
   const [spaceId, setSpaceId] = useState(allSpaces)
+  const [state, setState] = useState<State>("any")
+  const [page, setPage] = useState(1)
   const [creating, setCreating] = useState(false)
   const needle = useDeferredValue(query).trim()
   const spaceItems = spaces.data?.items ?? []
   const spaceNames = new Map(spaceItems.map((space) => [space.id, space.name]))
-  const visible = (schedules.data?.items ?? []).filter(
-    (schedule) =>
-      (spaceId === allSpaces || schedule.spaceId === spaceId) &&
-      Search.matches([schedule.name, schedule.message], needle),
-  )
-  const filtered = needle !== "" || spaceId !== allSpaces
+  const matched = (schedules.data?.items ?? [])
+    .filter(
+      (schedule) =>
+        (spaceId === allSpaces || schedule.spaceId === spaceId) &&
+        (state === "any" || schedule.status === state) &&
+        Search.matches([schedule.name, schedule.message], needle),
+    )
+    .toSorted((left, right) => left.name.localeCompare(right.name))
+  const pageCount = Math.max(1, Math.ceil(matched.length / pageSize))
+  const current = Math.min(page, pageCount)
+  const visible = matched.slice((current - 1) * pageSize, current * pageSize)
+  const filtered = needle !== "" || spaceId !== allSpaces || state !== "any"
   return (
     <PageShell.Root
       title="Schedules"
-      subtitle="Work that starts at a set time instead of a message."
+      subtitle="Work that starts on a schedule instead of a message."
       toolbar={
         <Toolbar.Root>
           <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search schedules" />
+          <Select.Root label="State" size="small" value={state} onValueChange={setState} options={stateOptions} />
           <Select.Root
             label="Space"
             size="small"
@@ -62,102 +88,109 @@ export function SchedulesPage() {
             leadingIcon={<Icon glyph="Plus" />}
             onClick={() => setCreating(true)}
           >
-            New schedule
+            Create schedule
           </Button>
         </Toolbar.Root>
       }
     >
-      <Table.Root
+      <Grid
         state={Schedules.tableState(schedules, visible.length)}
-        caption="Schedules"
-        emptyIcon={<Icon glyph="CalendarClock" size="medium" tone="secondary" />}
-        emptyMessage={filtered ? "No matching schedules" : "No schedules yet"}
-        emptyDescription={filtered ? "Try a different search or space." : "A schedule starts a chat at a set time."}
-        failureMessage="Couldn’t load schedules."
+        filtered={filtered}
         onRetry={() => void schedules.refetch()}
       >
-        <Table.Header>
-          <Table.HeaderCell width="quarter">Name</Table.HeaderCell>
-          <Table.HeaderCell width="medium" visibility="wide-screens">
-            Space
-          </Table.HeaderCell>
-          <Table.HeaderCell>When</Table.HeaderCell>
-          <Table.HeaderCell width="large" visibility="wide-screens">
-            Next run
-          </Table.HeaderCell>
-          <Table.HeaderCell width="medium">Status</Table.HeaderCell>
-          <Table.RowActionsHeaderCell />
-        </Table.Header>
-        <Table.Body>
-          {visible.map((schedule) => (
-            <ScheduleRow key={schedule.id} schedule={schedule} spaceName={spaceNames.get(schedule.spaceId) ?? "—"} />
-          ))}
-        </Table.Body>
-      </Table.Root>
+        {visible.map((schedule, index) => (
+          <ScheduleCard
+            key={schedule.id}
+            schedule={schedule}
+            index={index}
+            spaceName={spaceNames.get(schedule.spaceId) ?? "—"}
+          />
+        ))}
+      </Grid>
+      {pageCount > 1 ? <Pagination.Numbered page={current} pageCount={pageCount} onPageChange={setPage} /> : null}
       {creating ? <ScheduleDialog onClose={() => setCreating(false)} /> : null}
     </PageShell.Root>
   )
 }
 
-function ScheduleRow(props: { schedule: ScheduleInfo; spaceName: string }) {
-  const navigate = useNavigate()
-  const schedule = props.schedule
-  const status = Schedules.statusOf(schedule)
-  const target = schedule.target
+function Grid(props: {
+  state: "loading" | "failed" | "empty" | "ready"
+  filtered: boolean
+  onRetry: () => void
+  children: ReactNode
+}) {
+  if (props.state === "loading") return <LoadingMessage placement="section" />
+  if (props.state === "failed")
+    return <StateMessage state="failed" title="Couldn’t load every schedule." onRetry={props.onRetry} />
+  if (props.state === "empty")
+    return (
+      <StateMessage
+        state={props.filtered ? "no-results" : "empty"}
+        icon={<Icon glyph="Clock" size="medium" tone="secondary" />}
+        title={props.filtered ? "No matching schedules" : "No schedules yet"}
+        description={
+          props.filtered ? "Try a different search or filter." : "Create one to run a prompt on a recurring cadence."
+        }
+      />
+    )
   return (
-    <Table.Row onActivate={() => void navigate({ to: "/schedules/$scheduleId", params: { scheduleId: schedule.id } })}>
-      <Table.Cell>
-        <span className="flex min-w-0 flex-col">
-          <Link to="/schedules/$scheduleId" params={{ scheduleId: schedule.id }}>
-            {schedule.name}
-          </Link>
-          {target === "new-chat" ? null : (
-            <Text purpose="caption" tone="secondary" element="span">
-              <Link to="/sessions/$sessionId" params={{ sessionId: target.sessionId }}>
-                In a chat
-              </Link>
-            </Text>
-          )}
-        </span>
-      </Table.Cell>
-      <Table.Cell visibility="wide-screens">{props.spaceName}</Table.Cell>
-      <Table.Cell>
-        <ScheduleWhen when={schedule.when} />
-      </Table.Cell>
-      <Table.Cell visibility="wide-screens">
-        {schedule.nextRunAt ? <Time value={schedule.nextRunAt} format="date-time" /> : "—"}
-      </Table.Cell>
-      <Table.Cell>
-        <span className="flex items-center gap-2">
-          <Icon glyph={status.glyph} tone="secondary" />
-          {status.label}
-        </span>
-      </Table.Cell>
-      <RowActions schedule={schedule} />
-    </Table.Row>
+    <section aria-label="Schedules" aria-live="polite">
+      <div className="grid grid-cols-1 content-start gap-3 sm:grid-cols-2 lg:grid-cols-3">{props.children}</div>
+    </section>
   )
 }
 
-function RowActions(props: { schedule: ScheduleInfo }) {
-  const actions = ScheduleActions.useActions(props.schedule)
+// oxlint-disable-next-line ren/no-comments -- ren-v1's schedule card: the next run as a relative time, archive, and a switch that pauses or resumes; an ended schedule's switch is off and says why.
+function ScheduleCard(props: { schedule: ScheduleInfo; index: number; spaceName: string }) {
+  const schedule = props.schedule
+  const actions = ScheduleActions.useActions(schedule)
+  const status = Schedules.statusOf(schedule)
+  const ended = schedule.status === "ended"
   return (
     <>
-      <Table.RowActions label={`Actions for ${props.schedule.name}`}>
-        <Menu.Item icon={<Icon glyph="Play" />} onSelect={actions.run}>
-          Run now
-        </Menu.Item>
-        {actions.toggle ? (
-          <Menu.Item icon={<Icon glyph={actions.toggle.glyph} />} onSelect={actions.toggle.onSelect}>
-            {actions.toggle.label}
-          </Menu.Item>
-        ) : null}
-        <Menu.Item icon={<Icon glyph="Pencil" />} onSelect={actions.edit}>
-          Edit
-        </Menu.Item>
-        <Menu.Item tone="danger" icon={<Icon glyph="Trash2" />} onSelect={actions.archive}>
-          Archive
-        </Menu.Item>
-      </Table.RowActions>
+      <Card.Root
+        layout="feature"
+        interaction="link"
+        render={<Link to="/schedules/$scheduleId" params={{ scheduleId: schedule.id }} />}
+        label={`Open schedule: ${schedule.name}`}
+        appearanceOrder={props.index}
+        media={<Icon glyph="Clock" size="medium" tone="secondary" />}
+        title={schedule.name}
+        description={
+          <>
+            {props.spaceName} · <ScheduleWhen when={schedule.when} />
+          </>
+        }
+        metadata={
+          schedule.status === "paused" ? null : (
+            <Text purpose="body" numerals="tabular" element="span">
+              {schedule.nextRunAt ? (
+                <Time value={schedule.nextRunAt} format="relative" relativeStyle="narrow" label="Next run" />
+              ) : (
+                status.label
+              )}
+            </Text>
+          )
+        }
+        actions={
+          <>
+            <IconButton size="small" label={`Archive schedule: ${schedule.name}`} onClick={actions.archive}>
+              <Icon glyph="Trash2" />
+            </IconButton>
+            <Tooltip.Root content={ended ? "It ended. Edit its time to run it again." : undefined}>
+              <span className="inline-flex">
+                <Switch
+                  size="small"
+                  checked={schedule.status === "active"}
+                  disabled={ended}
+                  onCheckedChange={() => actions.toggle?.onSelect()}
+                  label={`${schedule.status === "active" ? "Pause" : "Resume"} schedule: ${schedule.name}`}
+                />
+              </span>
+            </Tooltip.Root>
+          </>
+        }
+      />
       {actions.dialogs}
     </>
   )

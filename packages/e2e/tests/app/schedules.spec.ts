@@ -12,7 +12,7 @@ test("a member creates a daily schedule, runs it now and finds the scheduled mes
   await page.goto("/app/schedules")
   await expect(page.getByText("No schedules yet")).toBeVisible()
 
-  await page.getByRole("button", { name: "New schedule" }).click()
+  await page.getByRole("button", { name: "Create schedule" }).click()
   const dialog = page.getByRole("dialog", { name: "New schedule" })
   await dialog.getByRole("combobox", { name: "Space" }).click()
   await page.getByRole("option").first().click()
@@ -21,10 +21,10 @@ test("a member creates a daily schedule, runs it now and finds the scheduled mes
   await dialog.getByRole("button", { name: "Create schedule" }).click()
   await expect(dialog).toHaveCount(0)
 
-  const row = page.getByRole("row", { name: /Daily report/ })
-  await expect(row).toContainText("Every day at 09:00")
-  await expect(row).toContainText("Active")
-  await row.getByRole("link", { name: "Daily report", exact: true }).click()
+  const card = page.getByRole("link", { name: "Open schedule: Daily report" })
+  await expect(card).toContainText("Every day at 09:00")
+  await expect(page.getByRole("switch", { name: "Pause schedule: Daily report" })).toBeChecked()
+  await card.click()
   await expect(page.getByRole("heading", { name: "Daily report" })).toBeVisible()
   await expect(page.getByText("No runs yet")).toBeVisible()
 
