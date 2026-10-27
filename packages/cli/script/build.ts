@@ -1,5 +1,6 @@
 export * as CliBuild from "./build.js"
 
+import { Auth } from "@ren/schema/auth"
 import { Schema } from "effect"
 import { mkdir } from "node:fs/promises"
 import { resolve } from "node:path"
@@ -60,6 +61,8 @@ const result = await Bun.build({
 if (!result.success) throw new AggregateError(result.logs, "CLI build failed")
 const digest = new Bun.CryptoHasher("sha256").update(await Bun.file(outfile).arrayBuffer()).digest("hex")
 await Bun.write(`${outfile}.sha256`, `${digest}  ${name}\n`)
+if (new URL(Auth.cliClient.client_id).origin === host.origin)
+  await Bun.write(resolve(args.values.outdir, "oauth-client.json"), `${JSON.stringify(Auth.cliClient, null, 2)}\n`)
 await Bun.write(
   resolve(args.values.outdir, "install.sh"),
   (await Bun.file(new URL("../install.sh", import.meta.url)).text()).replace(
