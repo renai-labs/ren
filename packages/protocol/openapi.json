@@ -13581,6 +13581,77 @@
         },
         "additionalProperties": false
       },
+      "Factory.Edge": {
+        "type": "object",
+        "properties": {
+          "agentId": {
+            "type": "string"
+          },
+          "max": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Handoffs on this edge before a person decides."
+          },
+          "else": {
+            "type": "string",
+            "description": "Gets the task at the max."
+          },
+          "start": {
+            "$ref": "#/components/schemas/Factory.StartMode"
+          }
+        },
+        "required": ["agentId"],
+        "additionalProperties": false
+      },
+      "Factory.Entry": {
+        "type": "object",
+        "properties": {
+          "agentId": {
+            "type": "string"
+          },
+          "maxRuns": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Runs of this agent before a person decides."
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Factory.Edge"
+            },
+            "description": "The agents it can hand off to. Without it, any agent."
+          }
+        },
+        "required": ["agentId"],
+        "additionalProperties": false
+      },
+      "Factory.Info": {
+        "type": "object",
+        "properties": {
+          "maxHandoffs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Handoffs before a person decides."
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Factory.Entry"
+            },
+            "maxItems": 64
+          }
+        },
+        "required": ["agents"],
+        "additionalProperties": false,
+        "description": "The space’s agents in board order, with their handoffs."
+      },
+      "Factory.StartMode": {
+        "type": "string",
+        "enum": ["new", "continue"]
+      },
       "ForbiddenErrorEncoded": {
         "type": "object",
         "properties": {
@@ -17878,12 +17949,8 @@
               }
             ]
           },
-          "agentOrder": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The space’s factory order: agent IDs, first to last. It orders the task board’s columns and does not limit which agent holds a task."
+          "factory": {
+            "$ref": "#/components/schemas/Factory.Info"
           },
           "canUpdate": {
             "type": "boolean"
@@ -17929,7 +17996,7 @@
           "brainScope",
           "memberCount",
           "membershipId",
-          "agentOrder",
+          "factory",
           "canUpdate",
           "canJoin",
           "canAddMember",
@@ -17975,15 +18042,10 @@
       "Space.UpdateInput": {
         "type": "object",
         "properties": {
-          "agentOrder": {
+          "factory": {
             "anyOf": [
               {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "The space’s factory order: agent IDs, first to last. It orders the task board’s columns and does not limit which agent holds a task.",
-                "maxItems": 64
+                "$ref": "#/components/schemas/Factory.Info"
               },
               {
                 "type": "null"

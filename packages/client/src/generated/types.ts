@@ -18,6 +18,8 @@ export type BrainScope = "session" | "space"
 
 export type SpaceMembershipID = string
 
+export type FactoryStartMode = "new" | "continue"
+
 export type SpaceAssignmentID = string
 
 export type EnvironmentTemplateID = string
@@ -282,28 +284,6 @@ export type AppProfileSkipped = { kind: "mcps" | "skills" | "env"; slug: string;
 
 export type AppListingCategories = { [x: PrimitiveSlug]: Array<PrimitiveSlug> }
 
-export type SpaceInfo = {
-  id: SpaceID
-  organizationId: AuthOrganizationID
-  kind: SpaceKind
-  ownerUserId: AuthUserID | null
-  slug: PrimitiveSlug
-  name: string
-  description: string | null
-  brainScope: BrainScope
-  memberCount: number
-  membershipId: SpaceMembershipID | null
-  agentOrder: Array<string>
-  canUpdate: boolean
-  canJoin: boolean
-  canAddMember: boolean
-  canRemoveMember: boolean
-  canArchive: boolean
-  createdAt: string
-  updatedAt: string
-  archivedAt: string | null
-}
-
 export type SpaceMemberActive = {
   id: SpaceMembershipID
   spaceId: SpaceID
@@ -315,6 +295,8 @@ export type SpaceMemberActive = {
   createdAt: string
   archivedAt: string | null
 }
+
+export type FactoryEdge = { agentId: string; max?: number; else?: string; start?: FactoryStartMode }
 
 export type SpaceMemberPending = {
   id: SpaceAssignmentID
@@ -679,7 +661,7 @@ export type AppListingInfo = {
   archivedAt: string | null
 }
 
-export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
+export type FactoryEntry = { agentId: string; maxRuns?: number; to?: Array<FactoryEdge> }
 
 export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
 
@@ -881,6 +863,8 @@ export type InfraPlan = { changes: Array<InfraChange>; problems: Array<InfraProb
 
 export type InfraApplied = { changes: Array<InfraChange> }
 
+export type FactoryInfo = { maxHandoffs?: number; agents: Array<FactoryEntry> }
+
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
 export type SettingsInfo = {
@@ -993,6 +977,28 @@ export type ChannelPlaceInfo = {
 
 export type ChannelInstallProviderInfos = { items: Array<ChannelInstallProviderInfo> }
 
+export type SpaceInfo = {
+  id: SpaceID
+  organizationId: AuthOrganizationID
+  kind: SpaceKind
+  ownerUserId: AuthUserID | null
+  slug: PrimitiveSlug
+  name: string
+  description: string | null
+  brainScope: BrainScope
+  memberCount: number
+  membershipId: SpaceMembershipID | null
+  factory: FactoryInfo
+  canUpdate: boolean
+  canJoin: boolean
+  canAddMember: boolean
+  canRemoveMember: boolean
+  canArchive: boolean
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
 export type SpaceSettingsInfo = { id: SpaceID; settings: SettingsInfo; canUpdate: boolean; updatedAt: string | null }
 
 export type OrganizationSettingsInfo = {
@@ -1070,6 +1076,8 @@ export type TaskActivityInfo =
   | { id: TaskCommentID; type: "comment"; comment: TaskCommentInfo }
 
 export type ChannelPlacePage = { items: Array<ChannelPlaceInfo>; page: number; pageSize: number; total: number }
+
+export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
 
 export type AgentPage = { items: Array<AgentInfo>; page: number; pageSize: number; total: number }
 
@@ -1251,29 +1259,77 @@ export type SpaceCreateOutput = SpaceInfo
 
 export type SpaceUpdateInput = {
   readonly id: { readonly id: string }["id"]
-  readonly agentOrder?: {
-    readonly agentOrder?: ReadonlyArray<string> | undefined
-    readonly name?: string | undefined
-    readonly description?: string | null | undefined
-    readonly brainScope?: ("session" | "space") | undefined
-  }["agentOrder"]
+  readonly factory?: {
+    readonly factory?: {
+      readonly maxHandoffs?: number
+      readonly agents: ReadonlyArray<{
+        readonly agentId: string
+        readonly maxRuns?: number
+        readonly to?: ReadonlyArray<{
+          readonly agentId: string
+          readonly max?: number
+          readonly else?: string
+          readonly start?: "new" | "continue"
+        }>
+      }>
+    } | null
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly brainScope?: ("session" | "space") | null
+  }["factory"]
   readonly name?: {
-    readonly agentOrder?: ReadonlyArray<string> | undefined
-    readonly name?: string | undefined
-    readonly description?: string | null | undefined
-    readonly brainScope?: ("session" | "space") | undefined
+    readonly factory?: {
+      readonly maxHandoffs?: number
+      readonly agents: ReadonlyArray<{
+        readonly agentId: string
+        readonly maxRuns?: number
+        readonly to?: ReadonlyArray<{
+          readonly agentId: string
+          readonly max?: number
+          readonly else?: string
+          readonly start?: "new" | "continue"
+        }>
+      }>
+    } | null
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly brainScope?: ("session" | "space") | null
   }["name"]
   readonly description?: {
-    readonly agentOrder?: ReadonlyArray<string> | undefined
-    readonly name?: string | undefined
-    readonly description?: string | null | undefined
-    readonly brainScope?: ("session" | "space") | undefined
+    readonly factory?: {
+      readonly maxHandoffs?: number
+      readonly agents: ReadonlyArray<{
+        readonly agentId: string
+        readonly maxRuns?: number
+        readonly to?: ReadonlyArray<{
+          readonly agentId: string
+          readonly max?: number
+          readonly else?: string
+          readonly start?: "new" | "continue"
+        }>
+      }>
+    } | null
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly brainScope?: ("session" | "space") | null
   }["description"]
   readonly brainScope?: {
-    readonly agentOrder?: ReadonlyArray<string> | undefined
-    readonly name?: string | undefined
-    readonly description?: string | null | undefined
-    readonly brainScope?: ("session" | "space") | undefined
+    readonly factory?: {
+      readonly maxHandoffs?: number
+      readonly agents: ReadonlyArray<{
+        readonly agentId: string
+        readonly maxRuns?: number
+        readonly to?: ReadonlyArray<{
+          readonly agentId: string
+          readonly max?: number
+          readonly else?: string
+          readonly start?: "new" | "continue"
+        }>
+      }>
+    } | null
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly brainScope?: ("session" | "space") | null
   }["brainScope"]
 }
 

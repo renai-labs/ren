@@ -2,11 +2,13 @@ export * as Space from "./space.js"
 
 import { Database } from "@ren/db/database"
 import { Agent } from "@ren/schema/agent"
+import { Factory } from "@ren/schema/factory"
+import { FactoryCheck } from "@ren/schema/factory-check"
 import { Space } from "@ren/schema/space"
 import { SpaceMember } from "@ren/schema/space-member"
 import { and, asc, count, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
-import { Array, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "./access.js"
 import { CredentialOffboarding } from "./credential/offboarding.js"
 import { EgressControl } from "./egress-control.js"
@@ -16,6 +18,7 @@ import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
 import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
+import { TaskFactory } from "./task/factory.js"
 
 export interface Interface extends Primitive.Interface<typeof Space.definition> {
   readonly changeSlug: (
@@ -51,7 +54,7 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
       membershipId: SpaceQueries.membership.id,
       isFirstOrganizationSpace,
       memberCount,
-      agentOrder: AgentQueries.factoryOrder,
+      usable: AgentQueries.factoryOrder,
     })
     .from(Database.Schema.space)
     .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
@@ -104,7 +107,7 @@ export const layer = Layer.effect(
           brainScope: row.space.brain_scope,
           memberCount: row.memberCount,
           membershipId: row.membershipId,
-          agentOrder: canRead ? row.agentOrder : [],
+          factory: canRead ? TaskFactory.keep(row.space.factory, row.usable) : Factory.empty,
           canUpdate: isAllowed(actions.update),
           canJoin: isAllowed(actions.join),
           canAddMember: isAllowed(actions.addMember),
@@ -207,26 +210,24 @@ export const layer = Layer.effect(
             if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource })) {
               return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
             }
-            const agentOrder = input.agentOrder && Array.dedupe(input.agentOrder)
-            if (agentOrder) {
+            if (input.factory) {
+              const problem = FactoryCheck.problems(input.factory).at(0)
+              if (problem) return yield* new Primitive.Invalid({ message: problem, field: "factory" })
+              const ids = input.factory.agents.map((entry) => entry.agentId)
               const usable = yield* transaction
                 .select({ id: Database.Schema.agent.id })
                 .from(Database.Schema.agent)
                 .where(
                   and(
-                    inArray(Database.Schema.agent.id, agentOrder.filter(Schema.is(Agent.ID))),
+                    inArray(Database.Schema.agent.id, ids.filter(Schema.is(Agent.ID))),
                     AgentQueries.isUsableIn(id, actor.organizationId),
                   ),
                 )
-              if (usable.length !== agentOrder.length)
+              if (usable.length !== ids.length)
                 return yield* new Primitive.Invalid({
-                  message: "Each agent in the factory order must be usable in this space.",
-                  field: "agentOrder",
+                  message: "Each agent in the factory must be usable in this space.",
+                  field: "factory",
                 })
-              yield* transaction
-                .update(Database.Schema.space)
-                .set({ agent_order: agentOrder.filter(Schema.is(Agent.ID)) })
-                .where(eq(Database.Schema.space.id, id))
             }
             const updated = yield* transaction
               .update(Database.Schema.space)
@@ -234,6 +235,7 @@ export const layer = Layer.effect(
                 name: input.name,
                 description: input.description,
                 brain_scope: input.brainScope,
+                factory: input.factory,
                 updated_at: sql`now()`,
               })
               .where(eq(Database.Schema.space.id, id))
