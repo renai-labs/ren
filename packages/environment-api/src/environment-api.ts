@@ -1,5 +1,6 @@
 export * as EnvironmentApi from "./environment-api.js"
 
+import { Drive } from "@ren/schema/drive"
 import { Environment } from "@ren/schema/environment"
 import { Identifier } from "@ren/schema/identifier"
 import { Brain } from "@ren/schema/brain"
@@ -194,6 +195,15 @@ export const UnpackInput = Schema.Struct({
     }),
   ),
 }).annotate({ identifier: "Executor.UnpackInput" })
+
+export interface MountInput extends Schema.Schema.Type<typeof MountInput> {}
+export const MountInput = Schema.Struct({
+  path: Schema.String.annotate({
+    description:
+      "The folder that shows the drive, read-only. A healthy mount of the same remote there answers at once; a dead one is mounted again",
+  }),
+  remote: Drive.Remote,
+}).annotate({ identifier: "Executor.MountInput" })
 
 export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundError>()("ProcessNotFoundError", {
   id: ProcessID,

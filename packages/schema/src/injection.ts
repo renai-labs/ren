@@ -3,7 +3,9 @@ export * as Injection from "./injection.js"
 import { Schema } from "effect"
 import { Credential } from "./credential.js"
 
-export const OpName = Schema.Literals(["replace", "setHeader", "route"]).annotate({ identifier: "Injection.OpName" })
+export const OpName = Schema.Literals(["replace", "setHeader", "route", "awsSign"]).annotate({
+  identifier: "Injection.OpName",
+})
 export type OpName = typeof OpName.Type
 
 export const opNames: ReadonlyArray<OpName> = OpName.literals
@@ -23,6 +25,15 @@ export const Op = Schema.Union([
       description:
         "The first path segment, such as `ren:MCP_GMAIL`, that the egress removes before it appends the rest of the path to the upstream.",
     }),
+  }),
+  Schema.Struct({
+    op: Schema.Literal("awsSign"),
+    accessKeyId: Schema.String,
+    secretAccessKey: Schema.Redacted(Schema.String),
+    sessionToken: Schema.Redacted(Schema.String),
+  }).annotate({
+    description:
+      "The egress removes the request’s AWS SigV4 signature, which holds a placeholder, and signs it again with these keys, for the region and service of the removed signature.",
   }),
 ]).annotate({
   identifier: "Injection.Op",

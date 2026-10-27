@@ -265,11 +265,16 @@ const request = (
 
 const values = (reply: Injection.Reply) =>
   reply.allow
-    ? reply.inject.map((op) =>
-        op.op === "route"
-          ? { op: op.op, upstream: Redacted.value(op.upstream) }
-          : { ...op, value: Redacted.value(op.value) },
-      )
+    ? reply.inject.map((op) => {
+        if (op.op === "route") return { op: op.op, upstream: Redacted.value(op.upstream) }
+        if (op.op === "awsSign")
+          return {
+            ...op,
+            secretAccessKey: Redacted.value(op.secretAccessKey),
+            sessionToken: Redacted.value(op.sessionToken),
+          }
+        return { ...op, value: Redacted.value(op.value) }
+      })
     : reply
 
 describe("Egress.resolve", () => {
