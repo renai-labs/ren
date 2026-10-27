@@ -3,10 +3,11 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Channel } from "@ren/schema/channel"
 import { Environment } from "@ren/schema/environment"
+import { Memory } from "@ren/schema/memory"
 import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
 import { Signature } from "@ren/schema/signature"
-import type { Space } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { Context, Effect, Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
 import { Host } from "./host.js"
@@ -87,6 +88,16 @@ export const PullApps = Schema.Struct({
   catalog: AppCatalog.Catalog,
 }).annotate({ identifier: "Host.PullApps" })
 
+export interface PullMemory extends Schema.Schema.Type<typeof PullMemory> {}
+export const PullMemory = Schema.Struct({
+  spaceId: Space.ID,
+  organization: Schema.NullOr(Memory.Root).annotate({ description: "Null when the organization has no root file." }),
+  space: Schema.NullOr(Memory.Root).annotate({ description: "Null when the brain’s space has no root file." }),
+}).annotate({
+  identifier: "Host.PullMemory",
+  description: "The root files of the organization’s memory and of the brain’s space’s memory (memory M8).",
+})
+
 export interface PullChat extends Schema.Schema.Type<typeof PullChat> {}
 export const PullChat = Schema.Struct({
   id: Session.ID,
@@ -110,6 +121,7 @@ export const PullReply = Schema.Struct({
     }),
   ),
   layers: SessionSettings.Layers,
+  memory: Schema.optionalKey(PullMemory).annotate({ description: "Omitted by a Ren that has no memory yet." }),
   chats: Schema.Array(PullChat),
   deleted: Schema.Array(Session.ID).annotate({
     description: "Root chats of the request that Ren no longer has. The brain drops them (E109, HR22).",

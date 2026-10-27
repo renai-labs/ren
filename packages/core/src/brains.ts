@@ -55,6 +55,7 @@ import { ChannelInstallQueries } from "./channel-install/queries.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Credentials } from "./credentials.js"
 import { Environments } from "./environments.js"
+import { Memory } from "./memory.js"
 import { Models } from "./models.js"
 import { Settings } from "./settings.js"
 import { SessionPolicy } from "./session/policy.js"
@@ -519,6 +520,7 @@ export const layer = Layer.effect(
           ...Option.match(apps, { onNone: () => ({}), onSome: (catalog) => ({ apps: catalog }) }),
           channels,
           layers: pulled.layers,
+          memory: yield* Memory.roots(database.db, host).pipe(Effect.orDie),
           chats: pulled.chats,
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
           env: yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation }),

@@ -13,6 +13,7 @@ import { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors
 import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
+import type { PullMemory } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
 import {
   Clock,
@@ -35,6 +36,7 @@ import opencode from "../../../node_modules/@opencode/core/package.json"
 import { BrainStorage } from "../../brain-storage.js"
 import { AppStore } from "../../app-store.js"
 import { ChannelStore } from "../../channel-store.js"
+import { MemoryStore } from "../../memory-store.js"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
 import { GitSources } from "../../git-sources.js"
@@ -386,6 +388,7 @@ const layerWith = (opener: Opener) =>
       const settings = cell.vars.REN_URL ? yield* Effect.serviceOption(ChatSettings.Service) : Option.none()
       const apps = yield* Effect.serviceOption(AppStore.Service)
       const channels = yield* Effect.serviceOption(ChannelStore.Service)
+      const memory = yield* Effect.serviceOption(MemoryStore.Service)
       const address = yield* Effect.serviceOption(RenAddress.Service)
       const hostToken = yield* Effect.serviceOption(HostToken.Service)
       const found = yield* Effect.serviceOption(GitSources.Service)
@@ -424,7 +427,13 @@ const layerWith = (opener: Opener) =>
                   sources,
                 },
               )
-              return yield* make(server, endpoints, settings, Option.some({ inference, refreshKey }))
+              return yield* make(
+                server,
+                endpoints,
+                settings,
+                Option.some({ inference, refreshKey }),
+                Option.isSome(memory) ? yield* memory.value.current : Option.none(),
+              )
             }),
           ),
         ),
@@ -468,6 +477,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     readonly inference: Inference.Interface
     readonly refreshKey: Harness.Refresh
   }> = Option.none(),
+  memory: Option.Option<PullMemory> = Option.none(),
 ) {
   const client = server.client
   const state = { firstAskedAt: new Map<string, number>(), models: endpoints }
@@ -524,17 +534,19 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     state.models = models
     yield* server.configure({
       models,
+      ...(update.memory && { memory: update.memory }),
       ...(update.apps && { apps: update.apps }),
       ...(update.channels && { channels: update.channels }),
       ...(Option.isSome(server.chats) && { chats: yield* Ref.get(server.chats.value.latest) }),
     })
   })
-  // oxlint-disable-next-line ren/no-comments -- A pull while the harness was closed saved new layers; an opening resolves each chat from them, not from what the chat had before.
+  // oxlint-disable-next-line ren/no-comments -- A pull while the harness was closed saved new layers and memory; an opening resolves each chat from them, not from what the chat had before.
   yield* configure({
     models: endpoints,
     ...(Option.isSome(settings) && {
       settings: { layers: yield* settings.value.layers, chats: yield* settings.value.chats },
     }),
+    ...(Option.isSome(memory) && { memory }),
   })
   const reader = Option.isSome(models)
     ? Option.some(

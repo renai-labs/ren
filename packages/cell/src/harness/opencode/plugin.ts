@@ -11,6 +11,7 @@ import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { EnvironmentCopies } from "@ren/brain/environment/copies"
 import { BrainSettings } from "@ren/brain/settings"
 import { HostMcp } from "@ren/host-api/host-mcp"
+import type { Memory } from "@ren/schema/memory"
 import { AppCatalog } from "@ren/schema/app-catalog"
 import { Models } from "@ren/schema/models"
 import { Channel } from "@ren/schema/channel"
@@ -76,6 +77,9 @@ export class ManagedKeyError extends Schema.TaggedError<ManagedKeyError>()("Mana
 }) {}
 
 const never = Number.MAX_SAFE_INTEGER
+
+const memoryText = (tag: string, root: Memory.Root | null, attributes = "") =>
+  [`<${tag}${attributes}${root?.truncated ? ' truncated="true"' : ""}>`, root?.content ?? "", `</${tag}>`].join("\n")
 
 const rank = { allow: 0, ask: 1, deny: 2 } as const
 
@@ -457,6 +461,17 @@ export const make = (
               const agent = Option.getOrUndefined(agentOf(event.agent))
               if (!agent) return
               event.system.push(...agent.instructions.map((text) => ({ type: "text" as const, text })))
+              const memory = Ref.getUnsafe(applied).memory
+              if (isSession && event.sessionID === sessionId && Option.isSome(memory))
+                event.system.push({
+                  type: "text",
+                  text: [
+                    "<memory>",
+                    ...(memory.value.organization ? [memoryText("org", memory.value.organization)] : []),
+                    memoryText("space", memory.value.space, ` id="${memory.value.spaceId}"`),
+                    "</memory>",
+                  ].join("\n"),
+                })
               const subagent = event.tools.subagent
               if (subagent && Predicate.isObject(subagent.input) && Predicate.isObject(subagent.input.properties))
                 subagent.input = { ...subagent.input, properties: withoutModel(subagent.input.properties) }
