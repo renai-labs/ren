@@ -20,6 +20,7 @@ import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { Label } from "@ren/core/label"
 import { OrganizationSettings } from "@ren/core/organization-settings"
+import { ScheduleTrigger } from "@ren/core/schedule-trigger"
 import { Schedules } from "@ren/core/schedules"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
@@ -154,10 +155,13 @@ export const layer = Layer.mergeAll(
           Layer.provide(ReferenceCheck.layer),
           Layer.provide(RepositoryHosts.layer),
         ),
-        Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer, Schedules.layer).pipe(
-          Layer.provide(SessionRunner.layer),
-          Layer.provide(BrainRegistry.layer),
-        ),
+        Layer.mergeAll(
+          Task.layer,
+          TaskActivity.layer,
+          TaskComment.layer,
+          Label.layer,
+          Schedules.layer.pipe(Layer.provide(ScheduleTrigger.layerPostgres)),
+        ).pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,

@@ -24,6 +24,9 @@ export type MessageID = typeof MessageID.Type
 export const Harness = Schema.Literals(["opencode"]).annotate({ identifier: "Session.Harness" })
 export type Harness = typeof Harness.Type
 
+// oxlint-disable-next-line ren/no-comments -- The harness of a chat that Ren starts with no person to pick one, such as a schedule run. Replaced by the space runtime (runtime/plan.md D2, D3).
+export const defaultHarness: Harness = "opencode"
+
 export interface Model extends Schema.Schema.Type<typeof Model> {}
 export const Model = Schema.Struct({
   endpointId: Schema.NonEmptyString,

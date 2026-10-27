@@ -123,12 +123,15 @@ One pure function in core, `Schedules.nextFire(row, after)`, gives the next fire
 
 The latest missed fire (S2) of a due cron row uses the same mapping backwards from now, and is never before `next_run_at`.
 
-### 5.4 Ticker
+### 5.4 Trigger
 
-A fiber in `Schedules.layer`, forked as Retention forks its loop (`core/src/retention.ts:62-69`), every 30 s:
+`ScheduleTrigger.Service` decides when a schedule fires and records each fire as a pending run. It has `changed(scheduleId)`, which `Schedules` calls after each write, and `claim`, which records the fires that are due. `Schedules` runs the pending runs; a trigger never starts a chat.
 
-1. In one transaction: select up to 100 rows with `next_run_at <= now`, not archived, `paused_reason` null, `FOR UPDATE SKIP LOCKED`. For each row, insert a `timed` run for the latest missed fire (S2) with `status = pending` and a new session id and message id, `on conflict do nothing`. Set `next_run_at = nextFire(when, now)`.
-2. After the commit: `DurableRunner.ensure(ScheduleFire, { runId })` for every `pending` run. `ensure` does nothing for a key that runs or ran (`core/src/durable-runner.ts:7`).
+`ScheduleTrigger.layerPostgres` (S1): `changed` does nothing. `claim`, in one transaction, selects up to 100 rows with `next_run_at <= now`, not archived, `paused_reason` null, `FOR UPDATE SKIP LOCKED`. For each row it inserts a `timed` run for the latest missed fire (S2) and sets `next_run_at = nextFire(when, now)`.
+
+A later layer (Temporal Schedules, a Durable Object alarm) keeps its own copy in `changed` and inserts the run when its fire arrives; its `claim` does nothing.
+
+Every 30 s, `Schedules` calls `claim`, then `DurableRunner.ensure(ScheduleFire, { runId })` for every `pending` run. `ensure` does nothing for a key that runs or ran (`core/src/durable-runner.ts:7`).
 
 ### 5.5 `ScheduleFire`
 
