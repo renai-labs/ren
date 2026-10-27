@@ -23,7 +23,7 @@ import { ReferenceCheck } from "@ren/core/reference-check"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SpaceSettings } from "@ren/core/space/settings"
-import { Seed } from "@ren/core/testing"
+import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
 import { TestEnvironment } from "@ren/executor/testing"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
@@ -233,6 +233,7 @@ export const start = async (options: {
         PORT: String(serverPort),
         DATABASE_URL: database.href,
         BETTER_AUTH_SECRET: "e2e-secret-do-not-use-in-production",
+        ...TestDrives.config,
         BETTER_AUTH_URL: `http://127.0.0.1:${serverPort}`,
         TRUSTED_ORIGINS: `http://127.0.0.1:${serverPort}`,
         APP_URL: `http://127.0.0.1:${serverPort}/app`,

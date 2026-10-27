@@ -54,6 +54,14 @@ import type {
   MemoryEditOutput,
   MemoryDeleteInput,
   MemoryDeleteOutput,
+  DriveListInput,
+  DriveListOutput,
+  DriveStartUploadInput,
+  DriveStartUploadOutput,
+  DriveDownloadInput,
+  DriveDownloadOutput,
+  DriveDeleteInput,
+  DriveDeleteOutput,
   AgentListInput,
   AgentListOutput,
   AgentGetInput,
@@ -689,6 +697,56 @@ export function make(options: ClientOptions) {
             query: { spaceId: input["spaceId"], path: input["path"] },
             successStatus: 204,
             declaredStatuses: [401, 403, 404],
+            empty: true,
+          },
+          requestOptions,
+        ),
+    },
+    drive: {
+      list: (input?: DriveListInput, requestOptions?: RequestOptions) =>
+        request<DriveListOutput>(
+          {
+            method: "GET",
+            path: `/drive`,
+            query: { spaceId: input?.["spaceId"], folder: input?.["folder"], cursor: input?.["cursor"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      startUpload: (input: DriveStartUploadInput, requestOptions?: RequestOptions) =>
+        request<DriveStartUploadOutput>(
+          {
+            method: "POST",
+            path: `/drive/uploads`,
+            body: { spaceId: input["spaceId"], path: input["path"], size: input["size"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      download: (input: DriveDownloadInput, requestOptions?: RequestOptions) =>
+        request<DriveDownloadOutput>(
+          {
+            method: "GET",
+            path: `/drive/file`,
+            query: { spaceId: input["spaceId"], path: input["path"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      delete: (input: DriveDeleteInput, requestOptions?: RequestOptions) =>
+        request<DriveDeleteOutput>(
+          {
+            method: "DELETE",
+            path: `/drive/file`,
+            query: { spaceId: input["spaceId"], path: input["path"] },
+            successStatus: 204,
+            declaredStatuses: [401, 403, 404, 503],
             empty: true,
           },
           requestOptions,

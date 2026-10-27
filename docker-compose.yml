@@ -17,6 +17,36 @@ services:
       timeout: 5s
       retries: 20
 
+  # S3 for drives, with STS. `rustfs-setup` makes the dev and test buckets and lets the app post uploads.
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: rendev
+      RUSTFS_SECRET_KEY: ren-dev-secret
+    ports:
+      - "127.0.0.1:59000:9000"
+    volumes:
+      - rustfs:/data
+
+  rustfs-setup:
+    image: amazon/aws-cli:latest
+    depends_on:
+      - rustfs
+    environment:
+      AWS_ACCESS_KEY_ID: rendev
+      AWS_SECRET_ACCESS_KEY: ren-dev-secret
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://rustfs:9000
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        until aws s3api list-buckets >/dev/null 2>&1; do sleep 1; done;
+        for bucket in ren-drives ren-drives-test; do
+        aws s3api create-bucket --bucket $$bucket >/dev/null 2>&1;
+        aws s3api put-bucket-cors --bucket $$bucket --cors-configuration
+        '{"CORSRules":[{"AllowedOrigins":["http://localhost:5173"],"AllowedMethods":["GET","POST"],"AllowedHeaders":["*"]}]}';
+        done
+
   celld:
     build: packages/cell/docker
     image: ren-celld
@@ -49,4 +79,5 @@ services:
 
 volumes:
   postgres:
+  rustfs:
   celld:

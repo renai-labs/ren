@@ -21,7 +21,7 @@ import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
 import { SessionRunner } from "@ren/core/session/runner"
 import { Settings } from "@ren/core/settings"
 import { Signer } from "@ren/core/signer"
-import { Seed } from "@ren/core/testing"
+import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
 import { TestEnvironment } from "@ren/executor/testing"
 import { EgressHarness } from "@ren/server/testing"
@@ -169,6 +169,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
         PORT: String(serverPort),
         DATABASE_URL: database.href,
         BETTER_AUTH_SECRET: "e2e-secret-do-not-use-in-production",
+        ...TestDrives.config,
         BETTER_AUTH_URL: `http://127.0.0.1:${serverPort}`,
         TRUSTED_ORIGINS: `http://127.0.0.1:${serverPort}`,
         APP_URL: `http://127.0.0.1:${serverPort}/app`,

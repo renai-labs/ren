@@ -351,6 +351,55 @@ const adaptGroupMemory = (raw: RawClient["memory"]) => ({
   delete: EndpointMemoryDelete(raw),
 })
 
+type DriveListRequest = Parameters<RawClient["drive"]["drive.list"]>[0]
+type DriveListInput = {
+  readonly spaceId?: DriveListRequest["query"]["spaceId"]
+  readonly folder?: DriveListRequest["query"]["folder"]
+  readonly cursor?: DriveListRequest["query"]["cursor"]
+}
+const EndpointDriveList = (raw: RawClient["drive"]) => (input?: DriveListInput) =>
+  raw["drive.list"]({
+    query: { spaceId: input?.["spaceId"], folder: input?.["folder"], cursor: input?.["cursor"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type DriveStartUploadRequest = Parameters<RawClient["drive"]["drive.startUpload"]>[0]
+type DriveStartUploadInput = {
+  readonly spaceId?: DriveStartUploadRequest["payload"]["spaceId"]
+  readonly path: DriveStartUploadRequest["payload"]["path"]
+  readonly size: DriveStartUploadRequest["payload"]["size"]
+}
+const EndpointDriveStartUpload = (raw: RawClient["drive"]) => (input: DriveStartUploadInput) =>
+  raw["drive.startUpload"]({ payload: { spaceId: input["spaceId"], path: input["path"], size: input["size"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type DriveDownloadRequest = Parameters<RawClient["drive"]["drive.download"]>[0]
+type DriveDownloadInput = {
+  readonly spaceId?: DriveDownloadRequest["query"]["spaceId"]
+  readonly path: DriveDownloadRequest["query"]["path"]
+}
+const EndpointDriveDownload = (raw: RawClient["drive"]) => (input: DriveDownloadInput) =>
+  raw["drive.download"]({ query: { spaceId: input["spaceId"], path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type DriveDeleteRequest = Parameters<RawClient["drive"]["drive.delete"]>[0]
+type DriveDeleteInput = {
+  readonly spaceId?: DriveDeleteRequest["query"]["spaceId"]
+  readonly path: DriveDeleteRequest["query"]["path"]
+}
+const EndpointDriveDelete = (raw: RawClient["drive"]) => (input: DriveDeleteInput) =>
+  raw["drive.delete"]({ query: { spaceId: input["spaceId"], path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupDrive = (raw: RawClient["drive"]) => ({
+  list: EndpointDriveList(raw),
+  startUpload: EndpointDriveStartUpload(raw),
+  download: EndpointDriveDownload(raw),
+  delete: EndpointDriveDelete(raw),
+})
+
 type AgentListRequest = Parameters<RawClient["agent"]["agent.list"]>[0]
 type AgentListInput = {
   readonly spaceId?: AgentListRequest["query"]["spaceId"]
@@ -1554,6 +1603,7 @@ const adaptClient = (raw: RawClient) => ({
   "space-settings": adaptGroupSpaceSettings(raw["space-settings"]),
   "organization-settings": adaptGroupOrganizationSettings(raw["organization-settings"]),
   memory: adaptGroupMemory(raw["memory"]),
+  drive: adaptGroupDrive(raw["drive"]),
   agent: adaptGroupAgent(raw["agent"]),
   app: adaptGroupApp(raw["app"]),
   "app-profile": adaptGroupAppProfile(raw["app-profile"]),

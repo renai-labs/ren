@@ -6,17 +6,23 @@ import { ScheduleRun } from "@ren/schema/schedule-run"
 import { Session } from "@ren/schema/session"
 import { eq, inArray } from "drizzle-orm"
 import { Duration, Effect, Layer } from "effect"
+import { Access } from "../src/access.js"
+import { Drives } from "../src/drives.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { Retention } from "../src/retention.js"
 import { SessionSync } from "../src/session-sync.js"
+import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 import { SyncFixture } from "./lib/sync-fixture.js"
 
 const it = testEffect(
   Layer.mergeAll(Retention.layer, SessionSync.layer).pipe(
+    Layer.provideMerge(Drives.layer),
+    Layer.provideMerge(Access.layer),
     Layer.provideMerge(DurableRunner.layerMemory),
     Layer.provideMerge(Testing.layer),
+    Layer.provide(TestDrives.layer),
   ),
 )
 
@@ -108,5 +114,40 @@ describe("Retention", () => {
           kept.map((row) => row.id),
         ]).toEqual([[recent], ["msg_kept", "msg_live"], runs.slice(1).map((run) => run.id)])
       }),
+  )
+
+  it.live("a space's drive goes 30 days after the space is archived, and a space archived 29 days ago keeps it", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const drives = yield* Drives.Service
+      const retention = yield* Retention.Service
+      const owner = yield* Seed.owner()
+      const ada = { userId: owner.createdBy, organizationId: owner.organizationId, roles: ["owner"] }
+      const recent = yield* Seed.space(owner.organizationId)
+      yield* Seed.join(recent, owner.createdBy)
+      const spaceIds = [owner.spaceId, recent]
+      yield* Effect.forEach(spaceIds, (spaceId) =>
+        Effect.flatMap(drives.startUpload(ada, { spaceId, path: "notes/plan.md", size: 4 }), (upload) =>
+          TestDrives.post(upload, "plan"),
+        ),
+      )
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ archived_at: daysAgo(31) })
+        .where(eq(Database.Schema.space.id, owner.spaceId))
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ archived_at: daysAgo(29) })
+        .where(eq(Database.Schema.space.id, recent))
+      yield* retention.run
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ archived_at: null })
+        .where(inArray(Database.Schema.space.id, spaceIds))
+      const folders = yield* Effect.forEach(spaceIds, (spaceId) =>
+        Effect.map(drives.list(ada, { spaceId }), (listing) => listing.folders),
+      )
+      expect(folders).toEqual([[], ["notes"]])
+    }),
   )
 })

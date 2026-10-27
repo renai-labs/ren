@@ -64,6 +64,7 @@ import { InvitationHandler } from "./handlers/api/invitation.js"
 import { LabelHandler } from "./handlers/api/label.js"
 import { MeHandler } from "./handlers/api/me.js"
 import { MemoryHandler } from "./handlers/api/memory.js"
+import { DriveHandler } from "./handlers/api/drive.js"
 import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handlers/api/environment-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
@@ -145,6 +146,7 @@ export const layer = Layer.mergeAll(
         SpaceSettingsHandler,
         OrganizationSettingsHandler,
         MemoryHandler,
+        DriveHandler,
         AgentHandler,
         AppHandler,
         AppProfileHandler,

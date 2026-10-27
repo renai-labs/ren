@@ -19,6 +19,9 @@
     "typecheck": "tsgo -b tsconfig.json tsconfig.tests.json"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
+    "@aws-sdk/s3-presigned-post": "catalog:",
+    "@aws-sdk/s3-request-presigner": "catalog:",
     "@ren/host-api": "workspace:*",
     "@ren/environment-api": "workspace:*",
     "@effect/sql-pg": "catalog:",
