@@ -1,0 +1,295 @@
+---
+import "@fontsource-variable/fraunces/opsz.css"
+import "@fontsource-variable/jetbrains-mono/index.css"
+import Layout from "../../layouts/layout.astro"
+import { ArchitectureDiagram } from "../../components/architecture-diagram.js"
+import { CALENDLY_URL } from "../../lib/links.js"
+---
+
+<Layout
+  title="Towards L5 autonomy"
+  description="The journey from L0 to L5 autonomous companies, and why we built Ren — managed infrastructure for companies to build, deploy and work with agents across every business function."
+>
+  <div class="sphere-page">
+    <div class="page">
+      <div class="hero">
+        <div class="hero-canvas-wrap">
+          <canvas></canvas>
+        </div>
+      </div>
+
+      <div class="title-block">
+        <div class="eyebrow">Ren · Manifesto</div>
+        <h1>Towards L5 autonomous companies</h1>
+        <p class="lede">
+         In the next few years, every company will become an L5 autonomous company. This is what the journey from L0 → L5 would look like: 
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section-sphere"><canvas data-level="0"></canvas></div>
+        <div class="section-content">
+          <h2><span class="lvl">L0</span> Static Workflows</h2>
+          <p>
+           You’ve glued together no-code tools and scripts. They keep breaking the moment you go beyond 10 nodes. Most of the processes are still manual. 
+          </p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-sphere"><canvas data-level="1"></canvas></div>
+        <div class="section-content">
+          <h2><span class="lvl">L1</span> Chatbots</h2>
+          <p>
+           You prompt an agent, ask questions, automate one off tasks. Every session starts from scratch. You are still doing most of the work with occasional help from the AI. This is equivalent of copy pasting on chatgpt / claude. 
+          </p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-sphere"><canvas data-level="2"></canvas></div>
+        <div class="section-content">
+          <h2><span class="lvl">L2</span> Agents</h2>
+          <p>
+           You delegate tasks to agents. You go from prompt → automation. But you still need to prompt everytime, trigger workflows manually. Every agent session starts from scratch. Agents keep breaking, require decent engineering effort to keep running. Things are still messy, only a few AI pilled people in your company know how to make agents work. They run in silos while the rest of the company is playing catch-up. 
+          </p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-sphere"><canvas data-level="3"></canvas></div>
+        <div class="section-content">
+          <h2><span class="lvl">L3</span> Proactive intelligence</h2>
+          <p>
+           Agents are omnipresent, perform scheduled tasks, react to messages and events. They don’t just handle chores, they go through analytics to surface insights, alerts before systems start breaking. This is when you start feeling the magic - tasks get automated end to end. Agents tell you what to work on. Your primary task becomes to unblock agents. 
+          </p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-sphere"><canvas data-level="4"></canvas></div>
+        <div class="section-content">
+          <h2><span class="lvl">L4</span> Recursive self improvement</h2>
+          <p>
+           Agents share knowledge of past interactions, decisions, facts. They self reflect, write code and improve workflows with minimal human interaction. Sales, marketing, engineering, ops work on a shared knowledge substrate - better, faster decisions. You define taste, strategy and take critical decisions - agents handle execution. 
+          </p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-sphere"><canvas data-level="5"></canvas></div>
+        <div class="section-content">
+          <h2><span class="lvl">L5</span> Compounding growth</h2>
+          <p>
+           Society of agents - coordinate with each other to achieve the final outcome. The system grows with you - compounding knowledge and wealth over time. Teams equipped with L5 autonomous systems achieve escape velocity. 
+          </p>
+        </div>
+      </div>
+
+      <div class="closing">
+        <p>
+          This isn’t science fiction - we are already seeing flavours of this setup with claude code, openclaw, codex, etc. Engineers are trying their best to keep their agents running for as long as possible. The bottleneck for companies to go from L2 → L5 isn’t intelligence (we’re already here) - its <em>infrastructure.</em>
+        </p>
+        <p>
+          For a multi-human-AI collaborative workspace, you need to manage inference, agent harness, sandbox execution,
+          auth, permissions, skills, shared context layer, orchestration, observability, evals and more. Most teams 
+          don't have the bandwidth to manage this.
+        </p>
+        <p>
+          That's why we built Ren - <span class="text-foreground">managed infrastructure for companies to build, deploy and work with
+          agents across every business function, without engineering overhead.</span>
+        </p>
+        <figure class="diagram">
+          <ArchitectureDiagram />
+        </figure>
+        <p>
+          If you're trying to build an AI native company, we'd love to <a href={CALENDLY_URL} class="chat-link">chat</a>.
+        </p>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  import { mountHeroSphere, mountStageSphere } from "../../components/why/spheres.js"
+
+  const hero = document.querySelector(".hero-canvas-wrap canvas")
+  if (hero instanceof HTMLCanvasElement) mountHeroSphere(hero)
+  for (const canvas of document.querySelectorAll(".section-sphere canvas")) {
+    if (canvas instanceof HTMLCanvasElement) mountStageSphere(canvas, Number(canvas.dataset.level))
+  }
+</script>
+
+<style>
+  .sphere-page {
+    --bg: #000000;
+    --fg: #ffffff;
+    --dim: rgba(255, 255, 255, 0.45);
+    --faint: rgba(255, 255, 255, 0.12);
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-optical-sizing: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 80px 32px 160px;
+  }
+  .hero {
+    height: 70vh;
+    min-height: 540px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: 80px;
+    margin-bottom: 80px;
+  }
+  .hero-canvas-wrap {
+    width: 100%;
+    max-width: 640px;
+    aspect-ratio: 1 / 1;
+    cursor: grab;
+  }
+  .hero-canvas-wrap:active {
+    cursor: grabbing;
+  }
+  .hero-canvas-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .title-block {
+    margin-bottom: 96px;
+  }
+  .eyebrow {
+    font-family: "JetBrains Mono Variable", monospace;
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 24px;
+  }
+  h1 {
+    font-family: "Fraunces Variable", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-size: clamp(40px, 6vw, 64px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 32px;
+    color: var(--fg);
+  }
+  .lede {
+    font-size: 19px;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.78);
+    max-width: 700px;
+  }
+  .section {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 28px;
+    align-items: start;
+    padding: 36px 0;
+    border-top: 1px solid var(--faint);
+  }
+  .section-sphere {
+    width: 96px;
+    height: 96px;
+    position: sticky;
+    top: 40px;
+  }
+  .section-sphere canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .section-content h2 {
+    font-family: "Fraunces Variable", serif;
+    font-optical-sizing: auto;
+    font-weight: 500;
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    color: var(--fg);
+  }
+  .lvl {
+    font-family: "JetBrains Mono Variable", monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+    text-transform: uppercase;
+    font-weight: 400;
+  }
+  .section-content p {
+    font-size: 16.5px;
+    line-height: 1.65;
+    color: rgba(255, 255, 255, 0.72);
+    max-width: 620px;
+  }
+  .closing {
+    margin-top: 96px;
+  }
+  .closing p {
+    font-size: 16.5px;
+    line-height: 1.65;
+    color: rgba(255, 255, 255, 0.78);
+    margin-bottom: 20px;
+  }
+  .closing p:last-child {
+    margin-bottom: 0;
+  }
+  .closing em {
+    font-style: italic;
+    color: var(--fg);
+  }
+  .chat-link {
+    color: rgba(255, 255, 255, 0.5);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .diagram {
+    margin: 48px 0;
+    width: min(1200px, calc(100vw - 48px));
+    margin-left: 50%;
+    transform: translateX(-50%);
+  }
+
+  @media (max-width: 640px) {
+    .page {
+      padding: 48px 20px 100px;
+    }
+    .hero {
+      height: auto;
+      min-height: 0;
+      margin-bottom: 72px;
+    }
+    .hero-canvas-wrap {
+      max-width: 100%;
+    }
+    .section {
+      grid-template-columns: 64px 1fr;
+      gap: 20px;
+      padding: 28px 0;
+    }
+    .section-sphere {
+      width: 64px;
+      height: 64px;
+    }
+    h1 {
+      font-size: 38px;
+    }
+    .section-content h2 {
+      font-size: 22px;
+    }
+  }
+</style>

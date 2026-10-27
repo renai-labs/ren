@@ -1,0 +1,57 @@
+---
+import "../styles/globals.css"
+import { Footer } from "../components/layout/footer.js"
+import { Navbar } from "../components/layout/navbar.js"
+
+interface Props {
+  title: string
+  description: string
+}
+
+const site = import.meta.env.SITE
+const title = `${Astro.props.title} | Ren`
+const ogImage = `${site}/og-image.png`
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={Astro.props.description} />
+    <link rel="canonical" href={`${site}${Astro.url.pathname}`} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={Astro.props.description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:site_name" content="Ren" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={Astro.props.description} />
+    <meta name="twitter:image" content={ogImage} />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/ren_logo_dark.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script
+      type="application/ld+json"
+      set:html={JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: "Ren AI",
+        url: site,
+        logo: `${site}/ren_logo_dark.svg`,
+        description: Astro.props.description,
+      })}
+    />
+  </head>
+  <body>
+    <div class="flex min-h-dvh flex-col">
+      <Navbar client:load />
+      <div class="flex-1">
+        <slot />
+      </div>
+      <Footer />
+    </div>
+  </body>
+</html>

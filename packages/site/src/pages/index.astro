@@ -1,0 +1,48 @@
+---
+import Layout from "../layouts/layout.astro"
+import { HeroSection } from "../components/ui/hero-section.js"
+import { FactoryShowcase } from "../components/factory/showcase.js"
+import { TrustedBy } from "../components/ui/trusted-by.js"
+import { FactoryCta } from "../components/ui/factory-cta.js"
+
+const title = 'Self improving software,\nfor engineering teams'
+const description =
+  'Your team runs the factory, AI ships the code.'
+---
+
+<Layout title={title} description={description}>
+  <script
+    type="application/ld+json"
+    set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: 'Ren',
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      description,
+      url: import.meta.env.SITE,
+      offers: {
+        '@type': 'Offer',
+        price: '0',
+        priceCurrency: 'USD',
+        description: 'Free to get started',
+      },
+    })}
+  />
+
+  <main class="flex-1 flex flex-col items-center pt-[var(--header-height)]">
+    <HeroSection title={title} description={description} />
+
+    <section class="w-full pt-12 md:pt-16">
+      <div class="mx-auto max-w-[var(--page-wide-max)] px-4 md:px-[var(--page-inset)]">
+        <div class="min-h-[648px] md:min-h-[768px]">
+          <FactoryShowcase client:only="react" />
+        </div>
+      </div>
+    </section>
+
+    <TrustedBy />
+
+    <FactoryCta />
+  </main>
+</Layout>
