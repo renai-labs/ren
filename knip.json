@@ -46,6 +46,9 @@
       ],
       "ignoreDependencies": ["@ren/server"]
     },
+    "packages/site": {
+      "entry": ["src/layouts/legal.astro"]
+    },
     "packages/httpapi-codegen": {
       "entry": ["test/**/*.test.ts", "script/**/*.ts"]
     }

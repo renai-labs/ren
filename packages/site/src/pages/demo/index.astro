@@ -1,0 +1,99 @@
+---
+import Layout from "../../layouts/layout.astro"
+import { CalendlyEmbed } from "../../components/ui/calendly-embed.js"
+
+const AGENDA = [
+  "Map out what you're working on.",
+  "Show you where Ren can help.",
+  "Agree on a clear next step if it makes sense.",
+]
+
+const FIT = [
+  "You want to cut your LLM costs by up to 20x.",
+  "Your team needs to share agents, skills, and context, and run them in Slack and email.",
+  "You're running agents or automations and want them to hold up in production.",
+]
+---
+
+<Layout
+  title="Book a demo"
+  description="Thirty minutes to map out the problems you're trying to solve and see where Ren can help."
+>
+  <main class="flex-1 flex flex-col items-center pt-[var(--header-height)]">
+    <section class="w-full">
+      <div class="mx-auto max-w-[var(--page-wide-max)] px-[var(--page-inset)] py-16 md:py-24">
+        <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.05fr] gap-12 lg:gap-16 items-start">
+
+          <!-- LEFT: copy -->
+          <div>
+            <span class="text-caption tracking-[0.18em] text-muted-foreground">
+              Book a demo
+            </span>
+            <h1 class="mt-4 text-4xl sm:text-5xl font-medium tracking-tight leading-[1.05] text-foreground">
+              See where Ren fits.
+            </h1>
+            <p class="mt-5 max-w-xl text-body-lg text-muted-foreground leading-relaxed">
+              Thirty minutes to map out the problems you're trying to solve and where Ren can help.
+            </p>
+
+            <div class="mt-10">
+              <h2 class="text-caption tracking-[0.16em] text-muted-foreground mb-4">
+                Worth booking if
+              </h2>
+              <ul class="space-y-3">
+                {FIT.map((item) => (
+                  <li class="relative pl-6 text-body text-secondary-foreground leading-relaxed">
+                    <span class="absolute left-0 top-[0.55em] size-1.5 rounded-full bg-brand"></span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div class="mt-10">
+              <h2 class="text-caption tracking-[0.16em] text-muted-foreground mb-4">
+                What we'll do on the call
+              </h2>
+              <ul class="space-y-3">
+                {AGENDA.map((item) => (
+                  <li class="relative pl-6 text-body text-secondary-foreground leading-relaxed">
+                    <span class="absolute left-0 top-[0.55em] size-1.5 rounded-full bg-brand"></span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+          </div>
+
+          <!-- RIGHT: booking -->
+          <div class="lg:sticky lg:top-[calc(var(--header-height)+1.5rem)] rounded-xl border border-border-subtle bg-card overflow-hidden">
+            <div class="flex items-center justify-between gap-3 border-b border-border-subtle px-5 py-4">
+              <div class="flex items-center gap-3">
+                <img
+                  src="/images/shrey-profile.jpeg"
+                  alt="Shrey"
+                  width="36"
+                  height="36"
+                  class="size-9 rounded-full border border-border-strong object-cover"
+                />
+                <div>
+                  <div class="text-body-sm font-medium text-foreground">Shrey · Ren</div>
+                  <div class="text-caption text-muted-foreground">Founder</div>
+                </div>
+              </div>
+              <span class="rounded-full bg-brand/10 px-2.5 py-1 text-caption font-medium text-brand">
+                30 min
+              </span>
+            </div>
+
+            <div class="px-2 pt-2 sm:px-3 sm:pt-3">
+              <CalendlyEmbed client:load />
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+</Layout>

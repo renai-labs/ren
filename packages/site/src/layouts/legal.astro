@@ -1,0 +1,65 @@
+---
+import Layout from "./layout.astro"
+
+interface Props {
+  frontmatter: { title: string; description: string; updated: string }
+}
+---
+
+<Layout title={Astro.props.frontmatter.title} description={Astro.props.frontmatter.description}>
+  <main class="pt-(--header-height)">
+    <div class="mx-auto max-w-3xl px-4 py-12">
+      <a href="/" class="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m12 19-7-7 7-7"></path>
+          <path d="M19 12H5"></path>
+        </svg>
+        Back to Home
+      </a>
+      <article>
+        <h1 class="mb-2 text-3xl font-medium">{Astro.props.frontmatter.title}</h1>
+        <p class="updated">Last updated: {Astro.props.frontmatter.updated}</p>
+        <slot />
+      </article>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  @reference "../styles/globals.css";
+
+  article {
+    @apply mb-8;
+  }
+
+  article :global(h2) {
+    @apply mt-8 mb-4 text-xl font-medium;
+  }
+
+  article :global(h3) {
+    @apply mb-3 text-lg font-medium;
+  }
+
+  article :global(p) {
+    @apply mb-4 text-muted-foreground;
+  }
+
+  article .updated {
+    @apply mb-8;
+  }
+
+  article :global(ul) {
+    @apply mb-4 list-inside list-disc space-y-2 text-muted-foreground;
+  }
+</style>

@@ -355,6 +355,8 @@ const colorRoleClass = {
     "Use colour tokens only in their role: backgrounds take background, fill and overlay; text takes text; borders and rings take border. Accent and status work anywhere. Add a role token in Paper instead of borrowing one.",
 }
 
+const siteTailwind = { cwd: new URL("packages/site", import.meta.url).pathname, entryPoint: "src/styles/globals.css" }
+
 const appClasses = {
   pattern: `^(?!(?:(?:sm|md|lg):)*(?:${layoutUtilities})$).+$`,
   message:
@@ -810,6 +812,19 @@ export default defineConfig({
       rules: {
         "no-restricted-globals": ["error", reflect, ...serverGlobals, ...dialogGlobals, ...formatGlobals],
         "no-restricted-properties": ["error", jsonParse, ...domProperties, ...formatProperties, ...dateProperties],
+      },
+    },
+    {
+      files: ["packages/site/**"],
+      rules: {
+        ...Object.fromEntries(Object.keys(tailwindRules).map((rule) => [rule, ["error", siteTailwind]])),
+        "better-tailwindcss/no-restricted-classes": [
+          "error",
+          {
+            ...siteTailwind,
+            restrict: [importantClass, viewportUnitClass, readingOrderClass, fontSmoothingClass, colorRoleClass],
+          },
+        ],
       },
     },
     {

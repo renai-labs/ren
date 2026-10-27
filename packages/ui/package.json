@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "exports": {
     "./styles": "./src/styles/index.css",
+    "./styles/fonts": "./src/styles/fonts.css",
     "./*": "./src/components/*.tsx"
   },
   "scripts": {
