@@ -21,7 +21,7 @@ const cacheOf = (github: TestGitHub.Instance) =>
 const read = (resolved: SkillSource.Resolved) => ({ commit: resolved.lookup.commit, document: resolved.document })
 
 const refReads = (github: TestGitHub.Instance) =>
-  Effect.map(github.requests, (requests) => requests.filter((request) => request.includes("info/refs")).length)
+  Effect.map(github.requests, (requests) => requests.filter((request) => request.includes("git-upload-pack")).length)
 
 it.effect("reads a floating source again only after the refresh interval, and a pinned commit never", () =>
   Effect.gen(function* () {

@@ -1,7 +1,7 @@
 export * as GitHubReader from "./reader.js"
 
 import { Credential } from "@ren/schema/credential"
-import { Effect, Option, Schema } from "effect"
+import { Duration, Effect, Option, Schema } from "effect"
 import { HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
 
 export interface Hosts {
@@ -60,22 +60,40 @@ const placeholder = Credential.placeholder("GITHUB")
 const bearer = (access: Access): Readonly<Record<string, string>> =>
   access === "placeholder" ? { authorization: `Bearer ${placeholder}` } : {}
 
-// oxlint-disable-next-line ren/no-comments -- Git's smart-HTTP ref advertisement: pkt-lines of "<sha> <ref>", the first one followed by NUL and capabilities.
-const advertised = (body: string) => {
+const encoder = new TextEncoder()
+
+const pktLine = (line: string) => `${(encoder.encode(line).length + 4).toString(16).padStart(4, "0")}${line}`
+
+// oxlint-disable-next-line ren/no-comments -- R34: git protocol v2 ls-refs with ref-prefix, so GitHub sends only these refs and not every pull request ref. "0001" ends the command, "0000" ends the request.
+const lsRefs = (ref: string | undefined) =>
+  [
+    pktLine("command=ls-refs\n"),
+    pktLine("object-format=sha1\n"),
+    "0001",
+    pktLine("peel\n"),
+    pktLine("symrefs\n"),
+    ...(ref && !commitPattern.test(ref)
+      ? [pktLine(`ref-prefix refs/heads/${ref}\n`), pktLine(`ref-prefix refs/tags/${ref}\n`)]
+      : [pktLine("ref-prefix HEAD\n")]),
+    "0000",
+  ].join("")
+
+// oxlint-disable-next-line ren/no-comments -- Each ls-refs line is "<oid> <name>[ symref-target:<ref>][ peeled:<oid>]". A peeled oid is the commit of an annotated tag.
+const listed = (body: Uint8Array) => {
   const refs = new Map<string, string>()
+  const decoder = new TextDecoder()
   let offset = 0
   while (offset + 4 <= body.length) {
-    const length = Number.parseInt(body.slice(offset, offset + 4), 16)
+    const length = Number.parseInt(decoder.decode(body.subarray(offset, offset + 4)), 16)
     if (Number.isNaN(length)) break
-    const line =
-      length === 0
-        ? ""
-        : (body
-            .slice(offset + 4, offset + length)
-            .split("\0")
-            .at(0) ?? "")
-    const sha = line.slice(0, 40)
-    if (commitPattern.test(sha)) refs.set(line.slice(41).trim(), sha)
+    const fields = decoder
+      .decode(body.subarray(offset + 4, offset + Math.max(length, 4)))
+      .trim()
+      .split(" ")
+    const oid = fields.at(0) ?? ""
+    const name = fields.at(1)
+    const peeled = fields.find((field) => field.startsWith("peeled:"))?.slice("peeled:".length)
+    if (name && commitPattern.test(oid)) refs.set(name, peeled ?? oid)
     offset += Math.max(length, 4)
   }
   return refs
@@ -92,10 +110,10 @@ const repositoryOf = (host: string, url: string): Repository | undefined => {
 const commitOf = (refs: ReadonlyMap<string, string>, ref: string | undefined) => {
   if (!ref) return refs.get("HEAD")
   if (commitPattern.test(ref)) return ref
-  return (
-    refs.get(ref) ?? refs.get(`refs/heads/${ref}`) ?? refs.get(`refs/tags/${ref}^{}`) ?? refs.get(`refs/tags/${ref}`)
-  )
+  return refs.get(`refs/heads/${ref}`) ?? refs.get(`refs/tags/${ref}`)
 }
+
+export const answerWithin = Duration.seconds(15)
 
 // oxlint-disable-next-line ren/no-comments -- R11: each answer to the placeholder has one cause, except a repository that does not exist, which GitHub answers as a private one.
 const causeOf = (response: HttpClientResponse.HttpClientResponse, name: string, url: string) => {
@@ -112,26 +130,46 @@ const causeOf = (response: HttpClientResponse.HttpClientResponse, name: string, 
 
 export const make = Effect.fnUntraced(function* (hosts: Effect.Effect<Hosts>) {
   const http = yield* HttpClient.HttpClient
-  const get = (url: string, request: string, headers: Readonly<Record<string, string>>) =>
+  const send = (url: string, request: HttpClientRequest.HttpClientRequest) =>
     http
-      .execute(HttpClientRequest.get(request).pipe(HttpClientRequest.setHeaders(headers)))
+      .execute(request)
       .pipe(Effect.mapError((error) => new Failed({ message: `Could not read ${url} from GitHub: ${error.message}` })))
   const text = (response: HttpClientResponse.HttpClientResponse) =>
     response.text.pipe(Effect.mapError((error) => new Failed({ message: error.message })))
+  // oxlint-disable-next-line ren/no-comments -- R35: the limit is inside the read, so a slow GitHub fails the read and the cache keeps the last good commit (a caller that stops waiting would remove the cache entry).
+  const within = (url: string) =>
+    Effect.timeoutOrElse({
+      duration: answerWithin,
+      orElse: () =>
+        Effect.fail(
+          new Failed({ message: `GitHub did not answer within ${Duration.format(answerWithin)} for ${url}` }),
+        ),
+    })
   return {
-    lookup: Effect.fn("GitHubReader.lookup")(function* (url: string, ref?: string) {
+    lookup: (url: string, ref?: string) =>
+      Effect.gen(function* () {
       const found = yield* hosts
       const repository = repositoryOf(found.host, url)
       if (!repository) return yield* new Failed({ message: `Ren reads only repositories on ${found.host}, not ${url}` })
       const name = `${repository.owner}/${repository.repo}`
-      const refs = `${found.git}/${name}.git/info/refs?service=git-upload-pack`
-      const first = yield* get(url, refs, {})
+      const request = HttpClientRequest.post(`${found.git}/${name}.git/git-upload-pack`).pipe(
+        HttpClientRequest.setHeaders({
+          "git-protocol": "version=2",
+          accept: "application/x-git-upload-pack-result",
+        }),
+        HttpClientRequest.bodyText(lsRefs(ref), "application/x-git-upload-pack-request"),
+      )
+      const first = yield* send(url, request)
       const isRefused = first.status === 401 || first.status === 404
       const answered = isRefused
-        ? yield* get(url, refs, { authorization: `Basic ${btoa(`x-access-token:${placeholder}`)}` })
+        ? yield* send(
+            url,
+            HttpClientRequest.setHeader(request, "authorization", `Basic ${btoa(`x-access-token:${placeholder}`)}`),
+          )
         : first
       if (answered.status !== 200) return yield* new Failed({ message: causeOf(answered, name, url) })
-      const commit = commitOf(advertised(yield* text(answered)), ref)
+      const body = yield* answered.arrayBuffer.pipe(Effect.mapError((error) => new Failed({ message: error.message })))
+      const commit = commitOf(listed(new Uint8Array(body)), ref)
       if (!commit) return yield* new Failed({ message: `The ref ${ref ?? "HEAD"} is not in ${url}` })
       return {
         hosts: found,
@@ -139,16 +177,16 @@ export const make = Effect.fnUntraced(function* (hosts: Effect.Effect<Hosts>) {
         commit,
         access: isRefused ? ("placeholder" as const) : ("anonymous" as const),
       }
-    }),
+    }).pipe(within(url), Effect.withSpan("GitHubReader.lookup")),
     read: Effect.fn("GitHubReader.read")(function* (lookup: Lookup, path: string) {
       const repository = `${lookup.repository.owner}/${lookup.repository.repo}`
       const url = `${lookup.hosts.raw}/${repository}/${lookup.commit}/${path}`
-      const response = yield* get(url, url, bearer(lookup.access))
+      const response = yield* send(url, HttpClientRequest.get(url).pipe(HttpClientRequest.setHeaders(bearer(lookup.access))))
       if (response.status === 404) return Option.none()
       if (response.status !== 200)
         return yield* new Failed({ message: `GitHub answered ${response.status} for ${repository}/${path}` })
       return Option.some(yield* text(response))
-    }),
+    }, (effect, lookup, path) => within(`https://${lookup.hosts.host}/${lookup.repository.owner}/${lookup.repository.repo}/${path}`)(effect)),
     archive: (lookup) => ({
       url: `${lookup.hosts.api}/repos/${lookup.repository.owner}/${lookup.repository.repo}/tarball/${lookup.commit}`,
       headers: bearer(lookup.access),

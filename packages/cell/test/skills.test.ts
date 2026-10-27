@@ -236,7 +236,7 @@ it.live(
       const beforeRefresh = (yield* github.requests).length
       const told = yield* session.turn(stub.script(), 1)
       expect(
-        (yield* github.requests).slice(beforeRefresh).filter((request) => request.includes("info/refs")),
+        (yield* github.requests).slice(beforeRefresh).filter((request) => request.includes("git-upload-pack")),
       ).toHaveLength(1)
       expect(told.system).toContain("The skill pdf changed after this chat loaded it")
       const reloaded = result(yield* session.load("pdf"))

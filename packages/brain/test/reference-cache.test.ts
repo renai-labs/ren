@@ -1,6 +1,6 @@
 import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
-import { Effect, Layer } from "effect"
+import { Effect, Fiber, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { GitHubReader } from "../src/github/reader.js"
@@ -16,7 +16,7 @@ const cacheOf = (github: TestGitHub.Instance) =>
   )
 
 const refReads = (github: TestGitHub.Instance) =>
-  Effect.map(github.requests, (requests) => requests.filter((request) => request.includes("info/refs")).length)
+  Effect.map(github.requests, (requests) => requests.filter((request) => request.includes("git-upload-pack")).length)
 
 it.effect(
   "looks a branch up again after 1 day, and a failed lookup after 1 minute with the last good commit kept",
@@ -56,5 +56,25 @@ it.effect("a lookup that failed succeeds 1 minute after the cause is fixed, with
     expect(yield* refReads(github)).toBe(before)
     yield* TestClock.adjust("1 minute")
     expect(yield* cache.resolve(docs)).toMatchObject({ commit, access: "placeholder" })
+  }),
+)
+
+it.effect("GitHub does not answer: after 15 s the last good commit stays, and a lookup 1 minute later succeeds", () =>
+  Effect.gen(function* () {
+    const github = yield* TestGitHub.make({ repo: "docs" })
+    const first = yield* github.commit({ "README.md": "first" })
+    const cache = yield* cacheOf(github)
+    const docs = { repository: github.url }
+    yield* cache.resolve(docs)
+    const second = yield* github.commit({ "README.md": "second" })
+    yield* TestClock.adjust("1 day")
+    yield* github.hold
+    const held = yield* Effect.forkChild(cache.resolve(docs))
+    yield* github.arrived
+    yield* TestClock.adjust("15 seconds")
+    expect((yield* Fiber.join(held)).commit).toBe(first)
+    yield* github.release
+    yield* TestClock.adjust("1 minute")
+    expect((yield* cache.resolve(docs)).commit).toBe(second)
   }),
 )
