@@ -9,6 +9,7 @@ import {
   IconArrowUp,
   IconAt,
   IconClipboardText,
+  IconPaperclip,
   IconFileText,
   IconLoader2,
   IconPlayerStopFilled,
@@ -30,6 +31,7 @@ import {
 import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
+import { AttachmentChips, DropOverlay, useAttachments } from "@/components/ren/chat/attachments"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -46,7 +48,7 @@ import { useCatalog } from "@/hooks/use-catalog"
 import { api } from "@/lib/api"
 import { gaps } from "@/lib/apps"
 
-function AddMenu(props: { placement: "home" | "chat"; onInsert: (text: string) => void }) {
+function AddMenu(props: { placement: "home" | "chat"; onInsert: (text: string) => void; onAttach: () => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -63,6 +65,10 @@ function AddMenu(props: { placement: "home" | "chat"; onInsert: (text: string) =
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-64">
         <DropdownMenuGroup>
+          <DropdownMenuItem onClick={props.onAttach}>
+            <IconPaperclip />
+            Attach files
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => props.onInsert("/")}>
             <IconTerminal2 />
             Run a command
@@ -319,6 +325,8 @@ export function PromptInput(props: {
   suggest?: Suggest | undefined
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
+  const attachments = useAttachments()
+  const picker = useRef<HTMLInputElement>(null)
   const draft = props.value
   const booting = props.boot?._tag === "Starting"
   const text = draft.text
@@ -327,6 +335,10 @@ export function PromptInput(props: {
   const [grown, setGrown] = useState(false)
   const submit = () => {
     if (props.sending || booting) return
+    if (attachments.files.length > 0) {
+      toast("Remove the attached files to send", { description: "Ren can’t receive files in chat yet." })
+      return
+    }
     if (blank) {
       if (props.running) props.onStop?.()
       return
@@ -343,7 +355,7 @@ export function PromptInput(props: {
       blank={blank}
       stop={Boolean(stop)}
       sending={props.sending === true}
-      booting={booting}
+      booting={booting || attachments.files.length > 0}
       onClick={submit}
     />
   )
@@ -370,6 +382,20 @@ export function PromptInput(props: {
   return (
     <div className="relative flex flex-col gap-2">
       {suggest?.open ? <SuggestionMenu suggest={suggest} onChoose={choose} /> : null}
+      <DropOverlay onFiles={attachments.add} />
+      <input
+        ref={picker}
+        type="file"
+        multiple
+        hidden
+        onChange={(event) => {
+          attachments.add([...(event.target.files ?? [])])
+          event.target.value = ""
+        }}
+      />
+      {attachments.files.length > 0 ? (
+        <AttachmentChips files={attachments.files} onRemove={attachments.remove} />
+      ) : null}
       {draft.pasted.length > 0 ? (
         <PastedBlocks
           pasted={draft.pasted}
@@ -383,7 +409,7 @@ export function PromptInput(props: {
       >
         {stacked ? null : (
           <InputGroupAddon>
-            <AddMenu placement={props.placement} onInsert={insert} />
+            <AddMenu placement={props.placement} onInsert={insert} onAttach={() => picker.current?.click()} />
             {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
             {status ? (
               <span className="ml-2">
@@ -416,7 +442,7 @@ export function PromptInput(props: {
             )
             if (kind === "text") return
             event.preventDefault()
-            if (kind === "attachment") toast("Files can’t be attached yet")
+            if (kind === "attachment") attachments.add([...data.files])
             else change(Composer.addPasted(draft, { id: SessionMessage.ID.create(), text: pasted }))
           }}
           ref={textarea}
@@ -451,7 +477,7 @@ export function PromptInput(props: {
         />
         {stacked ? (
           <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
-            <AddMenu placement={props.placement} onInsert={insert} />
+            <AddMenu placement={props.placement} onInsert={insert} onAttach={() => picker.current?.click()} />
             {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
             {props.model}
             {send}

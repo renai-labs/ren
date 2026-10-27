@@ -46,3 +46,14 @@ export const formText = (form: FormData, name: string) => {
   const value = form.get(name)
   return typeof value === "string" ? value : ""
 }
+
+const byteUnits = ["B", "KB", "MB", "GB"] as const
+
+export function formatBytes(bytes: number) {
+  const exponent = Math.min(
+    byteUnits.length - 1,
+    Math.max(0, Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(1000))),
+  )
+  const value = bytes / 1000 ** exponent
+  return `${exponent === 0 ? value : value.toFixed(value < 10 ? 1 : 0)} ${byteUnits[exponent]}`
+}
