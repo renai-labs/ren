@@ -1,13 +1,14 @@
 import { useState } from "react"
 import type { SpaceInfo } from "@ren/client"
-import { IconChevronDown, IconCube, IconUser } from "@tabler/icons-react"
+import { IconChevronDown, IconCube } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -31,12 +32,16 @@ export function WorkingIn(props: {
       spaces: matches.filter(isPersonal),
     },
     {
-      label: "Organization",
+      label: "Shared",
       spaces: matches.filter((space) => !isPersonal(space)),
     },
   ].filter((group) => group.spaces.length > 0)
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (!open) setQuery("")
+      }}
+    >
       <DropdownMenuTrigger
         disabled={props.disabled}
         render={
@@ -52,25 +57,30 @@ export function WorkingIn(props: {
         <span className="text-foreground">{spaceName(props.spaceId)}</span>
         <IconChevronDown />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-64">
-        <MenuSearch value={query} onChange={setQuery} placeholder="Search" />
-        {groups.map((group, index) => (
-          <DropdownMenuGroup key={group.label}>
-            {index > 0 ? <DropdownMenuSeparator /> : null}
-            <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-            {group.spaces.map((space) => (
-              <DropdownMenuItem
-                key={space.id}
-                className={space.id === props.spaceId ? "font-medium" : ""}
-                onClick={() => props.onChange(space.id)}
-              >
-                {isPersonal(space) ? <IconUser /> : <IconCube />}
-                <span className="truncate">{space.name}</span>
-                {isPersonal(space) ? <span className="ml-auto font-normal text-muted-foreground">Only you</span> : null}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuGroup>
-        ))}
+      <DropdownMenuContent side="top" align="start" className="w-72">
+        <MenuSearch value={query} onChange={setQuery} placeholder="Search spaces…" />
+        {groups.length === 0 ? (
+          <p className="px-2 py-6 text-center text-sm text-muted-foreground">No spaces match “{query.trim()}”</p>
+        ) : null}
+        <DropdownMenuRadioGroup value={props.spaceId ?? ""} onValueChange={(next: string) => props.onChange(next)}>
+          {groups.map((group, index) => (
+            <DropdownMenuGroup key={group.label}>
+              {index > 0 ? <DropdownMenuSeparator /> : null}
+              <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+              {group.spaces.map((space) => (
+                <DropdownMenuRadioItem key={space.id} value={space.id} closeOnClick>
+                  <IconCube />
+                  <span className="min-w-0 flex-1 truncate">{space.name}</span>
+                  {isPersonal(space) ? null : (
+                    <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+                      {space.memberCount} members
+                    </span>
+                  )}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuGroup>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )
