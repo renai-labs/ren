@@ -1,4 +1,5 @@
-# The web app: a static build in a private bucket behind CloudFront, served under /app/.
+# The site and the web app: static builds in a private bucket behind CloudFront. The site is served
+# at the root, the app under /app/.
 
 resource "aws_s3_bucket" "app" {
   bucket = "${var.name}-app-${data.aws_caller_identity.current.account_id}"
@@ -36,8 +37,9 @@ resource "aws_cloudfront_origin_access_control" "app" {
   signing_protocol                  = "sigv4"
 }
 
-# `/` goes to the app. A path under /app/ without a file extension is a client route, so it gets the
-# app's index; a path with one is a file and goes to the bucket.
+# A path with a file extension is a file and goes to the bucket. Without one, a path under /app/ is a
+# client route, so it gets the app's index; any other path is a site page, so it gets that
+# directory's index.
 resource "aws_cloudfront_function" "app" {
   name    = "${var.name}-app"
   runtime = "cloudfront-js-2.0"
@@ -46,11 +48,16 @@ resource "aws_cloudfront_function" "app" {
     function handler(event) {
       var request = event.request
       var uri = request.uri
-      if (uri === "/" || uri === "/app") {
+      if (uri === "/app") {
         return { statusCode: 301, statusDescription: "Moved Permanently", headers: { location: { value: "/app/" } } }
       }
-      if (uri.startsWith("/app/") && uri.split("/").pop().indexOf(".") === -1) {
+      if (uri.split("/").pop().indexOf(".") !== -1) {
+        return request
+      }
+      if (uri.startsWith("/app/")) {
         request.uri = "/app/index.html"
+      } else {
+        request.uri = uri.endsWith("/") ? uri + "index.html" : uri + "/index.html"
       }
       return request
     }
