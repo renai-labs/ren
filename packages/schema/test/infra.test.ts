@@ -31,6 +31,11 @@ describe("Infra.Spec", () => {
     expect(String(exit)).toContain('Agent "build" is defined in engineering and support.')
   })
 
+  test("rejects an agent with a reserved name", () => {
+    const exit = decode({ engineering: { name: "Engineering", agents: { ren: agent } } })
+    expect(String(exit)).toContain("The name ren is reserved.")
+  })
+
   test("rejects a use of an agent that no space defines", () => {
     const exit = decode({ support: { name: "Support", uses: { agents: ["build"] } } })
     expect(String(exit)).toContain('Space "support" uses agent "build", which no space defines.')

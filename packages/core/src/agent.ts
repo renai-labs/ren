@@ -8,7 +8,6 @@ import { and, asc, count, eq, isNull, or, sql, type SQL } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Predicate, Schema } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
-import { AgentDefaults } from "./agent/defaults.js"
 import { AgentPolicy } from "./agent/policy.js"
 import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
@@ -63,7 +62,7 @@ const rowInfo = (row: Row) => Effect.flatMap(settingsOf(row), (settings) => toIn
 
 const refused = (input: { readonly name: string; readonly isSubagent: boolean; readonly settings: Settings.Info }) =>
   [
-    AgentDefaults.reserved.has(input.name) && `The name ${input.name} is reserved.`,
+    Agent.reserved.has(input.name) && `The name ${input.name} is reserved.`,
     input.isSubagent && input.settings.references.length > 0 && "A subagent cannot have references.",
   ].find(Predicate.isString)
 

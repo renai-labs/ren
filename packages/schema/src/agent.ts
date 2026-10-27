@@ -13,6 +13,8 @@ export type ID = typeof ID.Type
 
 export const Name = Primitive.Slug.annotate({ identifier: "Agent.Name" })
 
+export const reserved: ReadonlySet<string> = new Set(["ren", "general", "explore", "compaction", "title", "summary"])
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
