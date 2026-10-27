@@ -15670,7 +15670,7 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 64,
-        "pattern": "^[^/\\\\\\s`,]+$"
+        "pattern": "^[^/\\\\\\s`,:]+$"
       },
       "Reference.Branch": {
         "type": "string",

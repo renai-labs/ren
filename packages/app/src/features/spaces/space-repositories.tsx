@@ -330,7 +330,7 @@ function RepositoryRow(props: {
 }
 
 const aliasProblem = (alias: string, others: ReadonlyArray<ReferenceInfo>) => {
-  if (!isAlias(alias)) return "Use an alias with no slash, backslash, space, backtick or comma."
+  if (!isAlias(alias)) return "Use an alias with no slash, backslash, space, backtick, comma or colon."
   return others.some((each) => each.alias === alias) ? `Another repository uses the alias ${alias}.` : undefined
 }
 
