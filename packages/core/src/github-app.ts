@@ -2,6 +2,7 @@ export * as GitHubApp from "./github-app.js"
 
 import { Database } from "@ren/db/database"
 import type { PullEnv } from "@ren/host-api/ren-host-api"
+import { GitHost } from "@ren/schema/git-host"
 import type { Auth } from "@ren/schema/auth"
 import { Credential } from "@ren/schema/credential"
 import { and, eq } from "drizzle-orm"
@@ -29,7 +30,7 @@ export interface Settings {
 
 export const apiVersion = "2022-11-28"
 
-export const label = "GITHUB"
+export const label = GitHost.label("github")
 
 const tokenKeptUntilBeforeExpiry = 5 * 60_000
 

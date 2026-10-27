@@ -261,6 +261,7 @@ export const layer = Layer.effect(
           expiresAt: DateTime.makeUnsafe(exp * 1000),
           generation: hand.value.generation,
           egress: hand.value.egress,
+          sharedDirectory: `${hand.value.workspace}/.ren`,
         } satisfies Environment.Access
       }
       const templateRows = yield* database.db
@@ -320,8 +321,9 @@ export const layer = Layer.effect(
         ),
         expiresAt: DateTime.makeUnsafe(exp * 1000),
         generation: assigned.generation,
-        // oxlint-disable-next-line ren/no-comments -- No environment provider routes its machines through the egress yet (environment-provider/docker.ts), so a template environment gets no placeholders (R19, §11.1).
-        egress: false,
+        egress: provider.value.egress,
+        // oxlint-disable-next-line ren/no-comments -- R49, R59: the folder beside the session folders, which every session on the environment shares.
+        sharedDirectory: `${config.directory}/.ren`,
       } satisfies Environment.Access
     })
 

@@ -19,6 +19,7 @@ interface Probe {
 export const make = (
   options: {
     readonly id?: string
+    readonly egress?: boolean
     readonly endpoint?: (
       environmentId: Environment.ID,
     ) => Effect.Effect<EnvironmentProvider.Endpoint, EnvironmentProvider.Gone>
@@ -37,6 +38,7 @@ export const make = (
       id: EnvironmentProvider.ID.make(options.id ?? "test"),
       title: "Test",
       description: "Environments that live in the test’s memory.",
+      egress: options.egress ?? false,
       config: Config,
       binding: Schema.Struct({ environmentId: Environment.ID }),
       provision: (input) =>
