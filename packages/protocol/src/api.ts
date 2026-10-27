@@ -12,6 +12,7 @@ import { CredentialGroup } from "./groups/credential.js"
 import { CredentialConnectGroup } from "./groups/credential-connect.js"
 import { OAuthAppGroup } from "./groups/oauth-app.js"
 import { OAuthSessionGroup } from "./groups/oauth-session.js"
+import { DriveGroup } from "./groups/drive.js"
 import { EnvironmentTemplateGroup } from "./groups/environment-template.js"
 import { EnvironmentProviderGroup } from "./groups/environment-provider.js"
 import { HealthGroup } from "./groups/health.js"
@@ -44,6 +45,7 @@ export const Api = HttpApi.make("server")
   .add(SpaceSettingsGroup)
   .add(OrganizationSettingsGroup)
   .add(MemoryGroup)
+  .add(DriveGroup)
   .add(AgentGroup)
   .add(AppGroup)
   .add(AppProfileGroup)

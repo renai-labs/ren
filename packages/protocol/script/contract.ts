@@ -13,6 +13,10 @@ const exceptions = new Map([
     "memory",
     "Reads and writes the files of an organization's or a space's memory by path, inside one record per memory: no primitive operation addresses a part of a record.",
   ],
+  [
+    "drive",
+    "Lists, uploads to, downloads from and deletes files of an organization's or a space's drive by path, in S3 and not in records: an upload and a download are links to S3, which no primitive operation is.",
+  ],
   ["sign-in", "The accounts a person can sign in with, before anyone is signed in."],
   ["invitation", "Invitation preview before the invitee signs in."],
   [

@@ -45,12 +45,48 @@ const scope = {
   ),
 }
 
+export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
+export const ListInput = Schema.Struct({
+  ...scope,
+  folder: Schema.optional(
+    Path.annotate({ description: "The folder to list, such as `reports`. Omit it for the root." }),
+  ),
+  cursor: Schema.optional(
+    Schema.String.annotate({ description: "The `cursor` of the previous page, to list the next one." }),
+  ),
+}).annotate({ identifier: "Drive.ListInput" })
+
+export interface File extends Schema.Schema.Type<typeof File> {}
+export const File = Schema.Struct({
+  path: Schema.String.annotate({ description: "The file’s path inside its drive." }),
+  size: Schema.Int,
+  modifiedAt: Schema.DateTimeUtc,
+}).annotate({ identifier: "Drive.File" })
+
+export interface Listing extends Schema.Schema.Type<typeof Listing> {}
+export const Listing = Schema.Struct({
+  folders: Schema.Array(Schema.String).annotate({ description: "The paths of the folders directly in the folder." }),
+  files: Schema.Array(File).annotate({ description: "The files directly in the folder." }),
+  cursor: Schema.NullOr(Schema.String).annotate({ description: "Null on the last page." }),
+}).annotate({ identifier: "Drive.Listing", description: "One page of a folder, sorted by path." })
+
+export interface PathInput extends Schema.Schema.Type<typeof PathInput> {}
+export const PathInput = Schema.Struct({ ...scope, path: Path }).annotate({ identifier: "Drive.PathInput" })
+
 export interface StartUploadInput extends Schema.Schema.Type<typeof StartUploadInput> {}
 export const StartUploadInput = Schema.Struct({
   ...scope,
-  path: Path,
-  size: Schema.Int.check(Schema.isGreaterThan(0)).annotate({ description: "The file’s size in bytes." }),
+  path: Path.annotate({ description: "Where the file goes. A file already at the path is replaced." }),
+  size: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).annotate({
+    description: "The file’s size in bytes. The upload must send exactly this many.",
+  }),
 }).annotate({ identifier: "Drive.StartUploadInput" })
+
+export interface Link extends Schema.Schema.Type<typeof Link> {}
+export const Link = Schema.Struct({
+  url: Schema.String.annotate({ description: "A link that downloads the file, with no other credential." }),
+  expiresAt: Schema.DateTimeUtc,
+}).annotate({ identifier: "Drive.Link" })
 
 export interface Remote extends Schema.Schema.Type<typeof Remote> {}
 export const Remote = Schema.Struct({

@@ -42,6 +42,17 @@ export type ReferenceDescription = string
 
 export type MemoryPath = string
 
+export type DriveFile = { path: string; size: number; modifiedAt: string }
+
+export type WriteResultUpload = {
+  uploadId: string
+  uploadUrl: string
+  fields: { [x: string]: string }
+  expiresAt: string
+}
+
+export type DriveLink = { url: string; expiresAt: string }
+
 export type AgentID = string
 
 export type AppID = string
@@ -347,6 +358,8 @@ export type ReferenceInfo = {
 }
 
 export type MemoryFile = { path: MemoryPath; content: string }
+
+export type DriveListing = { folders: Array<string>; files: Array<DriveFile>; cursor: string | null }
 
 export type TaskEventAssigned = {
   _tag: "assigned"
@@ -1253,10 +1266,6 @@ export type ConflictError = {
 export const isConflictError = (value: unknown): value is ConflictError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ConflictError"
 
-export type TooLargeError = { readonly _tag: "TooLargeError"; readonly message: string }
-export const isTooLargeError = (value: unknown): value is TooLargeError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "TooLargeError"
-
 export type UnavailableError = {
   readonly _tag: "UnavailableError"
   readonly message: string
@@ -1264,6 +1273,10 @@ export type UnavailableError = {
 }
 export const isUnavailableError = (value: unknown): value is UnavailableError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "UnavailableError"
+
+export type TooLargeError = { readonly _tag: "TooLargeError"; readonly message: string }
+export const isTooLargeError = (value: unknown): value is TooLargeError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "TooLargeError"
 
 export type HealthGetOutput = HealthInfo
 
@@ -1677,6 +1690,48 @@ export type MemoryDeleteInput = {
 }
 
 export type MemoryDeleteOutput = void
+
+export type DriveListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["spaceId"]
+  readonly folder?: {
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["folder"]
+  readonly cursor?: {
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["cursor"]
+}
+
+export type DriveListOutput = DriveListing
+
+export type DriveStartUploadInput = {
+  readonly spaceId?: { readonly spaceId?: string | null; readonly path: string; readonly size: number }["spaceId"]
+  readonly path: { readonly spaceId?: string | null; readonly path: string; readonly size: number }["path"]
+  readonly size: { readonly spaceId?: string | null; readonly path: string; readonly size: number }["size"]
+}
+
+export type DriveStartUploadOutput = WriteResultUpload
+
+export type DriveDownloadInput = {
+  readonly spaceId?: { readonly spaceId?: string | undefined; readonly path: string }["spaceId"]
+  readonly path: { readonly spaceId?: string | undefined; readonly path: string }["path"]
+}
+
+export type DriveDownloadOutput = DriveLink
+
+export type DriveDeleteInput = {
+  readonly spaceId?: { readonly spaceId?: string | undefined; readonly path: string }["spaceId"]
+  readonly path: { readonly spaceId?: string | undefined; readonly path: string }["path"]
+}
+
+export type DriveDeleteOutput = void
 
 export type AgentListInput = {
   readonly spaceId?: {

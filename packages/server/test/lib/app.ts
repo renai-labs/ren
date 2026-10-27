@@ -10,6 +10,7 @@ import { ChannelProvider } from "@ren/core/channel-provider"
 import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
+import { Drives } from "@ren/core/drives"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
@@ -36,6 +37,7 @@ import { EgressControl } from "@ren/core/egress-control"
 import { Access } from "@ren/core/access"
 import { Credentials } from "@ren/core/credentials"
 import { Envelope } from "@ren/core/envelope"
+import { TestDrives } from "@ren/core/testing"
 import { CredentialEnv } from "@ren/core/credential-env"
 import { OAuth } from "@ren/core/oauth"
 import { OAuthFetch } from "@ren/core/oauth-fetch"
@@ -87,6 +89,7 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
       SIGNUP_MX_CHECK: "false",
       CELL_URL: "http://127.0.0.1:9",
       BRAIN_KEYS: brainKeys,
+      ...TestDrives.config,
       ...overrides,
     }),
     { asPrimary: true },
@@ -108,6 +111,7 @@ export const services = Layer.mergeAll(
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   OAuth.layer,
   RenInferenceRemoval.layer.pipe(Layer.provide(DurableRunner.layerMemory)),
+  Drives.layer,
 ).pipe(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(AppProfiles.layer),

@@ -13,6 +13,7 @@ import { MemoryPolicy } from "./memory/policy.js"
 import { OAuthAppPolicy } from "./oauth-app/policy.js"
 import { AppPolicy } from "./app/policy.js"
 import { AppProfilePolicy } from "./app/profile-policy.js"
+import { DrivePolicy } from "./drives/policy.js"
 import { EnvironmentTemplatePolicy } from "./environment-templates/policy.js"
 import { InfraPolicy } from "./infra-specs/policy.js"
 import { RenInferencePolicy } from "./ren-inference/policy.js"
@@ -95,6 +96,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...EnvironmentTemplatePolicy.documents,
   ...SettingsPolicy.documents,
   ...MemoryPolicy.documents,
+  ...DrivePolicy.documents,
   ...AgentPolicy.documents,
   ...AppPolicy.documents,
   ...AppProfilePolicy.documents,
