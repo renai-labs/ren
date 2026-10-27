@@ -2,11 +2,12 @@ export * as InfraSpecs from "./infra-specs.js"
 
 import { Database } from "@ren/db/database"
 import type { Agent as AgentSchema } from "@ren/schema/agent"
+import { Factory } from "@ren/schema/factory"
 import { Infra } from "@ren/schema/infra"
 import { Settings } from "@ren/schema/settings"
 import type { Space as SpaceSchema } from "@ren/schema/space"
 import { and, asc, eq, isNull } from "drizzle-orm"
-import { Context, Effect, Layer, Predicate, Schema } from "effect"
+import { Context, Effect, Layer, Predicate, Schema, Struct } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { Agent } from "./agent.js"
@@ -37,6 +38,7 @@ interface LiveSpace {
   readonly name: string
   readonly description: string | null
   readonly settings: Settings.Info
+  readonly factory: Factory.Info
   readonly isMember: boolean
 }
 
@@ -56,6 +58,7 @@ interface Live {
   readonly agents: ReadonlyArray<LiveAgent>
   readonly memberships: ReadonlyArray<{ readonly spaceId: SpaceSchema.ID; readonly agentId: AgentSchema.ID }>
   readonly apps: ReadonlyArray<{ readonly ownerSpaceId: SpaceSchema.ID | null; readonly slug: string }>
+  readonly globals: ReadonlyArray<{ readonly id: AgentSchema.ID; readonly name: string }>
 }
 
 interface Step {
@@ -66,6 +69,39 @@ interface Step {
 const unsupported = ["apps", "schedules", "webhooks", "channels"] as const
 
 const sameSettings = Schema.toEquivalence(Settings.Info)
+
+const sameFactory = Schema.toEquivalence(Infra.FactoryDeclaration)
+
+const noFactory: Infra.FactoryDeclaration = { maxHandoffs: Factory.defaultMaxHandoffs, agents: [] }
+
+const factoryNames = (factory: Factory.Info, names: ReadonlyMap<string, string>): Infra.FactoryDeclaration => {
+  const name = (id: string) => names.get(id) ?? id
+  return {
+    maxHandoffs: factory.maxHandoffs,
+    agents: factory.agents
+      .filter((entry) => names.has(entry.agentId))
+      .map((entry) =>
+        Struct.renameKeys(
+          Struct.evolve(entry, {
+            agentId: name,
+            to: (to) =>
+              (to ?? [])
+                .filter((edge) => names.has(edge.agentId))
+                .map((edge) =>
+                  Struct.renameKeys(
+                    Struct.evolve(!edge.else || names.has(edge.else) ? edge : Struct.omit(edge, ["else"]), {
+                      agentId: name,
+                      else: (id: string | undefined) => name(id ?? ""),
+                    }),
+                    { agentId: "agent" },
+                  ),
+                ),
+          }),
+          { agentId: "agent" },
+        ),
+      ),
+  }
+}
 
 interface Claim {
   readonly key: string
@@ -200,6 +236,17 @@ export const layer = Layer.effect(
               .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_membership.space_id))
               .where(eq(Database.Schema.space.organization_id, actor.organizationId))
               .orderBy(asc(Database.Schema.agent_membership.space_id), asc(Database.Schema.agent_membership.agent_id))
+            const globals = yield* transaction
+              .select({ id: Database.Schema.agent.id, name: Database.Schema.agent.name })
+              .from(Database.Schema.agent)
+              .where(
+                and(
+                  isNull(Database.Schema.agent.organization_id),
+                  isNull(Database.Schema.agent.archived_at),
+                  eq(Database.Schema.agent.is_subagent, false),
+                ),
+              )
+              .orderBy(asc(Database.Schema.agent.name))
             const apps = yield* transaction
               .select({ ownerSpaceId: Database.Schema.app.owner_space_id, slug: Database.Schema.app.slug })
               .from(Database.Schema.app)
@@ -224,6 +271,7 @@ export const layer = Layer.effect(
                   name: row.space.name,
                   description: row.space.description,
                   settings: decoded.settings,
+                  factory: row.space.factory,
                   isMember: Boolean(row.membershipId),
                 })),
               ),
@@ -244,6 +292,7 @@ export const layer = Layer.effect(
               ),
               memberships: membershipRows,
               apps,
+              globals,
             } satisfies Live
           }),
         )
@@ -260,6 +309,7 @@ export const layer = Layer.effect(
         memberships: live.memberships.filter(
           (membership) => sharedIds.has(membership.spaceId) && ownedIds.has(membership.agentId),
         ),
+        factoryNames: new Map([...live.globals, ...owned].map((agent) => [agent.id, agent.name])),
       }
     }
 
@@ -515,6 +565,46 @@ export const layer = Layer.effect(
             }),
           )
         })
+      const globalIds = new Map(live.globals.map((agent) => [agent.name, agent.id]))
+      const factorySteps = spaceMatches.flatMap((match): Array<Step> => {
+        const declared = match.declaration.factory ?? noFactory
+        if (sameFactory(declared, match.live ? factoryNames(match.live.factory, inScope.factoryNames) : noFactory))
+          return []
+        if (match.live) touched.push(match.live.id)
+        const idOf = (name: string) => agentIds.get(name) ?? globalIds.get(name) ?? name
+        return [
+          step(
+            "update",
+            "space",
+            `spaces/${match.slug}`,
+            Effect.gen(function* () {
+              yield* spaces.update(actor, yield* spaceId(match.slug), {
+                factory: {
+                  maxHandoffs: declared.maxHandoffs,
+                  agents: declared.agents.map((entry) =>
+                    Struct.renameKeys(
+                      Struct.evolve(entry, {
+                        agent: idOf,
+                        to: (to) =>
+                          (to ?? []).map((edge) =>
+                            Struct.renameKeys(
+                              Struct.evolve(edge, { agent: idOf, else: (agent) => idOf(agent ?? "") }),
+                              {
+                                agent: "agentId",
+                              },
+                            ),
+                          ),
+                      }),
+                      { agent: "agentId" },
+                    ),
+                  ),
+                },
+              })
+            }),
+            { fields: ["factory"] },
+          ),
+        ]
+      })
       const membershipArchives = [...current]
         .filter(([path]) => !wanted.has(path))
         .map(([path, membership]) => {
@@ -573,6 +663,7 @@ export const layer = Layer.effect(
         ...spaceSteps.toSorted(byPath),
         ...agentSteps.toSorted(byPath),
         ...membershipCreates.toSorted(byPath),
+        ...factorySteps.toSorted(byPath),
         ...membershipArchives.toSorted(byPath),
         ...agentArchives.toSorted(byPath),
         ...spaceArchives.toSorted(byPath),
@@ -647,6 +738,10 @@ export const layer = Layer.effect(
         const live = yield* load(actor)
         const inScope = scope(live)
         const names = new Map(inScope.owned.map((agent) => [agent.id, agent.name]))
+        const factoryOf = (factory: Factory.Info) => {
+          const named = factoryNames(factory, inScope.factoryNames)
+          return sameFactory(named, noFactory) ? {} : { factory: named }
+        }
         return {
           bindings: { organization: live.organization.slug },
           spec: {
@@ -658,6 +753,7 @@ export const layer = Layer.effect(
                   name: space.name,
                   ...(Predicate.isNotNull(space.description) && { description: space.description }),
                   settings: space.settings,
+                  ...factoryOf(space.factory),
                   agents: Object.fromEntries(
                     inScope.owned
                       .filter((agent) => agent.ownerSpaceId === space.id)

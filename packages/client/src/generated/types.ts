@@ -639,6 +639,8 @@ export type GitHostRepository = { kind: GitHostKind; url: string; name: string; 
 
 export type AuthSignInProviders = { items: Array<AuthSignInProvider> }
 
+export type InfraFactoryEdgeDeclaration = { agent: AgentName; max?: number; else?: AgentName; start?: FactoryStartMode }
+
 export type InfraUses = { agents?: Array<AgentName> }
 
 export type InfraChange = {
@@ -858,6 +860,11 @@ export type ChannelMappingInfo = {
 export type ChannelInstallProviderInfo = { id: ChannelProvider; title: string; triggers: Array<ChannelTrigger> }
 
 export type GitHostListing = { kind: GitHostKind; installed: boolean; repositories: Array<GitHostRepository> }
+
+export type InfraFactoryDeclaration = {
+  maxHandoffs?: number
+  agents: Array<{ agent: AgentName; maxRuns?: number; to?: Array<InfraFactoryEdgeDeclaration> }>
+}
 
 export type InfraPlan = { changes: Array<InfraChange>; problems: Array<InfraProblem>; digest: string }
 
@@ -1086,6 +1093,7 @@ export type InfraPulledSpace = {
   name: string
   description?: string | null
   settings: SettingsInfo
+  factory?: InfraFactoryDeclaration
   agents: { [x: AgentName]: AgentDeclaration }
   uses: InfraUses
 }
@@ -6849,6 +6857,19 @@ export type InfraPlanInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly factory?: {
+            readonly maxHandoffs?: number
+            readonly agents: ReadonlyArray<{
+              readonly agent: string
+              readonly maxRuns?: number
+              readonly to?: ReadonlyArray<{
+                readonly agent: string
+                readonly max?: number
+                readonly else?: string
+                readonly start?: "new" | "continue"
+              }>
+            }>
+          }
           readonly uses?: { readonly agents?: ReadonlyArray<string> }
         }
       }
@@ -7163,6 +7184,19 @@ export type InfraPlanInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+          }
+          readonly factory?: {
+            readonly maxHandoffs?: number
+            readonly agents: ReadonlyArray<{
+              readonly agent: string
+              readonly maxRuns?: number
+              readonly to?: ReadonlyArray<{
+                readonly agent: string
+                readonly max?: number
+                readonly else?: string
+                readonly start?: "new" | "continue"
+              }>
+            }>
           }
           readonly uses?: { readonly agents?: ReadonlyArray<string> }
         }
@@ -7484,6 +7518,19 @@ export type InfraApplyInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly factory?: {
+            readonly maxHandoffs?: number
+            readonly agents: ReadonlyArray<{
+              readonly agent: string
+              readonly maxRuns?: number
+              readonly to?: ReadonlyArray<{
+                readonly agent: string
+                readonly max?: number
+                readonly else?: string
+                readonly start?: "new" | "continue"
+              }>
+            }>
+          }
           readonly uses?: { readonly agents?: ReadonlyArray<string> }
         }
       }
@@ -7800,6 +7847,19 @@ export type InfraApplyInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly factory?: {
+            readonly maxHandoffs?: number
+            readonly agents: ReadonlyArray<{
+              readonly agent: string
+              readonly maxRuns?: number
+              readonly to?: ReadonlyArray<{
+                readonly agent: string
+                readonly max?: number
+                readonly else?: string
+                readonly start?: "new" | "continue"
+              }>
+            }>
+          }
           readonly uses?: { readonly agents?: ReadonlyArray<string> }
         }
       }
@@ -8115,6 +8175,19 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+          }
+          readonly factory?: {
+            readonly maxHandoffs?: number
+            readonly agents: ReadonlyArray<{
+              readonly agent: string
+              readonly maxRuns?: number
+              readonly to?: ReadonlyArray<{
+                readonly agent: string
+                readonly max?: number
+                readonly else?: string
+                readonly start?: "new" | "continue"
+              }>
+            }>
           }
           readonly uses?: { readonly agents?: ReadonlyArray<string> }
         }

@@ -7,6 +7,8 @@ import { AppProfile } from "./app-profile.js"
 import { Channel } from "./channel.js"
 import { Credential } from "./credential.js"
 import { EnvironmentTemplate } from "./environment-template.js"
+import { Factory } from "./factory.js"
+import { FactoryCheck } from "./factory-check.js"
 import { OrganizationSettings } from "./organization-settings.js"
 import { Primitive } from "./primitive.js"
 import { Schedule } from "./schedule.js"
@@ -27,6 +29,33 @@ export interface Uses extends Schema.Schema.Type<typeof Uses> {}
 export const Uses = Schema.Struct({
   agents: Schema.Array(Agent.Name).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
 }).annotate({ identifier: "Infra.Uses" })
+
+export interface FactoryEdgeDeclaration extends Schema.Schema.Type<typeof FactoryEdgeDeclaration> {}
+export const FactoryEdgeDeclaration = Schema.Struct({
+  agent: Agent.Name,
+  max: Factory.Edge.fields.max,
+  else: Schema.optionalKey(Agent.Name),
+  start: Factory.Edge.fields.start,
+}).annotate({ identifier: "Infra.FactoryEdgeDeclaration" })
+
+export interface FactoryDeclaration extends Schema.Schema.Type<typeof FactoryDeclaration> {}
+export const FactoryDeclaration = Schema.Struct({
+  maxHandoffs: Factory.Info.fields.maxHandoffs,
+  agents: Schema.Array(
+    Schema.Struct({
+      agent: Agent.Name,
+      maxRuns: Factory.Entry.fields.maxRuns,
+      to: Schema.optionalKey(Schema.Array(FactoryEdgeDeclaration)),
+    }),
+  ).check(
+    Schema.isMaxLength(Factory.maximumAgents, {
+      message: `A factory has at most ${Factory.maximumAgents} agents.`,
+    }),
+  ),
+}).annotate({
+  identifier: "Infra.FactoryDeclaration",
+  description: "The space’s factory, with agent names. Without it, the factory has no agents.",
+})
 
 export interface SpaceDeclaration extends Schema.Schema.Type<typeof SpaceDeclaration> {}
 export const SpaceDeclaration = Schema.Struct({
@@ -52,6 +81,9 @@ export const SpaceDeclaration = Schema.Struct({
     Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
   ),
   environment: Schema.optionalKey(EnvironmentTemplate.Declaration),
+  factory: Schema.optionalKey(
+    FactoryDeclaration.check(Schema.makeFilter((factory) => FactoryCheck.issues(factory.agents, "agent"))),
+  ),
   uses: Uses.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({ agents: [] }))),
 }).annotate({ identifier: "Infra.SpaceDeclaration" })
 
@@ -180,6 +212,19 @@ export const Spec = Schema.Struct({
                 ],
           )
         }),
+        ...spaces.flatMap(([space, declaration]) => {
+          const agents = new Set(["ren", ...Object.keys(declaration.agents), ...declaration.uses.agents])
+          return (declaration.factory?.agents ?? []).flatMap((entry, index) =>
+            agents.has(entry.agent)
+              ? []
+              : [
+                  {
+                    path: ["spaces", space, "factory", "agents", index, "agent"],
+                    issue: `The factory of space "${space}" names agent "${entry.agent}", which is not in the space.`,
+                  },
+                ],
+          )
+        }),
       ]
     }),
   )
@@ -247,6 +292,7 @@ export interface PulledSpace extends Schema.Schema.Type<typeof PulledSpace> {}
 export const PulledSpace = Schema.Struct({
   ...Struct.omit(Space.CreateInput.fields, ["slug"]),
   settings: Settings.Info,
+  factory: Schema.optionalKey(FactoryDeclaration),
   agents: Schema.Record(Agent.Name, Agent.Declaration),
   uses: Uses,
 }).annotate({ identifier: "Infra.PulledSpace" })

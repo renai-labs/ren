@@ -13812,6 +13812,68 @@
         "required": ["action", "kind", "path", "fields"],
         "additionalProperties": false
       },
+      "Infra.FactoryDeclaration": {
+        "type": "object",
+        "properties": {
+          "maxHandoffs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Handoffs before a person decides."
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "agent": {
+                  "$ref": "#/components/schemas/Agent.Name"
+                },
+                "maxRuns": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 20,
+                  "description": "Runs of this agent before a person decides."
+                },
+                "to": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Infra.FactoryEdgeDeclaration"
+                  }
+                }
+              },
+              "required": ["agent"],
+              "additionalProperties": false
+            },
+            "maxItems": 64
+          }
+        },
+        "required": ["agents"],
+        "additionalProperties": false,
+        "description": "The space’s factory, with agent names. Without it, the factory has no agents."
+      },
+      "Infra.FactoryEdgeDeclaration": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/Agent.Name"
+          },
+          "max": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Handoffs on this edge before a person decides."
+          },
+          "else": {
+            "$ref": "#/components/schemas/Agent.Name"
+          },
+          "start": {
+            "$ref": "#/components/schemas/Factory.StartMode"
+          }
+        },
+        "required": ["agent"],
+        "additionalProperties": false
+      },
       "Infra.Kind": {
         "type": "string",
         "enum": ["organization", "space", "agent", "membership"]
@@ -13926,6 +13988,9 @@
           },
           "settings": {
             "$ref": "#/components/schemas/Settings.Info"
+          },
+          "factory": {
+            "$ref": "#/components/schemas/Infra.FactoryDeclaration"
           },
           "agents": {
             "type": "object",
@@ -14134,6 +14199,46 @@
           },
           "environment": {
             "$ref": "#/components/schemas/EnvironmentTemplate.Declaration"
+          },
+          "factory": {
+            "type": "object",
+            "properties": {
+              "maxHandoffs": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Handoffs before a person decides."
+              },
+              "agents": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "$ref": "#/components/schemas/Agent.Name"
+                    },
+                    "maxRuns": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 20,
+                      "description": "Runs of this agent before a person decides."
+                    },
+                    "to": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Infra.FactoryEdgeDeclaration"
+                      }
+                    }
+                  },
+                  "required": ["agent"],
+                  "additionalProperties": false
+                },
+                "maxItems": 64
+              }
+            },
+            "required": ["agents"],
+            "additionalProperties": false,
+            "description": "The space’s factory, with agent names. Without it, the factory has no agents."
           },
           "uses": {
             "$ref": "#/components/schemas/Infra.Uses"

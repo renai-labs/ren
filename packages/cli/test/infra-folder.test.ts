@@ -160,6 +160,7 @@ describe("InfraFolder.write", () => {
               settings: { instructions: "Test first.", permissions: [], references: [] },
             },
           },
+          factory: { maxHandoffs: 5, agents: [{ agent: "ren", to: [{ agent: "build", max: 2 }] }, { agent: "build" }] },
           uses: { agents: [] },
         },
         home: { name: "Home", settings: { permissions: [], references: [] }, agents: {}, uses: { agents: ["build"] } },
