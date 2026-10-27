@@ -17,6 +17,7 @@ import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
 import { SessionRunner } from "./session/runner.js"
 import { TaskPolicy } from "./task/policy.js"
+import { TaskFactory } from "./task/factory.js"
 import { TaskQueries } from "./task/queries.js"
 import { TaskStart } from "./task/start.js"
 import { TaskTrail } from "./task/trail.js"
@@ -230,11 +231,20 @@ export const layer = Layer.effect(
     ) {
       const where = eq(Database.Schema.task.id, id)
       const planned = yield* database.transaction((transaction) =>
-        TaskQueries.find(transaction, access, actor, where, actions.start).pipe(
-          Effect.flatMap((row) =>
-            TaskStart.plan(transaction, row, mode, review).pipe(Effect.map((plan) => ({ plan, task: row.task }))),
-          ),
-        ),
+        Effect.gen(function* () {
+          const row = yield* TaskQueries.find(transaction, access, actor, where, actions.start)
+          const factory = yield* TaskFactory.read(transaction, row.task.space_id)
+          const history = yield* TaskFactory.history(transaction, row.task.id)
+          const runs = row.task.agent_id && TaskFactory.runs(factory, row.task.agent_id, history)
+          if (actor.agent && runs && runs.used >= runs.max)
+            return yield* new Primitive.Conflict({
+              message: `The task’s agent ran ${runs.used} of ${runs.max} times. A person must decide first.`,
+            })
+          return {
+            plan: yield* TaskStart.plan(transaction, row, { mode, review, factory, history }),
+            task: row.task,
+          }
+        }),
       )
       const message = {
         messageId: Session.MessageID.create(),
@@ -339,7 +349,7 @@ export const layer = Layer.effect(
       transaction: Database.Transaction,
       actor: Actor.Info,
       row: TaskQueries.Row,
-      input: Task.AssignInput,
+      input: Pick<Task.AssignInput, "spaceId" | "agentId" | "ownerId">,
     ) {
       const spaceId = input.spaceId ?? row.task.space_id
       const moves = spaceId !== row.task.space_id
@@ -371,7 +381,16 @@ export const layer = Layer.effect(
             eq(Database.Schema.task.id, id),
             actions.assign,
           )
-          const next = yield* nextAssignment(transaction, actor, row, input)
+          const factory = yield* TaskFactory.handOff(transaction, row.task, actor.agent?.agentId, input)
+          if (factory._tag === "review") {
+            yield* TaskFactory.requestReview(transaction, row.task, factory.reason)
+            return { hasAgent: false, agentChanged: false, start: undefined }
+          }
+          const next = yield* nextAssignment(transaction, actor, row, {
+            spaceId: input.spaceId,
+            agentId: factory.agentId,
+            ownerId: input.ownerId,
+          })
           const changed =
             next.spaceId !== row.task.space_id ||
             next.agentId !== row.task.agent_id ||
@@ -396,7 +415,7 @@ export const layer = Layer.effect(
                 toOwnerId: next.ownerId,
                 fromSpaceId: row.task.space_id,
                 toSpaceId: next.spaceId,
-                note: input.note ?? null,
+                note: [factory.note, input.note].filter(Boolean).join("\n\n") || null,
               },
             ])
           }
@@ -478,10 +497,14 @@ export const layer = Layer.effect(
               }),
             )
           }
-          return { hasAgent: Boolean(next.agentId), agentChanged: next.agentId !== row.task.agent_id }
+          return {
+            hasAgent: Boolean(next.agentId),
+            agentChanged: next.agentId !== row.task.agent_id,
+            start: factory.start,
+          }
         }),
       )
-      const start = input.start ?? (assigned.agentChanged ? "continue" : "none")
+      const start = input.start ?? assigned.start ?? (assigned.agentChanged ? "continue" : "none")
       if (start === "none" || !assigned.hasAgent) return { task: yield* read(actor, id), start: "none" }
       const started = yield* launch(actor, id, start).pipe(
         Effect.as("started" as const),

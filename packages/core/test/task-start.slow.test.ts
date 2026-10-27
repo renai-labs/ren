@@ -182,6 +182,58 @@ describe("Task start", () => {
   )
 })
 
+describe("Task factory", () => {
+  it.live(
+    "a governed agent's start message lists its handoffs and limits, and an agent at its max runs cannot start",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const spaces = yield* Space.Service
+        const o = yield* org
+        const build = yield* o.agent("build")
+        const review = yield* o.agent("review")
+        yield* spaces.update(o.ada, o.factory.id, {
+          factory: {
+            maxHandoffs: 20,
+            agents: [
+              { agentId: build, to: [{ agentId: review, max: 2 }] },
+              { agentId: review, maxRuns: 1, to: [{ agentId: build }] },
+            ],
+          },
+        })
+        const script = harness.stub.script()
+        const created = yield* tasks.create(o.ada, {
+          spaceId: o.factory.id,
+          title: `Ship ${script.marker}`,
+          agentId: build,
+        })
+        const builder = TaskFixture.actingAs(
+          o.ada,
+          o.factory.id,
+          build,
+          yield* sessionOf(yield* tasks.start(o.ada, created.id, { mode: "new" })),
+        )
+        const first = yield* Effect.promise(() => script.called(1))
+        expect(first.text).toContain(
+          "Hand off with task_assign to one of:\n- review (used 0 of 2; then the task goes to human review)",
+        )
+        expect(first.text).toContain("Handoffs: 0 of 20.")
+        const reviewer = TaskFixture.actingAs(
+          o.ada,
+          o.factory.id,
+          review,
+          yield* sessionOf(yield* tasks.assign(builder, created.id, { agentId: review })),
+        )
+        expect((yield* Effect.promise(() => script.called(2))).text).toContain(
+          "Run 1 of 1 for review. Handoffs: 1 of 20.",
+        )
+        expect((yield* Effect.flip(tasks.start(reviewer, created.id, { mode: "continue" })))._tag).toBe(
+          "Primitive.Conflict",
+        )
+      }),
+  )
+})
+
 describe("Task assign", () => {
   it.live("a hand-off says whether the agent started, without failing the assign when the start fails", () =>
     Effect.gen(function* () {

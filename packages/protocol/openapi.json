@@ -18430,7 +18430,7 @@
                 "type": "null"
               }
             ],
-            "description": "The new agent, or null for none."
+            "description": "The new agent, or null for none. An agent whose start message lists handoff choices can hand off only to those agents."
           },
           "ownerId": {
             "anyOf": [
