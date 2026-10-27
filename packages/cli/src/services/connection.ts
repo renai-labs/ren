@@ -7,7 +7,7 @@ import { Release } from "../release.js"
 import { Credentials } from "./credentials.js"
 import { OAuth } from "./oauth.js"
 
-type Client = Effect.Success<ReturnType<typeof Ren.make>>
+export type Client = Effect.Success<ReturnType<typeof Ren.make>>
 
 export class Service extends Context.Service<
   Service,

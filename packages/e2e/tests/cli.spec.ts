@@ -7,7 +7,7 @@ import { createInterface } from "node:readline"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { Schema } from "effect"
-import { createUser, serverURL, uniqueEmail } from "./lib/servers.js"
+import { createUser, password, serverURL, signIn, uniqueEmail } from "./lib/servers.js"
 
 const cli = fileURLToPath(new URL("../../cli/src/index.ts", import.meta.url))
 
@@ -21,6 +21,46 @@ const Stored = Schema.fromJsonString(
 const Me = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Struct({ user: Schema.Struct({ email: Schema.String }) })),
 )
+
+test("ren2 manages a space and its members by slug", async ({ request }) => {
+  const email = uniqueEmail("cli-space")
+  await createUser(request, { name: "Grace Hopper", email })
+  const token = (await signIn(request, { email, password })).headers()["set-auth-token"] ?? ""
+  const env = { REN_TOKEN: token }
+  const Space = Schema.decodeUnknownSync(
+    Schema.fromJsonString(
+      Schema.Struct({
+        id: Schema.String,
+        slug: Schema.String,
+        name: Schema.String,
+        description: Schema.NullishOr(Schema.String),
+      }),
+    ),
+  )
+
+  const created = Space((await ren2(["space", "create", "--name", "Docs", "--slug", "docs"], env)).stdout)
+  expect(Space((await ren2(["spaces", "get", "docs"], env)).stdout).id).toBe(created.id)
+  const input = JSON.stringify({ name: "Docs Team", description: "Draft" })
+  const updated = await ren2(["space", "update", "docs", "--input", input, "--description", "Writes the docs"], env)
+  expect(Space(updated.stdout)).toMatchObject({ id: created.id, name: "Docs Team", description: "Writes the docs" })
+
+  const members = await ren2(["space", "member", "list", "docs"], env)
+  const Page = Schema.Struct({ items: Schema.Array(Schema.Unknown), total: Schema.Number })
+  expect(Schema.decodeUnknownSync(Schema.fromJsonString(Page))(members.stdout).total).toBeGreaterThan(0)
+  const pretty = await ren2(["space", "list", "--output", "pretty"], env)
+  expect(pretty.stdout).toMatch(/^ID +SLUG +NAME/u)
+  expect(pretty.stdout).toContain("docs")
+  expect(pretty.stdout).toMatch(/Page 1 of 1, \d+ total\.\n$/u)
+
+  await expect(ren2(["space", "update", "docs", "--name", ""], env)).rejects.toMatchObject({
+    code: 1,
+    stderr: expect.stringContaining('"path":"--name"'),
+  })
+  await ren2(["space", "archive", "docs"], env)
+  await expect(ren2(["space", "get", "docs"], env)).rejects.toMatchObject({
+    stderr: expect.stringContaining('"type":"NotFoundError"'),
+  })
+})
 
 test("ren2 health reports server health", async () => {
   const result = await ren2(["health"])
