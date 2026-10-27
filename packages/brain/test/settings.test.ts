@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { Permission } from "@ren/schema/permission"
 import type { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
-import type { Settings } from "@ren/schema/settings"
+import { Settings } from "@ren/schema/settings"
 import { Option, Result } from "effect"
 import { BrainSettings } from "../src/settings.js"
 
@@ -98,6 +98,20 @@ describe("BrainSettings.resolve", () => {
     }
     expect(resolve(stored).primary.instructions).toEqual(["You are Ren."])
     expect(resolve(stored, { agent: "reviewer" }).primary.instructions).toEqual(["You review."])
+  })
+
+  test("an agent's steps come from the most specific layer that sets them, else the default", () => {
+    const resolved = resolve({
+      ren: layer({ model: stub }),
+      space: layer({ steps: 40 }),
+      agents: [
+        primary({ steps: 12 }),
+        { name: "explore", isSubagent: true, settings: layer({}) },
+        { name: "quick", isSubagent: true, settings: layer({ steps: 5 }) },
+      ],
+    })
+    expect([resolved.primary.steps, ...resolved.subagents.map((agent) => agent.steps)]).toEqual([12, 40, 5])
+    expect(resolve({ ren: layer({ model: stub }), agents: [primary()] }).primary.steps).toBe(Settings.defaultSteps)
   })
 
   test("an unavailable agent model falls back to the space's model, and an unavailable subagent model to the primary's (E61)", () => {

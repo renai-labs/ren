@@ -870,6 +870,7 @@ export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pag
 export type SettingsInfo = {
   instructions?: string
   model?: SessionModel
+  steps?: number
   permissions?: PermissionRuleList
   references?: ReferenceList
 }
@@ -1499,6 +1500,7 @@ export type SpaceSettingsUpdateInput = {
     readonly settings: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1526,6 +1528,7 @@ export type OrganizationSettingsUpdateInput = {
     readonly settings: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1662,6 +1665,7 @@ export type AgentCreateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1683,6 +1687,7 @@ export type AgentCreateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1704,6 +1709,7 @@ export type AgentCreateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1725,6 +1731,7 @@ export type AgentCreateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1746,6 +1753,7 @@ export type AgentCreateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1772,6 +1780,7 @@ export type AgentUpdateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1792,6 +1801,7 @@ export type AgentUpdateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1812,6 +1822,7 @@ export type AgentUpdateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1832,6 +1843,7 @@ export type AgentUpdateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -6550,6 +6562,7 @@ export type InfraPlanInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -6571,6 +6584,7 @@ export type InfraPlanInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -6590,6 +6604,7 @@ export type InfraPlanInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -6862,6 +6877,7 @@ export type InfraPlanInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -6883,6 +6899,7 @@ export type InfraPlanInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -6902,6 +6919,7 @@ export type InfraPlanInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -7179,6 +7197,7 @@ export type InfraApplyInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -7200,6 +7219,7 @@ export type InfraApplyInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -7219,6 +7239,7 @@ export type InfraApplyInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -7492,6 +7513,7 @@ export type InfraApplyInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -7513,6 +7535,7 @@ export type InfraApplyInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -7532,6 +7555,7 @@ export type InfraApplyInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -7805,6 +7829,7 @@ export type InfraApplyInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -7826,6 +7851,7 @@ export type InfraApplyInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -7845,6 +7871,7 @@ export type InfraApplyInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
