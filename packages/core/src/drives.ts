@@ -16,7 +16,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { Drive } from "@ren/schema/drive"
 import type { Space } from "@ren/schema/space"
 import type { WriteResult } from "@ren/schema/write-result"
-import { and, eq, gte, isNull, lt } from "drizzle-orm"
+import { and, eq, isNull, lt } from "drizzle-orm"
 import { ByteSize, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
@@ -51,8 +51,6 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Drives") {}
 
 export const linkLifetime = Duration.minutes(15)
-
-export const sweepWindow = Duration.days(7)
 
 export const prefixOf = (owner: {
   readonly organizationId: Auth.OrganizationID
@@ -135,20 +133,20 @@ export const layer = Layer.effect(
       return prefixOf({ organizationId: actor.organizationId, spaceId })
     })
 
-    const deleteAll = (under: string): Effect.Effect<void, Unavailable> =>
-      Effect.gen(function* () {
-        const listed = yield* send((signal) =>
-          s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: under }), { abortSignal: signal }),
-        )
-        const keys = (listed.Contents ?? []).flatMap((object) => (object.Key ? [{ Key: object.Key }] : []))
-        if (keys.length === 0) return
-        yield* send((signal) =>
-          s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: keys, Quiet: true } }), {
-            abortSignal: signal,
-          }),
-        )
-        if (listed.IsTruncated) yield* deleteAll(under)
-      })
+    const deletePage = Effect.fnUntraced(function* (under: string) {
+      const listed = yield* send((signal) =>
+        s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: under }), { abortSignal: signal }),
+      )
+      const keys = (listed.Contents ?? []).flatMap((object) => (object.Key ? [{ Key: object.Key }] : []))
+      if (keys.length === 0) return false
+      const deleted = yield* send((signal) =>
+        s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: keys, Quiet: true } }), {
+          abortSignal: signal,
+        }),
+      )
+      if (deleted.Errors?.length) return yield* new Unavailable({ cause: deleted.Errors })
+      return listed.IsTruncated ?? false
+    })
 
     return Service.of({
       list: Effect.fn("Drives.list")(function* (actor: Actor.Info, input: Drive.ListInput) {
@@ -234,17 +232,13 @@ export const layer = Layer.effect(
         const spaces = yield* database.db
           .select({ spaceId: Database.Schema.space.id, organizationId: Database.Schema.space.organization_id })
           .from(Database.Schema.space)
-          .where(
-            and(
-              lt(Database.Schema.space.archived_at, archivedBefore),
-              gte(
-                Database.Schema.space.archived_at,
-                new Date(archivedBefore.getTime() - Duration.toMillis(sweepWindow)),
-              ),
-            ),
-          )
+          .where(lt(Database.Schema.space.archived_at, archivedBefore))
           .pipe(Effect.orDie)
-        yield* Effect.forEach(spaces, (space) => deleteAll(prefixOf(space)), { concurrency: 4, discard: true })
+        yield* Effect.forEach(
+          spaces,
+          (space) => deletePage(prefixOf(space)).pipe(Effect.repeat({ while: (more) => more })),
+          { concurrency: 4, discard: true },
+        )
       }),
     })
   }),

@@ -20,10 +20,10 @@ export const currentActor = Effect.gen(function* () {
   } satisfies Actor.Info
 })
 
-const notFound = (error: Primitive.NotFound) => Effect.fail(new NotFoundError({ message: error.message }))
-const forbidden = (error: Primitive.Forbidden) => Effect.fail(new ForbiddenError({ message: error.message }))
-const conflict = (error: Primitive.Conflict) => Effect.fail(new ConflictError({ message: error.message }))
-const invalid = (error: Primitive.Invalid) =>
+export const notFound = (error: Primitive.NotFound) => Effect.fail(new NotFoundError({ message: error.message }))
+export const forbidden = (error: Primitive.Forbidden) => Effect.fail(new ForbiddenError({ message: error.message }))
+export const conflict = (error: Primitive.Conflict) => Effect.fail(new ConflictError({ message: error.message }))
+export const invalid = (error: Primitive.Invalid) =>
   Effect.fail(new InvalidRequestError({ message: error.message, ...(error.field && { field: error.field }) }))
 
 export const list =

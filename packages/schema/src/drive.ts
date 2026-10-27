@@ -22,6 +22,7 @@ export const Path = Schema.String.check(Schema.isNonEmpty({ message: "Path is re
         "Use a path inside the drive, such as reports/q3.pdf, with no empty, . or .. part.",
     ),
     Schema.makeFilter((path) => !/\p{Cc}/u.test(path) || "A path has no control characters."),
+    Schema.makeFilter((path) => !path.includes("${filename}") || "A path has no ${filename}."),
     Schema.makeFilter(
       (path) => path.split("/").every((name) => bytesOf(name) <= maxNameBytes) || "Use names of 255 bytes or fewer.",
     ),

@@ -133,7 +133,7 @@ describe("Retention", () => {
       )
       yield* database.db
         .update(Database.Schema.space)
-        .set({ archived_at: daysAgo(31) })
+        .set({ archived_at: daysAgo(90) })
         .where(eq(Database.Schema.space.id, owner.spaceId))
       yield* database.db
         .update(Database.Schema.space)
