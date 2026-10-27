@@ -16,6 +16,7 @@ import {
   CodeBlockLine,
   CodeBlockTitle,
 } from "@/components/ui/code-block"
+import { ImageLightbox } from "@/components/ren/image-lightbox"
 import { useHighlightedCode } from "@/hooks/use-highlighted-code"
 import { cn } from "@/lib/utils"
 
@@ -55,7 +56,16 @@ function MarkdownCode({ node: _node, className, children, ...props }: ComponentP
   )
 }
 
-const components = { code: MarkdownCode }
+function MarkdownImage({ node: _node, src, alt, ...props }: ComponentProps<"img"> & ExtraProps) {
+  if (typeof src !== "string" || !src) return null
+  return (
+    <ImageLightbox src={src} alt={alt ?? ""} className="my-2 block w-fit max-w-full cursor-zoom-in rounded-md">
+      <img src={src} alt={alt ?? ""} {...props} className="max-h-96 max-w-full rounded-md border object-contain" />
+    </ImageLightbox>
+  )
+}
+
+const components = { code: MarkdownCode, img: MarkdownImage }
 
 const withDataImages = (schema: unknown) => {
   if (typeof schema !== "object" || schema === null || !("protocols" in schema)) return schema

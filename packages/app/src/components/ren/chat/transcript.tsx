@@ -71,6 +71,7 @@ import {
 } from "@/components/ui/trace"
 import { Markdown } from "@/components/ren/chat/markdown"
 import { EmptyState } from "@/components/ren/empty-state"
+import { ImageLightbox } from "@/components/ren/image-lightbox"
 
 interface Person {
   readonly name: string
@@ -259,7 +260,13 @@ function FileChips(props: { files: ReadonlyArray<SessionMessage.FileAttachment> 
           <Attachment key={`${file.name ?? file.mime}-${index}`} size="sm">
             {image ? (
               <AttachmentMedia variant="image">
-                <img src={`data:${file.mime};base64,${file.data}`} alt={file.name ?? "Image"} />
+                <ImageLightbox
+                  src={`data:${file.mime};base64,${file.data}`}
+                  alt={file.name ?? "Image"}
+                  className="size-full cursor-zoom-in"
+                >
+                  <img src={`data:${file.mime};base64,${file.data}`} alt={file.name ?? "Image"} />
+                </ImageLightbox>
               </AttachmentMedia>
             ) : (
               <AttachmentMedia>
@@ -432,12 +439,13 @@ function StepRow(props: {
       <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
       <TraceCollapsibleContent className="flex flex-col gap-2">
         {images.map((image) => (
-          <img
-            key={image.uri}
-            src={image.uri}
-            alt={image.name ?? "Image"}
-            className="max-h-64 w-fit max-w-full rounded-md border bg-muted object-contain"
-          />
+          <ImageLightbox key={image.uri} src={image.uri} alt={image.name?.split("/").at(-1) ?? "Image"}>
+            <img
+              src={image.uri}
+              alt={image.name ?? "Image"}
+              className="max-h-64 w-fit max-w-full rounded-md border bg-muted object-contain"
+            />
+          </ImageLightbox>
         ))}
         {props.output && !(images.length > 0 && props.output === "Image read successfully") ? (
           <Output text={props.output} failed={props.failed} />

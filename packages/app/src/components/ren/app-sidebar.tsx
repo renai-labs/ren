@@ -201,8 +201,8 @@ export function AppSidebar() {
           <SidebarTrigger />
         </div>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup className="px-0">
+      <SidebarContent className="overflow-hidden">
+        <SidebarGroup className="shrink-0 px-0">
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
               <SidebarMenuItem>
@@ -231,8 +231,8 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup className="px-0">
-          <SidebarGroupLabel className="text-sm text-sidebar-foreground">Chats</SidebarGroupLabel>
+        <SidebarGroup className="min-h-0 flex-1 px-0 pb-0">
+          <SidebarGroupLabel className="shrink-0 text-sm text-sidebar-foreground">Chats</SidebarGroupLabel>
           <div className="absolute top-3.5 right-9 flex group-data-[collapsible=icon]:hidden">
             <FilterMenu
               label="Filter chats"
@@ -245,7 +245,7 @@ export function AppSidebar() {
           <SidebarGroupAction title="New chat" render={<Link to="/" />}>
             <IconPlus />
           </SidebarGroupAction>
-          <SidebarGroupContent>
+          <SidebarGroupContent className="min-h-0 flex-1 scroll-fade-b scrollbar-thin overflow-y-auto overscroll-contain pb-2">
             <SidebarMenu className="gap-1">
               {chats.length === 0 ? (
                 <li className="flex p-2 text-sm text-sidebar-foreground">
