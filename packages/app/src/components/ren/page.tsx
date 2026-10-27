@@ -49,7 +49,7 @@ export function Page(props: {
     <div
       className={
         full
-          ? "flex w-full flex-col gap-4 px-3 pt-6 pb-3"
+          ? "flex w-full flex-col gap-4 px-8 pt-6 pb-3"
           : "mx-auto flex w-full max-w-200 flex-col gap-6 px-6 pt-22 pb-12"
       }
     >
