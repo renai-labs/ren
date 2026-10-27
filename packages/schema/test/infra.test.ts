@@ -11,19 +11,14 @@ const app = (fields: Record<string, unknown> = {}) => ({
   ...fields,
 })
 
-const decode = (spaces: Record<string, unknown>, moved: ReadonlyArray<unknown> = []) =>
-  Schema.decodeUnknownExit(Infra.Spec)({ org: { settings: {} }, spaces, moved })
+const decode = (spaces: Record<string, unknown>) =>
+  Schema.decodeUnknownExit(Infra.Spec)({ org: { settings: {} }, spaces })
 
 describe("Infra.Spec", () => {
-  test("a space uses an agent and an app that another space owns", () => {
+  test("a space uses an agent that another space owns", () => {
     const exit = decode({
-      engineering: {
-        name: "Engineering",
-        agents: { build: agent },
-        apps: { "release-notes": app({ dependsOn: ["linear"] }) },
-        uses: { apps: ["linear"] },
-      },
-      support: { name: "Support", uses: { agents: ["build"], apps: ["release-notes", "linear"] } },
+      engineering: { name: "Engineering", agents: { build: agent } },
+      support: { name: "Support", uses: { agents: ["build"] } },
     })
     expect(Exit.isSuccess(exit)).toBe(true)
   })
@@ -54,20 +49,6 @@ describe("Infra.Spec", () => {
     expect(String(exit)).toContain('App "release-notes" is defined in engineering and support.')
   })
 
-  test("rejects a use of an app that the space owns", () => {
-    const exit = decode({
-      engineering: { name: "Engineering", apps: { "release-notes": app() }, uses: { apps: ["release-notes"] } },
-    })
-    expect(String(exit)).toContain('Space "engineering" owns app "release-notes", so it does not list it in uses.')
-  })
-
-  test("rejects a space that uses an app but not its dependency", () => {
-    const exit = decode({
-      engineering: { name: "Engineering", apps: { "release-notes": app({ dependsOn: ["linear"] }) } },
-    })
-    expect(String(exit)).toContain('Space "engineering" uses app "release-notes", which depends on "linear".')
-  })
-
   test("rejects a skill that two apps define", () => {
     const skill = { type: "upstream", upstream: { url: "https://github.com/acme/skills.git", path: "." } }
     const exit = decode({
@@ -92,12 +73,19 @@ describe("Infra.Spec", () => {
     )
   })
 
-  test("rejects a move whose source still exists or whose target does not", () => {
-    const exit = decode({ engineering: { name: "Engineering", agents: { build: agent } } }, [
-      { from: "spaces/engineering/agents/build", to: "spaces/engineering/agents/qa" },
-    ])
-    expect(String(exit)).toContain('A move from "spaces/engineering/agents/build" names a resource that still exists.')
-    expect(String(exit)).toContain('A move to "spaces/engineering/agents/qa" names a resource that does not exist.')
+  test("rejects a renamedFrom name that the spec still defines", () => {
+    const exit = decode({
+      engineering: {
+        name: "Engineering",
+        renamedFrom: ["support"],
+        agents: { build: { ...agent, renamedFrom: ["qa"] }, qa: agent },
+        apps: { notes: app({ renamedFrom: ["changelog"] }), changelog: app() },
+      },
+      support: { name: "Support" },
+    })
+    expect(String(exit)).toContain('Space "engineering" is renamed from "support", which the spec still defines.')
+    expect(String(exit)).toContain('Agent "build" is renamed from "qa", which the spec still defines.')
+    expect(String(exit)).toContain('App "notes" is renamed from "changelog", which the spec still defines.')
   })
 
   const mcp = (fields: Record<string, unknown>) =>
