@@ -268,6 +268,7 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
             name: space.name,
             ...(Predicate.isString(space.description) && { description: space.description }),
             ...compact(space.settings),
+            ...(space.factory && { factory: space.factory }),
             ...(space.uses.agents?.length ? { uses: { agents: space.uses.agents } } : {}),
           }),
         ),

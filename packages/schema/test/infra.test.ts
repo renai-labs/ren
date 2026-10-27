@@ -78,6 +78,21 @@ describe("Infra.Spec", () => {
     )
   })
 
+  test("a factory names the agents of its space, ren included, and keeps the factory rules", () => {
+    const factory = (agents: ReadonlyArray<unknown>) =>
+      decode({
+        engineering: { name: "Engineering", agents: { build: agent, review: agent } },
+        support: { name: "Support", agents: { triage: agent }, factory: { agents } },
+      })
+    expect(Exit.isSuccess(factory([{ agent: "ren", to: [{ agent: "triage" }] }, { agent: "triage" }]))).toBe(true)
+    expect(String(factory([{ agent: "build" }]))).toContain(
+      'The factory of space "support" names agent "build", which is not in the space.',
+    )
+    expect(String(factory([{ agent: "triage", to: [{ agent: "triage" }] }]))).toContain(
+      "triage cannot hand off to itself.",
+    )
+  })
+
   test("rejects a renamedFrom name that the spec still defines", () => {
     const exit = decode({
       engineering: {

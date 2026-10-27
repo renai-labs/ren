@@ -177,6 +177,49 @@ describe("InfraSpecs", () => {
     }),
   )
 
+  it.live(
+    "a factory names agents: apply writes it after the agents that it names, and pull writes the names back",
+    () =>
+      Effect.gen(function* () {
+        const spaces = yield* Space.Service
+        const infra = yield* InfraSpecs.Service
+        yield* Seed.ren()
+        const o = yield* org
+        const input = {
+          bindings: o.bindings,
+          spec: spec({
+            home: {
+              name: "Home",
+              agents: { build: {}, review: {} },
+              factory: {
+                maxHandoffs: 8,
+                agents: [
+                  { agent: "ren", to: [{ agent: "build" }] },
+                  { agent: "build", maxRuns: 3, to: [{ agent: "review" }] },
+                  { agent: "review", to: [{ agent: "build", max: 2, else: "ren", start: "continue" }] },
+                ],
+              },
+            },
+          }),
+        }
+
+        const plan = yield* infra.plan(o.admin, input)
+
+        expect(plan.changes).toEqual([
+          change("create", "agent", "spaces/home/agents/build"),
+          change("create", "agent", "spaces/home/agents/review"),
+          change("update", "space", "spaces/home", { fields: ["factory"] }),
+        ])
+        yield* infra.apply(o.admin, { ...input, digest: plan.digest })
+        expect((yield* spaces.get(o.admin, o.home.id)).factory.agents.map((entry) => entry.to?.length)).toEqual([
+          1, 1, 1,
+        ])
+        const pulled = yield* infra.pull(o.admin)
+        expect(pulled.spec.spaces["home"]?.factory).toEqual(input.spec.spaces["home"]?.factory)
+        expect(yield* infra.plan(o.admin, yield* replan(pulled))).toMatchObject({ changes: [], problems: [] })
+      }),
+  )
+
   it.live("renamedFrom keeps the row of a renamed space or agent, and moving an agent's folder transfers it", () =>
     Effect.gen(function* () {
       const spaces = yield* Space.Service
