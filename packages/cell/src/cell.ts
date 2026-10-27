@@ -27,6 +27,7 @@ import { Env } from "./env.js"
 import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
 import { CredentialEnv } from "./credential-env.js"
+import { GitSources } from "./git-sources.js"
 import { HostToken } from "./host-token.js"
 import { Inference } from "./inference.js"
 import { ModelStore } from "./model-store.js"
@@ -214,6 +215,7 @@ export const hostLayer = Layer.unwrap(
     const behindEgress = cell.vars.REN_EGRESS === "1"
     return (behindEgress ? ModelRefresh.layerEgress : ModelRefresh.layer(cell.vars.REN_URL)).pipe(
       Layer.provideMerge(behindEgress ? HostToken.layerEgress : HostToken.layer(cell.vars.REN_URL)),
+      Layer.provideMerge(GitSources.layer),
       Layer.provideMerge(
         Layer.mergeAll(ModelStore.layer, CredentialEnv.layer, AppStore.layer, ChannelStore.layer, Inference.layer),
       ),

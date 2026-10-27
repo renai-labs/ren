@@ -17,6 +17,7 @@ import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { GitSources } from "../src/git-sources.js"
 import { Env } from "../src/env.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
@@ -103,7 +104,9 @@ const open = Effect.fnUntraced(function* (github?: TestGitHub.Instance) {
     {
       saved: Option.none(),
       directoryOf: () => local,
-      ...(github && { github: Effect.succeed(github.hosts), skills: { refresh: 0 } }),
+      ...(github && {
+        sources: yield* GitSources.make({ github: Effect.succeed(github.hosts), skills: { refresh: 0 } }),
+      }),
     },
   )
   const harness = yield* OpenCodeHarness.make(host, endpoints)

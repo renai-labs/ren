@@ -22,7 +22,7 @@ export const workspaceId = (sessionId: Session.ID) => Workspace.ID.make(`wrk_${I
 
 export const sessionIdOf = (workspaceId: Workspace.ID) => Session.ID.make(`ses_${Identifier.suffix(workspaceId)}`)
 
-export const killedBySignal = (signal: Signal.Name) => new CrossSpawnSpawner.KilledBySignal(signal)
+const killedBySignal = (signal: Signal.Name) => new CrossSpawnSpawner.KilledBySignal(signal)
 
 const files = (environment: EnvironmentSession.Files): EnvironmentFiles.FilesImpl => {
   const fileError = (path: string) => (cause: unknown) =>

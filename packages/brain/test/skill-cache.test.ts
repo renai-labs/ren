@@ -1,9 +1,7 @@
 import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
 import { Effect, Layer } from "effect"
-import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
-import { GitHubReader } from "../src/github/reader.js"
 import { SkillCache } from "../src/skill/cache.js"
 import { SkillSource } from "../src/skill/source.js"
 import { TestGitHub } from "./lib/github.js"
@@ -13,9 +11,8 @@ const it = testEffect(Layer.empty)
 const skill = (body: string) => `---\ndescription: Fill PDF forms\n---\n${body}\n`
 
 const cacheOf = (github: TestGitHub.Instance) =>
-  GitHubReader.make(Effect.succeed(github.hosts)).pipe(
-    Effect.provide(FetchHttpClient.layer),
-    Effect.flatMap((reader) => SkillCache.make(SkillSource.make(reader), { refresh: "5 minutes" })),
+  TestGitHub.hostsOf(github).pipe(
+    Effect.flatMap((hosts) => SkillCache.make(SkillSource.make(hosts), { refresh: "5 minutes" })),
   )
 
 const read = (resolved: SkillSource.Resolved) => ({ commit: resolved.lookup.commit, document: resolved.document })

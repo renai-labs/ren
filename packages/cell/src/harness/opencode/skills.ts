@@ -6,29 +6,20 @@ import { Permission } from "@opencode/core/permission"
 import type { Plugin } from "@opencode/plugin/effect"
 import { Agent } from "@opencode/schema/agent"
 import { Skill } from "@opencode/schema/skill"
-import { Tool } from "@opencode/schema/tool"
-import type { EnvironmentSession } from "@ren/brain/environment/session"
-import type { SkillCache } from "@ren/brain/skill/cache"
-import { SkillMaterialize } from "@ren/brain/skill/materialize"
+import type { EnvironmentCopies } from "@ren/brain/environment/copies"
 import type { SkillSource } from "@ren/brain/skill/source"
 import type { AppCatalog } from "@ren/schema/app-catalog"
-import { Effect, Equal, Hash, Option, Ref, Schema, Semaphore, Struct } from "effect"
-
-export interface Sources {
-  readonly source: SkillSource.Interface
-  readonly cache: SkillCache.Interface
-}
+import { Effect, Equal, Hash, Option, Ref, Schema, Struct } from "effect"
+import type { GitSources } from "../../git-sources.js"
+import type { OpenCodeCopies } from "./copies.js"
 
 export interface Registration {
   readonly info: Skill.Info
   readonly identity: string
   readonly directory: string
-  readonly files: Option.Option<SkillMaterialize.Files>
+  readonly files: Option.Option<EnvironmentCopies.Copy>
   readonly source?: SkillSource.Pointer
 }
-
-// oxlint-disable-next-line ren/no-comments -- The tools that reach a session's environment. The first of them after a skill loads puts that skill's files there.
-export const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
 
 const encoder = new TextEncoder()
 
@@ -40,8 +31,8 @@ const noEnvironment =
 export const make = Effect.fnUntraced(function* (input: {
   readonly context: Pick<Plugin.Context, "skill" | "tool" | "session" | "agent" | "location">
   readonly isSession: boolean
-  readonly files: Option.Option<EnvironmentSession.Files>
-  readonly sources: Sources
+  readonly hasEnvironment: boolean
+  readonly sources: GitSources.Interface["skills"]
   readonly apps: Option.Option<AppCatalog.Info>
   readonly onPrompt: Effect.Effect<void>
 }) {
@@ -50,12 +41,13 @@ export const make = Effect.fnUntraced(function* (input: {
       prepare: () => Effect.succeed<ReadonlyArray<Registration>>([]),
       apply: () => Effect.void,
       isChanged: (): boolean => false,
+      items: (): ReadonlyArray<OpenCodeCopies.Item> => [],
     }
   const root = `${input.context.location.directory}/.ren/skills`
   const current = yield* Ref.make<ReadonlyArray<Registration>>([])
   const entriesOf = (apps: Option.Option<AppCatalog.Info>) =>
     Option.match(apps, { onNone: () => [], onSome: (info) => info.catalog.skills })
-  const hasEnvironment = Option.isSome(input.files)
+  const hasEnvironment = input.hasEnvironment
   const prepare = Effect.fnUntraced(function* (apps: Option.Option<AppCatalog.Info>) {
     const previous = yield* Ref.get(current)
     const prepared = yield* Effect.forEach(
@@ -107,23 +99,21 @@ export const make = Effect.fnUntraced(function* (input: {
         }
         const identity = found.value.lookup.commit.slice(0, 12)
         const directory = `${root}/${entry.slug}/${identity}`
-        return [
-          {
-            identity,
-            directory,
-            source: declaration.upstream,
-            files: Option.some({
-              type: "archive" as const,
-              ...input.sources.source.archive(found.value),
-              folder: declaration.upstream.path,
-            }),
-            info: Struct.evolve(read.skill, {
-              id: () => Skill.ID.make(entry.slug),
-              path: () => AbsolutePath.make(`${directory}/skill.md`),
-              content: (text) => `${text}${hasEnvironment ? "" : noEnvironment}`,
-            }),
-          },
-        ] satisfies ReadonlyArray<Registration>
+        const registration: Registration = {
+          identity,
+          directory,
+          source: declaration.upstream,
+          files: Option.some({
+            type: "archive",
+            unpack: { ...found.value.lookup.archive, folder: declaration.upstream.path },
+          }),
+          info: Struct.evolve(read.skill, {
+            id: () => Skill.ID.make(entry.slug),
+            path: () => AbsolutePath.make(`${directory}/skill.md`),
+            content: (text) => `${text}${hasEnvironment ? "" : noEnvironment}`,
+          }),
+        }
+        return [registration]
       }),
       { concurrency: 8 },
     )
@@ -131,13 +121,9 @@ export const make = Effect.fnUntraced(function* (input: {
   })
   yield* Ref.set(current, yield* prepare(input.apps))
   const loaded = new Map<string, Registration>()
-  const pending = new Map<string, Registration>()
-  const copying = yield* Semaphore.make(1)
   const load = (id: string) => {
     const registration = Ref.getUnsafe(current).find((each) => each.info.id === id)
-    if (!registration) return
-    loaded.set(id, registration)
-    if (Option.isSome(registration.files) && hasEnvironment) pending.set(registration.directory, registration)
+    if (registration) loaded.set(id, registration)
   }
   const isChanged = (next: ReadonlyArray<Registration>) =>
     !Equal.equals(
@@ -153,39 +139,9 @@ export const make = Effect.fnUntraced(function* (input: {
       Option.map(decodeCall(event.input), (call) => load(call.id))
     }),
   )
-  yield* input.context.tool.hook("execute.before", (event) => {
-    if (!environmentTools.includes(event.tool) || Option.isNone(input.files)) return Effect.void
-    const files = input.files.value
-    return copying.withPermit(
-      Effect.suspend(() =>
-        Effect.forEach(
-          [...pending.values()],
-          Effect.fnUntraced(function* (registration) {
-            yield* Option.match(registration.files, {
-              onNone: () => Effect.void,
-              onSome: (content) =>
-                SkillMaterialize.ensure(files, registration.directory, content).pipe(
-                  Effect.mapError(
-                    (error) =>
-                      new Tool.Error({
-                        message: `The files of the skill ${registration.info.id} are not on the environment: ${error.message}. Retry the environment tool to copy them again.`,
-                      }),
-                  ),
-                ),
-            })
-            pending.delete(registration.directory)
-          }),
-          { discard: true },
-        ),
-      ),
-    )
-  })
   yield* input.context.session.hook("prompt", (event) =>
     Effect.gen(function* () {
       yield* input.onPrompt
-      // oxlint-disable-next-line ren/no-comments -- R44: each turn copies the files of every loaded skill again; the executor answers at once for a folder that exists.
-      for (const registration of loaded.values())
-        if (Option.isSome(registration.files) && hasEnvironment) pending.set(registration.directory, registration)
       const mentioned = event.prompt.skills ?? []
       if (mentioned.length === 0) return
       const session = yield* input.context.session.get({ sessionID: event.sessionID }).pipe(Effect.option)
@@ -223,5 +179,22 @@ export const make = Effect.fnUntraced(function* (input: {
       yield* input.context.skill.reload()
     }),
     isChanged,
+    // oxlint-disable-next-line ren/no-comments -- The files of each loaded skill, for the copy before an environment tool.
+    items: (): ReadonlyArray<OpenCodeCopies.Item> =>
+      hasEnvironment
+        ? [...loaded.values()].flatMap((registration) =>
+            Option.match(registration.files, {
+              onNone: () => [],
+              onSome: (copy) => [
+                {
+                  path: registration.directory,
+                  copy,
+                  note: (message: string) =>
+                    `The files of the skill ${registration.info.id} are not on the environment: ${message}. The next environment tool copies them again.`,
+                },
+              ],
+            }),
+          )
+        : [],
   }
 })

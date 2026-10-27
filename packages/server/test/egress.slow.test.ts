@@ -20,7 +20,8 @@ import { BrainToken } from "@ren/host-api/brain-token"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { EnvironmentSession } from "@ren/brain/environment/session"
-import { GitHubReader } from "@ren/brain/github/reader"
+import { GitHubHost } from "@ren/brain/git/github"
+import { GitHosts } from "@ren/brain/git/hosts"
 import { SkillSource } from "@ren/brain/skill/source"
 import { TestAccess, TestGitHub } from "@ren/brain/testing"
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
@@ -601,13 +602,15 @@ const behindEgress = Effect.fnUntraced(function* (github: TestGitHub.Instance) {
   })
   const proxy = `http://${found.login}:${found.password}@127.0.0.1:${state.egress?.tunnel ?? 0}`
   const port = new URL(github.hosts.git).port
-  const hosts: GitHubReader.Hosts = {
+  const hosts: GitHubHost.Hosts = {
     host: "github.com",
     git: `http://github.com:${port}/git`,
     api: `http://api.github.com:${port}/api`,
     raw: `http://raw.githubusercontent.com:${port}/raw`,
   }
-  const reader = yield* GitHubReader.make(Effect.succeed(hosts)).pipe(Effect.provide(FetchHttpClient.layer))
+  const reader = GitHosts.make([
+    yield* GitHubHost.make(Effect.succeed(hosts)).pipe(Effect.provide(FetchHttpClient.layer)),
+  ])
   const proxied = Object.assign(
     (input: string | URL | Request, init?: RequestInit) => fetch(input, { ...init, proxy }),
     { preconnect: fetch.preconnect },
@@ -671,7 +674,7 @@ describe("GitHub through the egress", () => {
       const brain = yield* behindEgress(github)
       const lookup = yield* brain.viaEgress(brain.reader.lookup("https://github.com/acme/docs"))
       expect(lookup).toMatchObject({ commit, access: "placeholder" })
-      const archive = brain.reader.archive(lookup)
+      const archive = lookup.archive
       expect(archive.headers).toEqual({ authorization: "Bearer ren:GITHUB" })
       const path = join(brain.directory, "references", commit.slice(0, 12))
       yield* brain.files.unpack({
@@ -701,7 +704,7 @@ describe("GitHub through the egress", () => {
       const resolved = yield* brain.viaEgress(skills.resolve({ url: "https://github.com/acme/skills", path: "pdf" }))
       expect(resolved.document).toContain("Run fill.sh")
       const path = join(brain.directory, "skills", commit.slice(0, 12))
-      yield* brain.files.unpack({ ...skills.archive(resolved), folder: "pdf", path })
+      yield* brain.files.unpack({ ...resolved.lookup.archive, folder: "pdf", path })
       expect(yield* Effect.promise(() => Bun.file(join(path, "fill.sh")).text())).toBe("echo fill\n")
       const sent = (yield* github.authorizations).flatMap((request) => (request[1] ? [request[1]] : []))
       expect(sent.filter((authorization) => authorization.includes("ren:GITHUB"))).toEqual([])

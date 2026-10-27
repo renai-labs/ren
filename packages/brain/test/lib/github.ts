@@ -4,7 +4,9 @@ import { Effect } from "effect"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import type { GitHubReader } from "../../src/github/reader.js"
+import { FetchHttpClient } from "effect/http"
+import { GitHubHost } from "../../src/git/github.js"
+import { GitHosts } from "../../src/git/hosts.js"
 
 // oxlint-disable-next-line ren/no-comments -- What GitHub, or the egress before it, answers to the ren:GITHUB placeholder: the egress put a token that reads the repository, the runtime has no egress (401), the space has no credential (403 from the egress) or the token cannot read the repository (404).
 export type Placeholder = "accepted" | "no_egress" | "no_credential" | "no_access"
@@ -141,7 +143,7 @@ export const make = Effect.fnUntraced(function* (
       git: `${origin}/git`,
       api: `${origin}/api`,
       raw: `${origin}/raw`,
-    } satisfies GitHubReader.Hosts,
+    } satisfies GitHubHost.Hosts,
     requests: Effect.sync(() => state.requests.map((request) => request.path)),
     // oxlint-disable-next-line ren/no-comments -- The ref-prefix lines of each ls-refs request that reached git, in order.
     bodies: Effect.sync(() => [...state.bodies]),
@@ -194,3 +196,10 @@ export const make = Effect.fnUntraced(function* (
 })
 
 export type Instance = Effect.Success<ReturnType<typeof make>>
+
+// oxlint-disable-next-line ren/no-comments -- The git hosts of a brain, with GitHub at the fake.
+export const hostsOf = (github: Instance) =>
+  GitHubHost.make(Effect.succeed(github.hosts)).pipe(
+    Effect.map((host) => GitHosts.make([host])),
+    Effect.provide(FetchHttpClient.layer),
+  )
