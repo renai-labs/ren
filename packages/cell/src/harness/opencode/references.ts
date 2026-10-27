@@ -28,6 +28,9 @@ const isAvailable = (prepared: Prepared): prepared is Extract<Prepared, { readon
 // oxlint-disable-next-line ren/no-comments -- R2: one root beside the chat folders, shared by every chat on the environment.
 export const rootOf = (directory: string) => `${dirname(directory)}/.ren/references`
 
+const archiveNote =
+  "A reference is a copy of a GitHub archive: it has no submodules, no Git LFS file contents, no symlinks and no files marked export-ignore."
+
 const nameOf = (repository: string) =>
   URL.parse(repository)
     ?.pathname.split("/")
@@ -55,7 +58,6 @@ export const make = Effect.fnUntraced(function* (input: {
       yield* input.references,
       (info) =>
         input.sources.cache.resolve({ repository: info.repository, ...(info.branch && { branch: info.branch }) }).pipe(
-          Effect.timeout("20 seconds"),
           Effect.map((lookup): Prepared => ({
             info,
             lookup,
@@ -71,14 +73,19 @@ export const make = Effect.fnUntraced(function* (input: {
       { concurrency: 8 },
     )
   })
-  // oxlint-disable-next-line ren/no-comments -- A reference reaches OpenCode only after its lookup: at the start, at a settings change and before each turn (R3, §5a).
-  const refresh = Effect.gen(function* () {
-    const next = yield* prepare()
-    if (Equal.equals(next, yield* Ref.get(current))) return
-    yield* Ref.set(current, next)
-    yield* input.context.reference.reload()
-  })
-  yield* Ref.set(current, yield* prepare())
+  // oxlint-disable-next-line ren/no-comments -- A reference reaches OpenCode only after its lookup: at the start, at a settings change and before each turn (R3, §5a). R36, R37: the start and a settings change look up in the background, one lookup at a time for the chat, and a prompt waits for it.
+  const lookups = yield* Semaphore.make(1)
+  const lookUp = lookups.withPermit(
+    Effect.gen(function* () {
+      const next = yield* prepare()
+      if (Equal.equals(next, yield* Ref.get(current))) return
+      yield* Ref.set(current, next)
+      yield* input.context.reference.reload()
+    }),
+  )
+  const scope = yield* Effect.scope
+  const refresh = Effect.asVoid(Effect.forkIn(lookUp, scope))
+  yield* refresh
   yield* input.context.reference.transform((editor) => {
     for (const prepared of Ref.getUnsafe(current).filter(isAvailable))
       editor.add(prepared.info.alias, {
@@ -87,11 +94,17 @@ export const make = Effect.fnUntraced(function* (input: {
         ...(prepared.info.description && { description: prepared.info.description }),
       })
   })
-  yield* input.context.session.hook("prompt", () => refresh)
+  // oxlint-disable-next-line ren/no-comments -- R5, R44: the copies of the current generation, cleared at each prompt, so files deleted under the root come back at the next turn. The executor answers at once for a path that exists.
+  const copied = { generation: Number.NaN, paths: new Set<string>() }
+  yield* input.context.session.hook("prompt", () =>
+    Effect.sync(() => copied.paths.clear()).pipe(Effect.andThen(lookUp)),
+  )
   yield* input.context.session.hook("context", (event) =>
     Effect.sync(() => {
-      for (const prepared of Ref.getUnsafe(current))
-        if ("unavailable" in prepared) event.system.push({ type: "text", text: prepared.unavailable })
+      const prepared = Ref.getUnsafe(current)
+      if (prepared.some(isAvailable)) event.system.push({ type: "text", text: archiveNote })
+      for (const each of prepared)
+        if ("unavailable" in each) event.system.push({ type: "text", text: each.unavailable })
     }),
   )
   yield* input.context.permission.hook("evaluate", (event) =>
@@ -106,23 +119,25 @@ export const make = Effect.fnUntraced(function* (input: {
       if (event.action === "external_directory" && inside.length === event.resources.length) event.effect = "allow"
     }),
   )
-  // oxlint-disable-next-line ren/no-comments -- R5, R17: before the first environment tool, every reference of the chat is on the environment of the current generation.
-  const unpacked = new Set<string>()
-  const unpacking = yield* Semaphore.make(1)
+  // oxlint-disable-next-line ren/no-comments -- R17, R38: before an environment tool, each reference copies on its own. A copy that fails does not fail the tool: its cause goes into the tool result, and the next environment tool tries again.
+  const notes = new Map<string, ReadonlyArray<string>>()
+  const copying = yield* Semaphore.make(1)
   yield* input.context.tool.hook("execute.before", (event) => {
     const available = Ref.getUnsafe(current).filter(isAvailable)
     if (!OpenCodeSkills.environmentTools.includes(event.tool) || available.length === 0) return Effect.void
-    return unpacking.withPermit(
+    return copying.withPermit(
       Effect.gen(function* () {
         const generation = yield* environment.generation.pipe(
           Effect.mapError((error) => new Tool.Error({ message: error.message })),
         )
-        yield* Effect.forEach(
-          available,
-          (prepared) => {
-            const key = `${generation} ${prepared.path}`
-            if (unpacked.has(key)) return Effect.void
-            return environment.files
+        if (generation !== copied.generation) {
+          copied.generation = generation
+          copied.paths.clear()
+        }
+        const failures = yield* Effect.forEach(
+          available.filter((prepared) => !copied.paths.has(prepared.path)),
+          (prepared) =>
+            environment.files
               .unpack({
                 ...input.sources.reader.archive(prepared.lookup),
                 folder: ".",
@@ -132,19 +147,48 @@ export const make = Effect.fnUntraced(function* (input: {
                 links: "skip",
               })
               .pipe(
-                Effect.tap(() => Effect.sync(() => unpacked.add(key))),
-                Effect.mapError(
-                  (error) =>
-                    new Tool.Error({
-                      message: `The reference ${prepared.info.alias} is not on the environment: ${error.message}. Retry the environment tool to copy it again.`,
-                    }),
+                Effect.as(Option.none<string>()),
+                Effect.tap(() => Effect.sync(() => copied.paths.add(prepared.path))),
+                Effect.catch((error) =>
+                  Effect.succeed(
+                    Option.some(
+                      `The reference ${prepared.info.alias} is not on the environment: ${error.message}. The next environment tool copies it again.`,
+                    ),
+                  ),
                 ),
-              )
-          },
-          { concurrency: 4, discard: true },
+              ),
+          { concurrency: 4 },
         )
+        const causes = failures.filter(Option.isSome).map((failure) => failure.value)
+        if (causes.length > 0) notes.set(event.id, causes)
       }),
     )
   })
+  yield* input.context.tool.hook("execute.after", (event) =>
+    Effect.sync(() => {
+      const causes = notes.get(event.id)
+      if (!causes) return
+      notes.delete(event.id)
+      const note = causes.join("\n")
+      if (event.status === "error") {
+        event.error = new Tool.Error({ message: `${event.error.message}\n\n${note}` })
+        return
+      }
+      const content = event.result.content
+      event.result = {
+        ...event.result,
+        content:
+          typeof content === "string"
+            ? `${content}\n\n${note}`
+            : [
+                ...(content ??
+                  ("output" in event.result
+                    ? [{ type: "text" as const, text: JSON.stringify(event.result.output) }]
+                    : [])),
+                { type: "text" as const, text: note },
+              ],
+      }
+    }),
+  )
   return { refresh }
 })

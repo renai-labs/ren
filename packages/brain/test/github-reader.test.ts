@@ -93,8 +93,6 @@ it.effect("a read of a file that GitHub does not answer fails after 15 s", () =>
     const read = yield* Effect.forkChild(Effect.flip(reader.read(lookup, "README.md")))
     yield* github.arrived
     yield* TestClock.adjust("15 seconds")
-    expect((yield* Fiber.join(read)).message).toBe(
-      `GitHub did not answer within 15s for ${github.url}/README.md`,
-    )
+    expect((yield* Fiber.join(read)).message).toBe(`GitHub did not answer within 15s for ${github.url}/README.md`)
   }),
 )

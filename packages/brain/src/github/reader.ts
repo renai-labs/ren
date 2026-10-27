@@ -148,45 +148,55 @@ export const make = Effect.fnUntraced(function* (hosts: Effect.Effect<Hosts>) {
   return {
     lookup: (url: string, ref?: string) =>
       Effect.gen(function* () {
-      const found = yield* hosts
-      const repository = repositoryOf(found.host, url)
-      if (!repository) return yield* new Failed({ message: `Ren reads only repositories on ${found.host}, not ${url}` })
-      const name = `${repository.owner}/${repository.repo}`
-      const request = HttpClientRequest.post(`${found.git}/${name}.git/git-upload-pack`).pipe(
-        HttpClientRequest.setHeaders({
-          "git-protocol": "version=2",
-          accept: "application/x-git-upload-pack-result",
-        }),
-        HttpClientRequest.bodyText(lsRefs(ref), "application/x-git-upload-pack-request"),
-      )
-      const first = yield* send(url, request)
-      const isRefused = first.status === 401 || first.status === 404
-      const answered = isRefused
-        ? yield* send(
-            url,
-            HttpClientRequest.setHeader(request, "authorization", `Basic ${btoa(`x-access-token:${placeholder}`)}`),
-          )
-        : first
-      if (answered.status !== 200) return yield* new Failed({ message: causeOf(answered, name, url) })
-      const body = yield* answered.arrayBuffer.pipe(Effect.mapError((error) => new Failed({ message: error.message })))
-      const commit = commitOf(listed(new Uint8Array(body)), ref)
-      if (!commit) return yield* new Failed({ message: `The ref ${ref ?? "HEAD"} is not in ${url}` })
-      return {
-        hosts: found,
-        repository,
-        commit,
-        access: isRefused ? ("placeholder" as const) : ("anonymous" as const),
-      }
-    }).pipe(within(url), Effect.withSpan("GitHubReader.lookup")),
-    read: Effect.fn("GitHubReader.read")(function* (lookup: Lookup, path: string) {
-      const repository = `${lookup.repository.owner}/${lookup.repository.repo}`
-      const url = `${lookup.hosts.raw}/${repository}/${lookup.commit}/${path}`
-      const response = yield* send(url, HttpClientRequest.get(url).pipe(HttpClientRequest.setHeaders(bearer(lookup.access))))
-      if (response.status === 404) return Option.none()
-      if (response.status !== 200)
-        return yield* new Failed({ message: `GitHub answered ${response.status} for ${repository}/${path}` })
-      return Option.some(yield* text(response))
-    }, (effect, lookup, path) => within(`https://${lookup.hosts.host}/${lookup.repository.owner}/${lookup.repository.repo}/${path}`)(effect)),
+        const found = yield* hosts
+        const repository = repositoryOf(found.host, url)
+        if (!repository)
+          return yield* new Failed({ message: `Ren reads only repositories on ${found.host}, not ${url}` })
+        const name = `${repository.owner}/${repository.repo}`
+        const request = HttpClientRequest.post(`${found.git}/${name}.git/git-upload-pack`).pipe(
+          HttpClientRequest.setHeaders({
+            "git-protocol": "version=2",
+            accept: "application/x-git-upload-pack-result",
+          }),
+          HttpClientRequest.bodyText(lsRefs(ref), "application/x-git-upload-pack-request"),
+        )
+        const first = yield* send(url, request)
+        const isRefused = first.status === 401 || first.status === 404
+        const answered = isRefused
+          ? yield* send(
+              url,
+              HttpClientRequest.setHeader(request, "authorization", `Basic ${btoa(`x-access-token:${placeholder}`)}`),
+            )
+          : first
+        if (answered.status !== 200) return yield* new Failed({ message: causeOf(answered, name, url) })
+        const body = yield* answered.arrayBuffer.pipe(
+          Effect.mapError((error) => new Failed({ message: error.message })),
+        )
+        const commit = commitOf(listed(new Uint8Array(body)), ref)
+        if (!commit) return yield* new Failed({ message: `The ref ${ref ?? "HEAD"} is not in ${url}` })
+        return {
+          hosts: found,
+          repository,
+          commit,
+          access: isRefused ? ("placeholder" as const) : ("anonymous" as const),
+        }
+      }).pipe(within(url), Effect.withSpan("GitHubReader.lookup")),
+    read: Effect.fn("GitHubReader.read")(
+      function* (lookup: Lookup, path: string) {
+        const repository = `${lookup.repository.owner}/${lookup.repository.repo}`
+        const url = `${lookup.hosts.raw}/${repository}/${lookup.commit}/${path}`
+        const response = yield* send(
+          url,
+          HttpClientRequest.get(url).pipe(HttpClientRequest.setHeaders(bearer(lookup.access))),
+        )
+        if (response.status === 404) return Option.none()
+        if (response.status !== 200)
+          return yield* new Failed({ message: `GitHub answered ${response.status} for ${repository}/${path}` })
+        return Option.some(yield* text(response))
+      },
+      (effect, lookup, path) =>
+        within(`https://${lookup.hosts.host}/${lookup.repository.owner}/${lookup.repository.repo}/${path}`)(effect),
+    ),
     archive: (lookup) => ({
       url: `${lookup.hosts.api}/repos/${lookup.repository.owner}/${lookup.repository.repo}/tarball/${lookup.commit}`,
       headers: bearer(lookup.access),
