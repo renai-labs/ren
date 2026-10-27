@@ -37,7 +37,7 @@ import { Task } from "@ren/core/task"
 import { TaskActivity } from "@ren/core/task/activity"
 import { TaskComment } from "@ren/core/task/comment"
 import { Effect, Layer } from "effect"
-import { HttpEffect, HttpMiddleware, HttpRouter } from "effect/http"
+import { HttpEffect, HttpMiddleware, HttpPlatform, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "./api.js"
 import { Auth } from "./auth.js"
@@ -113,6 +113,15 @@ const settingsAndAgents = Layer.mergeAll(SpaceSettings.layer, OrganizationSettin
   Layer.provide(RepositoryHosts.layer),
 )
 
+// oxlint-disable-next-line ren/no-comments -- Only the Api: MCP routes may answer with SSE, and Bun's compression stream cannot flush each event.
+const Compression = HttpRouter.middleware(
+  Effect.gen(function* () {
+    const platform = yield* HttpPlatform.HttpPlatform
+    return (httpEffect) =>
+      HttpMiddleware.compression()(httpEffect).pipe(Effect.provideService(HttpPlatform.HttpPlatform, platform))
+  }),
+).layer
+
 export const layer = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
@@ -154,7 +163,7 @@ export const layer = Layer.mergeAll(
         SignInHandler,
         InfraHandler,
       ]),
-      Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
+      Layer.provide([ActiveOrganizationLayer, AuthenticationLayer, Compression]),
       Layer.provide([
         Health.layer,
         Invitation.layer,
