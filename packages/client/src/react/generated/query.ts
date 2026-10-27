@@ -114,6 +114,8 @@ import type {
   ChannelMappingRemoveInput,
   ChannelConnectChannelInstallStartInput,
   ChannelConnectChannelPlaceListInput,
+  InfraPlanInput,
+  InfraApplyInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -1230,6 +1232,32 @@ export function make(client: ReturnType<typeof Ren.make>) {
               queryFn: (context) => client["sign-in"]["sign-in-provider"]["list"]({ signal: context.signal }),
             }),
         },
+      },
+    },
+    infra: {
+      pull: {
+        queryKey: () => ["infra", "pull"] as const,
+        queryOptions: () =>
+          queryOptions({
+            queryKey: ["infra", "pull"] as const,
+            queryFn: (context) => client["infra"]["pull"]({ signal: context.signal }),
+          }),
+      },
+      plan: {
+        mutationKey: () => ["infra", "plan"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["infra", "plan"] as const,
+            mutationFn: (input: InfraPlanInput) => client["infra"]["plan"](input),
+          }),
+      },
+      apply: {
+        mutationKey: () => ["infra", "apply"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["infra", "apply"] as const,
+            mutationFn: (input: InfraApplyInput) => client["infra"]["apply"](input),
+          }),
       },
     },
   }

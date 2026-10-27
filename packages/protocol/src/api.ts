@@ -15,6 +15,7 @@ import { OAuthSessionGroup } from "./groups/oauth-session.js"
 import { EnvironmentTemplateGroup } from "./groups/environment-template.js"
 import { EnvironmentProviderGroup } from "./groups/environment-provider.js"
 import { HealthGroup } from "./groups/health.js"
+import { InfraGroup } from "./groups/infra.js"
 import { InvitationGroup } from "./groups/invitation.js"
 import { LabelGroup } from "./groups/label.js"
 import { MeGroup } from "./groups/me.js"
@@ -67,6 +68,7 @@ export const Api = HttpApi.make("server")
   .add(ChannelConnectGroup)
   .add(RepositoryGroup)
   .add(SignInGroup)
+  .add(InfraGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren API",

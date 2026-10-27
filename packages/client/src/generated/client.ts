@@ -232,6 +232,11 @@ import type {
   ChannelConnectChannelPlaceListOutput,
   RepositoryListOutput,
   SignInSignInProviderListOutput,
+  InfraPullOutput,
+  InfraPlanInput,
+  InfraPlanOutput,
+  InfraApplyInput,
+  InfraApplyOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -1968,6 +1973,37 @@ export function make(options: ClientOptions) {
             requestOptions,
           ),
       },
+    },
+    infra: {
+      pull: (requestOptions?: RequestOptions) =>
+        request<InfraPullOutput>(
+          { method: "GET", path: `/infra`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
+          requestOptions,
+        ),
+      plan: (input: InfraPlanInput, requestOptions?: RequestOptions) =>
+        request<InfraPlanOutput>(
+          {
+            method: "POST",
+            path: `/infra/plan`,
+            body: { spec: input["spec"], bindings: input["bindings"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      apply: (input: InfraApplyInput, requestOptions?: RequestOptions) =>
+        request<InfraApplyOutput>(
+          {
+            method: "POST",
+            path: `/infra/apply`,
+            body: { spec: input["spec"], bindings: input["bindings"], digest: input["digest"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
   }
 }

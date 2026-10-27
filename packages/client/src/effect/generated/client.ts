@@ -1513,6 +1513,35 @@ const adaptGroupSignIn = (raw: RawClient["sign-in"]) => ({
   "sign-in-provider": { list: EndpointSignInSignInProviderList(raw) },
 })
 
+const EndpointInfraPull = (raw: RawClient["infra"]) => () => raw["infra.pull"]({}).pipe(Effect.mapError(mapClientError))
+
+type InfraPlanRequest = Parameters<RawClient["infra"]["infra.plan"]>[0]
+type InfraPlanInput = {
+  readonly spec: InfraPlanRequest["payload"]["spec"]
+  readonly bindings: InfraPlanRequest["payload"]["bindings"]
+}
+const EndpointInfraPlan = (raw: RawClient["infra"]) => (input: InfraPlanInput) =>
+  raw["infra.plan"]({ payload: { spec: input["spec"], bindings: input["bindings"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type InfraApplyRequest = Parameters<RawClient["infra"]["infra.apply"]>[0]
+type InfraApplyInput = {
+  readonly spec: InfraApplyRequest["payload"]["spec"]
+  readonly bindings: InfraApplyRequest["payload"]["bindings"]
+  readonly digest: InfraApplyRequest["payload"]["digest"]
+}
+const EndpointInfraApply = (raw: RawClient["infra"]) => (input: InfraApplyInput) =>
+  raw["infra.apply"]({ payload: { spec: input["spec"], bindings: input["bindings"], digest: input["digest"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupInfra = (raw: RawClient["infra"]) => ({
+  pull: EndpointInfraPull(raw),
+  plan: EndpointInfraPlan(raw),
+  apply: EndpointInfraApply(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -1549,6 +1578,7 @@ const adaptClient = (raw: RawClient) => ({
   "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),
   repository: adaptGroupRepository(raw["repository"]),
   "sign-in": adaptGroupSignIn(raw["sign-in"]),
+  infra: adaptGroupInfra(raw["infra"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>
