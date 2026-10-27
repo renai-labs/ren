@@ -1,7 +1,7 @@
 export * as ChatSettings from "./chat-settings.js"
 
 import { BrainSettings } from "@ren/brain/settings"
-import type { PullChat } from "@ren/host-api/ren-host-api"
+import { PullChat } from "@ren/host-api/ren-host-api"
 import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
 import { Context, Effect, Layer, Option, Ref, Result, Schema } from "effect"
@@ -15,9 +15,7 @@ const StoredResolved = Schema.fromJsonString(Schema.Record(Schema.String, BrainS
 
 const StoredLayers = Schema.fromJsonString(SessionSettings.Layers)
 
-const StoredChats = Schema.fromJsonString(
-  Schema.Array(Schema.Struct({ id: Session.ID, agent: Schema.NullOr(Schema.String), archived: Schema.Boolean })),
-)
+const StoredChats = Schema.fromJsonString(Schema.Array(PullChat))
 
 export interface Interface {
   readonly layers: Effect.Effect<BrainSettings.Layers>
@@ -76,7 +74,11 @@ export const layer = Layer.effect(
       resolve: Effect.fn("ChatSettings.resolve")(function* (sessionId, model, lookup) {
         const chat = (yield* Ref.get(chats)).find((each) => each.id === sessionId)
         return yield* Result.match(
-          BrainSettings.resolve(yield* Ref.get(layers), { agent: chat?.agent ?? null, model }, lookup),
+          BrainSettings.resolve(
+            yield* Ref.get(layers),
+            { agent: chat?.agent ?? null, model, drives: chat?.drives },
+            lookup,
+          ),
           { onFailure: Effect.fail, onSuccess: Effect.succeed },
         )
       }),

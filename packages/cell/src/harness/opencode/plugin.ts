@@ -285,7 +285,7 @@ export const make = (
           )
         const folder = context.location.directory
         if (Option.isSome(confinement) && folder.startsWith(`${confinement.value.workspace}/`)) {
-          const allow = [...confinement.value.allow, `${OpenCodeReferences.rootOf(folder)}/`]
+          const allow = [...confinement.value.allow, ...OpenCodeReferences.rootsOf(folder).map((root) => `${root}/`)]
           yield* context.permission.hook("evaluate", (event) =>
             Effect.sync(() => {
               if (event.action !== "external_directory" || event.effect === "deny") return
@@ -455,6 +455,7 @@ export const make = (
             references: Effect.sync(() =>
               Option.match(Ref.getUnsafe(installed), { onNone: () => [], onSome: (chat) => chat.resolved.references }),
             ),
+            drives: () => Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives,
           })
           copySources.push(references.items)
           yield* context.session.hook("context", (event) =>

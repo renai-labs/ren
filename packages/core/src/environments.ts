@@ -9,7 +9,7 @@ import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { and, asc, count, eq, exists, isNull, type SQLWrapper, sql } from "drizzle-orm"
+import { and, asc, count, eq, exists, inArray, isNull, type SQLWrapper, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { EnvironmentProvider } from "./environment-provider.js"
 import { Signer } from "./signer.js"
@@ -30,6 +30,12 @@ export interface Hand {
   readonly url: string
   readonly workspace: Environment.Directory
   readonly egress: boolean
+  readonly canMount: boolean
+}
+
+export interface Capability {
+  readonly canMount: boolean
+  readonly egress: boolean
 }
 
 interface Bound {
@@ -46,6 +52,11 @@ export interface Interface {
     subject: Subject,
     hand: Option.Option<Hand>,
   ) => Effect.Effect<Option.Option<Environment.Directory>>
+  readonly capabilities: (
+    organizationId: Auth.OrganizationID,
+    sessionIds: ReadonlyArray<Session.ID>,
+    hand: Option.Option<Hand>,
+  ) => Effect.Effect<ReadonlyMap<Session.ID, Capability>>
   readonly unbind: (subject: Subject) => Effect.Effect<void>
   readonly access: (
     subject: Subject,
@@ -369,6 +380,42 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         return Option.flatMap(Option.fromNullishOr(rows.at(0)), (row) =>
           Option.map(registry.get(row.provider), () => directoryOf(subject.sessionId)),
+        )
+      }),
+      capabilities: Effect.fn("Environments.capabilities")(function* (
+        organizationId: Auth.OrganizationID,
+        sessionIds: ReadonlyArray<Session.ID>,
+        hand: Option.Option<Hand>,
+      ) {
+        const bound =
+          sessionIds.length === 0
+            ? []
+            : yield* database.db
+                .select({ sessionId: sessions.session_id, provider: templates.provider })
+                .from(sessions)
+                .leftJoin(
+                  templates,
+                  and(
+                    eq(templates.id, sessions.environment_template_id),
+                    isAvailable(organizationId, sessions.space_id),
+                  ),
+                )
+                .where(inArray(sessions.session_id, [...sessionIds]))
+                .pipe(Effect.orDie)
+        const providers = new Map(bound.map((row) => [row.sessionId, row.provider]))
+        return new Map(
+          sessionIds.flatMap((sessionId) => {
+            const capability = providers.has(sessionId)
+              ? Option.map(
+                  Option.flatMap(Option.fromNullishOr(providers.get(sessionId)), registry.get),
+                  (provider) => ({
+                    canMount: provider.canMount,
+                    egress: provider.egress,
+                  }),
+                )
+              : Option.map(hand, (found) => ({ canMount: found.canMount, egress: found.egress }))
+            return Option.isSome(capability) ? [[sessionId, capability.value] as const] : []
+          }),
         )
       }),
       unbind: Effect.fn("Environments.unbind")(function* (subject: Subject) {

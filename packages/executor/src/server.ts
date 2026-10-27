@@ -93,6 +93,10 @@ const operations = EnvironmentApi.Rpcs.toLayer(
       "files.move": (input) => executor.move(input.from, input.to),
       "files.mkdir": (input) => executor.mkdir(input.path),
       "files.unpack": (input) => executor.unpack(input),
+      "drives.mount": (input) =>
+        Effect.fail(
+          new EnvironmentApi.MountError({ path: input.path, message: "this environment cannot mount a drive" }),
+        ),
     })
   }),
 )

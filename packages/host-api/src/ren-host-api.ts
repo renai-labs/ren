@@ -2,6 +2,7 @@ import { AppCatalog } from "@ren/schema/app-catalog"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Channel } from "@ren/schema/channel"
+import { Drive } from "@ren/schema/drive"
 import { Environment } from "@ren/schema/environment"
 import { Memory } from "@ren/schema/memory"
 import { Session } from "@ren/schema/session"
@@ -103,6 +104,9 @@ export const PullChat = Schema.Struct({
   id: Session.ID,
   agent: Schema.NullOr(Schema.String).annotate({ description: "The name of the chat’s primary agent." }),
   archived: Schema.Boolean,
+  drives: Schema.optionalKey(Drive.Availability).annotate({
+    description: "Omitted for a chat without an environment, and by a Ren without drives.",
+  }),
 }).annotate({ identifier: "Host.PullChat" })
 
 export interface PullReply extends Schema.Schema.Type<typeof PullReply> {}

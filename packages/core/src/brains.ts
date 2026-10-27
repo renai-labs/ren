@@ -54,6 +54,7 @@ import { BrainHost } from "./brain-host.js"
 import { ChannelInstallQueries } from "./channel-install/queries.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Credentials } from "./credentials.js"
+import { Drives } from "./drives.js"
 import { Environments } from "./environments.js"
 import { Memory } from "./memory.js"
 import { Models } from "./models.js"
@@ -189,6 +190,7 @@ export const layer = Layer.effect(
     const credentialEnv = yield* CredentialEnv.Service
     const settings = yield* Settings.Service
     const environments = yield* Environments.Service
+    const drives = yield* Drives.Service
     const brainHost = yield* BrainHost.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const prepared = new Map<Brain.ID, number>()
@@ -254,6 +256,7 @@ export const layer = Layer.effect(
         url: hand.url,
         workspace: hand.workspace,
         egress: hand.egress,
+        canMount: hand.canMount,
       }))
     })
 
@@ -511,6 +514,11 @@ export const layer = Layer.effect(
                 .where(inArray(Database.Schema.agent_session.id, [...roots]))
                 .pipe(Effect.orDie)
         const inference = yield* models.inference
+        const capabilities = yield* environments.capabilities(
+          host.organizationId,
+          pulled.chats.map((chat) => chat.id),
+          yield* handOf(host.brainId, host.generation),
+        )
         const channels = yield* database
           .transaction((transaction) => ChannelInstallQueries.servers(transaction, host.organizationId, host.spaceId))
           .pipe(Effect.orDie)
@@ -521,7 +529,16 @@ export const layer = Layer.effect(
           channels,
           layers: pulled.layers,
           memory: yield* Memory.roots(database.db, host).pipe(Effect.orDie),
-          chats: pulled.chats,
+          chats: pulled.chats.map((chat) => {
+            const capability = capabilities.get(chat.id)
+            if (!capability) return chat
+            return {
+              id: chat.id,
+              agent: chat.agent,
+              archived: chat.archived,
+              drives: drives.availability(host, capability),
+            }
+          }),
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
           env: yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation }),
         } satisfies PullReply

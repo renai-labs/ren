@@ -14,11 +14,13 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Database } from "@ren/db/database"
+import { Access } from "../../src/access.js"
 import { BrainClient } from "../../src/brain-client.js"
 import { BrainHost } from "../../src/brain-host.js"
 import { Brains } from "../../src/brains.js"
 import { BrainLifecycle } from "../../src/brain-lifecycle.js"
 import { SandboxEgress } from "../../src/sandbox-egress.js"
+import { Drives } from "../../src/drives.js"
 import { DurableRunner } from "../../src/durable-runner.js"
 import { EnvironmentProvider } from "../../src/environment-provider.js"
 import { Environments } from "../../src/environments.js"
@@ -26,6 +28,7 @@ import type { Models } from "../../src/models.js"
 import { SandboxProvider } from "../../src/sandbox-provider.js"
 import { LocalSandbox } from "../../src/sandbox-provider/local.js"
 import { Settings } from "../../src/settings.js"
+import { TestDrives } from "./drives.js"
 import { RenHostApiTest } from "./ren-host-api.js"
 import { Seed } from "./seed.js"
 import { Signer } from "../../src/signer.js"
@@ -106,6 +109,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
     Layer.provide(Settings.layer),
     Layer.provide(options.models),
     Layer.provide(options.environments),
+    Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(
       ConfigProvider.layer(
@@ -113,6 +117,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
           BRAIN_KEYS: brainKeys,
           ENVIRONMENT_KEYS: environmentKeys,
           REN_URL: `http://127.0.0.1:${options.port}`,
+          ...TestDrives.config,
           ...options.config,
         }),
       ),
@@ -290,10 +295,16 @@ export const cellLayerWith =
       Layer.provide(Settings.layer),
       Layer.provide(models),
       Layer.provide(environments),
+      Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(
         ConfigProvider.layer(
-          ConfigProvider.fromUnknown({ BRAIN_KEYS: brainKeys, ENVIRONMENT_KEYS: environmentKeys, ...config }),
+          ConfigProvider.fromUnknown({
+            BRAIN_KEYS: brainKeys,
+            ENVIRONMENT_KEYS: environmentKeys,
+            ...TestDrives.config,
+            ...config,
+          }),
         ),
       ),
     )

@@ -2,9 +2,11 @@ export * as OpenCodeReferences from "./references.js"
 
 import { AbsolutePath } from "@opencode/client/effect"
 import type { Plugin } from "@opencode/plugin/effect"
+import { Drives } from "@ren/brain/reference/drives"
 import { References } from "@ren/brain/reference/references"
 import { Repositories } from "@ren/brain/reference/repositories"
 import { Environment } from "@ren/schema/environment"
+import type { Drive } from "@ren/schema/drive"
 import type { Reference } from "@ren/schema/reference"
 import { Effect } from "effect"
 import type { OpenCodeCopies } from "./copies.js"
@@ -12,19 +14,22 @@ import type { OpenCodeCopies } from "./copies.js"
 const writes = new Set(["edit", "write", "patch"])
 
 // oxlint-disable-next-line ren/no-comments -- R2, R49: one root in the folder that every session on the environment shares.
-export const rootOf = (directory: string) => `${Environment.sharedDirectoryOf({ directory })}/${Repositories.root}`
+export const rootsOf = (directory: string) =>
+  [Repositories.root, Drives.root].map((root) => `${Environment.sharedDirectoryOf({ directory })}/${root}`)
 
 export const make = Effect.fnUntraced(function* (input: {
   readonly context: Pick<Plugin.Context, "reference" | "session" | "permission" | "location">
   readonly hasEnvironment: boolean
   readonly repositories: Repositories.Interface
   readonly references: Effect.Effect<ReadonlyArray<Reference.Info>>
+  readonly drives: () => Drive.Availability | undefined
 }) {
   // oxlint-disable-next-line ren/no-comments -- R7: a chat without an environment cannot read a reference, so it gets none.
   if (!input.hasEnvironment) return { refresh: Effect.void, items: (): ReadonlyArray<OpenCodeCopies.Item> => [] }
   const shared = Environment.sharedDirectoryOf({ directory: input.context.location.directory })
   const sources = [
     yield* input.repositories.chat({ references: input.references, changed: input.context.reference.reload() }),
+    Drives.chat({ drives: input.drives, changed: input.context.reference.reload() }),
   ]
   const ready = () =>
     sources.flatMap((source) =>
@@ -79,7 +84,7 @@ export const make = Effect.fnUntraced(function* (input: {
         path: each.path,
         copy: each.prepared.copy,
         note: (message) =>
-          `The reference ${each.prepared.alias} is not on the environment: ${message}. The next environment tool copies it again.`,
+          `The reference ${each.prepared.alias} is not on the environment: ${message}. The next environment tool tries again.`,
       })),
   }
 })

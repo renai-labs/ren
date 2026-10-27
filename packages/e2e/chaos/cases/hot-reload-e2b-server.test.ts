@@ -35,6 +35,7 @@ import path from "node:path"
 import { Platform } from "../lib/platform.js"
 import { LiteLLM } from "../lib/provider/litellm.js"
 import { Wait } from "../lib/wait.js"
+import { Drives } from "@ren/core/drives"
 
 // oxlint-disable-next-line ren/no-comments -- The E2B brain reaches the real Ren server and LiteLLM through public tunnels to these local ports.
 const renPort = Number(process.env.CHAOS_REN_TUNNEL_PORT ?? 4111)
@@ -220,8 +221,11 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
                 .pipe(Layer.provide(Signer.layerLocal))
                 .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([]))),
             ),
+            Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
             Layer.provide(FetchHttpClient.layer),
-            Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ ...shared, ...process.env }))),
+            Layer.provide(
+              ConfigProvider.layer(ConfigProvider.fromUnknown({ ...TestDrives.config, ...shared, ...process.env })),
+            ),
           ),
         ),
         Layer.provideMerge(databaseLayer),

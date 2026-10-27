@@ -516,6 +516,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               {
                 agent: chat.agent,
                 model: Option.fromUndefinedOr(picked),
+                drives: chat.drives,
               },
               lookup,
             )

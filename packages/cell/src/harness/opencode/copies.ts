@@ -3,7 +3,7 @@ export * as OpenCodeCopies from "./copies.js"
 import type { Plugin } from "@opencode/plugin/effect"
 import { Tool } from "@opencode/schema/tool"
 import type { EnvironmentCopies } from "@ren/brain/environment/copies"
-import { Effect, Option, Semaphore } from "effect"
+import { Effect, Option, Predicate, Semaphore } from "effect"
 import { OpenCodeEnvironmentTools } from "./environment-tools.js"
 
 export interface Item extends EnvironmentCopies.Item {
@@ -38,7 +38,11 @@ export const make = Effect.fnUntraced(function* (input: {
       if (!note) return
       notes.delete(event.id)
       if (event.status === "error") {
-        event.error = new Tool.Error({ message: `${event.error.message}\n\n${note}` })
+        event.error = new Tool.Error({
+          message: `${event.error.message}\n\n${note}`,
+          ...(Predicate.isNotUndefined(event.error.error) && { error: event.error.error }),
+          ...(event.error.metadata && { metadata: event.error.metadata }),
+        })
         return
       }
       const content = event.result.content
