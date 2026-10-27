@@ -14418,8 +14418,8 @@
       },
       "Schedule.PauseReason": {
         "type": "string",
-        "enum": ["user", "owner_left", "agent_removed"],
-        "description": "`user`: a person paused it. `owner_left`: its owner left the space. `agent_removed`: its agent left the space."
+        "enum": ["user", "owner_left", "agent_removed", "failing"],
+        "description": "`user`: a person paused it. `owner_left`: its owner left the space. `agent_removed`: its agent left the space. `failing`: its last 5 runs failed."
       },
       "Schedule.Recurring": {
         "type": "object",

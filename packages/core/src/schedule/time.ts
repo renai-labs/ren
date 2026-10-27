@@ -84,3 +84,34 @@ export const latestFire = (row: Row, now: Date) => {
     },
   )
 }
+
+// oxlint-disable-next-line ren/no-comments -- S33: the shortest time between the next fires of a cron, over its next 100 fires.
+export const shortestGap = (row: Pick<Row, "cron" | "time_zone" | "until_at" | "run_at">, after: Date) =>
+  Array.from({ length: 100 }).reduce<{ readonly last: Option.Option<Date>; readonly gap: number }>(
+    (state) =>
+      Option.match(
+        Option.flatMap(state.last, (last) => nextFire(row, last)),
+        {
+          onNone: () => ({ last: Option.none(), gap: state.gap }),
+          onSome: (fire) => ({
+            last: Option.some(fire),
+            gap: Option.match(state.last, {
+              onNone: () => state.gap,
+              onSome: (last) => Math.min(state.gap, fire.getTime() - last.getTime()),
+            }),
+          }),
+        },
+      ),
+    { last: nextFire(row, after), gap: Number.POSITIVE_INFINITY },
+  ).gap
+
+// oxlint-disable-next-line ren/no-comments -- S15: a timed run of a cron retries until the cron's next fire after the run was claimed (a missed fire is claimed late, S2); a one-time or manual run for an hour.
+export const deadlineOf = (
+  row: Pick<Row, "cron" | "time_zone" | "until_at" | "run_at">,
+  run: { readonly scheduledAt: Date; readonly claimedAt: Date; readonly trigger: "timed" | "manual" },
+) => {
+  const from = run.claimedAt.getTime() > run.scheduledAt.getTime() ? run.claimedAt : run.scheduledAt
+  const hourLater = new Date(from.getTime() + hour)
+  if (run.trigger === "manual" || row.run_at) return hourLater
+  return Option.getOrElse(nextFire({ ...row, until_at: null }, from), () => hourLater)
+}

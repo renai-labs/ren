@@ -18,7 +18,7 @@ CREATE TABLE "schedule" (
 	"archived_at" timestamp,
 	CONSTRAINT "schedule_when_check" CHECK (("cron" is null) <> ("run_at" is null)),
 	CONSTRAINT "schedule_time_zone_check" CHECK (("cron" is null) = ("time_zone" is null)),
-	CONSTRAINT "schedule_paused_reason_check" CHECK ("paused_reason" in ('user', 'owner_left', 'agent_removed'))
+	CONSTRAINT "schedule_paused_reason_check" CHECK ("paused_reason" in ('user', 'owner_left', 'agent_removed', 'failing'))
 );
 --> statement-breakpoint
 CREATE TABLE "schedule_run" (

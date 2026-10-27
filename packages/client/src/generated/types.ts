@@ -196,7 +196,7 @@ export type ScheduleOnce = { at: string }
 
 export type ScheduleStatus = "active" | "paused" | "ended"
 
-export type SchedulePauseReason = "user" | "owner_left" | "agent_removed"
+export type SchedulePauseReason = "user" | "owner_left" | "agent_removed" | "failing"
 
 export type ScheduleRunID = string
 

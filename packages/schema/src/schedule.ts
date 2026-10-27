@@ -1,6 +1,6 @@
 export * as Schedule from "./schedule.js"
 
-import { DateTime, Effect, Option, Schema } from "effect"
+import { DateTime, Duration, Effect, Option, Schema } from "effect"
 import { Agent } from "./agent.js"
 import { Auth } from "./auth.js"
 import { Identifier } from "./identifier.js"
@@ -90,11 +90,17 @@ export type TargetInput = typeof TargetInput.Type
 export const Status = Schema.Literals(["active", "paused", "ended"]).annotate({ identifier: "Schedule.Status" })
 export type Status = typeof Status.Type
 
-export const PauseReason = Schema.Literals(["user", "owner_left", "agent_removed"]).annotate({
+export const PauseReason = Schema.Literals(["user", "owner_left", "agent_removed", "failing"]).annotate({
   identifier: "Schedule.PauseReason",
   description:
-    "`user`: a person paused it. `owner_left`: its owner left the space. `agent_removed`: its agent left the space.",
+    "`user`: a person paused it. `owner_left`: its owner left the space. `agent_removed`: its agent left the space. `failing`: its last 5 runs failed.",
 })
+
+export const maximumActive = 50
+
+export const minimumInterval = Duration.minutes(5)
+
+export const failuresToPause = 5
 export type PauseReason = typeof PauseReason.Type
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}

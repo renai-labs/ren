@@ -16,6 +16,7 @@ import { Brains } from "../src/brains.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { ScheduleTime } from "../src/schedule/time.js"
 import { ScheduleTrigger } from "../src/schedule-trigger.js"
+import { ScheduleRuns } from "../src/schedule/runs.js"
 import { Schedules } from "../src/schedules.js"
 import { SessionRunner } from "../src/session/runner.js"
 import { testEffect } from "./lib/effect.js"
@@ -37,12 +38,15 @@ class Chats extends Context.Service<
     readonly calls: Queue.Queue<Call>
     readonly busy: Set<Session.ID>
     readonly refuse: { value: boolean }
+    readonly rejected: Array<(sessionId: Session.ID) => Effect.Effect<void>>
   }
 >()("@ren/core/test/Schedules/Chats") {}
 
 const chats = Layer.effect(
   Chats,
-  Effect.map(Queue.unbounded<Call>(), (calls) => Chats.of({ calls, busy: new Set(), refuse: { value: false } })),
+  Effect.map(Queue.unbounded<Call>(), (calls) =>
+    Chats.of({ calls, busy: new Set(), refuse: { value: false }, rejected: [] }),
+  ),
 )
 
 const runner = Layer.effect(
@@ -77,7 +81,7 @@ const runner = Layer.effect(
           return { messageId: input.messageId }
         }),
       get: (sessionId) =>
-        created.has(sessionId)
+        created.has(sessionId) || recorded.busy.has(sessionId)
           ? Effect.succeed({
               id: sessionId,
               rootId: sessionId,
@@ -94,6 +98,7 @@ const runner = Layer.effect(
               updatedAt: null,
             })
           : Effect.fail(new SessionRunner.NotFound({ message: "Session not found." })),
+      onStartRejected: (listener) => Effect.sync(() => void recorded.rejected.push(listener)),
     })
   }),
 )
@@ -352,33 +357,41 @@ describe("Schedules", () => {
       }),
   )
 
-  it.live("a person's this-chat, a past time, a past end and a cron that never matches are refused (S5, S20)", () =>
-    Effect.gen(function* () {
-      const schedules = yield* Schedules.Service
-      const t = yield* team
-      const base = { spaceId: t.spaceId, name: "Bad", message: "Bad." }
-      const thisChat = yield* schedules
-        .create(t.ada, decodeCreate({ ...base, when: daily, target: "this-chat" }))
-        .pipe(Effect.flip)
-      const past = yield* schedules
-        .create(t.ada, decodeCreate({ ...base, when: { at: DateTime.makeUnsafe("2020-01-01T00:00:00Z") } }))
-        .pipe(Effect.flip)
-      const ended = yield* schedules
-        .create(
-          t.ada,
-          decodeCreate({ ...base, when: { ...daily, until: DateTime.makeUnsafe("2020-01-01T00:00:00Z") } }),
-        )
-        .pipe(Effect.flip)
-      const never = yield* schedules
-        .create(t.ada, decodeCreate({ ...base, when: { cron: "0 0 30 2 *", timeZone: "UTC" } }))
-        .pipe(Effect.flip)
-      expect([thisChat, past, ended, never].map((error) => [error._tag, "field" in error && error.field])).toEqual([
-        ["Primitive.Invalid", "target"],
-        ["Primitive.Invalid", "when"],
-        ["Primitive.Invalid", "when"],
-        ["Primitive.Invalid", "when"],
-      ])
-    }),
+  it.live(
+    "a person's this-chat, a past time, a past end, fires less than 5 minutes apart and a cron that never matches are refused (S5, S20, S33)",
+    () =>
+      Effect.gen(function* () {
+        const schedules = yield* Schedules.Service
+        const t = yield* team
+        const base = { spaceId: t.spaceId, name: "Bad", message: "Bad." }
+        const thisChat = yield* schedules
+          .create(t.ada, decodeCreate({ ...base, when: daily, target: "this-chat" }))
+          .pipe(Effect.flip)
+        const past = yield* schedules
+          .create(t.ada, decodeCreate({ ...base, when: { at: DateTime.makeUnsafe("2020-01-01T00:00:00Z") } }))
+          .pipe(Effect.flip)
+        const ended = yield* schedules
+          .create(
+            t.ada,
+            decodeCreate({ ...base, when: { ...daily, until: DateTime.makeUnsafe("2020-01-01T00:00:00Z") } }),
+          )
+          .pipe(Effect.flip)
+        const often = yield* schedules
+          .create(t.ada, decodeCreate({ ...base, when: { cron: "0,2 9 * * *", timeZone: "UTC" } }))
+          .pipe(Effect.flip)
+        const never = yield* schedules
+          .create(t.ada, decodeCreate({ ...base, when: { cron: "0 0 30 2 *", timeZone: "UTC" } }))
+          .pipe(Effect.flip)
+        expect(
+          [thisChat, past, ended, often, never].map((error) => [error._tag, "field" in error && error.field]),
+        ).toEqual([
+          ["Primitive.Invalid", "target"],
+          ["Primitive.Invalid", "when"],
+          ["Primitive.Invalid", "when"],
+          ["Primitive.Invalid", "when"],
+          ["Primitive.Invalid", "when"],
+        ])
+      }),
   )
 
   it.live(
@@ -469,7 +482,13 @@ describe("Schedules", () => {
       yield* due(created.id, Cron.prev(Cron.parseUnsafe(hourly.cron, hourly.timeZone), new Date()))
       yield* schedules.tick
       yield* Queue.take(recorded.calls)
-      yield* due(created.id, new Date(Date.now() - 1000))
+      const old = new Date(Date.now() - 3 * 3_600_000)
+      yield* Effect.flatMap(Database.Service, (database) =>
+        database.db
+          .update(Database.Schema.schedule_run)
+          .set({ scheduled_at: old, created_at: old })
+          .where(eq(Database.Schema.schedule_run.schedule_id, created.id)),
+      )
       expect(yield* settled(created.id)).toMatchObject([{ status: "failed", error: "The brain is starting." }])
     }),
   )
@@ -543,6 +562,145 @@ describe("Schedules", () => {
       yield* schedules.tick
       expect(yield* settled(created.id)).toMatchObject([{ status: "skipped", reason: "chat_archived" }])
       expect((yield* rowOf(created.id)).archived_at).not.toBeNull()
+    }),
+  )
+
+  it.live(
+    "a start that the brain refuses later fails its run, and the fifth failure in a row pauses the schedule (S32, S36)",
+    () =>
+      Effect.gen(function* () {
+        const schedules = yield* Schedules.Service
+        const database = yield* Database.Service
+        const recorded = yield* Chats
+        const t = yield* team
+        const created = yield* schedules.create(
+          t.ada,
+          decodeCreate({ spaceId: t.spaceId, name: "Digest", message: "Digest.", when: hourly }),
+        )
+        yield* database.db.insert(Database.Schema.schedule_run).values(
+          [5, 4, 3, 2].map((hours) => ({
+            id: ScheduleRun.ID.create(),
+            schedule_id: created.id,
+            scheduled_at: new Date(Date.now() - hours * 3_600_000),
+            trigger: "timed" as const,
+            status: "failed" as const,
+            error: "The brain is starting.",
+            session_id: Session.ID.create(),
+            message_id: Session.MessageID.create(),
+          })),
+        )
+        yield* schedules.run(t.ada, created.id, {})
+        const call = yield* Queue.take(recorded.calls)
+        if (call.kind !== "create") return yield* Effect.die(new Error("Run now sent to a chat"))
+        yield* settled(created.id, 5)
+        yield* Effect.forEach(recorded.rejected, (listener) => listener(call.input.sessionId), { discard: true })
+        const runs = yield* runsOf(created.id)
+        expect(runs.find((row) => row.session_id === call.input.sessionId)).toMatchObject({
+          status: "failed",
+          error: "The brain refused to start the chat.",
+        })
+        expect(yield* schedules.get(t.ada, created.id)).toMatchObject({ status: "paused", pausedReason: "failing" })
+      }),
+  )
+
+  it.live("a run still pending 5 minutes past its deadline fails, so the next fire starts (S34)", () =>
+    Effect.gen(function* () {
+      const schedules = yield* Schedules.Service
+      const database = yield* Database.Service
+      const recorded = yield* Chats
+      const t = yield* team
+      const created = yield* schedules.create(
+        t.ada,
+        decodeCreate({ spaceId: t.spaceId, name: "Digest", message: "Digest.", when: hourly }),
+      )
+      const latest = Cron.prev(Cron.parseUnsafe(hourly.cron, hourly.timeZone), new Date())
+      const lost = ScheduleRun.ID.create()
+      const old = new Date(latest.getTime() - 2 * 3_600_000)
+      yield* database.db.insert(Database.Schema.schedule_run).values({
+        id: lost,
+        schedule_id: created.id,
+        scheduled_at: old,
+        created_at: old,
+        trigger: "timed",
+        session_id: Session.ID.create(),
+        message_id: Session.MessageID.create(),
+      })
+      yield* DurableRunner.ensure(ScheduleRuns.FireRun, { runId: lost })
+      yield* Queue.take(recorded.calls)
+      yield* settled(created.id)
+      yield* database.db
+        .update(Database.Schema.schedule_run)
+        .set({ status: "pending" })
+        .where(eq(Database.Schema.schedule_run.id, lost))
+      yield* due(created.id, latest)
+      yield* schedules.tick
+      const runs = yield* settled(created.id, 2)
+      expect(runs.find((row) => row.id === lost)).toMatchObject({ status: "failed", error: "The run did not finish." })
+      expect(runs.find((row) => row.scheduled_at.getTime() === latest.getTime())).toMatchObject({ status: "started" })
+    }),
+  )
+
+  it.live("a space holds at most 50 schedules that are not archived or ended (S35)", () =>
+    Effect.gen(function* () {
+      const schedules = yield* Schedules.Service
+      const database = yield* Database.Service
+      const t = yield* team
+      yield* database.db.insert(Database.Schema.schedule).values(
+        Array.from({ length: Schedule.maximumActive }, (_, index) => ({
+          id: Schedule.ID.create(),
+          organization_id: t.organizationId,
+          space_id: t.spaceId,
+          name: `Digest ${index}`,
+          owner_id: t.createdBy,
+          cron: "0 9 * * *",
+          time_zone: "UTC",
+          message: "Digest.",
+          next_run_at: new Date(Date.now() + 3_600_000),
+        })),
+      )
+      const refused = yield* schedules
+        .create(t.ada, decodeCreate({ spaceId: t.spaceId, name: "One more", message: "More.", when: daily }))
+        .pipe(Effect.flip)
+      expect(refused).toMatchObject({ _tag: "Primitive.Conflict" })
+    }),
+  )
+
+  it.live("a recurring schedule skips a fire while its chat works, and a one-time follow-up still queues (S37)", () =>
+    Effect.gen(function* () {
+      const schedules = yield* Schedules.Service
+      const recorded = yield* Chats
+      const t = yield* team
+      const sessionId = yield* Seed.session({
+        organizationId: t.organizationId,
+        spaceId: t.spaceId,
+        createdBy: t.createdBy,
+      })
+      recorded.busy.add(sessionId)
+      const recurring = yield* schedules.create(
+        t.ada,
+        decodeCreate({ spaceId: t.spaceId, name: "Ping", message: "Ping.", when: hourly, target: { sessionId } }),
+      )
+      const once = yield* schedules.create(
+        t.ada,
+        decodeCreate({
+          spaceId: t.spaceId,
+          name: "Follow up",
+          message: "Follow up.",
+          when: { in: "30 minutes" },
+          target: { sessionId },
+        }),
+      )
+      yield* due(recurring.id, Cron.prev(Cron.parseUnsafe(hourly.cron, hourly.timeZone), new Date()))
+      yield* Effect.flatMap(Database.Service, (database) =>
+        database.db
+          .update(Database.Schema.schedule)
+          .set({ run_at: new Date(Date.now() - 1000), next_run_at: new Date(Date.now() - 1000) })
+          .where(eq(Database.Schema.schedule.id, once.id)),
+      )
+      yield* schedules.tick
+      expect(yield* settled(recurring.id)).toMatchObject([{ status: "skipped", reason: "previous_run_busy" }])
+      expect(yield* settled(once.id)).toMatchObject([{ status: "started" }])
+      expect(yield* Queue.take(recorded.calls)).toMatchObject({ kind: "send", input: { sessionId, delivery: "queue" } })
     }),
   )
 
