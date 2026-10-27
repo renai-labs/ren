@@ -131,9 +131,10 @@
       "name": "@renai-labs/cli",
       "version": "0.0.0",
       "bin": {
-        "ren": "./src/index.ts",
+        "ren2": "./src/index.ts",
       },
       "dependencies": {
+        "@effect/platform-bun": "catalog:",
         "@ren/schema": "workspace:*",
         "@renai-labs/sdk": "workspace:*",
         "effect": "catalog:",

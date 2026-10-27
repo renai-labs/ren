@@ -5,7 +5,7 @@
   "type": "module",
   "license": "UNLICENSED",
   "bin": {
-    "ren": "./src/index.ts"
+    "ren2": "./src/index.ts"
   },
   "exports": {
     "./*": "./src/*.ts"
@@ -23,6 +23,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
+    "@effect/platform-bun": "catalog:",
     "@ren/schema": "workspace:*",
     "@renai-labs/sdk": "workspace:*",
     "effect": "catalog:"
