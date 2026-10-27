@@ -18,7 +18,7 @@ const line = (change: Infra.Change) =>
     change.fields.length > 0 ? `: ${change.fields.join(", ")}` : "",
   ].join("")
 
-export const render = (plan: Infra.Plan) => [
+export const render = (plan: Pick<Infra.Plan, "changes">) => [
   ...plan.changes.filter((change) => change.action === "archive").map(line),
   ...plan.changes.filter((change) => change.action !== "archive").map(line),
 ]
@@ -53,23 +53,16 @@ export const gate = (
 
 const planned = Effect.fn("InfraCommand.planned")(function* (root: string) {
   const result = yield* Effect.tryPromise(() => InfraFolder.validate(root))
-  if (result.kind === "invalid") {
-    return yield* Effect.fail(new Error(result.problems.map(InfraFolder.format).join("\n")))
-  }
+  if (result.kind === "invalid") return yield* Output.Failure.problems(result.problems)
   if (!result.bindings) {
-    return yield* Effect.fail(new Error("deploy.yaml: Missing. It names the organization: organization: <slug>."))
+    return yield* new Output.Failure({
+      message: "deploy.yaml: Missing. It names the organization: organization: <slug>.",
+    })
   }
   const connection = yield* Connection.Service
-  const output = yield* Output.Service
   const client = yield* connection.client
   const input = { spec: result.spec, bindings: result.bindings }
   const plan = yield* client.infra.plan(input)
-  yield* output.result(render(plan).join("\n") || "No changes.")
-  if (plan.problems.length > 0) {
-    return yield* Effect.fail(
-      new Error(plan.problems.map((problem) => `${problem.path}: ${problem.message}`).join("\n")),
-    )
-  }
   return { input, plan, organization: result.bindings.organization }
 })
 
@@ -77,11 +70,9 @@ export const validate = Effect.fn("InfraCommand.validate")(function* (
   input: Command.Command.Config.Infer<typeof Commands.folder>,
 ) {
   const result = yield* Effect.tryPromise(() => InfraFolder.validate(resolve(input.folder)))
-  if (result.kind === "invalid") {
-    return yield* Effect.fail(new Error(result.problems.map(InfraFolder.format).join("\n")))
-  }
+  if (result.kind === "invalid") return yield* Output.Failure.problems(result.problems)
   const output = yield* Output.Service
-  yield* output.result("The spec is valid.")
+  yield* output.result(Schema.Struct({ valid: Schema.Literal(true) }), { valid: true }, "The spec is valid.")
 })
 
 export const plan = Effect.fn("InfraCommand.plan")(function* (
@@ -89,28 +80,43 @@ export const plan = Effect.fn("InfraCommand.plan")(function* (
 ) {
   const result = yield* planned(resolve(input.folder))
   const output = yield* Output.Service
-  if (result.plan.changes.length > 0) yield* output.result(`\nDigest: ${result.plan.digest}`)
+  const changes = render(result.plan)
+  yield* output.result(
+    Infra.Plan,
+    result.plan,
+    changes.length > 0 ? [...changes, "", `Digest: ${result.plan.digest}`].join("\n") : "No changes.",
+  )
+  if (result.plan.problems.length > 0) return yield* Output.Failure.problems(result.plan.problems)
 })
 
 export const apply = Effect.fn("InfraCommand.apply")(function* (
   input: Command.Command.Config.Infer<typeof Commands.applyOptions>,
 ) {
   const result = yield* planned(resolve(input.folder))
+  if (result.plan.problems.length > 0) return yield* Output.Failure.problems(result.plan.problems)
   const output = yield* Output.Service
   const decision = gate(result.plan, {
     interactive: output.interactive,
     allowArchive: input.allowArchive,
     ...(Option.isSome(input.plan) ? { digest: input.plan.value } : {}),
   })
-  if (decision.kind === "done") return yield* output.result(decision.message)
-  if (decision.kind === "refuse") return yield* Effect.fail(new Error(decision.message))
-  if (decision.kind === "confirm" && !(yield* output.confirm(result.organization))) {
-    return yield* Effect.fail(new Error("Apply cancelled."))
+  if (decision.kind === "done") return yield* output.result(Infra.Applied, { changes: [] }, decision.message)
+  if (decision.kind === "refuse") return yield* new Output.Failure({ message: decision.message })
+  if (decision.kind === "confirm") {
+    yield* output.diagnostic(render(result.plan).join("\n"))
+    if (!(yield* output.confirm(result.organization))) return yield* new Output.Failure({ message: "Apply cancelled." })
   }
   const connection = yield* Connection.Service
   const client = yield* connection.client
   const applied = yield* client.infra.apply({ ...result.input, digest: result.plan.digest })
-  yield* output.result(`Applied ${applied.changes.length} ${applied.changes.length === 1 ? "change" : "changes"}.`)
+  yield* output.result(
+    Infra.Applied,
+    applied,
+    [
+      ...render(applied),
+      `Applied ${applied.changes.length} ${applied.changes.length === 1 ? "change" : "changes"}.`,
+    ].join("\n"),
+  )
 })
 
 export const pull = Effect.fn("InfraCommand.pull")(function* (
@@ -123,5 +129,5 @@ export const pull = Effect.fn("InfraCommand.pull")(function* (
   const encoded = yield* Schema.encodeEffect(Infra.Pulled)(pulled)
   const root = resolve(input.folder)
   yield* Effect.tryPromise(() => InfraFolder.write(root, encoded))
-  yield* output.result(`Pulled the org spec into ${root}.`)
+  yield* output.result(Schema.Struct({ folder: Schema.String }), { folder: root }, `Pulled the org spec into ${root}.`)
 })

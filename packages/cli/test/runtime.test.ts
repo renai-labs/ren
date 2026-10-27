@@ -3,6 +3,25 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { ApiError } from "@renai-labs/sdk/effect"
+import { Runtime } from "../src/runtime.js"
+import { Output } from "../src/services/output.js"
+
+test("an API error keeps its tag and fields; anything else the CLI reports is a CliError", () => {
+  expect(Runtime.describe(new ApiError.NotFoundError({ message: "No such space.", resource: "space" }))).toEqual({
+    type: "NotFoundError",
+    message: "No such space.",
+    resource: "space",
+  })
+  expect(Runtime.describe(new Output.Failure({ message: "Apply cancelled." }))).toEqual({
+    type: "CliError",
+    message: "Apply cancelled.",
+  })
+  expect(Runtime.describe(new Error("Timed out waiting for sign-in."))).toEqual({
+    type: "CliError",
+    message: "Timed out waiting for sign-in.",
+  })
+})
 
 test("interrupting as soon as a command starts releases its scope without an error report", async () => {
   const root = await mkdtemp(join(tmpdir(), "ren2-runtime-"))

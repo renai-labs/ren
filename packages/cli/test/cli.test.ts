@@ -3,6 +3,7 @@ import { mkdtemp } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { Schema } from "effect"
 
 const ren = async (args: ReadonlyArray<string>, options: { cwd?: string; env?: Record<string, string> } = {}) => {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../src/index.ts", import.meta.url)), ...args], {
@@ -26,13 +27,28 @@ const folder = async (files: Record<string, string>) => {
   return root
 }
 
-describe("ren2", () => {
-  test("fails on an unknown command", async () => {
-    const result = await ren(["nope"])
+const failure = (stderr: string) =>
+  Schema.decodeUnknownSync(
+    Schema.fromJsonString(
+      Schema.Struct({
+        error: Schema.StructWithRest(Schema.Struct({ type: Schema.String, message: Schema.String }), [
+          Schema.Record(Schema.String, Schema.Unknown),
+        ]),
+      }),
+    ),
+  )(stderr).error
 
-    expect(result.code).toBe(1)
-    expect(result.stdout).toBe("")
-    expect(result.stderr).toContain("nope")
+describe("ren2", () => {
+  test("a usage error exits 2 with one JSON error when piped, and with help and the problem in a terminal format", async () => {
+    const piped = await ren(["nope"])
+    const pretty = await ren(["nope", "--output", "pretty"])
+
+    expect(piped.code).toBe(2)
+    expect(piped.stdout).toBe("")
+    expect(failure(piped.stderr)).toMatchObject({ type: "UsageError", message: expect.stringContaining("nope") })
+    expect(pretty.code).toBe(2)
+    expect(pretty.stderr).toContain("USAGE")
+    expect(pretty.stderr).toContain("nope")
   })
 
   test("root and nested help work without a connection and use the ren2 name", async () => {
@@ -54,18 +70,31 @@ describe("ren2", () => {
     const extra = await ren(["infra", "validate", root, "extra"])
     const flag = await ren(["infra", "validate", root, "--allow-archive"])
 
-    expect(extra.code).toBe(1)
+    expect(extra.code).toBe(2)
     expect(extra.stdout).toBe("")
     expect(extra.stderr).toContain("extra")
-    expect(flag.code).toBe(1)
+    expect(flag.code).toBe(2)
     expect(flag.stdout).toBe("")
     expect(flag.stderr).toContain("--allow-archive")
   })
 
-  test("connection errors are reported once on stderr", async () => {
-    const result = await ren(["health"])
+  test("an error is reported once on stderr, as JSON when piped and as its message in pretty format", async () => {
+    const piped = await ren(["health"])
+    const pretty = await ren(["--output", "pretty", "health"])
 
-    expect(result).toEqual({ code: 1, stdout: "", stderr: "Invalid REN_URL: not-a-url\n" })
+    expect(piped).toEqual({
+      code: 1,
+      stdout: "",
+      stderr: '{"error":{"type":"CliError","message":"Invalid REN_URL: not-a-url"}}\n',
+    })
+    expect(pretty).toEqual({ code: 1, stdout: "", stderr: "Invalid REN_URL: not-a-url\n" })
+  })
+
+  test("says which server it could not reach", async () => {
+    const result = await ren(["health", "--output", "pretty"], { env: { REN_URL: "http://127.0.0.1:9" } })
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toBe("Could not reach http://127.0.0.1:9.\n")
   })
 
   test("uses stored credentials only for the server that issued them", async () => {
@@ -77,25 +106,38 @@ describe("ren2", () => {
 
     const result = await ren(["whoami"], { env: { XDG_CONFIG_HOME: config, REN_URL: "http://127.0.0.1:9" } })
 
-    expect(result).toEqual({ code: 1, stdout: "", stderr: "Not logged in to http://127.0.0.1:9. Run ren2 login.\n" })
+    expect(result.code).toBe(1)
+    expect(failure(result.stderr)).toEqual({
+      type: "CliError",
+      message: "Not logged in to http://127.0.0.1:9. Run ren2 login.",
+    })
   })
 
-  test("infra validate reads .ren by default and says when the spec is valid", async () => {
+  test("infra validate reads .ren by default and prints the result in the chosen format", async () => {
     const root = await folder({
       ".ren/org.yaml": "settings: {}\n",
       ".ren/spaces/engineering/space.yaml": "name: Engineering\n",
     })
 
-    const result = await ren(["infra", "validate"], { cwd: root })
+    const piped = await ren(["infra", "validate"], { cwd: root })
+    const pretty = await ren(["infra", "validate", "--output", "pretty"], { cwd: root })
 
-    expect(result).toEqual({ code: 0, stdout: "The spec is valid.\n", stderr: "" })
+    expect(piped).toEqual({ code: 0, stdout: '{\n  "valid": true\n}\n', stderr: "" })
+    expect(pretty).toEqual({ code: 0, stdout: "The spec is valid.\n", stderr: "" })
   })
 
-  test("infra validate prints each problem and fails", async () => {
+  test("infra validate fails with each problem, structured in JSON", async () => {
     const root = await folder({ "org.yaml": "settings: {}\n", "spaces/engineering/space.yaml": "{}\n" })
 
-    const result = await ren(["infra", "validate", root])
+    const piped = await ren(["infra", "validate", root])
+    const pretty = await ren(["infra", "validate", root, "--output=pretty"])
 
-    expect(result).toEqual({ code: 1, stdout: "", stderr: "spaces/engineering/space.yaml: name: Missing key\n" })
+    expect(piped.code).toBe(1)
+    expect(failure(piped.stderr)).toEqual({
+      type: "CliError",
+      message: "spaces/engineering/space.yaml: name: Missing key",
+      problems: [{ path: "spaces/engineering/space.yaml", field: "name", message: "Missing key" }],
+    })
+    expect(pretty).toEqual({ code: 1, stdout: "", stderr: "spaces/engineering/space.yaml: name: Missing key\n" })
   })
 })

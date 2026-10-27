@@ -18,6 +18,10 @@ const Stored = Schema.fromJsonString(
   Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Number]))),
 )
 
+const Me = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Struct({ user: Schema.Struct({ email: Schema.String }) })),
+)
+
 test("ren2 health reports server health", async () => {
   const result = await ren2(["health"])
   const health = Schema.Struct({ status: Schema.String, version: Schema.String })
@@ -49,20 +53,25 @@ test("ren2 signs in through the browser, refreshes its session and signs out", a
   await page.getByRole("button", { name: "Allow access" }).click()
   await expect(page.getByText("You can close this tab.")).toBeVisible()
   expect(await exited).toBe(0)
-  expect(stdout.join("")).toContain(`Logged in as ${email}`)
-  expect((await ren2(["whoami"], env)).stdout).toContain(email)
+  expect(Me(stdout.join("")).user.email).toBe(email)
+  expect(Me((await ren2(["whoami"], env)).stdout).user.email).toBe(email)
 
   const file = join(config, "ren2", "credentials.json")
   const signedIn = Schema.decodeUnknownSync(Stored)(await readFile(file, "utf8"))
   const session = signedIn[serverURL] ?? {}
   await writeFile(file, JSON.stringify({ [serverURL]: { ...session, expiresAt: 0 } }))
-  expect((await ren2(["whoami"], env)).stdout).toContain(email)
+  expect(Me((await ren2(["whoami"], env)).stdout).user.email).toBe(email)
   const refreshed = Schema.decodeUnknownSync(Stored)(await readFile(file, "utf8"))[serverURL] ?? {}
   expect(refreshed["refreshToken"]).not.toBe(session["refreshToken"])
   expect(refreshed["expiresAt"]).toBeGreaterThan(Date.now())
 
-  expect((await ren2(["logout"], env)).stdout).toBe(`Logged out of ${serverURL}.\n`)
-  await expect(ren2(["whoami"], env)).rejects.toMatchObject({
+  const loggedOut = Schema.Struct({ server: Schema.String, loggedOut: Schema.Boolean })
+  expect(Schema.decodeUnknownSync(Schema.fromJsonString(loggedOut))((await ren2(["logout"], env)).stdout)).toEqual({
+    server: serverURL,
+    loggedOut: true,
+  })
+  await expect(ren2(["whoami", "--output", "pretty"], env)).rejects.toMatchObject({
+    code: 1,
     stderr: `Not logged in to ${serverURL}. Run ren2 login.\n`,
   })
 })

@@ -1,6 +1,6 @@
 # ren2 CLI
 
-Status: partially implemented. The command/runtime foundation, binary release tooling and browser login are implemented. Device login, profiles, generated API coverage and structured output remain proposed. Publishing the first release requires running the release workflow. HTTP operations and domain shapes remain owned by the protocol and schema. Implementation work belongs in `TODO.md` or issues.
+Status: partially implemented. The command/runtime foundation, binary release tooling, browser login and the output contract are implemented. Device login, profiles, generated API coverage and streaming output remain proposed. Publishing the first release requires running the release workflow. HTTP operations and domain shapes remain owned by the protocol and schema. Implementation work belongs in `TODO.md` or issues.
 
 ## 1. Purpose
 
@@ -143,24 +143,44 @@ Validate input at the boundary using the current contracts. Preserve meaningful 
 
 A command consuming stdin as data must not also use it for interactive confirmation.
 
-### 5.2 Output
+### 5.2 Output (implemented)
 
-Ordinary commands accept `--output json|pretty`:
+Every command accepts the global flag `--output json|pretty`:
 
 - Explicit selection wins.
 - Default to pretty output when stdout is a terminal and JSON otherwise.
-- Results go to stdout; progress, prompts and diagnostics go to stderr.
-- JSON output contains structured results without banners, progress text or terminal formatting.
-- JSON-mode failures are structured on stderr, including actionable validation details when available.
+- Results go to stdout; progress, prompts and diagnostics go to stderr. Help and version text go to stdout in either format.
+- A JSON result is one document: the command's value encoded with its schema, in the API's wire format (`Auth.Me` for `login` and `whoami`, `Infra.Plan` for `infra plan`, `Infra.Applied` for `infra apply`). Commands without an API value return a small object, such as `{"valid":true}` or `{"server":…,"loggedOut":true}`.
 - Lists preserve pagination information. Fetching additional pages must be explicit and documented.
 
-Finite commands emit one complete result. Streaming commands need a separately documented event format, such as newline-delimited JSON, and must not silently use an unbounded sequence where callers expect one JSON document.
+Errors are rendered once, at the process boundary. In JSON, the error is the last line on stderr:
 
-The exact error envelope and exit-code taxonomy remain open. Success is zero; usage errors, request failures and interruption have documented nonzero behavior. Errors are rendered once at the process boundary.
+```json
+{ "error": { "type": "NotFoundError", "message": "No such space.", "resource": "space" } }
+```
+
+`type` is one of:
+
+- The tag of an error the Ren API declares, with its fields.
+- `UsageError` for parsing failures.
+- `CliError` for everything else the CLI reports, including connection failures. It carries `problems` (`path`, optional `field`, `message`) when a spec or plan is invalid.
+
+In pretty format, the error is its message; a usage error also prints the command's help.
+
+| Exit code | Meaning                                    |
+| --------- | ------------------------------------------ |
+| 0         | Success                                    |
+| 1         | Failure, including an invalid spec or plan |
+| 2         | Usage error                                |
+| 130       | Interrupted                                |
+
+`infra apply` shows the plan on stderr only when it asks for confirmation. Its result lists the applied changes.
+
+Finite commands emit one complete result. Streaming commands will use newline-delimited JSON, one event per line, documented with the first streaming command. They must not use an unbounded sequence where callers expect one JSON document.
 
 ### 5.3 Infrastructure
 
-Keep `ren2 infra validate|plan|apply|pull` and the `.ren/` default folder. Preserve the existing interactive confirmation and noninteractive digest/archive rules. JSON plan output includes the structured changes, problems and digest, so scripts do not scrape a `Digest:` line.
+Keep `ren2 infra validate|plan|apply|pull` and the `.ren/` default folder. Preserve the existing interactive confirmation and noninteractive digest/archive rules. JSON plan output includes the structured changes, problems and digest, so scripts do not scrape a `Digest:` line. A plan with problems is still printed, then fails with them.
 
 The infrastructure scope is owned by [the infra design](infra.md) and [the Infra schema](../packages/schema/src/infra.ts). At the inspected baseline, validation accepts more declarations than reconciliation manages. `Infra.Kind` covers organization, space, agent and membership changes; `Infra.Pulled` covers organization settings, shared spaces and their agents. Private specs are unsupported.
 
@@ -276,7 +296,7 @@ Resolve before the affected feature ships:
 2. Device authorization for headless login (section 4.2).
 3. Named profiles and their config format.
 4. Connection and organization flags.
-5. Stable error envelope, exit codes and streaming output contract.
+5. The streaming event format (section 5.2).
 6. Generated command naming for nested resources and exceptions.
 7. Additional platforms and any future package-manager installation routes. The initial binary/installer release contract is defined in section 7; `REN2_HOST_URL` remains configurable for migration.
 8. Per-capability migration decisions for legacy features without a current equivalent.
