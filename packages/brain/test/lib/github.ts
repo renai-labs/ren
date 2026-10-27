@@ -9,7 +9,7 @@ import type { GitHubReader } from "../../src/github/reader.js"
 // oxlint-disable-next-line ren/no-comments -- What GitHub, or the egress before it, answers to the ren:GITHUB placeholder: the egress put a token that reads the repository, the runtime has no egress (401), the space has no credential (403 from the egress) or the token cannot read the repository (404).
 export type Placeholder = "accepted" | "no_egress" | "no_credential" | "no_access"
 
-// oxlint-disable-next-line ren/no-comments -- A real Git repository served through the GitHub endpoints a brain reads: smart-HTTP refs, raw files, and the API tarball that redirects to a temporary archive link. A private one answers as GitHub does to a request without a token.
+// oxlint-disable-next-line ren/no-comments -- A real Git repository served through the GitHub endpoints a brain reads: the git protocol v2 `ls-refs` of real `git upload-pack`, raw files, and the API tarball that redirects to a temporary archive link. A private one answers as GitHub does to a request without a token.
 export const make = Effect.fnUntraced(function* (
   options: { readonly owner?: string; readonly repo?: string; readonly isPrivate?: boolean } = {},
 ) {
@@ -40,24 +40,39 @@ export const make = Effect.fnUntraced(function* (
   yield* git(["init", "--quiet", "--initial-branch=main"])
   const state = {
     requests: [] as Array<{ readonly path: string; readonly authorization: string | null }>,
+    bodies: [] as Array<ReadonlyArray<string>>,
     failing: false,
     isPrivate: options.isPrivate ?? false,
     placeholder: "accepted" as Placeholder,
+    held: undefined as PromiseWithResolvers<void> | undefined,
+    arrived: Promise.withResolvers<void>(),
   }
-  const spawned = (args: ReadonlyArray<string>, prefix: Uint8Array = new Uint8Array()) => {
-    const run = Bun.spawn(["git", ...args], { cwd: directory, stdout: "pipe", stderr: "ignore" })
+  const spawned = (
+    args: ReadonlyArray<string>,
+    input?: { readonly body: ArrayBuffer; readonly env: Readonly<Record<string, string>> },
+  ) => {
+    const run = Bun.spawn(["git", ...args], {
+      cwd: directory,
+      stdin: input ? new Uint8Array(input.body) : "ignore",
+      stdout: "pipe",
+      stderr: "ignore",
+      env: { ...process.env, ...input?.env },
+    })
     return new Response(run.stdout)
       .arrayBuffer()
-      .then(async (bytes) => ((await run.exited) === 0 ? new Uint8Array([...prefix, ...new Uint8Array(bytes)]) : null))
+      .then(async (bytes) => ((await run.exited) === 0 ? new Uint8Array(bytes) : null))
   }
   const temporary = crypto.randomUUID()
-  const answer = (url: URL) => {
+  const answer = async (url: URL, request: Request) => {
     const pathname = url.pathname
-    if (pathname === `/git/${owner}/${repo}.git/info/refs`)
-      return spawned(
-        ["upload-pack", "--stateless-rpc", "--advertise-refs", "."],
-        new TextEncoder().encode("001e# service=git-upload-pack\n0000"),
-      )
+    if (pathname === `/git/${owner}/${repo}.git/git-upload-pack` && request.method === "POST") {
+      const body = await request.arrayBuffer()
+      state.bodies.push(new TextDecoder().decode(body).match(/ref-prefix [^\n]+/gu) ?? [])
+      return spawned(["upload-pack", "--stateless-rpc", "."], {
+        body,
+        env: { GIT_PROTOCOL: request.headers.get("git-protocol") ?? "" },
+      })
+    }
     const raw = new RegExp(`^/raw/${owner}/${repo}/([^/]+)/(.+)$`, "u").exec(pathname)
     if (raw) return spawned(["show", `${raw[1]}:${raw[2]}`])
     const tarball = new RegExp(`^/api/repos/${owner}/${repo}/tarball/([^/]+)$`, "u").exec(pathname)
@@ -74,7 +89,7 @@ export const make = Effect.fnUntraced(function* (
         `--prefix=${owner}-${repo}-${archive[1]?.slice(0, 7)}/`,
         `${archive[1]}`,
       ])
-    return Promise.resolve(null)
+    return null
   }
   const refused = (pathname: string, authorization: string | null) => {
     if (pathname.startsWith("/codeload/")) return null
@@ -98,16 +113,22 @@ export const make = Effect.fnUntraced(function* (
           const url = new URL(request.url)
           const authorization = request.headers.get("authorization")
           state.requests.push({ path: `${url.pathname}${url.search}`, authorization })
+          state.arrived.resolve()
+          if (state.held) await state.held.promise
           if (state.failing) return new Response("unavailable", { status: 503 })
           const refusal = refused(url.pathname, authorization)
           if (refusal) return refusal
-          const body = await answer(url)
+          const body = await answer(url, request)
           if (body instanceof Response) return body
           return body ? new Response(body) : new Response("404: Not Found", { status: 404 })
         },
       }),
     ),
-    (served) => Effect.promise(() => served.stop(true)),
+    (served) =>
+      Effect.promise(() => {
+        state.held?.resolve()
+        return served.stop(true)
+      }),
   )
   const origin = `http://127.0.0.1:${server.port}`
   return {
@@ -119,11 +140,23 @@ export const make = Effect.fnUntraced(function* (
       raw: `${origin}/raw`,
     } satisfies GitHubReader.Hosts,
     requests: Effect.sync(() => state.requests.map((request) => request.path)),
+    // oxlint-disable-next-line ren/no-comments -- The ref-prefix lines of each ls-refs request that reached git, in order.
+    bodies: Effect.sync(() => [...state.bodies]),
     authorizations: Effect.sync(() => state.requests.map((request) => [request.path, request.authorization] as const)),
     fail: (isFailing: boolean) =>
       Effect.sync(() => {
         state.failing = isFailing
       }),
+    // oxlint-disable-next-line ren/no-comments -- Requests that arrive while held wait until release. `arrived` ends at the first request after hold.
+    hold: Effect.sync(() => {
+      state.held = Promise.withResolvers<void>()
+      state.arrived = Promise.withResolvers<void>()
+    }),
+    arrived: Effect.promise(() => state.arrived.promise),
+    release: Effect.sync(() => {
+      state.held?.resolve()
+      state.held = undefined
+    }),
     answer: (placeholder: Placeholder) =>
       Effect.sync(() => {
         state.placeholder = placeholder

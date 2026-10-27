@@ -1,6 +1,6 @@
 export * as ReferenceCache from "./cache.js"
 
-import { Cache, Duration, Effect, Exit, MutableHashMap, Option } from "effect"
+import { Cache, Duration, Effect, Exit } from "effect"
 import { GitHubReader } from "../github/reader.js"
 
 export interface Reference {
@@ -16,6 +16,9 @@ export const refreshAfter = Duration.days(1)
 
 export const retryAfter = Duration.minutes(1)
 
+// oxlint-disable-next-line ren/no-comments -- R45: the lookups and the last good commits of one brain are bounded; the oldest goes first.
+export const capacity = 1000
+
 // oxlint-disable-next-line ren/no-comments -- R3: one lookup per reference and day for the whole brain. A failed lookup is tried again after a minute and keeps the last good commit until then; a commit in the branch never changes.
 export const make = Effect.fnUntraced(function* (
   reader: GitHubReader.Interface,
@@ -24,23 +27,30 @@ export const make = Effect.fnUntraced(function* (
     retry: retryAfter,
   },
 ) {
-  const lastGood = MutableHashMap.empty<Reference, GitHubReader.Lookup>()
+  const lastGood = new Map<string, GitHubReader.Lookup>()
+  const keyOf = (reference: Reference) => `${reference.repository}#${reference.branch ?? ""}`
+  const keep = (reference: Reference, lookup: GitHubReader.Lookup) => {
+    lastGood.delete(keyOf(reference))
+    lastGood.set(keyOf(reference), lookup)
+    const oldest = lastGood.size > capacity ? lastGood.keys().next() : undefined
+    if (oldest && !oldest.done) lastGood.delete(oldest.value)
+  }
   const cache = yield* Cache.makeWith(
     (reference: Reference) =>
       reader.lookup(reference.repository, reference.branch).pipe(
-        Effect.tap((lookup) => Effect.sync(() => MutableHashMap.set(lastGood, reference, lookup))),
+        Effect.tap((lookup) => Effect.sync(() => keep(reference, lookup))),
         Effect.map((lookup) => ({ lookup, isFresh: true })),
         Effect.catch((error) => {
-          const kept = MutableHashMap.get(lastGood, reference)
-          return Option.isSome(kept)
+          const kept = lastGood.get(keyOf(reference))
+          return kept
             ? Effect.logWarning(`Keeping the last good lookup of ${reference.repository}: ${error.message}`).pipe(
-                Effect.as({ lookup: kept.value, isFresh: false }),
+                Effect.as({ lookup: kept, isFresh: false }),
               )
             : Effect.fail(error)
         }),
       ),
     {
-      capacity: Number.MAX_SAFE_INTEGER,
+      capacity,
       timeToLive: (exit, reference) => {
         if (Exit.isFailure(exit) || !exit.value.isFresh) return options.retry
         return GitHubReader.commitPattern.test(reference.branch ?? "") ? Duration.infinity : options.refresh
