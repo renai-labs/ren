@@ -10,6 +10,7 @@ import { EnvironmentTemplate } from "./environment-template.js"
 import { OrganizationSettings } from "./organization-settings.js"
 import { Primitive } from "./primitive.js"
 import { Schedule } from "./schedule.js"
+import { Settings } from "./settings.js"
 import { Space } from "./space.js"
 import { SpaceSettings } from "./space-settings.js"
 import { Webhook } from "./webhook.js"
@@ -31,6 +32,7 @@ export interface SpaceDeclaration extends Schema.Schema.Type<typeof SpaceDeclara
 export const SpaceDeclaration = Schema.Struct({
   ...Struct.omit(Space.CreateInput.fields, ["slug"]),
   renamedFrom: RenamedFrom,
+  description: Schema.optionalKey(Schema.String),
   settings: SpaceSettings.UpdateInput.fields.settings.pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed({ permissions: [], references: [] })),
   ),
@@ -200,3 +202,64 @@ export const Bindings = Schema.Struct({
   organization: Schema.NonEmptyString.annotate({ description: "The slug of the organization." }),
   spaces: Schema.Record(Primitive.Slug, SpaceBindings).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
 }).annotate({ identifier: "Infra.Bindings" })
+
+export const Kind = Schema.Literals(["organization", "space", "agent", "membership"]).annotate({
+  identifier: "Infra.Kind",
+})
+export type Kind = typeof Kind.Type
+
+export interface Change extends Schema.Schema.Type<typeof Change> {}
+export const Change = Schema.Struct({
+  action: Schema.Literals(["create", "update", "archive"]),
+  kind: Kind,
+  path: Schema.String.annotate({
+    description:
+      "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name> or spaces/<slug>/uses/agents/<name>.",
+  }),
+  from: Schema.optionalKey(Schema.String.annotate({ description: "The path before a rename or a move." })),
+  fields: Schema.Array(Schema.String).annotate({ description: "The fields that an update changes." }),
+}).annotate({ identifier: "Infra.Change" })
+
+export interface Problem extends Schema.Schema.Type<typeof Problem> {}
+export const Problem = Schema.Struct({ path: Schema.String, message: Schema.String }).annotate({
+  identifier: "Infra.Problem",
+})
+
+export interface PlanInput extends Schema.Schema.Type<typeof PlanInput> {}
+export const PlanInput = Schema.Struct({ spec: Spec, bindings: Bindings }).annotate({ identifier: "Infra.PlanInput" })
+
+export interface Plan extends Schema.Schema.Type<typeof Plan> {}
+export const Plan = Schema.Struct({
+  changes: Schema.Array(Change),
+  problems: Schema.Array(Problem).annotate({ description: "A plan with problems cannot be applied." }),
+  digest: Schema.String.annotate({ description: "Apply refuses the plan when the digest has changed." }),
+}).annotate({ identifier: "Infra.Plan" })
+
+export interface ApplyInput extends Schema.Schema.Type<typeof ApplyInput> {}
+export const ApplyInput = Schema.Struct({ ...PlanInput.fields, digest: Schema.String }).annotate({
+  identifier: "Infra.ApplyInput",
+})
+
+export interface Applied extends Schema.Schema.Type<typeof Applied> {}
+export const Applied = Schema.Struct({ changes: Schema.Array(Change) }).annotate({ identifier: "Infra.Applied" })
+
+export interface PulledSpace extends Schema.Schema.Type<typeof PulledSpace> {}
+export const PulledSpace = Schema.Struct({
+  ...Struct.omit(Space.CreateInput.fields, ["slug"]),
+  settings: Settings.Info,
+  agents: Schema.Record(Agent.Name, Agent.Declaration),
+  uses: Uses,
+}).annotate({ identifier: "Infra.PulledSpace" })
+
+export interface Pulled extends Schema.Schema.Type<typeof Pulled> {}
+export const Pulled = Schema.Struct({
+  bindings: Schema.Struct({ organization: Bindings.fields.organization }),
+  spec: Schema.Struct({
+    org: OrganizationSettings.UpdateInput,
+    spaces: Schema.Record(Primitive.Slug, PulledSpace),
+  }),
+}).annotate({
+  identifier: "Infra.Pulled",
+  description:
+    "The part of the org spec that infra applies today: organization settings, shared spaces and their agents.",
+})

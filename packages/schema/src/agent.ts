@@ -52,7 +52,10 @@ export const CreateInput = Schema.Struct({
 }).annotate({ identifier: "Agent.CreateInput" })
 
 export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
-export const Declaration = CreateInput.mapFields(Struct.omit(["ownerSpaceId", "name"])).annotate({
+export const Declaration = CreateInput.mapFields((fields) => ({
+  ...Struct.omit(fields, ["ownerSpaceId", "name"]),
+  description: Schema.optionalKey(Schema.String),
+})).annotate({
   identifier: "Agent.Declaration",
 })
 

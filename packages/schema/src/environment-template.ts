@@ -54,7 +54,10 @@ export const CreateInput = Schema.Struct({
 }).annotate({ identifier: "EnvironmentTemplate.CreateInput" })
 
 export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
-export const Declaration = CreateInput.mapFields(Struct.omit(["name"])).annotate({
+export const Declaration = CreateInput.mapFields((fields) => ({
+  ...Struct.omit(fields, ["name"]),
+  description: Schema.optionalKey(Schema.String),
+})).annotate({
   identifier: "EnvironmentTemplate.Declaration",
 })
 
