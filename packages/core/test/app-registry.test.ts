@@ -130,6 +130,16 @@ it.live("browsing lists active listings by text and category", () =>
     const slugs = (input: { readonly query?: string; readonly category?: string }) =>
       Effect.map(registry.list(reader, { ...page, ...input }), (result) => result.items.map((item) => item.slug))
     expect(yield* slugs({})).toEqual(["linear", "notion"])
+    yield* publish(
+      publication("guide", {
+        skills: {
+          write: { type: "content", description: "Write guides", instructions: "Long", files: { "a.md": "A" } },
+        },
+      }),
+    )
+    expect((yield* registry.get(reader, "guide")).skills).toEqual({
+      write: { type: "content", description: "Write guides", requiredCredentials: [] },
+    })
     expect(yield* slugs({ query: "ISSUES" })).toEqual(["linear"])
     expect(yield* slugs({ category: "writer" })).toEqual(["notion"])
     expect((yield* Effect.flip(registry.get(reader, "unlisted")))._tag).toBe("Primitive.NotFound")

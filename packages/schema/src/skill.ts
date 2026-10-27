@@ -52,11 +52,23 @@ export const Upstream = Schema.Struct({
 export const Declaration = Schema.Union([Content, Upstream]).annotate({ identifier: "Skill.Declaration" })
 export type Declaration = typeof Declaration.Type
 
-export const Info = Schema.Union([
-  Content,
-  Schema.Struct({
-    ...Upstream.fields,
-    upstream: Schema.Struct({ ...Upstream.fields.upstream.fields, url: Schema.String, path: Schema.String }),
-  }),
-]).annotate({ identifier: "Skill.Info" })
+const UpstreamInfo = Schema.Struct({
+  ...Upstream.fields,
+  upstream: Schema.Struct({ ...Upstream.fields.upstream.fields, url: Schema.String, path: Schema.String }),
+})
+
+export const Info = Schema.Union([Content, UpstreamInfo]).annotate({ identifier: "Skill.Info" })
 export type Info = typeof Info.Type
+
+export const Summary = Schema.Union([
+  Schema.Struct({
+    type: Content.fields.type,
+    description: Content.fields.description,
+    requiredCredentials: Content.fields.requiredCredentials,
+  }),
+  UpstreamInfo,
+]).annotate({
+  identifier: "Skill.Summary",
+  description: "A skill without its content: a content skill has no instructions or files.",
+})
+export type Summary = typeof Summary.Type

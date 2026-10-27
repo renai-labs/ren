@@ -898,6 +898,14 @@ export type SkillContent = {
   files?: { [x: string]: string }
 }
 
+export type SkillSummary =
+  | { type: "content"; description: string; requiredCredentials?: Array<CredentialSkillRequirement> }
+  | {
+      type: "upstream"
+      requiredCredentials?: Array<CredentialSkillRequirement>
+      upstream: { url: string; ref?: string; path: string }
+    }
+
 export type AppProfileInfo = {
   id: AppProfileID
   appId: AppID
@@ -1102,7 +1110,7 @@ export type AppRegistryInfo = {
   requiredCredentials?: Array<CredentialRequirement>
   environment?: AppEnvironment
   mcps: { [x: PrimitiveSlug]: McpInfo }
-  skills: { [x: PrimitiveSlug]: SkillInfo }
+  skills: { [x: PrimitiveSlug]: SkillSummary }
   dependsOn?: Array<PrimitiveSlug>
   revision: number
 }
