@@ -43,7 +43,11 @@ const result = await Bun.build({
   entrypoints: [fileURLToPath(new URL("../src/index.ts", import.meta.url))],
   target: "bun",
   minify: true,
-  define: { REN2_VERSION: JSON.stringify(version), REN2_API_URL: JSON.stringify(api.origin) },
+  define: {
+    REN2_VERSION: JSON.stringify(version),
+    REN2_API_URL: JSON.stringify(api.origin),
+    REN2_RELEASE_HOST: JSON.stringify(host.origin),
+  },
   compile: {
     target: target === "linux-x64" ? "bun-linux-x64-baseline" : `bun-${target}`,
     outfile,

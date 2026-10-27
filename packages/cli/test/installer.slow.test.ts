@@ -1,50 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { mkdtemp } from "node:fs/promises"
 import { join } from "node:path"
-import { fileURLToPath } from "node:url"
+import { asset, makeReleases, run } from "./lib/releases.js"
 
-const cli = fileURLToPath(new URL("..", import.meta.url))
 const version = "0.0.0-test"
-const asset = `ren2-${process.platform}-${process.arch}`
-const root = await mkdtemp(join(tmpdir(), "ren2-install-"))
-const releases = join(root, "ren2/releases")
-const server = Bun.serve({
-  port: 0,
-  hostname: "127.0.0.1",
-  fetch: async (request) => {
-    const path = new URL(request.url).pathname
-    const file = Bun.file(join(root, path))
-    return (await file.exists()) ? new Response(file) : new Response("Not found", { status: 404 })
-  },
-})
+const releases = await makeReleases()
+const root = releases.root
 
-const run = async (command: ReadonlyArray<string>, home: string) => {
-  const child = Bun.spawn([...command], {
-    cwd: home,
-    env: {
-      ...process.env,
-      HOME: home,
-      SHELL: "/bin/zsh",
-      ZDOTDIR: home,
-      XDG_CONFIG_HOME: join(home, ".config"),
-      PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
-      REN2_HOST_URL: server.url.origin,
-      REN_URL: "not-a-url",
-    },
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  return {
-    code: await child.exited,
-    stdout: await new Response(child.stdout).text(),
-    stderr: await new Response(child.stderr).text(),
-  }
-}
+const exec = (command: ReadonlyArray<string>, home: string) => run(command, home, { REN2_HOST_URL: releases.host })
 
 const install = (home: string, args: ReadonlyArray<string> = []) =>
-  run(
+  exec(
     [
       "/bin/bash",
       "-o",
@@ -58,20 +24,11 @@ const install = (home: string, args: ReadonlyArray<string> = []) =>
   )
 
 beforeAll(async () => {
-  const build = Bun.spawn([process.execPath, "script/build.ts", "--version", version, "--outdir", join(root, "ren2")], {
-    cwd: cli,
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const errors = await new Response(build.stderr).text()
-  expect(await build.exited, errors).toBe(0)
-  await Bun.write(join(root, "ren2/latest.txt"), `${version}\n`)
+  await releases.build(version)
+  await releases.latest(version)
 }, 120_000)
 
-afterAll(async () => {
-  await server.stop(true)
-  await rm(root, { recursive: true, force: true })
-})
+afterAll(() => releases.dispose())
 
 describe("curl installer", () => {
   test("installs a standalone CLI beside ren and adds PATH only once", async () => {
@@ -89,12 +46,12 @@ describe("curl installer", () => {
     expect(await Bun.file(credentials).text()).toBe("legacy credentials")
 
     const binary = join(home, ".ren2/bin/ren2")
-    expect(await run([binary, "--version"], home)).toEqual({ code: 0, stdout: `ren2 v${version}\n`, stderr: "" })
-    const help = await run([binary, "infra", "apply", "--help"], home)
+    expect(await exec([binary, "--version"], home)).toEqual({ code: 0, stdout: `ren2 v${version}\n`, stderr: "" })
+    const help = await exec([binary, "infra", "apply", "--help"], home)
     expect(help.code).toBe(0)
     expect(help.stdout).toContain("--plan")
     await Bun.write(join(home, ".ren/org.yaml"), "settings: {}\n")
-    expect(await run([binary, "infra", "validate"], home)).toEqual({
+    expect(await exec([binary, "infra", "validate"], home)).toEqual({
       code: 0,
       stdout: '{\n  "valid": true\n}\n',
       stderr: "",
@@ -115,17 +72,17 @@ describe("curl installer", () => {
     const missing = await install(home, ["--version", "0.0.1", "--no-modify-path"])
     expect(missing.code).not.toBe(0)
 
-    await Bun.write(join(releases, "0.0.2", asset), "corrupt binary")
-    await Bun.write(join(releases, "0.0.2", `${asset}.sha256`), Bun.file(join(releases, version, `${asset}.sha256`)))
+    await Bun.write(releases.file("0.0.2"), "corrupt binary")
+    await Bun.write(releases.file("0.0.2", `${asset}.sha256`), Bun.file(releases.file(version, `${asset}.sha256`)))
     const corrupt = await install(home, ["--version", "0.0.2", "--no-modify-path"])
     expect(corrupt.code).not.toBe(0)
     expect(corrupt.stderr).toContain("Checksum mismatch")
-    await Bun.write(join(releases, "0.0.3", asset), Bun.file(join(releases, version, asset)))
-    await Bun.write(join(releases, "0.0.3", `${asset}.sha256`), Bun.file(join(releases, version, `${asset}.sha256`)))
+    await Bun.write(releases.file("0.0.3"), Bun.file(releases.file(version)))
+    await Bun.write(releases.file("0.0.3", `${asset}.sha256`), Bun.file(releases.file(version, `${asset}.sha256`)))
     const mislabeled = await install(home, ["--version", "0.0.3", "--no-modify-path"])
     expect(mislabeled.code).not.toBe(0)
     expect(mislabeled.stderr).toContain("wrong version")
-    expect(await run([join(home, ".ren2/bin/ren2"), "--version"], home)).toEqual({
+    expect(await exec([join(home, ".ren2/bin/ren2"), "--version"], home)).toEqual({
       code: 0,
       stdout: `ren2 v${version}\n`,
       stderr: "",

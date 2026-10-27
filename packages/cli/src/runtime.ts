@@ -63,7 +63,7 @@ export const run = <Name extends string, Input, ContextInput, E, R>(
           helpOutput.push(format(...args))
         },
       }),
-      Effect.provide(CliConfig.layer({ builtIns: [GlobalFlag.Help, GlobalFlag.Version] })),
+      Effect.provide(CliConfig.layer({ builtIns: [GlobalFlag.Help, GlobalFlag.Version, GlobalFlag.Completions] })),
       Effect.provide(
         CliOutput.layer({
           formatHelpDoc: (doc) =>

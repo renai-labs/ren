@@ -1,7 +1,7 @@
 export * as Credentials from "./credentials.js"
 
 import { Context, Effect, FileSystem, Layer, Path, Schema } from "effect"
-import { homedir } from "node:os"
+import { Directories } from "../directories.js"
 
 export interface Credential extends Schema.Schema.Type<typeof Credential> {}
 export const Credential = Schema.Struct({
@@ -26,7 +26,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
-    const directory = path.join(process.env.XDG_CONFIG_HOME ?? path.join(homedir(), ".config"), "ren2")
+    const directory = Directories.config()
     const file = path.join(directory, "credentials.json")
     const read = Effect.gen(function* () {
       if (!(yield* fs.exists(file))) return {}

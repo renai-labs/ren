@@ -292,7 +292,13 @@ An npm package can be an additional installation route. If published, it exposes
 
 The workspace package remains private and its bin points at source for development. `bun run build` produces versioned platform binaries, checksums and a rendered installer under `dist`. The `cli release` workflow builds and tests each target natively before publishing all artifacts, then updates the installer and `latest.txt`. Existing release versions are immutable. A Node-only release would require explicitly replacing Bun-specific runtime behavior; it is not assumed by this design.
 
-Version output comes from release metadata. Completion scripts use `ren2`. Every installation route must coexist with ren-v1 without executable or configuration collisions. Upgrade behavior follows the selected installation method; a shell-installed binary upgrades through the same release artifacts without switching the user to npm.
+Version output comes from release metadata. `ren2 --completions bash|zsh|fish|sh` prints a completion script for the whole tree, generated commands included. Every installation route must coexist with ren-v1 without executable or configuration collisions. Upgrade behavior follows the selected installation method; a shell-installed binary upgrades through the same release artifacts without switching the user to npm.
+
+#### Upgrade (implemented)
+
+`ren2 upgrade [version]` reads `latest.txt` (or takes the pinned version), downloads the binary for this platform with its checksum, checks the SHA-256 and that the new binary reports the expected version, and renames it over the running executable. A failure leaves the working binary and no temporary file. Without a version it never downgrades and says when the binary is up to date. A binary run from source refuses and says to rebuild. The release host is built in from `REN2_HOST_URL` and can be overridden by the same variable.
+
+At most once a day, a command in a terminal with pretty output checks `latest.txt`, caches the answer in the config directory (`update.json`), and prints `ren2 vX.Y.Z is available. Run ren2 upgrade.` on stderr when a newer release exists. The check runs beside the command, waits at most one second after it, and never fails it. It is off for JSON output, in CI, when `REN2_NO_UPDATE_CHECK` is set and for `ren2 upgrade` itself. There is no automatic replacement.
 
 ## 8. Verification
 

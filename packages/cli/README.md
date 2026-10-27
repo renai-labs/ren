@@ -57,7 +57,15 @@ curl -fsSL "${REN2_HOST_URL}/ren2/install.sh" | bash
 
 Pass `--version <version>` to pin a release or `--no-modify-path` to leave shell config alone. The installer verifies SHA-256 and the executable's version before replacing `~/.ren2/bin/ren2`. macOS and glibc Linux are supported on arm64 and x64. Bun and Node are not required.
 
-Rerun the installer to upgrade. In a terminal, the installer runs `ren2 login`; `--no-init` skips it.
+In a terminal, the installer runs `ren2 login`; `--no-init` skips it.
+
+`ren2 upgrade` installs the latest release, and `ren2 upgrade 0.2.0` a specific one. It checks the SHA-256 and the new executable's version before it replaces itself, so a failed upgrade keeps the working binary. Once a day, a terminal session prints `ren2 vX.Y.Z is available` after a command. The check never runs for JSON output, in CI or with `REN2_NO_UPDATE_CHECK=1`, and it never delays a command by more than a second.
+
+Shell completions:
+
+```sh
+ren2 --completions zsh > "${fpath[1]}/_ren2"   # bash, zsh, fish or sh
+```
 
 ## Build and release
 
@@ -67,7 +75,7 @@ bun run build --version 0.1.0 --target linux-x64
 REN_SLOW=1 bun run test
 ```
 
-Builds use the current platform by default. `--outdir` defaults to `dist`. `REN2_HOST_URL` sets the generated installer's default host and can also override it at installation time. `REN2_API_URL` sets the binary's default API (default `http://localhost:4000`); the release workflow uses the environment's `REN_API_URL`.
+Builds use the current platform by default. `--outdir` defaults to `dist`. `REN2_HOST_URL` sets the default release host of the generated installer and of `ren2 upgrade`, and overrides it at installation or upgrade time. `REN2_API_URL` sets the binary's default API (default `http://localhost:4000`); the release workflow uses the environment's `REN_API_URL`.
 
 ```text
 dist/
