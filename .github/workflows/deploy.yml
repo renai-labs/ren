@@ -178,6 +178,42 @@ jobs:
           aws s3 sync packages/app/dist/ "s3://$bucket/app/" --exclude "assets/*" --cache-control "no-cache" --delete --only-show-errors
           aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/app/*" --query Invalidation.Status --output text
 
+  site:
+    name: site
+    needs: changes
+    runs-on: ubuntu-latest
+    environment: v2-prod
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Build the site
+        run: bun run --cwd packages/site build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      # The same order as the app. The site owns the bucket's root, the app owns /app/, so the delete
+      # leaves /app/ alone.
+      - name: Upload
+        env:
+          DEPLOY: ${{ vars.DEPLOY_NAME }}
+          DISTRIBUTION: ${{ vars.APP_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+          bucket="$DEPLOY-app-$(aws sts get-caller-identity --query Account --output text)"
+          aws s3 sync packages/site/dist/_astro/ "s3://$bucket/_astro/" --cache-control "public, max-age=31536000, immutable" --only-show-errors
+          aws s3 sync packages/site/dist/ "s3://$bucket/" --exclude "_astro/*" --exclude "app/*" --cache-control "no-cache" --delete --only-show-errors
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/*" --query Invalidation.Status --output text
+
   egress:
     name: egress
     needs: [changes, server]

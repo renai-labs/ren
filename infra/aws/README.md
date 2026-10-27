@@ -3,7 +3,7 @@
 Terraform for one Ren deployment on AWS. The deploy workflow (`.github/workflows/deploy.yml`) releases code into it.
 
 ```
-browser ──HTTPS──▶ CloudFront ──▶ S3 (app, /app/)
+browser ──HTTPS──▶ CloudFront ──▶ S3 (site, /; app, /app/)
 browser ──HTTPS api.<domain>──▶ load balancer ──▶ ECS service server :4100
 server ──E2B API──▶ sandbox (brain + hand) ──every connection, egress.<domain>:1080──▶ egress (EC2) ──▶ internet
 egress ──mTLS server.<name>.internal:4443──▶ server        server ──mTLS egress.<name>.internal:9443──▶ egress
@@ -16,7 +16,7 @@ egress ──mTLS server.<name>.internal:4443──▶ server        server ─�
 | `server.tf`  | ECS cluster, ECR repository, server secret, roles, task definition, service               |
 | `egress.tf`  | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document     |
 | `waf.tf`     | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules         |
-| `app.tf`     | App bucket and CloudFront distribution                                                    |
+| `app.tf`     | Site and app bucket and CloudFront distribution                                           |
 | `deploy.tf`  | The role the deploy workflow assumes with GitHub OIDC                                     |
 
 ## Rules
