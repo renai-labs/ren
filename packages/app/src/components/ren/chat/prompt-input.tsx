@@ -304,9 +304,17 @@ export function PromptInput(props: {
                   onSelect={() => choose(item.value)}
                 >
                   {item.kind === "command" ? <IconTerminal2 /> : item.kind === "file" ? <IconFileText /> : <IconAt />}
-                  <span className={item.kind === "file" ? "truncate font-mono text-xs" : "truncate"}>{item.label}</span>
+                  <span
+                    className={
+                      item.kind === "file" ? "min-w-0 flex-1 truncate font-mono text-xs" : "min-w-0 flex-1 truncate"
+                    }
+                  >
+                    {item.label}
+                  </span>
                   {item.description ? (
-                    <span className="ml-auto truncate pl-3 text-xs text-muted-foreground">{item.description}</span>
+                    <span className="max-w-1/2 shrink-0 truncate pl-3 text-xs text-muted-foreground">
+                      {item.description}
+                    </span>
                   ) : null}
                 </CommandItem>
               ))}

@@ -1,5 +1,12 @@
 import type { ComponentProps } from "react"
-import { Streamdown, useIsCodeFenceIncomplete, type ExtraProps } from "streamdown"
+import {
+  Streamdown,
+  defaultRehypePlugins,
+  defaultUrlTransform,
+  useIsCodeFenceIncomplete,
+  type ExtraProps,
+  type UrlTransform,
+} from "streamdown"
 import {
   CodeBlock,
   CodeBlockActions,
@@ -50,11 +57,27 @@ function MarkdownCode({ node: _node, className, children, ...props }: ComponentP
 
 const components = { code: MarkdownCode }
 
+const withDataImages = (schema: unknown) => {
+  if (typeof schema !== "object" || schema === null || !("protocols" in schema)) return schema
+  const protocols = schema.protocols
+  if (typeof protocols !== "object" || protocols === null) return schema
+  const src: ReadonlyArray<unknown> = "src" in protocols && Array.isArray(protocols.src) ? protocols.src : []
+  return { ...schema, protocols: { ...protocols, src: [...src, "data"] } }
+}
+const rehypePlugins: Array<(typeof defaultRehypePlugins)[string]> = Object.entries(defaultRehypePlugins).map(
+  ([name, plugin]) => (name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin),
+)
+
+const urlTransform: UrlTransform = (url, key, node) =>
+  key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)
+
 export function Markdown(props: { children: string; streaming?: boolean | undefined; className?: string | undefined }) {
   return (
     <Streamdown
       controls={false}
       tableMaxHeight={0}
+      urlTransform={urlTransform}
+      rehypePlugins={rehypePlugins}
       components={components}
       isAnimating={props.streaming === true}
       className={cn("min-w-0 text-sm/relaxed", props.className)}

@@ -104,7 +104,8 @@ const isTyping = (target: EventTarget | null) =>
 export function useNewTaskShortcut() {
   useEffect(() => {
     const open = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "c" || !isBareKey(event) || isTyping(event.target)) return
+      if (event.defaultPrevented || event.key.toLowerCase() !== "c" || !isBareKey(event) || isTyping(event.target))
+        return
       event.preventDefault()
       openNewTask()
     }

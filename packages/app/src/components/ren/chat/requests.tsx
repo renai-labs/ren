@@ -142,8 +142,16 @@ function QuestionForm(props: {
       <CardContent>
         <Questionnaire
           key={props.form.id}
-          items={questions.map((field) => ({ name: field.key, required: field.required === true }))}
+          items={questions.map((field) => ({
+            name: field.key,
+            required: field.required === true,
+            choices: (field.options ?? []).map((option) => ({ value: option.value })),
+          }))}
           shortcuts="letters"
+          ref={(node) => {
+            if (node && document.activeElement === document.body)
+              node.querySelector<HTMLElement>("fieldset:not([hidden])")?.focus({ preventScroll: true })
+          }}
           onSubmit={(event) => {
             event.preventDefault()
             props.onSubmit(readAnswer(props.form, new FormData(event.currentTarget)))

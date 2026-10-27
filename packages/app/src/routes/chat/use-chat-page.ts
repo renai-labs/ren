@@ -156,6 +156,7 @@ const bootStatusOf = (
 ): PromptInputBoot | undefined =>
   connection === "reconnecting" ? { _tag: "Reconnecting" } : boot && boot._tag !== "Ready" ? boot : undefined
 
+const workspacePrefix = /^.*\/workspace\/[^/]+\//u
 const linkPattern = /https?:\/\/[^\s)>\]]+/gu
 
 function artifactsOf(messages: ReadonlyArray<SessionMessage.Info>) {
@@ -170,7 +171,7 @@ function artifactsOf(messages: ReadonlyArray<SessionMessage.Info>) {
     message.type === "assistant"
       ? message.content.flatMap((content) =>
           content.type === "tool" && PatchFiles.isFileChange(content) && content.state.status === "completed"
-            ? PatchFiles.patchFiles(PatchFiles.toolFiles(content)).map((file) => file.path)
+            ? PatchFiles.patchFiles(PatchFiles.toolFiles(content)).map((file) => file.path.replace(workspacePrefix, ""))
             : [],
         )
       : [],

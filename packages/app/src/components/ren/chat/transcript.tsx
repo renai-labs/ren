@@ -280,7 +280,8 @@ function FileChips(props: { files: ReadonlyArray<SessionMessage.FileAttachment> 
 function EditPrompt(props: { text: string; onCancel: () => void; onSave: (text: string) => void }) {
   const [text, setText] = useState(props.text)
   const save = () => {
-    if (text.trim()) props.onSave(text.trim())
+    if (!text.trim() || text.trim() === props.text.trim()) props.onCancel()
+    else props.onSave(text.trim())
   }
   return (
     <div className="flex flex-col gap-1.5">
@@ -303,7 +304,7 @@ function EditPrompt(props: { text: string; onCancel: () => void; onSave: (text: 
           <Button variant="ghost" size="sm" onClick={props.onCancel}>
             Cancel
           </Button>
-          <Button size="sm" disabled={!text.trim() || text.trim() === props.text.trim()} onClick={save}>
+          <Button size="sm" onClick={save}>
             Send
           </Button>
         </InputGroupAddon>
@@ -413,7 +414,9 @@ function StepRow(props: {
   running?: boolean
   failed?: boolean
   output?: string | undefined
+  images?: ReadonlyArray<SessionMessage.ToolFileContent> | undefined
 }) {
+  const images = props.images ?? []
   const line = (
     <TraceLine status={props.running ? "running" : props.failed ? "error" : undefined}>
       <TraceIcon>{props.running ? <Spinner /> : props.icon}</TraceIcon>
@@ -423,12 +426,22 @@ function StepRow(props: {
       ) : null}
     </TraceLine>
   )
-  if (!props.output) return line
+  if (!props.output && images.length === 0) return line
   return (
     <TraceCollapsible>
       <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
-      <TraceCollapsibleContent>
-        <Output text={props.output} failed={props.failed} />
+      <TraceCollapsibleContent className="flex flex-col gap-2">
+        {images.map((image) => (
+          <img
+            key={image.uri}
+            src={image.uri}
+            alt={image.name ?? "Image"}
+            className="max-h-64 w-fit max-w-full rounded-md border bg-muted object-contain"
+          />
+        ))}
+        {props.output && !(images.length > 0 && props.output === "Image read successfully") ? (
+          <Output text={props.output} failed={props.failed} />
+        ) : null}
       </TraceCollapsibleContent>
     </TraceCollapsible>
   )
@@ -570,6 +583,13 @@ function ToolStep(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; onOp
       running={status === "running"}
       failed={status === "failed"}
       output={error ?? ToolDisplay.output(tool)}
+      images={
+        "content" in tool.state
+          ? tool.state.content.filter(
+              (item): item is SessionMessage.ToolFileContent => item.type === "file" && item.mime.startsWith("image/"),
+            )
+          : []
+      }
     />
   )
 }
@@ -590,7 +610,9 @@ function StepItem(props: { step: Step; view: ChatAtoms.View; onOpenChild: (id: S
     return (
       <TraceCollapsible>
         <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
-        <TraceCollapsibleContent className="whitespace-pre-wrap">{text}</TraceCollapsibleContent>
+        <TraceCollapsibleContent>
+          <Markdown className="text-sm/relaxed">{text}</Markdown>
+        </TraceCollapsibleContent>
       </TraceCollapsible>
     )
   }
