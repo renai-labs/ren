@@ -54,6 +54,7 @@ export function Markdown(props: { children: string; streaming?: boolean | undefi
   return (
     <Streamdown
       controls={false}
+      tableMaxHeight={0}
       components={components}
       isAnimating={props.streaming === true}
       className={cn("min-w-0 text-sm/relaxed", props.className)}

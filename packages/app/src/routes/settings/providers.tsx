@@ -3,12 +3,7 @@ import { EmptyState } from "@/components/ren/empty-state"
 import { useState } from "react"
 import type { RenInferenceConnection } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import {
-  IconChevronDown,
-  IconExternalLink,
-  IconInfoCircle,
-  IconPlus,
-  IconTrash } from "@tabler/icons-react"
+import { IconChevronDown, IconExternalLink, IconInfoCircle, IconPlus, IconTrash } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -17,7 +12,8 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { Tabs } from "@/components/ui/tabs"
 import { ConfirmDialog } from "@/components/ren/confirm-dialog"
@@ -38,13 +34,13 @@ const providers = [
 
 const relative = new Intl.RelativeTimeFormat("en", {
   style: "narrow",
-  numeric: "auto" })
+  numeric: "auto",
+})
 
 const resetsIn = (value: string, now: number) => {
   const minutes = Math.round((Date.parse(value) - now) / 60_000)
   if (minutes < 60) return relative.format(minutes, "minute")
-  if (minutes < 24 * 60)
-    return relative.format(Math.round(minutes / 60), "hour")
+  if (minutes < 24 * 60) return relative.format(Math.round(minutes / 60), "hour")
   return relative.format(Math.round(minutes / (24 * 60)), "day")
 }
 
@@ -73,10 +69,15 @@ function useProvidersPage() {
         {
           onSuccess: (result) => {
             window.open(result.url, "_blank", "noopener,noreferrer")
-            toast(`Opened ${providers.find((each) => each.name === provider)?.product ?? provider} sign-in in a new tab`, {
-              description: "Ren lists the subscription once you finish there." })
+            toast(
+              `Opened ${providers.find((each) => each.name === provider)?.product ?? provider} sign-in in a new tab`,
+              {
+                description: "Ren lists the subscription once you finish there.",
+              },
+            )
           },
-          onError: (error) => toast.error("Couldn’t start the sign-in", { description: errorMessage(error) }) },
+          onError: (error) => toast.error("Couldn’t start the sign-in", { description: errorMessage(error) }),
+        },
       )
     },
     rename: (id: string, label: string) =>
@@ -89,8 +90,10 @@ function useProvidersPage() {
         { id: connection.id },
         {
           onSuccess: () => toast.success(`${connection.label} removed`),
-          onError: (error) => toast.error("Couldn’t remove", { description: errorMessage(error) }) },
-      ) }
+          onError: (error) => toast.error("Couldn’t remove", { description: errorMessage(error) }),
+        },
+      ),
+  }
 }
 
 export function ProvidersPage() {
@@ -103,8 +106,7 @@ export function ProvidersPage() {
   const setRemoving = page.setRemoving
   const connect = page.connect
   const rows = connections.filter((each) => each.providerName === tab)
-  const product =
-    providers.find((provider) => provider.name === tab)?.product ?? tab
+  const product = providers.find((provider) => provider.name === tab)?.product ?? tab
   return (
     <Page
       title="Providers"
@@ -117,11 +119,7 @@ export function ProvidersPage() {
               <PageTabsTrigger
                 key={provider.name}
                 value={provider.name}
-                count={
-                  connections.filter(
-                    (each) => each.providerName === provider.name
-                  ).length
-                }
+                count={connections.filter((each) => each.providerName === provider.name).length}
               >
                 <ProviderMark provider={provider.name} />
                 {provider.name}
@@ -149,7 +147,9 @@ export function ProvidersPage() {
               ) : null
             }
           >
-            {page.unavailable ? "Subscriptions aren’t available on this server yet." : `No ${product} subscriptions yet`}
+            {page.unavailable
+              ? "Subscriptions aren’t available on this server yet."
+              : `No ${product} subscriptions yet`}
           </EmptyState>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -175,7 +175,8 @@ export function ProvidersPage() {
           confirmation={{
             title: `Remove ${removing.label}?`,
             description: "New requests stop using it right away.",
-            action: "Remove" }}
+            action: "Remove",
+          }}
           onConfirm={() => page.remove(removing)}
         />
       ) : null}
@@ -193,15 +194,12 @@ function ConnectMenu(props: { onSelect: (provider: string) => void }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-40">
         <DropdownMenuGroup>
-        {providers.map((provider) => (
-          <DropdownMenuItem
-            key={provider.name}
-            onClick={() => props.onSelect(provider.name)}
-          >
-            <ProviderMark provider={provider.name} />
-            {provider.product}
-          </DropdownMenuItem>
-        ))}
+          {providers.map((provider) => (
+            <DropdownMenuItem key={provider.name} onClick={() => props.onSelect(provider.name)}>
+              <ProviderMark provider={provider.name} />
+              {provider.product}
+            </DropdownMenuItem>
+          ))}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -213,10 +211,7 @@ function ChatGptGuide() {
     <p className="flex items-start gap-2 text-sm text-muted-foreground">
       <IconInfoCircle className="mt-0.5 size-4 shrink-0" />
       <span>
-        Before you connect, turn on{" "}
-        <span className="text-foreground">
-          Enable device code authorization for Codex
-        </span>{" "}
+        Before you connect, turn on <span className="text-foreground">Enable device code authorization for Codex</span>{" "}
         in your{" "}
         <a
           href="https://chatgpt.com/#settings/Security"
@@ -248,11 +243,7 @@ function SubscriptionCard(props: {
       style={{ animationDelay: `${Math.min(props.index * 30, 240)}ms` }}
     >
       <div
-        className={
-          connection.canReconnect
-            ? "flex min-w-0 flex-col gap-1 pr-36"
-            : "flex min-w-0 flex-col gap-1 pr-8"
-        }
+        className={connection.canReconnect ? "flex min-w-0 flex-col gap-1 pr-36" : "flex min-w-0 flex-col gap-1 pr-8"}
       >
         <span className="truncate text-sm font-medium">
           {connection.canManage ? (
@@ -262,21 +253,14 @@ function SubscriptionCard(props: {
           )}
         </span>
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
-          <StatusBadge tone={connection.status.tone}>
-            {connection.status.label}
-          </StatusBadge>
+          <StatusBadge tone={connection.status.tone}>{connection.status.label}</StatusBadge>
           {connection.plan ? <span>· {connection.plan}</span> : null}
         </span>
       </div>
       {connection.canManage ? (
         <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
           {connection.canReconnect ? (
-            <Button
-              variant="secondary"
-              size="xs"
-              className="h-6.5"
-              onClick={props.onReconnect}
-            >
+            <Button variant="secondary" size="xs" className="h-6.5" onClick={props.onReconnect}>
               Reconnect
             </Button>
           ) : null}
@@ -293,9 +277,7 @@ function SubscriptionCard(props: {
       ) : null}
       {connection.meters.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          {connection.canReconnect
-            ? "Sign in again to keep using it."
-            : "Usage appears after the first request."}
+          {connection.canReconnect ? "Sign in again to keep using it." : "Usage appears after the first request."}
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
@@ -304,9 +286,7 @@ function SubscriptionCard(props: {
               <div className="flex items-baseline justify-between gap-3 text-xs">
                 <span className="truncate">{meter.title}</span>
                 <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
-                  <span className="font-medium">
-                    {meter.percent === null ? "—" : `${meter.percent}%`}
-                  </span>
+                  <span className="font-medium">{meter.percent === null ? "—" : `${meter.percent}%`}</span>
                   {meter.resetsAt && Date.parse(meter.resetsAt) > now ? (
                     <span
                       className="text-muted-foreground"

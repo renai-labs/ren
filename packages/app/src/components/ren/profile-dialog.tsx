@@ -100,9 +100,7 @@ function CreateProfile(props: {
   const [slug, setSlug] = useState(() => slugOf(props.from?.name ?? ""))
   const [slugEdited, setSlugEdited] = useState(false)
   const [kind, setKind] = useState<AppProfile["kind"]>(offered[0])
-  const [spaces, setSpaces] = useState<ReadonlySet<string>>(
-    () => new Set(props.from ? [props.from.spaceId] : [])
-  )
+  const [spaces, setSpaces] = useState<ReadonlySet<string>>(() => new Set(props.from ? [props.from.spaceId] : []))
   const [noSpace, setNoSpace] = useState(false)
   const submit = (event: { preventDefault: () => void }) => {
     event.preventDefault()
@@ -123,8 +121,7 @@ function CreateProfile(props: {
       <DialogHeader>
         <DialogTitle>New profile</DialogTitle>
         <DialogDescription>
-          A profile is one set of accounts for {props.app.name}. The agent tells
-          profiles apart by their name.
+          A profile is one set of accounts for {props.app.name}. The agent tells profiles apart by their name.
         </DialogDescription>
       </DialogHeader>
       <FieldGroup className="gap-5">
@@ -169,16 +166,8 @@ function CreateProfile(props: {
               onValueChange={(value) => setKind(value === "private" ? "private" : "shared")}
               className="grid-cols-2"
             >
-              <Choice
-                value="shared"
-                title="Shared"
-                description="The spaces you pick use it."
-              />
-              <Choice
-                value="private"
-                title="Private"
-                description="Only your Personal Space uses it."
-              />
+              <Choice value="shared" title="Shared" description="The spaces you pick use it." />
+              <Choice value="private" title="Private" description="Only your Personal Space uses it." />
             </RadioGroup>
           </FieldSet>
         ) : null}
@@ -200,18 +189,13 @@ function CreateProfile(props: {
                       })
                     }
                   />
-                  <FieldLabel
-                    htmlFor={`profile-space-${space.id}`}
-                    className="font-normal"
-                  >
+                  <FieldLabel htmlFor={`profile-space-${space.id}`} className="font-normal">
                     {space.name}
                   </FieldLabel>
                 </Field>
               ))}
             </div>
-            {noSpace && spaces.size === 0 ? (
-              <FieldError>Pick at least one space.</FieldError>
-            ) : null}
+            {noSpace && spaces.size === 0 ? <FieldError>Pick at least one space.</FieldError> : null}
           </FieldSet>
         ) : null}
         {create.error ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
@@ -234,9 +218,7 @@ function Choice(props: { value: string; title: string; description: string }) {
       <Field orientation="horizontal">
         <FieldContent>
           <FieldTitle>{props.title}</FieldTitle>
-          <FieldDescription className="text-xs">
-            {props.description}
-          </FieldDescription>
+          <FieldDescription className="text-xs">{props.description}</FieldDescription>
         </FieldContent>
         <RadioGroupItem value={props.value} id={id} />
       </Field>
@@ -293,11 +275,7 @@ function ConnectAccount(props: {
                 }
               />
             </Row>,
-            <Row
-              key="spaces"
-              title="Used in"
-              description={reach(props.profile)}
-            >
+            <Row key="spaces" title="Used in" description={reach(props.profile)}>
               <AccountAccess profile={props.profile} />
             </Row>,
           ]}
@@ -309,9 +287,7 @@ function ConnectAccount(props: {
             .map((gate) => (
               <Alert key={gate.name}>
                 <IconAlertTriangle className="text-chart-3" />
-                <AlertDescription>
-                  Set up the org OAuth app “{gate.name}” before you sign in.
-                </AlertDescription>
+                <AlertDescription>Set up the org OAuth app “{gate.name}” before you sign in.</AlertDescription>
               </Alert>
             ))}
           <Rows>
@@ -324,13 +300,8 @@ function ConnectAccount(props: {
                   onSignIn={() => signIn(item)}
                 />
               ) : (
-                <KeyRow
-                  key={item.label}
-                  profileId={props.profile.id}
-                  app={props.app}
-                  item={item}
-                />
-              )
+                <KeyRow key={item.label} profileId={props.profile.id} app={props.app} item={item} />
+              ),
             )}
           </Rows>
         </div>
@@ -349,19 +320,13 @@ function ConnectAccount(props: {
 }
 
 const signInCaption = (item: AppProfileItem) => {
-  if (item.status === "ok")
-    return item.holder ? `Connected as ${item.holder.name}` : "Connected"
+  if (item.status === "ok") return item.holder ? `Connected as ${item.holder.name}` : "Connected"
   if (item.status === "reconnect") return "Sign in again to keep it working."
-  if (item.status === "unavailable")
-    return "Not available in this organization."
+  if (item.status === "unavailable") return "Not available in this organization."
   return `Opens ${item.name} in a new tab.`
 }
 
-function SignInRow(props: {
-  item: AppProfileItem
-  waiting: boolean
-  onSignIn: () => void
-}) {
+function SignInRow(props: { item: AppProfileItem; waiting: boolean; onSignIn: () => void }) {
   if (props.waiting)
     return (
       <Row
@@ -369,12 +334,7 @@ function SignInRow(props: {
         description={`Waiting for ${props.item.name}…`}
         media={<Spinner className="text-muted-foreground" />}
       >
-        <Button
-          variant="ghost"
-          size="xs"
-          className="h-6.5 text-muted-foreground"
-          onClick={props.onSignIn}
-        >
+        <Button variant="ghost" size="xs" className="h-6.5 text-muted-foreground" onClick={props.onSignIn}>
           Open again
         </Button>
       </Row>
@@ -387,12 +347,7 @@ function SignInRow(props: {
       media={ok ? <IconCheck className="size-4 text-chart-2" /> : undefined}
     >
       {props.item.status === "unavailable" ? null : (
-        <Button
-          variant={ok ? "outline" : "default"}
-          size="xs"
-          className="h-6.5"
-          onClick={props.onSignIn}
-        >
+        <Button variant={ok ? "outline" : "default"} size="xs" className="h-6.5" onClick={props.onSignIn}>
           {ok ? "Reconnect" : `Sign in with ${props.item.name}`}
         </Button>
       )}
@@ -416,17 +371,8 @@ function KeyRow(props: { profileId: string; app: App; item: AppProfileItem }) {
   const target = keyTarget(props.item, props.app)
   if (props.item.status === "ok" && !replacing)
     return (
-      <Row
-        title={props.item.name}
-        description="Saved"
-        media={<IconCheck className="size-4 text-chart-2" />}
-      >
-        <Button
-          variant="outline"
-          size="xs"
-          className="h-6.5"
-          onClick={() => setReplacing(true)}
-        >
+      <Row title={props.item.name} description="Saved" media={<IconCheck className="size-4 text-chart-2" />}>
+        <Button variant="outline" size="xs" className="h-6.5" onClick={() => setReplacing(true)}>
           Replace
         </Button>
       </Row>

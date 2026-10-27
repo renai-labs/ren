@@ -72,10 +72,7 @@ function Chip(props: {
         {props.text}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
-        <DropdownMenuRadioGroup
-          value={props.value}
-          onValueChange={props.onChange}
-        >
+        <DropdownMenuRadioGroup value={props.value} onValueChange={props.onChange}>
           {props.options.map((option) => (
             <DropdownMenuRadioItem key={option.value} value={option.value}>
               {option.label}
@@ -139,8 +136,7 @@ export function NewTaskDialog(props: {
   const [draft, setDraft] = useState(() => draftFor(defaultSpace))
   const spaceId = draft.spaceId || defaultSpace
   const spaceName = spaces.spaceName
-  const set = (patch: Partial<typeof draft>) =>
-    setDraft((current) => ({ ...current, ...patch }))
+  const set = (patch: Partial<typeof draft>) => setDraft((current) => ({ ...current, ...patch }))
   const mutation = useMutation(api.task.create.mutationOptions())
   const create = () => {
     mutation.mutate(
@@ -148,7 +144,14 @@ export function NewTaskDialog(props: {
         spaceId,
         title: draft.title.trim(),
         ...(draft.description.trim() && { description: draft.description.trim() }),
-        status: draft.status === "in_progress" ? "in_progress" : draft.status === "done" ? "done" : draft.status === "dismissed" ? "dismissed" : "todo",
+        status:
+          draft.status === "in_progress"
+            ? "in_progress"
+            : draft.status === "done"
+              ? "done"
+              : draft.status === "dismissed"
+                ? "dismissed"
+                : "todo",
         ...(draft.priority === "high" || draft.priority === "medium" || draft.priority === "low"
           ? { priority: draft.priority }
           : {}),
@@ -189,10 +192,7 @@ export function NewTaskDialog(props: {
               <IconChevronDown className="text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuRadioGroup
-                value={spaceId}
-                onValueChange={(next: string) => set({ spaceId: next })}
-              >
+              <DropdownMenuRadioGroup value={spaceId} onValueChange={(next: string) => set({ spaceId: next })}>
                 {spaces.joined.map((space) => (
                   <DropdownMenuRadioItem key={space.id} value={space.id}>
                     <IconCube />
@@ -204,16 +204,12 @@ export function NewTaskDialog(props: {
           </DropdownMenu>
           <IconChevronRight className="size-4 text-muted-foreground" />
           <DialogTitle>New task</DialogTitle>
-          <DialogDescription className="sr-only">
-            Add a task to a space.
-          </DialogDescription>
+          <DialogDescription className="sr-only">Add a task to a space.</DialogDescription>
           <Button
             variant="ghost"
             size="icon-sm"
             className="-mr-1 ml-auto text-muted-foreground"
-            aria-label={
-              expanded ? "Collapse task composer" : "Expand task composer"
-            }
+            aria-label={expanded ? "Collapse task composer" : "Expand task composer"}
             onClick={() => setExpanded((current) => !current)}
           >
             {expanded ? <IconMinimize /> : <IconMaximize />}
@@ -277,16 +273,8 @@ export function NewTaskDialog(props: {
                   label,
                 })),
               ]}
-              icon={
-                <PriorityIcon
-                  priority={draft.priority === "none" ? null : draft.priority}
-                />
-              }
-              text={
-                draft.priority === "none"
-                  ? "Priority"
-                  : priorityLabelOf(draft.priority)
-              }
+              icon={<PriorityIcon priority={draft.priority === "none" ? null : draft.priority} />}
+              text={draft.priority === "none" ? "Priority" : priorityLabelOf(draft.priority)}
               muted={draft.priority === "none"}
               onChange={(priority) => set({ priority })}
             />
@@ -300,13 +288,8 @@ export function NewTaskDialog(props: {
                   label: agent.name,
                 })),
               ]}
-              icon={
-                draft.agentId === "none" ? <IconUserCircle /> : <IconGhost />
-              }
-              text={
-                agents.find((agent) => agent.id === draft.agentId)?.name ??
-                "Assignee"
-              }
+              icon={draft.agentId === "none" ? <IconUserCircle /> : <IconGhost />}
+              text={agents.find((agent) => agent.id === draft.agentId)?.name ?? "Assignee"}
               muted={draft.agentId === "none"}
               onChange={(agentId) => set({ agentId })}
             />
@@ -337,10 +320,7 @@ export function NewTaskDialog(props: {
                       })
                     }
                   >
-                    <span
-                      className="size-2 rounded-full"
-                      style={{ background: labelColor(label.color) }}
-                    />
+                    <span className="size-2 rounded-full" style={{ background: labelColor(label.color) }} />
                     {label.name}
                   </DropdownMenuCheckboxItem>
                 ))}

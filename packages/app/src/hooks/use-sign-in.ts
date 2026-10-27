@@ -4,7 +4,10 @@ import { toast } from "sonner"
 import { api, errorMessage, profileQueries } from "@/lib/api"
 
 export function useSignIn(onOpened?: (item: AppProfileItem) => void) {
-  const connect = useMutation({ ...api["credential-connect"].credential.connect.mutationOptions(), meta: { invalidates: profileQueries } })
+  const connect = useMutation({
+    ...api["credential-connect"].credential.connect.mutationOptions(),
+    meta: { invalidates: profileQueries },
+  })
   return {
     pending: connect.isPending,
     start: (profileId: string, item: AppProfileItem) => {

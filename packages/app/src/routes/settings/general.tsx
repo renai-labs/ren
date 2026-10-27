@@ -23,7 +23,10 @@ function useGeneralPage() {
   const current = settings.data.settings
   const [instructions, setInstructions] = useState<string>()
   const draft = instructions ?? current.instructions ?? ""
-  const saveSettings = (patch: { instructions?: string; model?: { endpointId: string; modelId: string; variant?: string } }) =>
+  const saveSettings = (patch: {
+    instructions?: string
+    model?: { endpointId: string; modelId: string; variant?: string }
+  }) =>
     update.mutateAsync(
       { id: me.organization.id, settings: { ...current, ...patch } },
       { onError: (error) => toast.error("Couldn’t save the settings", { description: errorMessage(error) }) },
@@ -34,7 +37,9 @@ function useGeneralPage() {
     organization: me.organization,
     canUpdate: settings.data.canUpdate,
     models,
-    model: model ? { id: model.modelId, providerID: model.endpointId, ...(model.variant && { variant: model.variant }) } : undefined,
+    model: model
+      ? { id: model.modelId, providerID: model.endpointId, ...(model.variant && { variant: model.variant }) }
+      : undefined,
     instructions: draft,
     saving: update.isPending,
     setInstructions,
@@ -74,11 +79,7 @@ export function GeneralSettingsPage() {
               />
             </span>
           </Row>,
-          <Row
-            key="model"
-            title="Default model"
-            description="New chats start with it unless a space sets its own."
-          >
+          <Row key="model" title="Default model" description="New chats start with it unless a space sets its own.">
             <ModelPicker
               models={page.models}
               value={page.model ?? page.models.at(0)}
@@ -100,9 +101,7 @@ export function GeneralSettingsPage() {
           placeholder={"# Organization instructions\n\n- Conventions every agent should follow."}
           className="min-h-110 rounded-xl bg-card p-4 dark:bg-card"
         />
-        <p className="text-xs text-muted-foreground">
-          {page.saving ? "Saving…" : "Changes save automatically."}
-        </p>
+        <p className="text-xs text-muted-foreground">{page.saving ? "Saving…" : "Changes save automatically."}</p>
       </Section>
     </Page>
   )

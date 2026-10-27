@@ -21,4 +21,5 @@ export const sidebarSessionsOptions = () =>
     initialPageParam: 1,
     getNextPageParam: (last) => (last.page * last.pageSize < last.total ? last.page + 1 : undefined),
     staleTime: 30_000,
+    refetchInterval: 10_000,
   })

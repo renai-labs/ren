@@ -83,7 +83,12 @@ function useAcceptInvitationPage() {
 
 export function AcceptInvitationPage() {
   const page = useAcceptInvitationPage()
-  if (page.loading) return <AuthLayout title="Loading invitation…" description="">{null}</AuthLayout>
+  if (page.loading)
+    return (
+      <AuthLayout title="Loading invitation…" description="">
+        {null}
+      </AuthLayout>
+    )
   if (page.failed)
     return (
       <AuthLayout

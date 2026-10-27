@@ -15,14 +15,7 @@ import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { RowMenu } from "@/components/ren/row-menu"
 import { StatusBadge } from "@/components/ren/status-badge"
 import { TableCard, TableEmpty } from "@/components/ren/page"
@@ -194,32 +187,21 @@ export function CredentialsTable(props: {
                       {credential.name ?? credential.label}
                     </span>
                     {detail.length ? (
-                      <span className="truncate font-mono text-xs text-muted-foreground">
-                        {detail.join(" · ")}
-                      </span>
+                      <span className="truncate font-mono text-xs text-muted-foreground">{detail.join(" · ")}</span>
                     ) : null}
                   </span>
                 </TableCell>
-                <TableCell
-                  className="truncate text-muted-foreground"
-                  title={credential.hosts.join(", ")}
-                >
+                <TableCell className="truncate text-muted-foreground" title={credential.hosts.join(", ")}>
                   {hostsLabel(credential.hosts)}
                 </TableCell>
                 <TableCell>
                   <span className="flex flex-wrap items-center gap-2">
                     {ownerLabel(credential.owner, spaces, me.user.id)}
                     {credential.account ? (
-                      <StatusBadge tone="neutral">
-                        {credential.account.name}’s account
-                      </StatusBadge>
+                      <StatusBadge tone="neutral">{credential.account.name}’s account</StatusBadge>
                     ) : null}
-                    {credential.delivery === "delivered" ? (
-                      <StatusBadge tone="warn">Delivered</StatusBadge>
-                    ) : null}
-                    {credential.status === "reconnect" ? (
-                      <StatusBadge tone="error">Reconnect</StatusBadge>
-                    ) : null}
+                    {credential.delivery === "delivered" ? <StatusBadge tone="warn">Delivered</StatusBadge> : null}
+                    {credential.status === "reconnect" ? <StatusBadge tone="error">Reconnect</StatusBadge> : null}
                   </span>
                 </TableCell>
                 <TableCell>

@@ -34,10 +34,8 @@ export type FilterProperty = {
 
 export type Filters = Record<string, string[]>
 
-const row =
-  "h-9 gap-3 px-3 data-highlighted:[&_svg]:text-foreground! data-popup-open:[&_svg]:text-foreground!"
-const marked =
-  "h-9 gap-2 pr-3 pl-8 *:data-[slot$=indicator]:right-auto *:data-[slot$=indicator]:left-2"
+const row = "h-9 gap-3 px-3 data-highlighted:[&_svg]:text-foreground! data-popup-open:[&_svg]:text-foreground!"
+const marked = "h-9 gap-2 pr-3 pl-8 *:data-[slot$=indicator]:right-auto *:data-[slot$=indicator]:left-2"
 
 export function FilterMenu(props: {
   label: string
@@ -81,8 +79,7 @@ export function FilterMenu(props: {
           <DropdownMenuLabel className="mb-1">Properties</DropdownMenuLabel>
           {props.properties.map((property) => {
             const selected = props.value[property.key] ?? []
-            const set = (values: string[]) =>
-              props.onChange({ ...props.value, [property.key]: values })
+            const set = (values: string[]) => props.onChange({ ...props.value, [property.key]: values })
             return (
               <DropdownMenuSub key={property.key}>
                 <DropdownMenuSubTrigger className={row}>
@@ -92,43 +89,24 @@ export function FilterMenu(props: {
                     {selected.length === 0
                       ? property.any
                       : selected.length === 1
-                        ? property.options.find(
-                            (option) => option.value === selected[0]
-                          )?.label
+                        ? property.options.find((option) => option.value === selected[0])?.label
                         : `${selected.length} selected`}
                   </span>
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent
-                  sideOffset={2}
-                  className={props.noun ? "w-60" : "w-48"}
-                >
+                <DropdownMenuSubContent sideOffset={2} className={props.noun ? "w-60" : "w-48"}>
                   {property.single ? (
                     <DropdownMenuRadioGroup
                       value={selected[0] ?? ""}
-                      onValueChange={(value: string) =>
-                        set(value ? [value] : [])
-                      }
+                      onValueChange={(value: string) => set(value ? [value] : [])}
                     >
-                      {[
-                        { value: "", label: property.any },
-                        ...property.options,
-                      ].map((option) => (
-                        <DropdownMenuRadioItem
-                          key={option.value}
-                          value={option.value}
-                          className={marked}
-                        >
+                      {[{ value: "", label: property.any }, ...property.options].map((option) => (
+                        <DropdownMenuRadioItem key={option.value} value={option.value} className={marked}>
                           {option.label}
                         </DropdownMenuRadioItem>
                       ))}
                     </DropdownMenuRadioGroup>
                   ) : (
-                    <CheckboxOptions
-                      property={property}
-                      selected={selected}
-                      onChange={set}
-                      noun={props.noun}
-                    />
+                    <CheckboxOptions property={property} selected={selected} onChange={set} noun={props.noun} />
                   )}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
@@ -136,11 +114,7 @@ export function FilterMenu(props: {
           })}
         </DropdownMenuGroup>
         <DropdownMenuSeparator className="mx-0 my-2" />
-        <DropdownMenuItem
-          className={row}
-          disabled={!active}
-          onClick={() => props.onChange({})}
-        >
+        <DropdownMenuItem className={row} disabled={!active} onClick={() => props.onChange({})}>
           <IconRestore />
           Reset to default
         </DropdownMenuItem>
@@ -157,19 +131,13 @@ function CheckboxOptions(props: {
 }) {
   const [query, setQuery] = useState("")
   const needle = query.trim().toLowerCase()
-  const options = props.property.options.filter((option) =>
-    option.label.toLowerCase().includes(needle)
-  )
+  const options = props.property.options.filter((option) => option.label.toLowerCase().includes(needle))
   return (
     <>
       {props.property.options.length > 5 ? (
         <MenuSearch value={query} onChange={setQuery} placeholder="Filter…" />
       ) : null}
-      {options.length === 0 ? (
-        <div className="px-3 py-2 text-sm text-muted-foreground">
-          No results
-        </div>
-      ) : null}
+      {options.length === 0 ? <div className="px-3 py-2 text-sm text-muted-foreground">No results</div> : null}
       {options.map((option) => (
         <DropdownMenuCheckboxItem
           key={option.value}
@@ -178,9 +146,7 @@ function CheckboxOptions(props: {
           closeOnClick={false}
           onCheckedChange={(checked) =>
             props.onChange(
-              checked
-                ? [...props.selected, option.value]
-                : props.selected.filter((value) => value !== option.value)
+              checked ? [...props.selected, option.value] : props.selected.filter((value) => value !== option.value),
             )
           }
         >
@@ -188,8 +154,7 @@ function CheckboxOptions(props: {
           <span className="flex-1 truncate">{option.label}</span>
           {props.noun && option.count !== undefined ? (
             <span className="text-xs text-muted-foreground">
-              {option.count}{" "}
-              {option.count === 1 ? props.noun : `${props.noun}s`}
+              {option.count} {option.count === 1 ? props.noun : `${props.noun}s`}
             </span>
           ) : null}
         </DropdownMenuCheckboxItem>
@@ -200,9 +165,7 @@ function CheckboxOptions(props: {
 
 export const passes = (filters: Filters, values: Record<string, string[]>) =>
   Object.entries(filters).every(
-    (entry) =>
-      entry[1].length === 0 ||
-      (values[entry[0]] ?? []).some((value) => entry[1].includes(value))
+    (entry) => entry[1].length === 0 || (values[entry[0]] ?? []).some((value) => entry[1].includes(value)),
   )
 
 export function FilterChips(props: {
@@ -210,9 +173,7 @@ export function FilterChips(props: {
   value: Filters
   onChange: (value: Filters) => void
 }) {
-  const on = props.properties.filter(
-    (property) => (props.value[property.key] ?? []).length > 0
-  )
+  const on = props.properties.filter((property) => (props.value[property.key] ?? []).length > 0)
   if (on.length === 0) return null
   return (
     <div className="flex flex-wrap items-center gap-1">
@@ -221,10 +182,7 @@ export function FilterChips(props: {
         const optionLabels = new Map(property.options.map((option) => [option.value, option.label]))
         const labels = selected.map((value) => optionLabels.get(value) ?? value)
         return (
-          <div
-            key={property.key}
-            className="flex h-6.5 items-center divide-x rounded-md border text-xs"
-          >
+          <div key={property.key} className="flex h-6.5 items-center divide-x rounded-md border text-xs">
             <span className="flex h-full items-center gap-1.5 px-2 text-muted-foreground [&_svg]:size-3.5">
               <property.icon />
               {property.label}
@@ -232,15 +190,11 @@ export function FilterChips(props: {
             <span className="flex h-full items-center px-2 text-muted-foreground">
               {selected.length > 1 ? "is any of" : "is"}
             </span>
-            <span className="flex h-full max-w-60 items-center truncate px-2">
-              {labels.join(", ")}
-            </span>
+            <span className="flex h-full max-w-60 items-center truncate px-2">{labels.join(", ")}</span>
             <button
               type="button"
               aria-label={`Remove ${property.label} filter`}
-              onClick={() =>
-                props.onChange({ ...props.value, [property.key]: [] })
-              }
+              onClick={() => props.onChange({ ...props.value, [property.key]: [] })}
               className="flex h-full items-center rounded-r-md px-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <IconX className="size-3.5" />
@@ -248,12 +202,7 @@ export function FilterChips(props: {
           </div>
         )
       })}
-      <Button
-        variant="ghost"
-        size="xs"
-        className="h-6.5 text-muted-foreground"
-        onClick={() => props.onChange({})}
-      >
+      <Button variant="ghost" size="xs" className="h-6.5 text-muted-foreground" onClick={() => props.onChange({})}>
         Clear
       </Button>
     </div>

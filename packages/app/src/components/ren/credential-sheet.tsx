@@ -3,21 +3,9 @@ import { Credential } from "@ren/schema/credential"
 import { useMutation } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Sheet,
   SheetClose,
@@ -107,16 +95,9 @@ export function CredentialSheet(props: {
           <FieldGroup className="flex-1 gap-6 overflow-y-auto overscroll-contain px-4 pb-4">
             <Field>
               <FieldLabel htmlFor="credential-name">Env name</FieldLabel>
-              <Input
-                id="credential-name"
-                name="label"
-                required
-                placeholder="STRIPE_API_KEY"
-                className="font-mono"
-              />
+              <Input id="credential-name" name="label" required placeholder="STRIPE_API_KEY" className="font-mono" />
               <FieldDescription>
-                Chats see it as an env var that holds ren:&lt;name&gt;. It
-                cannot change later.
+                Chats see it as an env var that holds ren:&lt;name&gt;. It cannot change later.
               </FieldDescription>
             </Field>
             <Field>
@@ -132,37 +113,20 @@ export function CredentialSheet(props: {
               />
             </Field>
             <Field orientation="horizontal">
-              <Switch
-                id="credential-any-host"
-                checked={anyHost}
-                onCheckedChange={setAnyHost}
-              />
-              <FieldLabel htmlFor="credential-any-host">
-                Use on any website
-              </FieldLabel>
+              <Switch id="credential-any-host" checked={anyHost} onCheckedChange={setAnyHost} />
+              <FieldLabel htmlFor="credential-any-host">Use on any website</FieldLabel>
             </Field>
             {anyHost ? null : (
               <Field>
                 <FieldLabel htmlFor="credential-hosts">Websites</FieldLabel>
-                <Input
-                  id="credential-hosts"
-                  name="hosts"
-                  required
-                  placeholder="api.stripe.com"
-                />
-                <FieldDescription>
-                  Ren adds the key only to requests to these hosts.
-                </FieldDescription>
+                <Input id="credential-hosts" name="hosts" required placeholder="api.stripe.com" />
+                <FieldDescription>Ren adds the key only to requests to these hosts.</FieldDescription>
               </Field>
             )}
             {props.owners.length > 1 ? (
               <Field>
                 <FieldLabel>Who can use it</FieldLabel>
-                <Select
-                  items={props.owners}
-                  value={owner}
-                  onValueChange={(value) => setOwner(String(value))}
-                >
+                <Select items={props.owners} value={owner} onValueChange={(value) => setOwner(String(value))}>
                   <SelectTrigger aria-label="Who can use it" className="w-full">
                     <SelectValue />
                   </SelectTrigger>

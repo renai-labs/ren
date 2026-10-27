@@ -15,7 +15,6 @@ export const formatDate = (value: string | Date) => dateFormat.format(new Date(v
 
 export const formatShortDate = (value: string | Date) => shortDateFormat.format(new Date(value))
 
-
 const units = [
   { unit: "year", ms: 365 * 86_400_000 },
   { unit: "month", ms: 30 * 86_400_000 },
@@ -40,7 +39,8 @@ export const roleLabel: Record<Role, string> = { owner: "Owner", admin: "Admin",
 
 export const isRole = (value: string): value is Role => Object.hasOwn(roleLabel, value)
 
-export const modelKey = (model: { readonly providerID: string; readonly id: string }) => `${model.providerID}/${model.id}`
+export const modelKey = (model: { readonly providerID: string; readonly id: string }) =>
+  `${model.providerID}/${model.id}`
 
 export const formText = (form: FormData, name: string) => {
   const value = form.get(name)

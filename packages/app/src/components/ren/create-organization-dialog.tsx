@@ -17,7 +17,10 @@ import { auth, isSlugTaken, organizationSlug, slugAvailabilityOptions } from "@/
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import { resetSession } from "@/lib/chat"
 
-export function CreateOrganizationForm(props: { onCreated?: () => void; footer?: (pending: boolean) => React.ReactNode }) {
+export function CreateOrganizationForm(props: {
+  onCreated?: () => void
+  footer?: (pending: boolean) => React.ReactNode
+}) {
   const navigate = useNavigate()
   const [name, setName] = useState("")
   const [error, setError] = useState("")
@@ -25,7 +28,10 @@ export function CreateOrganizationForm(props: { onCreated?: () => void; footer?:
   const [pending, setPending] = useState(false)
   const slug = organizationSlug(name)
   const debounced = useDebouncedValue(slug, 350)
-  const availability = useQuery({ ...slugAvailabilityOptions(debounced), enabled: debounced !== "" && debounced === slug })
+  const availability = useQuery({
+    ...slugAvailabilityOptions(debounced),
+    enabled: debounced !== "" && debounced === slug,
+  })
   const taken = slug !== "" && (slug === takenSlug || availability.data === "taken")
   const submit = async () => {
     if (!name.trim()) {

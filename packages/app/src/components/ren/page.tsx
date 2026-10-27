@@ -1,11 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton"
 import { TableCell, TableRow } from "@/components/ui/table"
-import {
-  Fragment,
-  type ComponentProps,
-  type ComponentType,
-  type ReactNode,
-} from "react"
+import { Fragment, type ComponentProps, type ComponentType, type ReactNode } from "react"
 import { IconChevronDown } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,9 +42,7 @@ export function Page(props: {
   const heading = (
     <>
       <h1 className="text-xl font-medium">{props.title}</h1>
-      {props.description ? (
-        <p className="text-sm text-muted-foreground">{props.description}</p>
-      ) : null}
+      {props.description ? <p className="text-sm text-muted-foreground">{props.description}</p> : null}
     </>
   )
   return (
@@ -82,17 +75,9 @@ export function Page(props: {
           <div className="flex shrink-0 items-center gap-2">{props.aside}</div>
         </header>
       ) : (
-        <header
-          className={
-            full
-              ? "flex items-center justify-between gap-4"
-              : "flex flex-col gap-1"
-          }
-        >
+        <header className={full ? "flex items-center justify-between gap-4" : "flex flex-col gap-1"}>
           {heading}
-          {full && props.actions ? (
-            <div className="flex items-center gap-1">{props.actions}</div>
-          ) : null}
+          {full && props.actions ? <div className="flex items-center gap-1">{props.actions}</div> : null}
         </header>
       )}
       {toolbar && !full ? (
@@ -118,9 +103,7 @@ export function PageScope(props: {
   }[]
   onChange: (value: string) => void
 }) {
-  const current =
-    props.options.find((option) => option.value === props.value) ??
-    props.options.at(0)
+  const current = props.options.find((option) => option.value === props.value) ?? props.options.at(0)
   if (!current) return null
   return (
     <DropdownMenu>
@@ -139,10 +122,7 @@ export function PageScope(props: {
         <IconChevronDown className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="center" className="w-56">
-        <DropdownMenuRadioGroup
-          value={props.value}
-          onValueChange={props.onChange}
-        >
+        <DropdownMenuRadioGroup value={props.value} onValueChange={props.onChange}>
           {props.options.map((option) => (
             <DropdownMenuRadioItem key={option.value} value={option.value}>
               <option.icon />
@@ -157,7 +137,12 @@ export function PageScope(props: {
 
 export function TableCard(props: { children: ReactNode; className?: string | undefined }) {
   return (
-    <div className={cn("rounded-xl border bg-card p-2 [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3 [&_th]:font-normal [&_th]:text-muted-foreground [&_thead_tr]:border-0 [&_tr]:border-0", props.className)}>
+    <div
+      className={cn(
+        "rounded-xl border bg-card p-2 [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3 [&_th]:font-normal [&_th]:text-muted-foreground [&_thead_tr]:border-0 [&_tr]:border-0",
+        props.className,
+      )}
+    >
       {props.children}
     </div>
   )
@@ -167,36 +152,24 @@ export function PageTabsList(props: ComponentProps<typeof TabsList>) {
   return <TabsList {...props} className="h-8 gap-1 bg-transparent p-0" />
 }
 
-export function PageTabsTrigger(props: {
-  value: string
-  count?: number | undefined
-  children: ReactNode
-}) {
+export function PageTabsTrigger(props: { value: string; count?: number | undefined; children: ReactNode }) {
   return (
     <TabsTrigger
       value={props.value}
       className="h-8 flex-none gap-2 px-3 font-normal data-active:font-medium group-data-[variant=default]/tabs-list:data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-secondary"
     >
       {props.children}
-      {props.count === undefined ? null : (
-        <span className="text-muted-foreground">{props.count}</span>
-      )}
+      {props.count === undefined ? null : <span className="text-muted-foreground">{props.count}</span>}
     </TabsTrigger>
   )
 }
 
-export function Section(props: {
-  title: string
-  description?: string | undefined
-  children: ReactNode
-}) {
+export function Section(props: { title: string; description?: string | undefined; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <h2 className="text-sm font-medium">{props.title}</h2>
-        {props.description ? (
-          <p className="text-xs text-muted-foreground">{props.description}</p>
-        ) : null}
+        {props.description ? <p className="text-xs text-muted-foreground">{props.description}</p> : null}
       </div>
       {props.children}
     </section>
@@ -232,11 +205,7 @@ export function Row(props: {
           {props.title}
           {props.badge}
         </ItemTitle>
-        {props.description ? (
-          <ItemDescription className="text-xs">
-            {props.description}
-          </ItemDescription>
-        ) : null}
+        {props.description ? <ItemDescription className="text-xs">{props.description}</ItemDescription> : null}
       </ItemContent>
       {props.children ? <ItemActions>{props.children}</ItemActions> : null}
     </Item>

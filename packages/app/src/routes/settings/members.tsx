@@ -12,7 +12,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger } from "@/components/ui/dialog"
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -56,7 +57,8 @@ function useMembersPage() {
   const [query, setQuery] = useState("")
   const inSpace = useQuery({
     ...api["space-member"].list.queryOptions({ spaceId: scope, status: "active", page: 1, pageSize: pickerPageSize }),
-    enabled: scope !== "org" })
+    enabled: scope !== "org",
+  })
   const spaceUsers = new Set(
     (inSpace.data?.items ?? []).flatMap((member) => (member.status === "active" ? [member.userId] : [])),
   )
@@ -72,7 +74,8 @@ function useMembersPage() {
       email: member.email,
       image: member.image,
       role: member.role,
-      you: member.id === me.user.id }))
+      you: member.id === me.user.id,
+    }))
   const invitations = organization.invitations.filter((invitation) => invitation.status === "pending")
   const refresh = () => queryClient.invalidateQueries({ queryKey: organizationOptions(me.organization.id).queryKey })
   const visibleRows = rows.slice((page - 1) * pageSize, page * pageSize)
@@ -83,8 +86,7 @@ function useMembersPage() {
     tab,
     page,
     total: tab === "members" ? rows.length : invitations.length,
-    openTab: (next: string) =>
-      void navigate({ search: { tab: next === "invitations" ? "invitations" : "members" } }),
+    openTab: (next: string) => void navigate({ search: { tab: next === "invitations" ? "invitations" : "members" } }),
     scope,
     setScope: (next: string) => {
       setScope(next)
@@ -109,13 +111,15 @@ function useMembersPage() {
     changeRole: async (memberId: string, name: string, role: string) => {
       const result = await auth.organization.updateMemberRole({ memberId, role, organizationId: me.organization.id })
       await refresh()
-      if (result.error === null) toast.success(`${name} is now ${roleLabel[isRole(role) ? role : "member"].toLowerCase()}`)
+      if (result.error === null)
+        toast.success(`${name} is now ${roleLabel[isRole(role) ? role : "member"].toLowerCase()}`)
       else toast.error("Couldn’t change role", { description: result.error.message })
     },
     remove: async (memberId: string, name: string) => {
       const result = await auth.organization.removeMember({
         memberIdOrEmail: memberId,
-        organizationId: me.organization.id })
+        organizationId: me.organization.id,
+      })
       await refresh()
       if (result.error === null) toast.success(`${name} removed from organization`)
       else toast.error("Couldn’t remove member", { description: result.error.message })
@@ -128,7 +132,8 @@ function useMembersPage() {
           email,
           role,
           organizationId: me.organization.id,
-          resend: false })
+          resend: false,
+        })
         if (result.error !== null) failures.push(`${email}: ${result.error.message ?? "failed"}`)
       }
       await refresh()
@@ -140,7 +145,8 @@ function useMembersPage() {
         email,
         role: isRole(role) ? role : "member",
         organizationId: me.organization.id,
-        resend: true })
+        resend: true,
+      })
       await refresh()
       if (result.error === null) toast.success(`Invitation resent to ${email}`)
       else toast.error("Couldn’t resend invitation", { description: result.error.message })
@@ -150,10 +156,13 @@ function useMembersPage() {
       await refresh()
       if (result.error === null) toast.success(`Invitation to ${email} revoked`)
       else toast.error("Couldn’t revoke invitation", { description: result.error.message })
-    } }
+    },
+  }
 }
 
-function InviteDialog(props: { onInvite: (emails: ReadonlyArray<string>, role: Role) => Promise<ReadonlyArray<string>> }) {
+function InviteDialog(props: {
+  onInvite: (emails: ReadonlyArray<string>, role: Role) => Promise<ReadonlyArray<string>>
+}) {
   const [open, setOpen] = useState(false)
   const [role, setRole] = useState<Role>("member")
   const [text, setText] = useState("")
@@ -300,14 +309,16 @@ export function MembersSettingsPage() {
                 disabled={row.you || !page.canAdminister}
                 onChange={(role) => void page.changeRole(row.memberId, row.name, role)}
               />
-            ) }}
+            ),
+          }}
           remove={(row) =>
             row.you || !page.canAdminister
               ? undefined
               : {
                   title: `Remove ${row.name}?`,
                   description: "They lose access to this organization and its spaces.",
-                  action: "Remove" }
+                  action: "Remove",
+                }
           }
           onRemove={(row) => page.remove(row.memberId, row.name)}
           empty="No members match these filters"
@@ -344,7 +355,9 @@ export function MembersSettingsPage() {
                             confirm: {
                               title: "Revoke invitation?",
                               description: `The invitation to ${invite.email} stops working.`,
-                              action: "Revoke" } },
+                              action: "Revoke",
+                            },
+                          },
                         ]}
                       />
                     ) : null}

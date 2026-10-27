@@ -1,12 +1,15 @@
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { Composer, type ChatSession } from "@ren/chat"
 import { SessionMessage } from "@ren/schema/session/message"
+import { cn } from "@/lib/utils"
+import type { Suggest } from "@/routes/chat/use-composer-suggestions"
 import { toast } from "sonner"
 import { useQuery } from "@tanstack/react-query"
 import {
   IconArrowUp,
   IconAt,
   IconClipboardText,
+  IconFileText,
   IconLoader2,
   IconPlayerStopFilled,
   IconPlus,
@@ -24,13 +27,9 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@/components/ui/attachment"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarGroup,
-  AvatarImage,
-} from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -40,18 +39,8 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupTextarea,
-} from "@/components/ui/input-group"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTitle,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group"
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { ProfileDialog, type ProfileTarget } from "@/components/ren/profile-dialog"
 import { useCatalog } from "@/hooks/use-catalog"
 import { api } from "@/lib/api"
@@ -106,9 +95,7 @@ function AppsStrip(props: { spaceId: string }) {
     gaps: gaps(profile),
   }))
   if (profiles.length === 0) return null
-  const apps = [
-    ...new Map(profiles.map((profile) => [profile.app, profile.icon] as const)),
-  ]
+  const apps = [...new Map(profiles.map((profile) => [profile.app, profile.icon] as const))]
   const missing = profiles.filter((profile) => profile.gaps.length > 0).length
   return (
     <Popover>
@@ -129,24 +116,15 @@ function AppsStrip(props: { spaceId: string }) {
             </Avatar>
           ))}
         </AvatarGroup>
-        {missing ? (
-          <Badge className="bg-chart-3 text-primary-foreground">
-            {missing}
-          </Badge>
-        ) : null}
+        {missing ? <Badge className="bg-chart-3 text-primary-foreground">{missing}</Badge> : null}
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
         <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
         {profiles.map((profile) => (
-          <div
-            key={profile.id}
-            className="flex items-center gap-3 rounded-sm p-2"
-          >
+          <div key={profile.id} className="flex items-center gap-3 rounded-sm p-2">
             <Avatar size="sm" className="data-[size=sm]:size-5">
               <AvatarImage src={profile.icon} alt="" />
-              <AvatarFallback className="bg-secondary">
-                {profile.app.charAt(0)}
-              </AvatarFallback>
+              <AvatarFallback className="bg-secondary">{profile.app.charAt(0)}</AvatarFallback>
             </Avatar>
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-sm">
@@ -181,15 +159,9 @@ function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void
     return (
       <span className="flex min-w-0 items-center gap-2 text-xs">
         <span className="truncate text-destructive">
-          {props.boot.reason.split("\n").at(0)?.trim() ||
-            "The sandbox failed to start."}
+          {props.boot.reason.split("\n").at(0)?.trim() || "The sandbox failed to start."}
         </span>
-        <Button
-          variant="link"
-          size="xs"
-          className="pointer-events-auto h-auto px-0"
-          onClick={props.onRetry}
-        >
+        <Button variant="link" size="xs" className="pointer-events-auto h-auto px-0" onClick={props.onRetry}>
           Retry
         </Button>
       </span>
@@ -262,20 +234,25 @@ export function PromptInput(props: {
   running?: boolean | undefined
   onStop?: (() => void) | undefined
   sending?: boolean | undefined
+  suggest?: Suggest | undefined
 }) {
+  const textarea = useRef<HTMLTextAreaElement>(null)
   const draft = props.value
   const text = draft.text
   const blank = Composer.isBlank(draft)
   const change = (next: Composer.Draft) => props.onChange(next)
+  const [grown, setGrown] = useState(false)
   const submit = () => {
     if (props.sending) return
     if (blank) {
       if (props.running) props.onStop?.()
       return
     }
+    setGrown(false)
     props.onSubmit()
   }
   const home = props.placement === "home"
+  const stacked = home || grown || text.includes("\n") || draft.pasted.length > 0
   const status = props.boot && blank ? props.boot : undefined
   const stop = props.running && blank && props.onStop
   const send = (
@@ -289,10 +266,54 @@ export function PromptInput(props: {
       {props.sending ? <IconLoader2 className="animate-spin" /> : stop ? <IconPlayerStopFilled /> : <IconArrowUp />}
     </InputGroupButton>
   )
-  const insert = (character: string) =>
-    change(Composer.withText(draft, `${text}${text && !text.endsWith(" ") ? " " : ""}${character}`))
+  const place = (next: string, cursor: number) =>
+    requestAnimationFrame(() => {
+      const node = textarea.current
+      if (!node || node.value !== next) return
+      node.focus()
+      node.setSelectionRange(cursor, cursor)
+    })
+  const insert = (character: string) => {
+    const next = character === "/" && !text ? "/" : `${text}${text && !text.endsWith(" ") ? " " : ""}${character}`
+    change(Composer.withText(draft, next))
+    props.suggest?.onCursor(next, next.length)
+    place(next, next.length)
+  }
+  const choose = (value: string) => {
+    const result = props.suggest?.onChoose(value, text, textarea.current?.selectionStart ?? text.length)
+    if (!result) return
+    change(Composer.withText(draft, result.text))
+    place(result.text, result.cursor)
+  }
+  const suggest = props.suggest
   return (
-    <div className="flex flex-col gap-2">
+    <div className="relative flex flex-col gap-2">
+      {suggest?.open ? (
+        <Command
+          value={suggest.active ?? ""}
+          shouldFilter={false}
+          className="absolute bottom-full left-0 mb-2 h-auto w-full max-w-md rounded-xl border bg-popover shadow-md"
+        >
+          <CommandList className="max-h-72">
+            <CommandGroup heading={suggest.label}>
+              {suggest.items.map((item) => (
+                <CommandItem
+                  key={item.value}
+                  value={item.value}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onSelect={() => choose(item.value)}
+                >
+                  {item.kind === "command" ? <IconTerminal2 /> : item.kind === "file" ? <IconFileText /> : <IconAt />}
+                  <span className={item.kind === "file" ? "truncate font-mono text-xs" : "truncate"}>{item.label}</span>
+                  {item.description ? (
+                    <span className="ml-auto truncate pl-3 text-xs text-muted-foreground">{item.description}</span>
+                  ) : null}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      ) : null}
       {draft.pasted.length > 0 ? (
         <PastedBlocks
           pasted={draft.pasted}
@@ -301,75 +322,90 @@ export function PromptInput(props: {
           onRemove={(id) => change(Composer.removePasted(draft, id))}
         />
       ) : null}
-    <InputGroup
-      className={
-        home
-          ? "rounded-xl bg-card dark:bg-card"
-          : "h-12.25 rounded-full bg-card pl-1 dark:bg-card"
-      }
-    >
-      {home ? null : (
-        <InputGroupAddon>
-          <AddMenu placement={props.placement} onInsert={insert} />
-          {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
-          {status ? (
-            <span className="ml-2">
-              <PromptInputStatus boot={status} onRetry={props.onRetry} />
-            </span>
-          ) : null}
-        </InputGroupAddon>
-      )}
-      {home && status ? (
-        <span className="pointer-events-none absolute top-4 left-4 flex">
-          <PromptInputStatus boot={status} onRetry={props.onRetry} />
-        </span>
-      ) : null}
-      <InputGroupTextarea
-        value={text}
-        onChange={(event) => change(Composer.withText(draft, event.target.value))}
-        onPaste={(event) => {
-          const data = event.clipboardData
-          const pasted = data.getData("text/plain")
-          const kind = Composer.paste(
-            { types: [...data.types], kinds: [...data.items].map((item) => item.kind), text: pasted },
-            { readClipboardImage: false },
-          )
-          if (kind === "text") return
-          event.preventDefault()
-          if (kind === "attachment") toast("Files can’t be attached yet")
-          else change(Composer.addPasted(draft, { id: SessionMessage.ID.create(), text: pasted }))
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
-          event.preventDefault()
-          submit()
-        }}
-        placeholder={status ? "" : "Ask anything, @ to add context"}
-        aria-label="Message"
-        readOnly={props.sending}
-        // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer is the page’s one input, as in Ren
-        autoFocus
-        rows={1}
-        className={
-          home
-            ? "min-h-24 px-4 pt-4 leading-relaxed"
-            : "min-h-0 px-2 py-3 leading-relaxed"
-        }
-      />
-      {home ? (
-        <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
-          <AddMenu placement={props.placement} onInsert={insert} />
-          {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
-          {props.model}
-          {send}
-        </InputGroupAddon>
-      ) : (
-        <InputGroupAddon align="inline-end" className="min-w-76 justify-end">
-          {props.model}
-          {send}
-        </InputGroupAddon>
-      )}
-    </InputGroup>
+      <InputGroup
+        className={stacked ? "rounded-xl bg-card dark:bg-card" : "h-12.25 rounded-full bg-card pl-1 dark:bg-card"}
+      >
+        {stacked ? null : (
+          <InputGroupAddon>
+            <AddMenu placement={props.placement} onInsert={insert} />
+            {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
+            {status ? (
+              <span className="ml-2">
+                <PromptInputStatus boot={status} onRetry={props.onRetry} />
+              </span>
+            ) : null}
+          </InputGroupAddon>
+        )}
+        {stacked && status ? (
+          <span className="pointer-events-none absolute top-4 left-4 flex">
+            <PromptInputStatus boot={status} onRetry={props.onRetry} />
+          </span>
+        ) : null}
+        <InputGroupTextarea
+          value={text}
+          onChange={(event) => {
+            const next = event.target.value
+            if (!next) setGrown(false)
+            else if (!stacked && event.target.scrollHeight > 60) setGrown(true)
+            change(Composer.withText(draft, next))
+            props.suggest?.onCursor(next, event.target.selectionStart)
+          }}
+          onBlur={() => props.suggest?.onClose()}
+          onPaste={(event) => {
+            const data = event.clipboardData
+            const pasted = data.getData("text/plain")
+            const kind = Composer.paste(
+              { types: [...data.types], kinds: [...data.items].map((item) => item.kind), text: pasted },
+              { readClipboardImage: false },
+            )
+            if (kind === "text") return
+            event.preventDefault()
+            if (kind === "attachment") toast("Files can’t be attached yet")
+            else change(Composer.addPasted(draft, { id: SessionMessage.ID.create(), text: pasted }))
+          }}
+          ref={textarea}
+          onKeyDown={(event) => {
+            if (suggest?.open && !event.nativeEvent.isComposing) {
+              if ((event.key === "Enter" || event.key === "Tab") && suggest.active && !event.shiftKey) {
+                event.preventDefault()
+                choose(suggest.active)
+                return
+              }
+              if (suggest.onKey({ key: event.key, ctrlKey: event.ctrlKey, isComposing: false })) {
+                event.preventDefault()
+                return
+              }
+            }
+            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
+            event.preventDefault()
+            submit()
+          }}
+          placeholder={status ? "" : "Ask anything, @ to add context"}
+          aria-label="Message"
+          readOnly={props.sending}
+          // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer is the page’s one input, as in Ren
+          autoFocus
+          rows={1}
+          className={
+            stacked
+              ? cn("px-4 pt-4 leading-relaxed", home ? "min-h-24" : "max-h-60 min-h-16")
+              : "min-h-0 px-2 py-3 leading-relaxed"
+          }
+        />
+        {stacked ? (
+          <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
+            <AddMenu placement={props.placement} onInsert={insert} />
+            {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
+            {props.model}
+            {send}
+          </InputGroupAddon>
+        ) : (
+          <InputGroupAddon align="inline-end" className="min-w-76 justify-end">
+            {props.model}
+            {send}
+          </InputGroupAddon>
+        )}
+      </InputGroup>
     </div>
   )
 }

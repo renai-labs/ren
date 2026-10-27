@@ -103,7 +103,11 @@ export function useTasksPage() {
     archiveSelected: async () => {
       const ids = selected
       setSelected([])
-      await bulk(ids, (id) => archive.mutateAsync({ id }), ids.length === 1 ? "Task archived" : `${ids.length} tasks archived`)
+      await bulk(
+        ids,
+        (id) => archive.mutateAsync({ id }),
+        ids.length === 1 ? "Task archived" : `${ids.length} tasks archived`,
+      )
     },
     errorMessage,
   }

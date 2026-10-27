@@ -21,11 +21,7 @@ function ProgressRing(props: GlyphProps & { state: RingState }) {
         <mask id={mask}>
           <circle cx="7" cy="7" r="7" fill="white" />
           <path
-            d={
-              props.state === "complete"
-                ? "M4 7.2 5.9 9.1 10 5"
-                : "M4.75 4.75 9.25 9.25M9.25 4.75 4.75 9.25"
-            }
+            d={props.state === "complete" ? "M4 7.2 5.9 9.1 10 5" : "M4.75 4.75 9.25 9.25M9.25 4.75 4.75 9.25"}
             fill="none"
             stroke="black"
             strokeWidth="1.6"
@@ -33,27 +29,14 @@ function ProgressRing(props: GlyphProps & { state: RingState }) {
             strokeLinejoin="round"
           />
         </mask>
-        <circle
-          cx="7"
-          cy="7"
-          r="7"
-          fill="currentColor"
-          mask={`url(#${mask})`}
-        />
+        <circle cx="7" cy="7" r="7" fill="currentColor" mask={`url(#${mask})`} />
       </svg>
     )
   }
   const circumference = 2 * Math.PI * 2
   return (
     <svg {...svg}>
-      <circle
-        cx="7"
-        cy="7"
-        r="6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
+      <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
       {props.state === "half" ? (
         <circle
           cx="7"
@@ -87,15 +70,7 @@ function SignalBars(props: GlyphProps & { level: number }) {
     >
       {bars.map((bar, index) =>
         props.level === 0 ? (
-          <rect
-            key={bar.x}
-            x={bar.x}
-            y="7.25"
-            width="3"
-            height="1.5"
-            rx="0.5"
-            fill="currentColor"
-          />
+          <rect key={bar.x} x={bar.x} y="7.25" width="3" height="1.5" rx="0.5" fill="currentColor" />
         ) : (
           <rect
             key={bar.x}
@@ -107,7 +82,7 @@ function SignalBars(props: GlyphProps & { level: number }) {
             fill="currentColor"
             opacity={index < props.level ? 1 : 0.5}
           />
-        )
+        ),
       )}
     </svg>
   )
@@ -184,10 +159,7 @@ export const priorities = {
 
 const priorityLevel: Record<string, number> = { low: 1, medium: 2, high: 3 }
 
-export function PriorityIcon(props: {
-  priority: string | null
-  className?: string | undefined
-}) {
+export function PriorityIcon(props: { priority: string | null; className?: string | undefined }) {
   return (
     <SignalBars
       level={props.priority ? (priorityLevel[props.priority] ?? 0) : 0}
@@ -202,10 +174,7 @@ export const labelColor = (color: string | null | undefined) => color ?? "var(--
 export function LabelBadge(props: { name: string; color?: string | null | undefined }) {
   return (
     <Badge variant="outline" className="h-6 gap-2 rounded-full bg-muted">
-      <span
-        className="size-2 rounded-full"
-        style={{ background: labelColor(props.color) }}
-      />
+      <span className="size-2 rounded-full" style={{ background: labelColor(props.color) }} />
       {props.name}
     </Badge>
   )

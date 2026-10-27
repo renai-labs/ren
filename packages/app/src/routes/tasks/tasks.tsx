@@ -10,7 +10,8 @@ import {
   IconLink,
   IconX,
   IconPlus,
-  IconGhost } from "@tabler/icons-react"
+  IconGhost,
+} from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -18,29 +19,18 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ExpandableSearch } from "@/components/ren/expandable-search"
 import { ConfirmDialog } from "@/components/ren/confirm-dialog"
 import { Page, SkeletonRows } from "@/components/ren/page"
 import { NewTaskDialog } from "@/components/ren/new-task-dialog"
 import { PersonAvatar } from "@/components/ren/person-avatar"
 import { FilterChips, FilterMenu } from "@/components/ren/filter-menu"
-import {
-  DisplayOptions,
-  countedTaskProperties,
-  taskProperties } from "@/components/ren/task-filters"
-import {
-  LabelBadge,
-  PriorityIcon,
-  StatusGlyph,
-  StatusIcon,
-  UnassignedIcon,
-  statuses } from "@/components/ren/task-meta"
+import { DisplayOptions, countedTaskProperties, taskProperties } from "@/components/ren/task-filters"
+import { LabelBadge, PriorityIcon, StatusGlyph, StatusIcon, UnassignedIcon, statuses } from "@/components/ren/task-meta"
 import type { Member } from "@/hooks/use-members"
 import { formatShortDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -98,19 +88,13 @@ function TaskRow(props: {
           ? task.labels.map((label) => <LabelBadge key={label.id} name={label.name} color={label.color} />)
           : null}
         {show("due") && task.dueAt ? (
-          <span className="px-1 text-xs text-muted-foreground">
-            {formatShortDate(task.dueAt)}
-          </span>
+          <span className="px-1 text-xs text-muted-foreground">{formatShortDate(task.dueAt)}</span>
         ) : null}
         {show("created") ? (
-          <span className="px-1 text-xs text-muted-foreground">
-            {formatShortDate(task.createdAt)}
-          </span>
+          <span className="px-1 text-xs text-muted-foreground">{formatShortDate(task.createdAt)}</span>
         ) : null}
         {show("updated") ? (
-          <span className="px-1 text-xs text-muted-foreground">
-            {formatShortDate(task.updatedAt)}
-          </span>
+          <span className="px-1 text-xs text-muted-foreground">{formatShortDate(task.updatedAt)}</span>
         ) : null}
         {show("links") && task.links.length > 0 ? (
           <span className="flex items-center gap-1 px-1 text-xs text-muted-foreground">
@@ -122,10 +106,7 @@ function TaskRow(props: {
       {show("assignee") ? (
         <span className="flex size-6 shrink-0 items-center justify-center">
           {task.agentId ? (
-            <IconGhost
-              className="size-4 text-muted-foreground"
-              aria-label={props.agentName ?? "Agent"}
-            />
+            <IconGhost className="size-4 text-muted-foreground" aria-label={props.agentName ?? "Agent"} />
           ) : owner ? (
             <PersonAvatar name={owner} image={props.owner?.image} />
           ) : (
@@ -143,29 +124,32 @@ const groupingsFor = (lookups: TaskLookups) => ({
     label: space.name,
     icon: IconCube,
     spaceId: space.id as string | undefined,
-    has: (task: Task) => task.spaceId === space.id })),
+    has: (task: Task) => task.spaceId === space.id,
+  })),
   status: Object.entries(statuses).map(([value, status]) => ({
     id: value,
     label: status.label,
-    icon: (props: { className?: string }) => (
-      <StatusGlyph status={value} className={props.className} />
-    ),
+    icon: (props: { className?: string }) => <StatusGlyph status={value} className={props.className} />,
     spaceId: undefined,
-    has: (task: Task) => task.status === value })),
+    has: (task: Task) => task.status === value,
+  })),
   agent: [
     ...lookups.agents.map((agent) => ({
       id: agent.id,
       label: agent.name,
       icon: IconGhost,
       spaceId: undefined,
-      has: (task: Task) => task.agentId === agent.id })),
+      has: (task: Task) => task.agentId === agent.id,
+    })),
     {
       id: "none",
       label: "No agent",
       icon: IconGhost,
       spaceId: undefined,
-      has: (task: Task) => task.agentId === null },
-  ] })
+      has: (task: Task) => task.agentId === null,
+    },
+  ],
+})
 
 export function TasksPage() {
   const page = useTasksPage()
@@ -182,26 +166,19 @@ export function TasksPage() {
       label: group.label,
       icon: group.icon,
       spaceId: group.spaceId,
-      tasks: visible.filter(group.has) }))
+      tasks: visible.filter(group.has),
+    }))
     .filter((group) => display.showEmpty || group.tasks.length > 0)
   return (
     <Page
       title="Tasks"
       width="full"
       leading={
-        <FilterChips
-          properties={taskProperties(page.lookups)}
-          value={page.filters}
-          onChange={page.setFilters}
-        />
+        <FilterChips properties={taskProperties(page.lookups)} value={page.filters} onChange={page.setFilters} />
       }
       actions={
         <>
-          <ExpandableSearch
-            label="Search tasks"
-            value={page.query}
-            onChange={page.setQuery}
-          />
+          <ExpandableSearch label="Search tasks" value={page.query} onChange={page.setQuery} />
           <FilterMenu
             label="Filter tasks"
             properties={countedTaskProperties(page.lookups, roots)}
@@ -210,9 +187,7 @@ export function TasksPage() {
             noun="task"
           />
           <DisplayOptions value={display} />
-          <NewTaskDialog
-            trigger={<Button size="icon-sm" aria-label="New task" />}
-          >
+          <NewTaskDialog trigger={<Button size="icon-sm" aria-label="New task" />}>
             <IconEdit />
           </NewTaskDialog>
         </>
@@ -235,9 +210,7 @@ export function TasksPage() {
           No tasks yet
         </EmptyState>
       ) : (
-        <div
-          className={cn("flex flex-col transition-opacity", page.stale && "opacity-60")}
-        >
+        <div className={cn("flex flex-col transition-opacity", page.stale && "opacity-60")}>
           {groups.map((group) => (
             <Collapsible key={group.id} defaultOpen>
               <div className="flex h-9 items-center gap-2 rounded-lg bg-muted pr-2 pl-1 text-sm">
@@ -255,9 +228,7 @@ export function TasksPage() {
                 </CollapsibleTrigger>
                 <group.icon className="size-4 text-muted-foreground" />
                 <h2 className="truncate font-medium">{group.label}</h2>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {group.tasks.length}
-                </span>
+                <span className="text-xs text-muted-foreground tabular-nums">{group.tasks.length}</span>
                 <NewTaskDialog
                   spaceId={group.spaceId}
                   trigger={
@@ -284,9 +255,7 @@ export function TasksPage() {
                     selected={selected.includes(task.id)}
                     onSelect={(checked) =>
                       page.setSelected((current) =>
-                        checked
-                          ? [...current, task.id]
-                          : current.filter((id) => id !== task.id)
+                        checked ? [...current, task.id] : current.filter((id) => id !== task.id),
                       )
                     }
                   />
@@ -312,11 +281,13 @@ export function TasksPage() {
             ? {
                 title: "Archive task?",
                 description: `“${page.tasks.find((task) => task.id === selected.at(0))?.title ?? "This task"}” will be removed from Tasks.`,
-                action: "Archive" }
+                action: "Archive",
+              }
             : {
                 title: `Archive ${selected.length} tasks?`,
                 description: "These tasks will be removed from Tasks.",
-                action: "Archive" }
+                action: "Archive",
+              }
         }
         onConfirm={page.archiveSelected}
       />
@@ -352,9 +323,7 @@ function SelectionBar(props: {
         </button>
       </span>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={<Button variant="ghost" size="sm" className="h-7" />}
-        >
+        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="h-7" />}>
           Change status
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-48">
@@ -367,17 +336,10 @@ function SelectionBar(props: {
         </DropdownMenuContent>
       </DropdownMenu>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={<Button variant="ghost" size="sm" className="h-7" />}
-        >
-          Move
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="h-7" />}>Move</DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-64">
           {props.agents.map((agent) => (
-            <DropdownMenuItem
-              key={agent.id}
-              onClick={() => props.onMove(agent.id)}
-            >
+            <DropdownMenuItem key={agent.id} onClick={() => props.onMove(agent.id)}>
               <IconGhost />
               {agent.name}
             </DropdownMenuItem>
@@ -389,12 +351,7 @@ function SelectionBar(props: {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7"
-        onClick={props.onArchive}
-      >
+      <Button variant="ghost" size="sm" className="h-7" onClick={props.onArchive}>
         <IconArchive />
         Archive
       </Button>

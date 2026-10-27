@@ -26,11 +26,9 @@ const providerName: Record<string, string> = {
 
 export function pickModel(
   models: ReadonlyArray<SessionModel.Choice>,
-  picks: ReadonlyArray<SessionModel.Ref | null | undefined>
+  picks: ReadonlyArray<SessionModel.Ref | null | undefined>,
 ): SessionModel.Ref | undefined {
-  const found = picks.find(
-    (pick) => pick && models.some((model) => modelKey(model) === modelKey(pick))
-  )
+  const found = picks.find((pick) => pick && models.some((model) => modelKey(model) === modelKey(pick)))
   if (found) return found
   const first = models.at(0)
   if (!first) return undefined
@@ -40,8 +38,12 @@ export function pickModel(
 function ProviderIcon(props: { provider: string }) {
   return <ProviderMark provider={providerName[props.provider] ?? props.provider} />
 }
-const capitalize = (word: string) =>
-  word.charAt(0).toUpperCase() + word.slice(1)
+const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1)
+const efforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+const effortRank = (id: string) => {
+  const index = efforts.indexOf(id)
+  return index === -1 ? efforts.length : index
+}
 
 export function ModelPicker(props: {
   models: ReadonlyArray<SessionModel.Choice>
@@ -56,22 +58,14 @@ export function ModelPicker(props: {
   const current = props.models.find((model) => modelKey(model) === key)
   const variant = props.value?.variant ?? current?.variants.at(0)?.id
   const choice = current ? `${modelKey(current)}:${variant ?? ""}` : ""
-  const matches = props.models.filter((model) =>
-    model.name.toLowerCase().includes(query.trim().toLowerCase())
-  )
-  if (props.loading)
-    return <Skeleton className="ml-auto h-7 w-44 rounded-md" />
+  const matches = props.models.filter((model) => model.name.toLowerCase().includes(query.trim().toLowerCase()))
+  if (props.loading) return <Skeleton className="ml-auto h-7 w-44 rounded-md" />
   if (!current) return null
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         disabled={props.disabled}
-        render={
-          <InputGroupButton
-            size="sm"
-            className="ml-auto pr-1.5 font-normal text-muted-foreground"
-          />
-        }
+        render={<InputGroupButton size="sm" className="ml-auto pr-1.5 font-normal text-muted-foreground" />}
       >
         <ProviderIcon provider={current.providerID} />
         {current.name}
@@ -84,18 +78,12 @@ export function ModelPicker(props: {
         <IconChevronDown />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-72">
-        <MenuSearch
-          value={query}
-          onChange={setQuery}
-          placeholder="Search models…"
-        />
+        <MenuSearch value={query} onChange={setQuery} placeholder="Search models…" />
         <DropdownMenuRadioGroup
           value={choice}
           onValueChange={(value: string) => {
             const separator = value.lastIndexOf(":")
-            const picked = props.models.find(
-              (model) => modelKey(model) === value.slice(0, separator)
-            )
+            const picked = props.models.find((model) => modelKey(model) === value.slice(0, separator))
             const nextVariant = value.slice(separator + 1)
             if (picked)
               props.onChange({
@@ -106,9 +94,7 @@ export function ModelPicker(props: {
           }}
         >
           {providers
-            .filter((provider) =>
-              matches.some((model) => model.providerID === provider)
-            )
+            .filter((provider) => matches.some((model) => model.providerID === provider))
             .map((provider) => (
               <DropdownMenuGroup key={provider}>
                 <DropdownMenuLabel className="flex items-center gap-2 [&_svg]:size-4">
@@ -119,32 +105,35 @@ export function ModelPicker(props: {
                   .filter((model) => model.providerID === provider)
                   .map((model) =>
                     model.variants.length === 0 ? (
-                      <DropdownMenuRadioItem key={modelKey(model)} value={`${modelKey(model)}:`}>
+                      <DropdownMenuRadioItem key={modelKey(model)} value={`${modelKey(model)}:`} closeOnClick>
                         {model.name}
                       </DropdownMenuRadioItem>
                     ) : (
-                    <DropdownMenuSub key={modelKey(model)}>
-                      <DropdownMenuSubTrigger inset>
-                        {model.name}
-                        {modelKey(model) === key ? (
-                          <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-                            {capitalize(variant ?? "")}
-                            <IconCheck className="text-foreground" />
-                          </span>
-                        ) : null}
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent>
-                        {model.variants.map((option) => (
-                          <DropdownMenuRadioItem
-                            key={option.id}
-                            value={`${modelKey(model)}:${option.id}`}
-                          >
-                            {capitalize(option.id)}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                    )
+                      <DropdownMenuSub key={modelKey(model)}>
+                        <DropdownMenuSubTrigger inset>
+                          {model.name}
+                          {modelKey(model) === key ? (
+                            <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+                              {capitalize(variant ?? "")}
+                              <IconCheck className="text-foreground" />
+                            </span>
+                          ) : null}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent>
+                          {model.variants
+                            .toSorted((a, b) => effortRank(a.id) - effortRank(b.id))
+                            .map((option) => (
+                              <DropdownMenuRadioItem
+                                key={option.id}
+                                value={`${modelKey(model)}:${option.id}`}
+                                closeOnClick
+                              >
+                                {capitalize(option.id)}
+                              </DropdownMenuRadioItem>
+                            ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                    ),
                   )}
               </DropdownMenuGroup>
             ))}

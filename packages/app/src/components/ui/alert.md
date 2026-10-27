@@ -10,13 +10,13 @@ None. The code in `alert.tsx` is exactly what the shadcn CLI generated. Its prop
 
 Only the theme changed (see `src/index.css`). This component reads these theme values:
 
-| shadcn variable | Ren value | Ren role |
-| --- | --- | --- |
-| `foreground` | #f1f1f1 | Ren text-primary |
-| `card` | #1f1f1f | Ren bg-secondary — raised surfaces |
-| `card-foreground` | #f1f1f1 | Ren text-primary |
-| `muted-foreground` | #a3a3a3 | Ren text-secondary |
-| `destructive` | #f47780 | Ren status-danger |
+| shadcn variable    | Ren value | Ren role                           |
+| ------------------ | --------- | ---------------------------------- |
+| `foreground`       | #f1f1f1   | Ren text-primary                   |
+| `card`             | #1f1f1f   | Ren bg-secondary — raised surfaces |
+| `card-foreground`  | #f1f1f1   | Ren text-primary                   |
+| `muted-foreground` | #a3a3a3   | Ren text-secondary                 |
+| `destructive`      | #f47780   | Ren status-danger                  |
 
 Corners: `--radius` is 8px (Ren's control radius) instead of shadcn's 10px, so `rounded-lg` is 8px.
 

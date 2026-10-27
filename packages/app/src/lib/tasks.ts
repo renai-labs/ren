@@ -16,8 +16,7 @@ export type TaskSearch = typeof TaskSearchSchema.Type
 
 export const TaskSearch = Schema.toStandardSchemaV1(TaskSearchSchema)
 
-const isStatus = (value: string | undefined): value is TaskStatus =>
-  taskStatuses.some((status) => status === value)
+const isStatus = (value: string | undefined): value is TaskStatus => taskStatuses.some((status) => status === value)
 
 const isPriority = (value: string | undefined): value is TaskPriority =>
   value === "high" || value === "medium" || value === "low"

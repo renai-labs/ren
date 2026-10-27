@@ -13,10 +13,7 @@ export function useCatalog() {
   const listed = (registry.data?.items ?? []).map(fromRegistry)
   const ownById = new Map(own.map((app) => [app.id, app]))
   const listedIds = new Set(listed.map((app) => app.id))
-  const catalog = [
-    ...listed.map((app) => ownById.get(app.id) ?? app),
-    ...own.filter((app) => !listedIds.has(app.id)),
-  ]
+  const catalog = [...listed.map((app) => ownById.get(app.id) ?? app), ...own.filter((app) => !listedIds.has(app.id))]
   const all = profiles.data?.items ?? []
   return {
     loading: apps.isPending || registry.isPending || profiles.isPending,

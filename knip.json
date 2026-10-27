@@ -1,29 +1,13 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignore": [
-    "repos/**",
-    "**/generated/**",
-    "**/*.gen.ts",
-    ".agents/**",
-    ".claude/**"
-  ],
+  "ignore": ["repos/**", "**/generated/**", "**/*.gen.ts", ".agents/**", ".claude/**"],
   "workspaces": {
     ".": {
-      "entry": [
-        "script/**/*.ts",
-        "oxlint.config.ts",
-        ".opencode/plugins/*.ts"
-      ],
-      "ignoreDependencies": [
-        "@opencode/plugin",
-        "effect"
-      ]
+      "entry": ["script/**/*.ts", "oxlint.config.ts", ".opencode/plugins/*.ts"],
+      "ignoreDependencies": ["@opencode/plugin", "effect"]
     },
     "packages/*": {
-      "entry": [
-        "test/**/*.test.{ts,tsx}",
-        "script/**/*.ts"
-      ]
+      "entry": ["test/**/*.test.{ts,tsx}", "script/**/*.ts"]
     },
     "packages/cell": {
       "entry": [
@@ -37,29 +21,15 @@
         "test/**/*.test.ts",
         "test/lib/preload.ts"
       ],
-      "ignoreBinaries": [
-        "celld",
-        "e2b"
-      ],
-      "ignoreDependencies": [
-        "cloudflare"
-      ]
+      "ignoreBinaries": ["celld", "e2b"],
+      "ignoreDependencies": ["cloudflare"]
     },
     "packages/core": {
-      "entry": [
-        "test/**/*.test.ts",
-        "test/lib/preload.ts",
-        "script/**/*.ts"
-      ]
+      "entry": ["test/**/*.test.ts", "test/lib/preload.ts", "script/**/*.ts"]
     },
     "packages/db": {
-      "entry": [
-        "test/**/*.test.ts",
-        "script/**/*.ts"
-      ],
-      "ignoreDependencies": [
-        "@ren/schema"
-      ]
+      "entry": ["test/**/*.test.ts", "script/**/*.ts"],
+      "ignoreDependencies": ["@ren/schema"]
     },
     "packages/e2e": {
       "entry": [
@@ -70,21 +40,13 @@
         "script/**/*.ts",
         "playwright.config.ts"
       ],
-      "ignoreDependencies": [
-        "@ren/server"
-      ]
+      "ignoreDependencies": ["@ren/server"]
     },
     "packages/httpapi-codegen": {
-      "entry": [
-        "test/**/*.test.ts",
-        "script/**/*.ts"
-      ]
+      "entry": ["test/**/*.test.ts", "script/**/*.ts"]
     },
     "packages/app": {
-      "entry": [
-        "src/main.tsx",
-        "scripts/**/*.py"
-      ],
+      "entry": ["src/main.tsx", "scripts/**/*.py"],
       "ignore": [
         "src/components/ui/**",
         "src/hooks/use-highlighted-code.ts",
@@ -106,8 +68,6 @@
   },
   "ignoreDependencies": ["tailwindcss", "@fontsource/ibm-plex-mono", "auth", "turbo", "@typescript/native-preview"],
   "ignoreIssues": {
-    "packages/server/src/primitive.ts": [
-      "duplicates"
-    ]
+    "packages/server/src/primitive.ts": ["duplicates"]
   }
 }

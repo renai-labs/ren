@@ -20,16 +20,11 @@ export function AppIcon(props: {
       className={cn(
         "flex shrink-0 items-center justify-center overflow-hidden bg-secondary font-medium text-foreground",
         size,
-        props.className
+        props.className,
       )}
     >
       {props.icon ? (
-        <img
-          src={props.icon}
-          alt=""
-          draggable={false}
-          className="size-full object-cover"
-        />
+        <img src={props.icon} alt="" draggable={false} className="size-full object-cover" />
       ) : (
         props.name[0]
       )}

@@ -5,18 +5,10 @@ import { getRouteApi } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { Tabs } from "@/components/ui/tabs"
 import { AddToSpace, type Added } from "@/components/ren/add-to-space"
-import {
-  AccountList,
-  AppGrid,
-  AppRow,
-  AppSheet,
-} from "@/components/ren/app-list"
+import { AccountList, AppGrid, AppRow, AppSheet } from "@/components/ren/app-list"
 import { ToolbarSearch } from "@/components/ren/toolbar-search"
 import { Page, PageTabsList, PageTabsTrigger, SkeletonRows } from "@/components/ren/page"
-import {
-  ProfileDialog,
-  type ProfileTarget,
-} from "@/components/ren/profile-dialog"
+import { ProfileDialog, type ProfileTarget } from "@/components/ren/profile-dialog"
 import { ListPagination } from "@/components/ren/list-pagination"
 import { useCatalog } from "@/hooks/use-catalog"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
@@ -28,9 +20,7 @@ import { currentPage } from "@/lib/pagination"
 const route = getRouteApi("/_authed/_shell/marketplace")
 
 const matches = (app: { name: string; description: string }, query: string) =>
-  `${app.name} ${app.description}`
-    .toLowerCase()
-    .includes(query.trim().toLowerCase())
+  `${app.name} ${app.description}`.toLowerCase().includes(query.trim().toLowerCase())
 
 function useMarketplacePage() {
   const search = route.useSearch()
@@ -100,9 +90,7 @@ export function MarketplacePage() {
           </PageTabsList>
         </Tabs>
       }
-      actions={
-        <ToolbarSearch label="Search apps" value={query} onChange={page.setQuery} />
-      }
+      actions={<ToolbarSearch label="Search apps" value={query} onChange={page.setQuery} />}
       footer={<ListPagination page={page.page} pageSize={pageSize} total={page.total} noun="app" />}
     >
       {page.loading ? (
@@ -118,9 +106,7 @@ export function MarketplacePage() {
                 key={each.id}
                 name={each.name}
                 icon={each.icon}
-                caption={
-                  profiles.length > 0 ? summary(profiles) : each.description
-                }
+                caption={profiles.length > 0 ? summary(profiles) : each.description}
                 attention={needsAttention(profiles)}
                 onOpen={() => setOpened(each.id)}
                 action={<AddToSpace app={each} onAdded={added} />}
@@ -144,9 +130,7 @@ export function MarketplacePage() {
                 variant="outline"
                 size="xs"
                 className="h-6.5"
-                onClick={() =>
-                  setProfile({ appId: each.appId, profileId: each.id })
-                }
+                onClick={() => setProfile({ appId: each.appId, profileId: each.id })}
               >
                 {connectLabel(each) ?? "Open"}
               </Button>
@@ -154,9 +138,7 @@ export function MarketplacePage() {
           />
         ) : null}
       </AppSheet>
-      {profile ? (
-        <ProfileDialog {...profile} onClose={() => setProfile(undefined)} />
-      ) : null}
+      {profile ? <ProfileDialog {...profile} onClose={() => setProfile(undefined)} /> : null}
     </Page>
   )
 }

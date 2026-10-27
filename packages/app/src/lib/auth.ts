@@ -41,7 +41,6 @@ export const auth = createAuthClient({
   plugins: [organizationClient(), emailOTPClient(), authorizationRequest],
 })
 
-
 function assertSuccess<Result extends { error: { message?: string | undefined } | null }>(
   result: Result,
   fallback: string,

@@ -5,7 +5,11 @@ export const askToNotify = () => {
   if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission()
 }
 
-export function useAttentionNotification(input: { readonly running: boolean; readonly asking: boolean; readonly title: string }) {
+export function useAttentionNotification(input: {
+  readonly running: boolean
+  readonly asking: boolean
+  readonly title: string
+}) {
   const previous = useRef({ running: input.running, asking: input.asking })
   useEffect(() => {
     const before = previous.current

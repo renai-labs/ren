@@ -6,6 +6,8 @@
   "ignorePatterns": [
     "**/*.toml",
     "repos/",
+    ".agents/skills/",
+    ".claude/skills/",
     "packages/client/src/generated/",
     "packages/client/src/effect/generated/",
     "packages/db/migration/",

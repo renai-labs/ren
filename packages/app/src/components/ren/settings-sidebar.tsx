@@ -99,18 +99,12 @@ export function SettingsSidebar() {
       <SidebarContent>
         {sections.map((group) => (
           <SidebarGroup key={group.label} className="px-0 pb-4">
-            <SidebarGroupLabel className="mb-1 text-sm text-sidebar-foreground">
-              {group.label}
-            </SidebarGroupLabel>
+            <SidebarGroupLabel className="mb-1 text-sm text-sidebar-foreground">{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-1">
                 {group.items.map((item) => (
                   <SidebarMenuItem key={item.id}>
-                    <SidebarMenuButton
-                      className="h-9"
-                      isActive={section === item.id}
-                      render={<Link to={item.to} />}
-                    >
+                    <SidebarMenuButton className="h-9" isActive={section === item.id} render={<Link to={item.to} />}>
                       <item.icon />
                       <span>{item.label}</span>
                     </SidebarMenuButton>

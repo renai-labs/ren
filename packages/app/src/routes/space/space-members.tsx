@@ -13,7 +13,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger } from "@/components/ui/dialog"
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { ListPagination } from "@/components/ren/list-pagination"
@@ -47,10 +48,12 @@ function useSpaceMembers() {
   const [adding, setAdding] = useState(false)
   const members = useQuery({
     ...api["space-member"].list.queryOptions({ spaceId: space.id, page, pageSize }),
-    placeholderData: keepPreviousData })
+    placeholderData: keepPreviousData,
+  })
   const everyone = useQuery({
     ...api["space-member"].list.queryOptions({ spaceId: space.id, page: 1, pageSize: pickerPageSize }),
-    enabled: adding })
+    enabled: adding,
+  })
   const organization = useOrganization()
   const create = useMutation(api["space-member"].create.mutationOptions())
   const remove = useMutation(api["space-member"].archive.mutationOptions())
@@ -67,7 +70,8 @@ function useSpaceMembers() {
         name: member.user.name || member.user.email,
         email: member.user.email,
         image: member.user.image ?? undefined,
-        target: { userId: member.userId } })),
+        target: { userId: member.userId },
+      })),
     ...organization.invitations
       .filter((invitation) => invitation.status === "pending" && !joined.has(invitation.email.toLowerCase()))
       .map((invitation) => ({
@@ -75,7 +79,8 @@ function useSpaceMembers() {
         name: invitation.email,
         email: "Invited",
         image: undefined,
-        target: { email: invitation.email } })),
+        target: { email: invitation.email },
+      })),
   ]
   const rows = (members.data?.items ?? []).map((member) =>
     member.status === "active"
@@ -85,7 +90,8 @@ function useSpaceMembers() {
           email: member.email,
           image: member.image ?? undefined,
           you: member.userId === me.user.id,
-          pending: false }
+          pending: false,
+        }
       : { id: member.id, name: member.email, email: member.email, you: false, pending: true },
   )
   const needle = query.trim().toLowerCase()
@@ -115,7 +121,8 @@ function useSpaceMembers() {
                 : `${candidate.name} will join when they accept their invite`,
             )
           },
-          onError: (error) => toast.error("Could not add the member", { description: errorMessage(error) }) },
+          onError: (error) => toast.error("Could not add the member", { description: errorMessage(error) }),
+        },
       ),
     remove: (row: { id: string; name: string }) =>
       remove.mutateAsync(
@@ -126,8 +133,10 @@ function useSpaceMembers() {
             const next = lastPageAfterRemoval(page, total, pageSize)
             if (next !== page) void navigate({ search: (previous) => ({ ...previous, page: next }) })
           },
-          onError: (error) => toast.error("Could not remove the member", { description: errorMessage(error) }) },
-      ) }
+          onError: (error) => toast.error("Could not remove the member", { description: errorMessage(error) }),
+        },
+      ),
+  }
 }
 
 function AddSpaceMemberDialog(props: {
@@ -209,14 +218,20 @@ export function SpaceMembersTab() {
         column={{
           heading: "Status",
           cell: (row) =>
-            row.pending ? <StatusBadge tone="neutral">Pending</StatusBadge> : <StatusBadge tone="ok">Active</StatusBadge> }}
+            row.pending ? (
+              <StatusBadge tone="neutral">Pending</StatusBadge>
+            ) : (
+              <StatusBadge tone="ok">Active</StatusBadge>
+            ),
+        }}
         remove={(row) =>
           row.you || !page.space.canRemoveMember
             ? undefined
             : {
                 title: `Remove ${row.name} from ${page.space.name}?`,
                 description: "They lose access to this space’s chats, apps and keys.",
-                action: "Remove" }
+                action: "Remove",
+              }
         }
         onRemove={page.remove}
         empty={page.query ? `Nothing matches “${page.query.trim()}”` : "No members"}

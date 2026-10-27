@@ -8,13 +8,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { AuthLayout, FormError } from "@/components/ren/auth"
-import {
-  auth,
-  consentOrganizationHeader,
-  oauthClientOptions,
-  organizationsOptions,
-  sessionOptions,
-} from "@/lib/auth"
+import { auth, consentOrganizationHeader, oauthClientOptions, organizationsOptions, sessionOptions } from "@/lib/auth"
 import { initials } from "@/lib/format"
 
 const route = getRouteApi("/consent")

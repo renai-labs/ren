@@ -47,10 +47,7 @@ export function Choice(props: {
       <SelectTrigger
         aria-label={props.label}
         size={props.size ?? "default"}
-        className={
-          props.className ??
-          "border-transparent text-muted-foreground dark:bg-transparent"
-        }
+        className={props.className ?? "border-transparent text-muted-foreground dark:bg-transparent"}
       >
         <SelectValue />
       </SelectTrigger>
@@ -83,11 +80,7 @@ export function PasswordDialog() {
   const [revoke, setRevoke] = useState(true)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={<Button variant="outline" size="xs" className="h-6.5" />}
-      >
-        Change
-      </DialogTrigger>
+      <DialogTrigger render={<Button variant="outline" size="xs" className="h-6.5" />}>Change</DialogTrigger>
       <DialogContent>
         <form
           className="contents"
@@ -121,19 +114,15 @@ export function PasswordDialog() {
         >
           <DialogHeader>
             <DialogTitle>Change password</DialogTitle>
-            <DialogDescription>
-              Confirm your current password, then pick a new one.
-            </DialogDescription>
+            <DialogDescription>Confirm your current password, then pick a new one.</DialogDescription>
           </DialogHeader>
           <FieldGroup className="gap-4">
-            {["Current password", "New password", "Confirm new password"].map(
-              (label) => (
-                <Field key={label}>
-                  <FieldLabel htmlFor={label}>{label}</FieldLabel>
-                  <Input id={label} name={label} type="password" required />
-                </Field>
-              )
-            )}
+            {["Current password", "New password", "Confirm new password"].map((label) => (
+              <Field key={label}>
+                <FieldLabel htmlFor={label}>{label}</FieldLabel>
+                <Input id={label} name={label} type="password" required />
+              </Field>
+            ))}
             {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps a Base UI Switch, which renders a button */}
             <label className="flex items-center gap-2 text-sm">
               <Switch checked={revoke} onCheckedChange={setRevoke} />
@@ -142,9 +131,7 @@ export function PasswordDialog() {
             {error ? <FieldError>{error}</FieldError> : null}
           </FieldGroup>
           <DialogFooter>
-            <DialogClose render={<Button variant="ghost" />}>
-              Cancel
-            </DialogClose>
+            <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
             <Button type="submit" disabled={pending}>
               {pending ? <Spinner data-icon="inline-start" /> : null}
               Change password
@@ -165,29 +152,16 @@ const themeCards = [
 function ThemePreview(props: { tone: "light" | "dark" }) {
   const light = props.tone === "light"
   return (
-    <span
-      className={`flex flex-1 flex-col gap-1.5 px-3 pt-3 ${light ? "bg-neutral-50" : "bg-neutral-900"}`}
-    >
-      <span
-        className={`mx-auto h-1.5 w-1/2 rounded-full ${light ? "bg-neutral-400" : "bg-neutral-600"}`}
-      />
-      <span
-        className={`mx-auto -mt-0.5 h-0.5 w-3/4 rounded-full ${light ? "bg-neutral-200" : "bg-neutral-800"}`}
-      />
+    <span className={`flex flex-1 flex-col gap-1.5 px-3 pt-3 ${light ? "bg-neutral-50" : "bg-neutral-900"}`}>
+      <span className={`mx-auto h-1.5 w-1/2 rounded-full ${light ? "bg-neutral-400" : "bg-neutral-600"}`} />
+      <span className={`mx-auto -mt-0.5 h-0.5 w-3/4 rounded-full ${light ? "bg-neutral-200" : "bg-neutral-800"}`} />
       <span
         className={`flex flex-1 flex-col justify-around divide-y rounded-t-md px-2 ${light ? "divide-neutral-200 bg-white" : "divide-neutral-700 bg-neutral-800"}`}
       >
         {[0, 1, 2].map((line) => (
-          <span
-            key={line}
-            className="flex flex-1 flex-col justify-center gap-1"
-          >
-            <span
-              className={`h-1 w-1/3 rounded-full ${light ? "bg-neutral-400" : "bg-neutral-600"}`}
-            />
-            <span
-              className={`h-0.5 w-1/2 rounded-full ${light ? "bg-neutral-300" : "bg-neutral-700"}`}
-            />
+          <span key={line} className="flex flex-1 flex-col justify-center gap-1">
+            <span className={`h-1 w-1/3 rounded-full ${light ? "bg-neutral-400" : "bg-neutral-600"}`} />
+            <span className={`h-0.5 w-1/2 rounded-full ${light ? "bg-neutral-300" : "bg-neutral-700"}`} />
           </span>
         ))}
       </span>
@@ -200,11 +174,7 @@ export function ThemePicker() {
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
       <span className="text-sm font-medium">Theme</span>
-      <div
-        role="radiogroup"
-        aria-label="Theme"
-        className="grid grid-cols-3 gap-2"
-      >
+      <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-2">
         {themeCards.map((card) => (
           <button
             key={card.value}
@@ -222,9 +192,7 @@ export function ThemePicker() {
                   <ThemePreview tone="dark" />
                 </>
               ) : (
-                <ThemePreview
-                  tone={card.value === "light" ? "light" : "dark"}
-                />
+                <ThemePreview tone={card.value === "light" ? "light" : "dark"} />
               )}
             </span>
             {card.label}
@@ -237,4 +205,3 @@ export function ThemePicker() {
     </div>
   )
 }
-

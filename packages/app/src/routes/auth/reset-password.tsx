@@ -55,7 +55,9 @@ export function ResetPasswordPage() {
     return (
       <AuthLayout>
         <div className="flex flex-col gap-4">
-          <FieldDescription>This reset link has expired or was already used. Request a new one to continue.</FieldDescription>
+          <FieldDescription>
+            This reset link has expired or was already used. Request a new one to continue.
+          </FieldDescription>
           <Button className="h-10 w-full" onClick={page.requestNew}>
             Request a new link
           </Button>

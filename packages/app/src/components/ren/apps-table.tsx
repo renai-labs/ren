@@ -1,12 +1,5 @@
 import type { ReactNode } from "react"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AppIcon } from "@/components/ren/app-icon"
 import { TableCard, TableEmpty } from "@/components/ren/page"
 import { RowMenu } from "@/components/ren/row-menu"
@@ -18,8 +11,7 @@ import type { CatalogApp } from "@/lib/apps"
 type App = CatalogApp
 type AppProfile = AppProfileInfo
 
-const accounts = (count: number) =>
-  count === 1 ? "1 account" : `${count} accounts`
+const accounts = (count: number) => (count === 1 ? "1 account" : `${count} accounts`)
 
 export function AppsTable(props: {
   rows: { app: App; profiles: ReadonlyArray<AppProfile>; usedIn: string }[]
@@ -44,16 +36,9 @@ export function AppsTable(props: {
             const app = row.app
             const profiles = row.profiles
             const usedIn = row.usedIn
-            const missing = profiles.reduce(
-              (total, profile) => total + gaps(profile).length,
-              0
-            )
+            const missing = profiles.reduce((total, profile) => total + gaps(profile).length, 0)
             return (
-              <TableRow
-                key={app.id}
-                className="cursor-pointer"
-                onClick={() => props.onOpen(app.id)}
-              >
+              <TableRow key={app.id} className="cursor-pointer" onClick={() => props.onOpen(app.id)}>
                 <TableCell>
                   <span className="flex min-w-0 items-center gap-3">
                     <AppIcon name={app.name} icon={app.icon} />
@@ -68,23 +53,16 @@ export function AppsTable(props: {
                       >
                         {app.name}
                       </button>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {accounts(profiles.length)}
-                      </span>
+                      <span className="truncate text-xs text-muted-foreground">{accounts(profiles.length)}</span>
                     </span>
                   </span>
                 </TableCell>
-                <TableCell
-                  className="truncate text-muted-foreground"
-                  title={usedIn}
-                >
+                <TableCell className="truncate text-muted-foreground" title={usedIn}>
                   {usedIn}
                 </TableCell>
                 <TableCell>
                   {missing ? (
-                    <StatusBadge tone="warn">
-                      {missing} not connected
-                    </StatusBadge>
+                    <StatusBadge tone="warn">{missing} not connected</StatusBadge>
                   ) : (
                     <StatusBadge tone="ok">Connected</StatusBadge>
                   )}

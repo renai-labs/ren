@@ -1,5 +1,4 @@
-export const currentPage = (search: { readonly page?: number | undefined }) =>
-  Math.max(1, Math.floor(search.page ?? 1))
+export const currentPage = (search: { readonly page?: number | undefined }) => Math.max(1, Math.floor(search.page ?? 1))
 
 export const pageCount = (total: number, size: number) => Math.max(1, Math.ceil(total / size))
 

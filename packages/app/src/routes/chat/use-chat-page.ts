@@ -1,6 +1,15 @@
 import { useState } from "react"
 import { useAtomRefresh } from "@effect/atom-react"
-import { ChatState, Composer, Family, SessionTasks, Working, type ChatSession, type TimelineRow } from "@ren/chat"
+import {
+  ChatState,
+  Composer,
+  Family,
+  PatchFiles,
+  SessionTasks,
+  Working,
+  type ChatSession,
+  type TimelineRow,
+} from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -17,6 +26,7 @@ import { useMe } from "@/hooks/use-me"
 import { useMembers } from "@/hooks/use-members"
 import { useSpaces } from "@/hooks/use-spaces"
 import { api, errorMessage } from "@/lib/api"
+import { useComposerSuggestions } from "@/routes/chat/use-composer-suggestions"
 import { seedFromLists } from "@/lib/cache"
 import { sessionKeys, useChatCacheBridge } from "@/lib/chat"
 import { sessionTitle } from "@/lib/sessions"
@@ -64,7 +74,9 @@ function useView(root: Session.ID, child: Session.ID | undefined) {
     messages: ChatState.messages(state, viewed),
     rows: projection?.rows ?? noRows,
     running: ChatState.activity(state, viewed) === "running",
-    working: projection ? Working.show(state, viewed, projection, child ? (state.info[viewed]?.parentID ?? root) : viewed) : false,
+    working: projection
+      ? Working.show(state, viewed, projection, child ? (state.info[viewed]?.parentID ?? root) : viewed)
+      : false,
     permission,
     permissionTitle: permission ? childTitle(state, permission.sessionID) : "",
     form,
@@ -80,9 +92,90 @@ export function useChatPage() {
   return useChat(params.sessionId, {
     child: search.child,
     onChild: (id) =>
-      void navigate({ to: "/sessions/$sessionId", params: { sessionId: params.sessionId }, search: id ? { child: id } : {} }),
+      void navigate({
+        to: "/sessions/$sessionId",
+        params: { sessionId: params.sessionId },
+        search: id ? { child: id } : {},
+      }),
     onArchived: () => void navigate({ to: "/" }),
   })
+}
+
+function useChatSuggestions(input: {
+  root: Session.ID
+  capabilities: SessionInfo["capabilities"] | undefined
+  messages: ReadonlyArray<SessionMessage.Info>
+  reverted: boolean
+  model: SessionModel.Ref | undefined
+}) {
+  const compact = ChatReact.useAction(input.root, (opened, next: SessionModel.Ref | undefined) => opened.compact(next))
+  const revert = ChatReact.useAction(input.root, (opened, id: SessionMessage.ID) => opened.revert(id))
+  const redo = ChatReact.useAction(input.root, (opened) => opened.redo)
+  const lastUser = input.messages.findLast((message) => message.type === "user")
+  const revertable = input.capabilities?.revert !== false
+  const fail = (title: string) => (error: unknown) => toast.error(title, { description: errorMessage(error) })
+  const command = ChatReact.useAction(input.root, (opened, request: ChatSession.CommandInput) =>
+    opened.command(request),
+  )
+  const suggestions = useComposerSuggestions({
+    root: input.root,
+    commands: input.capabilities?.commands !== false,
+    client: {
+      "model.choose": false,
+      "session.compact": input.capabilities?.compact !== false && lastUser !== undefined,
+      "session.undo": revertable && lastUser !== undefined,
+      "session.redo": revertable && input.reverted,
+    },
+    onClient: (id) => {
+      if (id === "session.compact") void compact(input.model).catch(fail("Could not compact the chat"))
+      if (id === "session.undo" && lastUser) void revert(lastUser.id).catch(fail("Could not undo"))
+      if (id === "session.redo") void redo().catch(fail("Could not restore messages"))
+    },
+  })
+  return {
+    suggest: suggestions.suggest,
+    run: (
+      request: ChatSession.PromptInput & { text: string },
+      prompt: (request: ChatSession.PromptInput) => Promise<unknown>,
+    ) => {
+      const slash = suggestions.slash(request.text)
+      const selection = {
+        ...(request.delivery && { delivery: request.delivery }),
+        ...(request.model && { model: request.model }),
+      }
+      return slash
+        ? command({ name: slash.name, ...suggestions.resolve(slash.text), ...selection })
+        : prompt({ ...request, ...suggestions.resolve(request.text) })
+    },
+  }
+}
+
+const bootStatusOf = (
+  connection: string | undefined,
+  boot: PromptInputBoot | { readonly _tag: "Ready" } | undefined,
+): PromptInputBoot | undefined =>
+  connection === "reconnecting" ? { _tag: "Reconnecting" } : boot && boot._tag !== "Ready" ? boot : undefined
+
+const linkPattern = /https?:\/\/[^\s)>\]]+/gu
+
+function artifactsOf(messages: ReadonlyArray<SessionMessage.Info>) {
+  const texts = messages.flatMap((message) =>
+    message.type === "user"
+      ? [message.text]
+      : message.type === "assistant"
+        ? message.content.flatMap((content) => (content.type === "text" ? [content.text] : []))
+        : [],
+  )
+  const files = messages.flatMap((message) =>
+    message.type === "assistant"
+      ? message.content.flatMap((content) =>
+          content.type === "tool" && PatchFiles.isFileChange(content) && content.state.status === "completed"
+            ? PatchFiles.patchFiles(PatchFiles.toolFiles(content)).map((file) => file.path)
+            : [],
+        )
+      : [],
+  )
+  return { links: [...new Set(texts.flatMap((text) => text.match(linkPattern) ?? []))], files: [...new Set(files)] }
 }
 
 export function useChat(
@@ -144,30 +237,25 @@ export function useChat(
   })
 
   const model = pickModel(modelList, [saved, info?.model])
+  const suggestions = useChatSuggestions({
+    root,
+    capabilities: info?.capabilities,
+    messages: view.messages,
+    reverted,
+    model,
+  })
   const name = me.user.name || me.user.email
-  const bootStatus: PromptInputBoot | undefined =
-    connection === "reconnecting" ? { _tag: "Reconnecting" } : boot && boot._tag !== "Ready" ? boot : undefined
-  const links = [
-    ...new Set(
-      view.messages
-        .flatMap((message) =>
-          message.type === "user"
-            ? [message.text]
-            : message.type === "assistant"
-              ? message.content.flatMap((content) => (content.type === "text" ? [content.text] : []))
-              : [],
-        )
-        .flatMap((text) => text.match(/https?:\/\/[^\s)>\]]+/gu) ?? []),
-    ),
-  ]
+  const bootStatus = bootStatusOf(connection, boot)
+  const artifacts = artifactsOf(view.messages)
   return {
     root,
     child,
     title,
+    files: artifacts.files,
     spaceId: stored.data?.spaceId,
     spaceName,
     viewer: { id: me.user.id, name, image: me.user.image ?? undefined },
-    links,
+    links: artifacts.links,
     expanded,
     bootStatus,
     blocked: Boolean(view.permission ?? view.form),
@@ -200,6 +288,7 @@ export function useChat(
     retrying: restart.isPending,
     draft,
     setDraft,
+    suggest: suggestions.suggest,
     models: modelList,
     modelsLoading: !AsyncResult.isSuccess(models) && !AsyncResult.isFailure(models),
     model,
@@ -213,27 +302,31 @@ export function useChat(
       const sent = draft
       askToNotify()
       setDraft(Composer.empty)
-      void prompt({ id, text, delivery: running ? followUp : "steer", ...(model && { model }) }).catch(
-        (error: unknown) => {
-          setDraft(sent)
-          toast.error("Could not send your message", { description: `${errorMessage(error)} Your draft has been kept.` })
-        },
-      )
+      const selection = { delivery: running ? followUp : ("steer" as const), ...(model && { model }) }
+      void suggestions.run({ id, text, ...selection }, prompt).catch((error: unknown) => {
+        setDraft(sent)
+        toast.error("Could not send your message", { description: `${errorMessage(error)} Your draft has been kept.` })
+      })
     },
-    stop: () => void interrupt().catch((error: unknown) => toast.error("Could not stop Ren", { description: errorMessage(error) })),
+    stop: () =>
+      void interrupt().catch((error: unknown) =>
+        toast.error("Could not stop Ren", { description: errorMessage(error) }),
+      ),
     loadMore: () =>
       void loadMore().catch((error: unknown) =>
         toast.error("Could not load earlier messages", { description: errorMessage(error) }),
       ),
-    edit: (message: SessionMessage.User) => {
+    edit: (message: SessionMessage.User, text: string) => {
       setReverting(true)
       void revert(message.id)
-        .then(() => setDraft(Composer.withText(Composer.empty, message.text)))
-        .catch((error: unknown) => toast.error("Could not revert", { description: errorMessage(error) }))
+        .then(() => prompt({ id: SessionMessage.ID.create(), text, delivery: "steer", ...(model && { model }) }))
+        .catch((error: unknown) => toast.error("Could not edit your message", { description: errorMessage(error) }))
         .finally(() => setReverting(false))
     },
     restore: () =>
-      void redo().catch((error: unknown) => toast.error("Could not restore messages", { description: errorMessage(error) })),
+      void redo().catch((error: unknown) =>
+        toast.error("Could not restore messages", { description: errorMessage(error) }),
+      ),
     retry: () =>
       restart.mutate(
         { id: root },

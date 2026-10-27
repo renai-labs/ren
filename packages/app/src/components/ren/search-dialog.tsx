@@ -81,7 +81,10 @@ export function SearchDialog() {
             if (next) setFilter(next.value)
           }}
         >
-          <CommandInput placeholder={filters.find((each) => each.value === filter)?.placeholder} className="text-base" />
+          <CommandInput
+            placeholder={filters.find((each) => each.value === filter)?.placeholder}
+            className="text-base"
+          />
           <Tabs value={filter} onValueChange={(value: Filter) => setFilter(value)} className="-mx-1 border-b p-2">
             <TabsList className="h-7 gap-1 bg-transparent p-0">
               {filters.map((each) => (

@@ -1,17 +1,9 @@
 import { useState } from "react"
 import { IconSearch, IconX } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 
-export function ExpandableSearch(props: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-}) {
+export function ExpandableSearch(props: { label: string; value: string; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false)
   if (!open && !props.value) {
     return (

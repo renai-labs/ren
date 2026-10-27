@@ -16,14 +16,7 @@ import {
 import { AvatarGroup } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardAction,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogClose,
@@ -33,14 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,11 +61,7 @@ export function SpacesPage() {
       description="Each space gives a team its own credentials, apps and agents."
       actions={
         <>
-          <ExpandableSearch
-            label="Search spaces"
-            value={query}
-            onChange={setQuery}
-          />
+          <ExpandableSearch label="Search spaces" value={query} onChange={setQuery} />
           <FilterMenu
             label="Filter spaces"
             properties={[
@@ -99,11 +81,7 @@ export function SpacesPage() {
             onChange={setFilters}
           />
           <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button size="icon-sm" aria-label="Create or join a space" />
-              }
-            >
+            <DropdownMenuTrigger render={<Button size="icon-sm" aria-label="Create or join a space" />}>
               <IconPlus />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
@@ -138,21 +116,19 @@ export function SpacesPage() {
       footer={<ListPagination page={page.page} pageSize={pageSize} total={page.total} noun="space" />}
     >
       {page.spaces ? null : <SkeletonCards />}
-      <div className={cn("mt-4 grid gap-4 transition-opacity sm:grid-cols-2", page.stale && "opacity-60", !page.spaces && "hidden")}>
+      <div
+        className={cn(
+          "mt-4 grid gap-4 transition-opacity sm:grid-cols-2",
+          page.stale && "opacity-60",
+          !page.spaces && "hidden",
+        )}
+      >
         {(page.spaces ?? [])
-          .filter(
-            (space) =>
-              !needle ||
-              `${space.name} ${space.description ?? ""}`
-                .toLowerCase()
-                .includes(needle)
-          )
+          .filter((space) => !needle || `${space.name} ${space.description ?? ""}`.toLowerCase().includes(needle))
           .filter((space) =>
             passes(filters, {
-              visibility: [
-                isPrivate(space) ? "private" : "shared",
-              ],
-            })
+              visibility: [isPrivate(space) ? "private" : "shared"],
+            }),
           )
           .map((space) => (
             <SpaceCard key={space.id} space={space} />
@@ -205,11 +181,7 @@ function SpaceCard(props: { space: SpaceInfo }) {
           ) : (
             <AvatarGroup className="gap-1 space-x-0 *:data-[slot=avatar]:ring-card">
               {shown.map((name) => (
-                <PersonAvatar
-                  key={name}
-                  name={name}
-                  className="bg-secondary text-[10px] font-medium text-foreground"
-                />
+                <PersonAvatar key={name} name={name} className="bg-secondary text-[10px] font-medium text-foreground" />
               ))}
               {memberCount > shown.length ? (
                 <PersonAvatar
@@ -245,34 +217,22 @@ function NewSpaceDialog(props: {
           onSubmit={(event) => {
             event.preventDefault()
             const form = new FormData(event.currentTarget)
-            props.onCreate(
-              formText(form, "name").trim(),
-              formText(form, "description").trim()
-            )
+            props.onCreate(formText(form, "name").trim(), formText(form, "description").trim())
           }}
         >
           <DialogHeader>
             <DialogTitle>New space</DialogTitle>
-            <DialogDescription>
-              You join it as its first member.
-            </DialogDescription>
+            <DialogDescription>You join it as its first member.</DialogDescription>
           </DialogHeader>
           <FieldGroup className="gap-4">
             <Field>
               <FieldLabel htmlFor="space-name">Name</FieldLabel>
-              <Input
-                id="space-name"
-                name="name"
-                required
-                placeholder="My space"
-              />
+              <Input id="space-name" name="name" required placeholder="My space" />
             </Field>
             <Field>
               <FieldLabel htmlFor="space-description">
                 Description
-                <span className="text-xs font-normal text-muted-foreground">
-                  Optional
-                </span>
+                <span className="text-xs font-normal text-muted-foreground">Optional</span>
               </FieldLabel>
               <Textarea
                 id="space-description"
@@ -310,9 +270,7 @@ function JoinSpaceDialog(props: {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Join space</DialogTitle>
-          <DialogDescription>
-            Choose a space in your organization to join.
-          </DialogDescription>
+          <DialogDescription>Choose a space in your organization to join.</DialogDescription>
         </DialogHeader>
         <Command className="rounded-lg! bg-muted inset-ring inset-ring-border **:data-[slot=input-group]:h-8.75!">
           <CommandInput placeholder="Search spaces…" />
@@ -335,17 +293,12 @@ function JoinSpaceDialog(props: {
                     className="items-start py-1"
                   >
                     <span className="mt-0.5 flex size-5 items-center justify-center rounded-md bg-secondary">
-                      <IconCube
-                        className="size-4 text-muted-foreground"
-                        strokeWidth={1.75}
-                      />
+                      <IconCube className="size-4 text-muted-foreground" strokeWidth={1.75} />
                     </span>
                     <span className="flex min-w-0 flex-col">
                       {space.name}
                       {space.description ? (
-                        <span className="truncate text-xs text-muted-foreground">
-                          {space.description}
-                        </span>
+                        <span className="truncate text-xs text-muted-foreground">{space.description}</span>
                       ) : null}
                     </span>
                   </CommandItem>
@@ -355,13 +308,8 @@ function JoinSpaceDialog(props: {
           </CommandList>
         </Command>
         <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
-            Cancel
-          </DialogClose>
-          <Button
-            disabled={!chosen || props.pending}
-            onClick={() => chosen && props.onJoin(chosen.id, chosen.name)}
-          >
+          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+          <Button disabled={!chosen || props.pending} onClick={() => chosen && props.onJoin(chosen.id, chosen.name)}>
             {props.pending ? <Spinner data-icon="inline-start" /> : null}
             Join space
           </Button>

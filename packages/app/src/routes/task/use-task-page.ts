@@ -25,7 +25,9 @@ export function useTaskPage() {
   const subtasks = useQuery(
     api.task.list.queryOptions({ parentId: task.id, includeDone: true, page: 1, pageSize: pickerPageSize }),
   )
-  const activity = useQuery(api["task-activity"].list.queryOptions({ taskId: task.id, page: 1, pageSize: pickerPageSize }))
+  const activity = useQuery(
+    api["task-activity"].list.queryOptions({ taskId: task.id, page: 1, pageSize: pickerPageSize }),
+  )
   const agents = useAgents()
   const members = useMembers()
   const spaces = useSpaces()
@@ -34,9 +36,18 @@ export function useTaskPage() {
   const [archiving, setArchiving] = useState(false)
   const [comment, setComment] = useState("")
   const fail = (title: string) => (error: Error) => toast.error(title, { description: errorMessage(error) })
-  const update = useMutation({ ...api.task.update.mutationOptions(), meta: { invalidates: [api["task-activity"].list.queryKey()] } })
-  const assign = useMutation({ ...api.task.assign.mutationOptions(), meta: { invalidates: [api["task-activity"].list.queryKey()] } })
-  const review = useMutation({ ...api.task.review.mutationOptions(), meta: { invalidates: [api["task-activity"].list.queryKey()] } })
+  const update = useMutation({
+    ...api.task.update.mutationOptions(),
+    meta: { invalidates: [api["task-activity"].list.queryKey()] },
+  })
+  const assign = useMutation({
+    ...api.task.assign.mutationOptions(),
+    meta: { invalidates: [api["task-activity"].list.queryKey()] },
+  })
+  const review = useMutation({
+    ...api.task.review.mutationOptions(),
+    meta: { invalidates: [api["task-activity"].list.queryKey()] },
+  })
   const start = useMutation(api.task.start.mutationOptions())
   const archive = useMutation(api.task.archive.mutationOptions())
   const createComment = useMutation({
@@ -52,7 +63,9 @@ export function useTaskPage() {
     subtasks: subtasks.data?.items ?? [],
     activity: (activity.data?.items ?? []).flatMap((item) => (item.type === "comment" ? [item.comment] : [])),
     authorName: (author: { userId: string | null; agentId: string | null }) =>
-      author.agentId ? (agents.agent(author.agentId)?.name ?? "Agent") : (members.member(author.userId)?.name ?? "Member"),
+      author.agentId
+        ? (agents.agent(author.agentId)?.name ?? "Agent")
+        : (members.member(author.userId)?.name ?? "Member"),
     agents: agents.agents,
     members: members.members,
     spaces: spaces.spaces,

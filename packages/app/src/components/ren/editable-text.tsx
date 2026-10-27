@@ -17,11 +17,15 @@ export function EditableText(props: {
   const [draft, setDraft] = useState<string>()
   const [saving, setSaving] = useState(false)
   if (props.readOnly)
-    return <span className={cn("text-sm", !props.value && "text-muted-foreground")}>{props.value || props.placeholder}</span>
+    return (
+      <span className={cn("text-sm", !props.value && "text-muted-foreground")}>{props.value || props.placeholder}</span>
+    )
   if (draft === undefined)
     return (
       <span className={cn("flex min-w-0 items-center gap-1 text-sm", props.className)}>
-        <span className={cn("truncate", !props.value && "text-muted-foreground")}>{props.value || props.placeholder}</span>
+        <span className={cn("truncate", !props.value && "text-muted-foreground")}>
+          {props.value || props.placeholder}
+        </span>
         <Button
           variant="ghost"
           size="icon-xs"

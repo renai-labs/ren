@@ -8,14 +8,7 @@ import { api, errorMessage } from "@/lib/api"
 import { auth } from "@/lib/auth"
 import { askToNotify } from "@/lib/notify"
 import { Choice, deliveries, details, PasswordDialog, ThemePicker } from "@/routes/settings/settings-shared"
-import {
-  chooseChatDetail,
-  chooseFollowUp,
-  chooseNotify,
-  useChatDetail,
-  useFollowUp,
-  useNotify,
-} from "@/stores/ui"
+import { chooseChatDetail, chooseFollowUp, chooseNotify, useChatDetail, useFollowUp, useNotify } from "@/stores/ui"
 
 function usePreferencesPage() {
   const me = useMe()

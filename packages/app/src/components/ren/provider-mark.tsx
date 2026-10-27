@@ -14,10 +14,7 @@ export function ProviderMark(props: { provider: string; className?: string | und
       alt=""
       aria-hidden
       draggable={false}
-      className={cn(
-        "size-4 shrink-0 rounded-sm object-cover",
-        props.className
-      )}
+      className={cn("size-4 shrink-0 rounded-sm object-cover", props.className)}
     />
   )
 }

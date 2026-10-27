@@ -21,7 +21,13 @@ export function SignupPage() {
             <FormError>{page.error}</FormError>
             <Field>
               <FieldLabel htmlFor="signup-email">Email</FieldLabel>
-              <Input id="signup-email" type="email" value={page.email} readOnly className="h-10 border-transparent bg-muted dark:bg-muted" />
+              <Input
+                id="signup-email"
+                type="email"
+                value={page.email}
+                readOnly
+                className="h-10 border-transparent bg-muted dark:bg-muted"
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="signup-password">Password</FieldLabel>

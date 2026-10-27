@@ -178,7 +178,10 @@ const browserPatterns = [
     regex: "^(styled-components|@emotion/.*|@stitches/.*|@vanilla-extract/.*)$",
     message: "Style with Tailwind and design tokens.",
   },
-  { regex: "^(react-hot-toast|react-toastify|notistack)$", message: "Use the Sonner toast from src/components/ui/sonner." },
+  {
+    regex: "^(react-hot-toast|react-toastify|notistack)$",
+    message: "Use the Sonner toast from src/components/ui/sonner.",
+  },
   {
     regex: "^(redux|@reduxjs/.*|react-redux|mobx|mobx-react.*|recoil|jotai|valtio|nanostores|@nanostores/.*)$",
     message:

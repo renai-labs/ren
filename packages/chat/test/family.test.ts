@@ -328,7 +328,7 @@ test("a subagent card reads its child's state, tools and requests", () => {
     background: false,
     needsInput: false,
     tools: 1,
-    activity: "Grep src",
+    activity: "Grep revenue in src",
   })
   const background = Family.subagent(
     withChild,

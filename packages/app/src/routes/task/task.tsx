@@ -18,14 +18,7 @@ import {
 } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,19 +29,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { ConfirmDialog } from "@/components/ren/confirm-dialog"
 import { PersonAvatar } from "@/components/ren/person-avatar"
@@ -96,42 +79,31 @@ export function TaskPage() {
           Tasks
         </Link>
         <IconChevronRight className="size-4 text-muted-foreground" />
-        <span className="font-mono text-xs text-muted-foreground">
-          {task.identifier}
-        </span>
+        <span className="font-mono text-xs text-muted-foreground">{task.identifier}</span>
         <span className="truncate font-medium">{task.title}</span>
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={
-              <Button
-                size="sm"
-                className="ml-auto"
-                aria-label={`Start a session for ${task.title}`}
-              />
-            }
+            render={<Button size="sm" className="ml-auto" aria-label={`Start a session for ${task.title}`} />}
           >
             <IconPlayerPlay />
             Start
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuGroup>
-            <DropdownMenuItem disabled={page.starting} onClick={() => page.start("new")}>
-              <IconPlus />
-              Start new session
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!task.session || page.starting}
-              onClick={() => page.start("continue")}
-            >
-              <IconHistory />
-              Continue last session
-            </DropdownMenuItem>
-            {task.session ? (
-              <DropdownMenuItem onClick={() => page.openSession(task.session?.id)}>
-                <IconMessage />
-                Open session
+              <DropdownMenuItem disabled={page.starting} onClick={() => page.start("new")}>
+                <IconPlus />
+                Start new session
               </DropdownMenuItem>
-            ) : null}
+              <DropdownMenuItem disabled={!task.session || page.starting} onClick={() => page.start("continue")}>
+                <IconHistory />
+                Continue last session
+              </DropdownMenuItem>
+              {task.session ? (
+                <DropdownMenuItem onClick={() => page.openSession(task.session?.id)}>
+                  <IconMessage />
+                  Open session
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -150,49 +122,32 @@ export function TaskPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40">
             <DropdownMenuGroup>
-            <DropdownMenuItem onClick={() => set({ status: "done" })}>
-              Mark done
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => set({ status: "dismissed" })}>
-              Dismiss
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={task.agentId === null}
-              onClick={() => page.assignTo({ agentId: null })}
-            >
-              Unassign
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={task.humanReview}
-              onClick={page.requestReview}
-            >
-              Request review
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => page.setArchiving(true)}
-            >
-              Archive task
-            </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => set({ status: "done" })}>Mark done</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => set({ status: "dismissed" })}>Dismiss</DropdownMenuItem>
+              <DropdownMenuItem disabled={task.agentId === null} onClick={() => page.assignTo({ agentId: null })}>
+                Unassign
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={task.humanReview} onClick={page.requestReview}>
+                Request review
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => page.setArchiving(true)}>
+                Archive task
+              </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
       <div className="flex min-h-0 flex-1 gap-8 overflow-y-auto overscroll-contain pr-8 pl-2">
         <article className="mx-auto flex w-full max-w-200 min-w-0 flex-col gap-6 pt-12 pb-16">
-          <h1 className="text-[28px]/9 font-semibold tracking-tight">
-            {task.title}
-          </h1>
+          <h1 className="text-[28px]/9 font-semibold tracking-tight">{task.title}</h1>
           {task.humanReview ? (
             <div className="flex items-start gap-3 rounded-xl border bg-card p-4">
               <IconAlertCircle className="mt-0.5 size-4 text-chart-3" />
               <div className="flex flex-1 flex-col gap-1">
                 <span className="text-sm font-medium">Needs your review</span>
                 {task.humanReviewReason ? (
-                  <span className="text-sm text-muted-foreground">
-                    {task.humanReviewReason}
-                  </span>
+                  <span className="text-sm text-muted-foreground">{task.humanReviewReason}</span>
                 ) : null}
               </div>
               <Button variant="ghost" size="sm" onClick={() => page.decide("changes_requested")}>
@@ -217,8 +172,7 @@ export function TaskPage() {
           {subtasks.length > 0 ? (
             <section className="flex flex-col gap-2">
               <h2 className="text-sm font-medium">
-                Subtasks · {task.subtasks?.done ?? 0} of{" "}
-                {task.subtasks?.total ?? subtasks.length} done
+                Subtasks · {task.subtasks?.done ?? 0} of {task.subtasks?.total ?? subtasks.length} done
               </h2>
               {subtasks.map((subtask) => (
                 <Link
@@ -228,9 +182,7 @@ export function TaskPage() {
                   className="flex h-9 items-center gap-2 rounded-lg px-2 text-sm hover:bg-muted"
                 >
                   <StatusIcon task={subtask} />
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {subtask.identifier}
-                  </span>
+                  <span className="font-mono text-xs text-muted-foreground">{subtask.identifier}</span>
                   {subtask.title}
                 </Link>
               ))}
@@ -262,9 +214,7 @@ export function TaskPage() {
                 <div className="flex flex-col gap-1">
                   <span>
                     <span className="font-medium">{page.authorName(comment.author)}</span>{" "}
-                    <span className="text-muted-foreground">
-                      · {formatDate(comment.createdAt)}
-                    </span>
+                    <span className="text-muted-foreground">· {formatDate(comment.createdAt)}</span>
                   </span>
                   <span className="whitespace-pre-wrap">{comment.body}</span>
                 </div>
@@ -289,20 +239,11 @@ export function TaskPage() {
             </div>
           </section>
         </article>
-        <aside
-          aria-label="Task properties"
-          className="flex w-70 shrink-0 flex-col gap-6 pt-12"
-        >
+        <aside aria-label="Task properties" className="flex w-70 shrink-0 flex-col gap-6 pt-12">
           <PropertySection title="Properties">
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    className={propertyButton}
-                    aria-label={`Status for ${task.title}`}
-                  />
-                }
+                render={<Button variant="ghost" className={propertyButton} aria-label={`Status for ${task.title}`} />}
               >
                 <StatusIcon task={task} />
                 {statusOf(task.status).label}
@@ -325,18 +266,10 @@ export function TaskPage() {
             </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    className={propertyButton}
-                    aria-label={`Priority for ${task.title}`}
-                  />
-                }
+                render={<Button variant="ghost" className={propertyButton} aria-label={`Priority for ${task.title}`} />}
               >
                 <PriorityIcon priority={task.priority} />
-                {task.priority
-                  ? priorityLabelOf(task.priority)
-                  : "No priority"}
+                {task.priority ? priorityLabelOf(task.priority) : "No priority"}
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-40">
                 <DropdownMenuRadioGroup
@@ -347,13 +280,11 @@ export function TaskPage() {
                     })
                   }
                 >
-                  {[["none", "No priority"], ...Object.entries(priorities)].map(
-                    (entry) => (
-                      <DropdownMenuRadioItem key={entry[0]} value={entry[0]}>
-                        {entry[1]}
-                      </DropdownMenuRadioItem>
-                    )
-                  )}
+                  {[["none", "No priority"], ...Object.entries(priorities)].map((entry) => (
+                    <DropdownMenuRadioItem key={entry[0]} value={entry[0]}>
+                      {entry[1]}
+                    </DropdownMenuRadioItem>
+                  ))}
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -378,10 +309,7 @@ export function TaskPage() {
               </PopoverTrigger>
               <PopoverContent align="start" className="w-72 gap-0 p-0">
                 <Command className={pickerCommand}>
-                  <CommandInput
-                    placeholder="Search assignee…"
-                    className="text-base"
-                  />
+                  <CommandInput placeholder="Search assignee…" className="text-base" />
                   <CommandList className="max-h-80 p-1">
                     <CommandEmpty>No one matches.</CommandEmpty>
                     <CommandGroup>
@@ -412,12 +340,8 @@ export function TaskPage() {
                         <CommandItem
                           key={member.id}
                           className={pickerItem}
-                          data-checked={
-                            task.agentId === null && task.ownerId === member.id
-                          }
-                          onSelect={() =>
-                            page.assignTo({ agentId: null, ownerId: member.id })
-                          }
+                          data-checked={task.agentId === null && task.ownerId === member.id}
+                          onSelect={() => page.assignTo({ agentId: null, ownerId: member.id })}
                         >
                           <PersonAvatar name={member.name} image={member.image} />
                           {member.name}
@@ -445,9 +369,7 @@ export function TaskPage() {
                 <Calendar
                   mode="single"
                   selected={task.dueAt ? new Date(task.dueAt) : undefined}
-                  onSelect={(day: Date | undefined) =>
-                    set({ dueAt: day ? day.toISOString() : null })
-                  }
+                  onSelect={(day: Date | undefined) => set({ dueAt: day ? day.toISOString() : null })}
                   className="w-full p-0"
                 />
                 <Separator />
@@ -494,21 +416,12 @@ export function TaskPage() {
                             data-checked={checked}
                             onSelect={() =>
                               set({
-                                labels: checked
-                                  ? names.filter((name) => name !== label.name)
-                                  : [...names, label.name],
+                                labels: checked ? names.filter((name) => name !== label.name) : [...names, label.name],
                               })
                             }
                           >
-                            {checked ? (
-                              <IconSquareCheckFilled />
-                            ) : (
-                              <IconSquare className="text-muted-foreground" />
-                            )}
-                            <span
-                              className="size-2 rounded-full"
-                              style={{ background: labelColor(label.color) }}
-                            />
+                            {checked ? <IconSquareCheckFilled /> : <IconSquare className="text-muted-foreground" />}
+                            <span className="size-2 rounded-full" style={{ background: labelColor(label.color) }} />
                             {label.name}
                           </CommandItem>
                         )
@@ -535,10 +448,7 @@ export function TaskPage() {
               </PopoverTrigger>
               <PopoverContent align="start" className="w-72 gap-0 p-0">
                 <Command className={pickerCommand}>
-                  <CommandInput
-                    placeholder="Search space…"
-                    className="text-base"
-                  />
+                  <CommandInput placeholder="Search space…" className="text-base" />
                   <p className="-mx-1 border-b px-4 py-2 text-xs text-muted-foreground">
                     Moving a task does not start work.
                   </p>
@@ -581,9 +491,7 @@ export function TaskPage() {
         <SheetContent className="data-[side=right]:sm:max-w-3xl">
           <SheetHeader>
             <SheetTitle>Task session</SheetTitle>
-            <SheetDescription>
-              Chat with the agent working on this task.
-            </SheetDescription>
+            <SheetDescription>Chat with the agent working on this task.</SheetDescription>
           </SheetHeader>
           <div className="flex min-h-0 flex-1 flex-col">
             {page.session ? <SessionThread sessionId={page.session} /> : null}

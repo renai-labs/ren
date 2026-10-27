@@ -57,7 +57,9 @@ function makeAtoms(userId: string) {
         ),
         keep: (items: ReadonlyArray<Outbox.Kept>) =>
           Effect.sync(() =>
-            items.length === 0 ? localStorage.removeItem(key) : localStorage.setItem(key, Schema.encodeSync(Kept)(items)),
+            items.length === 0
+              ? localStorage.removeItem(key)
+              : localStorage.setItem(key, Schema.encodeSync(Kept)(items)),
           ),
       }
     },
@@ -115,7 +117,10 @@ export const sessionKeys = {
   infinitePage: (input: { readonly pageSize: number }) => ["session", "infinite", input] as const,
 }
 
-export function useChatCacheBridge(sessionID: string, live: { readonly title?: string | undefined; readonly status?: Session.Status | undefined }) {
+export function useChatCacheBridge(
+  sessionID: string,
+  live: { readonly title?: string | undefined; readonly status?: Session.Status | undefined },
+) {
   const title = live.title
   const status = live.status
   useEffect(() => {

@@ -38,8 +38,8 @@ describe("tool display", () => {
     expect(ToolDisplay.label(tool("read", "completed"))).toBe("Read")
     expect(ToolDisplay.label(tool("shell", "running"))).toBe("Running")
     expect(ToolDisplay.label(tool("shell", "completed"))).toBe("Ran")
-    expect(ToolDisplay.label(tool("question", "completed"))).toBe("Asking")
-    expect(ToolDisplay.label(tool("read", "error"))).toBe("Reading")
+    expect(ToolDisplay.label(tool("question", "completed"))).toBe("Asked")
+    expect(ToolDisplay.label(tool("read", "error"))).toBe("Failed to read")
   })
 
   test("renders an unknown or MCP tool by its readable name", () => {
@@ -60,7 +60,8 @@ describe("tool display", () => {
     expect(ToolDisplay.subtitle(tool("execute", "completed", { code: "const a = 1\nconst b = 2" }))).toBe("const a = 1")
     expect(ToolDisplay.subtitle(tool("read", "completed", { filePath: "/repo/src/session.ts" }))).toBe("session.ts")
     expect(ToolDisplay.subtitle(tool("edit", "completed", { path: "src/a.ts" }))).toBe("a.ts")
-    expect(ToolDisplay.subtitle(tool("grep", "completed", { path: "src", pattern: "TODO" }))).toBe("src")
+    expect(ToolDisplay.subtitle(tool("grep", "completed", { path: "src", pattern: "TODO" }))).toBe("TODO in src")
+    expect(ToolDisplay.subtitle(tool("glob", "completed", { pattern: "*.txt" }))).toBe("*.txt")
     expect(ToolDisplay.subtitle(tool("webfetch", "completed", { url: "https://ren.ai" }))).toBe("https://ren.ai")
     expect(ToolDisplay.subtitle(tool("websearch", "completed", { query: "effect atoms" }))).toBe("effect atoms")
     expect(ToolDisplay.subtitle(tool("skill", "completed", { name: "pdf" }, { metadata: { name: "PDF" } }))).toBe("PDF")

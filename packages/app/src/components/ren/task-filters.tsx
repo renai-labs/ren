@@ -10,32 +10,13 @@ import {
   IconUsers,
 } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  passes,
-  type FilterProperty,
-  type Filters,
-} from "@/components/ren/filter-menu"
-import {
-  PriorityIcon,
-  StatusGlyph,
-  priorities,
-  statuses,
-} from "@/components/ren/task-meta"
+import { passes, type FilterProperty, type Filters } from "@/components/ren/filter-menu"
+import { PriorityIcon, StatusGlyph, priorities, statuses } from "@/components/ren/task-meta"
 import type { Member } from "@/hooks/use-members"
 import { changeTaskDisplay, type TaskDisplay } from "@/stores/ui"
 
@@ -71,9 +52,7 @@ const propertiesFor = (lookups: TaskLookups): TaskProperty[] => [
     options: Object.entries(statuses).map(([value, status]) => ({
       value,
       label: status.label,
-      icon: (glyph: { className?: string }) => (
-        <StatusGlyph status={value} className={glyph.className} />
-      ),
+      icon: (glyph: { className?: string }) => <StatusGlyph status={value} className={glyph.className} />,
     })),
     value: (task: Task) => [task.status],
   },
@@ -89,10 +68,7 @@ const propertiesFor = (lookups: TaskLookups): TaskProperty[] => [
       value: option.value,
       label: option.label,
       icon: (glyph: { className?: string }) => (
-        <PriorityIcon
-          priority={option.value === "none" ? null : option.value}
-          className={glyph.className}
-        />
+        <PriorityIcon priority={option.value === "none" ? null : option.value} className={glyph.className} />
       ),
     })),
     value: (task: Task) => [task.priority ?? "none"],
@@ -145,19 +121,12 @@ export const countedTaskProperties = (lookups: TaskLookups, tasks: ReadonlyArray
       value: option.value,
       label: option.label,
       icon: option.icon,
-      count: tasks.filter((task) => property.value(task).includes(option.value))
-        .length,
+      count: tasks.filter((task) => property.value(task).includes(option.value)).length,
     })),
   }))
 
 export const matchesFilters = (lookups: TaskLookups, task: Task, filters: Filters) =>
-  passes(
-    filters,
-    Object.fromEntries(
-      propertiesFor(lookups).map((property) => [property.key, property.value(task)])
-    )
-  )
-
+  passes(filters, Object.fromEntries(propertiesFor(lookups).map((property) => [property.key, property.value(task)])))
 
 const displayChoices = [
   {
@@ -198,44 +167,25 @@ const listProperties = [
   { value: "links", label: "Links" },
 ]
 
-export function DisplayOptions(props: {
-  value: TaskDisplay
-  onChange?: ((value: TaskDisplay) => void) | undefined
-}) {
+export function DisplayOptions(props: { value: TaskDisplay; onChange?: ((value: TaskDisplay) => void) | undefined }) {
   const [open, setOpen] = useState(false)
-  const set = (patch: Partial<TaskDisplay>) =>
-    (props.onChange ?? changeTaskDisplay)({ ...props.value, ...patch })
+  const set = (patch: Partial<TaskDisplay>) => (props.onChange ?? changeTaskDisplay)({ ...props.value, ...patch })
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground"
-            aria-label="Display options"
-          />
+          <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Display options" />
         }
       >
         <IconAdjustmentsHorizontal />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 gap-4 p-4">
-        <Tabs
-          value={props.value.layout}
-          onValueChange={(layout: string) => set({ layout })}
-        >
+        <Tabs value={props.value.layout} onValueChange={(layout: string) => set({ layout })}>
           <TabsList className="h-8 w-full gap-1">
-            <TabsTrigger
-              value="list"
-              className="h-6 border-0 text-xs dark:data-active:bg-secondary"
-            >
+            <TabsTrigger value="list" className="h-6 border-0 text-xs dark:data-active:bg-secondary">
               List
             </TabsTrigger>
-            <TabsTrigger
-              value="board"
-              className="h-6 border-0 text-xs dark:data-active:bg-secondary"
-              disabled
-            >
+            <TabsTrigger value="board" className="h-6 border-0 text-xs dark:data-active:bg-secondary" disabled>
               Board
             </TabsTrigger>
           </TabsList>
@@ -268,10 +218,7 @@ export function DisplayOptions(props: {
         {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps a Base UI Switch, which renders a button */}
         <label className="flex items-center justify-between">
           Show empty groups
-          <Switch
-            checked={props.value.showEmpty}
-            onCheckedChange={(showEmpty) => set({ showEmpty })}
-          />
+          <Switch checked={props.value.showEmpty} onCheckedChange={(showEmpty) => set({ showEmpty })} />
         </label>
         <div className="flex items-center gap-2">
           List properties
@@ -290,9 +237,7 @@ export function DisplayOptions(props: {
                 onClick={() =>
                   set({
                     properties: shown
-                      ? props.value.properties.filter(
-                          (value) => value !== property.value
-                        )
+                      ? props.value.properties.filter((value) => value !== property.value)
                       : [...props.value.properties, property.value],
                   })
                 }

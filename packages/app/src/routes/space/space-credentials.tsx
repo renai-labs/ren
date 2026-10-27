@@ -11,13 +11,15 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle } from "@/components/ui/dialog"
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { CredentialSheet } from "@/components/ren/credential-sheet"
 import { CredentialsTable } from "@/components/ren/credentials-table"
 import { ListPagination } from "@/components/ren/list-pagination"
@@ -50,8 +52,10 @@ function useSpaceCredentials() {
       spaceId: space.id,
       page,
       pageSize,
-      ...(needle && { search: needle }) }),
-    placeholderData: keepPreviousData })
+      ...(needle && { search: needle }),
+    }),
+    placeholderData: keepPreviousData,
+  })
   const others = useQuery(api.credential.list.queryOptions({ owner: "space", page: 1, pageSize: pickerPageSize }))
   const copy = useMutation(api.credential.copy.mutationOptions())
   const here = keys.data?.items ?? []
@@ -84,12 +88,14 @@ function useSpaceCredentials() {
         { id, owner: { kind: "space", spaceId: space.id } },
         {
           onSuccess: () => toast.success(`${label} copied`),
-          onError: (error) => toast.error("Could not copy the key", { description: errorMessage(error) }) },
+          onError: (error) => toast.error("Could not copy the key", { description: errorMessage(error) }),
+        },
       ),
     removed: () => {
       const next = lastPageAfterRemoval(page, total, pageSize)
       if (next !== page) void navigate({ search: (previous) => ({ ...previous, page: next }) })
-    } }
+    },
+  }
 }
 
 export function SpaceCredentialsTab() {

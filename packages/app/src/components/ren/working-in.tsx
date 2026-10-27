@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { MenuSearch } from "@/components/ren/menu-search"
 
-
 const isPersonal = (space: SpaceInfo) => space.memberCount === 1
 
 export function WorkingIn(props: {
@@ -25,9 +24,7 @@ export function WorkingIn(props: {
   const [query, setQuery] = useState("")
   const spaceName = (spaceId: string | undefined) =>
     props.spaces.find((space) => space.id === spaceId)?.name ?? "Choose a space"
-  const matches = props.spaces.filter((space) =>
-    space.name.toLowerCase().includes(query.trim().toLowerCase())
-  )
+  const matches = props.spaces.filter((space) => space.name.toLowerCase().includes(query.trim().toLowerCase()))
   const groups = [
     {
       label: "Personal",
@@ -69,11 +66,7 @@ export function WorkingIn(props: {
               >
                 {isPersonal(space) ? <IconUser /> : <IconCube />}
                 <span className="truncate">{space.name}</span>
-                {isPersonal(space) ? (
-                  <span className="ml-auto font-normal text-muted-foreground">
-                    Only you
-                  </span>
-                ) : null}
+                {isPersonal(space) ? <span className="ml-auto font-normal text-muted-foreground">Only you</span> : null}
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>

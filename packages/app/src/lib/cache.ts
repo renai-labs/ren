@@ -10,7 +10,7 @@ interface ListPage<Item> {
   readonly items: ReadonlyArray<Item>
 }
 
-const isInfinite = <Item,>(data: ListPage<Item> | InfiniteData<ListPage<Item>>): data is InfiniteData<ListPage<Item>> =>
+const isInfinite = <Item>(data: ListPage<Item> | InfiniteData<ListPage<Item>>): data is InfiniteData<ListPage<Item>> =>
   "pages" in data
 
 export function seedFromLists<Item extends Listed>(listKeys: ReadonlyArray<QueryKey>, idOrSlug: string) {

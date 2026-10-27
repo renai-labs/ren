@@ -1,14 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { IconArrowDown, IconArrowUp } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { Confirmation } from "@/components/ren/confirm-dialog"
 import { TableCard, TableEmpty } from "@/components/ren/page"
 import { PersonAvatar } from "@/components/ren/person-avatar"
@@ -55,9 +48,7 @@ export function MembersTable<Row extends MemberRow>(props: {
         <TableBody>
           {props.rows.length === 0 ? <TableEmpty columns={5}>{props.empty}</TableEmpty> : null}
           {props.rows
-            .toSorted(
-              (a, b) => a.name.localeCompare(b.name) * (descending ? -1 : 1)
-            )
+            .toSorted((a, b) => a.name.localeCompare(b.name) * (descending ? -1 : 1))
             .map((row) => {
               const confirmation = props.remove(row)
               return (
@@ -66,11 +57,7 @@ export function MembersTable<Row extends MemberRow>(props: {
                     <span className="flex min-w-0 items-center gap-3">
                       <PersonAvatar name={row.name} image={row.image} />
                       <span className="truncate">{row.name}</span>
-                      {row.you ? (
-                        <span className="text-xs text-muted-foreground">
-                          You
-                        </span>
-                      ) : null}
+                      {row.you ? <span className="text-xs text-muted-foreground">You</span> : null}
                     </span>
                   </TableCell>
                   <TableCell className="truncate" title={row.email}>

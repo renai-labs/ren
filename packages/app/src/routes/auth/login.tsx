@@ -4,14 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
-import {
-  AuthLayout,
-  BackButton,
-  CodeVerification,
-  FormError,
-  GoogleButton,
-  PasswordInput,
-} from "@/components/ren/auth"
+import { AuthLayout, BackButton, CodeVerification, FormError, GoogleButton, PasswordInput } from "@/components/ren/auth"
 import { useLoginPage } from "@/routes/auth/use-login-page"
 
 export function LoginPage() {
@@ -46,7 +39,13 @@ export function LoginPage() {
           <FieldGroup className="gap-4">
             <Field>
               <FieldLabel htmlFor="login-email">Email</FieldLabel>
-              <Input id="login-email" type="email" value={page.email} readOnly className="h-10 border-transparent bg-muted dark:bg-muted" />
+              <Input
+                id="login-email"
+                type="email"
+                value={page.email}
+                readOnly
+                className="h-10 border-transparent bg-muted dark:bg-muted"
+              />
             </Field>
             <Field>
               <div className="flex items-center">

@@ -78,7 +78,10 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
   notFoundComponent: RouteNotFound,
 })
 
-const signedOutGuard = async (search: { readonly redirect?: string | undefined; readonly invitationId?: string | undefined }) => {
+const signedOutGuard = async (search: {
+  readonly redirect?: string | undefined
+  readonly invitationId?: string | undefined
+}) => {
   const session = await queryClient.query(sessionOptions())
   if (session && !authorizationQuery) {
     const target = safeRedirect(search.redirect) ?? "/"
@@ -108,7 +111,9 @@ const signupRoute = createRoute({
   loaderDeps: ({ search }) => ({ invitationId: search.invitationId }),
   loader: ({ deps }) => {
     if (deps.invitationId)
-      void queryClient.query({ ...api.invitation.preview.queryOptions({ id: deps.invitationId }), retry: false }).catch(ignore)
+      void queryClient
+        .query({ ...api.invitation.preview.queryOptions({ id: deps.invitationId }), retry: false })
+        .catch(ignore)
   },
   component: SignupPage,
 })
@@ -177,7 +182,11 @@ const acceptInvitationRoute = createRoute({
     ])
     const organization = preview?.organization
     if (!deps.join || !session || preview?.state !== "pending" || !organization) return {}
-    const outcome = await joinInvitation({ invitationId: deps.id, organizationId: organization.id, redirect: deps.redirect })
+    const outcome = await joinInvitation({
+      invitationId: deps.id,
+      organizationId: organization.id,
+      redirect: deps.redirect,
+    })
     if (outcome.kind === "opened") throw redirect({ href: outcome.href })
     return { failure: outcome }
   },
@@ -255,7 +264,11 @@ const spacesRoute = createRoute({
     void queryClient.query(api.space.list.queryOptions({ page: deps.page, pageSize })).catch(ignore)
   },
   pendingComponent: () => (
-    <PageSkeleton title="Spaces" description="Each space gives a team its own credentials, apps and agents." body="cards" />
+    <PageSkeleton
+      title="Spaces"
+      description="Each space gives a team its own credentials, apps and agents."
+      body="cards"
+    />
   ),
   component: SpacesPage,
 })
@@ -274,7 +287,9 @@ const spaceOverviewRoute = createRoute({
   getParentRoute: () => spaceRoute,
   path: "/",
   loader: ({ params }) => {
-    void queryClient.query(api.session.list.queryOptions({ spaceId: params.spaceId, page: 1, pageSize: 5 })).catch(ignore)
+    void queryClient
+      .query(api.session.list.queryOptions({ spaceId: params.spaceId, page: 1, pageSize: 5 }))
+      .catch(ignore)
   },
   component: SpaceOverviewTab,
 })
@@ -285,9 +300,9 @@ const spaceMembersRoute = createRoute({
   validateSearch: PageSearch,
   loaderDeps: ({ search }) => ({ page: currentPage(search) }),
   loader: ({ params, deps }) => {
-    void queryClient.query(
-      api["space-member"].list.queryOptions({ spaceId: params.spaceId, page: deps.page, pageSize }),
-    ).catch(ignore)
+    void queryClient
+      .query(api["space-member"].list.queryOptions({ spaceId: params.spaceId, page: deps.page, pageSize }))
+      .catch(ignore)
   },
   component: SpaceMembersTab,
 })
@@ -332,7 +347,9 @@ const taskRoute = createRoute({
   staticData: { title: "Task" },
   loader: ({ params }) => {
     void queryClient.query(api.task.get.queryOptions({ idOrSlug: params.taskId })).catch(ignore)
-    void queryClient.query(api["task-activity"].list.queryOptions({ taskId: params.taskId, page: 1, pageSize: pickerPageSize })).catch(ignore)
+    void queryClient
+      .query(api["task-activity"].list.queryOptions({ taskId: params.taskId, page: 1, pageSize: pickerPageSize }))
+      .catch(ignore)
   },
   component: TaskPage,
 })

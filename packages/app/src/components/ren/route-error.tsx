@@ -17,7 +17,12 @@ const messages: Record<number, string> = {
   503: "The service is temporarily unavailable.",
 }
 
-function ErrorState(props: { title: string; description: string; offline?: boolean | undefined; onRetry?: () => void }) {
+function ErrorState(props: {
+  title: string
+  description: string
+  offline?: boolean | undefined
+  onRetry?: () => void
+}) {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
       <Empty>

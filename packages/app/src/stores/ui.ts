@@ -70,7 +70,6 @@ export const useHomeSpaceId = () => useUi((state) => state.homeSpaceId)
 export const useNewTask = () => useUi((state) => state.newTask)
 export const useSearchOpen = () => useUi((state) => state.searchOpen)
 
-
 export const changeTaskDisplay = (taskDisplay: TaskDisplay) => useUi.setState({ taskDisplay })
 
 export const chooseChatDetail = (chatDetail: ChatDetail) => useUi.setState({ chatDetail })

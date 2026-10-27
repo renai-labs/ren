@@ -74,7 +74,8 @@
   --radius-xl: 12px;
   --radius-2xl: 16px;
 
-  --shadow-overlay: 0 0 0 1px var(--border), 0 16px 48px -6px rgba(20, 20, 20, 0.5), 0 6px 12px -2px rgba(20, 20, 20, 0.5);
+  --shadow-overlay:
+    0 0 0 1px var(--border), 0 16px 48px -6px rgba(20, 20, 20, 0.5), 0 6px 12px -2px rgba(20, 20, 20, 0.5);
   --shadow-dialog: 0 0 0 1px var(--border), 0 16px 48px 0 rgba(20, 20, 20, 0.5);
 
   --color-background: var(--background);

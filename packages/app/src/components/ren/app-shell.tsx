@@ -36,7 +36,10 @@ export function AppShell() {
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset className={insetClass}>
-            <div data-slot="page-scroll" className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+            <div
+              data-slot="page-scroll"
+              className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+            >
               <Outlet />
             </div>
           </SidebarInset>
@@ -54,7 +57,10 @@ export function SettingsShell() {
     <SidebarProvider>
       <SettingsSidebar />
       <SidebarInset className={insetClass}>
-        <div data-slot="page-scroll" className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+        <div
+          data-slot="page-scroll"
+          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+        >
           <Outlet />
         </div>
       </SidebarInset>

@@ -33,19 +33,13 @@ type AppProfile = AppProfileInfo
 
 type Target = { id: string; name: string }
 
-export type Added = (added: {
-  app: App
-  profileId?: string | undefined
-  space: Target
-}) => void
+export type Added = (added: { app: App; profileId?: string | undefined; space: Target }) => void
 
 function useAddition(app: App, onAdded: Added) {
   const [choosing, setChoosing] = useState<Target>()
   const catalog = useCatalog()
   const access = useMutation({ ...api["app-profile"].access.mutationOptions(), meta: { invalidates: profileQueries } })
-  const shared = catalog.profilesOf(app.id).filter(
-    (profile) => profile.kind === "shared"
-  )
+  const shared = catalog.profilesOf(app.id).filter((profile) => profile.kind === "shared")
   const done = (profileId: string | undefined, space: Target) => {
     setChoosing(undefined)
     if (!profileId) {
@@ -64,8 +58,7 @@ function useAddition(app: App, onAdded: Added) {
     )
   }
   return {
-    add: (space: Target) =>
-      shared.length > 0 ? setChoosing(space) : done(undefined, space),
+    add: (space: Target) => (shared.length > 0 ? setChoosing(space) : done(undefined, space)),
     dialog: choosing ? (
       <ChooseProfile
         app={app}
@@ -79,11 +72,7 @@ function useAddition(app: App, onAdded: Added) {
   }
 }
 
-export function AddToSpace(props: {
-  app: App
-  primary?: boolean
-  onAdded: Added
-}) {
+export function AddToSpace(props: { app: App; primary?: boolean; onAdded: Added }) {
   const navigate = useNavigate()
   const addition = useAddition(props.app, props.onAdded)
   const profiles = useCatalog().profilesOf(props.app.id)
@@ -102,17 +91,13 @@ export function AddToSpace(props: {
           }
         >
           Add to space
-          <IconChevronDown
-            className={props.primary ? undefined : "text-muted-foreground"}
-          />
+          <IconChevronDown className={props.primary ? undefined : "text-muted-foreground"} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuGroup>
             <DropdownMenuLabel>Your spaces</DropdownMenuLabel>
             {yourSpaces.map((space) => {
-              const added = profiles.some((profile) =>
-                listsSpace(profile, space.id)
-              )
+              const added = profiles.some((profile) => listsSpace(profile, space.id))
               return (
                 <DropdownMenuItem
                   key={space.id}
@@ -142,12 +127,7 @@ export function AddHere(props: { app: App; space: Target; onAdded: Added }) {
   const addition = useAddition(props.app, props.onAdded)
   return (
     <>
-      <Button
-        variant="outline"
-        size="xs"
-        className="h-6.5"
-        onClick={() => addition.add(props.space)}
-      >
+      <Button variant="outline" size="xs" className="h-6.5" onClick={() => addition.add(props.space)}>
         Add
       </Button>
       {addition.dialog}
@@ -175,34 +155,18 @@ function ChooseProfile(props: {
           <DialogTitle>
             Add {props.app.name} to {props.space.name}
           </DialogTitle>
-          <DialogDescription>
-            Use an account already connected, or connect a new one for this
-            space.
-          </DialogDescription>
+          <DialogDescription>Use an account already connected, or connect a new one for this space.</DialogDescription>
         </DialogHeader>
         <Rows>
           {[
             ...props.shared.map((profile) => (
-              <Row
-                key={profile.id}
-                title={profile.name}
-                description={reach(profile)}
-              >
-                <Button
-                  variant="outline"
-                  size="xs"
-                  className="h-6.5"
-                  onClick={() => props.onUse(profile)}
-                >
+              <Row key={profile.id} title={profile.name} description={reach(profile)}>
+                <Button variant="outline" size="xs" className="h-6.5" onClick={() => props.onUse(profile)}>
                   Use
                 </Button>
               </Row>
             )),
-            <Row
-              key="new"
-              title={`New account for ${props.space.name}`}
-              description="Only this space uses it."
-            >
+            <Row key="new" title={`New account for ${props.space.name}`} description="Only this space uses it.">
               <Button size="xs" className="h-6.5" onClick={props.onCreate}>
                 Create
               </Button>

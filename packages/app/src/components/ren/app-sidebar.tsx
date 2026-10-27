@@ -51,12 +51,7 @@ import {
   SidebarMenuSkeleton,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import {
-  FilterMenu,
-  passes,
-  type FilterProperty,
-  type Filters,
-} from "@/components/ren/filter-menu"
+import { FilterMenu, passes, type FilterProperty, type Filters } from "@/components/ren/filter-menu"
 import { ConfirmDialog } from "@/components/ren/confirm-dialog"
 import { CreateOrganizationDialog } from "@/components/ren/create-organization-dialog"
 import { Logomark } from "@/components/ren/logomark"
@@ -127,7 +122,7 @@ function ChatStatus(props: { sessionId: string; busy: boolean }) {
   const attention = useChatAttention(props.sessionId) ?? (props.busy ? "running" : "idle")
   if (attention === "idle") return null
   return (
-    <SidebarMenuBadge>
+    <SidebarMenuBadge className="peer-data-[size=default]/menu-button:top-2">
       <span
         className={attention === "asking" ? "size-2 rounded-full bg-chart-3" : "size-2 rounded-full bg-chart-2"}
         aria-label={attention === "asking" ? "Needs your input" : "Working"}
@@ -170,10 +165,9 @@ export function AppSidebar() {
     (chat) =>
       passes(
         { space: filters.space ?? [], status: filters.status ?? [] },
-        { space: [chat.spaceId], status: [chat.status] }
+        { space: [chat.spaceId], status: [chat.status] },
       ) &&
-      (!updated ||
-        now - Date.parse(chat.updatedAt) <= days[updated] * 86_400_000)
+      (!updated || now - Date.parse(chat.updatedAt) <= days[updated] * 86_400_000),
   )
   const [organizationQuery, setOrganizationQuery] = useState("")
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -185,7 +179,7 @@ export function AppSidebar() {
     ? listed
     : [me.organization, ...listed]
   const matchingOrganizations = allOrganizations.filter((organization) =>
-    organization.name.toLowerCase().includes(organizationQuery.trim().toLowerCase())
+    organization.name.toLowerCase().includes(organizationQuery.trim().toLowerCase()),
   )
   const userName = me.user.name || me.user.email
   const switchTo = async (organizationId: string) => {
@@ -212,11 +206,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  className="h-9"
-                  isActive={path === "/"}
-                  render={<Link to="/" />}
-                >
+                <SidebarMenuButton className="h-9" isActive={path === "/"} render={<Link to="/" />}>
                   <IconEdit />
                   <span>New chat</span>
                 </SidebarMenuButton>
@@ -232,11 +222,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               {pages.map((page) => (
                 <SidebarMenuItem key={page.to}>
-                  <SidebarMenuButton
-                    className="h-9"
-                    isActive={path.startsWith(page.to)}
-                    render={<Link to={page.to} />}
-                  >
+                  <SidebarMenuButton className="h-9" isActive={path.startsWith(page.to)} render={<Link to={page.to} />}>
                     <page.icon />
                     <span>{page.label}</span>
                   </SidebarMenuButton>
@@ -246,9 +232,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup className="px-0">
-          <SidebarGroupLabel className="text-sm text-sidebar-foreground">
-            Chats
-          </SidebarGroupLabel>
+          <SidebarGroupLabel className="text-sm text-sidebar-foreground">Chats</SidebarGroupLabel>
           <div className="absolute top-3.5 right-9 flex group-data-[collapsible=icon]:hidden">
             <FilterMenu
               label="Filter chats"
@@ -265,22 +249,15 @@ export function AppSidebar() {
             <SidebarMenu className="gap-1">
               {chats.length === 0 ? (
                 <li className="flex p-2 text-sm text-sidebar-foreground">
-                  {allChats.length === 0
-                    ? "No chats"
-                    : "No chats match these filters"}
+                  {allChats.length === 0 ? "No chats" : "No chats match these filters"}
                 </li>
               ) : null}
               {chats.map((chat) => (
                 <SidebarMenuItem key={chat.id}>
                   <SidebarMenuButton
-                    className="h-9"
+                    className="h-9 group-has-data-[sidebar=menu-badge]/menu-item:pr-7"
                     isActive={path === `/sessions/${chat.id}`}
-                    render={
-                      <Link
-                        to="/sessions/$sessionId"
-                        params={{ sessionId: chat.id }}
-                      />
-                    }
+                    render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
                   >
                     <IconMessage />
                     <span>{sessionTitle(chat.title)}</span>
@@ -324,12 +301,8 @@ export function AppSidebar() {
                   <AvatarFallback>{initials(userName)}</AvatarFallback>
                 </Avatar>
                 <span className="flex min-w-0 flex-1 flex-col text-start leading-tight">
-                  <span className="truncate font-medium text-foreground">
-                    {userName}
-                  </span>
-                  <span className="truncate text-xs">
-                    {me.organization.name}
-                  </span>
+                  <span className="truncate font-medium text-foreground">{userName}</span>
+                  <span className="truncate text-xs">{me.organization.name}</span>
                 </span>
                 <IconChevronUp />
               </DropdownMenuTrigger>
@@ -354,10 +327,7 @@ export function AppSidebar() {
                     onValueChange={(value: string) => void switchTo(value)}
                   >
                     {matchingOrganizations.map((organization) => (
-                      <DropdownMenuRadioItem
-                        key={organization.id}
-                        value={organization.id}
-                      >
+                      <DropdownMenuRadioItem key={organization.id} value={organization.id}>
                         <PersonAvatar name={organization.name} />
                         {organization.name}
                       </DropdownMenuRadioItem>
@@ -380,14 +350,7 @@ export function AppSidebar() {
             <div className="flex">
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground"
-                      aria-label="Help"
-                    />
-                  }
+                  render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Help" />}
                 >
                   <IconHelpCircle />
                 </DropdownMenuTrigger>

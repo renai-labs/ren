@@ -36,7 +36,8 @@ function useCredentialsPage() {
   const keys = useQuery({
     ...api.credential.list.queryOptions({ page, pageSize, ...(needle && { search: needle }) }),
     placeholderData: keepPreviousData,
-    select: (data) => ({ ...data, items: data.items.filter((credential) => credential.owner.kind !== "profile") }) })
+    select: (data) => ({ ...data, items: data.items.filter((credential) => credential.owner.kind !== "profile") }),
+  })
   const total = keys.data?.total ?? 0
   return {
     tab,
@@ -54,7 +55,8 @@ function useCredentialsPage() {
     removed: () => {
       const next = lastPageAfterRemoval(page, total, pageSize)
       if (next !== page) void navigate({ search: (previous) => ({ ...previous, page: next }) })
-    } }
+    },
+  }
 }
 
 export function CredentialsSettingsPage() {
@@ -148,10 +150,7 @@ function OrgApps() {
             action={(each) => (
               <>
                 <AccountAccess profile={each} />
-                <AccountActions
-                  profile={each}
-                  onOpen={() => setProfile({ appId: each.appId, profileId: each.id })}
-                />
+                <AccountActions profile={each} onOpen={() => setProfile({ appId: each.appId, profileId: each.id })} />
               </>
             )}
           />

@@ -20,7 +20,8 @@ function useSpaceApps() {
   const catalog = useCatalog()
   const reach = useQuery({
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: space.id }),
-    refetchOnWindowFocus: "always" })
+    refetchOnWindowFocus: "always",
+  })
   const access = useMutation({ ...api["app-profile"].access.mutationOptions(), meta: { invalidates: profileQueries } })
   const [opened, setOpened] = useState<string>()
   const [profile, setProfile] = useState<ProfileTarget>()
@@ -46,15 +47,14 @@ function useSpaceApps() {
     app,
     here,
     elsewhere: app
-      ? catalog
-          .profilesOf(app.id)
-          .filter((each) => each.kind === "shared" && !here.some((own) => own.id === each.id))
+      ? catalog.profilesOf(app.id).filter((each) => each.kind === "shared" && !here.some((own) => own.id === each.id))
       : [],
     open: setOpened,
     profile,
     setProfile,
     remove: (profileId: string) => change({ id: profileId, remove: [space.id] }, "Couldn’t remove the account"),
-    addHere: (profileId: string) => change({ id: profileId, add: [space.id] }, "Couldn’t add the account") }
+    addHere: (profileId: string) => change({ id: profileId, add: [space.id] }, "Couldn’t add the account"),
+  }
 }
 
 export function SpaceAppsTab() {
@@ -73,9 +73,7 @@ export function SpaceAppsTab() {
         <AddAppDialog
           space={space}
           added={new Set(page.byApp.keys())}
-          onAdded={(added) =>
-            page.setProfile({ appId: added.app.id, profileId: added.profileId, from: page.from })
-          }
+          onAdded={(added) => page.setProfile({ appId: added.app.id, profileId: added.profileId, from: page.from })}
         />
       </div>
       {page.loading ? (

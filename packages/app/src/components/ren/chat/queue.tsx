@@ -41,10 +41,18 @@ export function Queue(props: { tasks: ReadonlyArray<SessionTasks.Task>; running:
               {props.tasks.map((task) => (
                 <TraceLine
                   key={task.id}
-                  status={task.status === "in_progress" && props.running ? "running" : task.status === "pending" ? "pending" : undefined}
+                  status={
+                    task.status === "in_progress" && props.running
+                      ? "running"
+                      : task.status === "pending"
+                        ? "pending"
+                        : undefined
+                  }
                 >
                   <TraceIcon>{icons[task.status]}</TraceIcon>
-                  <TraceTitle className={task.status === "cancelled" ? "line-through" : undefined}>{task.content}</TraceTitle>
+                  <TraceTitle className={task.status === "cancelled" ? "line-through" : undefined}>
+                    {task.content}
+                  </TraceTitle>
                 </TraceLine>
               ))}
             </Trace>
