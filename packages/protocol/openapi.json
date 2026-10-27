@@ -1788,6 +1788,394 @@
         }
       }
     },
+    "/memory": {
+      "get": {
+        "tags": ["memory"],
+        "operationId": "memory.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID_1"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Only the files whose path starts with it, such as `people/`."
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Memory.Path"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "List the file paths of a memory. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "summary": "List memory files"
+      }
+    },
+    "/memory/file": {
+      "get": {
+        "tags": ["memory"],
+        "operationId": "memory.read",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID_1"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Memory.Path"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory.File",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Memory.File"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the whole content of one memory file. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "summary": "Read a memory file"
+      },
+      "put": {
+        "tags": ["memory"],
+        "operationId": "memory.write",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a memory file or replace its whole content. Keep each fact to one short line and each file on one topic; prefer an edit for a small change. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "summary": "Write a memory file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Memory.WriteInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "patch": {
+        "tags": ["memory"],
+        "operationId": "memory.edit",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory.File",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Memory.File"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Replace exact text in a memory file and return the new content. oldString must occur once unless replaceAll is set. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "summary": "Edit a memory file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Memory.EditInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["memory"],
+        "operationId": "memory.delete",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID_1"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Memory.Path"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete one memory file. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "summary": "Delete a memory file"
+      }
+    },
     "/agents": {
       "get": {
         "tags": ["agent"],
@@ -2831,7 +3219,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Space.ID_1"
+                  "$ref": "#/components/schemas/Space.ID_2"
                 },
                 {
                   "type": "null"
@@ -13501,6 +13889,86 @@
           }
         ]
       },
+      "Memory.EditInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID_1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "$ref": "#/components/schemas/Memory.Path"
+          },
+          "oldString": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The exact text to replace."
+          },
+          "newString": {
+            "type": "string"
+          },
+          "replaceAll": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Replace every occurrence. Without it, oldString must occur once."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["path", "oldString", "newString"],
+        "additionalProperties": false
+      },
+      "Memory.File": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "$ref": "#/components/schemas/Memory.Path"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"],
+        "additionalProperties": false
+      },
+      "Memory.Path": {
+        "type": "string",
+        "description": "A file path relative to the memory root, such as `memory.md` or `people/ana.md`."
+      },
+      "Memory.WriteInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID_1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "$ref": "#/components/schemas/Memory.Path"
+          },
+          "content": {
+            "type": "string",
+            "description": "The whole new content of the file."
+          }
+        },
+        "required": ["path", "content"],
+        "additionalProperties": false
+      },
       "NotFoundErrorEncoded": {
         "type": "object",
         "properties": {
@@ -16282,6 +16750,11 @@
       "Space.ID_1": {
         "type": "string",
         "pattern": "^spc_",
+        "description": "The space whose memory to use. Omit it for the organization’s memory."
+      },
+      "Space.ID_2": {
+        "type": "string",
+        "pattern": "^spc_",
         "description": "Only the profiles that this space reaches."
       },
       "Space.Info": {
@@ -18136,6 +18609,9 @@
     },
     {
       "name": "organization-settings"
+    },
+    {
+      "name": "memory"
     },
     {
       "name": "agent"

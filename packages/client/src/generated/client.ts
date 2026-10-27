@@ -44,6 +44,16 @@ import type {
   OrganizationSettingsGetOutput,
   OrganizationSettingsUpdateInput,
   OrganizationSettingsUpdateOutput,
+  MemoryListInput,
+  MemoryListOutput,
+  MemoryReadInput,
+  MemoryReadOutput,
+  MemoryWriteInput,
+  MemoryWriteOutput,
+  MemoryEditInput,
+  MemoryEditOutput,
+  MemoryDeleteInput,
+  MemoryDeleteOutput,
   AgentListInput,
   AgentListOutput,
   AgentGetInput,
@@ -607,6 +617,74 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    memory: {
+      list: (input?: MemoryListInput, requestOptions?: RequestOptions) =>
+        request<MemoryListOutput>(
+          {
+            method: "GET",
+            path: `/memory`,
+            query: { spaceId: input?.["spaceId"], prefix: input?.["prefix"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      read: (input: MemoryReadInput, requestOptions?: RequestOptions) =>
+        request<MemoryReadOutput>(
+          {
+            method: "GET",
+            path: `/memory/file`,
+            query: { spaceId: input["spaceId"], path: input["path"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      write: (input: MemoryWriteInput, requestOptions?: RequestOptions) =>
+        request<MemoryWriteOutput>(
+          {
+            method: "PUT",
+            path: `/memory/file`,
+            body: { spaceId: input["spaceId"], path: input["path"], content: input["content"] },
+            successStatus: 204,
+            declaredStatuses: [401, 403, 404],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      edit: (input: MemoryEditInput, requestOptions?: RequestOptions) =>
+        request<MemoryEditOutput>(
+          {
+            method: "PATCH",
+            path: `/memory/file`,
+            body: {
+              spaceId: input["spaceId"],
+              path: input["path"],
+              oldString: input["oldString"],
+              newString: input["newString"],
+              replaceAll: input["replaceAll"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      delete: (input: MemoryDeleteInput, requestOptions?: RequestOptions) =>
+        request<MemoryDeleteOutput>(
+          {
+            method: "DELETE",
+            path: `/memory/file`,
+            query: { spaceId: input["spaceId"], path: input["path"] },
+            successStatus: 204,
+            declaredStatuses: [401, 403, 404],
+            empty: true,
           },
           requestOptions,
         ),
