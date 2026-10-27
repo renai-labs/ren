@@ -95,7 +95,14 @@ const entries = Effect.fnUntraced(function* (
         requiredCredentials: info.requiredCredentials,
         ...(info.environment && { environment: info.environment }),
         mcps: info.mcps,
-        skills: info.skills,
+        skills: Object.fromEntries(
+          Object.entries(info.skills).map(([slug, skill]) => [
+            slug,
+            skill.type === "content"
+              ? { type: skill.type, description: skill.description, requiredCredentials: skill.requiredCredentials }
+              : skill,
+          ]),
+        ),
         dependsOn: info.dependsOn,
         revision: info.revision,
       },
