@@ -437,6 +437,7 @@ export const make = (
               editor.update(agent.name, (info) => {
                 info.mode = agent === resolved.primary ? "primary" : "subagent"
                 info.model = modelRef(agent.model)
+                info.steps = agent.steps
                 if (agent.description) info.description = agent.description
                 info.permissions = [
                   ...info.permissions,
