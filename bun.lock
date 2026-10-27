@@ -134,6 +134,7 @@
         "ren": "./src/index.ts",
       },
       "dependencies": {
+        "@ren/schema": "workspace:*",
         "@renai-labs/sdk": "workspace:*",
         "effect": "catalog:",
       },
