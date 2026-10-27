@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import type { ReactNode } from "react"
 import { useAtomValue } from "@effect/atom-react"
 import { ChatState, Family, Projection, TimelineRow, TimelineText, ToolDisplay, ToolState, type ChatAtoms } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
@@ -8,7 +8,6 @@ import type { Shell } from "@ren/schema/shell"
 import {
   IconAlertTriangle,
   IconBrain,
-  IconChevronDown,
   IconChevronRight,
   IconClock,
   IconCode,
@@ -27,7 +26,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
 import { CodeBlock, CodeBlockContent } from "@/components/ui/code-block"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@/components/ui/message"
 import {
@@ -39,8 +37,17 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
 import { Spinner } from "@/components/ui/spinner"
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace"
 import { Markdown } from "@/components/ren/chat/markdown"
-import { cn } from "@/lib/utils"
 
 interface Person {
   readonly name: string
@@ -213,8 +220,8 @@ const toolIcons: Record<ToolDisplay.Kind, typeof IconCode> = {
 
 function Output(props: { text: string; failed?: boolean | undefined }) {
   return (
-    <CodeBlock size="sm" variant={props.failed ? "destructive" : "default"} className="mt-1 border-0 bg-muted">
-      <CodeBlockContent wrap className="max-h-64 p-3 text-muted-foreground">
+    <CodeBlock size="sm" variant={props.failed ? "destructive" : "default"}>
+      <CodeBlockContent wrap className="max-h-64">
         {props.text}
       </CodeBlockContent>
     </CodeBlock>
@@ -222,38 +229,21 @@ function Output(props: { text: string; failed?: boolean | undefined }) {
 }
 
 function StepRow(props: { icon: ReactNode; verb: string; subject?: string | undefined; running?: boolean; failed?: boolean; output?: string | undefined }) {
-  const trigger = (
-    <>
-      <MarkerIcon>{props.running ? <Spinner /> : props.icon}</MarkerIcon>
-      <MarkerContent className="flex min-w-0 flex-1 items-center gap-2">
-        <span className={cn("text-foreground", props.running && "shimmer", props.failed && "text-destructive")}>
-          {props.verb}
-        </span>
-        {props.subject ? (
-          <code className="truncate rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs">{props.subject}</code>
-        ) : null}
-      </MarkerContent>
-    </>
+  const line = (
+    <TraceLine status={props.running ? "running" : props.failed ? "error" : undefined}>
+      <TraceIcon>{props.running ? <Spinner /> : props.icon}</TraceIcon>
+      <TraceTitle className="shrink-0">{props.verb}</TraceTitle>
+      {props.subject ? <TraceDescription className="min-w-0 shrink truncate font-mono text-xs">{props.subject}</TraceDescription> : null}
+    </TraceLine>
   )
-  if (!props.output)
-    return <Marker className="h-8 rounded-lg px-2">{trigger}</Marker>
+  if (!props.output) return line
   return (
-    <Collapsible>
-      <CollapsibleTrigger
-        render={
-          <Marker
-            className="h-8 rounded-lg px-2 hover:bg-muted"
-            render={<button type="button" aria-label={[props.verb, props.subject].filter(Boolean).join(" ")} />}
-          />
-        }
-      >
-        {trigger}
-        <IconChevronRight className="transition-transform duration-150 ease-out group-aria-expanded/marker:rotate-90 motion-reduce:transition-none" />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
+    <TraceCollapsible>
+      <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
+      <TraceCollapsibleContent>
         <Output text={props.output} failed={props.failed} />
-      </CollapsibleContent>
-    </Collapsible>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
   )
 }
 
@@ -283,28 +273,23 @@ function SubagentStep(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; 
   const card = Family.subagent(state, props.view.sessionID, props.tool)
   const child = card.child
   const running = card.status === "running" || card.status === "delegating"
-  const content = (
-    <>
-      <MarkerIcon>{running ? <Spinner /> : <IconGhost />}</MarkerIcon>
-      <MarkerContent className="flex min-w-0 flex-1 items-center gap-2">
-        <span className={cn("text-foreground", running && "shimmer", card.status === "failed" && "text-destructive")}>
-          {card.needsInput ? "Needs your input" : "Delegated"}
-        </span>
-        <code className="truncate rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs">{card.title}</code>
-      </MarkerContent>
-    </>
+  const line = (
+    <TraceLine status={running ? "running" : card.status === "failed" ? "error" : undefined}>
+      <TraceIcon>{running ? <Spinner /> : <IconGhost />}</TraceIcon>
+      <TraceTitle className="shrink-0">{card.needsInput ? "Needs your input" : "Delegated"}</TraceTitle>
+      <TraceDescription className="min-w-0 shrink truncate">{card.title}</TraceDescription>
+      {child?.startsWith("ses_") ? (
+        <TraceIcon>
+          <IconChevronRight />
+        </TraceIcon>
+      ) : null}
+    </TraceLine>
   )
-  if (!child?.startsWith("ses_")) return <Marker className="h-8 rounded-lg px-2">{content}</Marker>
+  if (!child?.startsWith("ses_")) return line
   return (
-    <Marker
-      className="h-8 rounded-lg px-2 hover:bg-muted"
-      render={
-        <button type="button" aria-label={`Open ${card.title}`} onClick={() => props.onOpenChild(Session.ID.make(child))} />
-      }
-    >
-      {content}
-      <IconChevronRight />
-    </Marker>
+    <button type="button" aria-label={`Open ${card.title}`} onClick={() => props.onOpenChild(Session.ID.make(child))}>
+      {line}
+    </button>
   )
 }
 
@@ -331,19 +316,24 @@ function ToolStep(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; onOp
 
 function StepItem(props: { step: Step; view: ChatAtoms.View; onOpenChild: (id: Session.ID) => void }) {
   const step = props.step
-  if (step.kind === "reasoning")
-    return (
-      <Marker className="py-1.5">
-        {step.running ? (
-          <MarkerIcon>
-            <IconBrain />
-          </MarkerIcon>
-        ) : null}
-        <MarkerContent className={cn("line-clamp-3 whitespace-pre-wrap", step.running && "shimmer")}>
-          {step.content.text.trim() || "Thinking…"}
-        </MarkerContent>
-      </Marker>
+  if (step.kind === "reasoning") {
+    const text = step.content.text.trim()
+    const line = (
+      <TraceLine status={step.running ? "running" : undefined}>
+        <TraceIcon>
+          <IconBrain />
+        </TraceIcon>
+        <TraceTitle>{step.running ? "Thinking" : "Thought"}</TraceTitle>
+      </TraceLine>
     )
+    if (!text) return line
+    return (
+      <TraceCollapsible>
+        <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
+        <TraceCollapsibleContent className="whitespace-pre-wrap">{text}</TraceCollapsibleContent>
+      </TraceCollapsible>
+    )
+  }
   if (step.kind === "tool") return <ToolStep tool={step.tool} view={props.view} onOpenChild={props.onOpenChild} />
   if (step.kind === "shell") {
     const message = step.message
@@ -362,12 +352,13 @@ function StepItem(props: { step: Step; view: ChatAtoms.View; onOpenChild: (id: S
   const notice = TimelineText.notice(step.message)
   if (!notice) return null
   return (
-    <Marker className="py-1.5">
-      <MarkerIcon>
+    <TraceLine>
+      <TraceIcon>
         <IconInfoCircle />
-      </MarkerIcon>
-      <MarkerContent>{notice.detail ? `${notice.title} · ${notice.detail}` : notice.title}</MarkerContent>
-    </Marker>
+      </TraceIcon>
+      <TraceTitle>{notice.title}</TraceTitle>
+      {notice.detail ? <TraceDescription className="min-w-0 shrink truncate">{notice.detail}</TraceDescription> : null}
+    </TraceLine>
   )
 }
 
@@ -379,30 +370,27 @@ function Steps(props: {
   view: ChatAtoms.View
   onOpenChild: (id: Session.ID) => void
 }) {
-  const [open, setOpen] = useState(props.expanded === true)
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger
-        render={
-          <Button
-            variant="ghost"
-            className="h-7 px-0 text-muted-foreground hover:bg-transparent aria-expanded:bg-transparent aria-expanded:text-muted-foreground"
-          />
-        }
-      >
-        <IconClock />
-        <span className={props.running ? "shimmer" : undefined}>
-          {props.running ? "Working, " : props.workedFor ? `Worked for ${props.workedFor}, ` : "Worked, "}
-          {props.steps.length === 1 ? "1 step" : `${props.steps.length} steps`}
-        </span>
-        <IconChevronDown />
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1 flex flex-col gap-0.5 border-l pl-3">
-        {props.steps.map((step) => (
-          <StepItem key={step.key} step={step} view={props.view} onOpenChild={props.onOpenChild} />
-        ))}
-      </CollapsibleContent>
-    </Collapsible>
+    <Trace>
+      <TraceCollapsible defaultOpen={props.expanded === true}>
+        <TraceCollapsibleTrigger>
+          <TraceLine status={props.running ? "running" : undefined}>
+            <TraceIcon>
+              <IconClock />
+            </TraceIcon>
+            <TraceTitle>{props.running ? "Working" : props.workedFor ? `Worked for ${props.workedFor}` : "Worked"}</TraceTitle>
+            <TraceDescription>{props.steps.length === 1 ? "1 step" : `${props.steps.length} steps`}</TraceDescription>
+          </TraceLine>
+        </TraceCollapsibleTrigger>
+        <TraceCollapsibleContent>
+          <Trace>
+            {props.steps.map((step) => (
+              <StepItem key={step.key} step={step} view={props.view} onOpenChild={props.onOpenChild} />
+            ))}
+          </Trace>
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+    </Trace>
   )
 }
 
