@@ -1,6 +1,6 @@
 # ren2 CLI
 
-Status: proposal. The executable name (`ren2`) and primary installation interface (a curl-fetched shell installer) are decided. This document records the proposed architecture and behavior; it does not claim those features are implemented. HTTP operations and domain shapes remain owned by the protocol and schema. Implementation work belongs in `TODO.md` or issues.
+Status: partially implemented. The command/runtime foundation and binary release tooling are implemented. Authentication, generated API coverage and structured output remain proposed. Publishing the first release requires running the release workflow. HTTP operations and domain shapes remain owned by the protocol and schema. Implementation work belongs in `TODO.md` or issues.
 
 ## 1. Purpose
 
@@ -204,7 +204,7 @@ packages/cli/src/
 
 Publish a shell installer as the primary entrypoint. Keep the hosting origin in `REN2_HOST_URL`, currently `https://v2.useren.ai`. Release configuration and installation documentation use this variable so the origin can change at migration without changing installer paths or command behavior. This hosting variable is separate from the CLI's API endpoint selection.
 
-The installer path below is proposed; these examples do not claim it is deployed:
+The release workflow publishes the paths below; these examples require a published release:
 
 ```sh
 export REN2_HOST_URL="https://v2.useren.ai"
@@ -215,28 +215,28 @@ curl -fsSL "${REN2_HOST_URL}/ren2/install.sh" | bash -s -- --no-init
 
 Keep the installer URL distinct from ren-v1's `https://useren.ai/install`. Its source references are ren-v1's `packages/site/src/scripts/install.sh` and OpenCode V2's root `install` script, served at `https://opencode.ai/v2/install`.
 
-The two references use different delivery mechanisms: the inspected ren-v1 script runs `npm install -g`, while OpenCode V2 downloads a platform-specific binary. For `ren2`, propose downloading a self-contained, Bun-built binary so installation does not require an existing Node, npm or Bun installation.
+The two references use different delivery mechanisms: the inspected ren-v1 script runs `npm install -g`, while OpenCode V2 downloads a platform-specific binary. `ren2` downloads a self-contained, Bun-built binary, requiring no existing Node, npm or Bun installation.
 
 Installer behavior:
 
 - Detect the supported operating system and architecture and select the matching release artifact. Unsupported targets fail with an actionable message.
 - Install the latest stable release by default; `--version` selects a specific release.
-- Install into a user-owned `ren2` binary directory, proposed as `~/.ren2/bin`, without replacing or removing ren-v1 binaries or credentials.
+- Install into `~/.ren2/bin` without replacing or removing ren-v1 binaries or credentials.
 - Add that directory to the shell path without duplicate entries. `--no-modify-path` skips shell configuration edits and prints the required setup.
 - Download and verify the selected artifact before replacing an existing installation. A failed download or verification leaves the working installation intact.
 - Verify the installed executable with `ren2 --version` and report its location.
-- Offer the login/onboarding workflow only when a usable terminal is available. `--no-init` skips onboarding, and noninteractive installation never waits for login. Interactive input comes from the terminal rather than the piped script's stdin.
+- Until login is implemented, print `ren2 --help` as the next step; `--no-init` skips that hint. Future onboarding requires a usable terminal, reads from that terminal rather than the piped script's stdin, and never blocks noninteractive installation.
 - Support `--help`; invalid options or missing option values fail clearly.
 
-The exact binary directory, release hosting, artifact verification mechanism and platform matrix must be settled before publishing the installer. Windows installation outside a Bash environment needs a separately documented path if supported.
+Support macOS and glibc Linux on arm64 and x64. Use the existing app S3 bucket and CloudFront distribution for `/ren2/*`, separate from `/app/*`. Verify each binary against its SHA-256 sidecar, then check its embedded version before replacement. Windows and musl Linux are not in this release matrix.
 
 ### 7.2 Release artifacts
 
-Use a Bun-based build initially, consistent with the existing Bun filesystem and YAML APIs. The proposed primary artifact includes its runtime. Verify the downloaded and installed executable outside the repository, not only source execution.
+Use a Bun-based build, consistent with the existing Bun filesystem and YAML APIs. Each binary includes its runtime. Verify the downloaded and installed executable outside the repository, not only source execution. Disable Bun's automatic project configuration and dotenv loading in compiled artifacts; connection configuration comes from the explicit CLI environment.
 
 An npm package can be an additional installation route. If published, it exposes `ren2` through a coherent built bin entry and follows the same version and coexistence contract. The curl installation interface does not depend on choosing the npm package name.
 
-The current package points its bin at source, lists `dist` for publication, and has no build script. Those declarations must become consistent before publication. A Node-only release would require explicitly replacing Bun-specific runtime behavior; it is not assumed by this design.
+The workspace package remains private and its bin points at source for development. `bun run build` produces versioned platform binaries, checksums and a rendered installer under `dist`. The `cli release` workflow builds and tests each target natively before publishing all artifacts, then updates the installer and `latest.txt`. Existing release versions are immutable. A Node-only release would require explicitly replacing Bun-specific runtime behavior; it is not assumed by this design.
 
 Version output comes from release metadata. Completion scripts use `ren2`. Every installation route must coexist with ren-v1 without executable or configuration collisions. Upgrade behavior follows the selected installation method; a shell-installed binary upgrades through the same release artifacts without switching the user to npm.
 
@@ -267,5 +267,5 @@ Resolve before the affected feature ships:
 4. Production endpoint default and exact connection/organization flags.
 5. Stable error envelope, exit codes and streaming output contract.
 6. Generated command naming for nested resources and exceptions.
-7. Installer path, release artifact hosting, artifact verification, installation directory and supported platforms; confirm the proposed runtime-inclusive binary delivery and upgrade mechanism. The current hosting origin is `REN2_HOST_URL=https://v2.useren.ai` and remains configurable for migration.
+7. Additional platforms and any future package-manager installation routes. The initial binary/installer release contract is defined in section 7; `REN2_HOST_URL` remains configurable for migration.
 8. Per-capability migration decisions for legacy features without a current equivalent.
