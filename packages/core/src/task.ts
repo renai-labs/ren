@@ -10,6 +10,7 @@ import type { TaskEvent } from "@ren/schema/task-event"
 import { TaskLink } from "@ren/schema/task-link"
 import { and, asc, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
+import { alias } from "drizzle-orm/pg-core"
 import { Array, Context, DateTime, Effect, Layer, Option, Predicate, Schema } from "effect"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
@@ -37,6 +38,7 @@ export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assig
     link: TaskLink.Ref,
     url: string,
   ) => Effect.Effect<ReadonlyArray<Task.ID>>
+  readonly runEnded: (sessionId: Session.ID) => Effect.Effect<void>
 }
 
 export const reviewStart: "continue" | "none" = "continue"
@@ -607,6 +609,86 @@ export const layer = Layer.effect(
             }),
           )
           .pipe(Effect.orDie)
+      }),
+      // oxlint-disable-next-line ren/no-comments -- A governed agent's run must end with a handoff or a review request, else a person must look. Lock first, then read the trail, so the check sees what committed while it waited. OpenCode keeps a session's last idle, so only an idle after the run's start counts.
+      runEnded: Effect.fn("Task.runEnded")(function* (sessionId: Session.ID) {
+        const opencode = Database.Schema.opencode_session
+        const started = alias(Database.Schema.task_event, "started_event")
+        const later = alias(Database.Schema.task_event, "later_event")
+        yield* database
+          .transaction((transaction) =>
+            Effect.gen(function* () {
+              const ended = yield* transaction
+                .select({
+                  task: Database.Schema.task,
+                  outcome: opencode.idle_outcome,
+                  idle: opencode.time_idle,
+                  agent: Database.Schema.agent.name,
+                })
+                .from(opencode)
+                .innerJoin(Database.Schema.agent_session, eq(Database.Schema.agent_session.id, opencode.session_id))
+                .innerJoin(
+                  Database.Schema.task_session,
+                  eq(Database.Schema.task_session.session_id, opencode.session_id),
+                )
+                .innerJoin(
+                  Database.Schema.task,
+                  and(
+                    eq(Database.Schema.task.id, Database.Schema.task_session.task_id),
+                    eq(Database.Schema.task.agent_id, Database.Schema.task_session.agent_id),
+                  ),
+                )
+                .innerJoin(Database.Schema.agent, eq(Database.Schema.agent.id, Database.Schema.task.agent_id))
+                .where(
+                  and(
+                    eq(opencode.session_id, sessionId),
+                    inArray(opencode.idle_outcome, ["succeeded", "failed"]),
+                    isNull(opencode.time_suspended),
+                    isNull(Database.Schema.agent_session.parent_id),
+                    inArray(Database.Schema.task.status, Task.actionable),
+                    eq(Database.Schema.task.human_review, false),
+                    isNull(Database.Schema.task.archived_at),
+                  ),
+                )
+                .orderBy(asc(Database.Schema.task.id))
+                .for("update", { of: Database.Schema.task })
+              yield* Effect.forEach(ended, (row) =>
+                Effect.gen(function* () {
+                  const factory = yield* TaskFactory.read(transaction, row.task.space_id)
+                  if (!row.task.agent_id || !TaskFactory.isGoverned(factory, row.task.agent_id)) return
+                  const quiet = yield* transaction
+                    .select({ id: started.id })
+                    .from(started)
+                    .where(
+                      and(
+                        eq(started.task_id, row.task.id),
+                        eq(started.kind, "started"),
+                        sql`${started.data} ->> 'sessionId' = ${sessionId}`,
+                        sql`to_timestamp(${row.idle} / 1000.0)::timestamp > ${started.created_at}`,
+                        sql`not exists (
+                          select 1 from ${Database.Schema.task_event} as ${later}
+                          where ${later.task_id} = ${row.task.id}
+                            and ${later.kind} in ('assigned', 'review_requested', 'reviewed')
+                            and (${later.created_at}, ${later.id}) > (${started.created_at}, ${started.id})
+                        )`,
+                      ),
+                    )
+                    .limit(1)
+                  if (quiet.length === 0) return
+                  yield* TaskFactory.requestReview(
+                    transaction,
+                    row.task,
+                    row.outcome === "failed"
+                      ? `${row.agent} stopped with an error.`
+                      : `${row.agent} ended its run without a handoff.`,
+                  )
+                }),
+              )
+            }),
+          )
+          .pipe(
+            Effect.catchCause((cause) => Effect.logError(`The task run of ${sessionId} could not be checked`, cause)),
+          )
       }),
       get: Effect.fn("Task.get")(function* (actor: Actor.Info, idOrSlug: string) {
         const parts = identifier.exec(idOrSlug)?.groups

@@ -2,11 +2,13 @@ import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { eq } from "drizzle-orm"
 import type { Agent } from "@ren/schema/agent"
+import type { Task as TaskSchema } from "@ren/schema/task"
 import { Effect } from "effect"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { Task } from "../src/task.js"
 import { TaskActivity } from "../src/task/activity.js"
+import { TaskTrail } from "../src/task/trail.js"
 import { Seed } from "./lib/seed.js"
 import { TaskFixture } from "./lib/task-fixture.js"
 
@@ -322,5 +324,74 @@ describe("Task factory", () => {
         },
       })
     }),
+  )
+
+  it.live(
+    "a governed agent's run that ends with no handoff asks a person; a handoff, an interruption, an earlier turn or an agent with no edges does not",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const tasks = yield* Task.Service
+        const f = yield* factory
+        const ran = Effect.fnUntraced(function* (
+          actor: typeof f.builder,
+          outcome: "succeeded" | "failed" | "interrupted",
+          more: { readonly handOff?: Agent.ID; readonly idleAt?: number } = {},
+        ) {
+          const task = yield* tasks.create(f.o.ada, {
+            spaceId: f.o.factory.id,
+            title: "Ship",
+            agentId: actor.agent.agentId,
+          })
+          const sessionId = yield* Seed.session({
+            organizationId: f.o.organizationId,
+            spaceId: f.o.factory.id,
+            createdBy: f.o.ada.userId,
+          })
+          yield* database.db
+            .insert(Database.Schema.task_session)
+            .values({ task_id: task.id, session_id: sessionId, agent_id: actor.agent.agentId })
+          yield* database.transaction((transaction) =>
+            TaskTrail.record(transaction, { id: task.id, organizationId: f.o.organizationId }, f.o.ada, [
+              { _tag: "started", agentId: actor.agent.agentId, sessionId, mode: "new" },
+              { _tag: "status", from: "todo", to: "in_progress" },
+            ]),
+          )
+          if (more.handOff) yield* tasks.assign(actor, task.id, { agentId: more.handOff, start: "none" })
+          yield* database.db.insert(Database.Schema.opencode_session).values({
+            session_id: sessionId,
+            project_id: "prj_1",
+            slug: "calm-river",
+            directory: "/workspace",
+            version: "2.0.27",
+            cost: 0,
+            tokens_input: 0,
+            tokens_output: 0,
+            tokens_reasoning: 0,
+            tokens_cache_read: 0,
+            tokens_cache_write: 0,
+            time_created: 1,
+            time_updated: 2,
+            time_idle: more.idleAt ?? Date.now() + 60_000,
+            idle_outcome: outcome,
+          })
+          yield* tasks.runEnded(sessionId)
+          return yield* tasks.get(f.o.ada, task.id)
+        })
+        const review = (task: TaskSchema.Info) => ({ humanReview: task.humanReview, reason: task.humanReviewReason })
+        expect(review(yield* ran(f.builder, "succeeded"))).toEqual({
+          humanReview: true,
+          reason: "build ended its run without a handoff.",
+        })
+        expect(review(yield* ran(f.builder, "failed"))).toEqual({
+          humanReview: true,
+          reason: "build stopped with an error.",
+        })
+        expect((yield* ran(f.builder, "succeeded", { handOff: f.review })).humanReview).toBe(false)
+        expect((yield* ran(f.builder, "succeeded", { idleAt: Date.now() - 60_000 })).humanReview).toBe(false)
+        expect((yield* ran(f.builder, "interrupted")).humanReview).toBe(false)
+        const planner = TaskFixture.actingAs(f.o.ada, f.o.factory.id, f.plan, f.builder.agent.sessionId)
+        expect((yield* ran(planner, "succeeded")).humanReview).toBe(false)
+      }),
   )
 })
