@@ -24,6 +24,7 @@ export function HomePage() {
             onChange={page.type}
             onSubmit={page.send}
             sending={page.starting}
+            suggest={page.suggest}
             model={
               <ModelPicker
                 models={page.models}

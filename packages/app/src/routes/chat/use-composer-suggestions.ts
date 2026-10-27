@@ -47,6 +47,21 @@ export function useComposerSuggestions(input: {
   client: Readonly<Record<ClientCommand.ID, boolean>>
   onClient: (id: ClientCommand.ID) => void
 }) {
+  const offered = Composer.offeredCommands(listed(ChatReact.useCommands(input.root)))
+  const brain = input.commands ? offered : []
+  const core = useSuggestions({
+    commands: (query) => ClientCommand.suggestions(ClientCommand.offered(input.client), brain, query),
+    onClient: input.onClient,
+  })
+  return { ...core, slash: (text: string) => Composer.slash(text, brain) }
+}
+
+export const useMentionSuggestions = () => useSuggestions({ commands: () => [], onClient: () => undefined })
+
+function useSuggestions(input: {
+  commands: (query: string) => ReadonlyArray<ClientCommand.Suggestion>
+  onClient: (id: ClientCommand.ID) => void
+}) {
   const [trigger, setTrigger] = useState<Composer.Trigger>()
   const [active, setActive] = useState<string>()
   const query = trigger?.kind === "mention" ? trigger.query.toLowerCase() : undefined
@@ -59,13 +74,7 @@ export function useComposerSuggestions(input: {
     handle: app.slug,
     description: app.description,
   }))
-  const offered = Composer.offeredCommands(listed(ChatReact.useCommands(input.root)))
-  const brain = input.commands ? offered : []
-  const runnable = ClientCommand.suggestions(
-    ClientCommand.offered(input.client),
-    brain,
-    trigger?.kind === "command" ? trigger.query : "",
-  )
+  const runnable = trigger?.kind === "command" ? input.commands(trigger.query) : []
   const mentionable =
     query === undefined
       ? []
@@ -139,7 +148,6 @@ export function useComposerSuggestions(input: {
   }
   return {
     suggest,
-    slash: (text: string) => Composer.slash(text, brain),
     resolve: (text: string) => Mentions.resolve(text, tokens(text)),
   }
 }

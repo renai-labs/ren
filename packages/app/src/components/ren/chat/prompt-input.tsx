@@ -251,14 +251,17 @@ function PastedBlocks(props: {
   )
 }
 
-function SuggestionMenu(props: { suggest: Suggest; onChoose: (value: string) => void }) {
+function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (value: string) => void }) {
   const suggest = props.suggest
   const choose = props.onChoose
   return (
     <Command
       value={suggest.active ?? ""}
       shouldFilter={false}
-      className="absolute inset-x-0 bottom-full mb-2 h-auto w-full rounded-xl border bg-popover shadow-md"
+      className={cn(
+        "absolute inset-x-0 z-20 h-auto w-full rounded-xl border bg-popover shadow-md",
+        props.below ? "top-full mt-2" : "bottom-full mb-2",
+      )}
     >
       <CommandList className="max-h-72">
         <CommandGroup heading={suggest.label}>
@@ -387,7 +390,7 @@ export function PromptInput(props: {
   const marks = suggest?.marks(text) ?? []
   return (
     <div className="relative flex flex-col gap-2">
-      {suggest?.open ? <SuggestionMenu suggest={suggest} onChoose={choose} /> : null}
+      {suggest?.open ? <SuggestionMenu suggest={suggest} below={home} onChoose={choose} /> : null}
       <DropOverlay onFiles={attachments.add} />
       <input
         ref={picker}

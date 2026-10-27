@@ -12,6 +12,7 @@ import { useSpaces } from "@/hooks/use-spaces"
 import { api, errorMessage } from "@/lib/api"
 import { handoff } from "@/lib/chat"
 import { chooseHomeSpace, chooseModel, useChosenModel, useHomeSpaceId } from "@/stores/ui"
+import { useMentionSuggestions } from "@/routes/chat/use-composer-suggestions"
 
 export function useHomePage() {
   const me = useMe()
@@ -28,7 +29,9 @@ export function useHomePage() {
   const prepare = useMutation(api.chat.prepare.mutationOptions())
   const [prepared, setPrepared] = useState<ReadonlySet<string>>(() => new Set())
   const create = useMutation(api.session.create.mutationOptions())
+  const mentions = useMentionSuggestions()
   return {
+    suggest: mentions.suggest,
     spaces,
     spaceId,
     draft,
@@ -49,7 +52,7 @@ export function useHomePage() {
     send: () => {
       const trimmed = Composer.message(draft).trim()
       if (!trimmed || !spaceId || create.isPending) return
-      const message = { id: SessionMessage.ID.create(), text: trimmed }
+      const message = { id: SessionMessage.ID.create(), text: mentions.resolve(trimmed).text }
       setSent(draft)
       create.mutate(
         { id: sessionId, spaceId, message, ...(model && { model }) },
