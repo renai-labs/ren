@@ -87,6 +87,13 @@ export const Spec = Schema.Struct({
             })),
           ),
         ),
+        ...[...owners.agents.values()]
+          .flat()
+          .filter((owned) => Agent.reserved.has(owned.name))
+          .map((owned) => ({
+            path: ["spaces", owned.space, "agents", owned.name],
+            issue: `The name ${owned.name} is reserved.`,
+          })),
         ...spaces.flatMap(([space, declaration]) =>
           declaration.uses.agents.flatMap((name, index) => {
             const path = ["spaces", space, "uses", "agents", index]
