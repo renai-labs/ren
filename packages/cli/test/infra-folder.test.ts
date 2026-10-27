@@ -3,6 +3,7 @@ import { mkdtemp } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { InfraFolder } from "../src/infra/folder.js"
+import { Output } from "../src/services/output.js"
 
 const folder = async (files: Record<string, string | Uint8Array>) => {
   const root = await mkdtemp(join(tmpdir(), "ren-infra-"))
@@ -82,7 +83,7 @@ describe("InfraFolder.validate", () => {
 
     const result = await InfraFolder.validate(root)
 
-    expect(result.problems.map(InfraFolder.format)).toEqual([
+    expect(result.problems.map(Output.formatProblem)).toEqual([
       "spaces/engineering/agents/build/agent.yaml: isSubagent: Expected boolean",
       "spaces/engineering/space.yaml: name: Missing key",
       "spaces/support/agents/qa: Put the instructions in instructions.md only.",
@@ -100,7 +101,7 @@ describe("InfraFolder.validate", () => {
 
     const result = await InfraFolder.validate(root)
 
-    expect(result.problems.map(InfraFolder.format)).toEqual([
+    expect(result.problems.map(Output.formatProblem)).toEqual([
       "spaces/engineering/agents/ren/agent.yaml: The name ren is reserved.",
       'spaces/engineering/schedules.yaml: nightly.agent: Schedule "nightly" in space "engineering" runs on agent "review", which is not in the space.',
     ])
@@ -118,7 +119,7 @@ describe("InfraFolder.validate", () => {
 
     const result = await InfraFolder.validate(root)
 
-    expect(result.problems.map(InfraFolder.format)).toEqual([
+    expect(result.problems.map(Output.formatProblem)).toEqual([
       "spaces/engineering/apps/notes/skills/empty: A skill folder needs SKILL.md or skill.yaml.",
       "spaces/engineering/apps/notes/skills/write/logo.png: A skill holds text files only.",
       "spaces/engineering/apps/notes/skills/write/SKILL.md: name: The name “draft” must be the folder name, write.",
@@ -133,7 +134,7 @@ describe("InfraFolder.validate", () => {
 
     expect(missing.problems).toEqual(result.problems)
 
-    expect(result.problems.map(InfraFolder.format)).toEqual([
+    expect(result.problems.map(Output.formatProblem)).toEqual([
       ".: No spec here. An org spec has org.yaml, and a private spec has space.yaml.",
     ])
   })

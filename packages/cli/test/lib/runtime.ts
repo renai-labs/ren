@@ -8,7 +8,7 @@ const command = Command.make("wait", { released: Argument.String("released") }, 
   Effect.gen(function* () {
     const output = yield* Output.Service
     yield* Effect.addFinalizer(() => Effect.promise(() => Bun.write(input.released, "released")))
-    yield* output.result("ready")
+    yield* output.print("ready")
     yield* Effect.never
   }),
 )

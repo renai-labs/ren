@@ -5,23 +5,15 @@ import { Predicate, Result, Schema, SchemaIssue } from "effect"
 import { existsSync } from "node:fs"
 import { mkdir, rm } from "node:fs/promises"
 import { join } from "node:path"
-
-export interface Problem {
-  readonly file: string
-  readonly field?: string
-  readonly message: string
-}
+import { Output } from "../services/output.js"
 
 export type Validated =
   | { readonly kind: "org"; readonly spec: Infra.Spec; readonly bindings?: Infra.Bindings; readonly problems: [] }
-  | { readonly kind: "invalid"; readonly problems: ReadonlyArray<Problem> }
+  | { readonly kind: "invalid"; readonly problems: ReadonlyArray<Output.Problem> }
 
 const records = ["schedules", "webhooks", "channels"] as const
 
 const formatter = SchemaIssue.makeFormatterStandardSchemaV1()
-
-export const format = (problem: Problem) =>
-  `${problem.file}: ${problem.field ? `${problem.field}: ` : ""}${problem.message}`
 
 const children = (files: ReadonlyArray<string>, prefix: string) =>
   [
@@ -32,8 +24,8 @@ const children = (files: ReadonlyArray<string>, prefix: string) =>
     ),
   ].toSorted()
 
-const problem = (file: string, keys: ReadonlyArray<string>, message: string): Problem =>
-  keys.length > 0 ? { file, field: keys.join("."), message } : { file, message }
+const problem = (file: string, keys: ReadonlyArray<string>, message: string): Output.Problem =>
+  keys.length > 0 ? { path: file, field: keys.join("."), message } : { path: file, message }
 
 const isInstructions = (keys: ReadonlyArray<string>) => keys.at(0) === "settings" && keys.at(1) === "instructions"
 
@@ -72,7 +64,7 @@ const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/u
 export const validate = async (root: string): Promise<Validated> => {
   const files = await list(root)
   const present = new Set(files)
-  const problems: Array<Problem> = []
+  const problems: Array<Output.Problem> = []
 
   const text = (file: string) => Bun.file(join(root, file)).text()
 
@@ -83,7 +75,7 @@ export const validate = async (root: string): Promise<Validated> => {
       Result.match({
         onSuccess: (value) => value,
         onFailure: (error) => {
-          problems.push({ file, message: `Invalid YAML: ${String(error)}` })
+          problems.push({ path: file, message: `Invalid YAML: ${String(error)}` })
           return
         },
       }),
@@ -100,19 +92,19 @@ export const validate = async (root: string): Promise<Validated> => {
     const settings = value["settings"] ?? {}
     if (!Predicate.isObject(settings)) return value
     if ("instructions" in settings)
-      problems.push({ file: folder.slice(0, -1) || ".", message: "Put the instructions in instructions.md only." })
+      problems.push({ path: folder.slice(0, -1) || ".", message: "Put the instructions in instructions.md only." })
     return { ...value, settings: { ...settings, instructions } }
   }
 
   const skill = async (folder: string, slug: string) => {
     if (present.has(`${folder}skill.yaml`)) {
       if (present.has(`${folder}SKILL.md`))
-        problems.push({ file: folder.slice(0, -1), message: "Use SKILL.md or skill.yaml, not both." })
+        problems.push({ path: folder.slice(0, -1), message: "Use SKILL.md or skill.yaml, not both." })
       const upstream = await yaml(`${folder}skill.yaml`)
       return Predicate.isObject(upstream) ? { type: "upstream", ...upstream } : upstream
     }
     if (!present.has(`${folder}SKILL.md`)) {
-      problems.push({ file: folder.slice(0, -1), message: "A skill folder needs SKILL.md or skill.yaml." })
+      problems.push({ path: folder.slice(0, -1), message: "A skill folder needs SKILL.md or skill.yaml." })
       return
     }
     const others = files.filter((file) => file.startsWith(folder) && file !== `${folder}SKILL.md`)
@@ -122,14 +114,14 @@ export const validate = async (root: string): Promise<Validated> => {
     problems.push(
       ...contents
         .filter((content) => content.bytes.includes(0))
-        .map((content) => ({ file: content.file, message: "A skill holds text files only." })),
+        .map((content) => ({ path: content.file, message: "A skill holds text files only." })),
     )
     const match = frontmatter.exec(await text(`${folder}SKILL.md`))
     const header = Result.try(() => Bun.YAML.parse(match?.at(1) ?? "")).pipe(Result.getOrUndefined)
     const data = Predicate.isObject(header) ? header : {}
     if (data["name"] !== slug)
       problems.push({
-        file: `${folder}SKILL.md`,
+        path: `${folder}SKILL.md`,
         field: "name",
         message: `The name “${String(data["name"])}” must be the folder name, ${slug}.`,
       })
@@ -188,8 +180,8 @@ export const validate = async (root: string): Promise<Validated> => {
       kind: "invalid",
       problems: [
         present.has("space.yaml")
-          ? { file: "space.yaml", message: "Private specs are not supported yet." }
-          : { file: ".", message: "No spec here. An org spec has org.yaml, and a private spec has space.yaml." },
+          ? { path: "space.yaml", message: "Private specs are not supported yet." }
+          : { path: ".", message: "No spec here. An org spec has org.yaml, and a private spec has space.yaml." },
       ],
     }
 
@@ -213,7 +205,7 @@ export const validate = async (root: string): Promise<Validated> => {
     ...problems,
     ...issues(spec).map((issue) => problem(...locate(issue.keys), issue.message)),
     ...issues(bindings).map((issue) => problem("deploy.yaml", issue.keys, issue.message)),
-  ].toSorted((left, right) => format(left).localeCompare(format(right)))
+  ].toSorted((left, right) => Output.formatProblem(left).localeCompare(Output.formatProblem(right)))
   if (all.length > 0 || Result.isFailure(spec) || (bindings && Result.isFailure(bindings)))
     return { kind: "invalid", problems: all }
   return { kind: "org", spec: spec.success, ...(bindings ? { bindings: bindings.success } : {}), problems: [] }

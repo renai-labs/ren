@@ -96,7 +96,7 @@ describe("curl installer", () => {
     await Bun.write(join(home, ".ren/org.yaml"), "settings: {}\n")
     expect(await run([binary, "infra", "validate"], home)).toEqual({
       code: 0,
-      stdout: "The spec is valid.\n",
+      stdout: '{\n  "valid": true\n}\n',
       stderr: "",
     })
   })

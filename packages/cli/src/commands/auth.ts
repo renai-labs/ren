@@ -1,7 +1,7 @@
 export * as AuthCommand from "./auth.js"
 
 import { Auth } from "@ren/schema/auth"
-import { Deferred, Effect } from "effect"
+import { Deferred, Effect, Schema } from "effect"
 import type { Command } from "effect/cli"
 import type { Commands } from "../commands.js"
 import { Connection } from "../services/connection.js"
@@ -82,8 +82,14 @@ export const login = Effect.fn("AuthCommand.login")(function* (
   const client = yield* connection.connect(credential.accessToken)
   const me = yield* client.me.get()
   yield* credentials.set(server, credential)
-  yield* output.result(`Logged in as ${me.user.email}${me.organization ? ` in ${me.organization.name}` : ""}.`)
+  yield* output.result(
+    Auth.Me,
+    me,
+    `Logged in as ${me.user.email}${me.organization ? ` in ${me.organization.name}` : ""}.`,
+  )
 })
+
+const LoggedOut = Schema.Struct({ server: Schema.String, loggedOut: Schema.Boolean })
 
 export const logout = Effect.gen(function* () {
   const connection = yield* Connection.Service
@@ -91,13 +97,18 @@ export const logout = Effect.gen(function* () {
   const output = yield* Output.Service
   const server = yield* connection.server
   const stored = yield* credentials.get(server)
-  if (!stored) return yield* output.result(`Not logged in to ${server.origin}.`)
+  if (!stored)
+    return yield* output.result(
+      LoggedOut,
+      { server: server.origin, loggedOut: false },
+      `Not logged in to ${server.origin}.`,
+    )
   yield* OAuth.discover(server).pipe(
     Effect.flatMap((endpoints) => OAuth.revoke(endpoints, stored)),
     Effect.ignore,
   )
   yield* credentials.remove(server)
-  yield* output.result(`Logged out of ${server.origin}.`)
+  yield* output.result(LoggedOut, { server: server.origin, loggedOut: true }, `Logged out of ${server.origin}.`)
 })
 
 export const whoami = Effect.gen(function* () {
@@ -105,5 +116,5 @@ export const whoami = Effect.gen(function* () {
   const output = yield* Output.Service
   const client = yield* connection.client
   const me = yield* client.me.get()
-  yield* output.result(me.organization ? `${me.user.email} in ${me.organization.name}` : me.user.email)
+  yield* output.result(Auth.Me, me, me.organization ? `${me.user.email} in ${me.organization.name}` : me.user.email)
 })

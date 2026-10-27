@@ -38,6 +38,14 @@ Credentials live in `$XDG_CONFIG_HOME/ren2/credentials.json` (default `~/.config
 
 The CLI's OAuth client ID is `Auth.cliClient.client_id` in `@ren/schema`. The server resolves that metadata document itself, so login works without fetching it.
 
+## Output
+
+`--output json|pretty` works on every command. Without it, output is pretty in a terminal and JSON when piped.
+
+- Results go to stdout. In JSON, a result is the API value in its wire format, such as `Auth.Me` for `whoami` or `Infra.Plan` for `infra plan`, and nothing else.
+- Progress, prompts and errors go to stderr. In JSON, an error is one line: `{"error":{"type":"NotFoundError","message":"…","resource":"space"}}`. `type` is the API error's tag with its fields, `UsageError`, or `CliError` for everything the CLI reports itself. Spec problems are listed in `problems`.
+- Exit codes: `0` success, `1` failure, `2` usage error, `130` interrupted.
+
 ## Install
 
 After the first release is published:
@@ -77,10 +85,10 @@ The npm package is private until its publication name and install format are dec
 
 - `src/commands.ts` declares typed Effect commands, arguments and flags.
 - `src/app.ts` binds those declarations to lazy-loaded handlers.
-- `src/runtime.ts` runs one scoped invocation, routes help and failures, and leaves signal handling to the Bun Effect runtime.
+- `src/runtime.ts` runs one scoped invocation, routes help, renders each failure once in the chosen format with its exit code, and leaves signal handling to the Bun Effect runtime.
 - `src/services/connection.ts` resolves the server and token once, refreshing a stored token when it is about to expire, and creates SDK clients.
 - `src/services/credentials.ts` stores tokens per server; `src/services/oauth.ts` discovers the server's OAuth endpoints and makes the token requests.
-- `src/services/output.ts` owns result output, diagnostics and terminal confirmation.
+- `src/services/output.ts` owns the output format, results encoded with their schema, diagnostics, `Output.Failure` and terminal confirmation.
 - `src/infra/folder.ts` maps local files to and from the shared Infra schema.
 
 Results and requested help go to stdout; usage failures, diagnostics and confirmation prompts go to stderr. Failures exit with status 1 and interruption with status 130. Infra retains its current human-readable output; structured output and generated API coverage are later phases of the [CLI design](../../specs/cli.md).
