@@ -5,6 +5,7 @@ import {
   createRouter,
   defaultParseSearch,
   defaultStringifySearch,
+  lazyRouteComponent,
   Outlet,
   redirect,
 } from "@tanstack/react-router"
@@ -21,31 +22,7 @@ import { joinInvitation } from "@/lib/invitation"
 import { currentPage } from "@/lib/pagination"
 import { sidebarSessionsOptions } from "@/lib/sessions"
 import { allTasksOptions, taskListInput, TaskSearch } from "@/lib/tasks"
-import { AcceptInvitationPage } from "@/routes/auth/accept-invitation"
-import { ConsentPage } from "@/routes/auth/consent"
-import { CreateOrganizationPage } from "@/routes/auth/create-organization"
-import { ForgotPasswordPage } from "@/routes/auth/forgot-password"
-import { LoginPage } from "@/routes/auth/login"
-import { ResetPasswordPage } from "@/routes/auth/reset-password"
-import { SignupPage } from "@/routes/auth/signup"
-import { VerifyEmailPage } from "@/routes/auth/verify-email"
-import { ChatPage } from "@/routes/chat/chat"
 import { HomePage } from "@/routes/home/home"
-import { MarketplacePage } from "@/routes/marketplace/marketplace"
-import { CredentialsSettingsPage } from "@/routes/settings/credentials"
-import { GeneralSettingsPage } from "@/routes/settings/general"
-import { MembersSettingsPage } from "@/routes/settings/members"
-import { PreferencesPage } from "@/routes/settings/preferences"
-import { ProvidersPage } from "@/routes/settings/providers"
-import { SpaceAppsTab } from "@/routes/space/space-apps"
-import { SpaceCredentialsTab } from "@/routes/space/space-credentials"
-import { SpaceFactoryTab } from "@/routes/space/space-factory"
-import { SpaceLayout } from "@/routes/space/space"
-import { SpaceMembersTab } from "@/routes/space/space-members"
-import { SpaceOverviewTab } from "@/routes/space/space-overview"
-import { SpacesPage } from "@/routes/spaces/spaces"
-import { TaskPage } from "@/routes/task/task"
-import { TasksPage } from "@/routes/tasks/tasks"
 
 export interface RouterContext {
   readonly queryClient: QueryClient
@@ -98,7 +75,7 @@ const loginRoute = createRoute({
   staticData: { title: "Sign in" },
   validateSearch: AuthSearch,
   beforeLoad: ({ search }) => signedOutGuard(search),
-  component: LoginPage,
+  component: lazyRouteComponent(() => import("@/routes/auth/login"), "LoginPage"),
 })
 
 const signupRoute = createRoute({
@@ -115,7 +92,7 @@ const signupRoute = createRoute({
         .query({ ...api.invitation.preview.queryOptions({ id: deps.invitationId }), retry: false })
         .catch(ignore)
   },
-  component: SignupPage,
+  component: lazyRouteComponent(() => import("@/routes/auth/signup"), "SignupPage"),
 })
 
 const verifyEmailRoute = createRoute({
@@ -126,7 +103,7 @@ const verifyEmailRoute = createRoute({
   validateSearch: Schema.toStandardSchemaV1(
     Schema.Struct({ email: Schema.optional(Schema.String), invitationId: InvitationId, redirect: Redirect }),
   ),
-  component: VerifyEmailPage,
+  component: lazyRouteComponent(() => import("@/routes/auth/verify-email"), "VerifyEmailPage"),
 })
 
 const forgotPasswordRoute = createRoute({
@@ -135,7 +112,7 @@ const forgotPasswordRoute = createRoute({
   pendingComponent: AppBoot,
   staticData: { title: "Reset your password" },
   validateSearch: Schema.toStandardSchemaV1(Schema.Struct({ email: Schema.optional(Schema.String) })),
-  component: ForgotPasswordPage,
+  component: lazyRouteComponent(() => import("@/routes/auth/forgot-password"), "ForgotPasswordPage"),
 })
 
 const resetPasswordRoute = createRoute({
@@ -146,7 +123,7 @@ const resetPasswordRoute = createRoute({
   validateSearch: Schema.toStandardSchemaV1(
     Schema.Struct({ token: Schema.optional(Schema.String), error: Schema.optional(Schema.String) }),
   ),
-  component: ResetPasswordPage,
+  component: lazyRouteComponent(() => import("@/routes/auth/reset-password"), "ResetPasswordPage"),
 })
 
 const consentRoute = createRoute({
@@ -161,7 +138,7 @@ const consentRoute = createRoute({
     const session = await queryClient.query(sessionOptions())
     if (!session) throw redirect({ to: "/login", search: { redirect: location.href } })
   },
-  component: ConsentPage,
+  component: lazyRouteComponent(() => import("@/routes/auth/consent"), "ConsentPage"),
 })
 
 const acceptInvitationRoute = createRoute({
@@ -191,7 +168,7 @@ const acceptInvitationRoute = createRoute({
     return { failure: outcome }
   },
   pendingComponent: AppBoot,
-  component: AcceptInvitationPage,
+  component: lazyRouteComponent(() => import("@/routes/auth/accept-invitation"), "AcceptInvitationPage"),
 })
 
 const authedRoute = createRoute({
@@ -219,7 +196,7 @@ const createOrganizationRoute = createRoute({
   path: "organizations/new",
   pendingComponent: AppBoot,
   staticData: { title: "Create organization" },
-  component: CreateOrganizationPage,
+  component: lazyRouteComponent(() => import("@/routes/auth/create-organization"), "CreateOrganizationPage"),
 })
 
 const shellRoute = createRoute({
@@ -251,7 +228,7 @@ const chatRoute = createRoute({
   loader: ({ params }) => {
     void queryClient.query(api.session.get.queryOptions({ idOrSlug: params.sessionId })).catch(ignore)
   },
-  component: ChatPage,
+  component: lazyRouteComponent(() => import("@/routes/chat/chat"), "ChatPage"),
 })
 
 const spacesRoute = createRoute({
@@ -270,7 +247,7 @@ const spacesRoute = createRoute({
       body="cards"
     />
   ),
-  component: SpacesPage,
+  component: lazyRouteComponent(() => import("@/routes/spaces/spaces"), "SpacesPage"),
 })
 
 const spaceRoute = createRoute({
@@ -280,7 +257,7 @@ const spaceRoute = createRoute({
   loader: ({ params }) => {
     void queryClient.query(api.space.get.queryOptions({ idOrSlug: params.spaceId })).catch(ignore)
   },
-  component: SpaceLayout,
+  component: lazyRouteComponent(() => import("@/routes/space/space"), "SpaceLayout"),
 })
 
 const spaceOverviewRoute = createRoute({
@@ -291,7 +268,7 @@ const spaceOverviewRoute = createRoute({
       .query(api.session.list.queryOptions({ spaceId: params.spaceId, page: 1, pageSize: 5 }))
       .catch(ignore)
   },
-  component: SpaceOverviewTab,
+  component: lazyRouteComponent(() => import("@/routes/space/space-overview"), "SpaceOverviewTab"),
 })
 
 const spaceMembersRoute = createRoute({
@@ -304,28 +281,28 @@ const spaceMembersRoute = createRoute({
       .query(api["space-member"].list.queryOptions({ spaceId: params.spaceId, page: deps.page, pageSize }))
       .catch(ignore)
   },
-  component: SpaceMembersTab,
+  component: lazyRouteComponent(() => import("@/routes/space/space-members"), "SpaceMembersTab"),
 })
 
 const spaceCredentialsRoute = createRoute({
   getParentRoute: () => spaceRoute,
   path: "credentials",
   validateSearch: PageSearch,
-  component: SpaceCredentialsTab,
+  component: lazyRouteComponent(() => import("@/routes/space/space-credentials"), "SpaceCredentialsTab"),
 })
 
 const spaceFactoryRoute = createRoute({
   getParentRoute: () => spaceRoute,
   path: "factory",
   validateSearch: PageSearch,
-  component: SpaceFactoryTab,
+  component: lazyRouteComponent(() => import("@/routes/space/space-factory"), "SpaceFactoryTab"),
 })
 
 const spaceAppsRoute = createRoute({
   getParentRoute: () => spaceRoute,
   path: "apps",
   validateSearch: PageSearch,
-  component: SpaceAppsTab,
+  component: lazyRouteComponent(() => import("@/routes/space/space-apps"), "SpaceAppsTab"),
 })
 
 const tasksRoute = createRoute({
@@ -338,7 +315,7 @@ const tasksRoute = createRoute({
     void queryClient.query(allTasksOptions(taskListInput(deps))).catch(ignore)
   },
   pendingComponent: () => <PageSkeleton title="Tasks" width="full" />,
-  component: TasksPage,
+  component: lazyRouteComponent(() => import("@/routes/tasks/tasks"), "TasksPage"),
 })
 
 const taskRoute = createRoute({
@@ -351,7 +328,7 @@ const taskRoute = createRoute({
       .query(api["task-activity"].list.queryOptions({ taskId: params.taskId, page: 1, pageSize: pickerPageSize }))
       .catch(ignore)
   },
-  component: TaskPage,
+  component: lazyRouteComponent(() => import("@/routes/task/task"), "TaskPage"),
 })
 
 const marketplaceRoute = createRoute({
@@ -369,7 +346,7 @@ const marketplaceRoute = createRoute({
       description="Add an app to a space, then connect its accounts. Every chat in the space can use it."
     />
   ),
-  component: MarketplacePage,
+  component: lazyRouteComponent(() => import("@/routes/marketplace/marketplace"), "MarketplacePage"),
 })
 
 const settingsRoute = createRoute({
@@ -394,7 +371,7 @@ const preferencesRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "preferences",
   staticData: { title: "Preferences" },
-  component: PreferencesPage,
+  component: lazyRouteComponent(() => import("@/routes/settings/preferences"), "PreferencesPage"),
 })
 
 const credentialsSettingsRoute = createRoute({
@@ -404,14 +381,14 @@ const credentialsSettingsRoute = createRoute({
   validateSearch: Schema.toStandardSchemaV1(
     Schema.Struct({ page: Schema.optional(Schema.Number), tab: Schema.optional(Schema.Literals(["apps", "keys"])) }),
   ),
-  component: CredentialsSettingsPage,
+  component: lazyRouteComponent(() => import("@/routes/settings/credentials"), "CredentialsSettingsPage"),
 })
 
 const generalRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "general",
   staticData: { title: "General" },
-  component: GeneralSettingsPage,
+  component: lazyRouteComponent(() => import("@/routes/settings/general"), "GeneralSettingsPage"),
 })
 
 const membersRoute = createRoute({
@@ -424,7 +401,7 @@ const membersRoute = createRoute({
       tab: Schema.optional(Schema.Literals(["members", "invitations"])),
     }),
   ),
-  component: MembersSettingsPage,
+  component: lazyRouteComponent(() => import("@/routes/settings/members"), "MembersSettingsPage"),
 })
 
 const providersRoute = createRoute({
@@ -434,7 +411,7 @@ const providersRoute = createRoute({
   loader: () => {
     void queryClient.query(api["ren-inference"].connection.list.queryOptions()).catch(ignore)
   },
-  component: ProvidersPage,
+  component: lazyRouteComponent(() => import("@/routes/settings/providers"), "ProvidersPage"),
 })
 
 const routeTree = rootRoute.addChildren([
