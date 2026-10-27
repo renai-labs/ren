@@ -90,6 +90,7 @@ it.live(
       yield* database.db.insert(Database.Schema.space).values({
         id: own,
         organization_id: subject.organizationId,
+        slug: "own",
         name: "Own",
         kind: "private",
         owner_user_id: subject.creator,

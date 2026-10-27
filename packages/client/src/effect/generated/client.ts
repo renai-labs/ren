@@ -48,12 +48,13 @@ const EndpointSpaceGet = (raw: RawClient["space"]) => (input: SpaceGetInput) =>
 type SpaceCreateRequest = Parameters<RawClient["space"]["space.create"]>[0]
 type SpaceCreateInput = {
   readonly name: SpaceCreateRequest["payload"]["name"]
+  readonly slug?: SpaceCreateRequest["payload"]["slug"]
   readonly description?: SpaceCreateRequest["payload"]["description"]
 }
 const EndpointSpaceCreate = (raw: RawClient["space"]) => (input: SpaceCreateInput) =>
-  raw["space.create"]({ payload: { name: input["name"], description: input["description"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+  raw["space.create"]({
+    payload: { name: input["name"], slug: input["slug"], description: input["description"] },
+  }).pipe(Effect.mapError(mapClientError))
 
 type SpaceUpdateRequest = Parameters<RawClient["space"]["space.update"]>[0]
 type SpaceUpdateInput = {
@@ -280,6 +281,74 @@ const EndpointOrganizationSettingsUpdate =
 const adaptGroupOrganizationSettings = (raw: RawClient["organization-settings"]) => ({
   get: EndpointOrganizationSettingsGet(raw),
   update: EndpointOrganizationSettingsUpdate(raw),
+})
+
+type MemoryListRequest = Parameters<RawClient["memory"]["memory.list"]>[0]
+type MemoryListInput = {
+  readonly spaceId?: MemoryListRequest["query"]["spaceId"]
+  readonly prefix?: MemoryListRequest["query"]["prefix"]
+}
+const EndpointMemoryList = (raw: RawClient["memory"]) => (input?: MemoryListInput) =>
+  raw["memory.list"]({ query: { spaceId: input?.["spaceId"], prefix: input?.["prefix"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type MemoryReadRequest = Parameters<RawClient["memory"]["memory.read"]>[0]
+type MemoryReadInput = {
+  readonly spaceId?: MemoryReadRequest["query"]["spaceId"]
+  readonly path: MemoryReadRequest["query"]["path"]
+}
+const EndpointMemoryRead = (raw: RawClient["memory"]) => (input: MemoryReadInput) =>
+  raw["memory.read"]({ query: { spaceId: input["spaceId"], path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type MemoryWriteRequest = Parameters<RawClient["memory"]["memory.write"]>[0]
+type MemoryWriteInput = {
+  readonly spaceId?: MemoryWriteRequest["payload"]["spaceId"]
+  readonly path: MemoryWriteRequest["payload"]["path"]
+  readonly content: MemoryWriteRequest["payload"]["content"]
+}
+const EndpointMemoryWrite = (raw: RawClient["memory"]) => (input: MemoryWriteInput) =>
+  raw["memory.write"]({ payload: { spaceId: input["spaceId"], path: input["path"], content: input["content"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type MemoryEditRequest = Parameters<RawClient["memory"]["memory.edit"]>[0]
+type MemoryEditInput = {
+  readonly spaceId?: MemoryEditRequest["payload"]["spaceId"]
+  readonly path: MemoryEditRequest["payload"]["path"]
+  readonly oldString: MemoryEditRequest["payload"]["oldString"]
+  readonly newString: MemoryEditRequest["payload"]["newString"]
+  readonly replaceAll?: MemoryEditRequest["payload"]["replaceAll"]
+}
+const EndpointMemoryEdit = (raw: RawClient["memory"]) => (input: MemoryEditInput) =>
+  raw["memory.edit"]({
+    payload: {
+      spaceId: input["spaceId"],
+      path: input["path"],
+      oldString: input["oldString"],
+      newString: input["newString"],
+      replaceAll: input["replaceAll"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type MemoryDeleteRequest = Parameters<RawClient["memory"]["memory.delete"]>[0]
+type MemoryDeleteInput = {
+  readonly spaceId?: MemoryDeleteRequest["query"]["spaceId"]
+  readonly path: MemoryDeleteRequest["query"]["path"]
+}
+const EndpointMemoryDelete = (raw: RawClient["memory"]) => (input: MemoryDeleteInput) =>
+  raw["memory.delete"]({ query: { spaceId: input["spaceId"], path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupMemory = (raw: RawClient["memory"]) => ({
+  list: EndpointMemoryList(raw),
+  read: EndpointMemoryRead(raw),
+  write: EndpointMemoryWrite(raw),
+  edit: EndpointMemoryEdit(raw),
+  delete: EndpointMemoryDelete(raw),
 })
 
 type AgentListRequest = Parameters<RawClient["agent"]["agent.list"]>[0]
@@ -994,6 +1063,7 @@ type ScheduleCreateRequest = Parameters<RawClient["schedule"]["schedule.create"]
 type ScheduleCreateInput = {
   readonly spaceId: ScheduleCreateRequest["payload"]["spaceId"]
   readonly name: ScheduleCreateRequest["payload"]["name"]
+  readonly slug?: ScheduleCreateRequest["payload"]["slug"]
   readonly message: ScheduleCreateRequest["payload"]["message"]
   readonly when: ScheduleCreateRequest["payload"]["when"]
   readonly target?: ScheduleCreateRequest["payload"]["target"]
@@ -1004,6 +1074,7 @@ const EndpointScheduleCreate = (raw: RawClient["schedule"]) => (input: ScheduleC
     payload: {
       spaceId: input["spaceId"],
       name: input["name"],
+      slug: input["slug"],
       message: input["message"],
       when: input["when"],
       target: input["target"],
@@ -1442,6 +1513,35 @@ const adaptGroupSignIn = (raw: RawClient["sign-in"]) => ({
   "sign-in-provider": { list: EndpointSignInSignInProviderList(raw) },
 })
 
+const EndpointInfraPull = (raw: RawClient["infra"]) => () => raw["infra.pull"]({}).pipe(Effect.mapError(mapClientError))
+
+type InfraPlanRequest = Parameters<RawClient["infra"]["infra.plan"]>[0]
+type InfraPlanInput = {
+  readonly spec: InfraPlanRequest["payload"]["spec"]
+  readonly bindings: InfraPlanRequest["payload"]["bindings"]
+}
+const EndpointInfraPlan = (raw: RawClient["infra"]) => (input: InfraPlanInput) =>
+  raw["infra.plan"]({ payload: { spec: input["spec"], bindings: input["bindings"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type InfraApplyRequest = Parameters<RawClient["infra"]["infra.apply"]>[0]
+type InfraApplyInput = {
+  readonly spec: InfraApplyRequest["payload"]["spec"]
+  readonly bindings: InfraApplyRequest["payload"]["bindings"]
+  readonly digest: InfraApplyRequest["payload"]["digest"]
+}
+const EndpointInfraApply = (raw: RawClient["infra"]) => (input: InfraApplyInput) =>
+  raw["infra.apply"]({ payload: { spec: input["spec"], bindings: input["bindings"], digest: input["digest"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupInfra = (raw: RawClient["infra"]) => ({
+  pull: EndpointInfraPull(raw),
+  plan: EndpointInfraPlan(raw),
+  apply: EndpointInfraApply(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -1453,6 +1553,7 @@ const adaptClient = (raw: RawClient) => ({
   "space-environment-template": adaptGroupSpaceEnvironmentTemplate(raw["space-environment-template"]),
   "space-settings": adaptGroupSpaceSettings(raw["space-settings"]),
   "organization-settings": adaptGroupOrganizationSettings(raw["organization-settings"]),
+  memory: adaptGroupMemory(raw["memory"]),
   agent: adaptGroupAgent(raw["agent"]),
   app: adaptGroupApp(raw["app"]),
   "app-profile": adaptGroupAppProfile(raw["app-profile"]),
@@ -1477,6 +1578,7 @@ const adaptClient = (raw: RawClient) => ({
   "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),
   repository: adaptGroupRepository(raw["repository"]),
   "sign-in": adaptGroupSignIn(raw["sign-in"]),
+  infra: adaptGroupInfra(raw["infra"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

@@ -14,6 +14,7 @@ import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { Inference } from "./inference.js"
+import { MemoryStore } from "./memory-store.js"
 import { RenAddress } from "./ren-address.js"
 
 const deletedKey = "ren:deleted"
@@ -38,6 +39,7 @@ export const layer = Layer.effect(
     const hostToken = yield* HostToken.Service
     const apps = yield* AppStore.Service
     const channels = yield* ChannelStore.Service
+    const memory = yield* MemoryStore.Service
     const settings = yield* ChatSettings.Service
     const keys = yield* BrainKeys.Service
     const fence = yield* Fence.Service
@@ -100,6 +102,15 @@ export const layer = Layer.effect(
             Effect.logWarning("The brain keeps its last channel servers", error).pipe(Effect.as(false)),
           ),
         )
+      const memoryChanged = reply.memory
+        ? yield* memory
+            .save(reply.memory)
+            .pipe(
+              Effect.catch((error) =>
+                Effect.logWarning("The brain keeps its last memory", error).pipe(Effect.as(false)),
+              ),
+            )
+        : false
       yield* keys.save(reply.publicKeys)
       yield* credentialEnv.apply(reply.env)
       const inferenceChanged = yield* inference.saveBaseUrl(Option.fromNullishOr(reply.inference?.baseUrl))
@@ -109,10 +120,11 @@ export const layer = Layer.effect(
           const current = yield* harness.getIfOpen
           if (Option.isNone(current)) return
           const opened = current.value
-          if (appsChanged || channelsChanged || settingsChanged)
+          if (appsChanged || channelsChanged || memoryChanged || settingsChanged)
             yield* opened.configure({
               ...(appsChanged && { apps: yield* apps.current }),
               ...(channelsChanged && { channels: yield* channels.current }),
+              ...(memoryChanged && { memory: yield* memory.current }),
               ...(settingsChanged && { settings: { layers: yield* settings.layers, chats: yield* settings.chats } }),
             })
           if (inferenceChanged) yield* opened.refreshModels

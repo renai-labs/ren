@@ -1,7 +1,7 @@
 export * as HarnessConfig from "./config.js"
 
 import type { BrainSettings } from "@ren/brain/settings"
-import type { PullChat } from "@ren/host-api/ren-host-api"
+import type { PullChat, PullMemory } from "@ren/host-api/ren-host-api"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
 import type { Models } from "@ren/schema/models"
@@ -11,6 +11,7 @@ export interface Update {
   readonly models?: ReadonlyArray<Models.Endpoint>
   readonly apps?: Option.Option<AppCatalog.Info>
   readonly channels?: ReadonlyArray<Channel.Provider>
+  readonly memory?: Option.Option<PullMemory>
   readonly settings?: {
     readonly layers: BrainSettings.Layers
     readonly chats: ReadonlyArray<PullChat>
@@ -22,6 +23,7 @@ export interface Snapshot {
   readonly models: ReadonlyArray<Models.Endpoint>
   readonly apps: Option.Option<AppCatalog.Info>
   readonly channels: ReadonlyArray<Channel.Provider>
+  readonly memory: Option.Option<PullMemory>
   readonly chats: ReadonlyMap<string, BrainSettings.Chat>
 }
 

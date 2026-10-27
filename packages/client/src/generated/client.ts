@@ -44,6 +44,16 @@ import type {
   OrganizationSettingsGetOutput,
   OrganizationSettingsUpdateInput,
   OrganizationSettingsUpdateOutput,
+  MemoryListInput,
+  MemoryListOutput,
+  MemoryReadInput,
+  MemoryReadOutput,
+  MemoryWriteInput,
+  MemoryWriteOutput,
+  MemoryEditInput,
+  MemoryEditOutput,
+  MemoryDeleteInput,
+  MemoryDeleteOutput,
   AgentListInput,
   AgentListOutput,
   AgentGetInput,
@@ -222,6 +232,11 @@ import type {
   ChannelConnectChannelPlaceListOutput,
   RepositoryListOutput,
   SignInSignInProviderListOutput,
+  InfraPullOutput,
+  InfraPlanInput,
+  InfraPlanOutput,
+  InfraApplyInput,
+  InfraApplyOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -362,7 +377,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/spaces`,
-            body: { name: input["name"], description: input["description"] },
+            body: { name: input["name"], slug: input["slug"], description: input["description"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
@@ -607,6 +622,74 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    memory: {
+      list: (input?: MemoryListInput, requestOptions?: RequestOptions) =>
+        request<MemoryListOutput>(
+          {
+            method: "GET",
+            path: `/memory`,
+            query: { spaceId: input?.["spaceId"], prefix: input?.["prefix"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      read: (input: MemoryReadInput, requestOptions?: RequestOptions) =>
+        request<MemoryReadOutput>(
+          {
+            method: "GET",
+            path: `/memory/file`,
+            query: { spaceId: input["spaceId"], path: input["path"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      write: (input: MemoryWriteInput, requestOptions?: RequestOptions) =>
+        request<MemoryWriteOutput>(
+          {
+            method: "PUT",
+            path: `/memory/file`,
+            body: { spaceId: input["spaceId"], path: input["path"], content: input["content"] },
+            successStatus: 204,
+            declaredStatuses: [401, 403, 404],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      edit: (input: MemoryEditInput, requestOptions?: RequestOptions) =>
+        request<MemoryEditOutput>(
+          {
+            method: "PATCH",
+            path: `/memory/file`,
+            body: {
+              spaceId: input["spaceId"],
+              path: input["path"],
+              oldString: input["oldString"],
+              newString: input["newString"],
+              replaceAll: input["replaceAll"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      delete: (input: MemoryDeleteInput, requestOptions?: RequestOptions) =>
+        request<MemoryDeleteOutput>(
+          {
+            method: "DELETE",
+            path: `/memory/file`,
+            query: { spaceId: input["spaceId"], path: input["path"] },
+            successStatus: 204,
+            declaredStatuses: [401, 403, 404],
+            empty: true,
           },
           requestOptions,
         ),
@@ -1386,6 +1469,7 @@ export function make(options: ClientOptions) {
             body: {
               spaceId: input["spaceId"],
               name: input["name"],
+              slug: input["slug"],
               message: input["message"],
               when: input["when"],
               target: input["target"],
@@ -1889,6 +1973,37 @@ export function make(options: ClientOptions) {
             requestOptions,
           ),
       },
+    },
+    infra: {
+      pull: (requestOptions?: RequestOptions) =>
+        request<InfraPullOutput>(
+          { method: "GET", path: `/infra`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
+          requestOptions,
+        ),
+      plan: (input: InfraPlanInput, requestOptions?: RequestOptions) =>
+        request<InfraPlanOutput>(
+          {
+            method: "POST",
+            path: `/infra/plan`,
+            body: { spec: input["spec"], bindings: input["bindings"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      apply: (input: InfraApplyInput, requestOptions?: RequestOptions) =>
+        request<InfraApplyOutput>(
+          {
+            method: "POST",
+            path: `/infra/apply`,
+            body: { spec: input["spec"], bindings: input["bindings"], digest: input["digest"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
   }
 }

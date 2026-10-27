@@ -1788,6 +1788,394 @@
         }
       }
     },
+    "/memory": {
+      "get": {
+        "tags": ["memory"],
+        "operationId": "memory.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID_1"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Only the files whose path starts with it, such as `people/`."
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Memory.Path"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "List the file paths of a memory. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "summary": "List memory files"
+      }
+    },
+    "/memory/file": {
+      "get": {
+        "tags": ["memory"],
+        "operationId": "memory.read",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID_1"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Memory.Path"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory.File",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Memory.File"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the whole content of one memory file. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "summary": "Read a memory file"
+      },
+      "put": {
+        "tags": ["memory"],
+        "operationId": "memory.write",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a memory file or replace its whole content. Keep each fact to one short line and each file on one topic; prefer an edit for a small change. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "summary": "Write a memory file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Memory.WriteInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "patch": {
+        "tags": ["memory"],
+        "operationId": "memory.edit",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory.File",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Memory.File"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Replace exact text in a memory file and return the new content. oldString must occur once unless replaceAll is set. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "summary": "Edit a memory file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Memory.EditInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["memory"],
+        "operationId": "memory.delete",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID_1"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Memory.Path"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete one memory file. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "summary": "Delete a memory file"
+      }
+    },
     "/agents": {
       "get": {
         "tags": ["agent"],
@@ -2831,7 +3219,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Space.ID_1"
+                  "$ref": "#/components/schemas/Space.ID_2"
                 },
                 {
                   "type": "null"
@@ -3649,7 +4037,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Primitive.Slug_2"
+                  "$ref": "#/components/schemas/Primitive.Slug_3"
                 },
                 {
                   "type": "null"
@@ -9587,6 +9975,203 @@
         "description": "Return the accounts that a person can sign in with on this Ren server, besides email.",
         "summary": "List sign-in providers"
       }
+    },
+    "/infra": {
+      "get": {
+        "tags": ["infra"],
+        "operationId": "infra.pull",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The part of the org spec that infra applies today: organization settings, shared spaces and their agents.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Infra.Pulled"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the organization settings and the shared spaces as an org spec. Needs an organization admin.",
+        "summary": "Pull the org spec"
+      }
+    },
+    "/infra/plan": {
+      "post": {
+        "tags": ["infra"],
+        "operationId": "infra.plan",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Infra.Plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Infra.Plan"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the changes that would make the organization match the spec, the problems that stop it, and the digest that apply needs.",
+        "summary": "Plan an org spec",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Infra.PlanInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/infra/apply": {
+      "post": {
+        "tags": ["infra"],
+        "operationId": "infra.apply",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Infra.Applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Infra.Applied"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Plan the spec again and write its changes, when the digest matches. A failed write stops apply and names its change; the writes before it stay.",
+        "summary": "Apply an org spec",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Infra.ApplyInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
     }
   },
   "components": {
@@ -9618,6 +10203,21 @@
           }
         },
         "required": ["ownerSpaceId", "name"],
+        "additionalProperties": false
+      },
+      "Agent.Declaration": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "isSubagent": {
+            "type": "boolean"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          }
+        },
         "additionalProperties": false
       },
       "Agent.ID": {
@@ -9706,6 +10306,24 @@
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "Agent.Name_1": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Without it, the space’s default settings."
+      },
+      "Agent.Name_2": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Without it, the webhook runs on the ren agent."
+      },
+      "Agent.Name_3": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Without it, the channel reaches the ren agent."
       },
       "Agent.Page": {
         "type": "object",
@@ -9895,7 +10513,7 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Declaration"
@@ -9904,7 +10522,7 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Declaration"
@@ -9913,11 +10531,11 @@
           "dependsOn": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             }
           },
           "slug": {
-            "$ref": "#/components/schemas/Primitive.Slug"
+            "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "ownerSpaceId": {
             "$ref": "#/components/schemas/Space.ID"
@@ -9955,7 +10573,7 @@
             "$ref": "#/components/schemas/App.ID"
           },
           "slug": {
-            "$ref": "#/components/schemas/Primitive.Slug"
+            "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "organizationId": {
             "anyOf": [
@@ -10009,7 +10627,7 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Info"
@@ -10018,7 +10636,7 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Info"
@@ -10027,7 +10645,7 @@
           "dependsOn": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             }
           },
           "revision": {
@@ -10156,7 +10774,7 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Declaration"
@@ -10165,7 +10783,7 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Declaration"
@@ -10174,7 +10792,7 @@
           "dependsOn": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             }
           },
           "name": {
@@ -10230,12 +10848,12 @@
       "AppListing.Categories": {
         "type": "object",
         "propertyNames": {
-          "$ref": "#/components/schemas/Primitive.Slug"
+          "$ref": "#/components/schemas/Primitive.Slug_1"
         },
         "additionalProperties": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/Primitive.Slug"
+            "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "minItems": 1
         },
@@ -10410,7 +11028,7 @@
             "$ref": "#/components/schemas/App.ID"
           },
           "appSlug": {
-            "$ref": "#/components/schemas/Primitive.Slug"
+            "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "slug": {
             "$ref": "#/components/schemas/AppProfile.Slug"
@@ -10717,7 +11335,7 @@
             "type": "string"
           },
           "also": {
-            "$ref": "#/components/schemas/Primitive.Slug_1"
+            "$ref": "#/components/schemas/Primitive.Slug_2"
           }
         },
         "required": ["kind", "slug", "also"],
@@ -10779,7 +11397,7 @@
             "$ref": "#/components/schemas/App.ID"
           },
           "slug": {
-            "$ref": "#/components/schemas/Primitive.Slug"
+            "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "name": {
             "type": "string",
@@ -10816,7 +11434,7 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Info"
@@ -10825,16 +11443,16 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
-              "$ref": "#/components/schemas/Skill.Info"
+              "$ref": "#/components/schemas/Skill.Summary"
             }
           },
           "dependsOn": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             }
           },
           "revision": {
@@ -10989,9 +11607,248 @@
         "type": "string",
         "enum": ["session", "space"]
       },
+      "Channel.Declaration": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["slack"]
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent": {
+                "$ref": "#/components/schemas/Agent.Name_3"
+              },
+              "fallback": {
+                "type": "boolean",
+                "description": "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository."
+              },
+              "triggers": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Channel.TriggerID"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "prompt": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "The provider’s triggers to turn on, such as GitHub’s pull_request_ready. All are off by default."
+              }
+            },
+            "required": ["kind", "purpose"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["linear"]
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent": {
+                "$ref": "#/components/schemas/Agent.Name_3"
+              },
+              "fallback": {
+                "type": "boolean",
+                "description": "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository."
+              },
+              "triggers": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Channel.TriggerID"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "prompt": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "The provider’s triggers to turn on, such as GitHub’s pull_request_ready. All are off by default."
+              }
+            },
+            "required": ["kind", "purpose"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["email"]
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent": {
+                "$ref": "#/components/schemas/Agent.Name_3"
+              }
+            },
+            "required": ["kind", "purpose"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["github"]
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent": {
+                "$ref": "#/components/schemas/Agent.Name_3"
+              },
+              "fallback": {
+                "type": "boolean",
+                "description": "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository."
+              },
+              "triggers": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Channel.TriggerID"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "prompt": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "The provider’s triggers to turn on, such as GitHub’s pull_request_ready. All are off by default."
+              }
+            },
+            "required": ["kind", "purpose"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["telegram"]
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent": {
+                "$ref": "#/components/schemas/Agent.Name_3"
+              },
+              "allowedSenders": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "blockedSenders": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "required": ["kind", "purpose"],
+            "additionalProperties": false
+          }
+        ]
+      },
       "Channel.Provider": {
         "type": "string",
         "enum": ["slack", "linear", "github"]
+      },
+      "Channel.Target": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["slack"]
+              },
+              "channelId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["kind", "channelId"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["linear"]
+              },
+              "projectId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["kind", "projectId"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["github"]
+              },
+              "repository": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["kind", "repository"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["telegram"]
+              },
+              "chatId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "topicId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["kind", "chatId"],
+            "additionalProperties": false
+          }
+        ]
       },
       "Channel.Trigger": {
         "type": "object",
@@ -11553,7 +12410,7 @@
             "type": "object",
             "properties": {
               "mcp": {
-                "$ref": "#/components/schemas/Primitive.Slug"
+                "$ref": "#/components/schemas/Primitive.Slug_1"
               }
             },
             "required": ["mcp"],
@@ -11875,7 +12732,7 @@
             "type": "object",
             "properties": {
               "mcp": {
-                "$ref": "#/components/schemas/Primitive.Slug"
+                "$ref": "#/components/schemas/Primitive.Slug_1"
               }
             },
             "required": ["mcp"],
@@ -12168,6 +13025,11 @@
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
         "description": "The managed MCP provider that holds the account of a `route` credential."
+      },
+      "Credential.Ref": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The name of a credential that is connected in Ren. A value is never in a file."
       },
       "Credential.RemoveInput": {
         "not": {
@@ -12554,6 +13416,27 @@
         "required": ["name", "provider", "config"],
         "additionalProperties": false
       },
+      "EnvironmentTemplate.Declaration": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/EnvironmentProvider.ID"
+          },
+          "config": {
+            "description": "The settings of the provider. Its schema is in the provider list."
+          },
+          "sessionsPerEnvironment": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": ["provider", "config"],
+        "additionalProperties": false
+      },
       "EnvironmentTemplate.ID": {
         "type": "string",
         "pattern": "^tpl_"
@@ -12778,6 +13661,446 @@
             "enum": ["ok"]
           }
         ]
+      },
+      "Infra.Applied": {
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Infra.Change"
+            }
+          }
+        },
+        "required": ["changes"],
+        "additionalProperties": false
+      },
+      "Infra.ApplyInput": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/Infra.Spec"
+          },
+          "bindings": {
+            "$ref": "#/components/schemas/Infra.Bindings"
+          },
+          "digest": {
+            "type": "string"
+          }
+        },
+        "required": ["spec", "bindings", "digest"],
+        "additionalProperties": false
+      },
+      "Infra.Bindings": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The slug of the organization."
+          },
+          "spaces": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Infra.SpaceBindings"
+            }
+          }
+        },
+        "required": ["organization"],
+        "additionalProperties": false
+      },
+      "Infra.Change": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["create", "update", "archive"]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/Infra.Kind"
+          },
+          "path": {
+            "type": "string",
+            "description": "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name> or spaces/<slug>/uses/agents/<name>."
+          },
+          "from": {
+            "type": "string",
+            "description": "The path before a rename or a move."
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The fields that an update changes."
+          }
+        },
+        "required": ["action", "kind", "path", "fields"],
+        "additionalProperties": false
+      },
+      "Infra.Kind": {
+        "type": "string",
+        "enum": ["organization", "space", "agent", "membership"]
+      },
+      "Infra.Plan": {
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Infra.Change"
+            }
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Infra.Problem"
+            },
+            "description": "A plan with problems cannot be applied."
+          },
+          "digest": {
+            "type": "string",
+            "description": "Apply refuses the plan when the digest has changed."
+          }
+        },
+        "required": ["changes", "problems", "digest"],
+        "additionalProperties": false
+      },
+      "Infra.PlanInput": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/Infra.Spec"
+          },
+          "bindings": {
+            "$ref": "#/components/schemas/Infra.Bindings"
+          }
+        },
+        "required": ["spec", "bindings"],
+        "additionalProperties": false
+      },
+      "Infra.Problem": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "message"],
+        "additionalProperties": false
+      },
+      "Infra.Pulled": {
+        "type": "object",
+        "properties": {
+          "bindings": {
+            "type": "object",
+            "properties": {
+              "organization": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The slug of the organization."
+              }
+            },
+            "required": ["organization"],
+            "additionalProperties": false
+          },
+          "spec": {
+            "type": "object",
+            "properties": {
+              "org": {
+                "$ref": "#/components/schemas/OrganizationSettings.UpdateInput"
+              },
+              "spaces": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Primitive.Slug_1"
+                },
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Infra.PulledSpace"
+                }
+              }
+            },
+            "required": ["org", "spaces"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["bindings", "spec"],
+        "additionalProperties": false,
+        "description": "The part of the org spec that infra applies today: organization settings, shared spaces and their agents."
+      },
+      "Infra.PulledSpace": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          },
+          "agents": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Agent.Name"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Agent.Declaration"
+            }
+          },
+          "uses": {
+            "$ref": "#/components/schemas/Infra.Uses"
+          }
+        },
+        "required": ["name", "settings", "agents", "uses"],
+        "additionalProperties": false
+      },
+      "Infra.SpaceBindings": {
+        "type": "object",
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "channels": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Channel.Target"
+            }
+          },
+          "profiles": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/AppProfile.Slug"
+              }
+            }
+          },
+          "webhooks": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "secret": {
+                  "$ref": "#/components/schemas/Credential.Ref"
+                }
+              },
+              "required": ["secret"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Infra.SpaceDeclaration": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string"
+          },
+          "renamedFrom": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "description": "Earlier names. Apply renames the live row that has one of them, so its history stays."
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          },
+          "agents": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Agent.Name"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "isSubagent": {
+                  "type": "boolean"
+                },
+                "settings": {
+                  "$ref": "#/components/schemas/Settings.Info"
+                },
+                "renamedFrom": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                  },
+                  "description": "Earlier names. Apply renames the live row that has one of them, so its history stays."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "apps": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "icon": {
+                  "$ref": "#/components/schemas/Primitive.HttpsUrl"
+                },
+                "requiredCredentials": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Credential.Requirement"
+                  }
+                },
+                "environment": {
+                  "$ref": "#/components/schemas/App.Environment"
+                },
+                "skills": {
+                  "type": "object",
+                  "propertyNames": {
+                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                  },
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Skill.Declaration"
+                  }
+                },
+                "mcps": {
+                  "type": "object",
+                  "propertyNames": {
+                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                  },
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Mcp.Declaration"
+                  }
+                },
+                "dependsOn": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                  }
+                },
+                "renamedFrom": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                  },
+                  "description": "Earlier names. Apply renames the live row that has one of them, so its history stays."
+                }
+              },
+              "required": ["name", "description"],
+              "additionalProperties": false
+            }
+          },
+          "schedules": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Schedule.Declaration"
+            }
+          },
+          "webhooks": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Webhook.Declaration"
+            }
+          },
+          "channels": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Channel.Declaration"
+            }
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.Declaration"
+          },
+          "uses": {
+            "$ref": "#/components/schemas/Infra.Uses"
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "Infra.Spec": {
+        "type": "object",
+        "properties": {
+          "org": {
+            "$ref": "#/components/schemas/OrganizationSettings.UpdateInput"
+          },
+          "spaces": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Infra.SpaceDeclaration"
+            }
+          }
+        },
+        "required": ["org", "spaces"],
+        "additionalProperties": false
+      },
+      "Infra.Uses": {
+        "type": "object",
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Agent.Name"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "InvalidRequestErrorEncoded": {
         "type": "object",
@@ -13501,6 +14824,86 @@
           }
         ]
       },
+      "Memory.EditInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID_1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "$ref": "#/components/schemas/Memory.Path"
+          },
+          "oldString": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The exact text to replace."
+          },
+          "newString": {
+            "type": "string"
+          },
+          "replaceAll": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Replace every occurrence. Without it, oldString must occur once."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["path", "oldString", "newString"],
+        "additionalProperties": false
+      },
+      "Memory.File": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "$ref": "#/components/schemas/Memory.Path"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "content"],
+        "additionalProperties": false
+      },
+      "Memory.Path": {
+        "type": "string",
+        "description": "A file path relative to the memory root, such as `memory.md` or `people/ana.md`."
+      },
+      "Memory.WriteInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID_1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "$ref": "#/components/schemas/Memory.Path"
+          },
+          "content": {
+            "type": "string",
+            "description": "The whole new content of the file."
+          }
+        },
+        "required": ["path", "content"],
+        "additionalProperties": false
+      },
       "NotFoundErrorEncoded": {
         "type": "object",
         "properties": {
@@ -14033,19 +15436,31 @@
       "Primitive.Slug": {
         "type": "string",
         "maxLength": 64,
-        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Unique among the live spaces of the organization. A new name does not change it."
       },
       "Primitive.Slug_1": {
         "type": "string",
         "maxLength": 64,
-        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        "description": "The older app in the org that has the same name."
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
       },
       "Primitive.Slug_2": {
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "The older app in the org that has the same name."
+      },
+      "Primitive.Slug_3": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
         "description": "Match a category in any group."
+      },
+      "Primitive.Slug_4": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Unique among the live schedules of its space. A new name does not change it."
       },
       "Reference.Alias": {
         "type": "string",
@@ -14244,6 +15659,17 @@
             "minLength": 1,
             "maxLength": 256
           },
+          "slug": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.Slug_1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, Ren makes one from the name and adds -2, -3, … when it is taken."
+          },
           "message": {
             "$ref": "#/components/schemas/Schedule.MessageEncoded"
           },
@@ -14279,6 +15705,38 @@
       "Schedule.Cron": {
         "type": "string"
       },
+      "Schedule.Declaration": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Without it, the slug."
+          },
+          "agent": {
+            "$ref": "#/components/schemas/Agent.Name_1"
+          },
+          "cron": {
+            "$ref": "#/components/schemas/Schedule.Cron"
+          },
+          "timeZone": {
+            "$ref": "#/components/schemas/Schedule.TimeZone"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Schedule.MessageEncoded"
+          },
+          "until": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["cron", "timeZone", "message"],
+        "additionalProperties": false
+      },
       "Schedule.ID": {
         "type": "string",
         "pattern": "^sch_"
@@ -14291,6 +15749,9 @@
           },
           "spaceId": {
             "$ref": "#/components/schemas/Space.ID"
+          },
+          "slug": {
+            "$ref": "#/components/schemas/Primitive.Slug_4"
           },
           "name": {
             "type": "string"
@@ -14361,6 +15822,7 @@
         "required": [
           "id",
           "spaceId",
+          "slug",
           "name",
           "agentId",
           "when",
@@ -16213,6 +17675,67 @@
       "Skill.SourceDirectory": {
         "type": "string"
       },
+      "Skill.Summary": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["content"]
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              },
+              "requiredCredentials": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Credential.SkillRequirement"
+                }
+              }
+            },
+            "required": ["type", "description"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["upstream"]
+              },
+              "requiredCredentials": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Credential.SkillRequirement"
+                }
+              },
+              "upstream": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "A Git branch, tag or commit. Omission follows the default branch. A branch or the default branch is read again by the brain: its new commits change the skill without a new release or catalog fingerprint. Name a commit to fix the content."
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["url", "path"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["type", "upstream"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "A skill without its content: a content skill has no instructions or files."
+      },
       "Skill.Upstream": {
         "type": "object",
         "properties": {
@@ -16261,6 +17784,17 @@
             "minLength": 1,
             "maxLength": 256
           },
+          "slug": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.Slug_1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, Ren makes one from the name and adds -2, -3, … when it is taken."
+          },
           "description": {
             "anyOf": [
               {
@@ -16280,6 +17814,11 @@
         "pattern": "^spc_"
       },
       "Space.ID_1": {
+        "type": "string",
+        "pattern": "^spc_",
+        "description": "The space whose memory to use. Omit it for the organization’s memory."
+      },
+      "Space.ID_2": {
         "type": "string",
         "pattern": "^spc_",
         "description": "Only the profiles that this space reaches."
@@ -16306,6 +17845,9 @@
               }
             ],
             "description": "The owner of a private space. Null for a shared space."
+          },
+          "slug": {
+            "$ref": "#/components/schemas/Primitive.Slug"
           },
           "name": {
             "type": "string"
@@ -16381,6 +17923,7 @@
           "organizationId",
           "kind",
           "ownerUserId",
+          "slug",
           "name",
           "description",
           "brainScope",
@@ -18077,6 +19620,23 @@
         "required": ["_tag", "message", "retryAfterMs"],
         "additionalProperties": false
       },
+      "Webhook.Declaration": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/Agent.Name_2"
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["purpose"],
+        "additionalProperties": false
+      },
       "WriteResult.Redirect": {
         "type": "object",
         "properties": {
@@ -18136,6 +19696,9 @@
     },
     {
       "name": "organization-settings"
+    },
+    {
+      "name": "memory"
     },
     {
       "name": "agent"
@@ -18208,6 +19771,9 @@
     },
     {
       "name": "sign-in"
+    },
+    {
+      "name": "infra"
     }
   ]
 }

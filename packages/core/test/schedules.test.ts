@@ -395,6 +395,32 @@ describe("Schedules", () => {
   )
 
   it.live(
+    "a schedule takes a slug from its name, unique among the live schedules of its space, and keeps it when renamed",
+    () =>
+      Effect.gen(function* () {
+        const schedules = yield* Schedules.Service
+        const t = yield* team
+        const create = (spaceId: Space.ID, input: { readonly name: string; readonly slug?: string }) =>
+          schedules.create(t.ada, decodeCreate({ spaceId, ...input, message: "Digest.", when: daily }))
+        const first = yield* create(t.spaceId, { name: "Daily digest" })
+        const second = yield* create(t.spaceId, { name: "Daily digest" })
+        expect([first.slug, second.slug]).toEqual(["daily-digest", "daily-digest-2"])
+        expect((yield* create(t.spaceId, { name: "Digest", slug: "morning" })).slug).toBe("morning")
+        const taken = yield* Effect.flip(create(t.spaceId, { name: "Digest", slug: "daily-digest" }))
+        expect(taken).toMatchObject({
+          _tag: "Primitive.Conflict",
+          message: "The slug “daily-digest” is already taken.",
+        })
+        expect((yield* schedules.update(t.ada, first.id, { name: "Morning digest" })).slug).toBe("daily-digest")
+        yield* schedules.archive(t.ada, second.id)
+        expect((yield* create(t.spaceId, { name: "Daily digest" })).slug).toBe("daily-digest-2")
+        const other = yield* Seed.space(t.organizationId)
+        yield* Seed.join(other, t.createdBy)
+        expect((yield* create(other, { name: "Daily digest" })).slug).toBe("daily-digest")
+      }),
+  )
+
+  it.live(
     "a member who changes the message becomes the owner, a pause and a resume keep the owner, and a non-member sees nothing (S9)",
     () =>
       Effect.gen(function* () {
@@ -650,6 +676,7 @@ describe("Schedules", () => {
           id: Schedule.ID.create(),
           organization_id: t.organizationId,
           space_id: t.spaceId,
+          slug: `digest-${index}`,
           name: `Digest ${index}`,
           owner_id: t.createdBy,
           cron: "0 9 * * *",

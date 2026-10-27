@@ -72,6 +72,7 @@ describe("Retention", () => {
           id: scheduleId,
           organization_id: owner.organizationId,
           space_id: owner.spaceId,
+          slug: "digest",
           name: "Digest",
           owner_id: owner.createdBy,
           cron: "0 9 * * *",

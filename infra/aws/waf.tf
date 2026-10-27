@@ -16,6 +16,16 @@ locals {
 
   # The host a brain sends model requests to.
   brain_inference_host = regex("^https://([^/:]+)", var.server_environment["REN_INFERENCE_BRAIN_URL"])[0]
+
+  # The rate limit skips a request with this label.
+  rate_limit_exempt_label = "ren:rate-limit-exempt"
+}
+
+resource "aws_wafv2_ip_set" "egress" {
+  name               = "${var.name}-egress"
+  scope              = "REGIONAL"
+  ip_address_version = "IPV4"
+  addresses          = ["${aws_eip.egress.public_ip}/32"]
 }
 
 resource "aws_wafv2_ip_set" "blocked" {
@@ -33,6 +43,58 @@ resource "aws_wafv2_web_acl" "load_balancer" {
     allow {}
   }
 
+  # Labels a request from the egress to a host in rate_limit_exempt_hosts. It only counts: the rules
+  # after it still apply.
+  dynamic "rule" {
+    for_each = length(var.rate_limit_exempt_hosts) > 0 ? [join("|", [for host in var.rate_limit_exempt_hosts : replace(lower(host), ".", "\\.")])] : []
+
+    content {
+      name     = "rate-limit-exempt"
+      priority = 0
+
+      action {
+        count {}
+      }
+
+      rule_label {
+        name = local.rate_limit_exempt_label
+      }
+
+      statement {
+        and_statement {
+          statement {
+            regex_match_statement {
+              regex_string = "^(${rule.value})$"
+
+              field_to_match {
+                single_header {
+                  name = "host"
+                }
+              }
+
+              text_transformation {
+                priority = 0
+                type     = "LOWERCASE"
+              }
+            }
+          }
+
+          statement {
+            ip_set_reference_statement {
+              arn = aws_wafv2_ip_set.egress.arn
+            }
+          }
+        }
+      }
+
+      visibility_config {
+        sampled_requests_enabled   = true
+        cloudwatch_metrics_enabled = true
+        metric_name                = "${var.name}-rate-limit-exempt"
+      }
+    }
+  }
+
   rule {
     name     = "rate-limit"
     priority = 1
@@ -48,7 +110,8 @@ resource "aws_wafv2_web_acl" "load_balancer" {
 
         # Every brain reaches Ren from the egress's one address, so a per-address limit would cap all
         # brains together. Its requests carry the brain's own token; the limit skips them: model
-        # requests, the host API (/host/) and the host MCP (/mcp).
+        # requests, the host API (/host/), the host MCP (/mcp), and requests that the
+        # rate-limit-exempt rule labels.
         scope_down_statement {
           not_statement {
             statement {
@@ -100,6 +163,13 @@ resource "aws_wafv2_web_acl" "load_balancer" {
                       priority = 0
                       type     = "NONE"
                     }
+                  }
+                }
+
+                statement {
+                  label_match_statement {
+                    scope = "LABEL"
+                    key   = local.rate_limit_exempt_label
                   }
                 }
               }

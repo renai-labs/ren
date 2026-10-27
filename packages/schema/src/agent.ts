@@ -13,6 +13,8 @@ export type ID = typeof ID.Type
 
 export const Name = Primitive.Slug.annotate({ identifier: "Agent.Name" })
 
+export const reserved: ReadonlySet<string> = new Set(["ren", "general", "explore", "compaction", "title", "summary"])
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
@@ -50,7 +52,10 @@ export const CreateInput = Schema.Struct({
 }).annotate({ identifier: "Agent.CreateInput" })
 
 export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
-export const Declaration = CreateInput.mapFields(Struct.omit(["ownerSpaceId", "name"])).annotate({
+export const Declaration = CreateInput.mapFields((fields) => ({
+  ...Struct.omit(fields, ["ownerSpaceId", "name"]),
+  description: Schema.optionalKey(Schema.String),
+})).annotate({
   identifier: "Agent.Declaration",
 })
 

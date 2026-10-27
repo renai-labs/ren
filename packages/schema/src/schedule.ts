@@ -107,6 +107,9 @@ export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
   spaceId: Space.ID,
+  slug: Primitive.Slug.annotate({
+    description: "Unique among the live schedules of its space. A new name does not change it.",
+  }),
   name: Schema.String,
   agentId: Schema.NullOr(Agent.ID).annotate({ description: "Null: a new chat gets the space’s default settings." }),
   when: When,
@@ -137,6 +140,9 @@ export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
   spaceId: Space.ID,
   name: Primitive.Name,
+  slug: Schema.optional(Primitive.Slug).annotate({
+    description: "Without it, Ren makes one from the name and adds -2, -3, … when it is taken.",
+  }),
   message: Message,
   when: WhenInput,
   target: Schema.optional(TargetInput).annotate({ description: "Without it, `new-chat`." }),
@@ -160,6 +166,7 @@ export const UpdateInput = Schema.Struct({
 const NoInput = Schema.Struct({}).annotate({ identifier: "Schedule.NoInput" })
 
 export const Declaration = Schema.Struct({
+  name: Schema.optionalKey(Primitive.Name.annotate({ description: "Without it, the slug." })),
   agent: Schema.optionalKey(Agent.Name.annotate({ description: "Without it, the space’s default settings." })),
   cron: Cron,
   timeZone: TimeZone,

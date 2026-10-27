@@ -9,10 +9,12 @@ import { AgentPolicy } from "./agent/policy.js"
 import { ChannelInstallPolicy } from "./channel-install/policy.js"
 import { ChannelMappingPolicy } from "./channel-mapping/policy.js"
 import { CredentialPolicy } from "./credential/policy.js"
+import { MemoryPolicy } from "./memory/policy.js"
 import { OAuthAppPolicy } from "./oauth-app/policy.js"
 import { AppPolicy } from "./app/policy.js"
 import { AppProfilePolicy } from "./app/profile-policy.js"
 import { EnvironmentTemplatePolicy } from "./environment-templates/policy.js"
+import { InfraPolicy } from "./infra-specs/policy.js"
 import { RenInferencePolicy } from "./ren-inference/policy.js"
 import { SchedulePolicy } from "./schedule/policy.js"
 import { SessionPolicy } from "./session/policy.js"
@@ -92,6 +94,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...SessionPolicy.documents,
   ...EnvironmentTemplatePolicy.documents,
   ...SettingsPolicy.documents,
+  ...MemoryPolicy.documents,
   ...AgentPolicy.documents,
   ...AppPolicy.documents,
   ...AppProfilePolicy.documents,
@@ -102,6 +105,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...ChannelInstallPolicy.documents,
   ...ChannelMappingPolicy.documents,
   ...SchedulePolicy.documents,
+  ...InfraPolicy.documents,
 ])
 
 export const layer = Layer.effect(

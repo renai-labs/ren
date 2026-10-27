@@ -29,6 +29,22 @@ export const where: ReadonlyMap<string, SQL> = new Map([
   [SessionPolicy.facts.spaceMember, isNotNull(membership.id)],
 ])
 
+export const slugs = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  organizationId: Auth.OrganizationID,
+) {
+  yield* transaction
+    .select({ id: Database.Schema.organization.id })
+    .from(Database.Schema.organization)
+    .where(eq(Database.Schema.organization.id, organizationId))
+    .for("no key update")
+  const rows = yield* transaction
+    .select({ slug: Database.Schema.space.slug })
+    .from(Database.Schema.space)
+    .where(and(eq(Database.Schema.space.organization_id, organizationId), isNull(Database.Schema.space.archived_at)))
+  return new Set(rows.map((row) => row.slug))
+})
+
 export const organizationMember = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   organizationId: Auth.OrganizationID,

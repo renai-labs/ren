@@ -17,7 +17,13 @@ import { Primitive } from "./primitive.js"
 import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 
-export type Interface = Primitive.Interface<typeof Space.definition>
+export interface Interface extends Primitive.Interface<typeof Space.definition> {
+  readonly changeSlug: (
+    actor: Actor.Info,
+    id: Space.ID,
+    slug: string,
+  ) => Effect.Effect<Space.Info, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict>
+}
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Space") {}
 
@@ -92,6 +98,7 @@ export const layer = Layer.effect(
           organizationId: row.space.organization_id,
           kind: row.space.kind,
           ownerUserId: row.space.owner_user_id,
+          slug: row.space.slug,
           name: row.space.name,
           description: canRead ? row.space.description : null,
           brainScope: row.space.brain_scope,
@@ -162,10 +169,10 @@ export const layer = Layer.effect(
         )
       }),
       get: Effect.fn("Space.get")(function* (actor: Actor.Info, idOrSlug: string) {
-        if (!Schema.is(Space.ID)(idOrSlug)) return yield* notFound
-        return yield* database.transaction((transaction) =>
-          find(transaction, actor, and(visibleTo(actor), eq(Database.Schema.space.id, idOrSlug))),
-        )
+        const where = Schema.is(Space.ID)(idOrSlug)
+          ? eq(Database.Schema.space.id, idOrSlug)
+          : eq(Database.Schema.space.slug, idOrSlug)
+        return yield* database.transaction((transaction) => find(transaction, actor, and(visibleTo(actor), where)))
       }),
       create: Effect.fn("Space.create")(function* (actor: Actor.Info, input: Space.CreateInput) {
         return yield* database.transaction((transaction) =>
@@ -177,6 +184,11 @@ export const layer = Layer.effect(
             yield* transaction.insert(Database.Schema.space).values({
               id,
               organization_id: actor.organizationId,
+              slug: yield* Primitive.slugFor(
+                input,
+                "space",
+                yield* SpaceQueries.slugs(transaction, actor.organizationId),
+              ),
               name: input.name,
               description: input.description ?? null,
             })
@@ -227,6 +239,26 @@ export const layer = Layer.effect(
               .where(eq(Database.Schema.space.id, id))
               .returning()
             if (updated.length === 0) return yield* notFound
+            return yield* find(transaction, actor, eq(Database.Schema.space.id, id))
+          }),
+        )
+      }),
+      changeSlug: Effect.fn("Space.changeSlug")(function* (actor: Actor.Info, id: Space.ID, slug: string) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const taken = yield* SpaceQueries.slugs(transaction, actor.organizationId)
+            const visible = yield* findVisible(transaction, actor, id)
+            if (!visible || visible.row.space.archived_at) return yield* notFound
+            if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource }))
+              return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
+            if (visible.row.space.slug !== slug) {
+              if (taken.has(slug))
+                return yield* new Primitive.Conflict({ message: `The slug “${slug}” is already taken.` })
+              yield* transaction
+                .update(Database.Schema.space)
+                .set({ slug, updated_at: sql`now()` })
+                .where(eq(Database.Schema.space.id, id))
+            }
             return yield* find(transaction, actor, eq(Database.Schema.space.id, id))
           }),
         )

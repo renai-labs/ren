@@ -1,6 +1,6 @@
 export * as Infra from "./infra.js"
 
-import { Effect, Schema } from "effect"
+import { Effect, Schema, Struct } from "effect"
 import { Agent } from "./agent.js"
 import { App } from "./app.js"
 import { AppProfile } from "./app-profile.js"
@@ -10,42 +10,38 @@ import { EnvironmentTemplate } from "./environment-template.js"
 import { OrganizationSettings } from "./organization-settings.js"
 import { Primitive } from "./primitive.js"
 import { Schedule } from "./schedule.js"
+import { Settings } from "./settings.js"
 import { Space } from "./space.js"
 import { SpaceSettings } from "./space-settings.js"
 import { Webhook } from "./webhook.js"
 
-const records = ["agents", "apps", "schedules", "webhooks", "channels"] as const
-
 const runners = { schedules: "Schedule", webhooks: "Webhook", channels: "Channel" } as const
 
-export const Path = Schema.String.check(
-  Schema.isPattern(
-    new RegExp(`^spaces/${Primitive.slugPattern}(?:/(?:${records.join("|")})/${Primitive.slugPattern})?$`, "u"),
-    {
-      message: "Use spaces/<slug> or spaces/<slug>/<agents|apps|schedules|webhooks|channels>/<slug>.",
-    },
-  ),
-).annotate({ identifier: "Infra.Path" })
-
-export interface Move extends Schema.Schema.Type<typeof Move> {}
-export const Move = Schema.Struct({ from: Path, to: Path }).annotate({ identifier: "Infra.Move" })
+const RenamedFrom = Schema.optionalKey(
+  Schema.Array(Primitive.Slug).annotate({
+    description: "Earlier names. Apply renames the live row that has one of them, so its history stays.",
+  }),
+)
 
 export interface Uses extends Schema.Schema.Type<typeof Uses> {}
 export const Uses = Schema.Struct({
   agents: Schema.Array(Agent.Name).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
-  apps: Schema.Array(Primitive.Slug)
-    .annotate({ description: "Registry apps, and custom apps that other spaces own." })
-    .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
 }).annotate({ identifier: "Infra.Uses" })
 
 export interface SpaceDeclaration extends Schema.Schema.Type<typeof SpaceDeclaration> {}
 export const SpaceDeclaration = Schema.Struct({
-  ...Space.CreateInput.fields,
+  ...Struct.omit(Space.CreateInput.fields, ["slug"]),
+  renamedFrom: RenamedFrom,
+  description: Schema.optionalKey(Schema.String),
   settings: SpaceSettings.UpdateInput.fields.settings.pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed({ permissions: [], references: [] })),
   ),
-  agents: Schema.Record(Agent.Name, Agent.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
-  apps: Schema.Record(Primitive.Slug, App.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
+  agents: Schema.Record(Agent.Name, Schema.Struct({ ...Agent.Declaration.fields, renamedFrom: RenamedFrom })).pipe(
+    Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
+  ),
+  apps: Schema.Record(Primitive.Slug, Schema.Struct({ ...App.Declaration.fields, renamedFrom: RenamedFrom })).pipe(
+    Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
+  ),
   schedules: Schema.Record(Primitive.Slug, Schedule.Declaration).pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
   ),
@@ -56,14 +52,13 @@ export const SpaceDeclaration = Schema.Struct({
     Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
   ),
   environment: Schema.optionalKey(EnvironmentTemplate.Declaration),
-  uses: Uses.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({ agents: [], apps: [] }))),
+  uses: Uses.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({ agents: [] }))),
 }).annotate({ identifier: "Infra.SpaceDeclaration" })
 
 export interface Spec extends Schema.Schema.Type<typeof Spec> {}
 export const Spec = Schema.Struct({
   org: OrganizationSettings.UpdateInput,
   spaces: Schema.Record(Primitive.Slug, SpaceDeclaration),
-  moved: Schema.Array(Move).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
 })
   .check(
     Schema.makeFilter((spec) => {
@@ -81,13 +76,6 @@ export const Spec = Schema.Struct({
         ),
       }
       const apps = [...owners.apps.values()].flatMap((owned) => owned.slice(0, 1))
-      const exists = (path: string) => {
-        const parts = path.split("/")
-        const space = spec.spaces[parts.at(1) ?? ""]
-        const kind = records.find((name) => name === parts.at(2))
-        if (!space) return false
-        return !kind || (parts.at(3) ?? "") in space[kind]
-      }
       return [
         ...App.dependencyCycles(new Map(apps.map((owned) => [owned.name, owned.app]))).map((cycle) => ({
           path: ["spaces"],
@@ -101,32 +89,53 @@ export const Spec = Schema.Struct({
             })),
           ),
         ),
+        ...[...owners.agents.values()]
+          .flat()
+          .filter((owned) => Agent.reserved.has(owned.name))
+          .map((owned) => ({
+            path: ["spaces", owned.space, "agents", owned.name],
+            issue: `The name ${owned.name} is reserved.`,
+          })),
         ...spaces.flatMap(([space, declaration]) =>
-          (["agents", "apps"] as const).flatMap((kind) =>
-            declaration.uses[kind].flatMap((name, index) => {
-              const path = ["spaces", space, "uses", kind, index]
-              const noun = kind === "agents" ? "agent" : "app"
-              if (name in declaration[kind])
-                return [{ path, issue: `Space "${space}" owns ${noun} "${name}", so it does not list it in uses.` }]
-              if (kind === "agents" && !owners.agents.has(name))
-                return [{ path, issue: `Space "${space}" uses agent "${name}", which no space defines.` }]
-              return []
-            }),
-          ),
+          declaration.uses.agents.flatMap((name, index) => {
+            const path = ["spaces", space, "uses", "agents", index]
+            if (name in declaration.agents)
+              return [{ path, issue: `Space "${space}" owns agent "${name}", so it does not list it in uses.` }]
+            if (!owners.agents.has(name))
+              return [{ path, issue: `Space "${space}" uses agent "${name}", which no space defines.` }]
+            return []
+          }),
         ),
-        ...spaces.flatMap(([space, declaration]) => {
-          const used = new Set([...Object.keys(declaration.apps), ...declaration.uses.apps])
-          return apps
-            .filter((owned) => used.has(owned.name))
-            .flatMap((owned) =>
-              owned.app.dependsOn
-                .filter((dependency) => !used.has(dependency))
-                .map((dependency) => ({
-                  path: ["spaces", space, "uses", "apps"],
-                  issue: `Space "${space}" uses app "${owned.name}", which depends on "${dependency}".`,
-                })),
-            )
-        }),
+        ...[
+          ...spaces.map(([space, declaration]) => ({
+            noun: "Space",
+            path: ["spaces", space],
+            name: space,
+            renamedFrom: declaration.renamedFrom,
+            defined: (earlier: string) => earlier in spec.spaces,
+          })),
+          ...spaces.flatMap(([space, declaration]) =>
+            Object.entries(declaration.agents).map(([name, owned]) => ({
+              noun: "Agent",
+              path: ["spaces", space, "agents", name],
+              name,
+              renamedFrom: owned.renamedFrom,
+              defined: (earlier: string) => owners.agents.has(earlier),
+            })),
+          ),
+          ...apps.map((owned) => ({
+            noun: "App",
+            path: ["spaces", owned.space, "apps", owned.name],
+            name: owned.name,
+            renamedFrom: owned.app.renamedFrom,
+            defined: (earlier: string) => owners.apps.has(earlier),
+          })),
+        ].flatMap((renamed) =>
+          (renamed.renamedFrom ?? []).filter(renamed.defined).map((earlier) => ({
+            path: [...renamed.path, "renamedFrom"],
+            issue: `${renamed.noun} "${renamed.name}" is renamed from "${earlier}", which the spec still defines.`,
+          })),
+        ),
         ...(["skills", "mcps"] as const).flatMap((kind) =>
           [
             ...Map.groupBy(
@@ -171,24 +180,6 @@ export const Spec = Schema.Struct({
                 ],
           )
         }),
-        ...spec.moved.flatMap((move, index) => [
-          ...(exists(move.from)
-            ? [
-                {
-                  path: ["moved", index, "from"],
-                  issue: `A move from "${move.from}" names a resource that still exists.`,
-                },
-              ]
-            : []),
-          ...(exists(move.to)
-            ? []
-            : [
-                {
-                  path: ["moved", index, "to"],
-                  issue: `A move to "${move.to}" names a resource that does not exist.`,
-                },
-              ]),
-        ]),
       ]
     }),
   )
@@ -211,3 +202,64 @@ export const Bindings = Schema.Struct({
   organization: Schema.NonEmptyString.annotate({ description: "The slug of the organization." }),
   spaces: Schema.Record(Primitive.Slug, SpaceBindings).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
 }).annotate({ identifier: "Infra.Bindings" })
+
+export const Kind = Schema.Literals(["organization", "space", "agent", "membership"]).annotate({
+  identifier: "Infra.Kind",
+})
+export type Kind = typeof Kind.Type
+
+export interface Change extends Schema.Schema.Type<typeof Change> {}
+export const Change = Schema.Struct({
+  action: Schema.Literals(["create", "update", "archive"]),
+  kind: Kind,
+  path: Schema.String.annotate({
+    description:
+      "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name> or spaces/<slug>/uses/agents/<name>.",
+  }),
+  from: Schema.optionalKey(Schema.String.annotate({ description: "The path before a rename or a move." })),
+  fields: Schema.Array(Schema.String).annotate({ description: "The fields that an update changes." }),
+}).annotate({ identifier: "Infra.Change" })
+
+export interface Problem extends Schema.Schema.Type<typeof Problem> {}
+export const Problem = Schema.Struct({ path: Schema.String, message: Schema.String }).annotate({
+  identifier: "Infra.Problem",
+})
+
+export interface PlanInput extends Schema.Schema.Type<typeof PlanInput> {}
+export const PlanInput = Schema.Struct({ spec: Spec, bindings: Bindings }).annotate({ identifier: "Infra.PlanInput" })
+
+export interface Plan extends Schema.Schema.Type<typeof Plan> {}
+export const Plan = Schema.Struct({
+  changes: Schema.Array(Change),
+  problems: Schema.Array(Problem).annotate({ description: "A plan with problems cannot be applied." }),
+  digest: Schema.String.annotate({ description: "Apply refuses the plan when the digest has changed." }),
+}).annotate({ identifier: "Infra.Plan" })
+
+export interface ApplyInput extends Schema.Schema.Type<typeof ApplyInput> {}
+export const ApplyInput = Schema.Struct({ ...PlanInput.fields, digest: Schema.String }).annotate({
+  identifier: "Infra.ApplyInput",
+})
+
+export interface Applied extends Schema.Schema.Type<typeof Applied> {}
+export const Applied = Schema.Struct({ changes: Schema.Array(Change) }).annotate({ identifier: "Infra.Applied" })
+
+export interface PulledSpace extends Schema.Schema.Type<typeof PulledSpace> {}
+export const PulledSpace = Schema.Struct({
+  ...Struct.omit(Space.CreateInput.fields, ["slug"]),
+  settings: Settings.Info,
+  agents: Schema.Record(Agent.Name, Agent.Declaration),
+  uses: Uses,
+}).annotate({ identifier: "Infra.PulledSpace" })
+
+export interface Pulled extends Schema.Schema.Type<typeof Pulled> {}
+export const Pulled = Schema.Struct({
+  bindings: Schema.Struct({ organization: Bindings.fields.organization }),
+  spec: Schema.Struct({
+    org: OrganizationSettings.UpdateInput,
+    spaces: Schema.Record(Primitive.Slug, PulledSpace),
+  }),
+}).annotate({
+  identifier: "Infra.Pulled",
+  description:
+    "The part of the org spec that infra applies today: organization settings, shared spaces and their agents.",
+})

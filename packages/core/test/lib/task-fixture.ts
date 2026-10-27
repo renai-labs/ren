@@ -6,6 +6,7 @@ import { Testing } from "@ren/db/testing"
 import type { Agent } from "@ren/schema/agent"
 import type { Session } from "@ren/schema/session"
 import type { Space as SpaceSchema } from "@ren/schema/space"
+import type { Task as TaskSchema } from "@ren/schema/task"
 import type { TaskActivity as Activity } from "@ren/schema/task-activity"
 import { and, eq, isNull } from "drizzle-orm"
 import { Effect, Layer } from "effect"
@@ -50,6 +51,14 @@ export const harness = () => {
     ),
   }
 }
+
+export const sessions = (taskId: TaskSchema.ID) =>
+  Effect.flatMap(Database.Service, (database) =>
+    database.db
+      .select({ sessionId: Database.Schema.task_session.session_id, agentId: Database.Schema.task_session.agent_id })
+      .from(Database.Schema.task_session)
+      .where(eq(Database.Schema.task_session.task_id, taskId)),
+  )
 
 export const page = { page: 1, pageSize: 50 }
 

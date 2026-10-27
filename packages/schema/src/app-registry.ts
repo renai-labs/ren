@@ -5,6 +5,7 @@ import { App } from "./app.js"
 import { AppListing } from "./app-listing.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { Skill } from "./skill.js"
 
 export interface Publication extends Schema.Schema.Type<typeof Publication> {}
 export const Publication = Schema.Struct({
@@ -51,7 +52,7 @@ export const Info = Schema.Struct({
   requiredCredentials: App.Info.fields.requiredCredentials,
   environment: App.Info.fields.environment,
   mcps: App.Info.fields.mcps,
-  skills: App.Info.fields.skills,
+  skills: Schema.Record(Primitive.Slug, Skill.Summary),
   dependsOn: App.Info.fields.dependsOn,
   revision: Schema.Int,
 }).annotate({ identifier: "AppRegistry.Info" })

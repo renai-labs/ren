@@ -13,6 +13,8 @@ export const spacePendingMemberEmailConstraint = "space_pending_member_space_id_
 
 export const privateSpaceOwnerConstraint = "space_organization_id_owner_user_id_uidx"
 
+export const spaceSlugConstraint = "space_organization_id_slug_uidx"
+
 export const space = pgTable(
   "space",
   {
@@ -25,6 +27,7 @@ export const space = pgTable(
     owner_user_id: text()
       .$type<Auth.UserID>()
       .references(() => user.id, { onDelete: "cascade" }),
+    slug: text().notNull(),
     name: text().notNull(),
     description: text(),
     brain_scope: text().$type<Brain.Scope>().notNull().default("space"),
@@ -35,6 +38,7 @@ export const space = pgTable(
   },
   (table) => [
     index("space_organization_id_created_at_id_idx").on(table.organization_id, table.created_at, table.id),
+    uniqueIndex(spaceSlugConstraint).on(table.organization_id, table.slug).where(isNull(table.archived_at)),
     uniqueIndex(privateSpaceOwnerConstraint)
       .on(table.organization_id, table.owner_user_id)
       .where(sql`${table.kind} = 'private' and ${table.archived_at} is null`),

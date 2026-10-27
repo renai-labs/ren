@@ -160,6 +160,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     models: initial,
     apps: options.apps ?? Option.none(),
     channels: options.channels ?? [],
+    memory: Option.none(),
     chats: Option.isSome(chats) ? yield* Ref.get(chats.value.latest) : new Map(),
   })
   const updates = yield* Semaphore.make(1)
