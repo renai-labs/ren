@@ -59,7 +59,7 @@ const EndpointSpaceCreate = (raw: RawClient["space"]) => (input: SpaceCreateInpu
 type SpaceUpdateRequest = Parameters<RawClient["space"]["space.update"]>[0]
 type SpaceUpdateInput = {
   readonly id: SpaceUpdateRequest["params"]["id"]
-  readonly agentOrder?: SpaceUpdateRequest["payload"]["agentOrder"]
+  readonly factory?: SpaceUpdateRequest["payload"]["factory"]
   readonly name?: SpaceUpdateRequest["payload"]["name"]
   readonly description?: SpaceUpdateRequest["payload"]["description"]
   readonly brainScope?: SpaceUpdateRequest["payload"]["brainScope"]
@@ -68,7 +68,7 @@ const EndpointSpaceUpdate = (raw: RawClient["space"]) => (input: SpaceUpdateInpu
   raw["space.update"]({
     params: { id: input["id"] },
     payload: {
-      agentOrder: input["agentOrder"],
+      factory: input["factory"],
       name: input["name"],
       description: input["description"],
       brainScope: input["brainScope"],

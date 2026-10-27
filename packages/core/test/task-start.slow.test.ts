@@ -34,7 +34,9 @@ describe("Task start", () => {
         const plan = yield* o.agent("plan")
         const build = yield* o.agent("build")
         const review = yield* o.agent("review")
-        yield* spaces.update(o.ada, o.factory.id, { agentOrder: [plan, build, review] })
+        yield* spaces.update(o.ada, o.factory.id, {
+          factory: { maxHandoffs: 20, agents: [{ agentId: plan }, { agentId: build }, { agentId: review }] },
+        })
         const script = harness.stub.script()
         const called = (count: number) => Effect.promise(() => script.called(count))
         const created = yield* tasks.create(o.ada, {

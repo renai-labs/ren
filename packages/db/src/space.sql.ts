@@ -1,7 +1,7 @@
-import type { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import { Primitive } from "@ren/schema/primitive"
 import type { Brain } from "@ren/schema/brain"
+import { Factory } from "@ren/schema/factory"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
 import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
@@ -34,7 +34,7 @@ export const space = pgTable(
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),
-    agent_order: jsonb().$type<ReadonlyArray<Agent.ID>>().notNull().default([]),
+    factory: jsonb().$type<Factory.Info>().notNull().default(Factory.empty),
   },
   (table) => [
     index("space_organization_id_created_at_id_idx").on(table.organization_id, table.created_at, table.id),

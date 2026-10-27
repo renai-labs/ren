@@ -390,7 +390,7 @@ export function make(options: ClientOptions) {
             method: "PATCH",
             path: `/spaces/${encodeURIComponent(input.id)}`,
             body: {
-              agentOrder: input["agentOrder"],
+              factory: input["factory"],
               name: input["name"],
               description: input["description"],
               brainScope: input["brainScope"],

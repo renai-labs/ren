@@ -42,7 +42,7 @@ test("the board keeps factory columns, then only other agents with visible tasks
     task({ spaceId: "other", agentId: "foreign" }),
   ]
   const groups = TaskView.boardGroups(
-    { id: "spc", agentOrder: ["plan", "build"] },
+    { id: "spc", factory: { agents: [{ agentId: "plan" }, { agentId: "build" }] } },
     [
       { id: "plan", name: "Plan" },
       { id: "build", name: "Build" },

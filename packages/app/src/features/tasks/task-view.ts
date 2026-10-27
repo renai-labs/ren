@@ -151,21 +151,22 @@ export interface Group {
 }
 
 export function boardGroups(
-  space: { readonly id: string; readonly agentOrder: ReadonlyArray<string> },
+  space: { readonly id: string; readonly factory: { readonly agents: ReadonlyArray<{ readonly agentId: string }> } },
   agents: ReadonlyArray<{ readonly id: string; readonly name: string }>,
   tasks: ReadonlyArray<TaskInfo>,
 ): Group[] {
+  const order = space.factory.agents.map((entry) => entry.agentId)
   const rows = tasks.filter((task) => task.spaceId === space.id)
   const names = new Map(agents.map((agent) => [agent.id, agent.name]))
   const extra = [...new Set(rows.flatMap((task) => task.agentId ?? []))]
-    .filter((id) => !space.agentOrder.includes(id))
+    .filter((id) => !order.includes(id))
     .toSorted(
       (a, b) =>
         (names.get(a) ?? "Archived agent").localeCompare(names.get(b) ?? "Archived agent") || a.localeCompare(b),
     )
   return [
     { id: none, name: "No agent", agentId: null, tasks: rows.filter((task) => task.agentId === null) },
-    ...[...space.agentOrder, ...extra].map((id) => ({
+    ...[...order, ...extra].map((id) => ({
       id,
       name: names.get(id) ?? "Archived agent",
       agentId: id,
