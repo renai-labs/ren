@@ -65,6 +65,15 @@ describe("ren2", () => {
     expect(nested.stderr).toBe("")
   })
 
+  test("prints a shell completion script that covers generated resources", async () => {
+    const result = await ren(["--completions", "zsh"])
+
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain("#compdef ren2")
+    expect(result.stdout).toContain("space")
+    expect(result.stderr).toBe("")
+  })
+
   test("rejects extra arguments and flags outside their command before executing", async () => {
     const root = await folder({ "org.yaml": "settings: {}\n" })
     const extra = await ren(["infra", "validate", root, "extra"])

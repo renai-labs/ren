@@ -22,10 +22,15 @@ export const loginOptions = {
   ),
 }
 
+export const upgradeOptions = {
+  version: Argument.String("version").pipe(Argument.withDescription("Release to install"), Argument.optional),
+}
+
 export const root = Command.make("ren2").pipe(Command.withDescription("Ren CLI"))
 export const login = Command.make("login", loginOptions).pipe(Command.withDescription("Sign in"))
 export const logout = Command.make("logout").pipe(Command.withDescription("Sign out"))
 export const whoami = Command.make("whoami").pipe(Command.withDescription("Show the signed-in user"))
+export const upgrade = Command.make("upgrade", upgradeOptions).pipe(Command.withDescription("Update ren2"))
 export const health = Command.make("health").pipe(Command.withDescription("Check server health"))
 export const infra = Command.make("infra").pipe(Command.withDescription("Manage infrastructure"))
 export const validate = Command.make("validate", folder).pipe(Command.withDescription("Validate a local spec"))

@@ -24,6 +24,11 @@ export const command = Commands.root.pipe(
         Effect.promise(() => import("./commands/auth.js")).pipe(Effect.flatMap((module) => module.AuthCommand.whoami)),
       ),
     ),
+    Commands.upgrade.pipe(
+      Command.withHandler((input) =>
+        Effect.promise(() => import("./upgrade.js")).pipe(Effect.flatMap((module) => module.Upgrade.run(input))),
+      ),
+    ),
     Commands.health.pipe(
       Command.withHandler(() =>
         Effect.promise(() => import("./commands/health.js")).pipe(Effect.flatMap((module) => module.Health.run)),

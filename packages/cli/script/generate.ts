@@ -327,7 +327,7 @@ const elsewhere = new Map([
   ["ren-inference.connect", "The provider sign-in returns to the app in a browser."],
 ])
 
-const handwritten = new Set(["login", "logout", "whoami", "health", "infra", "api"])
+const handwritten = new Set(["login", "logout", "whoami", "upgrade", "health", "infra", "api"])
 
 const standard: Readonly<Record<string, (resource: Resource) => string>> = {
   list: (resource) => `List ${resource.many}`,
