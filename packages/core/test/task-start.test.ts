@@ -1,7 +1,9 @@
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { eq } from "drizzle-orm"
+import type { Agent } from "@ren/schema/agent"
 import { Effect } from "effect"
+import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { Task } from "../src/task.js"
 import { TaskActivity } from "../src/task/activity.js"
@@ -224,6 +226,100 @@ describe("Task review", () => {
       expect(TaskFixture.kinds(trail)).toEqual(["created", "review_requested", "reviewed"])
       expect(trail.items.at(-1)).toMatchObject({
         event: { data: { _tag: "reviewed", decision: "changes_requested", comment: "Cover SCIM." } },
+      })
+    }),
+  )
+})
+
+describe("Task factory", () => {
+  const factory = Effect.gen(function* () {
+    const spaces = yield* Space.Service
+    const o = yield* org
+    const session = (agentId: Agent.ID) =>
+      Seed.session({ organizationId: o.organizationId, spaceId: o.factory.id, createdBy: o.ada.userId }).pipe(
+        Effect.map((sessionId) => TaskFixture.actingAs(o.ada, o.factory.id, agentId, sessionId)),
+      )
+    const plan = yield* o.agent("plan")
+    const build = yield* o.agent("build")
+    const review = yield* o.agent("review")
+    const qa = yield* o.agent("qa")
+    yield* spaces.update(o.ada, o.factory.id, {
+      factory: {
+        maxHandoffs: 20,
+        agents: [
+          { agentId: plan },
+          { agentId: build, to: [{ agentId: review }] },
+          { agentId: review, to: [{ agentId: qa }, { agentId: build, max: 1 }] },
+          { agentId: qa, to: [{ agentId: build, max: 1, else: review }] },
+        ],
+      },
+    })
+    return {
+      o,
+      plan,
+      build,
+      review,
+      qa,
+      builder: yield* session(build),
+      reviewer: yield* session(review),
+      tester: yield* session(qa),
+    }
+  })
+
+  it.live(
+    "a governed agent hands off only along its edges, an edge at its max asks a person, and the person's decision resets it",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const activity = yield* TaskActivity.Service
+        const f = yield* factory
+        const created = yield* tasks.create(f.o.ada, { spaceId: f.o.factory.id, title: "Ship", agentId: f.build })
+        const handOff = (actor: typeof f.builder, agentId: Agent.ID) =>
+          tasks.assign(actor, created.id, { agentId, start: "none" })
+        const refused = yield* Effect.flip(handOff(f.builder, f.plan))
+        expect(refused).toMatchObject({ _tag: "Primitive.Invalid", message: "build can hand off only to review." })
+        expect(yield* handOff(f.builder, f.review)).toMatchObject({ agentId: f.review })
+        expect(yield* handOff(f.builder, f.review)).toMatchObject({ agentId: f.review })
+        expect((yield* Effect.flip(handOff(f.builder, f.qa)))._tag).toBe("Primitive.Conflict")
+        expect(yield* handOff(f.reviewer, f.build)).toMatchObject({ agentId: f.build })
+        yield* handOff(f.builder, f.review)
+        expect(yield* handOff(f.reviewer, f.build)).toMatchObject({
+          agentId: f.review,
+          humanReview: true,
+          humanReviewReason: "review → build used 1 of 1.",
+        })
+        expect((yield* activity.list(f.o.ada, { taskId: created.id, ...page })).items.at(-1)).toMatchObject({
+          event: {
+            data: { _tag: "review_requested", reason: "review → build used 1 of 1." },
+            actor: { userId: null, agentId: null },
+          },
+        })
+        yield* tasks.review(f.o.ada, created.id, { humanReview: false, decision: "approved", start: "none" })
+        expect(yield* handOff(f.reviewer, f.build)).toMatchObject({ agentId: f.build, humanReview: false })
+      }),
+  )
+
+  it.live("an edge at its max sends the task to its else agent, with a note that says why", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const activity = yield* TaskActivity.Service
+      const f = yield* factory
+      const created = yield* tasks.create(f.o.ada, { spaceId: f.o.factory.id, title: "Test", agentId: f.qa })
+      yield* tasks.assign(f.tester, created.id, { agentId: f.build, start: "none" })
+      yield* tasks.assign(f.builder, created.id, { agentId: f.review, start: "none" })
+      yield* tasks.assign(f.reviewer, created.id, { agentId: f.qa, start: "none" })
+      expect(yield* tasks.assign(f.tester, created.id, { agentId: f.build, start: "none" })).toMatchObject({
+        agentId: f.review,
+      })
+      expect((yield* activity.list(f.o.ada, { taskId: created.id, ...page })).items.at(-1)).toMatchObject({
+        event: {
+          data: {
+            _tag: "assigned",
+            fromAgentId: f.qa,
+            toAgentId: f.review,
+            note: "review got the task instead of build: qa → build used 1 of 1.",
+          },
+        },
       })
     }),
   )
