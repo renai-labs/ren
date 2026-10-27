@@ -257,7 +257,7 @@ function SuggestionMenu(props: { suggest: Suggest; onChoose: (value: string) => 
     <Command
       value={suggest.active ?? ""}
       shouldFilter={false}
-      className="absolute bottom-full left-0 mb-2 h-auto w-full max-w-md rounded-xl border bg-popover shadow-md"
+      className="absolute inset-x-0 bottom-full mb-2 h-auto w-full rounded-xl border bg-popover shadow-md"
     >
       <CommandList className="max-h-72">
         <CommandGroup heading={suggest.label}>
