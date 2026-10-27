@@ -3,6 +3,7 @@ export * as App from "./app.js"
 import { Effect } from "effect"
 import { Command } from "effect/cli"
 import { Commands } from "./commands.js"
+import { commands } from "./generated/commands.js"
 
 export const command = Commands.root.pipe(
   Command.withSubcommands([
@@ -60,5 +61,6 @@ export const command = Commands.root.pipe(
         ),
       ]),
     ),
+    { group: "Resources", commands },
   ]),
 )

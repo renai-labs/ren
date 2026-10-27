@@ -140,6 +140,8 @@
         "effect": "catalog:",
       },
       "devDependencies": {
+        "@ren/httpapi-codegen": "workspace:*",
+        "@ren/protocol": "workspace:*",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },

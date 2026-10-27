@@ -1,6 +1,6 @@
 # ren2 CLI
 
-Status: partially implemented. The command/runtime foundation, binary release tooling, browser login and the output contract are implemented. Device login, profiles, generated API coverage and streaming output remain proposed. Publishing the first release requires running the release workflow. HTTP operations and domain shapes remain owned by the protocol and schema. Implementation work belongs in `TODO.md` or issues.
+Status: partially implemented. The command/runtime foundation, binary release tooling, browser login, the output contract and generated API commands are implemented. Device login, profiles, `ren2 api`, chat and streaming output remain proposed. Publishing the first release requires running the release workflow. HTTP operations and domain shapes remain owned by the protocol and schema. Implementation work belongs in `TODO.md` or issues.
 
 ## 1. Purpose
 
@@ -30,7 +30,7 @@ The useful existing behavior is preserved: SDK calls, shared-schema validation, 
 Relevant sources:
 
 - [Entrypoint](../packages/cli/src/index.ts)
-- [Connection](../packages/cli/src/connection.ts)
+- [Connection](../packages/cli/src/services/connection.ts)
 - [Infra commands](../packages/cli/src/infra/command.ts)
 - [Infra folder adapter](../packages/cli/src/infra/folder.ts)
 
@@ -87,6 +87,26 @@ Generate ordinary API commands from the current SDK-exposed contracts:
 
 Do not infer plurals or create a handwritten endpoint registry. Preserve stable operation IDs independently of friendly command names. Generation must reject command-path collisions and ambiguous overrides.
 
+#### Command grammar
+
+Follow the pattern of large platform CLIs (az, gcloud, gh, AWS): `ren2 <noun> [<sub-noun>] <verb> [<resource>] [flags]`. Commands are generated from the API, and a reviewed table in the CLI's generation script fixes their names, as gcloud's declarative commands and az's aaz do.
+
+| Rule        | Convention                                                                                                                                                                                                                                                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nouns       | Singular primitive name: `ren2 space`, `ren2 task`. The definition's declared `plural` is an alias (`ren2 spaces list`), accepted but not listed in help, as in gcloud and az; plurals are never inferred. Hyphenated names read as words: `environment template`, not `environment-template`.                                                                |
+| Child nouns | A resource that belongs to another nests under it and takes the parent as its first argument: `ren2 space member list eng`, `ren2 task comment add <task>`.                                                                                                                                                                                                   |
+| Verbs       | One set everywhere: `list`, `get`, `create`, `update`, `archive`, plus each action in kebab case (`transfer-ownership`, `pause`). `archive` stays `archive` because the API archives; a true delete is `delete`.                                                                                                                                              |
+| Membership  | Joining and leaving use `add` and `remove`, as `az ad group member add` does: `ren2 space member add eng --email ada@example.com`.                                                                                                                                                                                                                            |
+| Resources   | The resource is positional. Where the resource has a `get`, a slug works anywhere its ID does (`eng` or `spc_01…`); the CLI resolves it first, skipping the request when the value is already an ID. A reference the CLI can resolve drops its `Id` suffix (`spaceId` is `--space`); one it cannot keeps it (`--owner-id`), so the flag says an ID is needed. |
+| Flags       | Kebab-case field names (`--page-size`). Scalars, literal choices, booleans and lists of scalars are flags; a list takes comma-separated values or repeats. A flag is optional when the wire may omit it. Everything else comes through `--input` (section 5.1).                                                                                               |
+| Pages       | `--page` and `--page-size`; pretty output says how to get the next page. Nothing paginates silently.                                                                                                                                                                                                                                                          |
+| Help        | The table writes each command's description; a flag takes the first sentence of its schema description. Root help lists the hand-written workflows, then the generated nouns under `Resources:`.                                                                                                                                                              |
+| Output      | A list renders as a table of its identifying columns, anything else as YAML, in pretty format; JSON is the encoded API value (section 5.2). An operation with no content prints nothing in JSON and `Done.` in pretty format.                                                                                                                                 |
+
+Workflows stay hand-written: `login`, `infra`, `health`, `whoami` and chat. The generation script lists every SDK operation it does not generate, with the command that covers it or the reason, so a new endpoint fails generation until it is placed. Generation also fails on a repeated command path, a command that is also a group, a group without a description, two inputs with one name, or a name that collides with a hand-written command.
+
+The generator is `EmitCli` in `@ren/httpapi-codegen`; the table and the coverage check are `packages/cli/script/generate.ts`; the runtime that decodes flags with the endpoint's own schemas, resolves names, calls the SDK and renders the result is `packages/cli/src/operation.ts`.
+
 Handwritten commands own workflows such as login, infra reconciliation, file uploads and streaming runs. A custom handler can explicitly replace a generated action without registering two commands at the same path. Discovery describes the effective command, including its custom input behavior.
 
 Reusable generation mechanics belong in `@ren/httpapi-codegen`, which stays independent of Ren packages. Ren's generation scripts supply contracts and selection policy. Generated files follow the existing `bun run generate` workflow and are never edited by hand.
@@ -137,7 +157,7 @@ Project infrastructure declarations do not contain CLI login credentials.
 
 ### 5.1 Structured input
 
-Generated commands expose path arguments, query flags and suitable scalar body flags. Nested bodies support `--body` with a JSON literal, `@file`, or `@-` for stdin. Scalar body flags override the corresponding fields in the supplied body, matching ren-v1's convention.
+Generated commands expose path arguments, query flags and suitable scalar body flags. Nested bodies support `--input` with a JSON literal, `@file`, or `@-` for stdin, like AWS's `--cli-input-json`; it is not `--body` because payloads have fields named `body`. Scalar flags override the corresponding fields in the supplied input.
 
 Validate input at the boundary using the current contracts. Preserve meaningful differences between omitted fields, explicit nulls and empty values. Unsupported shapes need an explicit input strategy rather than guessed scalar flags. File and binary uploads use purpose-built handlers where a JSON body is insufficient.
 
@@ -211,25 +231,28 @@ Session streaming uses the SDK's Chat API surface and its access contract. It do
 
 ## 7. Package layout and distribution
 
-Proposed layout:
+Layout:
 
 ```text
-packages/cli/src/
-  index.ts                 # runtime entrypoint
-  commands.ts              # root command composition
-  generated/               # generated command definitions/adapters
-  commands/
-    auth/
-    infra/
-    api.ts
-    health.ts
-  services/
-    connection.ts          # resolved context and SDK client
-    config.ts              # CLI profiles and preferences
-    output.ts              # results and diagnostics
-  infra/
-    folder.ts              # filesystem <-> Infra schema
+packages/cli/
+  script/generate.ts       # command table and coverage check for generated commands
+  src/
+    index.ts               # runtime entrypoint
+    app.ts                 # binds definitions to lazy handlers
+    commands.ts            # hand-written command definitions
+    runtime.ts             # invocation, help, error envelope and exit codes
+    operation.ts           # runtime for generated commands
+    generated/             # generated definitions (commands.ts) and adapters (operations.ts)
+    commands/              # hand-written handlers: auth, health
+    infra/                 # infra handlers and the folder <-> Infra schema adapter
+    services/
+      connection.ts        # resolved endpoint, credential and SDK client
+      credentials.ts       # stored credentials per server
+      oauth.ts             # OAuth discovery and token requests
+      output.ts            # format, results, diagnostics and confirmation
 ```
+
+Proposed additions: `commands/api.ts` for `ren2 api` and `services/config.ts` for profiles.
 
 ### 7.1 Primary installation
 
@@ -297,6 +320,5 @@ Resolve before the affected feature ships:
 3. Named profiles and their config format.
 4. Connection and organization flags.
 5. The streaming event format (section 5.2).
-6. Generated command naming for nested resources and exceptions.
-7. Additional platforms and any future package-manager installation routes. The initial binary/installer release contract is defined in section 7; `REN2_HOST_URL` remains configurable for migration.
-8. Per-capability migration decisions for legacy features without a current equivalent.
+6. Additional platforms and any future package-manager installation routes. The initial binary/installer release contract is defined in section 7; `REN2_HOST_URL` remains configurable for migration.
+7. Per-capability migration decisions for legacy features without a current equivalent.

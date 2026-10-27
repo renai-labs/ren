@@ -14,7 +14,7 @@ The `ren2` command-line interface.
 
 ## Dependencies
 
-`@renai-labs/sdk`.
+`@renai-labs/sdk`. The generation script also uses `@ren/protocol` and `@ren/httpapi-codegen`, at build time only.
 
 ## Commands
 
@@ -90,5 +90,23 @@ The npm package is private until its publication name and install format are dec
 - `src/services/credentials.ts` stores tokens per server; `src/services/oauth.ts` discovers the server's OAuth endpoints and makes the token requests.
 - `src/services/output.ts` owns the output format, results encoded with their schema, diagnostics, `Output.Failure` and terminal confirmation.
 - `src/infra/folder.ts` maps local files to and from the shared Infra schema.
+- `src/generated/` holds the generated resource commands. Never edit it.
+- `src/operation.ts` runs a generated command: it resolves slugs to IDs, decodes flags and `--input` with the endpoint's own schemas, calls the SDK and renders the result.
 
-Results and requested help go to stdout; usage failures, diagnostics and confirmation prompts go to stderr. Failures exit with status 1 and interruption with status 130. Infra retains its current human-readable output; structured output and generated API coverage are later phases of the [CLI design](../../specs/cli.md).
+## Resource commands
+
+Every SDK operation is a command, named the way large platform CLIs name theirs: `ren2 <noun> [<sub-noun>] <verb> [<resource>] [flags]`.
+
+```sh
+ren2 space list
+ren2 space create --name Docs --slug docs
+ren2 space update docs --description "Writes the docs"
+ren2 space member add docs --email ada@example.com
+ren2 task create --space docs --title "Fix the build" --labels ci,urgent
+ren2 task comment add <task> --body "On it"
+ren2 schedule run nightly
+```
+
+A slug works wherever an ID does. Plural nouns are accepted (`ren2 spaces list`). Nested fields come through `--input` (JSON, `@file` or `@-`), and flags override it.
+
+The names come from the table in `script/generate.ts`. After a change to `@ren/protocol` or the table, run `bun run generate` from the repo root. Generation fails while an SDK operation is neither in the table nor listed with the command that covers it, so a new endpoint is never silently missing.

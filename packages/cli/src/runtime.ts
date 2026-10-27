@@ -1,11 +1,13 @@
 export * as Runtime from "./runtime.js"
 
 import { ApiError } from "@renai-labs/sdk/effect"
-import { Cause, Console, Data, Effect, Exit, Predicate, Runtime } from "effect"
-import { CliConfig, CliError, Command, GlobalFlag } from "effect/cli"
+import { Array, Cause, Console, Data, Effect, Exit, Predicate, Runtime } from "effect"
+import { CliConfig, CliError, CliOutput, Command, GlobalFlag } from "effect/cli"
 import { HttpClientError } from "effect/http"
 import { format } from "node:util"
 import { Output } from "./services/output.js"
+
+const formatter = CliOutput.defaultFormatter()
 
 class Exited extends Data.Error<{ readonly [Runtime.errorExitCode]: number }> {}
 
@@ -62,6 +64,24 @@ export const run = <Name extends string, Input, ContextInput, E, R>(
         },
       }),
       Effect.provide(CliConfig.layer({ builtIns: [GlobalFlag.Help, GlobalFlag.Version] })),
+      Effect.provide(
+        CliOutput.layer({
+          formatHelpDoc: (doc) =>
+            formatter.formatHelpDoc({
+              ...doc,
+              ...(doc.subcommands && {
+                subcommands: doc.subcommands.map((group) => ({
+                  ...group,
+                  commands: Array.map(group.commands, (command) => ({ ...command, alias: undefined })),
+                })),
+              }),
+            }),
+          formatCliError: formatter.formatCliError,
+          formatError: formatter.formatError,
+          formatVersion: formatter.formatVersion,
+          formatErrors: formatter.formatErrors,
+        }),
+      ),
       Effect.scoped,
       Effect.exit,
     )
