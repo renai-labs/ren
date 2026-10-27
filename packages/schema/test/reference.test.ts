@@ -29,7 +29,11 @@ describe("Reference.Branch", () => {
 })
 
 describe("Reference.Repository", () => {
-  test.each(["https://github.com/acme/docs", "https://git.acme.dev/acme/docs.git"])("accepts %s", (repository) => {
+  test.each([
+    "https://github.com/acme/docs",
+    "https://git.acme.dev/acme/docs.git",
+    "https://gitlab.com/acme/group/docs",
+  ])("accepts %s", (repository) => {
     expect(Exit.isSuccess(Schema.decodeUnknownExit(Reference.Repository)(repository))).toBe(true)
   })
 
@@ -38,7 +42,6 @@ describe("Reference.Repository", () => {
     "file:///home/ada/docs",
     "github.com/acme/docs",
     "https://github.com/acme",
-    "https://github.com/acme/docs/tree/main",
     "https://github.com/acme/docs/",
   ])("rejects %s", (repository) => {
     expect(Exit.isSuccess(Schema.decodeUnknownExit(Reference.Repository)(repository))).toBe(false)
