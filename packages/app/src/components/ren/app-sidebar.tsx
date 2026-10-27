@@ -9,6 +9,7 @@ import {
   IconCalendar,
   IconChecklist,
   IconChevronUp,
+  IconClock,
   IconCube,
   IconEdit,
   IconHelpCircle,
@@ -69,6 +70,7 @@ import { openSearch } from "@/stores/ui"
 const pages = [
   { to: "/spaces", label: "Spaces", icon: IconCube },
   { to: "/tasks", label: "Tasks", icon: IconChecklist },
+  { to: "/schedules", label: "Scheduled", icon: IconClock },
   { to: "/marketplace", label: "Marketplace", icon: IconLayoutGrid },
 ] as const
 

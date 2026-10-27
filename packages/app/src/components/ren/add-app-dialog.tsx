@@ -32,7 +32,7 @@ export function AddAppDialog(props: {
         <IconPlus />
         Add app
       </DialogTrigger>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>Add an app to {props.space.name}</DialogTitle>
           <DialogDescription>Every chat in the space can use it once its account is connected.</DialogDescription>
@@ -48,7 +48,7 @@ export function AddAppDialog(props: {
             onChange={(event) => setQuery(event.target.value)}
           />
         </InputGroup>
-        <div className="-mx-2 h-80 overflow-y-auto overscroll-contain">
+        <div className="-mx-2 h-[min(28rem,60vh)] overflow-y-auto overscroll-contain">
           {rows.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
               {catalog.loading

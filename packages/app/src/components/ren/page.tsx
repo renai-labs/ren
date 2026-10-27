@@ -222,11 +222,11 @@ export function SkeletonRows(props: { count?: number | undefined }) {
   )
 }
 
-export function SkeletonCards(props: { count?: number | undefined }) {
+export function SkeletonCards(props: { count?: number | undefined; columns?: 2 | 3 | undefined }) {
   return (
-    <div className="mt-4 grid gap-4 sm:grid-cols-2" aria-hidden>
-      {Array.from({ length: props.count ?? 4 }, (_, index) => (
-        <Skeleton key={index} className="h-[202px] w-full rounded-xl" />
+    <div className={cn("mt-4 grid gap-4 sm:grid-cols-2", props.columns === 3 && "lg:grid-cols-3")} aria-hidden>
+      {Array.from({ length: props.count ?? (props.columns === 3 ? 6 : 4) }, (_, index) => (
+        <Skeleton key={index} className={cn("w-full rounded-xl", props.columns === 3 ? "h-[215px]" : "h-[202px]")} />
       ))}
     </div>
   )
@@ -237,11 +237,12 @@ export function PageSkeleton(props: {
   description?: string | undefined
   width?: "column" | "full" | undefined
   body?: "rows" | "cards" | undefined
+  columns?: 2 | 3 | undefined
 }) {
   return (
     <Page title={props.title ?? ""} description={props.description} width={props.width}>
       <output className="sr-only">Loading</output>
-      {props.body === "cards" ? <SkeletonCards /> : <SkeletonRows />}
+      {props.body === "cards" ? <SkeletonCards columns={props.columns} /> : <SkeletonRows />}
     </Page>
   )
 }

@@ -48,7 +48,7 @@ import { cn } from "@/lib/utils"
 import { useSpacesPage } from "@/routes/spaces/use-spaces-page"
 import { formText } from "@/lib/format"
 
-const isPrivate = (space: SpaceInfo) => space.memberCount === 1 && space.membershipId !== null
+const isPrivate = (space: SpaceInfo) => space.kind === "private"
 
 export function SpacesPage() {
   const page = useSpacesPage()
@@ -155,7 +155,11 @@ function SpaceCard(props: { space: SpaceInfo }) {
     <Card className="relative gap-4 border shadow-soft ring-0 transition-colors [--card-spacing:--spacing(6)] hover:bg-muted active:scale-99">
       <CardHeader>
         <div className="mb-3 flex size-12 items-center justify-center rounded-lg bg-secondary">
-          <IconCube className="size-8 text-muted-foreground" strokeWidth={1.75} />
+          {personal ? (
+            <IconLock className="size-8 text-muted-foreground" strokeWidth={1.75} />
+          ) : (
+            <IconCube className="size-8 text-muted-foreground" strokeWidth={1.75} />
+          )}
         </div>
         <CardTitle className="text-sm/5">
           <Link to="/spaces/$spaceId" params={{ spaceId: space.id }} className="after:absolute after:inset-0">

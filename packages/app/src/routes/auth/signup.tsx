@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
-import { AuthLayout, BackButton, FormError, GoogleButton, PasswordInput } from "@/components/ren/auth"
+import { AuthLayout, BackButton, FormError, GoogleButton, PasswordInput, SocialButton } from "@/components/ren/auth"
 import { useSignupPage } from "@/routes/auth/use-signup-page"
 
 export function SignupPage() {
@@ -68,6 +68,8 @@ export function SignupPage() {
       }
     >
       <GoogleButton destination={page.destination} />
+      <SocialButton provider="github" destination={page.destination} />
+      <SocialButton provider="slack" destination={page.destination} />
       <form
         onSubmit={(event) => {
           event.preventDefault()

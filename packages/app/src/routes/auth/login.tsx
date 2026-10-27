@@ -4,7 +4,15 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
-import { AuthLayout, BackButton, CodeVerification, FormError, GoogleButton, PasswordInput } from "@/components/ren/auth"
+import {
+  AuthLayout,
+  BackButton,
+  CodeVerification,
+  FormError,
+  GoogleButton,
+  PasswordInput,
+  SocialButton,
+} from "@/components/ren/auth"
 import { useLoginPage } from "@/routes/auth/use-login-page"
 
 export function LoginPage() {
@@ -91,6 +99,8 @@ export function LoginPage() {
       }
     >
       <GoogleButton destination={page.destination} />
+      <SocialButton provider="github" destination={page.destination} />
+      <SocialButton provider="slack" destination={page.destination} />
       <form
         onSubmit={(event) => {
           event.preventDefault()

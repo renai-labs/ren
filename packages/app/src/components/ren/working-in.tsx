@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { MenuSearch } from "@/components/ren/menu-search"
 
-const isPersonal = (space: SpaceInfo) => space.memberCount === 1
+const isPersonal = (space: SpaceInfo) => space.kind === "private"
 
 export function WorkingIn(props: {
   spaces: ReadonlyArray<SpaceInfo>

@@ -1,12 +1,21 @@
 import { useEffect, useId, useState, type ComponentProps, type ReactNode } from "react"
-import { IconAlertCircle, IconChevronLeft, IconEye, IconEyeOff } from "@tabler/icons-react"
+import { useQuery } from "@tanstack/react-query"
+import { Channel } from "@ren/schema/channel"
+import {
+  IconAlertCircle,
+  IconBrandGithub,
+  IconBrandSlack,
+  IconChevronLeft,
+  IconEye,
+  IconEyeOff,
+} from "@tabler/icons-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp"
 import { Spinner } from "@/components/ui/spinner"
-import { appUrl } from "@/lib/api"
+import { api, appUrl } from "@/lib/api"
 import { auth, destinationHref, type AuthFailure, type Destination } from "@/lib/auth"
 
 export function AuthLayout(props: {
@@ -134,6 +143,35 @@ export function GoogleButton(props: { destination: Destination }) {
         ))}
       </svg>
       Continue with Google
+    </Button>
+  )
+}
+
+const socialIcons = { github: IconBrandGithub, slack: IconBrandSlack } as const
+
+export function SocialButton(props: { provider: "github" | "slack"; destination: Destination }) {
+  const offered = useQuery({
+    ...api["sign-in"]["sign-in-provider"].list.queryOptions(),
+    select: (providers) => providers.items.includes(props.provider),
+  })
+  if (!offered.data) return null
+  const destination =
+    props.provider === "slack"
+      ? { ...props.destination, redirect: props.destination.redirect ?? "/settings/channels/slack?connect=true" }
+      : props.destination
+  const afterAuth = `${appUrl}${destinationHref({ ...destination, join: true })}`
+  const Icon = socialIcons[props.provider]
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      className="h-10 w-full"
+      onClick={() =>
+        void auth.signIn.social({ provider: props.provider, callbackURL: afterAuth, newUserCallbackURL: afterAuth })
+      }
+    >
+      <Icon data-icon="inline-start" />
+      Continue with {Channel.titles[props.provider]}
     </Button>
   )
 }

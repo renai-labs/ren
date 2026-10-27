@@ -21,6 +21,7 @@ import { api, pageSize, pickerPageSize, queryClient } from "@/lib/api"
 import { auth, authKeys, authorizationQuery, canAdministerOptions, sessionOptions } from "@/lib/auth"
 import { joinInvitation } from "@/lib/invitation"
 import { currentPage } from "@/lib/pagination"
+import { scheduleListInput, ScheduleSearch } from "@/lib/schedules"
 import { sidebarSessionsOptions } from "@/lib/sessions"
 import { allTasksOptions, taskListInput, TaskSearch } from "@/lib/tasks"
 import { HomePage } from "@/routes/home/home"
@@ -307,6 +308,23 @@ const spaceAppsRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/space/space-apps"), "SpaceAppsTab"),
 })
 
+const spaceSchedulesRoute = createRoute({
+  getParentRoute: () => spaceRoute,
+  path: "schedules",
+  validateSearch: ScheduleSearch,
+  loaderDeps: ({ search }) => ({ page: search.page, filters: search.filters }),
+  loader: ({ params, deps }) => {
+    void queryClient
+      .query(
+        api.schedule.list.queryOptions(
+          scheduleListInput(deps, { page: currentPage(deps), pageSize, spaceId: params.spaceId }),
+        ),
+      )
+      .catch(ignore)
+  },
+  component: lazyRouteComponent(() => import("@/routes/space/space-schedules"), "SpaceSchedulesTab"),
+})
+
 const tasksRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "tasks",
@@ -331,6 +349,28 @@ const taskRoute = createRoute({
       .catch(ignore)
   },
   component: lazyRouteComponent(() => import("@/routes/task/task"), "TaskPage"),
+})
+
+const schedulesRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "schedules",
+  staticData: { title: "Scheduled" },
+  validateSearch: ScheduleSearch,
+  loaderDeps: ({ search }) => ({ page: search.page, filters: search.filters }),
+  loader: ({ deps }) => {
+    void queryClient
+      .query(api.schedule.list.queryOptions(scheduleListInput(deps, { page: currentPage(deps), pageSize })))
+      .catch(ignore)
+  },
+  pendingComponent: () => (
+    <PageSkeleton
+      title="Scheduled"
+      description="Work that starts on a schedule instead of a message."
+      body="cards"
+      columns={3}
+    />
+  ),
+  component: lazyRouteComponent(() => import("@/routes/schedules/schedules"), "SchedulesPage"),
 })
 
 const marketplaceRoute = createRoute({
@@ -436,9 +476,11 @@ const routeTree = rootRoute.addChildren([
         spaceCredentialsRoute,
         spaceFactoryRoute,
         spaceAppsRoute,
+        spaceSchedulesRoute,
       ]),
       tasksRoute,
       taskRoute,
+      schedulesRoute,
       marketplaceRoute,
     ]),
     settingsRoute.addChildren([

@@ -12,6 +12,7 @@ import {
   type ChatAtoms,
 } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
+import { Link } from "@tanstack/react-router"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { Shell } from "@ren/schema/shell"
@@ -74,6 +75,7 @@ import { EmptyState } from "@/components/ren/empty-state"
 import { ImageLightbox } from "@/components/ren/image-lightbox"
 import { withAppMentions } from "@/components/ren/app-mention"
 import { useCatalog } from "@/hooks/use-catalog"
+import { formatRun, localTimeZone } from "@/lib/schedules"
 
 interface Person {
   readonly name: string
@@ -360,6 +362,20 @@ function UserMessage(props: {
       </MessageAvatar>
       <MessageContent className={props.editing ? "w-full" : undefined}>
         <MessageHeader className="px-0">{props.person.name}</MessageHeader>
+        {props.message.schedule ? (
+          <Marker className="justify-end text-xs">
+            <MarkerIcon>
+              <IconClock />
+            </MarkerIcon>
+            <MarkerContent>
+              Scheduled ·{" "}
+              <Link to="/schedules" search={{ schedule: props.message.schedule.scheduleId }}>
+                {props.message.schedule.name}
+              </Link>{" "}
+              · {formatRun(props.message.schedule.scheduledAt, localTimeZone())}
+            </MarkerContent>
+          </Marker>
+        ) : null}
         {props.editing ? (
           <EditPrompt text={props.message.text} onCancel={props.onCancel} onSave={props.onSave} />
         ) : (

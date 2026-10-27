@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query"
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router"
-import { IconArrowLeft, IconCube } from "@tabler/icons-react"
+import { IconArrowLeft, IconCube, IconLock } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Tabs } from "@/components/ui/tabs"
@@ -9,7 +9,7 @@ import { RowMenu } from "@/components/ren/row-menu"
 import { api, errorMessage } from "@/lib/api"
 import { useSpace } from "@/routes/space/use-space"
 
-const tabs = ["overview", "members", "apps", "credentials", "factory"] as const
+const tabs = ["overview", "members", "apps", "credentials", "schedules", "factory"] as const
 
 type Tab = (typeof tabs)[number]
 
@@ -20,6 +20,7 @@ const tabPaths = {
   members: "/spaces/$spaceId/members",
   apps: "/spaces/$spaceId/apps",
   credentials: "/spaces/$spaceId/credentials",
+  schedules: "/spaces/$spaceId/schedules",
   factory: "/spaces/$spaceId/factory",
 } as const
 
@@ -60,9 +61,13 @@ const back = (
   </Button>
 )
 
-const media = (
+const media = (kind: string) => (
   <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-secondary">
-    <IconCube className="size-8 text-muted-foreground" />
+    {kind === "private" ? (
+      <IconLock className="size-8 text-muted-foreground" />
+    ) : (
+      <IconCube className="size-8 text-muted-foreground" />
+    )}
   </span>
 )
 
@@ -74,7 +79,7 @@ export function SpaceLayout() {
       title={space.name}
       description={space.description ?? undefined}
       back={back}
-      media={media}
+      media={media(space.kind)}
       menu={
         space.canArchive ? (
           <RowMenu
@@ -102,6 +107,7 @@ export function SpaceLayout() {
           </PageTabsTrigger>
           <PageTabsTrigger value="apps">Apps</PageTabsTrigger>
           <PageTabsTrigger value="credentials">Keys</PageTabsTrigger>
+          <PageTabsTrigger value="schedules">Scheduled</PageTabsTrigger>
           <PageTabsTrigger value="factory">Factory</PageTabsTrigger>
         </PageTabsList>
         <div className="pt-4">

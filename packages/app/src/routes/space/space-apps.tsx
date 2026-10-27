@@ -29,7 +29,7 @@ function useSpaceApps() {
   const byApp = Map.groupBy(reached, (each) => each.appId)
   const app = opened ? catalog.appOf(opened) : undefined
   const here: ReadonlyArray<AppProfileInfo> = app ? (byApp.get(app.id) ?? []) : []
-  const from = { spaceId: space.id, name: space.name, members: space.memberCount }
+  const from = { spaceId: space.id, name: space.name, members: space.memberCount, private: space.kind === "private" }
   const change = (input: { id: string; add?: string[]; remove?: string[] }, title: string) =>
     access.mutateAsync(input, { onError: (error) => toast.error(title, { description: errorMessage(error) }) })
   return {

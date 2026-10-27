@@ -47,7 +47,7 @@ type AppProfile = AppProfileInfo
 export type ProfileTarget = {
   appId: string
   profileId?: string | undefined
-  from?: { spaceId: string; name: string; members: number } | undefined
+  from?: { spaceId: string; name: string; members: number; private?: boolean } | undefined
 }
 
 export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
@@ -90,7 +90,7 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
 
 function CreateProfile(props: {
   app: App
-  from?: { spaceId: string; name: string; members: number } | undefined
+  from?: { spaceId: string; name: string; members: number; private?: boolean } | undefined
   onCreated: (profile: AppProfile) => void
 }) {
   const offered = kinds(props.from)
@@ -102,6 +102,7 @@ function CreateProfile(props: {
   const [kind, setKind] = useState<AppProfile["kind"]>(offered[0])
   const [spaces, setSpaces] = useState<ReadonlySet<string>>(() => new Set(props.from ? [props.from.spaceId] : []))
   const [noSpace, setNoSpace] = useState(false)
+  const [editing, setEditing] = useState(props.from?.private !== true)
   const submit = (event: { preventDefault: () => void }) => {
     event.preventDefault()
     if (kind === "shared" && spaces.size === 0) return setNoSpace(true)
@@ -119,12 +120,14 @@ function CreateProfile(props: {
   return (
     <form onSubmit={submit} className="contents">
       <DialogHeader>
-        <DialogTitle>New profile</DialogTitle>
+        <DialogTitle>{editing ? "New profile" : `Connect ${props.app.name}`}</DialogTitle>
         <DialogDescription>
-          A profile is one set of accounts for {props.app.name}. The agent tells profiles apart by their name.
+          {editing
+            ? `A profile is one set of accounts for ${props.app.name}. The agent tells profiles apart by their name.`
+            : `${props.from?.name ?? "This space"} is private, so only you will use these accounts.`}
         </DialogDescription>
       </DialogHeader>
-      <FieldGroup className="gap-5">
+      <FieldGroup className={editing ? "gap-5" : "hidden"}>
         <Field>
           <FieldLabel htmlFor="profile-name">Name</FieldLabel>
           <Input
@@ -198,13 +201,18 @@ function CreateProfile(props: {
             {noSpace && spaces.size === 0 ? <FieldError>Pick at least one space.</FieldError> : null}
           </FieldSet>
         ) : null}
-        {create.error ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
       </FieldGroup>
+      {create.error ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
       <DialogFooter>
+        {editing ? null : (
+          <Button type="button" variant="ghost" className="sm:mr-auto" onClick={() => setEditing(true)}>
+            Edit details
+          </Button>
+        )}
         <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
         <Button type="submit" disabled={create.isPending}>
           {create.isPending ? <Spinner data-icon="inline-start" /> : null}
-          Create profile
+          {editing ? "Create profile" : "Continue"}
         </Button>
       </DialogFooter>
     </form>

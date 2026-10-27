@@ -21,6 +21,7 @@
     "@ren/chat": "workspace:*",
     "@ren/client": "workspace:*",
     "@ren/schema": "workspace:*",
+    "@ren/util": "workspace:*",
     "@shadcn/react": "catalog:",
     "@streamdown/code": "catalog:",
     "@tabler/icons-react": "catalog:",

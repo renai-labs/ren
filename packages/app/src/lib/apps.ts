@@ -1,4 +1,5 @@
 import type { AppInfo, AppProfileInfo, AppRegistryInfo, CredentialInfo } from "@ren/client"
+import { Slug } from "@ren/util/slug"
 
 type AppProfile = AppProfileInfo
 type Credential = CredentialInfo
@@ -90,13 +91,7 @@ export const lastSpaceWarning = (profile: AppProfile) =>
 export const kinds = (from?: { members: number }) =>
   from && from.members > 1 ? (["shared"] as const) : (["shared", "private"] as const)
 
-export const slugOf = (name: string) =>
-  name
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, "-")
-    .replaceAll(/^-+|-+$/g, "")
-    .slice(0, 32)
-    .replace(/-+$/, "")
+export const slugOf = (name: string) => Slug.of(name, 32)
 
 export const signsIn = (item: AppProfile["items"][number]) => item.kind === "oauth" || item.kind === "provider"
 
@@ -138,7 +133,7 @@ export type CatalogApp = {
   readonly source: "registry" | "custom"
   readonly ownerSpaceId: string | null
   readonly mcps: AppInfo["mcps"]
-  readonly skills: AppInfo["skills"]
+  readonly skills: AppInfo["skills"] | AppRegistryInfo["skills"]
   readonly listing: { readonly body: string | null; readonly examplePrompts: ReadonlyArray<string> } | null
 }
 
