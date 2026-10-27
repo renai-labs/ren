@@ -65,6 +65,12 @@ variable "rate_limit" {
   description = "Requests from one address in 5 minutes before the load balancer's firewall blocks it."
 }
 
+variable "rate_limit_exempt_hosts" {
+  type        = list(string)
+  default     = []
+  description = "Hosts on the load balancer that brains call through the egress. The rate limit skips requests from the egress's address to them."
+}
+
 variable "blocked_ips" {
   type        = list(string)
   default     = []
