@@ -56,6 +56,7 @@ export const allTasksOptions = (input: TaskFilterInput) =>
     queryFn: async (context) => {
       const items: TaskInfo[] = []
       for (let page = 1; ; page++) {
+        // oxlint-disable-next-line no-await-in-loop -- pages fetched in order until total reached
         const result = await client.task.list({ ...input, page, pageSize: pickerPageSize }, { signal: context.signal })
         items.push(...result.items)
         if (page * result.pageSize >= result.total || result.items.length === 0) return { items, total: result.total }

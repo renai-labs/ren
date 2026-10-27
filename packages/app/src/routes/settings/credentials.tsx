@@ -123,17 +123,16 @@ function OrgApps() {
   if (catalog.loading) return <SkeletonRows count={4} />
   return (
     <>
-      {
-        <AppsTable
-          rows={used.map((each) => ({
-            app: each,
-            profiles: catalog.profilesOf(each.id),
-            usedIn: usedIn(catalog.profilesOf(each.id)) }))}
-          empty="No apps. Add one to a space from the Marketplace."
-          onOpen={setOpened}
-          onNew={(appId) => setProfile({ appId })}
-        />
-      }
+      <AppsTable
+        rows={used.map((each) => ({
+          app: each,
+          profiles: catalog.profilesOf(each.id),
+          usedIn: usedIn(catalog.profilesOf(each.id)),
+        }))}
+        empty="No apps. Add one to a space from the Marketplace."
+        onOpen={setOpened}
+        onNew={(appId) => setProfile({ appId })}
+      />
       <AppSheet app={app} onClose={() => setOpened(undefined)}>
         {app ? (
           <AccountList

@@ -8,5 +8,5 @@ export function useOrganization() {
 }
 
 export function useCanAdminister() {
-  return useSuspenseQuery(canAdministerOptions()).data === true
+  return useSuspenseQuery(canAdministerOptions()).data
 }

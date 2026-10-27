@@ -9,7 +9,6 @@ import { Page, Row, Rows, Section } from "@/components/ren/page"
 import { PersonAvatar } from "@/components/ren/person-avatar"
 import { useMe } from "@/hooks/use-me"
 import { useAutosave } from "@/hooks/use-autosave"
-import { useCanAdminister } from "@/hooks/use-organization"
 import { api, errorMessage } from "@/lib/api"
 import { auth, organizationOptions } from "@/lib/auth"
 
@@ -18,23 +17,22 @@ const modelsProbe = Session.ID.create()
 function useGeneralPage() {
   const me = useMe()
   const queryClient = useQueryClient()
-  const canAdminister = useCanAdminister()
   const models = useSuspenseQuery(api.chat.models.queryOptions({ id: modelsProbe })).data
   const settings = useSuspenseQuery(api["organization-settings"].get.queryOptions({ idOrSlug: me.organization.id }))
   const update = useMutation(api["organization-settings"].update.mutationOptions())
   const current = settings.data.settings
   const [instructions, setInstructions] = useState<string>()
-  const draft = instructions ?? current?.instructions ?? ""
+  const draft = instructions ?? current.instructions ?? ""
   const saveSettings = (patch: { instructions?: string; model?: { endpointId: string; modelId: string; variant?: string } }) =>
     update.mutateAsync(
       { id: me.organization.id, settings: { ...current, ...patch } },
       { onError: (error) => toast.error("Couldn’t save the settings", { description: errorMessage(error) }) },
     )
-  useAutosave(instructions, current?.instructions ?? "", (value) => saveSettings({ instructions: value }))
-  const model = current?.model
+  useAutosave(instructions, current.instructions ?? "", (value) => saveSettings({ instructions: value }))
+  const model = current.model
   return {
     organization: me.organization,
-    canUpdate: settings.data.canUpdate ?? canAdminister,
+    canUpdate: settings.data.canUpdate,
     models,
     model: model ? { id: model.modelId, providerID: model.endpointId, ...(model.variant && { variant: model.variant }) } : undefined,
     instructions: draft,

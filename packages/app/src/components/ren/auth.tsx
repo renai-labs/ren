@@ -21,9 +21,9 @@ export function AuthLayout(props: {
       <div className="flex w-full flex-1 flex-col items-center justify-center py-12">
         <div className="flex w-full max-w-80 flex-col gap-8">
           <div className="flex flex-col">
-            <h1 className="text-xl leading-7 font-medium tracking-[-0.5px]">{props.title ?? "Welcome to Ren"}</h1>
+            <h1 className="text-xl/7 font-medium tracking-[-0.5px]">{props.title ?? "Welcome to Ren"}</h1>
             {props.description === null || props.description === "" ? null : (
-              <p className="text-xl leading-7 tracking-[-0.5px] text-muted-foreground">
+              <p className="text-xl/7 tracking-[-0.5px] text-muted-foreground">
                 {props.description ?? "Self-improving software"}
               </p>
             )}
@@ -45,7 +45,7 @@ export function AuthLayout(props: {
   )
 }
 
-export function LegalFooter(props: { purpose?: "browse" | "signup" | undefined }) {
+function LegalFooter(props: { purpose?: "browse" | "signup" | undefined }) {
   return (
     <FieldDescription className="text-center text-xs [&>a]:no-underline [&>a:hover]:text-foreground">
       {props.purpose === "signup" ? "By creating an account, you agree to the " : null}
