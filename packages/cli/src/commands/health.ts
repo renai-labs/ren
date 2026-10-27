@@ -7,6 +7,6 @@ import { Output } from "../services/output.js"
 export const run = Effect.gen(function* () {
   const connection = yield* Connection.Service
   const output = yield* Output.Service
-  const client = yield* connection.client
+  const client = yield* connection.connect()
   yield* output.result(JSON.stringify(yield* client.health.get()))
 })

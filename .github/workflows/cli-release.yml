@@ -58,7 +58,10 @@ jobs:
 
       - name: Build
         working-directory: packages/cli
+        env:
+          REN2_API_URL: ${{ vars.REN_API_URL }}
         run: |
+          test -n "$REN2_API_URL" || { echo 'Set REN_API_URL in the v2-prod environment' >&2; exit 1; }
           bun run build --version "$RELEASE_VERSION" --target "$RELEASE_TARGET"
           test "$("dist/releases/$RELEASE_VERSION/ren2-$RELEASE_TARGET" --version)" = "ren2 v$RELEASE_VERSION"
 

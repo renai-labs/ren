@@ -119,4 +119,8 @@ else
   printf 'Add %s to PATH.\n' "$directory"
 fi
 printf 'Installed %s at %s/ren2\n' "$installed" "$directory"
-if [ "$init" = true ]; then printf 'Next: ren2 --help\n'; fi
+if [ "$init" = true ] && [ -t 1 ]; then
+  "$directory/ren2" login || printf 'Run ren2 login to sign in.\n'
+elif [ "$init" = true ]; then
+  printf 'Next: ren2 login\n'
+fi

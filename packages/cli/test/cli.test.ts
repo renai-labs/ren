@@ -68,6 +68,18 @@ describe("ren2", () => {
     expect(result).toEqual({ code: 1, stdout: "", stderr: "Invalid REN_URL: not-a-url\n" })
   })
 
+  test("uses stored credentials only for the server that issued them", async () => {
+    const config = await folder({
+      "ren2/credentials.json": JSON.stringify({
+        "https://ren.example": { accessToken: "access", refreshToken: "refresh", expiresAt: Date.now() + 3_600_000 },
+      }),
+    })
+
+    const result = await ren(["whoami"], { env: { XDG_CONFIG_HOME: config, REN_URL: "http://127.0.0.1:9" } })
+
+    expect(result).toEqual({ code: 1, stdout: "", stderr: "Not logged in to http://127.0.0.1:9. Run ren2 login.\n" })
+  })
+
   test("infra validate reads .ren by default and says when the spec is valid", async () => {
     const root = await folder({
       ".ren/org.yaml": "settings: {}\n",

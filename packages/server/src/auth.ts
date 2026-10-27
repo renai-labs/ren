@@ -44,7 +44,10 @@ export class Service extends Context.Service<Service, Interface>()("@ren/server/
 export const ClientMetadataFetch = Context.Reference<ClientMetadataResourceFetch>(
   "@ren/server/Auth/ClientMetadataFetch",
   {
-    defaultValue: () => fetchClientMetadataResource,
+    defaultValue: () => (input, init) =>
+      new Request(input).url === Auth.cliClient.client_id
+        ? Response.json(Auth.cliClient, { headers: { "cache-control": "max-age=86400" } })
+        : fetchClientMetadataResource(input, init),
   },
 )
 
