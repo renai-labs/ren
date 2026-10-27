@@ -14,6 +14,8 @@ import type { Actor } from "../src/actor.js"
 import { BrainHost } from "../src/brain-host.js"
 import { Brains } from "../src/brains.js"
 import { DurableRunner } from "../src/durable-runner.js"
+import { ScheduleTime } from "../src/schedule/time.js"
+import { ScheduleTrigger } from "../src/schedule-trigger.js"
 import { Schedules } from "../src/schedules.js"
 import { SessionRunner } from "../src/session/runner.js"
 import { testEffect } from "./lib/effect.js"
@@ -98,6 +100,7 @@ const runner = Layer.effect(
 
 const it = testEffect(
   Schedules.layer.pipe(
+    Layer.provideMerge(ScheduleTrigger.layerPostgres),
     Layer.provideMerge(runner),
     Layer.provideMerge(chats),
     Layer.provideMerge(Layer.mergeAll(Access.layer, DurableRunner.layerMemory)),
@@ -544,7 +547,7 @@ describe("Schedules", () => {
       Array.from({ length: count }).reduce<Array<Date>>((dates) => {
         const after = dates.at(-1) ?? new Date(from)
         const row = { cron: "30 2 * * *", time_zone: "Europe/Berlin", until_at: null, run_at: null }
-        return [...dates, Option.getOrThrow(Schedules.nextFire(row, after))]
+        return [...dates, Option.getOrThrow(ScheduleTime.nextFire(row, after))]
       }, [])
     expect(
       [...fires("2026-03-28T12:00:00Z", 1), ...fires("2026-10-24T12:00:00Z", 3)].map((date) => date.toISOString()),

@@ -6,7 +6,7 @@ import type { ScheduleOrigin } from "@ren/schema/schedule-origin"
 import { ScheduleRun } from "@ren/schema/schedule-run"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { and, asc, count, desc, eq, ilike, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm"
+import { and, count, desc, eq, ilike, isNotNull, isNull, lt, or, sql } from "drizzle-orm"
 import { Cause, Clock, Context, Cron, DateTime, Duration, Effect, Layer, Option, Result, Schema } from "effect"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { WorkflowEngine } from "effect/workflow"
@@ -16,6 +16,9 @@ import { AgentQueries } from "./agent/queries.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Primitive } from "./primitive.js"
 import { SchedulePolicy } from "./schedule/policy.js"
+import { ScheduleRuns } from "./schedule/runs.js"
+import { ScheduleTime } from "./schedule/time.js"
+import { ScheduleTrigger } from "./schedule-trigger.js"
 import { SessionRunner } from "./session/runner.js"
 import { SpaceQueries } from "./space/queries.js"
 
@@ -30,8 +33,6 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Sc
 export const tickEvery = Duration.seconds(30)
 
 const retryFor = Duration.hours(1)
-
-const hour = Duration.toMillis(Duration.hours(1))
 
 const schedule = Database.Schema.schedule
 
@@ -56,78 +57,6 @@ const actions = {
   runs: Primitive.action(ScheduleRun.definition, "list"),
 }
 
-export const FireRun = DurableRunner.make("ScheduleFire", {
-  payload: { runId: ScheduleRun.ID },
-  idempotencyKey: (payload) => payload.runId,
-})
-
-const offsetAt = (instant: number, zone: DateTime.TimeZone) =>
-  DateTime.zonedOffset(DateTime.makeZonedUnsafe(instant, { timeZone: zone }))
-
-const wallOf = (instant: number, zone: DateTime.TimeZone) => instant + offsetAt(instant, zone)
-
-// oxlint-disable-next-line ren/no-comments -- S30, as Temporal Schedules: a local time maps to no instant in the spring-forward gap, and to two in the repeated fall-back hour.
-const instantsOf = (wall: number, zone: DateTime.TimeZone) => {
-  const guess = wall - offsetAt(wall, zone)
-  return [...new Set([guess - 3 * hour, guess + 3 * hour].map((probe) => wall - offsetAt(probe, zone)))]
-    .filter((instant) => wallOf(instant, zone) === wall)
-    .toSorted((left, right) => left - right)
-}
-
-// oxlint-disable-next-line ren/no-comments -- The cron reads local time: Effect's Cron runs in UTC over local times, and instantsOf maps each back. A repeated hour's two copies can sort after a later local time, so the search reads 3 hours past the first match.
-const fireAfter = (cron: Cron.Cron, zone: DateTime.TimeZone, after: number) => {
-  const found: Array<number> = []
-  let wall = wallOf(after, zone) - 3 * hour
-  let limit = Number.POSITIVE_INFINITY
-  while (wall <= limit) {
-    wall = Cron.next(cron, wall).getTime()
-    const later = instantsOf(wall, zone).filter((instant) => instant > after)
-    found.push(...later)
-    if (later.length > 0 && limit === Number.POSITIVE_INFINITY) limit = wall + 3 * hour
-  }
-  return Math.min(...found)
-}
-
-const fireAtOrBefore = (cron: Cron.Cron, zone: DateTime.TimeZone, end: number) => {
-  const found: Array<number> = []
-  let wall = wallOf(end, zone) + 3 * hour + 1
-  let limit = Number.NEGATIVE_INFINITY
-  while (wall >= limit) {
-    wall = Cron.prev(cron, wall).getTime()
-    const earlier = instantsOf(wall, zone).filter((instant) => instant <= end)
-    found.push(...earlier)
-    if (earlier.length > 0 && limit === Number.NEGATIVE_INFINITY) limit = wall - 3 * hour
-  }
-  return Math.max(...found)
-}
-
-const cronOf = (row: Pick<Row, "cron" | "time_zone">) =>
-  Option.flatMap(row.time_zone ? DateTime.zoneMakeNamed(row.time_zone) : Option.none(), (zone) =>
-    Option.map(row.cron ? Result.getSuccess(Cron.parse(row.cron, "UTC")) : Option.none(), (cron) => ({ cron, zone })),
-  )
-
-// oxlint-disable-next-line ren/no-comments -- The next fire after a time, or none: a one-time schedule has one fire, a cron none after its end.
-export const nextFire = (row: Pick<Row, "cron" | "time_zone" | "until_at" | "run_at">, after: Date) => {
-  if (row.run_at) return row.run_at.getTime() > after.getTime() ? Option.some(row.run_at) : Option.none()
-  return Option.filter(
-    Option.map(cronOf(row), (parsed) => new Date(fireAfter(parsed.cron, parsed.zone, after.getTime()))),
-    (fire) => !row.until_at || fire.getTime() <= row.until_at.getTime(),
-  )
-}
-
-// oxlint-disable-next-line ren/no-comments -- S2: the latest fire that is due; the earlier missed fires do not run.
-const latestFire = (row: Row, now: Date) => {
-  if (row.run_at) return row.run_at
-  const end = row.until_at && row.until_at.getTime() < now.getTime() ? row.until_at : now
-  return Option.match(cronOf(row), {
-    onNone: () => row.next_run_at ?? now,
-    onSome: (parsed) => {
-      const latest = fireAtOrBefore(parsed.cron, parsed.zone, end.getTime())
-      return row.next_run_at && latest < row.next_run_at.getTime() ? row.next_run_at : new Date(latest)
-    },
-  })
-}
-
 // oxlint-disable-next-line ren/no-comments -- S4: a delay is stored as one time.
 const storedOf = (when: Schedule.WhenInput, at: Date) => {
   if ("in" in when)
@@ -146,7 +75,7 @@ const problemOf = (stored: ReturnType<typeof storedOf>, at: Date) => {
   if (stored.until_at && stored.until_at.getTime() <= at.getTime()) return "Pick an end time in the future."
   if (stored.cron && Result.isFailure(Cron.parse(stored.cron, "UTC")))
     return "Use a cron expression with five fields, for example “0 9 * * *”."
-  if (Option.isNone(nextFire(stored, at))) return "The schedule would end before it runs."
+  if (Option.isNone(ScheduleTime.nextFire(stored, at))) return "The schedule would end before it runs."
   return null
 }
 
@@ -231,6 +160,7 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const runner = yield* SessionRunner.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
+    const trigger = yield* ScheduleTrigger.Service
 
     const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
@@ -307,55 +237,14 @@ export const layer = Layer.effect(
     })
 
     const ensure = (runId: ScheduleRun.ID) =>
-      DurableRunner.ensure(FireRun, { runId }).pipe(
+      DurableRunner.ensure(ScheduleRuns.FireRun, { runId }).pipe(
         Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
         Effect.catchCause((cause) => Effect.logError(`The schedule run ${runId} could not be stored`, cause)),
       )
 
-    const insertRun = (
-      transaction: Pick<Database.Transaction, "insert">,
-      scheduleId: Schedule.ID,
-      scheduledAt: Date,
-      trigger: ScheduleRun.Trigger,
-    ) =>
-      transaction
-        .insert(run)
-        .values({
-          id: ScheduleRun.ID.create(),
-          schedule_id: scheduleId,
-          scheduled_at: scheduledAt,
-          trigger,
-          session_id: Session.ID.create(),
-          message_id: Session.MessageID.create(),
-        })
-        .onConflictDoNothing()
-        .returning({ id: run.id })
-
+    // oxlint-disable-next-line ren/no-comments -- S1: the trigger records due fires; every pending run then gets its durable run, also one that a crash left without one.
     const tick = Effect.gen(function* () {
-      const at = yield* now
-      yield* database.transaction((transaction) =>
-        Effect.gen(function* () {
-          const due = yield* transaction
-            .select()
-            .from(schedule)
-            .where(and(lte(schedule.next_run_at, at), isNull(schedule.archived_at), isNull(schedule.paused_reason)))
-            .orderBy(asc(schedule.next_run_at))
-            .limit(100)
-            .for("update", { skipLocked: true })
-          yield* Effect.forEach(
-            due,
-            (row) =>
-              Effect.gen(function* () {
-                yield* insertRun(transaction, row.id, latestFire(row, at), "timed")
-                yield* transaction
-                  .update(schedule)
-                  .set({ next_run_at: Option.getOrNull(nextFire(row, at)) })
-                  .where(eq(schedule.id, row.id))
-              }),
-            { discard: true },
-          )
-        }),
-      )
+      yield* trigger.claim
       const pending = yield* database.db.select({ id: run.id }).from(run).where(eq(run.status, "pending"))
       yield* Effect.forEach(pending, (row) => ensure(row.id), { discard: true })
     }).pipe(
@@ -380,6 +269,7 @@ export const layer = Layer.effect(
         .update(schedule)
         .set({ paused_reason: reason, next_run_at: null, updated_at: sql`now()` })
         .where(and(eq(schedule.id, scheduleId), isNull(schedule.archived_at)))
+        .pipe(Effect.andThen(trigger.changed(scheduleId)))
 
     // oxlint-disable-next-line ren/no-comments -- S3, S15: a pending earlier run, or the chat of the latest earlier run while it works.
     const previousBusy = Effect.fnUntraced(function* (current: RunRow) {
@@ -431,6 +321,7 @@ export const layer = Layer.effect(
           .update(schedule)
           .set({ archived_at: sql`now()`, next_run_at: null, updated_at: sql`now()` })
           .where(eq(schedule.id, row.id))
+        yield* trigger.changed(row.id)
         return Option.some<ScheduleRun.Reason>("chat_archived")
       }
       if (current.trigger === "timed" && (yield* previousBusy(current)))
@@ -462,7 +353,7 @@ export const layer = Layer.effect(
           { organizationId: row.organization_id, spaceId: row.space_id, createdBy: row.owner_id },
           {
             sessionId: current.session_id,
-            harness: "opencode",
+            harness: Session.defaultHarness,
             title: titleOf(row, current.scheduled_at),
             interactive: false,
             initialMessage: message,
@@ -520,7 +411,7 @@ export const layer = Layer.effect(
       if (Option.isSome(outcome)) yield* finish(runId, outcome.value, yield* now)
     })
 
-    yield* DurableRunner.register(FireRun, (payload) =>
+    yield* DurableRunner.register(ScheduleRuns.FireRun, (payload) =>
       fire(payload.runId).pipe(
         Effect.orDie,
         Effect.catchCause((cause) =>
@@ -584,13 +475,15 @@ export const layer = Layer.effect(
     ) =>
       Effect.fn(name)(function* (actor: Actor.Info, id: Schedule.ID) {
         const at = yield* now
-        return yield* database.transaction((transaction) =>
+        const info = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* find(transaction, actor, id, action)
             const rows = yield* write(transaction, row, at)
             return yield* written(rows)
           }),
         )
+        yield* trigger.changed(id)
+        return info
       })
 
     return Service.of({
@@ -608,7 +501,7 @@ export const layer = Layer.effect(
       }),
       create: Effect.fn("Schedules.create")(function* (actor: Actor.Info, input: Schedule.CreateInput) {
         const at = yield* now
-        return yield* database.transaction((transaction) =>
+        const info = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const space = (yield* transaction
               .select({ id: Database.Schema.space.id, membershipId: SpaceQueries.membership.id })
@@ -646,12 +539,14 @@ export const layer = Layer.effect(
                 message: input.message,
                 ...stored,
                 ...target,
-                next_run_at: Option.getOrNull(nextFire(stored, at)),
+                next_run_at: Option.getOrNull(ScheduleTime.nextFire(stored, at)),
               })
               .returning()
             return yield* written(rows)
           }),
         )
+        yield* trigger.changed(info.id)
+        return info
       }),
       update: Effect.fn("Schedules.update")(function* (
         actor: Actor.Info,
@@ -659,7 +554,7 @@ export const layer = Layer.effect(
         input: Schedule.UpdateInput,
       ) {
         const at = yield* now
-        return yield* database.transaction((transaction) =>
+        const info = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* find(transaction, actor, id, actions.update)
             // ast-grep-ignore: no-nullish-comparison, -- null clears the agent; undefined leaves it
@@ -679,7 +574,8 @@ export const layer = Layer.effect(
                 agent_id: input.agentId,
                 ...stored,
                 ...target,
-                ...(stored && !row.paused_reason && { next_run_at: Option.getOrNull(nextFire(stored, at)) }),
+                ...(stored &&
+                  !row.paused_reason && { next_run_at: Option.getOrNull(ScheduleTime.nextFire(stored, at)) }),
                 ...(isWritten && { owner_id: actor.userId }),
                 updated_at: sql`now()`,
               })
@@ -688,6 +584,8 @@ export const layer = Layer.effect(
             return yield* written(rows)
           }),
         )
+        yield* trigger.changed(id)
+        return info
       }),
       archive: change("Schedules.archive", actions.archive, (transaction, row) =>
         transaction
@@ -715,7 +613,7 @@ export const layer = Layer.effect(
               .update(schedule)
               .set({
                 paused_reason: null,
-                next_run_at: Option.getOrNull(nextFire(row, at)),
+                next_run_at: Option.getOrNull(ScheduleTime.nextFire(row, at)),
                 ...(row.paused_reason === "owner_left" && { owner_id: actor.userId }),
                 updated_at: sql`now()`,
               })
@@ -726,7 +624,7 @@ export const layer = Layer.effect(
       run: (actor, id) =>
         Effect.gen(function* () {
           const info = yield* change("Schedules.run", actions.run, (transaction, row, at) =>
-            insertRun(transaction, row.id, at, "manual").pipe(Effect.as([row])),
+            ScheduleRuns.insert(transaction, row.id, at, "manual").pipe(Effect.as([row])),
           )(actor, id)
           const pending = yield* database.db
             .select({ id: run.id })
