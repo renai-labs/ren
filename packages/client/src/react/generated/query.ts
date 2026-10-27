@@ -22,6 +22,11 @@ import type {
   SpaceSettingsUpdateInput,
   OrganizationSettingsGetInput,
   OrganizationSettingsUpdateInput,
+  MemoryListInput,
+  MemoryReadInput,
+  MemoryWriteInput,
+  MemoryEditInput,
+  MemoryDeleteInput,
   AgentListInput,
   AgentGetInput,
   AgentCreateInput,
@@ -341,6 +346,50 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["organization-settings", "update"] as const,
             mutationFn: (input: OrganizationSettingsUpdateInput) => client["organization-settings"]["update"](input),
+          }),
+      },
+    },
+    memory: {
+      list: {
+        queryKey: (input?: MemoryListInput) =>
+          input === undefined ? (["memory", "list"] as const) : (["memory", "list", input] as const),
+        queryOptions: (input?: MemoryListInput) =>
+          queryOptions({
+            queryKey: ["memory", "list", input] as const,
+            queryFn: (context) => client["memory"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      read: {
+        queryKey: (input?: MemoryReadInput) =>
+          input === undefined ? (["memory", "read"] as const) : (["memory", "read", input] as const),
+        queryOptions: (input: MemoryReadInput) =>
+          queryOptions({
+            queryKey: ["memory", "read", input] as const,
+            queryFn: (context) => client["memory"]["read"](input, { signal: context.signal }),
+          }),
+      },
+      write: {
+        mutationKey: () => ["memory", "write"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["memory", "write"] as const,
+            mutationFn: (input: MemoryWriteInput) => client["memory"]["write"](input),
+          }),
+      },
+      edit: {
+        mutationKey: () => ["memory", "edit"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["memory", "edit"] as const,
+            mutationFn: (input: MemoryEditInput) => client["memory"]["edit"](input),
+          }),
+      },
+      delete: {
+        mutationKey: () => ["memory", "delete"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["memory", "delete"] as const,
+            mutationFn: (input: MemoryDeleteInput) => client["memory"]["delete"](input),
           }),
       },
     },

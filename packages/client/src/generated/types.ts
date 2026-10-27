@@ -36,6 +36,8 @@ export type ReferenceBranch = string
 
 export type ReferenceDescription = string
 
+export type MemoryPath = string
+
 export type AgentID = string
 
 export type AppID = string
@@ -348,6 +350,8 @@ export type ReferenceInfo = {
   branch?: ReferenceBranch
   description: ReferenceDescription
 }
+
+export type MemoryFile = { path: MemoryPath; content: string }
 
 export type TaskEventAssigned = {
   _tag: "assigned"
@@ -1422,6 +1426,83 @@ export type OrganizationSettingsUpdateInput = {
 }
 
 export type OrganizationSettingsUpdateOutput = OrganizationSettingsInfo
+
+export type MemoryListInput = {
+  readonly spaceId?: { readonly spaceId?: string | undefined; readonly prefix?: string | undefined }["spaceId"]
+  readonly prefix?: { readonly spaceId?: string | undefined; readonly prefix?: string | undefined }["prefix"]
+}
+
+export type MemoryListOutput = Array<MemoryPath>
+
+export type MemoryReadInput = {
+  readonly spaceId?: { readonly spaceId?: string | undefined; readonly path: string }["spaceId"]
+  readonly path: { readonly spaceId?: string | undefined; readonly path: string }["path"]
+}
+
+export type MemoryReadOutput = MemoryFile
+
+export type MemoryWriteInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly path: string
+    readonly content: string
+  }["spaceId"]
+  readonly path: { readonly spaceId?: string | undefined; readonly path: string; readonly content: string }["path"]
+  readonly content: {
+    readonly spaceId?: string | undefined
+    readonly path: string
+    readonly content: string
+  }["content"]
+}
+
+export type MemoryWriteOutput = void
+
+export type MemoryEditInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly path: string
+    readonly oldString: string
+    readonly newString: string
+    readonly replaceAll?: boolean | undefined
+  }["spaceId"]
+  readonly path: {
+    readonly spaceId?: string | undefined
+    readonly path: string
+    readonly oldString: string
+    readonly newString: string
+    readonly replaceAll?: boolean | undefined
+  }["path"]
+  readonly oldString: {
+    readonly spaceId?: string | undefined
+    readonly path: string
+    readonly oldString: string
+    readonly newString: string
+    readonly replaceAll?: boolean | undefined
+  }["oldString"]
+  readonly newString: {
+    readonly spaceId?: string | undefined
+    readonly path: string
+    readonly oldString: string
+    readonly newString: string
+    readonly replaceAll?: boolean | undefined
+  }["newString"]
+  readonly replaceAll?: {
+    readonly spaceId?: string | undefined
+    readonly path: string
+    readonly oldString: string
+    readonly newString: string
+    readonly replaceAll?: boolean | undefined
+  }["replaceAll"]
+}
+
+export type MemoryEditOutput = MemoryFile
+
+export type MemoryDeleteInput = {
+  readonly spaceId?: { readonly spaceId?: string | undefined; readonly path: string }["spaceId"]
+  readonly path: { readonly spaceId?: string | undefined; readonly path: string }["path"]
+}
+
+export type MemoryDeleteOutput = void
 
 export type AgentListInput = {
   readonly spaceId?: {

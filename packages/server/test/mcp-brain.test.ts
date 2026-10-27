@@ -131,6 +131,45 @@ describe("Ren MCP for a brain", () => {
       }),
   )
 
+  it.live(
+    "an agent keeps its space’s memory through the memory tools, and only reads the organization’s (memory M5)",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* chat()
+        const headers = yield* subject.headers()
+        const file = { spaceId: subject.spaceId, path: "people/Ana notes", content: "- Prefers short replies." }
+        expect(yield* tool(headers, "memory_write", file)).toMatchObject({
+          isError: false,
+          content: [{ type: "text", text: "" }],
+        })
+        expect(yield* tool(headers, "memory_list", { spaceId: subject.spaceId, prefix: "people/" })).toMatchObject({
+          isError: false,
+          content: [{ type: "text", text: JSON.stringify([file.path]) }],
+        })
+        expect(
+          yield* tool(headers, "memory_edit", {
+            spaceId: subject.spaceId,
+            path: file.path,
+            oldString: "short",
+            newString: "long",
+          }),
+        ).toMatchObject({ isError: false })
+        expect(yield* tool(headers, "memory_read", { spaceId: subject.spaceId, path: file.path })).toMatchObject({
+          structuredContent: { content: "- Prefers long replies." },
+        })
+        expect(yield* tool(headers, "memory_delete", { spaceId: subject.spaceId, path: file.path })).toMatchObject({
+          isError: false,
+          content: [{ type: "text", text: "" }],
+        })
+        expect(
+          yield* tool(headers, "memory_write", { path: "memory.md", content: "- Ship on Fridays." }),
+        ).toMatchObject({
+          isError: true,
+          content: [{ text: expect.stringContaining("ForbiddenError") }],
+        })
+      }),
+  )
+
   it.live("answers 401 to a sender that Ren refuses, a host token that it refuses and a call that names no chat", () =>
     Effect.gen(function* () {
       const subject = yield* chat()

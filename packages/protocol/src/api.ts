@@ -18,6 +18,7 @@ import { HealthGroup } from "./groups/health.js"
 import { InvitationGroup } from "./groups/invitation.js"
 import { LabelGroup } from "./groups/label.js"
 import { MeGroup } from "./groups/me.js"
+import { MemoryGroup } from "./groups/memory.js"
 import { OrganizationSettingsGroup } from "./groups/organization-settings.js"
 import { RenInferenceGroup } from "./groups/ren-inference.js"
 import { ScheduleGroup, ScheduleRunGroup } from "./groups/schedule.js"
@@ -41,6 +42,7 @@ export const Api = HttpApi.make("server")
   .add(SpaceEnvironmentTemplateGroup)
   .add(SpaceSettingsGroup)
   .add(OrganizationSettingsGroup)
+  .add(MemoryGroup)
   .add(AgentGroup)
   .add(AppGroup)
   .add(AppProfileGroup)

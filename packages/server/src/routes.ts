@@ -19,6 +19,7 @@ import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { Label } from "@ren/core/label"
+import { Memory } from "@ren/core/memory"
 import { OrganizationSettings } from "@ren/core/organization-settings"
 import { ScheduleTrigger } from "@ren/core/schedule-trigger"
 import { Schedules } from "@ren/core/schedules"
@@ -60,6 +61,7 @@ import { HealthHandler } from "./handlers/api/health.js"
 import { InvitationHandler } from "./handlers/api/invitation.js"
 import { LabelHandler } from "./handlers/api/label.js"
 import { MeHandler } from "./handlers/api/me.js"
+import { MemoryHandler } from "./handlers/api/memory.js"
 import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handlers/api/environment-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
@@ -118,6 +120,7 @@ export const layer = Layer.mergeAll(
         SpaceEnvironmentTemplateHandler,
         SpaceSettingsHandler,
         OrganizationSettingsHandler,
+        MemoryHandler,
         AgentHandler,
         AppHandler,
         AppProfileHandler,
@@ -151,6 +154,7 @@ export const layer = Layer.mergeAll(
         SpaceMember.layer,
         EnvironmentTemplates.layer,
         SpaceEnvironmentTemplate.layer,
+        Memory.layer,
         Layer.mergeAll(SpaceSettings.layer, OrganizationSettings.layer, Agent.layer).pipe(
           Layer.provide(ReferenceCheck.layer),
           Layer.provide(RepositoryHosts.layer),

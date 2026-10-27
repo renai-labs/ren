@@ -282,6 +282,74 @@ const adaptGroupOrganizationSettings = (raw: RawClient["organization-settings"])
   update: EndpointOrganizationSettingsUpdate(raw),
 })
 
+type MemoryListRequest = Parameters<RawClient["memory"]["memory.list"]>[0]
+type MemoryListInput = {
+  readonly spaceId?: MemoryListRequest["query"]["spaceId"]
+  readonly prefix?: MemoryListRequest["query"]["prefix"]
+}
+const EndpointMemoryList = (raw: RawClient["memory"]) => (input?: MemoryListInput) =>
+  raw["memory.list"]({ query: { spaceId: input?.["spaceId"], prefix: input?.["prefix"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type MemoryReadRequest = Parameters<RawClient["memory"]["memory.read"]>[0]
+type MemoryReadInput = {
+  readonly spaceId?: MemoryReadRequest["query"]["spaceId"]
+  readonly path: MemoryReadRequest["query"]["path"]
+}
+const EndpointMemoryRead = (raw: RawClient["memory"]) => (input: MemoryReadInput) =>
+  raw["memory.read"]({ query: { spaceId: input["spaceId"], path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type MemoryWriteRequest = Parameters<RawClient["memory"]["memory.write"]>[0]
+type MemoryWriteInput = {
+  readonly spaceId?: MemoryWriteRequest["payload"]["spaceId"]
+  readonly path: MemoryWriteRequest["payload"]["path"]
+  readonly content: MemoryWriteRequest["payload"]["content"]
+}
+const EndpointMemoryWrite = (raw: RawClient["memory"]) => (input: MemoryWriteInput) =>
+  raw["memory.write"]({ payload: { spaceId: input["spaceId"], path: input["path"], content: input["content"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type MemoryEditRequest = Parameters<RawClient["memory"]["memory.edit"]>[0]
+type MemoryEditInput = {
+  readonly spaceId?: MemoryEditRequest["payload"]["spaceId"]
+  readonly path: MemoryEditRequest["payload"]["path"]
+  readonly oldString: MemoryEditRequest["payload"]["oldString"]
+  readonly newString: MemoryEditRequest["payload"]["newString"]
+  readonly replaceAll?: MemoryEditRequest["payload"]["replaceAll"]
+}
+const EndpointMemoryEdit = (raw: RawClient["memory"]) => (input: MemoryEditInput) =>
+  raw["memory.edit"]({
+    payload: {
+      spaceId: input["spaceId"],
+      path: input["path"],
+      oldString: input["oldString"],
+      newString: input["newString"],
+      replaceAll: input["replaceAll"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type MemoryDeleteRequest = Parameters<RawClient["memory"]["memory.delete"]>[0]
+type MemoryDeleteInput = {
+  readonly spaceId?: MemoryDeleteRequest["query"]["spaceId"]
+  readonly path: MemoryDeleteRequest["query"]["path"]
+}
+const EndpointMemoryDelete = (raw: RawClient["memory"]) => (input: MemoryDeleteInput) =>
+  raw["memory.delete"]({ query: { spaceId: input["spaceId"], path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupMemory = (raw: RawClient["memory"]) => ({
+  list: EndpointMemoryList(raw),
+  read: EndpointMemoryRead(raw),
+  write: EndpointMemoryWrite(raw),
+  edit: EndpointMemoryEdit(raw),
+  delete: EndpointMemoryDelete(raw),
+})
+
 type AgentListRequest = Parameters<RawClient["agent"]["agent.list"]>[0]
 type AgentListInput = {
   readonly spaceId?: AgentListRequest["query"]["spaceId"]
@@ -1453,6 +1521,7 @@ const adaptClient = (raw: RawClient) => ({
   "space-environment-template": adaptGroupSpaceEnvironmentTemplate(raw["space-environment-template"]),
   "space-settings": adaptGroupSpaceSettings(raw["space-settings"]),
   "organization-settings": adaptGroupOrganizationSettings(raw["organization-settings"]),
+  memory: adaptGroupMemory(raw["memory"]),
   agent: adaptGroupAgent(raw["agent"]),
   app: adaptGroupApp(raw["app"]),
   "app-profile": adaptGroupAppProfile(raw["app-profile"]),
