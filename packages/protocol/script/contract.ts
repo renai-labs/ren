@@ -3,6 +3,10 @@ import { HttpApi, HttpApiGroup } from "effect/http-api"
 import { Primitive } from "../src/primitive.js"
 
 const exceptions = new Map([
+  [
+    "infra",
+    "Plans, applies and pulls an org spec: a diff and a reconcile across many records, which no primitive operation is.",
+  ],
   ["health", "Server status for clients and load balancers."],
   ["me", "The signed-in user and their active organization."],
   [

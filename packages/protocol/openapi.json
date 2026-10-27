@@ -9975,6 +9975,203 @@
         "description": "Return the accounts that a person can sign in with on this Ren server, besides email.",
         "summary": "List sign-in providers"
       }
+    },
+    "/infra": {
+      "get": {
+        "tags": ["infra"],
+        "operationId": "infra.pull",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The part of the org spec that infra applies today: organization settings, shared spaces and their agents.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Infra.Pulled"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the organization settings and the shared spaces as an org spec. Needs an organization admin.",
+        "summary": "Pull the org spec"
+      }
+    },
+    "/infra/plan": {
+      "post": {
+        "tags": ["infra"],
+        "operationId": "infra.plan",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Infra.Plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Infra.Plan"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the changes that would make the organization match the spec, the problems that stop it, and the digest that apply needs.",
+        "summary": "Plan an org spec",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Infra.PlanInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/infra/apply": {
+      "post": {
+        "tags": ["infra"],
+        "operationId": "infra.apply",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Infra.Applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Infra.Applied"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Plan the spec again and write its changes, when the digest matches. A failed write stops apply and names its change; the writes before it stay.",
+        "summary": "Apply an org spec",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Infra.ApplyInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
     }
   },
   "components": {
@@ -10006,6 +10203,21 @@
           }
         },
         "required": ["ownerSpaceId", "name"],
+        "additionalProperties": false
+      },
+      "Agent.Declaration": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "isSubagent": {
+            "type": "boolean"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          }
+        },
         "additionalProperties": false
       },
       "Agent.ID": {
@@ -10094,6 +10306,24 @@
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "Agent.Name_1": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Without it, the space’s default settings."
+      },
+      "Agent.Name_2": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Without it, the webhook runs on the ren agent."
+      },
+      "Agent.Name_3": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Without it, the channel reaches the ren agent."
       },
       "Agent.Page": {
         "type": "object",
@@ -11377,9 +11607,248 @@
         "type": "string",
         "enum": ["session", "space"]
       },
+      "Channel.Declaration": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["slack"]
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent": {
+                "$ref": "#/components/schemas/Agent.Name_3"
+              },
+              "fallback": {
+                "type": "boolean",
+                "description": "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository."
+              },
+              "triggers": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Channel.TriggerID"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "prompt": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "The provider’s triggers to turn on, such as GitHub’s pull_request_ready. All are off by default."
+              }
+            },
+            "required": ["kind", "purpose"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["linear"]
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent": {
+                "$ref": "#/components/schemas/Agent.Name_3"
+              },
+              "fallback": {
+                "type": "boolean",
+                "description": "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository."
+              },
+              "triggers": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Channel.TriggerID"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "prompt": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "The provider’s triggers to turn on, such as GitHub’s pull_request_ready. All are off by default."
+              }
+            },
+            "required": ["kind", "purpose"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["email"]
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent": {
+                "$ref": "#/components/schemas/Agent.Name_3"
+              }
+            },
+            "required": ["kind", "purpose"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["github"]
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent": {
+                "$ref": "#/components/schemas/Agent.Name_3"
+              },
+              "fallback": {
+                "type": "boolean",
+                "description": "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository."
+              },
+              "triggers": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Channel.TriggerID"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "prompt": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "The provider’s triggers to turn on, such as GitHub’s pull_request_ready. All are off by default."
+              }
+            },
+            "required": ["kind", "purpose"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["telegram"]
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1
+              },
+              "agent": {
+                "$ref": "#/components/schemas/Agent.Name_3"
+              },
+              "allowedSenders": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "blockedSenders": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "required": ["kind", "purpose"],
+            "additionalProperties": false
+          }
+        ]
+      },
       "Channel.Provider": {
         "type": "string",
         "enum": ["slack", "linear", "github"]
+      },
+      "Channel.Target": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["slack"]
+              },
+              "channelId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["kind", "channelId"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["linear"]
+              },
+              "projectId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["kind", "projectId"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["github"]
+              },
+              "repository": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["kind", "repository"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["telegram"]
+              },
+              "chatId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "topicId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["kind", "chatId"],
+            "additionalProperties": false
+          }
+        ]
       },
       "Channel.Trigger": {
         "type": "object",
@@ -12557,6 +13026,11 @@
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
         "description": "The managed MCP provider that holds the account of a `route` credential."
       },
+      "Credential.Ref": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The name of a credential that is connected in Ren. A value is never in a file."
+      },
       "Credential.RemoveInput": {
         "not": {
           "type": "null"
@@ -12942,6 +13416,27 @@
         "required": ["name", "provider", "config"],
         "additionalProperties": false
       },
+      "EnvironmentTemplate.Declaration": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/EnvironmentProvider.ID"
+          },
+          "config": {
+            "description": "The settings of the provider. Its schema is in the provider list."
+          },
+          "sessionsPerEnvironment": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": ["provider", "config"],
+        "additionalProperties": false
+      },
       "EnvironmentTemplate.ID": {
         "type": "string",
         "pattern": "^tpl_"
@@ -13166,6 +13661,446 @@
             "enum": ["ok"]
           }
         ]
+      },
+      "Infra.Applied": {
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Infra.Change"
+            }
+          }
+        },
+        "required": ["changes"],
+        "additionalProperties": false
+      },
+      "Infra.ApplyInput": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/Infra.Spec"
+          },
+          "bindings": {
+            "$ref": "#/components/schemas/Infra.Bindings"
+          },
+          "digest": {
+            "type": "string"
+          }
+        },
+        "required": ["spec", "bindings", "digest"],
+        "additionalProperties": false
+      },
+      "Infra.Bindings": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The slug of the organization."
+          },
+          "spaces": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Infra.SpaceBindings"
+            }
+          }
+        },
+        "required": ["organization"],
+        "additionalProperties": false
+      },
+      "Infra.Change": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["create", "update", "archive"]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/Infra.Kind"
+          },
+          "path": {
+            "type": "string",
+            "description": "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name> or spaces/<slug>/uses/agents/<name>."
+          },
+          "from": {
+            "type": "string",
+            "description": "The path before a rename or a move."
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The fields that an update changes."
+          }
+        },
+        "required": ["action", "kind", "path", "fields"],
+        "additionalProperties": false
+      },
+      "Infra.Kind": {
+        "type": "string",
+        "enum": ["organization", "space", "agent", "membership"]
+      },
+      "Infra.Plan": {
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Infra.Change"
+            }
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Infra.Problem"
+            },
+            "description": "A plan with problems cannot be applied."
+          },
+          "digest": {
+            "type": "string",
+            "description": "Apply refuses the plan when the digest has changed."
+          }
+        },
+        "required": ["changes", "problems", "digest"],
+        "additionalProperties": false
+      },
+      "Infra.PlanInput": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/Infra.Spec"
+          },
+          "bindings": {
+            "$ref": "#/components/schemas/Infra.Bindings"
+          }
+        },
+        "required": ["spec", "bindings"],
+        "additionalProperties": false
+      },
+      "Infra.Problem": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "message"],
+        "additionalProperties": false
+      },
+      "Infra.Pulled": {
+        "type": "object",
+        "properties": {
+          "bindings": {
+            "type": "object",
+            "properties": {
+              "organization": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The slug of the organization."
+              }
+            },
+            "required": ["organization"],
+            "additionalProperties": false
+          },
+          "spec": {
+            "type": "object",
+            "properties": {
+              "org": {
+                "$ref": "#/components/schemas/OrganizationSettings.UpdateInput"
+              },
+              "spaces": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Primitive.Slug_1"
+                },
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Infra.PulledSpace"
+                }
+              }
+            },
+            "required": ["org", "spaces"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["bindings", "spec"],
+        "additionalProperties": false,
+        "description": "The part of the org spec that infra applies today: organization settings, shared spaces and their agents."
+      },
+      "Infra.PulledSpace": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          },
+          "agents": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Agent.Name"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Agent.Declaration"
+            }
+          },
+          "uses": {
+            "$ref": "#/components/schemas/Infra.Uses"
+          }
+        },
+        "required": ["name", "settings", "agents", "uses"],
+        "additionalProperties": false
+      },
+      "Infra.SpaceBindings": {
+        "type": "object",
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "channels": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Channel.Target"
+            }
+          },
+          "profiles": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/AppProfile.Slug"
+              }
+            }
+          },
+          "webhooks": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "secret": {
+                  "$ref": "#/components/schemas/Credential.Ref"
+                }
+              },
+              "required": ["secret"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Infra.SpaceDeclaration": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string"
+          },
+          "renamedFrom": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "description": "Earlier names. Apply renames the live row that has one of them, so its history stays."
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          },
+          "agents": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Agent.Name"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "isSubagent": {
+                  "type": "boolean"
+                },
+                "settings": {
+                  "$ref": "#/components/schemas/Settings.Info"
+                },
+                "renamedFrom": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                  },
+                  "description": "Earlier names. Apply renames the live row that has one of them, so its history stays."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "apps": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "icon": {
+                  "$ref": "#/components/schemas/Primitive.HttpsUrl"
+                },
+                "requiredCredentials": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Credential.Requirement"
+                  }
+                },
+                "environment": {
+                  "$ref": "#/components/schemas/App.Environment"
+                },
+                "skills": {
+                  "type": "object",
+                  "propertyNames": {
+                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                  },
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Skill.Declaration"
+                  }
+                },
+                "mcps": {
+                  "type": "object",
+                  "propertyNames": {
+                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                  },
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Mcp.Declaration"
+                  }
+                },
+                "dependsOn": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                  }
+                },
+                "renamedFrom": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                  },
+                  "description": "Earlier names. Apply renames the live row that has one of them, so its history stays."
+                }
+              },
+              "required": ["name", "description"],
+              "additionalProperties": false
+            }
+          },
+          "schedules": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Schedule.Declaration"
+            }
+          },
+          "webhooks": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Webhook.Declaration"
+            }
+          },
+          "channels": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Channel.Declaration"
+            }
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.Declaration"
+          },
+          "uses": {
+            "$ref": "#/components/schemas/Infra.Uses"
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "Infra.Spec": {
+        "type": "object",
+        "properties": {
+          "org": {
+            "$ref": "#/components/schemas/OrganizationSettings.UpdateInput"
+          },
+          "spaces": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Infra.SpaceDeclaration"
+            }
+          }
+        },
+        "required": ["org", "spaces"],
+        "additionalProperties": false
+      },
+      "Infra.Uses": {
+        "type": "object",
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Agent.Name"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "InvalidRequestErrorEncoded": {
         "type": "object",
@@ -14769,6 +15704,38 @@
       },
       "Schedule.Cron": {
         "type": "string"
+      },
+      "Schedule.Declaration": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Without it, the slug."
+          },
+          "agent": {
+            "$ref": "#/components/schemas/Agent.Name_1"
+          },
+          "cron": {
+            "$ref": "#/components/schemas/Schedule.Cron"
+          },
+          "timeZone": {
+            "$ref": "#/components/schemas/Schedule.TimeZone"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Schedule.MessageEncoded"
+          },
+          "until": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["cron", "timeZone", "message"],
+        "additionalProperties": false
       },
       "Schedule.ID": {
         "type": "string",
@@ -18592,6 +19559,23 @@
         "required": ["_tag", "message", "retryAfterMs"],
         "additionalProperties": false
       },
+      "Webhook.Declaration": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/Agent.Name_2"
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["purpose"],
+        "additionalProperties": false
+      },
       "WriteResult.Redirect": {
         "type": "object",
         "properties": {
@@ -18726,6 +19710,9 @@
     },
     {
       "name": "sign-in"
+    },
+    {
+      "name": "infra"
     }
   ]
 }

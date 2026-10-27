@@ -250,6 +250,12 @@ export type GitHostKind = "github"
 
 export type AuthSignInProvider = "google" | "github" | "slack"
 
+export type AgentName = string
+
+export type InfraKind = "organization" | "space" | "agent" | "membership"
+
+export type InfraProblem = { path: string; message: string }
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -651,6 +657,16 @@ export type GitHostRepository = { kind: GitHostKind; url: string; name: string; 
 
 export type AuthSignInProviders = { items: Array<AuthSignInProvider> }
 
+export type InfraUses = { agents?: Array<AgentName> }
+
+export type InfraChange = {
+  action: "create" | "update" | "archive"
+  kind: InfraKind
+  path: string
+  from?: string
+  fields: Array<string>
+}
+
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
 export type AppListingInfo = {
@@ -861,6 +877,10 @@ export type ChannelInstallProviderInfo = { id: ChannelProvider; title: string; t
 
 export type GitHostListing = { kind: GitHostKind; installed: boolean; repositories: Array<GitHostRepository> }
 
+export type InfraPlan = { changes: Array<InfraChange>; problems: Array<InfraProblem>; digest: string }
+
+export type InfraApplied = { changes: Array<InfraChange> }
+
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
 export type SettingsInfo = {
@@ -987,6 +1007,10 @@ export type AgentInfo = {
   archivedAt: string | null
 }
 
+export type OrganizationSettingsUpdateInput2 = { settings: SettingsInfo }
+
+export type AgentDeclaration = { description?: string; isSubagent?: boolean; settings?: SettingsInfo }
+
 export type SkillInfo =
   | SkillContent
   | {
@@ -1041,6 +1065,14 @@ export type ChannelPlacePage = { items: Array<ChannelPlaceInfo>; page: number; p
 
 export type AgentPage = { items: Array<AgentInfo>; page: number; pageSize: number; total: number }
 
+export type InfraPulledSpace = {
+  name: string
+  description?: string | null
+  settings: SettingsInfo
+  agents: { [x: AgentName]: AgentDeclaration }
+  uses: InfraUses
+}
+
 export type AppInfo = {
   id: AppID
   slug: PrimitiveSlug
@@ -1078,6 +1110,11 @@ export type AppRegistryInfo = {
 export type SessionMessageContent = SessionMessageText | SessionMessageReasoning | SessionMessageTool
 
 export type TaskActivityPage = { items: Array<TaskActivityInfo>; page: number; pageSize: number; total: number }
+
+export type InfraPulled = {
+  bindings: { organization: string }
+  spec: { org: OrganizationSettingsUpdateInput2; spaces: { [x: PrimitiveSlug]: InfraPulledSpace } }
+}
 
 export type AppPage = { items: Array<AppInfo>; page: number; pageSize: number; total: number }
 
@@ -6439,3 +6476,1578 @@ export type ChannelConnectChannelPlaceListOutput = ChannelPlacePage
 export type RepositoryListOutput = Array<GitHostListing>
 
 export type SignInSignInProviderListOutput = AuthSignInProviders
+
+export type InfraPullOutput = InfraPulled
+
+export type InfraPlanInput = {
+  readonly spec: {
+    readonly spec: {
+      readonly org: {
+        readonly settings: {
+          readonly instructions?: string
+          readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly permissions?: ReadonlyArray<{
+            readonly action: string
+            readonly resource: string
+            readonly effect: "ask" | "deny"
+          }>
+          readonly references?: ReadonlyArray<{
+            readonly alias: string
+            readonly repository: string
+            readonly branch?: string
+            readonly description: string
+          }>
+        }
+      }
+      readonly spaces: {
+        readonly [x: string]: {
+          readonly name: string
+          readonly description?: string
+          readonly renamedFrom?: ReadonlyArray<string>
+          readonly settings?: {
+            readonly instructions?: string
+            readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly permissions?: ReadonlyArray<{
+              readonly action: string
+              readonly resource: string
+              readonly effect: "ask" | "deny"
+            }>
+            readonly references?: ReadonlyArray<{
+              readonly alias: string
+              readonly repository: string
+              readonly branch?: string
+              readonly description: string
+            }>
+          }
+          readonly agents?: {
+            readonly [x: string]: {
+              readonly description?: string
+              readonly isSubagent?: boolean
+              readonly settings?: {
+                readonly instructions?: string
+                readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly permissions?: ReadonlyArray<{
+                  readonly action: string
+                  readonly resource: string
+                  readonly effect: "ask" | "deny"
+                }>
+                readonly references?: ReadonlyArray<{
+                  readonly alias: string
+                  readonly repository: string
+                  readonly branch?: string
+                  readonly description: string
+                }>
+              }
+              readonly renamedFrom?: ReadonlyArray<string>
+            }
+          }
+          readonly apps?: {
+            readonly [x: string]: {
+              readonly name: string
+              readonly description: string
+              readonly icon?: string
+              readonly requiredCredentials?: ReadonlyArray<
+                | {
+                    readonly kind: "env"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "secret"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "oauth_app"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "text"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                    readonly message: string
+                    readonly placeholder?: string
+                    readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                  }
+                | {
+                    readonly kind: "select"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                    readonly message: string
+                    readonly options: readonly [
+                      { readonly label: string; readonly value: string; readonly hint?: string },
+                      ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+                    ]
+                    readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                  }
+              >
+              readonly environment?: {
+                readonly packages?: {
+                  readonly apt?: ReadonlyArray<string>
+                  readonly npm?: ReadonlyArray<string>
+                  readonly pip?: ReadonlyArray<string>
+                  readonly go?: ReadonlyArray<string>
+                }
+                readonly buildCommands?: ReadonlyArray<string>
+              }
+              readonly skills?: {
+                readonly [x: string]:
+                  | {
+                      readonly type: "content"
+                      readonly description: string
+                      readonly requiredCredentials?: ReadonlyArray<
+                        | {
+                            readonly kind: "env"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                        | {
+                            readonly kind: "oauth_app"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                      >
+                      readonly instructions: string
+                      readonly files?: { readonly [x: string]: string }
+                    }
+                  | {
+                      readonly type: "upstream"
+                      readonly requiredCredentials?: ReadonlyArray<
+                        | {
+                            readonly kind: "env"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                        | {
+                            readonly kind: "oauth_app"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                      >
+                      readonly upstream: { readonly url: string; readonly ref?: string; readonly path: string }
+                    }
+              }
+              readonly mcps?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly transport:
+                    | { readonly type: "remote"; readonly url: string }
+                    | {
+                        readonly type: "local"
+                        readonly command: readonly [string, ...Array<string>]
+                        readonly cwd?: string
+                        readonly env?: { readonly [x: string]: string }
+                      }
+                    | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                  readonly auth:
+                    | { readonly type: "none" }
+                    | {
+                        readonly type: "oauth"
+                        readonly authorizationEndpoint?: string
+                        readonly tokenEndpoint?: string
+                        readonly scopes?: ReadonlyArray<string>
+                        readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
+                        readonly client?: {
+                          readonly clientId: string
+                          readonly resource?: string
+                          readonly redirectUri?: string
+                        }
+                      }
+                    | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
+                  readonly timeouts?: {
+                    readonly startup?: number
+                    readonly catalog?: number
+                    readonly execution?: number
+                  }
+                  readonly requiredCredentials?: ReadonlyArray<
+                    | {
+                        readonly kind: "env"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "secret"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "oauth_app"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "text"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                        readonly message: string
+                        readonly placeholder?: string
+                        readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                      }
+                    | {
+                        readonly kind: "select"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                        readonly message: string
+                        readonly options: readonly [
+                          { readonly label: string; readonly value: string; readonly hint?: string },
+                          ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+                        ]
+                        readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                      }
+                  >
+                }
+              }
+              readonly dependsOn?: ReadonlyArray<string>
+              readonly renamedFrom?: ReadonlyArray<string>
+            }
+          }
+          readonly schedules?: {
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly cron: string
+              readonly timeZone: string
+              readonly message: string
+              readonly until?: string
+              readonly enabled?: boolean
+            }
+          }
+          readonly webhooks?: {
+            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+          }
+          readonly channels?: {
+            readonly [x: string]:
+              | {
+                  readonly kind: "slack"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | {
+                  readonly kind: "linear"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
+              | {
+                  readonly kind: "github"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | {
+                  readonly kind: "telegram"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly allowedSenders?: ReadonlyArray<string>
+                  readonly blockedSenders?: ReadonlyArray<string>
+                }
+          }
+          readonly environment?: {
+            readonly description?: string
+            readonly provider: string
+            readonly config: JsonValue
+            readonly sessionsPerEnvironment?: number
+          }
+          readonly uses?: { readonly agents?: ReadonlyArray<string> }
+        }
+      }
+    }
+    readonly bindings: {
+      readonly organization: string
+      readonly spaces?: {
+        readonly [x: string]: {
+          readonly timezone?: string
+          readonly channels?: {
+            readonly [x: string]:
+              | { readonly kind: "slack"; readonly channelId: string }
+              | { readonly kind: "linear"; readonly projectId: string }
+              | { readonly kind: "github"; readonly repository: string }
+              | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
+          }
+          readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
+          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
+        }
+      }
+    }
+  }["spec"]
+  readonly bindings: {
+    readonly spec: {
+      readonly org: {
+        readonly settings: {
+          readonly instructions?: string
+          readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly permissions?: ReadonlyArray<{
+            readonly action: string
+            readonly resource: string
+            readonly effect: "ask" | "deny"
+          }>
+          readonly references?: ReadonlyArray<{
+            readonly alias: string
+            readonly repository: string
+            readonly branch?: string
+            readonly description: string
+          }>
+        }
+      }
+      readonly spaces: {
+        readonly [x: string]: {
+          readonly name: string
+          readonly description?: string
+          readonly renamedFrom?: ReadonlyArray<string>
+          readonly settings?: {
+            readonly instructions?: string
+            readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly permissions?: ReadonlyArray<{
+              readonly action: string
+              readonly resource: string
+              readonly effect: "ask" | "deny"
+            }>
+            readonly references?: ReadonlyArray<{
+              readonly alias: string
+              readonly repository: string
+              readonly branch?: string
+              readonly description: string
+            }>
+          }
+          readonly agents?: {
+            readonly [x: string]: {
+              readonly description?: string
+              readonly isSubagent?: boolean
+              readonly settings?: {
+                readonly instructions?: string
+                readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly permissions?: ReadonlyArray<{
+                  readonly action: string
+                  readonly resource: string
+                  readonly effect: "ask" | "deny"
+                }>
+                readonly references?: ReadonlyArray<{
+                  readonly alias: string
+                  readonly repository: string
+                  readonly branch?: string
+                  readonly description: string
+                }>
+              }
+              readonly renamedFrom?: ReadonlyArray<string>
+            }
+          }
+          readonly apps?: {
+            readonly [x: string]: {
+              readonly name: string
+              readonly description: string
+              readonly icon?: string
+              readonly requiredCredentials?: ReadonlyArray<
+                | {
+                    readonly kind: "env"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "secret"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "oauth_app"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "text"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                    readonly message: string
+                    readonly placeholder?: string
+                    readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                  }
+                | {
+                    readonly kind: "select"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                    readonly message: string
+                    readonly options: readonly [
+                      { readonly label: string; readonly value: string; readonly hint?: string },
+                      ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+                    ]
+                    readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                  }
+              >
+              readonly environment?: {
+                readonly packages?: {
+                  readonly apt?: ReadonlyArray<string>
+                  readonly npm?: ReadonlyArray<string>
+                  readonly pip?: ReadonlyArray<string>
+                  readonly go?: ReadonlyArray<string>
+                }
+                readonly buildCommands?: ReadonlyArray<string>
+              }
+              readonly skills?: {
+                readonly [x: string]:
+                  | {
+                      readonly type: "content"
+                      readonly description: string
+                      readonly requiredCredentials?: ReadonlyArray<
+                        | {
+                            readonly kind: "env"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                        | {
+                            readonly kind: "oauth_app"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                      >
+                      readonly instructions: string
+                      readonly files?: { readonly [x: string]: string }
+                    }
+                  | {
+                      readonly type: "upstream"
+                      readonly requiredCredentials?: ReadonlyArray<
+                        | {
+                            readonly kind: "env"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                        | {
+                            readonly kind: "oauth_app"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                      >
+                      readonly upstream: { readonly url: string; readonly ref?: string; readonly path: string }
+                    }
+              }
+              readonly mcps?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly transport:
+                    | { readonly type: "remote"; readonly url: string }
+                    | {
+                        readonly type: "local"
+                        readonly command: readonly [string, ...Array<string>]
+                        readonly cwd?: string
+                        readonly env?: { readonly [x: string]: string }
+                      }
+                    | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                  readonly auth:
+                    | { readonly type: "none" }
+                    | {
+                        readonly type: "oauth"
+                        readonly authorizationEndpoint?: string
+                        readonly tokenEndpoint?: string
+                        readonly scopes?: ReadonlyArray<string>
+                        readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
+                        readonly client?: {
+                          readonly clientId: string
+                          readonly resource?: string
+                          readonly redirectUri?: string
+                        }
+                      }
+                    | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
+                  readonly timeouts?: {
+                    readonly startup?: number
+                    readonly catalog?: number
+                    readonly execution?: number
+                  }
+                  readonly requiredCredentials?: ReadonlyArray<
+                    | {
+                        readonly kind: "env"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "secret"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "oauth_app"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "text"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                        readonly message: string
+                        readonly placeholder?: string
+                        readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                      }
+                    | {
+                        readonly kind: "select"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                        readonly message: string
+                        readonly options: readonly [
+                          { readonly label: string; readonly value: string; readonly hint?: string },
+                          ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+                        ]
+                        readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                      }
+                  >
+                }
+              }
+              readonly dependsOn?: ReadonlyArray<string>
+              readonly renamedFrom?: ReadonlyArray<string>
+            }
+          }
+          readonly schedules?: {
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly cron: string
+              readonly timeZone: string
+              readonly message: string
+              readonly until?: string
+              readonly enabled?: boolean
+            }
+          }
+          readonly webhooks?: {
+            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+          }
+          readonly channels?: {
+            readonly [x: string]:
+              | {
+                  readonly kind: "slack"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | {
+                  readonly kind: "linear"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
+              | {
+                  readonly kind: "github"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | {
+                  readonly kind: "telegram"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly allowedSenders?: ReadonlyArray<string>
+                  readonly blockedSenders?: ReadonlyArray<string>
+                }
+          }
+          readonly environment?: {
+            readonly description?: string
+            readonly provider: string
+            readonly config: JsonValue
+            readonly sessionsPerEnvironment?: number
+          }
+          readonly uses?: { readonly agents?: ReadonlyArray<string> }
+        }
+      }
+    }
+    readonly bindings: {
+      readonly organization: string
+      readonly spaces?: {
+        readonly [x: string]: {
+          readonly timezone?: string
+          readonly channels?: {
+            readonly [x: string]:
+              | { readonly kind: "slack"; readonly channelId: string }
+              | { readonly kind: "linear"; readonly projectId: string }
+              | { readonly kind: "github"; readonly repository: string }
+              | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
+          }
+          readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
+          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
+        }
+      }
+    }
+  }["bindings"]
+}
+
+export type InfraPlanOutput = InfraPlan
+
+export type InfraApplyInput = {
+  readonly spec: {
+    readonly spec: {
+      readonly org: {
+        readonly settings: {
+          readonly instructions?: string
+          readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly permissions?: ReadonlyArray<{
+            readonly action: string
+            readonly resource: string
+            readonly effect: "ask" | "deny"
+          }>
+          readonly references?: ReadonlyArray<{
+            readonly alias: string
+            readonly repository: string
+            readonly branch?: string
+            readonly description: string
+          }>
+        }
+      }
+      readonly spaces: {
+        readonly [x: string]: {
+          readonly name: string
+          readonly description?: string
+          readonly renamedFrom?: ReadonlyArray<string>
+          readonly settings?: {
+            readonly instructions?: string
+            readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly permissions?: ReadonlyArray<{
+              readonly action: string
+              readonly resource: string
+              readonly effect: "ask" | "deny"
+            }>
+            readonly references?: ReadonlyArray<{
+              readonly alias: string
+              readonly repository: string
+              readonly branch?: string
+              readonly description: string
+            }>
+          }
+          readonly agents?: {
+            readonly [x: string]: {
+              readonly description?: string
+              readonly isSubagent?: boolean
+              readonly settings?: {
+                readonly instructions?: string
+                readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly permissions?: ReadonlyArray<{
+                  readonly action: string
+                  readonly resource: string
+                  readonly effect: "ask" | "deny"
+                }>
+                readonly references?: ReadonlyArray<{
+                  readonly alias: string
+                  readonly repository: string
+                  readonly branch?: string
+                  readonly description: string
+                }>
+              }
+              readonly renamedFrom?: ReadonlyArray<string>
+            }
+          }
+          readonly apps?: {
+            readonly [x: string]: {
+              readonly name: string
+              readonly description: string
+              readonly icon?: string
+              readonly requiredCredentials?: ReadonlyArray<
+                | {
+                    readonly kind: "env"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "secret"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "oauth_app"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "text"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                    readonly message: string
+                    readonly placeholder?: string
+                    readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                  }
+                | {
+                    readonly kind: "select"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                    readonly message: string
+                    readonly options: readonly [
+                      { readonly label: string; readonly value: string; readonly hint?: string },
+                      ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+                    ]
+                    readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                  }
+              >
+              readonly environment?: {
+                readonly packages?: {
+                  readonly apt?: ReadonlyArray<string>
+                  readonly npm?: ReadonlyArray<string>
+                  readonly pip?: ReadonlyArray<string>
+                  readonly go?: ReadonlyArray<string>
+                }
+                readonly buildCommands?: ReadonlyArray<string>
+              }
+              readonly skills?: {
+                readonly [x: string]:
+                  | {
+                      readonly type: "content"
+                      readonly description: string
+                      readonly requiredCredentials?: ReadonlyArray<
+                        | {
+                            readonly kind: "env"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                        | {
+                            readonly kind: "oauth_app"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                      >
+                      readonly instructions: string
+                      readonly files?: { readonly [x: string]: string }
+                    }
+                  | {
+                      readonly type: "upstream"
+                      readonly requiredCredentials?: ReadonlyArray<
+                        | {
+                            readonly kind: "env"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                        | {
+                            readonly kind: "oauth_app"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                      >
+                      readonly upstream: { readonly url: string; readonly ref?: string; readonly path: string }
+                    }
+              }
+              readonly mcps?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly transport:
+                    | { readonly type: "remote"; readonly url: string }
+                    | {
+                        readonly type: "local"
+                        readonly command: readonly [string, ...Array<string>]
+                        readonly cwd?: string
+                        readonly env?: { readonly [x: string]: string }
+                      }
+                    | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                  readonly auth:
+                    | { readonly type: "none" }
+                    | {
+                        readonly type: "oauth"
+                        readonly authorizationEndpoint?: string
+                        readonly tokenEndpoint?: string
+                        readonly scopes?: ReadonlyArray<string>
+                        readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
+                        readonly client?: {
+                          readonly clientId: string
+                          readonly resource?: string
+                          readonly redirectUri?: string
+                        }
+                      }
+                    | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
+                  readonly timeouts?: {
+                    readonly startup?: number
+                    readonly catalog?: number
+                    readonly execution?: number
+                  }
+                  readonly requiredCredentials?: ReadonlyArray<
+                    | {
+                        readonly kind: "env"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "secret"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "oauth_app"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "text"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                        readonly message: string
+                        readonly placeholder?: string
+                        readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                      }
+                    | {
+                        readonly kind: "select"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                        readonly message: string
+                        readonly options: readonly [
+                          { readonly label: string; readonly value: string; readonly hint?: string },
+                          ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+                        ]
+                        readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                      }
+                  >
+                }
+              }
+              readonly dependsOn?: ReadonlyArray<string>
+              readonly renamedFrom?: ReadonlyArray<string>
+            }
+          }
+          readonly schedules?: {
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly cron: string
+              readonly timeZone: string
+              readonly message: string
+              readonly until?: string
+              readonly enabled?: boolean
+            }
+          }
+          readonly webhooks?: {
+            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+          }
+          readonly channels?: {
+            readonly [x: string]:
+              | {
+                  readonly kind: "slack"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | {
+                  readonly kind: "linear"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
+              | {
+                  readonly kind: "github"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | {
+                  readonly kind: "telegram"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly allowedSenders?: ReadonlyArray<string>
+                  readonly blockedSenders?: ReadonlyArray<string>
+                }
+          }
+          readonly environment?: {
+            readonly description?: string
+            readonly provider: string
+            readonly config: JsonValue
+            readonly sessionsPerEnvironment?: number
+          }
+          readonly uses?: { readonly agents?: ReadonlyArray<string> }
+        }
+      }
+    }
+    readonly bindings: {
+      readonly organization: string
+      readonly spaces?: {
+        readonly [x: string]: {
+          readonly timezone?: string
+          readonly channels?: {
+            readonly [x: string]:
+              | { readonly kind: "slack"; readonly channelId: string }
+              | { readonly kind: "linear"; readonly projectId: string }
+              | { readonly kind: "github"; readonly repository: string }
+              | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
+          }
+          readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
+          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
+        }
+      }
+    }
+    readonly digest: string
+  }["spec"]
+  readonly bindings: {
+    readonly spec: {
+      readonly org: {
+        readonly settings: {
+          readonly instructions?: string
+          readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly permissions?: ReadonlyArray<{
+            readonly action: string
+            readonly resource: string
+            readonly effect: "ask" | "deny"
+          }>
+          readonly references?: ReadonlyArray<{
+            readonly alias: string
+            readonly repository: string
+            readonly branch?: string
+            readonly description: string
+          }>
+        }
+      }
+      readonly spaces: {
+        readonly [x: string]: {
+          readonly name: string
+          readonly description?: string
+          readonly renamedFrom?: ReadonlyArray<string>
+          readonly settings?: {
+            readonly instructions?: string
+            readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly permissions?: ReadonlyArray<{
+              readonly action: string
+              readonly resource: string
+              readonly effect: "ask" | "deny"
+            }>
+            readonly references?: ReadonlyArray<{
+              readonly alias: string
+              readonly repository: string
+              readonly branch?: string
+              readonly description: string
+            }>
+          }
+          readonly agents?: {
+            readonly [x: string]: {
+              readonly description?: string
+              readonly isSubagent?: boolean
+              readonly settings?: {
+                readonly instructions?: string
+                readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly permissions?: ReadonlyArray<{
+                  readonly action: string
+                  readonly resource: string
+                  readonly effect: "ask" | "deny"
+                }>
+                readonly references?: ReadonlyArray<{
+                  readonly alias: string
+                  readonly repository: string
+                  readonly branch?: string
+                  readonly description: string
+                }>
+              }
+              readonly renamedFrom?: ReadonlyArray<string>
+            }
+          }
+          readonly apps?: {
+            readonly [x: string]: {
+              readonly name: string
+              readonly description: string
+              readonly icon?: string
+              readonly requiredCredentials?: ReadonlyArray<
+                | {
+                    readonly kind: "env"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "secret"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "oauth_app"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "text"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                    readonly message: string
+                    readonly placeholder?: string
+                    readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                  }
+                | {
+                    readonly kind: "select"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                    readonly message: string
+                    readonly options: readonly [
+                      { readonly label: string; readonly value: string; readonly hint?: string },
+                      ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+                    ]
+                    readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                  }
+              >
+              readonly environment?: {
+                readonly packages?: {
+                  readonly apt?: ReadonlyArray<string>
+                  readonly npm?: ReadonlyArray<string>
+                  readonly pip?: ReadonlyArray<string>
+                  readonly go?: ReadonlyArray<string>
+                }
+                readonly buildCommands?: ReadonlyArray<string>
+              }
+              readonly skills?: {
+                readonly [x: string]:
+                  | {
+                      readonly type: "content"
+                      readonly description: string
+                      readonly requiredCredentials?: ReadonlyArray<
+                        | {
+                            readonly kind: "env"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                        | {
+                            readonly kind: "oauth_app"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                      >
+                      readonly instructions: string
+                      readonly files?: { readonly [x: string]: string }
+                    }
+                  | {
+                      readonly type: "upstream"
+                      readonly requiredCredentials?: ReadonlyArray<
+                        | {
+                            readonly kind: "env"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                        | {
+                            readonly kind: "oauth_app"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                      >
+                      readonly upstream: { readonly url: string; readonly ref?: string; readonly path: string }
+                    }
+              }
+              readonly mcps?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly transport:
+                    | { readonly type: "remote"; readonly url: string }
+                    | {
+                        readonly type: "local"
+                        readonly command: readonly [string, ...Array<string>]
+                        readonly cwd?: string
+                        readonly env?: { readonly [x: string]: string }
+                      }
+                    | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                  readonly auth:
+                    | { readonly type: "none" }
+                    | {
+                        readonly type: "oauth"
+                        readonly authorizationEndpoint?: string
+                        readonly tokenEndpoint?: string
+                        readonly scopes?: ReadonlyArray<string>
+                        readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
+                        readonly client?: {
+                          readonly clientId: string
+                          readonly resource?: string
+                          readonly redirectUri?: string
+                        }
+                      }
+                    | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
+                  readonly timeouts?: {
+                    readonly startup?: number
+                    readonly catalog?: number
+                    readonly execution?: number
+                  }
+                  readonly requiredCredentials?: ReadonlyArray<
+                    | {
+                        readonly kind: "env"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "secret"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "oauth_app"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "text"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                        readonly message: string
+                        readonly placeholder?: string
+                        readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                      }
+                    | {
+                        readonly kind: "select"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                        readonly message: string
+                        readonly options: readonly [
+                          { readonly label: string; readonly value: string; readonly hint?: string },
+                          ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+                        ]
+                        readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                      }
+                  >
+                }
+              }
+              readonly dependsOn?: ReadonlyArray<string>
+              readonly renamedFrom?: ReadonlyArray<string>
+            }
+          }
+          readonly schedules?: {
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly cron: string
+              readonly timeZone: string
+              readonly message: string
+              readonly until?: string
+              readonly enabled?: boolean
+            }
+          }
+          readonly webhooks?: {
+            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+          }
+          readonly channels?: {
+            readonly [x: string]:
+              | {
+                  readonly kind: "slack"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | {
+                  readonly kind: "linear"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
+              | {
+                  readonly kind: "github"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | {
+                  readonly kind: "telegram"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly allowedSenders?: ReadonlyArray<string>
+                  readonly blockedSenders?: ReadonlyArray<string>
+                }
+          }
+          readonly environment?: {
+            readonly description?: string
+            readonly provider: string
+            readonly config: JsonValue
+            readonly sessionsPerEnvironment?: number
+          }
+          readonly uses?: { readonly agents?: ReadonlyArray<string> }
+        }
+      }
+    }
+    readonly bindings: {
+      readonly organization: string
+      readonly spaces?: {
+        readonly [x: string]: {
+          readonly timezone?: string
+          readonly channels?: {
+            readonly [x: string]:
+              | { readonly kind: "slack"; readonly channelId: string }
+              | { readonly kind: "linear"; readonly projectId: string }
+              | { readonly kind: "github"; readonly repository: string }
+              | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
+          }
+          readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
+          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
+        }
+      }
+    }
+    readonly digest: string
+  }["bindings"]
+  readonly digest: {
+    readonly spec: {
+      readonly org: {
+        readonly settings: {
+          readonly instructions?: string
+          readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly permissions?: ReadonlyArray<{
+            readonly action: string
+            readonly resource: string
+            readonly effect: "ask" | "deny"
+          }>
+          readonly references?: ReadonlyArray<{
+            readonly alias: string
+            readonly repository: string
+            readonly branch?: string
+            readonly description: string
+          }>
+        }
+      }
+      readonly spaces: {
+        readonly [x: string]: {
+          readonly name: string
+          readonly description?: string
+          readonly renamedFrom?: ReadonlyArray<string>
+          readonly settings?: {
+            readonly instructions?: string
+            readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly permissions?: ReadonlyArray<{
+              readonly action: string
+              readonly resource: string
+              readonly effect: "ask" | "deny"
+            }>
+            readonly references?: ReadonlyArray<{
+              readonly alias: string
+              readonly repository: string
+              readonly branch?: string
+              readonly description: string
+            }>
+          }
+          readonly agents?: {
+            readonly [x: string]: {
+              readonly description?: string
+              readonly isSubagent?: boolean
+              readonly settings?: {
+                readonly instructions?: string
+                readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly permissions?: ReadonlyArray<{
+                  readonly action: string
+                  readonly resource: string
+                  readonly effect: "ask" | "deny"
+                }>
+                readonly references?: ReadonlyArray<{
+                  readonly alias: string
+                  readonly repository: string
+                  readonly branch?: string
+                  readonly description: string
+                }>
+              }
+              readonly renamedFrom?: ReadonlyArray<string>
+            }
+          }
+          readonly apps?: {
+            readonly [x: string]: {
+              readonly name: string
+              readonly description: string
+              readonly icon?: string
+              readonly requiredCredentials?: ReadonlyArray<
+                | {
+                    readonly kind: "env"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "secret"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "oauth_app"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                  }
+                | {
+                    readonly kind: "text"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                    readonly message: string
+                    readonly placeholder?: string
+                    readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                  }
+                | {
+                    readonly kind: "select"
+                    readonly name: string
+                    readonly description?: string
+                    readonly optional?: boolean
+                    readonly message: string
+                    readonly options: readonly [
+                      { readonly label: string; readonly value: string; readonly hint?: string },
+                      ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+                    ]
+                    readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                  }
+              >
+              readonly environment?: {
+                readonly packages?: {
+                  readonly apt?: ReadonlyArray<string>
+                  readonly npm?: ReadonlyArray<string>
+                  readonly pip?: ReadonlyArray<string>
+                  readonly go?: ReadonlyArray<string>
+                }
+                readonly buildCommands?: ReadonlyArray<string>
+              }
+              readonly skills?: {
+                readonly [x: string]:
+                  | {
+                      readonly type: "content"
+                      readonly description: string
+                      readonly requiredCredentials?: ReadonlyArray<
+                        | {
+                            readonly kind: "env"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                        | {
+                            readonly kind: "oauth_app"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                      >
+                      readonly instructions: string
+                      readonly files?: { readonly [x: string]: string }
+                    }
+                  | {
+                      readonly type: "upstream"
+                      readonly requiredCredentials?: ReadonlyArray<
+                        | {
+                            readonly kind: "env"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                        | {
+                            readonly kind: "oauth_app"
+                            readonly name: string
+                            readonly description?: string
+                            readonly optional?: boolean
+                          }
+                      >
+                      readonly upstream: { readonly url: string; readonly ref?: string; readonly path: string }
+                    }
+              }
+              readonly mcps?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly transport:
+                    | { readonly type: "remote"; readonly url: string }
+                    | {
+                        readonly type: "local"
+                        readonly command: readonly [string, ...Array<string>]
+                        readonly cwd?: string
+                        readonly env?: { readonly [x: string]: string }
+                      }
+                    | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                  readonly auth:
+                    | { readonly type: "none" }
+                    | {
+                        readonly type: "oauth"
+                        readonly authorizationEndpoint?: string
+                        readonly tokenEndpoint?: string
+                        readonly scopes?: ReadonlyArray<string>
+                        readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
+                        readonly client?: {
+                          readonly clientId: string
+                          readonly resource?: string
+                          readonly redirectUri?: string
+                        }
+                      }
+                    | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
+                  readonly timeouts?: {
+                    readonly startup?: number
+                    readonly catalog?: number
+                    readonly execution?: number
+                  }
+                  readonly requiredCredentials?: ReadonlyArray<
+                    | {
+                        readonly kind: "env"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "secret"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "oauth_app"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                      }
+                    | {
+                        readonly kind: "text"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                        readonly message: string
+                        readonly placeholder?: string
+                        readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                      }
+                    | {
+                        readonly kind: "select"
+                        readonly name: string
+                        readonly description?: string
+                        readonly optional?: boolean
+                        readonly message: string
+                        readonly options: readonly [
+                          { readonly label: string; readonly value: string; readonly hint?: string },
+                          ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+                        ]
+                        readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+                      }
+                  >
+                }
+              }
+              readonly dependsOn?: ReadonlyArray<string>
+              readonly renamedFrom?: ReadonlyArray<string>
+            }
+          }
+          readonly schedules?: {
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly cron: string
+              readonly timeZone: string
+              readonly message: string
+              readonly until?: string
+              readonly enabled?: boolean
+            }
+          }
+          readonly webhooks?: {
+            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+          }
+          readonly channels?: {
+            readonly [x: string]:
+              | {
+                  readonly kind: "slack"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | {
+                  readonly kind: "linear"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
+              | {
+                  readonly kind: "github"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly fallback?: boolean
+                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
+                }
+              | {
+                  readonly kind: "telegram"
+                  readonly purpose: string
+                  readonly agent?: string
+                  readonly allowedSenders?: ReadonlyArray<string>
+                  readonly blockedSenders?: ReadonlyArray<string>
+                }
+          }
+          readonly environment?: {
+            readonly description?: string
+            readonly provider: string
+            readonly config: JsonValue
+            readonly sessionsPerEnvironment?: number
+          }
+          readonly uses?: { readonly agents?: ReadonlyArray<string> }
+        }
+      }
+    }
+    readonly bindings: {
+      readonly organization: string
+      readonly spaces?: {
+        readonly [x: string]: {
+          readonly timezone?: string
+          readonly channels?: {
+            readonly [x: string]:
+              | { readonly kind: "slack"; readonly channelId: string }
+              | { readonly kind: "linear"; readonly projectId: string }
+              | { readonly kind: "github"; readonly repository: string }
+              | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
+          }
+          readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
+          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
+        }
+      }
+    }
+    readonly digest: string
+  }["digest"]
+}
+
+export type InfraApplyOutput = InfraApplied
