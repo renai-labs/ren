@@ -1,6 +1,6 @@
 export * as Runtime from "./runtime.js"
 
-import { Cause, Console, Effect, Exit } from "effect"
+import { Cause, Console, Effect, Exit, Predicate } from "effect"
 import { CliConfig, CliError, Command, GlobalFlag } from "effect/cli"
 import { format } from "node:util"
 import { Output } from "./services/output.js"
@@ -31,13 +31,10 @@ export const run = <Name extends string, Input, ContextInput, E, R>(
       else yield* output.diagnostic(helpOutput.join("\n"))
     }
     if (Exit.isSuccess(exit)) return
-    if (!Cause.hasInterruptsOnly(exit.cause)) {
-      const error = Cause.squash(exit.cause)
-      const message =
-        CliError.isCliError(error) && error._tag === "ShowHelp"
-          ? error.errors.map((issue) => issue.message).join("\n")
-          : String(error instanceof Error ? error.message : error)
-      if (message) yield* output.diagnostic(message)
-    }
+    const error = Cause.hasInterruptsOnly(exit.cause) ? undefined : Cause.squash(exit.cause)
+    if (Predicate.isTagged(error, "UnauthorizedError")) yield* output.diagnostic("Not logged in. Run ren2 login.")
+    else if (CliError.isCliError(error) && error._tag === "ShowHelp") {
+      if (error.errors.length > 0) yield* output.diagnostic(error.errors.map((issue) => issue.message).join("\n"))
+    } else if (error) yield* output.diagnostic(error instanceof Error ? error.message : format(error))
     return yield* Effect.failCause(exit.cause)
   })

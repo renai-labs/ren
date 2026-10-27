@@ -1,6 +1,6 @@
 # ren2 CLI
 
-Status: partially implemented. The command/runtime foundation and binary release tooling are implemented. Authentication, generated API coverage and structured output remain proposed. Publishing the first release requires running the release workflow. HTTP operations and domain shapes remain owned by the protocol and schema. Implementation work belongs in `TODO.md` or issues.
+Status: partially implemented. The command/runtime foundation, binary release tooling and browser login are implemented. Device login, profiles, generated API coverage and structured output remain proposed. Publishing the first release requires running the release workflow. HTTP operations and domain shapes remain owned by the protocol and schema. Implementation work belongs in `TODO.md` or issues.
 
 ## 1. Purpose
 
@@ -116,11 +116,22 @@ For infra, `deploy.yaml` names the target organization. Resolve and check that t
 
 Keep connection profiles distinct from domain app profiles. A CLI profile selects a server, login and optional organization; an app profile represents accounts used by an app.
 
-Provide login, logout, auth status, identity inspection, profile selection and organization selection. Login must support both a person using a browser and an agent initiating authorization and checking its completion separately.
+### 4.1 Login (implemented)
 
-Current Ren uses Better Auth and bearer authentication. An equivalent of ren-v1's device authorization flow has not been established by this proposal. The server/auth contract must be chosen before implementing that workflow; old pairing endpoints are not assumed to exist.
+`ren2 login` uses OAuth 2.1 authorization code with PKCE against Ren's existing OAuth provider (the one MCP clients use), with a loopback callback on `127.0.0.1` and any free port. It discovers endpoints through protected resource metadata (RFC 9728) and authorization server metadata (RFC 8414), and requests `openid offline_access ren` for the server's protected resource. The person picks the organization on the consent page; the token is bound to it, so switching organizations means logging in again. `--no-browser` prints the URL only.
 
-Exact configuration paths, file formats, public flag names, environment variable names and the production endpoint default remain open. Existing `REN_URL` and `REN_TOKEN` behavior must receive an explicit compatibility decision. Project infrastructure declarations do not contain CLI login credentials.
+The CLI is a public native client identified by a Client ID Metadata Document URL, `Auth.cliClient.client_id` in `@ren/schema`. The server resolves that document itself rather than fetching it, so login works in development and on any deployment without depending on the release host.
+
+Access tokens last an hour. The CLI refreshes a token within a minute of expiry and stores the rotated refresh token. The provider's 30-second refresh reuse window lets concurrent CLI processes refresh with the same token safely. `ren2 logout` revokes the refresh token and removes the credential. `ren2 whoami` shows the user and organization.
+
+Credentials live in `$XDG_CONFIG_HOME/ren2/credentials.json` (default `~/.config/ren2`), written atomically with mode `0600`, keyed by server origin. A credential is sent only to the server that issued it. Endpoint precedence today is `REN_URL`, then the release's built-in API URL (`REN2_API_URL` at build time; `http://localhost:4000` from source). `REN_TOKEN` overrides stored credentials for CI and headless use.
+
+### 4.2 Later
+
+- Device authorization (RFC 8628) for SSH and remote machines. It needs the Better Auth device plugin, a migration and an approval page.
+- Named profiles, a `--server` flag and explicit organization selection without a new login.
+
+Project infrastructure declarations do not contain CLI login credentials.
 
 ## 5. Input, output and process behavior
 
@@ -225,7 +236,7 @@ Installer behavior:
 - Add that directory to the shell path without duplicate entries. `--no-modify-path` skips shell configuration edits and prints the required setup.
 - Download and verify the selected artifact before replacing an existing installation. A failed download or verification leaves the working installation intact.
 - Verify the installed executable with `ren2 --version` and report its location.
-- Until login is implemented, print `ren2 --help` as the next step; `--no-init` skips that hint. Future onboarding requires a usable terminal, reads from that terminal rather than the piped script's stdin, and never blocks noninteractive installation.
+- When stdout is a terminal, run `ren2 login`; a failed login does not fail the installation. Otherwise print `ren2 login` as the next step. `--no-init` skips both.
 - Support `--help`; invalid options or missing option values fail clearly.
 
 Support macOS and glibc Linux on arm64 and x64. Use the existing app S3 bucket and CloudFront distribution for `/ren2/*`, separate from `/app/*`. Verify each binary against its SHA-256 sidecar, then check its embedded version before replacement. Windows and musl Linux are not in this release matrix.
@@ -262,9 +273,9 @@ The command/runtime foundation, output contract and package build precede expans
 Resolve before the affected feature ships:
 
 1. npm package name; proposed `@renai-labs/cli2`.
-2. Login protocol and the server support needed for headless authorization.
-3. CLI config paths, credential storage, environment names and compatibility with `REN_URL`/`REN_TOKEN`.
-4. Production endpoint default and exact connection/organization flags.
+2. Device authorization for headless login (section 4.2).
+3. Named profiles and their config format.
+4. Connection and organization flags.
 5. Stable error envelope, exit codes and streaming output contract.
 6. Generated command naming for nested resources and exceptions.
 7. Additional platforms and any future package-manager installation routes. The initial binary/installer release contract is defined in section 7; `REN2_HOST_URL` remains configurable for migration.

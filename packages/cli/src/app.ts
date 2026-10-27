@@ -6,6 +6,23 @@ import { Commands } from "./commands.js"
 
 export const command = Commands.root.pipe(
   Command.withSubcommands([
+    Commands.login.pipe(
+      Command.withHandler((input) =>
+        Effect.promise(() => import("./commands/auth.js")).pipe(
+          Effect.flatMap((module) => module.AuthCommand.login(input)),
+        ),
+      ),
+    ),
+    Commands.logout.pipe(
+      Command.withHandler(() =>
+        Effect.promise(() => import("./commands/auth.js")).pipe(Effect.flatMap((module) => module.AuthCommand.logout)),
+      ),
+    ),
+    Commands.whoami.pipe(
+      Command.withHandler(() =>
+        Effect.promise(() => import("./commands/auth.js")).pipe(Effect.flatMap((module) => module.AuthCommand.whoami)),
+      ),
+    ),
     Commands.health.pipe(
       Command.withHandler(() =>
         Effect.promise(() => import("./commands/health.js")).pipe(Effect.flatMap((module) => module.Health.run)),

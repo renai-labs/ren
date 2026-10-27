@@ -34,6 +34,8 @@ if (
   host.password
 )
   throw new Error("REN2_HOST_URL must be an HTTP or HTTPS origin")
+const api = new URL(process.env.REN2_API_URL ?? "http://localhost:4000")
+if (!["http:", "https:"].includes(api.protocol)) throw new Error("REN2_API_URL must be an HTTP or HTTPS URL")
 const folder = resolve(args.values.outdir, "releases", version)
 const outfile = resolve(folder, name)
 await mkdir(folder, { recursive: true })
@@ -41,7 +43,7 @@ const result = await Bun.build({
   entrypoints: [fileURLToPath(new URL("../src/index.ts", import.meta.url))],
   target: "bun",
   minify: true,
-  define: { REN2_VERSION: JSON.stringify(version) },
+  define: { REN2_VERSION: JSON.stringify(version), REN2_API_URL: JSON.stringify(api.origin) },
   compile: {
     target: target === "linux-x64" ? "bun-linux-x64-baseline" : `bun-${target}`,
     outfile,

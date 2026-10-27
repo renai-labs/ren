@@ -37,6 +37,16 @@ export const OAuthClientAssertionID = Identifier.make("oca", "Auth.OAuthClientAs
 
 export const consentOrganizationHeader = "x-ren-consent-organization"
 
+export const cliClient = {
+  client_id: "https://v2.useren.ai/ren2/oauth-client.json",
+  client_name: "Ren CLI",
+  redirect_uris: ["http://127.0.0.1/callback"],
+  token_endpoint_auth_method: "none",
+  grant_types: ["authorization_code", "refresh_token"],
+  response_types: ["code"],
+  application_type: "native",
+} as const
+
 export const SignInProvider = Schema.Literals(["google", "github", "slack"]).annotate({
   identifier: "Auth.SignInProvider",
 })
