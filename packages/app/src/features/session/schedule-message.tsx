@@ -10,7 +10,7 @@ export function ScheduleMessageHeader(props: { origin: ScheduleOrigin.Info | und
   if (!origin) return null
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pb-2">
-      <Icon glyph="CalendarClock" size="small" tone="secondary" />
+      <Icon glyph="Clock" size="small" tone="secondary" />
       <Text purpose="caption" tone="secondary" element="span" wrapping="anywhere">
         Scheduled ·{" "}
         <Link to="/schedules/$scheduleId" params={{ scheduleId: origin.scheduleId }}>

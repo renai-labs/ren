@@ -58,7 +58,7 @@ export function ApplicationSidebar(props: { onSearch: () => void; chats: ReactNo
         />
         <ApplicationShell.NavigationItem
           current={pathname.startsWith("/schedules")}
-          icon={<Icon glyph="CalendarClock" />}
+          icon={<Icon glyph="Clock" />}
           label="Schedules"
           render={<Link to="/schedules" />}
         />

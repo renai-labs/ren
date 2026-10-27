@@ -154,7 +154,7 @@ function Actions(props: {
             </Menu.Item>
           ) : null}
           {spaceId ? (
-            <Menu.Item icon={<Icon glyph="CalendarClock" />} onSelect={() => setScheduling(true)}>
+            <Menu.Item icon={<Icon glyph="Clock" />} onSelect={() => setScheduling(true)}>
               Schedule a message
             </Menu.Item>
           ) : null}

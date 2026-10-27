@@ -1,7 +1,7 @@
 export * as Schedules from "./schedules.js"
 
 import type { ScheduleInfo, ScheduleRunInfo, ScheduleWhen } from "@ren/client"
-import { DateTime, Option } from "effect"
+import { Cron, DateTime, Option, Result } from "effect"
 
 export const frequencies = ["hourly", "daily", "weekdays", "weekly", "monthly", "custom", "once"] as const
 export type Frequency = (typeof frequencies)[number]
@@ -9,10 +9,10 @@ export type Frequency = (typeof frequencies)[number]
 export const frequencyOptions = [
   { value: "hourly", label: "Every hour" },
   { value: "daily", label: "Every day" },
-  { value: "weekdays", label: "Weekdays" },
+  { value: "weekdays", label: "Every weekday" },
   { value: "weekly", label: "Every week" },
   { value: "monthly", label: "Every month" },
-  { value: "custom", label: "Custom" },
+  { value: "custom", label: "Custom cron" },
   { value: "once", label: "Once" },
 ] satisfies ReadonlyArray<{ value: Frequency; label: string }>
 
@@ -26,7 +26,12 @@ export const weekdays = [
   { value: "0", label: "Sunday" },
 ] as const
 
-export const monthDays = Array.from({ length: 28 }, (_, index) => ({ value: `${index + 1}`, label: `${index + 1}` }))
+const weekdayNames = new Map<string, string>(weekdays.map((day) => [day.value, day.label]))
+
+export const monthDays = Array.from({ length: 31 }, (_, index) => ({
+  value: `${index + 1}`,
+  label: `Day ${index + 1}`,
+}))
 
 export interface Cadence {
   readonly frequency: Frequency
@@ -36,6 +41,7 @@ export interface Cadence {
   readonly cron: string
   readonly date: string
   readonly until: string
+  readonly untilTime: string
   readonly timeZone: string
 }
 
@@ -66,8 +72,8 @@ const presets = [
   { frequency: "hourly", pattern: /^0 \* \* \* \*$/u },
   { frequency: "daily", pattern: /^(\d+) (\d+) \* \* \*$/u },
   { frequency: "weekdays", pattern: /^(\d+) (\d+) \* \* 1-5$/u },
-  { frequency: "weekly", pattern: /^(\d+) (\d+) \* \* ([0-6])$/u },
-  { frequency: "monthly", pattern: /^(\d+) (\d+) ([1-9]|1\d|2[0-8]) \* \*$/u },
+  { frequency: "weekly", pattern: /^(\d+) (\d+) \* \* ([0-6](?:,[0-6])*)$/u },
+  { frequency: "monthly", pattern: /^(\d+) (\d+) ([1-9]|[12]\d|3[01]) \* \*$/u },
 ] as const
 
 const instantIn = (date: string, time: string, timeZone: string) => {
@@ -96,7 +102,8 @@ export const whenOf = (cadence: Cadence): Option.Option<ScheduleWhen> => {
     }))
   const cron = cronOf(cadence)
   if (cron === "") return Option.none()
-  const until = cadence.until === "" ? Option.none() : instantIn(cadence.until, "23:59", cadence.timeZone)
+  const until =
+    cadence.until === "" ? Option.none() : instantIn(cadence.until, cadence.untilTime || "23:59", cadence.timeZone)
   return Option.some({
     cron,
     timeZone: cadence.timeZone,
@@ -114,6 +121,7 @@ export const cadenceOf = (when: ScheduleWhen | undefined, fallbackZone: string):
     cron: "0 9 * * *",
     date: "",
     until: "",
+    untilTime: "23:59",
     timeZone: fallbackZone,
   }
   if (!when) return empty
@@ -122,7 +130,10 @@ export const cadenceOf = (when: ScheduleWhen | undefined, fallbackZone: string):
     ...empty,
     cron: when.cron,
     timeZone: when.timeZone,
-    until: when.until ? localOf(when.until, when.timeZone).date : "",
+    ...(when.until && {
+      until: localOf(when.until, when.timeZone).date,
+      untilTime: localOf(when.until, when.timeZone).time,
+    }),
   }
   const preset = presets.flatMap((candidate) => {
     const match = candidate.pattern.exec(when.cron)
@@ -141,12 +152,15 @@ const zoneName = (timeZone: string) => timeZone.split("/").at(-1)?.replaceAll("_
 // oxlint-disable-next-line ren/no-comments -- A cron `when` in words, for example “Every day at 09:00 · Berlin”.
 export const describe = (when: { readonly cron: string; readonly timeZone: string }) => {
   const cadence = cadenceOf(when, when.timeZone)
-  const day = weekdays.find((option) => option.value === cadence.weekday)?.label ?? ""
+  const days = cadence.weekday.split(",").flatMap((value) => {
+    const day = weekdayNames.get(value)
+    return day ? [day.slice(0, 3)] : []
+  })
   const words = {
     hourly: "Every hour",
     daily: `Every day at ${cadence.time}`,
-    weekdays: `Weekdays at ${cadence.time}`,
-    weekly: `${day}s at ${cadence.time}`,
+    weekdays: `Every weekday at ${cadence.time}`,
+    weekly: `${days.join(", ")} at ${cadence.time}`,
     monthly: `Day ${cadence.monthDay} of each month at ${cadence.time}`,
     custom: `Cron ${when.cron}`,
     once: "",
@@ -154,7 +168,12 @@ export const describe = (when: { readonly cron: string; readonly timeZone: strin
   return `${words} · ${zoneName(when.timeZone)}`
 }
 
-const pauseWords = { user: "Paused", owner_left: "Owner left", agent_removed: "Agent removed" } as const
+const pauseWords = {
+  user: "Paused",
+  owner_left: "Owner left",
+  agent_removed: "Agent removed",
+  failing: "Failing",
+} as const
 
 export const statusOf = (schedule: ScheduleInfo) => {
   if (schedule.pausedReason) return { label: pauseWords[schedule.pausedReason], glyph: "Stop" } as const
@@ -183,4 +202,18 @@ export const tableState = (query: { readonly isPending: boolean; readonly isErro
   if (query.isPending) return "loading" as const
   if (query.isError) return "failed" as const
   return rows === 0 ? ("empty" as const) : ("ready" as const)
+}
+
+// oxlint-disable-next-line ren/no-comments -- The next fire that the dialog shows under the cadence, as ren-v1's preview line did; the server decides the real fire time.
+export const preview = (cadence: Cadence) => {
+  const when = whenOf(cadence)
+  if (Option.isNone(when)) return { kind: "invalid" as const }
+  if ("at" in when.value) return { kind: "next" as const, at: when.value.at }
+  const parsed = Cron.parse(when.value.cron, when.value.timeZone)
+  if (Result.isFailure(parsed)) return { kind: "invalid" as const }
+  const next = Option.liftThrowable(Cron.next)(parsed.success)
+  if (Option.isNone(next)) return { kind: "never" as const }
+  const until = when.value.until
+  if (until && next.value.getTime() > Date.parse(until)) return { kind: "never" as const }
+  return { kind: "next" as const, at: next.value.toISOString() }
 }
