@@ -1,8 +1,6 @@
 import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
 import { Effect, Layer } from "effect"
-import { FetchHttpClient } from "effect/http"
-import { GitHubReader } from "../src/github/reader.js"
 import { SkillSource } from "../src/skill/source.js"
 import { TestGitHub } from "./lib/github.js"
 
@@ -10,11 +8,7 @@ const it = testEffect(Layer.empty)
 
 const skill = (body: string) => `---\nname: PDF\ndescription: Fill PDF forms\n---\n${body}\n`
 
-const source = (github: TestGitHub.Instance) =>
-  GitHubReader.make(Effect.succeed(github.hosts)).pipe(
-    Effect.provide(FetchHttpClient.layer),
-    Effect.map(SkillSource.make),
-  )
+const source = (github: TestGitHub.Instance) => TestGitHub.hostsOf(github).pipe(Effect.map(SkillSource.make))
 
 const read = (resolved: SkillSource.Resolved) => ({ commit: resolved.lookup.commit, document: resolved.document })
 

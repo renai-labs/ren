@@ -14,6 +14,7 @@ import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ChatSettings } from "../src/chat-settings.js"
+import { GitSources } from "../src/git-sources.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
@@ -70,8 +71,7 @@ const open = Effect.fnUntraced(function* (github: TestGitHub.Instance, reference
     {
       saved: Option.some(settings.saved),
       directoryOf: (sessionId) => join(workspace, sessionId),
-      github: Effect.succeed(github.hosts),
-      references: { refresh: 0, retry: 0 },
+      sources: yield* GitSources.make({ github: Effect.succeed(github.hosts), references: { refresh: 0, retry: 0 } }),
     },
   )
   const harness = yield* OpenCodeHarness.make(host, endpoints, Option.some(settings))

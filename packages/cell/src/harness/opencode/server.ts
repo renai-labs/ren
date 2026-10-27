@@ -19,10 +19,6 @@ import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
 import type { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { GitHubReader } from "@ren/brain/github/reader"
-import { ReferenceCache } from "@ren/brain/reference/cache"
-import { SkillCache } from "@ren/brain/skill/cache"
-import { SkillSource } from "@ren/brain/skill/source"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
 import type { Models } from "@ren/schema/models"
 import type { AppCatalog } from "@ren/schema/app-catalog"
@@ -30,7 +26,6 @@ import type { Channel } from "@ren/schema/channel"
 import {
   Context,
   Deferred,
-  type Duration,
   Effect,
   Fiber,
   Layer,
@@ -52,6 +47,7 @@ import { Credentials } from "./credentials.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
+import { GitSources } from "../../git-sources.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeExecution } from "./execution.js"
 import type { LayerNode } from "@opencode/util/effect/layer-node"
@@ -64,9 +60,7 @@ export interface Options {
   readonly makeDirectory?: (directory: string) => Effect.Effect<void>
   readonly apps?: Option.Option<AppCatalog.Info>
   readonly channels?: ReadonlyArray<Channel.Provider>
-  readonly github?: Effect.Effect<GitHubReader.Hosts>
-  readonly skills?: { readonly refresh?: Duration.Input }
-  readonly references?: { readonly refresh: Duration.Input; readonly retry: Duration.Input }
+  readonly sources?: GitSources.Interface
   readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
   readonly egress?: boolean
 }
@@ -205,12 +199,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       ),
     )
   const api = yield* client(fetch)
-  const github = yield* GitHubReader.make(options.github ?? Effect.succeed(GitHubReader.hostsOf({}))).pipe(
-    Effect.provide(FetchHttpClient.layer),
-  )
-  const skillSource = SkillSource.make(github)
-  const skillCache = yield* SkillCache.make(skillSource, { refresh: options.skills?.refresh ?? "5 minutes" })
-  const referenceCache = yield* ReferenceCache.make(github, options.references)
+  const sources = options.sources ?? (yield* GitSources.make())
   const approvals = (sessionId: string) =>
     located(sessionId, Location.Service).pipe(
       Effect.flatMap((location) => api.permission.saved.list({ projectID: location.project.id }).pipe(Effect.orDie)),
@@ -241,8 +230,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       approvals,
       executions.get,
       options.directoryOf,
-      { source: skillSource, cache: skillCache },
-      { reader: github, cache: referenceCache },
+      sources,
       Option.map(options.ren ?? Option.none(), (access) => ({
         ...access,
         lastSender: (sessionId: string) =>

@@ -8,7 +8,7 @@ import { SessionID } from "@opencode/schema/session-id"
 import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { EnvironmentSession } from "@ren/brain/environment/session"
+import { EnvironmentCopies } from "@ren/brain/environment/copies"
 import { BrainSettings } from "@ren/brain/settings"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import { AppCatalog } from "@ren/schema/app-catalog"
@@ -38,6 +38,9 @@ import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
 import { OpenCodeMcp } from "./mcp.js"
+import type { GitSources } from "../../git-sources.js"
+import { OpenCodeCopies } from "./copies.js"
+import { OpenCodeEnvironmentTools } from "./environment-tools.js"
 import { OpenCodeReferences } from "./references.js"
 import { OpenCodeSkills } from "./skills.js"
 import type { HarnessConfig } from "../config.js"
@@ -245,8 +248,7 @@ export const make = (
   ) => Effect.Effect<ReadonlyArray<{ readonly action: string; readonly resource: string }>, Harness.NotFound>,
   boundaryOf: (location: Plugin.Context["location"]) => OpenCodeExecution.Boundary,
   directoryOf: (sessionId: string) => string,
-  skillSources: OpenCodeSkills.Sources,
-  referenceSources: OpenCodeReferences.Sources,
+  sources: GitSources.Interface,
   ren: Option.Option<OpenCodeMcp.Ren>,
   members: {
     readonly egress: boolean
@@ -262,7 +264,7 @@ export const make = (
         const provider = context.provider
         if (Option.isNone(connections))
           yield* tool.transform((editor) => {
-            for (const id of OpenCodeSkills.environmentTools) editor.remove(id)
+            for (const id of OpenCodeEnvironmentTools.names) editor.remove(id)
           })
         if (Option.isSome(connections))
           yield* tool.hook("execute.after", (event) =>
@@ -379,19 +381,25 @@ export const make = (
           ren,
         })
         const refreshSkills = yield* Ref.make<Effect.Effect<void>>(Effect.void)
+        const copies = Option.map(
+          Option.filter(connections, () => Boolean(workspaceID)),
+          (each) => EnvironmentCopies.make(each, Session.ID.make(sessionId)),
+        )
+        const hasEnvironment = Option.isSome(copies)
         const skills = yield* OpenCodeSkills.make({
           context,
           isSession,
-          files: Option.flatMap(connections, (each) =>
-            workspaceID
-              ? Option.some(
-                  EnvironmentSession.make(each, Session.ID.make(sessionId), RenWorkspaceDriver.killedBySignal).files,
-                )
-              : Option.none(),
-          ),
-          sources: skillSources,
+          hasEnvironment,
+          sources: sources.skills,
           apps: (yield* Ref.get(applied)).apps,
           onPrompt: Effect.flatten(Ref.get(refreshSkills)),
+        })
+        // oxlint-disable-next-line ren/no-comments -- R53: one record of copies for the chat's references and skills.
+        const copySources: Array<() => ReadonlyArray<OpenCodeCopies.Item>> = [skills.items]
+        yield* OpenCodeCopies.make({
+          context,
+          copies,
+          items: () => copySources.flatMap((source) => source()),
         })
         const models = yield* Ref.make(initial.models)
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(models)))
@@ -437,23 +445,13 @@ export const make = (
           })
           const references = yield* OpenCodeReferences.make({
             context,
-            environment: Option.flatMap(connections, (each) =>
-              workspaceID
-                ? Option.some({
-                    files: EnvironmentSession.make(each, Session.ID.make(sessionId), RenWorkspaceDriver.killedBySignal)
-                      .files,
-                    generation: each.connect(Session.ID.make(sessionId)).pipe(
-                      Effect.map((connection) => connection.generation),
-                      Effect.scoped,
-                    ),
-                  })
-                : Option.none(),
-            ),
-            sources: referenceSources,
+            hasEnvironment,
+            repositories: sources.repositories,
             references: Effect.sync(() =>
               Option.match(Ref.getUnsafe(installed), { onNone: () => [], onSome: (chat) => chat.resolved.references }),
             ),
           })
+          copySources.push(references.items)
           yield* context.session.hook("context", (event) =>
             Effect.sync(() => {
               const agent = Option.getOrUndefined(agentOf(event.agent))
