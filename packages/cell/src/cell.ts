@@ -22,6 +22,7 @@ import type { State as BrainApiState } from "@ren/host-api/brain-api"
 import manifest from "../package.json"
 import { AppStore } from "./app-store.js"
 import { ChannelStore } from "./channel-store.js"
+import { MemoryStore } from "./memory-store.js"
 import { BrainStorage } from "./brain-storage.js"
 import { Env } from "./env.js"
 import { Fence } from "./fence.js"
@@ -217,7 +218,14 @@ export const hostLayer = Layer.unwrap(
       Layer.provideMerge(behindEgress ? HostToken.layerEgress : HostToken.layer(cell.vars.REN_URL)),
       Layer.provideMerge(GitSources.layer),
       Layer.provideMerge(
-        Layer.mergeAll(ModelStore.layer, CredentialEnv.layer, AppStore.layer, ChannelStore.layer, Inference.layer),
+        Layer.mergeAll(
+          ModelStore.layer,
+          CredentialEnv.layer,
+          AppStore.layer,
+          ChannelStore.layer,
+          MemoryStore.layer,
+          Inference.layer,
+        ),
       ),
       Layer.provideMerge(Fence.layer),
       Layer.provide(RenAddress.http),

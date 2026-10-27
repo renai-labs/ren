@@ -7,6 +7,7 @@ import { PullReply, PullRequest, type PullApps } from "@ren/host-api/ren-host-ap
 import { AppCatalog } from "@ren/schema/app-catalog"
 import { App } from "@ren/schema/app"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { Context, Effect, Fiber, Layer, Option, Schedule, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
@@ -14,6 +15,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { AppStore } from "../src/app-store.js"
 import { ChannelStore } from "../src/channel-store.js"
+import { MemoryStore } from "../src/memory-store.js"
 import { BrainKeys } from "../src/brain-keys.js"
 import { BrainStorage } from "../src/brain-storage.js"
 import { Cell } from "../src/cell.js"
@@ -203,6 +205,7 @@ const open = Effect.fnUntraced(function* (
             Effect.gen(function* () {
               const settings = yield* ChatSettings.Service
               const apps = yield* AppStore.Service
+              const memory = yield* MemoryStore.Service
               return Harness.layer(
                 options.active
                   ? Effect.gen(function* () {
@@ -231,7 +234,13 @@ const open = Effect.fnUntraced(function* (
                           makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
                         },
                       )
-                      return yield* OpenCodeHarness.make(host, [], Option.some(settings))
+                      return yield* OpenCodeHarness.make(
+                        host,
+                        [],
+                        Option.some(settings),
+                        Option.none(),
+                        yield* memory.current,
+                      )
                     })
                   : Effect.die(new Error("A pull must not open the closed harness")),
               )
@@ -244,6 +253,7 @@ const open = Effect.fnUntraced(function* (
           ModelStore.layer,
           AppStore.layer,
           ChannelStore.layer,
+          MemoryStore.layer,
           ChatSettings.layer,
           Cell.activityLayer,
           CredentialEnv.layer,
@@ -415,6 +425,47 @@ it.live(
     }),
 )
 
+it.live(
+  "a chat gets its space’s and its organization’s root memory files, and a change reaches a chat at its next turn (memory M8, M10)",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open({ active: true })
+      const spaceId = Space.ID.create()
+      const root = (content: string) => ({ content, truncated: false })
+      opened.answer(undefined, { memory: { spaceId, organization: null, space: root("- Prefers short replies.") } })
+      yield* opened.reload.pull
+      const harness = yield* opened.harness.get
+      const sessionId = Session.ID.create()
+      yield* harness.start({ sessionId, harness: "opencode", interactive: true })
+      const client = yield* OpenCodeServer.client(harness.fetch)
+      const sessionID = SessionID.make(sessionId)
+      const turn = Effect.fnUntraced(function* () {
+        const script = Shared.stub().script()
+        yield* client.session.prompt({ sessionID, text: `${script.marker} go` }).pipe(Effect.orDie)
+        yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
+        return script.calls[0]?.system ?? ""
+      })
+      const before = yield* turn()
+      expect(before).toContain("Prefers short replies.")
+      expect(before).toContain(`<memory>\n<space id="${spaceId}">\n- Prefers short replies.\n</space>\n</memory>`)
+      expect(before).not.toContain("<org>")
+      opened.answer(undefined, {
+        memory: { spaceId, organization: root("- Ship on Fridays."), space: root("- Prefers long replies.") },
+      })
+      yield* opened.reload.pull
+      const after = yield* turn()
+      expect(after).toContain("- Prefers long replies.")
+      expect(after).toContain("<org>\n- Ship on Fridays.\n</org>")
+      expect(after).not.toContain("Prefers short replies.")
+      opened.answer(undefined, { memory: { spaceId, organization: null, space: null } })
+      yield* opened.reload.pull
+      const cleared = yield* turn()
+      expect(cleared).toContain(`<space id="${spaceId}">\n\n</space>`)
+      expect(cleared).not.toContain("Ship on Fridays.")
+      expect(cleared).not.toContain("Prefers long replies.")
+    }),
+)
+
 it.live("a busy chat that Ren deleted is interrupted and dropped, and its model gets no more requests (HR22)", () =>
   Effect.gen(function* () {
     const opened = yield* open({ active: true })
@@ -497,7 +548,15 @@ it.live("a pull while the harness is closed reaches the chat when the harness op
       ),
     )
     yield* opened.harness.close
-    opened.answer(undefined, { layers: TestSettings.layers({ ren: { instructions: "While closed." } }), chats })
+    opened.answer(undefined, {
+      layers: TestSettings.layers({ ren: { instructions: "While closed." } }),
+      chats,
+      memory: {
+        spaceId: Space.ID.create(),
+        organization: null,
+        space: { content: "- Saved while closed.", truncated: false },
+      },
+    })
     yield* opened.reload.pull
     const harness = yield* opened.harness.get
     const client = yield* OpenCodeServer.client(harness.fetch)
@@ -506,6 +565,7 @@ it.live("a pull while the harness is closed reaches the chat when the harness op
     yield* client.session.prompt({ sessionID, text: `${turn.marker} go` }).pipe(Effect.orDie)
     yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
     expect(turn.calls[0]?.system).toContain("While closed.")
+    expect(turn.calls[0]?.system).toContain("- Saved while closed.")
   }),
 )
 
