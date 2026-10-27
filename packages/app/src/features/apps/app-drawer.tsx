@@ -1,11 +1,11 @@
 import type { AppProfileInfo } from "@ren/client"
 import { Avatar } from "@ren/ui/avatar"
 import { Dialog } from "@ren/ui/dialog"
+import { Document } from "@ren/ui/document"
 import { Icon } from "@ren/ui/icon"
 import type { Glyph } from "@ren/ui/icon"
 import { List } from "@ren/ui/list"
 import { StatusDot } from "@ren/ui/status-dot"
-import { Text } from "@ren/ui/text"
 import type { ReactNode } from "react"
 import { Profiles } from "../../components/profiles.js"
 import type { Apps } from "../../components/apps.js"
@@ -90,9 +90,7 @@ function About(props: { text: string | null }) {
   return (
     <List.Section title="About" appearance="eyebrow">
       <div className="px-2">
-        <Text purpose="body" tone="secondary">
-          {props.text}
-        </Text>
+        <Document.Markdown content={props.text} tone="secondary" />
       </div>
     </List.Section>
   )
