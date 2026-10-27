@@ -1,26 +1,15 @@
 #!/usr/bin/env bun
-/* oxlint-disable no-console -- the CLI writes its results to the terminal */
-import { Connection } from "./connection.js"
-import { InfraCommand } from "./infra/command.js"
+import { BunRuntime, BunServices } from "@effect/platform-bun"
+import { Effect } from "effect"
+import pkg from "../package.json"
+import { App } from "./app.js"
+import { Runtime } from "./runtime.js"
+import { Connection } from "./services/connection.js"
+import { Output } from "./services/output.js"
 
-const usage = `Usage: ren health\n       ${InfraCommand.usage.replace("Usage: ", "")}`
-
-async function main(args: ReadonlyArray<string>) {
-  const command = args.at(0)
-  if (!command) {
-    console.log(usage)
-    return 0
-  }
-  if (command === "infra") return InfraCommand.run(args.slice(1))
-  if (command === "health") {
-    console.log(JSON.stringify(await Connection.run((client) => client.health.get())))
-    return 0
-  }
-  console.error(`Unknown command: ${command}\n${usage}`)
-  return 1
-}
-
-process.exitCode = await main(process.argv.slice(2)).catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error))
-  return 1
-})
+Runtime.run(App.command, { version: pkg.version }).pipe(
+  Effect.provide(Connection.layer),
+  Effect.provide(Output.layer),
+  Effect.provide(BunServices.layer),
+  BunRuntime.runMain({ disableErrorReporting: true }),
+)
