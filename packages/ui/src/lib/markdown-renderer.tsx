@@ -14,6 +14,7 @@ import {
   CodeBlockLine,
   CodeBlockTitle,
 } from "../components/code-block.js"
+import { AppMention } from "../components/app-mention.js"
 import { ImageLightbox } from "../components/image-lightbox.js"
 import { useHighlightedCode } from "../hooks/use-highlighted-code.js"
 
@@ -69,6 +70,18 @@ const remarkPlugins = [...Object.values(defaultRemarkPlugins), sessionLinks]
 const allowedTags = { "session-link": ["session"] }
 
 const SessionContext = createContext<((sessionID: string) => void) | undefined>(undefined)
+
+const AppsContext = createContext<ReadonlyArray<AppMention.App>>([])
+
+const DefaultLink = defaultComponents.a
+
+function Anchor(props: ComponentProps<"a"> & ExtraProps) {
+  const apps = use(AppsContext)
+  const slug = props.href?.startsWith(AppMention.link) ? props.href.slice(AppMention.link.length) : undefined
+  const app = slug ? apps.find((item) => item.slug.toLowerCase() === slug) : undefined
+  if (app) return <AppMention.Chip app={app} />
+  return <DefaultLink {...props} />
+}
 
 function SessionButton(props: { session: string; children: ReactNode }) {
   const open = use(SessionContext)
@@ -147,28 +160,33 @@ const components: Components = {
   code: BlockCode,
   "session-link": SessionLink,
   img: Image,
+  a: Anchor,
 }
 
 export function MarkdownRenderer(props: {
   content: string
   streaming: boolean
   onOpenSession?: ((sessionID: string) => void) | undefined
+  apps?: ReadonlyArray<AppMention.App> | undefined
 }) {
+  const apps = props.apps ?? []
   return (
     <SessionContext value={props.onOpenSession}>
-      <Streamdown
-        mode={props.streaming ? "streaming" : "static"}
-        isAnimating={props.streaming}
-        plugins={plugins}
-        controls={controls}
-        linkSafety={linkSafety}
-        tableMaxHeight="32rem"
-        remarkPlugins={remarkPlugins}
-        allowedTags={allowedTags}
-        components={components}
-      >
-        {props.content}
-      </Streamdown>
+      <AppsContext value={apps}>
+        <Streamdown
+          mode={props.streaming ? "streaming" : "static"}
+          isAnimating={props.streaming}
+          plugins={plugins}
+          controls={controls}
+          linkSafety={linkSafety}
+          tableMaxHeight="32rem"
+          remarkPlugins={remarkPlugins}
+          allowedTags={allowedTags}
+          components={components}
+        >
+          {AppMention.links(props.content, apps)}
+        </Streamdown>
+      </AppsContext>
     </SessionContext>
   )
 }

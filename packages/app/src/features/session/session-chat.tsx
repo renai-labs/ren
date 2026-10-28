@@ -27,6 +27,7 @@ import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
 import { ChatView } from "./chat-view.js"
 import { Failure } from "./failure.js"
+import { SessionApps } from "./session-apps.js"
 import { SessionChild } from "./session-child.js"
 import { SessionComposer } from "./session-composer.js"
 import { SessionDrafts } from "./session-drafts.js"
@@ -376,6 +377,7 @@ export function SessionChat(props: {
   }
   const blocking = blocked(chat.requests, { approving: Chat.useAutoApprove(props.sessionID).enabled })
   const people = usePeople(props.organizationId, props.viewer, messages)
+  const apps = SessionApps.useMentionable()
 
   SessionCache.useLive(props.sessionID, liveOf(info, { running }))
 
@@ -432,6 +434,7 @@ export function SessionChat(props: {
               detail={props.detail}
               viewer={props.viewer}
               people={people}
+              apps={apps}
               filesResetAt={filesResetOf(stored.data)}
             />
           )}

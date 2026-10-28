@@ -3,7 +3,7 @@ export * as Mentions from "./mentions.js"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionMessage } from "@ren/schema/session/message"
 
-export type Kind = "agent" | "skill" | "file"
+export type Kind = "agent" | "skill" | "file" | "app"
 
 export interface Item {
   readonly kind: Kind
@@ -44,17 +44,37 @@ export const fromFile = (file: SessionCatalog.File): Item => ({
   handle: file.path,
 })
 
+export const fromApp = (app: {
+  readonly id: string
+  readonly slug: string
+  readonly name: string
+  readonly description: string
+}): Item => ({
+  kind: "app",
+  id: app.id,
+  label: app.name,
+  handle: app.slug,
+  ...(app.description && { description: app.description }),
+})
+
+const named = (item: Item, query: string) =>
+  [item.label, item.handle].some((value) => value.toLowerCase().includes(query.toLowerCase()))
+
 const matches = (item: Item, query: string) =>
   [item.label, item.handle, item.description ?? ""].some((value) => value.toLowerCase().includes(query.toLowerCase()))
 
 export const suggest = (input: {
   readonly agents: ReadonlyArray<Item>
   readonly skills: ReadonlyArray<Item>
+  readonly apps?: ReadonlyArray<Item>
   readonly files: ReadonlyArray<Item>
   readonly query: string
 }): ReadonlyArray<Item> => {
-  const named = [...input.agents, ...input.skills].filter((item) => matches(item, input.query))
-  return [...named, ...input.files.filter((file) => !named.some((item) => key(item) === key(file)))]
+  const listed = [
+    ...[...input.agents, ...input.skills].filter((item) => matches(item, input.query)),
+    ...(input.apps ?? []).filter((item) => named(item, input.query)),
+  ]
+  return [...listed, ...input.files.filter((file) => !listed.some((item) => key(item) === key(file)))]
 }
 
 export const text = (item: Pick<Item, "label">) => `@  ${item.label}`
