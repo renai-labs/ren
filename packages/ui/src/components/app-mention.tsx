@@ -6,7 +6,6 @@ export type App = {
   slug: string
   name: string
   icon: string | null
-  color?: string | null | undefined
 }
 
 export function Logo(props: { name: string; icon: string | null; className?: string | undefined }) {
@@ -34,11 +33,7 @@ export function Logo(props: { name: string; icon: string | null; className?: str
 
 export function Chip(props: { app: App }) {
   return (
-    <span
-      data-slot="app-mention"
-      className="font-medium whitespace-nowrap text-ring"
-      style={props.app.color ? { color: props.app.color } : undefined}
-    >
+    <span data-slot="app-mention" className="font-medium whitespace-nowrap text-ring">
       <Logo name={props.app.name} icon={props.app.icon} className="mr-[0.3em] align-[-0.28em]" />
       {props.app.name}
     </span>

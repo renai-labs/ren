@@ -35,12 +35,26 @@ import { InputGroup, InputGroupTextarea } from "./input-group.js"
 import { Kbd } from "./kbd.js"
 import { Spinner } from "./spinner.js"
 
-const ListboxContext = createContext<string | undefined>(undefined)
+export type Layout = "stacked" | "inline"
 
-export function Root(props: { label: string; onSubmit: () => void; className?: string; children: ReactNode }) {
+const RootContext = createContext<{ readonly listbox: string; readonly layout: Layout } | null>(null)
+
+function useRoot() {
+  const root = use(RootContext)
+  if (root === null) throw new Error("PromptInput parts must be used inside PromptInput.Root")
+  return root
+}
+
+export function Root(props: {
+  label: string
+  layout: Layout
+  onSubmit: () => void
+  className?: string
+  children: ReactNode
+}) {
   const listbox = useId()
   return (
-    <ListboxContext value={listbox}>
+    <RootContext value={{ listbox, layout: props.layout }}>
       <form
         data-slot="prompt-input"
         aria-label={props.label}
@@ -52,19 +66,18 @@ export function Root(props: { label: string; onSubmit: () => void; className?: s
       >
         {props.children}
       </form>
-    </ListboxContext>
+    </RootContext>
   )
 }
 
-export type Layout = "stacked" | "inline"
-
-export function Group(props: { layout: Layout; className?: string; children: ReactNode }) {
+export function Group(props: { className?: string; children: ReactNode }) {
+  const root = useRoot()
   return (
     <InputGroup
-      data-layout={props.layout}
+      data-layout={root.layout}
       className={cn(
         "h-auto bg-card shadow-composer transition-shadow focus-within:shadow-composer-focus has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card",
-        props.layout === "stacked" ? "rounded-xl" : "min-h-12 rounded-3xl pl-1",
+        root.layout === "stacked" ? "rounded-xl" : "min-h-12 rounded-3xl pl-1",
         props.className,
       )}
     >
@@ -78,7 +91,6 @@ export type MentionRange = {
   end: number
   label: string
   icon?: ReactNode
-  color?: string | undefined
 }
 
 function Mention(props: { mention: MentionRange; text: string }) {
@@ -86,7 +98,6 @@ function Mention(props: { mention: MentionRange; text: string }) {
   return (
     <span
       data-slot="prompt-input-mention"
-      style={mention.color ? { color: mention.color } : undefined}
       className="relative rounded-sm bg-secondary [box-decoration-break:clone] font-medium text-foreground ring-2 ring-secondary"
     >
       <span className="text-transparent">{props.text.slice(mention.start, mention.end - mention.label.length)}</span>
@@ -127,27 +138,6 @@ function submitOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
   form?.requestSubmit()
 }
 
-const textareaLayout: Record<Layout, string> = {
-  stacked: "min-h-16 px-4 pt-4 pb-2",
-  inline: "min-h-0 px-2 py-3",
-}
-
-const paddingOf = (layout: Layout, size: "default" | "lg" | undefined) =>
-  cn(
-    "text-base/relaxed md:text-sm/relaxed",
-    textareaLayout[layout],
-    layout === "stacked" && size === "lg" && "min-h-24",
-  )
-
-function suggestionAttributes(listbox: string | undefined, active: string | undefined) {
-  if (!listbox) return {}
-  return {
-    "aria-autocomplete": "list" as const,
-    "aria-controls": listbox,
-    ...(active && { "aria-activedescendant": suggestionID(listbox, active) }),
-  }
-}
-
 function assignRef<T>(ref: Ref<T> | undefined, node: T | null) {
   if (typeof ref === "function") return ref(node)
   if (ref) ref.current = node
@@ -156,7 +146,6 @@ function assignRef<T>(ref: Ref<T> | undefined, node: T | null) {
 export function Textarea(
   props: Omit<ComponentProps<"textarea">, "className" | "style" | "value"> & {
     value: string
-    layout: Layout
     size?: "default" | "lg"
     mentions?: ReadonlyArray<MentionRange>
     suggesting?: boolean
@@ -164,9 +153,8 @@ export function Textarea(
     focusOnMount?: boolean
   },
 ) {
-  const { layout, size, mentions, suggesting, activeSuggestion, focusOnMount, ref, onScroll, onKeyDown, ...rest } =
-    props
-  const listbox = use(ListboxContext)
+  const { size, mentions, suggesting, activeSuggestion, focusOnMount, ref, onScroll, onKeyDown, ...rest } = props
+  const root = useRoot()
   const input = useRef<HTMLTextAreaElement | null>(null)
   const layer = useRef<HTMLDivElement>(null)
   const marked = (mentions?.length ?? 0) > 0
@@ -181,7 +169,11 @@ export function Textarea(
     node.focus()
     node.setSelectionRange(node.value.length, node.value.length)
   }, [focusOnMount])
-  const padding = paddingOf(layout, size)
+  const padding = cn(
+    "text-base/relaxed md:text-sm/relaxed",
+    root.layout === "stacked" ? "min-h-16 px-4 pt-4 pb-2" : "min-h-0 px-2 py-3",
+    root.layout === "stacked" && size === "lg" && "min-h-24",
+  )
   return (
     <div data-slot="prompt-input-field" className="relative flex min-w-0 flex-1 self-stretch">
       {marked ? (
@@ -197,7 +189,11 @@ export function Textarea(
         </div>
       ) : null}
       <InputGroupTextarea
-        {...suggestionAttributes(suggesting ? listbox : undefined, activeSuggestion)}
+        {...(suggesting && {
+          "aria-autocomplete": "list" as const,
+          "aria-controls": root.listbox,
+          ...(activeSuggestion && { "aria-activedescendant": suggestionID(root.listbox, activeSuggestion) }),
+        })}
         {...(marked && { spellCheck: false })}
         ref={(node) => {
           input.current = node
@@ -211,11 +207,11 @@ export function Textarea(
           onKeyDown?.(event)
           submitOnEnter(event)
         }}
-        rows={layout === "inline" ? 1 : undefined}
+        rows={root.layout === "inline" ? 1 : undefined}
         className={cn(
           "relative max-h-60 placeholder:text-muted-foreground disabled:cursor-not-allowed",
           padding,
-          layout === "inline" && !props.value && "field-sizing-fixed placeholder:truncate",
+          root.layout === "inline" && !props.value && "field-sizing-fixed placeholder:truncate",
           marked && "text-transparent caret-foreground",
         )}
         {...rest}
@@ -224,36 +220,25 @@ export function Textarea(
   )
 }
 
-export type SuggestionKind = "agent" | "skill" | "file" | "app" | "command"
-
 export type Suggestion = {
   value: string
-  kind: SuggestionKind
+  group: string
   label: string
   description?: string | undefined
   icon?: ReactNode
-}
-
-const suggestionGroups: Record<SuggestionKind, string> = {
-  agent: "Agents",
-  skill: "Skills",
-  file: "Files",
-  app: "Apps",
-  command: "Commands",
 }
 
 export function Suggestions(props: {
   label: string
   items: ReadonlyArray<Suggestion>
   active: string | undefined
-  side?: "top" | "bottom"
   onActiveChange: (value: string) => void
   onSelect: (value: string) => void
 }) {
-  const listbox = use(ListboxContext)
+  const root = useRoot()
   const list = useRef<HTMLDivElement>(null)
   const starts = props.items.flatMap((item, index) =>
-    index === 0 || props.items[index - 1]?.kind !== item.kind ? [index] : [],
+    index === 0 || props.items[index - 1]?.group !== item.group ? [index] : [],
   )
   const groups = starts.map((start, index) => props.items.slice(start, starts[index + 1]))
   useLayoutEffect(() => {
@@ -261,27 +246,24 @@ export function Suggestions(props: {
   }, [props.active])
   return (
     <div
-      id={listbox}
+      id={root.listbox}
       ref={list}
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the text field keeps focus and points into the options, which a <select> cannot do
       role="listbox"
       aria-label={props.label}
-      className={cn(
-        "absolute inset-x-0 z-50 flex max-h-72 min-h-0 flex-col overflow-y-auto overscroll-contain rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10",
-        props.side === "bottom" ? "top-full mt-2" : "bottom-full mb-2",
-      )}
+      className="absolute inset-x-0 bottom-full z-50 mb-2 flex max-h-72 min-h-0 flex-col overflow-y-auto overscroll-contain rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
     >
       {groups.map((group) => (
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- options inside a listbox group through role="group"; an <optgroup> needs a <select>
-        <div key={group.at(0)?.value} role="group" aria-label={suggestionGroups[group.at(0)?.kind ?? "command"]}>
+        <div key={group.at(0)?.value} role="group" aria-label={group.at(0)?.group}>
           <span aria-hidden="true" className="block px-2 py-1.5 text-xs font-medium text-muted-foreground">
-            {suggestionGroups[group.at(0)?.kind ?? "command"]}
+            {group.at(0)?.group}
           </span>
           {group.map((item) => (
             // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus -- the text field keeps focus and drives the options through aria-activedescendant
             <div
               key={item.value}
-              id={listbox ? suggestionID(listbox, item.value) : undefined}
+              id={suggestionID(root.listbox, item.value)}
               // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- an <option> lives only inside a <select>, which cannot keep the text field focused
               role="option"
               aria-selected={item.value === props.active}
