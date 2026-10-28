@@ -44,6 +44,7 @@ export function useActions(schedule: ScheduleInfo, options: { readonly onArchive
     run: () => run.mutate({ id }),
     isRunning: run.isPending,
     toggle,
+    isToggling: pause.isPending || resume.isPending,
     edit: () => setEditing(true),
     archive: () => setArchiving(true),
     dialogs: (
