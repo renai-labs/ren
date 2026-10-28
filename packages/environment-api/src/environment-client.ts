@@ -17,6 +17,7 @@ const answerWithinFor: Readonly<Record<string, Duration.Duration>> = {
   "process.kill": Duration.seconds(5),
   // oxlint-disable-next-line ren/no-comments -- R39: a reference archive can have 1 GiB; the executor stops a stalled download after 60 s itself.
   "files.unpack": Duration.minutes(10),
+  "drives.mount": Duration.minutes(1),
 } satisfies Partial<Record<RpcGroup.Rpcs<typeof EnvironmentApi.Rpcs>["_tag"], Duration.Duration>>
 
 const isUnauthorizedResponse = (error: unknown) =>

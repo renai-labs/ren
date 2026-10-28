@@ -167,7 +167,7 @@ export const layer = Layer.effect(
     return SandboxProvider.Service.of({
       kind: "e2b",
       canEgress: true,
-      canMount: false,
+      canMount: true,
       template: config.template,
       create: Effect.fn("E2BSandbox.create")(function* (input) {
         const metadata = { brain: input.brainId, generation: String(input.generation) }

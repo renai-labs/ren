@@ -27,6 +27,10 @@
     "packages/core": {
       "entry": ["test/**/*.test.ts", "test/lib/preload.ts", "script/**/*.ts"]
     },
+    "packages/executor": {
+      "entry": ["test/**/*.test.ts"],
+      "ignoreBinaries": ["rclone", "fusermount3"]
+    },
     "packages/db": {
       "entry": ["test/**/*.test.ts", "script/**/*.ts"],
       "ignoreDependencies": ["@ren/schema"]

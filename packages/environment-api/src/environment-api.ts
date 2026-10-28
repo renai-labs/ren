@@ -45,6 +45,9 @@ export const Hello = Schema.Struct({
       description: "The shells this machine has, by absolute path. The first is its default.",
     }),
   ),
+  mount: Schema.optionalKey(
+    Schema.Boolean.annotate({ description: "Whether this machine has rclone and a usable /dev/fuse." }),
+  ),
 }).annotate({ identifier: "Executor.Hello" })
 
 export interface SpawnInput extends Schema.Schema.Type<typeof SpawnInput> {}
