@@ -38,7 +38,7 @@ export const Route = createFileRoute("/invites/accept")({
 
 function LoadingInvitation() {
   return (
-    <PublicShell.Centered frame="none">
+    <PublicShell.Centered>
       <Text tone="secondary" element="div" alignment="center">
         Loading invitation…
       </Text>

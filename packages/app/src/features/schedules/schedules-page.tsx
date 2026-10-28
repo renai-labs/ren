@@ -3,7 +3,7 @@ import { Button } from "@ren/ui/button"
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@ren/ui/card"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import {
   Pagination,
   PaginationContent,
@@ -18,7 +18,6 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Spinner } from "@ren/ui/spinner"
 import { Switch } from "@ren/ui/switch"
 import { Time } from "@ren/ui/time"
-import { Toolbar } from "@ren/ui/toolbar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { Search } from "@ren/util/search"
 import { useQuery } from "@tanstack/react-query"
@@ -81,11 +80,11 @@ export function SchedulesPage() {
           .toSorted((left, right) => left - right)
   const filtered = needle !== "" || spaceId !== allSpaces || state !== "any"
   return (
-    <PageShell.Root
+    <Page.Root
       title="Schedules"
-      subtitle="Work that starts on a schedule instead of a message."
-      toolbar={
-        <Toolbar.Root>
+      description="Work that starts on a schedule instead of a message."
+      actions={
+        <>
           <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search schedules" />
           <Select items={stateOptions} value={state} onValueChange={(next) => next && setState(next)}>
             <SelectTrigger size="sm" aria-label="State">
@@ -119,7 +118,47 @@ export function SchedulesPage() {
             <Icon glyph="Plus" data-icon="inline-start" />
             Create schedule
           </Button>
-        </Toolbar.Root>
+        </>
+      }
+      footer={
+        pageCount > 1 ? (
+          <Pagination className="mx-0 ml-auto w-auto justify-end">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  aria-disabled={current <= 1}
+                  className={current <= 1 ? "pointer-events-none opacity-50" : undefined}
+                  onClick={() => setPage(current - 1)}
+                />
+              </PaginationItem>
+              {pages.map((value, index) => (
+                <Fragment key={value}>
+                  {value - (pages[index - 1] ?? value - 1) > 1 ? (
+                    <PaginationItem>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  ) : null}
+                  <PaginationItem>
+                    <PaginationLink
+                      isActive={value === current}
+                      className="tabular-nums"
+                      onClick={() => setPage(value)}
+                    >
+                      {value}
+                    </PaginationLink>
+                  </PaginationItem>
+                </Fragment>
+              ))}
+              <PaginationItem>
+                <PaginationNext
+                  aria-disabled={current >= pageCount}
+                  className={current >= pageCount ? "pointer-events-none opacity-50" : undefined}
+                  onClick={() => setPage(current + 1)}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        ) : undefined
       }
     >
       <Grid
@@ -131,42 +170,8 @@ export function SchedulesPage() {
           <ScheduleCard key={schedule.id} schedule={schedule} spaceName={spaceNames.get(schedule.spaceId) ?? "—"} />
         ))}
       </Grid>
-      {pageCount > 1 ? (
-        <Pagination className="justify-end">
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                aria-disabled={current <= 1}
-                className={current <= 1 ? "pointer-events-none opacity-50" : undefined}
-                onClick={() => setPage(current - 1)}
-              />
-            </PaginationItem>
-            {pages.map((value, index) => (
-              <Fragment key={value}>
-                {value - (pages[index - 1] ?? value - 1) > 1 ? (
-                  <PaginationItem>
-                    <PaginationEllipsis />
-                  </PaginationItem>
-                ) : null}
-                <PaginationItem>
-                  <PaginationLink isActive={value === current} className="tabular-nums" onClick={() => setPage(value)}>
-                    {value}
-                  </PaginationLink>
-                </PaginationItem>
-              </Fragment>
-            ))}
-            <PaginationItem>
-              <PaginationNext
-                aria-disabled={current >= pageCount}
-                className={current >= pageCount ? "pointer-events-none opacity-50" : undefined}
-                onClick={() => setPage(current + 1)}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      ) : null}
       {creating ? <ScheduleDialog onClose={() => setCreating(false)} /> : null}
-    </PageShell.Root>
+    </Page.Root>
   )
 }
 

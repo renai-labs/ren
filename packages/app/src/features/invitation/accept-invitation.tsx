@@ -22,7 +22,7 @@ export function AcceptInvitation(props: {
 
   if (preview.isPending) {
     return (
-      <PublicShell.Centered frame="none">
+      <PublicShell.Centered>
         <Text tone="secondary" element="div" alignment="center">
           Loading invitation…
         </Text>

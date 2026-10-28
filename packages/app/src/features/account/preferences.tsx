@@ -2,7 +2,7 @@ import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "@ren/ui/field"
 import { InlineEdit } from "@ren/ui/inline-edit"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Spinner } from "@ren/ui/spinner"
 import { Switch } from "@ren/ui/switch"
@@ -58,7 +58,7 @@ function ChatSettings() {
   const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
   const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
   return (
-    <PageShell.Section title="Chats" frame="divided">
+    <Page.Section title="Chats" frame="divided">
       <Setting title="Detail" description="How much of Ren’s work a chat shows." controlId={`${id}-detail`}>
         <Select
           items={detailOptions}
@@ -137,7 +137,7 @@ function ChatSettings() {
           />
         </Setting>
       ) : null}
-    </PageShell.Section>
+    </Page.Section>
   )
 }
 
@@ -158,11 +158,11 @@ function LinkedAccounts() {
   const offered = [github, slack].filter((link) => link.offered)
   if (offered.length === 0) return null
   return (
-    <PageShell.Section title="Linked accounts" frame="divided">
+    <Page.Section title="Linked accounts" frame="divided">
       {offered.map((link) => (
         <LinkedAccount key={link.provider} link={link} />
       ))}
-    </PageShell.Section>
+    </Page.Section>
   )
 }
 
@@ -172,7 +172,7 @@ function LeaveOrganization(props: { organization: { id: string; name: string } }
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
   return (
-    <PageShell.Section title="Organization" frame="divided">
+    <Page.Section title="Organization" frame="divided">
       <Setting
         title={props.organization.name}
         description="Leaving archives your private space and deletes your personal credentials here."
@@ -200,7 +200,7 @@ function LeaveOrganization(props: { organization: { id: string; name: string } }
         }}
         onConfirmed={() => toast.add({ type: "success", title: `You left ${props.organization.name}` })}
       />
-    </PageShell.Section>
+    </Page.Section>
   )
 }
 
@@ -237,8 +237,8 @@ export function Preferences(props: {
   const theme = Theme.useTheme()
   const [changingPassword, setChangingPassword] = useState(false)
   return (
-    <PageShell.Root layout="settings" title="Preferences">
-      <PageShell.Section frame="divided">
+    <Page.Root title="Preferences">
+      <Page.Section frame="divided">
         <Setting title="Email" description="Contact support to change.">
           <div className="min-w-0">
             <Text tone="secondary" wrapping="anywhere" element="span">
@@ -269,24 +269,24 @@ export function Preferences(props: {
             }}
           />
         </Setting>
-      </PageShell.Section>
-      <PageShell.Section title="Appearance" frame="divided">
+      </Page.Section>
+      <Page.Section title="Appearance" frame="divided">
         <Field>
           <FieldTitle>Theme</FieldTitle>
           <ThemeSelector value={theme.preference} onValueChange={theme.setPreference} />
         </Field>
-      </PageShell.Section>
+      </Page.Section>
       <ChatSettings />
       <LinkedAccounts />
       {props.organization ? <LeaveOrganization organization={props.organization} /> : null}
-      <PageShell.Section title="Security" frame="divided">
+      <Page.Section title="Security" frame="divided">
         <Setting title="Password">
           <Button variant="outline" size="xs" className="h-6.5" onClick={() => setChangingPassword(true)}>
             Change
           </Button>
         </Setting>
-      </PageShell.Section>
+      </Page.Section>
       {changingPassword ? <PasswordDialog onClose={() => setChangingPassword(false)} /> : null}
-    </PageShell.Root>
+    </Page.Root>
   )
 }

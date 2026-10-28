@@ -2,7 +2,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@r
 import { Field, FieldTitle } from "@ren/ui/field"
 import { Icon } from "@ren/ui/icon"
 import { InlineEdit } from "@ren/ui/inline-edit"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { Spinner } from "@ren/ui/spinner"
 import { toast } from "@ren/ui/toast"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
@@ -15,7 +15,7 @@ export function GeneralSettings(props: { organizationId: string }) {
   const options = Auth.organizationOptions(context.auth, props.organizationId)
   const organization = useQuery(options)
   return (
-    <PageShell.Root layout="settings" title="General">
+    <Page.Root title="General">
       {organization.isPending ? (
         <Empty>
           <EmptyMedia>
@@ -24,7 +24,7 @@ export function GeneralSettings(props: { organizationId: string }) {
         </Empty>
       ) : null}
       {organization.isError ? (
-        <PageShell.Section frame="divided">
+        <Page.Section frame="divided">
           <Empty role="alert">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -34,10 +34,10 @@ export function GeneralSettings(props: { organizationId: string }) {
               <EmptyDescription>{organization.error.message}</EmptyDescription>
             </EmptyHeader>
           </Empty>
-        </PageShell.Section>
+        </Page.Section>
       ) : null}
       {organization.isSuccess ? (
-        <PageShell.Section frame="divided" key={organization.data.id}>
+        <Page.Section frame="divided" key={organization.data.id}>
           <Field orientation="horizontal">
             <FieldTitle>Name</FieldTitle>
             <InlineEdit
@@ -65,8 +65,8 @@ export function GeneralSettings(props: { organizationId: string }) {
               }}
             />
           </Field>
-        </PageShell.Section>
+        </Page.Section>
       ) : null}
-    </PageShell.Root>
+    </Page.Root>
   )
 }

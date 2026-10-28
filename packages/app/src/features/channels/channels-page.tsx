@@ -4,7 +4,7 @@ import { Button, buttonVariants } from "@ren/ui/button"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@ren/ui/item"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { SearchField } from "@ren/ui/search-field"
 import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
@@ -46,13 +46,13 @@ export function ChannelsPage(props: { query: string; onQueryChange: (query: stri
   const byCategory = Map.groupBy(matching, (provider) => provider.category)
   const sections = Channels.sections.filter((section) => byCategory.has(section.category))
   return (
-    <PageShell.Root
+    <Page.Root
       title="@Ren"
-      subtitle="Invoke Ren from where your team already works."
-      toolbar={<SearchField.Root value={props.query} onValueChange={props.onQueryChange} label="Search channels" />}
+      description="Invoke Ren from where your team already works."
+      leading={<SearchField.Root value={props.query} onValueChange={props.onQueryChange} label="Search channels" />}
     >
       {sections.map((section) => (
-        <PageShell.Section key={section.category} title={section.title} description={section.description}>
+        <Page.Section key={section.category} title={section.title} description={section.description}>
           <ItemGroup aria-label={section.title} className="gap-0 divide-y rounded-xl border bg-card">
             {(byCategory.get(section.category) ?? []).map((provider) => (
               <ProviderRow
@@ -65,7 +65,7 @@ export function ChannelsPage(props: { query: string; onQueryChange: (query: stri
               />
             ))}
           </ItemGroup>
-        </PageShell.Section>
+        </Page.Section>
       ))}
       {sections.length === 0 ? (
         <Empty>
@@ -82,7 +82,7 @@ export function ChannelsPage(props: { query: string; onQueryChange: (query: stri
           </EmptyContent>
         </Empty>
       ) : null}
-    </PageShell.Root>
+    </Page.Root>
   )
 }
 

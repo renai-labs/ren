@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
+import { Page } from "@ren/ui/page"
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
@@ -17,7 +18,7 @@ import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { Members } from "./members.js"
-import { SortableHead, StateRow } from "./table-parts.js"
+import { SortableHead } from "./table-parts.js"
 
 export function InvitationsTable(props: {
   rows: ReadonlyArray<Members.InvitationRow>
@@ -39,7 +40,7 @@ export function InvitationsTable(props: {
   const query = props.query.trim()
   return (
     <>
-      <div className="rounded-xl border bg-card p-2">
+      <Page.TableCard>
         <Table className="table-fixed">
           <TableCaption className="sr-only">Invitations</TableCaption>
           <TableHeader>
@@ -67,9 +68,9 @@ export function InvitationsTable(props: {
                 />
               ))
             ) : (
-              <StateRow
+              <Page.TableState
                 columns={4}
-                state={props.state}
+                state={props.state === "ready" ? "empty" : props.state}
                 failureMessage={props.failureMessage}
                 emptyMessage={query === "" ? "No pending invitations." : `Nothing matches “${query}”`}
                 emptyGlyph="Mail"
@@ -77,7 +78,7 @@ export function InvitationsTable(props: {
             )}
           </TableBody>
         </Table>
-      </div>
+      </Page.TableCard>
       <ConfirmationDialog
         open={confirming}
         onOpenChange={setConfirming}

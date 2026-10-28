@@ -10,7 +10,7 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
@@ -31,7 +31,7 @@ export function ScheduleDetailPage(props: { scheduleId: string; onArchived: () =
   })
   if (!detail.data)
     return (
-      <PageShell.Root title="Schedule">
+      <Page.Root title="Schedule">
         {detail.isError ? (
           <Empty role="alert">
             <EmptyHeader>
@@ -56,7 +56,7 @@ export function ScheduleDetailPage(props: { scheduleId: string; onArchived: () =
             </EmptyHeader>
           </Empty>
         )}
-      </PageShell.Root>
+      </Page.Root>
     )
   return <Detail schedule={detail.data} onArchived={props.onArchived} />
 }
@@ -67,14 +67,14 @@ function Detail(props: { schedule: ScheduleInfo; onArchived: () => void }) {
   const status = Schedules.statusOf(schedule)
   const target = schedule.target
   return (
-    <PageShell.Root
+    <Page.Root
       title={schedule.name}
-      subtitle={
+      description={
         <>
           <ScheduleWhen when={schedule.when} /> · {status.label}
         </>
       }
-      actions={
+      menu={
         <>
           <Button variant="outline" size="sm" disabled={actions.isRunning} onClick={actions.run}>
             {actions.isRunning ? (
@@ -139,7 +139,7 @@ function Detail(props: { schedule: ScheduleInfo; onArchived: () => void }) {
         <Runs schedule={schedule} />
       </section>
       {actions.dialogs}
-    </PageShell.Root>
+    </Page.Root>
   )
 }
 
@@ -155,7 +155,7 @@ function Runs(props: { schedule: ScheduleInfo }) {
   })
   const state = Schedules.tableState(runs, runs.data?.items.length ?? 0)
   return (
-    <div className="rounded-xl border bg-card p-2 [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3 [&_th]:font-normal [&_th]:text-muted-foreground [&_tr]:border-0">
+    <Page.TableCard>
       <Table className="table-fixed">
         <TableCaption className="sr-only">Runs</TableCaption>
         <TableHeader>
@@ -188,7 +188,7 @@ function Runs(props: { schedule: ScheduleInfo }) {
           ))}
         </TableBody>
       </Table>
-    </div>
+    </Page.TableCard>
   )
 }
 

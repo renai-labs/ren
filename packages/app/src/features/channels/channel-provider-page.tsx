@@ -6,7 +6,7 @@ import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@ren/ui/field"
 import { Icon } from "@ren/ui/icon"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@ren/ui/item"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
@@ -38,9 +38,8 @@ export function ChannelProviderPage(props: {
   const [resetting, setResetting] = useState(false)
   const install = installs.data?.items.find((each) => each.provider === provider.id)
   return (
-    <PageShell.Root
-      layout="settings"
-      context={
+    <Page.Root
+      back={
         <Link
           to="/settings/channels"
           className={buttonVariants({ variant: "ghost", size: "xs", className: "h-6.5 text-muted-foreground" })}
@@ -51,7 +50,7 @@ export function ChannelProviderPage(props: {
       }
       media={<Icon glyph={provider.glyph} size="large" tone="primary" />}
       title={provider.title}
-      actions={
+      menu={
         install ? (
           <Button variant="outline" size="xs" className="h-6.5" onClick={() => setResetting(true)}>
             <Icon glyph="Unplug" data-icon="inline-start" />
@@ -80,9 +79,9 @@ export function ChannelProviderPage(props: {
               </ItemActions>
             </Item>
           </ItemGroup>
-          <PageShell.Section frame="divided">
+          <Page.Section frame="divided">
             <DefaultSpace install={install} noun={provider.place.noun} />
-          </PageShell.Section>
+          </Page.Section>
           <ChannelRoutes install={install} userId={props.userId} />
         </>
       ) : (
@@ -107,7 +106,7 @@ export function ChannelProviderPage(props: {
         }}
         onConfirmed={() => toast.add({ type: "success", title: `${provider.title} mappings reset` })}
       />
-    </PageShell.Root>
+    </Page.Root>
   )
 }
 

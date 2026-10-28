@@ -7,7 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/col
 import { Document } from "@ren/ui/document"
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
@@ -42,7 +42,7 @@ export function TaskActivity(props: {
     return actor.userId ? (props.catalog.person(actor.userId)?.name ?? "Former member") : "Ren"
   }
   return (
-    <PageShell.Section title="Activity">
+    <Page.Section title="Activity">
       {history.isPending ? (
         <Empty>
           <EmptyHeader>
@@ -102,7 +102,7 @@ export function TaskActivity(props: {
         ))}
       </div>
       {props.task.canUpdate ? <CommentComposer taskId={props.task.id} /> : null}
-    </PageShell.Section>
+    </Page.Section>
   )
 }
 

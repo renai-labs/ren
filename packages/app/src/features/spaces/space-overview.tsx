@@ -1,6 +1,6 @@
 import { Field, FieldTitle } from "@ren/ui/field"
 import { InlineEdit } from "@ren/ui/inline-edit"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { Text } from "@ren/ui/text"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Forms } from "../../lib/forms.js"
@@ -15,7 +15,7 @@ export function SpaceOverview(props: { spaceId: string }) {
     await update.mutateAsync({ id: props.spaceId, ...change })
   }
   return (
-    <PageShell.Section frame="divided">
+    <Page.Section frame="divided">
       <Field orientation="horizontal">
         <FieldTitle>Name</FieldTitle>
         {space.data.canUpdate ? (
@@ -46,6 +46,6 @@ export function SpaceOverview(props: { spaceId: string }) {
           <Text element="span">{space.data.description ?? "—"}</Text>
         )}
       </Field>
-    </PageShell.Section>
+    </Page.Section>
   )
 }

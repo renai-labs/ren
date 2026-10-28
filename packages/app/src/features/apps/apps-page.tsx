@@ -1,11 +1,10 @@
 import { Button } from "@ren/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { SearchField } from "@ren/ui/search-field"
 import { Spinner } from "@ren/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
-import { Toolbar } from "@ren/ui/toolbar"
 import { useDeferredValue, useState } from "react"
 import { ProfileDialog } from "../../components/profile-dialog.js"
 import { Profiles } from "../../components/profiles.js"
@@ -34,29 +33,23 @@ export function AppsPage(props: {
   const openedProfiles = opened ? (catalog.profiles.get(opened.id) ?? []) : []
   const openProfile = (appId: string) => (profileId: string) => setProfileOf({ appId, profileId })
   return (
-    <PageShell.Root
+    <Page.Root
       title="Marketplace"
-      subtitle="Add an app to a space, then connect its accounts. Every chat in the space can use it."
-      toolbar={
-        <Toolbar.Root
-          alignment="split"
-          leading={
-            <ToggleGroup
-              aria-label="Marketplace view"
-              value={[props.view]}
-              onValueChange={(next) => {
-                const view = next[0]
-                if (view === "browse" || view === "in-use") props.onViewChange(view)
-              }}
-            >
-              <ToggleGroupItem value="browse">Browse</ToggleGroupItem>
-              <ToggleGroupItem value="in-use">In use</ToggleGroupItem>
-            </ToggleGroup>
-          }
+      description="Add an app to a space, then connect its accounts. Every chat in the space can use it."
+      leading={
+        <ToggleGroup
+          aria-label="Marketplace view"
+          value={[props.view]}
+          onValueChange={(next) => {
+            const view = next[0]
+            if (view === "browse" || view === "in-use") props.onViewChange(view)
+          }}
         >
-          <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search apps" />
-        </Toolbar.Root>
+          <ToggleGroupItem value="browse">Browse</ToggleGroupItem>
+          <ToggleGroupItem value="in-use">In use</ToggleGroupItem>
+        </ToggleGroup>
       }
+      actions={<SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search apps" />}
     >
       <section aria-label="Apps" aria-live="polite">
         <Catalog
@@ -102,7 +95,7 @@ export function AppsPage(props: {
           onClose={() => setProfileOf(undefined)}
         />
       ) : null}
-    </PageShell.Root>
+    </Page.Root>
   )
 }
 
