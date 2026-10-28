@@ -54,7 +54,7 @@ export interface Interface {
     actor: Actor.Info,
     input: Drive.PathInput,
   ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden | Unavailable>
-  readonly sweep: (archivedBefore: Date) => Effect.Effect<void, Unavailable>
+  readonly sweep: (archivedBefore: Date) => Effect.Effect<void>
   readonly availability: (
     owner: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
     environment: { readonly canMount: boolean; readonly egress: boolean },
@@ -344,7 +344,15 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         yield* Effect.forEach(
           spaces,
-          (space) => deletePage(prefixOf(space)).pipe(Effect.repeat({ while: (more) => more })),
+          (space) =>
+            deletePage(prefixOf(space)).pipe(
+              Effect.repeat({ while: (more) => more }),
+              Effect.catch((error) =>
+                Effect.logWarning("Retention kept an archived drive for the next run", error.cause).pipe(
+                  Effect.annotateLogs({ spaceId: space.spaceId }),
+                ),
+              ),
+            ),
           { concurrency: 4, discard: true },
         )
       }),
