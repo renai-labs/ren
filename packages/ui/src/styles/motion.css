@@ -82,42 +82,6 @@
   transition-property: none;
 }
 
-@utility shadow-composer {
-  box-shadow:
-    0 1px 2px var(--ren-color-fill-primary),
-    0 calc(var(--ren-spacing-1) * 1.5) calc(var(--ren-spacing-1) * 5) calc(-1 * var(--ren-spacing-2))
-      var(--ren-color-fill-secondary);
-
-  @variant dark {
-    box-shadow: none;
-  }
-}
-
-@utility shadow-composer-focus {
-  box-shadow:
-    0 1px 2px var(--ren-color-fill-primary),
-    0 var(--ren-spacing-2) var(--ren-spacing-6) calc(-1 * var(--ren-spacing-2)) var(--ren-color-fill-secondary),
-    0 var(--ren-spacing-2) var(--ren-spacing-6) calc(-1 * var(--ren-spacing-2)) var(--ren-color-fill-secondary);
-
-  @variant dark {
-    box-shadow: 0 0 0 1px var(--ren-color-fill-primary);
-  }
-}
-
-@utility shadow-raised {
-  box-shadow: 0 1px 2px 0 var(--ren-color-fill-secondary);
-
-  @variant dark {
-    box-shadow:
-      inset 0 1px 0 var(--ren-color-fill-primary),
-      0 1px 2px 0 var(--ren-color-overlay-primary);
-  }
-}
-
-@utility shadow-none {
-  box-shadow: none;
-}
-
 :root[data-theme-switching] *,
 :root[data-theme-switching] *::before,
 :root[data-theme-switching] *::after {
