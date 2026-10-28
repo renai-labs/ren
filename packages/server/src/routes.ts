@@ -113,6 +113,12 @@ const settingsAndAgents = Layer.mergeAll(SpaceSettings.layer, OrganizationSettin
   Layer.provide(RepositoryHosts.layer),
 )
 
+const schedules = Schedules.layer.pipe(
+  Layer.provide(ScheduleTrigger.layerPostgres),
+  Layer.provide(SessionRunner.layer),
+  Layer.provide(BrainRegistry.layer),
+)
+
 // oxlint-disable-next-line ren/no-comments -- Api only (MCP may stream SSE); gzip only (Bun's brotli blocks the event loop).
 const Compression = HttpRouter.middleware(
   Effect.gen(function* () {
@@ -175,14 +181,14 @@ export const layer = Layer.mergeAll(
         SpaceEnvironmentTemplate.layer,
         Memory.layer,
         settingsAndAgents,
-        InfraSpecs.layer.pipe(Layer.provide([Space.layer, AgentMembership.layer, settingsAndAgents])),
-        Layer.mergeAll(
-          Task.layer,
-          TaskActivity.layer,
-          TaskComment.layer,
-          Label.layer,
-          Schedules.layer.pipe(Layer.provide(ScheduleTrigger.layerPostgres)),
-        ).pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
+        InfraSpecs.layer.pipe(
+          Layer.provide([Space.layer, AgentMembership.layer, settingsAndAgents, App.layer, ChannelMappings.layer, schedules]),
+        ),
+        Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
+          Layer.provide(SessionRunner.layer),
+          Layer.provide(BrainRegistry.layer),
+        ),
+        schedules,
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,

@@ -220,6 +220,106 @@ const compact = (settings: (typeof Infra.Pulled.Encoded)["spec"]["org"]["setting
   return kept.length > 0 ? { settings: Object.fromEntries(kept) } : {}
 }
 
+type PulledSpace = (typeof Infra.Pulled.Encoded)["spec"]["spaces"][string]
+
+type PulledApp = PulledSpace["apps"][string]
+
+const nonEmpty = <A>(key: string, values: ReadonlyArray<A> | undefined) =>
+  values && values.length > 0 ? { [key]: values } : {}
+
+const record = async (path: string, value: Record<string, unknown>) =>
+  Object.keys(value).length > 0 ? Bun.write(path, dump(value)) : rm(path, { force: true })
+
+type PulledSkill = NonNullable<PulledApp["skills"]>[string]
+
+const writeSkill = async (folder: string, slug: string, skill: PulledSkill) => {
+  const existing = await list(folder)
+  if (skill.type === "upstream") {
+    await Promise.all(existing.map((file) => rm(join(folder, file), { force: true })))
+    await Bun.write(
+      join(folder, "skill.yaml"),
+      dump({ ...nonEmpty("requiredCredentials", skill.requiredCredentials), upstream: skill.upstream }),
+    )
+    return
+  }
+  const previous = existing.includes("SKILL.md") ? frontmatter.exec(await Bun.file(join(folder, "SKILL.md")).text()) : null
+  const parsed = Result.try(() => Bun.YAML.parse(previous?.at(1) ?? "")).pipe(Result.getOrUndefined)
+  const header = Predicate.isObject(parsed) ? parsed : {}
+  const metadata = Predicate.isObject(header["metadata"]) ? header["metadata"] : {}
+  const kept = Object.fromEntries(Object.entries(metadata).filter(([key]) => key !== "requiredCredentials"))
+  const merged = { ...kept, ...nonEmpty("requiredCredentials", skill.requiredCredentials) }
+  const files = skill.files ?? {}
+  await Promise.all(
+    existing
+      .filter((file) => file !== "SKILL.md" && !(file in files))
+      .map((file) => rm(join(folder, file), { force: true })),
+  )
+  await Promise.all([
+    Bun.write(
+      join(folder, "SKILL.md"),
+      `---\n${dump({ ...header, name: slug, description: skill.description, ...(Object.keys(merged).length > 0 ? { metadata: merged } : {}) })}---\n${skill.instructions}`,
+    ),
+    ...Object.entries(files).map(([file, content]) => Bun.write(join(folder, file), content)),
+  ])
+}
+
+const writeApp = async (folder: string, app: PulledApp) => {
+  const skills = Object.entries(app.skills ?? {})
+  const existing = children(await list(folder), "skills/")
+  await Promise.all(
+    existing
+      .filter((slug) => !(slug in (app.skills ?? {})))
+      .map((slug) => rm(join(folder, "skills", slug), { recursive: true, force: true })),
+  )
+  await Promise.all([
+    Bun.write(
+      join(folder, "app.yaml"),
+      dump({
+        name: app.name,
+        description: app.description,
+        ...(app.icon && { icon: app.icon }),
+        ...nonEmpty("requiredCredentials", app.requiredCredentials),
+        ...(app.environment && { environment: app.environment }),
+        ...nonEmpty("dependsOn", app.dependsOn),
+      }),
+    ),
+    record(join(folder, "mcps.yaml"), app.mcps ?? {}),
+    ...skills.map(([slug, skill]) => writeSkill(join(folder, "skills", slug), slug, skill)),
+  ])
+}
+
+const writeBindings = async (root: string, pulled: typeof Infra.Pulled.Encoded) => {
+  const deploy = Bun.file(join(root, "deploy.yaml"))
+  const parsed = (await deploy.exists()) ? Bun.YAML.parse(await deploy.text()) : {}
+  const current = Predicate.isObject(parsed) ? parsed : {}
+  const spaces = Predicate.isObject(current["spaces"]) ? current["spaces"] : {}
+  const slugs = [...new Set([...Object.keys(spaces), ...Object.keys(pulled.bindings.spaces)])].toSorted()
+  const written = Object.fromEntries(
+    slugs.flatMap((slug) => {
+      const before = Predicate.isObject(spaces[slug]) ? spaces[slug] : {}
+      const kept = Object.fromEntries(
+        Object.entries(before).filter(([key]) => key !== "channels" && key !== "profiles"),
+      )
+      const pulledSpace = pulled.bindings.spaces[slug]
+      const merged = {
+        ...kept,
+        ...(pulledSpace?.channels && Object.keys(pulledSpace.channels).length > 0 && { channels: pulledSpace.channels }),
+        ...(pulledSpace?.profiles && Object.keys(pulledSpace.profiles).length > 0 && { profiles: pulledSpace.profiles }),
+      }
+      return Object.keys(merged).length > 0 ? [[slug, merged]] : []
+    }),
+  )
+  const rest = Object.fromEntries(Object.entries(current).filter(([key]) => key !== "spaces"))
+  await Bun.write(
+    deploy,
+    dump({
+      ...rest,
+      organization: pulled.bindings.organization,
+      ...(Object.keys(written).length > 0 && { spaces: written }),
+    }),
+  )
+}
+
 export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) => {
   await mkdir(root, { recursive: true })
   const files = await list(root)
@@ -228,12 +328,7 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
     if (text) await Bun.write(path, `${text}\n`)
     else await rm(path, { force: true })
   }
-  const deploy = Bun.file(join(root, "deploy.yaml"))
-  const bindings = (await deploy.exists()) ? Bun.YAML.parse(await deploy.text()) : {}
-  await Bun.write(
-    deploy,
-    dump({ ...(Predicate.isObject(bindings) ? bindings : {}), organization: pulled.bindings.organization }),
-  )
+  await writeBindings(root, pulled)
   const org = compact(pulled.spec.org.settings)
   await Bun.write(join(root, "org.yaml"), org.settings ? dump(org) : "settings: {}\n")
   await instructions("", pulled.spec.org.settings.instructions)
@@ -247,6 +342,11 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
         children(files, `spaces/${slug}/agents/`)
           .filter((name) => !(name in space.agents))
           .map((name) => `spaces/${slug}/agents/${name}`),
+      ),
+      ...spaces.flatMap(([slug, space]) =>
+        children(files, `spaces/${slug}/apps/`)
+          .filter((name) => !(name in space.apps))
+          .map((name) => `spaces/${slug}/apps/${name}`),
       ),
     ].map((folder) => rm(join(root, folder), { recursive: true, force: true })),
   )
@@ -265,6 +365,9 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
           }),
         ),
         instructions(folder, space.settings.instructions),
+        record(join(root, folder, "schedules.yaml"), space.schedules),
+        record(join(root, folder, "channels.yaml"), space.channels),
+        ...Object.entries(space.apps).map(([name, app]) => writeApp(join(root, folder, "apps", name), app)),
       ]
     }),
     ...spaces.flatMap(([slug, space]) =>
