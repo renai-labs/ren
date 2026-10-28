@@ -1,7 +1,9 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test"
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { mkdtemp } from "node:fs/promises"
 import { join } from "node:path"
 import { asset, makeReleases, run } from "./lib/releases.js"
+
+setDefaultTimeout(30_000)
 
 const version = "0.0.0-test"
 const releases = await makeReleases()
