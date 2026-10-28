@@ -703,6 +703,29 @@ export const MemoryDelete = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
 }
 
+export const DriveList = {
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  folder: Flag.String("folder").pipe(Flag.optional, Flag.withDescription("The folder to list, such as `reports`.")),
+  cursor: Flag.String("cursor").pipe(
+    Flag.optional,
+    Flag.withDescription("The `cursor` of the previous page, to list the next one."),
+  ),
+}
+
+export const DriveDownload = {
+  path: Argument.String("path").pipe(
+    Argument.withDescription("A file’s path inside its drive, such as `reports/q3.pdf`."),
+  ),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+}
+
+export const DriveDelete = {
+  path: Argument.String("path").pipe(
+    Argument.withDescription("A file’s path inside its drive, such as `reports/q3.pdf`."),
+  ),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+}
+
 export const CredentialConnect = {
   profileId: Flag.String("profile").pipe(Flag.optional, Flag.withDescription("App profile slug or ID")),
   reconnect: Flag.Boolean("reconnect").pipe(Flag.optional),
@@ -1509,6 +1532,27 @@ export const commands = [
         Command.withDescription("Delete a memory file"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.MemoryDelete(input)),
+        ),
+      ),
+    ]),
+  ),
+  Command.make("drive").pipe(
+    Command.withDescription("Manage drive files"),
+    Command.withSubcommands([
+      Command.make("list", DriveList).pipe(
+        Command.withDescription("List a drive folder"),
+        Command.withHandler((input) => Effect.flatMap(Effect.promise(operations), (module) => module.DriveList(input))),
+      ),
+      Command.make("download", DriveDownload).pipe(
+        Command.withDescription("Download a drive file"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.DriveDownload(input)),
+        ),
+      ),
+      Command.make("delete", DriveDelete).pipe(
+        Command.withDescription("Delete a drive file"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.DriveDelete(input)),
         ),
       ),
     ]),
