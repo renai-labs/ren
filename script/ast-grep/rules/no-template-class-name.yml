@@ -1,0 +1,19 @@
+id: no-template-class-name
+language: Tsx
+message: Join conditional classes with `cn()`, which also resolves conflicts. A template string keeps both sides of a conflict.
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+rule:
+  kind: jsx_attribute
+  all:
+    - has:
+        kind: property_identifier
+        regex: ^className$
+    - has:
+        kind: jsx_expression
+        has:
+          kind: template_string
+          has:
+            kind: template_substitution

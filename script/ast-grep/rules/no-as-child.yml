@@ -1,0 +1,12 @@
+id: no-as-child
+language: Tsx
+message: "`asChild` is Radix. Ren's components are on Base UI: pass the element with `render`, for example `<DialogTrigger render={<Button />}>`."
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+rule:
+  kind: jsx_attribute
+  has:
+    kind: property_identifier
+    regex: ^asChild$

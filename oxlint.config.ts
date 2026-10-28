@@ -265,6 +265,7 @@ const forbiddenElements = [
   ["select", "Select"],
   ["dialog", "Dialog"],
   ["table", "Table"],
+  ["hr", "Separator"],
 ].map((entry) => ({ element: entry[0], message: `Use ${entry[1]} from @ren/ui.` }))
 
 const tailwind = {
@@ -322,6 +323,20 @@ const colorRoleClass = {
   pattern: `${anyVariant}(?:(?:bg|from|via|to)-(?:text|border)-|(?:text|placeholder|caret|decoration)-(?:background|fill|border|overlay)-|(?:border(?:-[xytrblse])?|ring|outline|divide|inset-ring)-(?:text|background|fill|overlay)-).+$`,
   message:
     "Use colour tokens only in their role: backgrounds take background, fill and overlay; text takes text; borders and rings take border. Accent and status work anywhere. Add a role token in Paper instead of borrowing one.",
+}
+
+const spaceClass = {
+  pattern: `${anyVariant}space-[xy]-.+$`,
+  message: "Space children with `flex` or `grid` and `gap-*`. `space-*` margins break when a child wraps or hides.",
+}
+const darkClass = {
+  pattern: "^(?:[^:]*:)*dark:.+$",
+  message:
+    "Theme colours already switch with the theme. Use shadcn's names or Ren's tokens instead of `dark:` overrides.",
+}
+const pulseClass = {
+  pattern: `${anyVariant}animate-pulse$`,
+  message: "Use `Skeleton` from @ren/ui for loading placeholders.",
 }
 
 const siteTailwind = { cwd: new URL("packages/site", import.meta.url).pathname, entryPoint: "src/styles/globals.css" }
@@ -586,6 +601,7 @@ export default defineConfig({
           readingOrderClass,
           fontSmoothingClass,
           colorRoleClass,
+          spaceClass,
         ],
       },
     ],
@@ -704,7 +720,7 @@ export default defineConfig({
       rules: {
         "better-tailwindcss/no-restricted-classes": [
           "error",
-          { restrict: [viewportUnitClass, fontSmoothingClass, colorRoleClass] },
+          { restrict: [viewportUnitClass, fontSmoothingClass, colorRoleClass, spaceClass] },
         ],
         "react/only-export-components": "off",
       },
@@ -722,6 +738,9 @@ export default defineConfig({
               readingOrderClass,
               fontSmoothingClass,
               colorRoleClass,
+              spaceClass,
+              darkClass,
+              pulseClass,
             ],
           },
         ],

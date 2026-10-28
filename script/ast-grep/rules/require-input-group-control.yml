@@ -1,0 +1,22 @@
+id: require-input-group-control
+language: Tsx
+message: Inside an `InputGroup`, use `InputGroupInput` and `InputGroupTextarea`. A plain `Input` or `Textarea` keeps its own border and focus ring.
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+rule:
+  any:
+    - kind: jsx_opening_element
+    - kind: jsx_self_closing_element
+  has:
+    field: name
+    regex: ^(Input|Textarea)$
+  inside:
+    stopBy: end
+    kind: jsx_element
+    has:
+      field: open_tag
+      has:
+        field: name
+        regex: ^InputGroup$

@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignore": ["repos/**", ".opencode/skills/**", "**/generated/**", "**/*.gen.ts"],
+  "ignore": ["repos/**", "**/generated/**", "**/*.gen.ts"],
   "workspaces": {
     ".": {
       "entry": ["script/**/*.ts", "oxlint.config.ts", ".opencode/plugins/*.ts"],
