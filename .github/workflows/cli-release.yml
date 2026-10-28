@@ -107,7 +107,7 @@ jobs:
           set -euo pipefail
           bucket="$DEPLOY-app-$(aws sts get-caller-identity --query Account --output text)"
           prefix="ren2/releases/$RELEASE_VERSION/"
-          count=$(aws s3api list-objects-v2 --bucket "$bucket" --prefix "$prefix" --query KeyCount --output text)
+          count=$(aws s3api list-objects-v2 --bucket "$bucket" --prefix "$prefix" --query KeyCount --output text --no-paginate)
           test "$count" = 0 || { echo 'Release already exists' >&2; exit 1; }
           (cd "dist/releases/$RELEASE_VERSION" && sha256sum --check ./*.sha256)
           aws s3 sync "dist/releases/$RELEASE_VERSION/" "s3://$bucket/$prefix" --cache-control 'public, max-age=31536000, immutable' --only-show-errors
