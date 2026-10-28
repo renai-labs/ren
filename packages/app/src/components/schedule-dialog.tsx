@@ -3,17 +3,18 @@ import { Pagination } from "@ren/schema/pagination"
 import { Primitive } from "@ren/schema/primitive"
 import { Schedule } from "@ren/schema/schedule"
 import { Space } from "@ren/schema/space"
-import { Alert, AlertDescription } from "@ren/ui/alert"
-import { Button } from "@ren/ui/button"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { Combobox } from "@ren/ui/combobox"
 import { Field, FieldLegend, FieldSet, FieldTitle } from "@ren/ui/field"
 import { Form } from "@ren/ui/form"
+import { FormActions } from "@ren/ui/form-actions"
 import { Icon } from "@ren/ui/icon"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@ren/ui/sheet"
 import { Text } from "@ren/ui/text"
 import { localTimeZone, Time, timeZones } from "@ren/ui/time"
 import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { Link, useMatchRoute } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
 import { useState } from "react"
 import { Pages } from "../lib/pages.js"
@@ -156,13 +157,13 @@ export function ScheduleDialog(props: {
         if (!open && !saving.pending) props.onClose()
       }}
     >
-      <SheetContent>
-        <SheetHeader>
+      <SheetContent className="gap-0 data-[side=right]:sm:max-w-105">
+        <SheetHeader className="pr-12 pb-3">
           <SheetTitle>{setup.title}</SheetTitle>
           <SheetDescription>{setup.description}</SheetDescription>
         </SheetHeader>
         <Form.Root form={form} arrangement="contents">
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 pb-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overscroll-contain px-4 pb-4">
             {setup.pickSpace ? <SpaceField form={form} /> : null}
             <form.AppField name="message">
               {(field) => (
@@ -178,27 +179,46 @@ export function ScheduleDialog(props: {
             <form.AppField name="name">
               {(field) => <field.TextField label="Name" placeholder="Daily report" />}
             </form.AppField>
-            {setup.isChat ? null : (
-              <form.Subscribe selector={(state) => state.values.spaceId}>
-                {(spaceId) => <AgentField form={form} spaceId={spaceId} />}
-              </form.Subscribe>
-            )}
             <form.Subscribe selector={(state) => state.values}>
-              {(values) => <CadenceFields form={form} cadence={values} />}
+              {(values) => (
+                <>
+                  <CadenceFields form={form} cadence={values} />
+                  {setup.isChat ? null : <AgentField form={form} spaceId={values.spaceId} />}
+                  <TimeZoneField form={form} />
+                  {values.frequency === "once" ? null : <UntilFields form={form} until={values.until} />}
+                </>
+              )}
             </form.Subscribe>
             {saving.problem ? (
-              <Alert variant="destructive">
-                <Icon glyph="AlertCircle" />
-                <AlertDescription>{saving.problem}</AlertDescription>
-              </Alert>
+              <Text purpose="body" tone="danger" role="alert">
+                {saving.problem}
+              </Text>
             ) : null}
           </div>
-          <SheetFooter className="justify-end">
-            <form.SubmitButton pendingLabel={setup.pendingLabel}>{setup.submitLabel}</form.SubmitButton>
+          <SheetFooter>
+            <FormActions.Cancel onClick={props.onClose} disabled={saving.pending} />
+            <div className="flex items-center gap-2">
+              {props.schedule ? <RunsLink scheduleId={props.schedule.id} /> : null}
+              <form.SubmitButton pendingLabel={setup.pendingLabel}>{setup.submitLabel}</form.SubmitButton>
+            </div>
           </SheetFooter>
         </Form.Root>
       </SheetContent>
     </Sheet>
+  )
+}
+
+function RunsLink(props: { scheduleId: string }) {
+  const matchRoute = useMatchRoute()
+  if (matchRoute({ to: "/schedules/$scheduleId", params: { scheduleId: props.scheduleId } })) return null
+  return (
+    <Link
+      to="/schedules/$scheduleId"
+      params={{ scheduleId: props.scheduleId }}
+      className={buttonVariants({ variant: "ghost" })}
+    >
+      View runs
+    </Link>
   )
 }
 
@@ -256,44 +276,52 @@ function AgentField(props: { form: ScheduleForm; spaceId: string }) {
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- ren-v1's cadence block: repeat and time side by side, the days, the cron, the next run, the time zone and the end.
+// oxlint-disable-next-line ren/no-comments -- ren-v1's cadence block: repeat and time side by side, then the date or days, the cron and the next run.
 function CadenceFields(props: { form: ScheduleForm; cadence: Schedules.Cadence }) {
   const form = props.form
   const frequency = props.cadence.frequency
   return (
     <>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <form.AppField name="frequency">
-          {(field) => <field.Select label="Repeat" width="full" options={Schedules.frequencyOptions} />}
-        </form.AppField>
-        {frequency === "hourly" || frequency === "custom" ? null : (
-          <form.AppField name="time">{(field) => <field.TextField label="Time" type="time" />}</form.AppField>
-        )}
-      </div>
-      {frequency === "once" ? (
-        <form.AppField name="date">{(field) => <field.TextField label="Date" type="date" />}</form.AppField>
-      ) : null}
-      {frequency === "weekly" ? <WeekdayField form={form} /> : null}
-      {frequency === "monthly" ? (
-        <form.AppField name="monthDay">
-          {(field) => <field.Select label="Day of month" width="full" options={Schedules.monthDays} />}
-        </form.AppField>
-      ) : null}
-      {frequency === "custom" ? (
-        <form.AppField name="cron">
-          {(field) => (
-            <field.TextField
-              label="Cron expression"
-              typeface="mono"
-              placeholder="0 9 * * 1-5"
-              description="Five fields: minute, hour, day of month, month, day of week."
-            />
+      <div className="flex flex-col gap-3">
+        <div className="grid gap-x-2 gap-y-3 sm:grid-cols-2">
+          <form.AppField name="frequency">
+            {(field) => <field.Select label="Repeat" width="full" options={Schedules.frequencyOptions} />}
+          </form.AppField>
+          {frequency === "hourly" || frequency === "custom" ? null : (
+            <form.AppField name="time">{(field) => <field.TextField label="Time" type="time" />}</form.AppField>
           )}
-        </form.AppField>
-      ) : null}
+          {frequency === "once" ? (
+            <div className="col-span-full">
+              <form.AppField name="date">{(field) => <field.TextField label="Date" type="date" />}</form.AppField>
+            </div>
+          ) : null}
+          {frequency === "weekly" ? (
+            <div className="col-span-full">
+              <WeekdayField form={form} />
+            </div>
+          ) : null}
+          {frequency === "monthly" ? (
+            <div className="col-span-full">
+              <form.AppField name="monthDay">
+                {(field) => <field.Select label="Day of month" width="full" options={Schedules.monthDays} />}
+              </form.AppField>
+            </div>
+          ) : null}
+        </div>
+        {frequency === "custom" ? (
+          <form.AppField name="cron">
+            {(field) => (
+              <field.TextField
+                label="Cron expression"
+                typeface="mono"
+                placeholder="0 9 * * 1-5"
+                description="Five fields: minute, hour, day of month, month, day of week."
+              />
+            )}
+          </form.AppField>
+        ) : null}
+      </div>
       <PreviewLine cadence={props.cadence} />
-      <TimeZoneField form={form} />
-      {frequency === "once" ? null : <UntilFields form={form} until={props.cadence.until} />}
     </>
   )
 }
@@ -302,7 +330,7 @@ function PreviewLine(props: { cadence: Schedules.Cadence }) {
   const preview = Schedules.preview(props.cadence)
   if (preview.kind === "invalid") return null
   return (
-    <Text purpose="caption" tone="secondary" element="p">
+    <Text purpose="caption" element="p" aria-live="polite">
       {preview.kind === "never" ? (
         "No runs left"
       ) : (
