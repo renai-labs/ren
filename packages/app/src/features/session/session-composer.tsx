@@ -7,6 +7,7 @@ import type { SessionInbox } from "@ren/schema/session/inbox"
 import type { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
+import { AppMention } from "@ren/ui/app-mention"
 import { PromptInput } from "@ren/ui/prompt-input"
 import { toast } from "@ren/ui/toast"
 import { IconFile, IconGhost, IconSparkles, IconTerminal2 } from "@tabler/icons-react"
@@ -32,6 +33,7 @@ import type { ChatView } from "./chat-view.js"
 import { ComposerKeys } from "./composer-keys.js"
 import { ComposerModelPicker } from "./composer-model-picker.js"
 import { ComposerQueue } from "./composer-queue.js"
+import { SessionApps } from "./session-apps.js"
 import { SessionDrafts } from "./session-drafts.js"
 
 const trailingSpace = /\s$/
@@ -75,11 +77,18 @@ const sessionStatus = (info: SessionInfo.Info | undefined, session: { readonly r
   picker: info?.capabilities.model !== false,
 })
 
-const mentionIcons: Readonly<Record<Mentions.Item["kind"], ReactNode>> = {
+const mentionIcons: Readonly<Record<Exclude<Mentions.Kind, "app">, ReactNode>> = {
   agent: <IconGhost />,
   skill: <IconSparkles />,
   file: <IconFile />,
 }
+
+const iconOf = (item: Mentions.Item, apps: ReadonlyMap<string, SessionApps.App>) =>
+  item.kind === "app" ? (
+    <AppMention.Logo name={item.label} icon={apps.get(item.id)?.icon ?? null} className="size-4" />
+  ) : (
+    mentionIcons[item.kind]
+  )
 
 const commandSuggestions = (commands: ReadonlyArray<ClientCommand.Suggestion>): ReadonlyArray<PromptInput.Suggestion> =>
   commands.map((item) => ({
@@ -90,13 +99,16 @@ const commandSuggestions = (commands: ReadonlyArray<ClientCommand.Suggestion>): 
     icon: <IconTerminal2 />,
   }))
 
-const mentionSuggestions = (items: ReadonlyArray<Mentions.Item>): ReadonlyArray<PromptInput.Suggestion> =>
+const mentionSuggestions = (
+  items: ReadonlyArray<Mentions.Item>,
+  apps: ReadonlyMap<string, SessionApps.App>,
+): ReadonlyArray<PromptInput.Suggestion> =>
   items.map((item) => ({
     value: Mentions.key(item),
     kind: item.kind,
     label: item.label,
     description: item.description,
-    icon: mentionIcons[item.kind],
+    icon: iconOf(item, apps),
   }))
 
 const commandQuery = (trigger: Composer.Trigger | undefined) => (trigger?.kind === "command" ? trigger.query : "")
@@ -118,7 +130,10 @@ interface Suggesting {
 function useMentionCatalog(sessionID: Session.ID, query: string) {
   const searched = Debounce.useDebouncedValue(query, fileSearchDelay)
   const found = listed(ChatReact.useFiles({ root: sessionID, query: searched, type: "file" }))
+  const apps = SessionApps.useMentionable()
   return {
+    byId: new Map(apps.map((app) => [app.id, app])),
+    apps: apps.map(Mentions.fromApp),
     agents: SessionCatalog.mentionable(listed(ChatReact.useAgents(sessionID))).map(Mentions.fromAgent),
     skills: Composer.offeredSkills(listed(ChatReact.useSkills(sessionID))).map(Mentions.fromSkill),
     files: searched && query ? found.map(Mentions.fromFile) : [],
@@ -139,7 +154,8 @@ function useSuggestions(input: {
   const commands = input.commands ? listedCommands : []
   const runnable = ClientCommand.suggestions(input.client, commands, commandQuery(trigger))
   const mentionable = query === undefined ? [] : Mentions.suggest({ ...catalog, query })
-  const suggestions = trigger?.kind === "command" ? commandSuggestions(runnable) : mentionSuggestions(mentionable)
+  const suggestions =
+    trigger?.kind === "command" ? commandSuggestions(runnable) : mentionSuggestions(mentionable, catalog.byId)
   const ids = suggestions.map((item) => item.value)
   return {
     trigger,
@@ -150,7 +166,8 @@ function useSuggestions(input: {
     suggestions,
     ids,
     active: Composer.activeSuggestion(ids, input.suggesting?.active),
-    catalog: [...catalog.agents, ...catalog.skills, ...input.picked],
+    catalog: [...catalog.agents, ...catalog.skills, ...catalog.apps, ...input.picked],
+    apps: catalog.byId,
   }
 }
 
@@ -592,7 +609,7 @@ export function SessionComposer(props: {
           start: token.start,
           end: token.end,
           label: token.item.label,
-          icon: mentionIcons[token.item.kind],
+          icon: iconOf(token.item, suggested.apps),
         }))}
         suggesting={suggested.suggestions.length > 0}
         activeSuggestion={suggested.active}

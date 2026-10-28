@@ -10,6 +10,7 @@ import {
 } from "@ren/chat"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
+import { AppMention } from "@ren/ui/app-mention"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
@@ -57,6 +58,7 @@ export interface Shared {
   readonly onPending: ((action: PendingAction, message: SessionMessage.User) => void) | undefined
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onOpenSession: ((sessionID: string) => void) | undefined
+  readonly apps: ReadonlyArray<AppMention.App>
 }
 
 export interface RowData {
@@ -91,7 +93,12 @@ function Response(props: { shared: Shared; data: RowData; text: string }) {
       <MessageContent>
         <Bubble variant="ghost">
           <BubbleContent>
-            <Markdown size="lg" streaming={streaming(props.data.message)} onOpenSession={props.shared.onOpenSession}>
+            <Markdown
+              size="lg"
+              streaming={streaming(props.data.message)}
+              onOpenSession={props.shared.onOpenSession}
+              apps={props.shared.apps}
+            >
               {props.text}
             </Markdown>
           </BubbleContent>
@@ -268,19 +275,23 @@ function Group(props: { shared: Shared; data: RowData; group: Exclude<TimelineRo
 
 const steerable = new Set<ChatState.PendingStatus | undefined>(["starting", "steering", "stranded"])
 
-function UserText(props: { text: string; highlights: ReadonlyArray<{ start: number; end: number }> }) {
+function UserText(props: {
+  text: string
+  highlights: ReadonlyArray<{ start: number; end: number }>
+  apps: ReadonlyArray<AppMention.App>
+}) {
   const ranges = props.highlights
   return (
     <>
       {ranges.map((range, index) => (
         <span key={range.start}>
-          {props.text.slice(ranges[index - 1]?.end ?? 0, range.start)}
+          {AppMention.withMentions(props.text.slice(ranges[index - 1]?.end ?? 0, range.start), props.apps)}
           <span data-highlight="" className="font-medium text-primary">
             {props.text.slice(range.start, range.end)}
           </span>
         </span>
       ))}
-      {props.text.slice(ranges.at(-1)?.end ?? 0)}
+      {AppMention.withMentions(props.text.slice(ranges.at(-1)?.end ?? 0), props.apps)}
     </>
   )
 }
@@ -427,7 +438,7 @@ function UserMessage(props: { shared: Shared; data: RowData }) {
         <ScheduleMessageHeader origin={message.schedule} />
         <Bubble variant="muted" align="end">
           <BubbleContent className="rounded-tr-lg px-4 text-base/relaxed whitespace-pre-wrap">
-            <UserText text={message.text} highlights={TimelineText.mentions(message)} />
+            <UserText text={message.text} highlights={TimelineText.mentions(message)} apps={props.shared.apps} />
           </BubbleContent>
         </Bubble>
         <MessageFooter className="min-h-6 gap-1 px-0">
@@ -479,7 +490,11 @@ function StepText(props: { shared: Shared; data: RowData; reference: TimelineRow
   if (content?.type !== "text") return null
   return (
     <div data-searchable className="min-w-0">
-      <Markdown streaming={streaming(props.data.message)} onOpenSession={props.shared.onOpenSession}>
+      <Markdown
+        streaming={streaming(props.data.message)}
+        onOpenSession={props.shared.onOpenSession}
+        apps={props.shared.apps}
+      >
         {content.text}
       </Markdown>
     </div>

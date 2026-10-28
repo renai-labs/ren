@@ -12,6 +12,7 @@ import {
   useMessageScroller,
 } from "@ren/ui/message-scroller"
 import { Spinner } from "@ren/ui/spinner"
+import type { AppMention } from "@ren/ui/app-mention"
 import { DateTime, Match } from "effect"
 // oxlint-disable-next-line no-restricted-imports -- the React Compiler memoizes inside a component, not across the items of a list, so memo keeps a streaming reply from re-rendering every row
 import { memo } from "react"
@@ -31,6 +32,8 @@ import { Timeline } from "./timeline.js"
 const none: ReadonlySet<string> = new Set()
 
 const nobody: ReadonlyMap<string, Person> = new Map()
+
+const noApps: ReadonlyArray<AppMention.App> = []
 
 const unnamed: ReadonlyMap<string, string> = new Map()
 
@@ -83,7 +86,8 @@ const sameShared = (left: Shared, right: Shared) =>
     left.onEdit === right.onEdit &&
     left.onPending === right.onPending &&
     left.onOpenChild === right.onOpenChild &&
-    left.onOpenSession === right.onOpenSession)
+    left.onOpenSession === right.onOpenSession &&
+    left.apps === right.apps)
 
 interface RowProps {
   readonly row: TimelineRow.Row
@@ -311,6 +315,7 @@ export function Transcript(props: {
   detail?: TimelineDetail.Detail | undefined
   viewer?: string
   people?: ReadonlyMap<string, Person>
+  apps?: ReadonlyArray<AppMention.App>
   filesResetAt?: DateTime.Utc | null
 }) {
   const messages: ReadonlyMap<string, SessionMessage.Info> = new Map(
@@ -332,6 +337,7 @@ export function Transcript(props: {
     onPending: props.onPending,
     onOpenChild: props.onOpenChild,
     onOpenSession: props.onOpenSession,
+    apps: props.apps ?? noApps,
   }
   const data = rowData({
     messages,

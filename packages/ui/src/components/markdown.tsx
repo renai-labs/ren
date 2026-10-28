@@ -1,5 +1,6 @@
 import { cn } from "cn"
 import { lazy, Suspense } from "react"
+import type { AppMention } from "./app-mention.js"
 
 const MarkdownRenderer = lazy(() =>
   import("../lib/markdown-renderer.js").then((module) => ({ default: module.MarkdownRenderer })),
@@ -11,6 +12,7 @@ export function Markdown(props: {
   size?: "default" | "lg"
   className?: string | undefined
   onOpenSession?: ((sessionID: string) => void) | undefined
+  apps?: ReadonlyArray<AppMention.App> | undefined
 }) {
   const size = props.size ?? "default"
   return (
@@ -24,6 +26,7 @@ export function Markdown(props: {
           content={props.children}
           streaming={props.streaming === true}
           onOpenSession={props.onOpenSession}
+          apps={props.apps}
         />
       </Suspense>
     </div>
