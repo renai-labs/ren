@@ -128,7 +128,7 @@ describe("InfraSpecs profiles", () => {
     }),
   )
 
-  it.live("a missing profile is a problem, but the owner profile of an app that the spec creates is not", () =>
+  it.live("a profile that does not exist is a problem: infra lists profiles, it never makes them", () =>
     Effect.gen(function* () {
       const infra = yield* InfraSpecs.Service
       const s = yield* setup
@@ -139,27 +139,20 @@ describe("InfraSpecs profiles", () => {
         s.o.admin,
         input(s.o.bindings.organization, spaces, {
           home: { profiles: { [fresh]: ["home"], [s.slug]: ["home", "team"] } },
-          eng: { profiles: { [fresh]: ["home"], [s.slug]: ["nope"] } },
+          eng: { profiles: { [s.slug]: ["nope"] } },
         }),
       )
 
-      expect(plan.changes).toEqual([InfraFixture.change("create", "app", `spaces/home/apps/${fresh}`)])
-      expect(plan.problems).toEqual(
-        [
-          {
-            path: `deploy.yaml/spaces/eng/profiles/${fresh}/home`,
-            message: `Create the shared profile home of ${fresh} first.`,
-          },
-          {
-            path: `deploy.yaml/spaces/eng/profiles/${s.slug}/nope`,
-            message: `Create the shared profile nope of ${s.slug} first.`,
-          },
-        ].toSorted((left, right) => left.path.localeCompare(right.path)),
-      )
-
-      const owned = input(s.o.bindings.organization, spaces, { home: { profiles: { [fresh]: ["home"] } } })
-      yield* apply(s.o.admin, owned)
-      expect(yield* infra.plan(s.o.admin, owned)).toMatchObject({ changes: [], problems: [] })
+      expect(plan.problems).toEqual([
+        {
+          path: `deploy.yaml/spaces/eng/profiles/${s.slug}/nope`,
+          message: `Create the shared profile nope of ${s.slug} in Ren first.`,
+        },
+        {
+          path: `deploy.yaml/spaces/home/profiles/${fresh}/home`,
+          message: `Create the shared profile home of ${fresh} in Ren first.`,
+        },
+      ])
     }),
   )
 })

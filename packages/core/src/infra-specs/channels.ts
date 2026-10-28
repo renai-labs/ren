@@ -188,25 +188,11 @@ export const make = Effect.gen(function* () {
     const resolved = declared.flatMap((entry) => {
       const declaration = entry.declaration
       const target = entry.space.bindings?.channels[entry.slug]
-      if (declaration.kind !== "github" && declaration.kind !== "slack") {
-        problems.push({
-          path: path(entry.space.slug, entry.slug),
-          message: `Infra does not apply ${declaration.kind} channels yet.`,
-        })
-        return []
-      }
       const title = Channel.titles[declaration.kind]
       if (!target) {
         problems.push({
           path: bindingPath(entry.space.slug, entry.slug),
           message: `Bind channel “${entry.slug}” to a ${title} place in deploy.yaml.`,
-        })
-        return []
-      }
-      if (target.kind !== "github" && target.kind !== "slack") {
-        problems.push({
-          path: bindingPath(entry.space.slug, entry.slug),
-          message: `deploy.yaml binds a ${target.kind} place, but channel “${entry.slug}” is a ${title} channel.`,
         })
         return []
       }
@@ -289,11 +275,10 @@ export const make = Effect.gen(function* () {
       if (fields.length === 0) return []
       context.touch(entry.space.liveId)
       context.touch(current.spaceId)
-      const before = path(owner ?? current.spaceId, pulled.get(current.id) ?? entry.slug)
       return [
         InfraPlan.step("update", "channel", target, run, {
           fields,
-          ...(fields.includes("space") && { from: before }),
+          ...(fields.includes("space") && { from: path(owner ?? current.spaceId, entry.slug) }),
         }),
       ]
     })

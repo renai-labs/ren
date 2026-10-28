@@ -1,13 +1,12 @@
 export * as InfraProfiles from "./profiles.js"
 
 import { Database } from "@ren/db/database"
-import { AppProfile } from "@ren/schema/app-profile"
+import type { AppProfile } from "@ren/schema/app-profile"
 import type { Auth } from "@ren/schema/auth"
 import type { Infra } from "@ren/schema/infra"
 import type { Space } from "@ren/schema/space"
-import { Slug } from "@ren/util/slug"
 import { and, asc, eq, inArray, isNull } from "drizzle-orm"
-import { Effect, Schema } from "effect"
+import { Effect } from "effect"
 import { AppProfiles } from "../app/profiles.js"
 import { InfraPlan } from "./plan.js"
 
@@ -21,15 +20,9 @@ export interface LiveProfile {
 
 export interface Live {
   readonly profiles: ReadonlyArray<LiveProfile>
-  readonly apps: ReadonlyArray<string>
 }
 
 const path = (space: string, app: string, profile: string) => `deploy.yaml/spaces/${space}/profiles/${app}/${profile}`
-
-const ownerSlug = (name: string) => {
-  const slug = Slug.of(name, AppProfile.maximumSlugLength)
-  return Schema.is(AppProfile.Slug)(slug) ? slug : "main"
-}
 
 export const load = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
@@ -68,11 +61,6 @@ export const load = Effect.fnUntraced(function* (
             ),
           )
           .orderBy(asc(Database.Schema.app_profile_space.profile_id), asc(Database.Schema.app_profile_space.space_id))
-  const apps = yield* transaction
-    .select({ slug: Database.Schema.app.slug })
-    .from(Database.Schema.app)
-    .where(and(eq(Database.Schema.app.organization_id, organizationId), isNull(Database.Schema.app.archived_at)))
-    .orderBy(asc(Database.Schema.app.slug))
   const spaces = Map.groupBy(listings, (listing) => listing.profileId)
   return {
     profiles: rows.map((row) => ({
@@ -82,7 +70,6 @@ export const load = Effect.fnUntraced(function* (
       allSpaces: row.allSpaces,
       spaces: (spaces.get(row.id) ?? []).map((listing) => listing.spaceId),
     })),
-    apps: apps.map((app) => app.slug),
   } satisfies Live
 })
 
@@ -92,10 +79,6 @@ export const make = Effect.gen(function* () {
   const diff = (context: InfraPlan.Context, live: Live): InfraPlan.Planned => {
     const problems: Array<Infra.Problem> = []
     const byApp = Map.groupBy(live.profiles, (profile) => profile.appSlug)
-    const existing = new Set(live.apps)
-    const owners = new Map(
-      context.spaces.flatMap((space) => Object.keys(space.declaration.apps).map((app) => [app, space] as const)),
-    )
     const pairs = context.spaces.flatMap((space) =>
       Object.entries(space.bindings?.profiles ?? {}).map(([app, slugs]) => ({
         space,
@@ -110,15 +93,7 @@ export const make = Effect.gen(function* () {
         const target = path(pair.space.slug, pair.app, slug)
         const profile = (byApp.get(pair.app) ?? []).find((candidate) => candidate.slug === slug)
         if (!profile) {
-          const owner = owners.get(pair.app)
-          if (
-            owner &&
-            !existing.has(pair.app) &&
-            owner.slug === pair.space.slug &&
-            ownerSlug(owner.declaration.name) === slug
-          )
-            return []
-          problems.push({ path: target, message: `Create the shared profile ${slug} of ${pair.app} first.` })
+          problems.push({ path: target, message: `Create the shared profile ${slug} of ${pair.app} in Ren first.` })
           return []
         }
         if (profile.allSpaces) {

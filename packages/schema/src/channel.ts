@@ -116,13 +116,9 @@ export const FailureReason = Schema.Literals([
 ]).annotate({ identifier: "Channel.FailureReason" })
 export type FailureReason = typeof FailureReason.Type
 
-const fields = {
+const mapped = {
   purpose: Schema.NonEmptyString,
   agent: Schema.optionalKey(Agent.Name.annotate({ description: "Without it, the channel reaches the ren agent." })),
-}
-
-const mapped = {
-  ...fields,
   fallback: Schema.optionalKey(Schema.Boolean).annotate({
     description:
       "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository.",
@@ -136,24 +132,15 @@ const mapped = {
 
 export const Declaration = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("slack"), ...mapped }),
-  Schema.Struct({ kind: Schema.Literal("email"), ...fields }),
   Schema.Struct({ kind: Schema.Literal("github"), ...mapped }),
-  Schema.Struct({
-    kind: Schema.Literal("telegram"),
-    ...fields,
-    allowedSenders: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
-    blockedSenders: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
-  }),
-]).annotate({ identifier: "Channel.Declaration" })
+]).annotate({
+  identifier: "Channel.Declaration",
+  description: "A channel that maps a place to a space. The spec maps the channels that a person installed in Ren.",
+})
 export type Declaration = typeof Declaration.Type
 
 export const Target = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("slack"), channelId: Schema.NonEmptyString }),
   Schema.Struct({ kind: Schema.Literal("github"), repository: Schema.NonEmptyString }),
-  Schema.Struct({
-    kind: Schema.Literal("telegram"),
-    chatId: Schema.NonEmptyString,
-    topicId: Schema.optionalKey(Schema.NonEmptyString),
-  }),
 ]).annotate({ identifier: "Channel.Target" })
 export type Target = typeof Target.Type
