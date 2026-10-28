@@ -7,7 +7,7 @@ description: Use when adding, updating, composing or styling shadcn components i
 
 `@ren/ui` is Ren's shadcn library: style `base-nova` on Base UI (never Radix), Tabler icons, and `cn` from the `cn` package. `packages/ui/components.json` configures the CLI, and `packages/ui/AGENTS.md` has Ren's rules for the files.
 
-Lint enforces the checkable shadcn rules: `gap-*` instead of `space-*`, `size-*` and `truncate` shorthands, no `dark:` overrides or raw colours in the app, `cn()` instead of template strings, `Skeleton` instead of `animate-pulse`, `Separator` instead of `<hr>`, `render` instead of `asChild` and `nativeButton={false}` when it renders a non-button, a title in every overlay, no `z-*` on overlays, items inside their group, `TabsTrigger` inside `TabsList`, `AvatarFallback` in every `Avatar`, `InputGroupInput` inside `InputGroup`, no sizing classes on icons inside components, `CodeBlock` instead of `<pre>`, and the chat structure (scroller part order, an ungated `MessageScrollerButton`, `BubbleContent`, `TraceTitle`, `TraceLine` in a `Trace` and never restyled, no hand-written scroll code). Run `bun run check` and follow each message. This skill covers the judgment calls.
+Lint enforces every rule it can check: class restrictions in `oxlint.config.ts`, and component structure (overlay titles, item groups, `render` and `nativeButton`, icon sizing, the chat parts) in `script/ast-grep/rules/`. Run `bun run check` and follow each message. This skill covers the judgment calls.
 
 ## Workflow
 
@@ -29,7 +29,7 @@ Run the CLI from `packages/ui` with `bunx --bun shadcn@latest`.
 - Overlays: `Dialog` for a focused task, `AlertDialog` to confirm a destructive action, `Sheet` for a side panel of details or filters, `Popover` for small content on click, `HoverCard` for preview on hover, `Command` inside `Dialog` for a palette.
 - `Button` has no loading prop. Compose `<Spinner data-icon="inline-start" />` with `disabled`.
 - An icon beside a label takes `data-icon="inline-start"` or `"inline-end"`. Pass icons as components (`icon={IconCheck}`), not string keys.
-- Live text shimmers with the `shimmer` utility; scroll containers fade their edges with `scroll-fade`. Don't write keyframes or mask gradients for either.
+- Live text shimmers with the `shimmer` utility, and scroll containers fade their edges with `scroll-fade`.
 
 ## Forms
 
@@ -45,4 +45,4 @@ Run the CLI from `packages/ui` with `bunx --bun shadcn@latest`.
 
 ## Chat
 
-Chat is built from shadcn's chat components. Read [rules/chat.md](./rules/chat.md) before building or changing the transcript or composer.
+Read [rules/chat.md](./rules/chat.md) before building or changing the transcript or composer.
