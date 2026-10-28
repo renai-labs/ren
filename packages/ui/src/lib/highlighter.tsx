@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react"
+import type { ReactNode } from "react"
 import { createHighlighterCore, type GrammarState, type HighlighterCore } from "shiki/core"
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript"
 
@@ -55,15 +55,24 @@ function languageOf(language: string) {
   return aliases[name] ?? null
 }
 
-const styleOf = (style: Record<string, string> | undefined): CSSProperties | undefined => style
+export interface Highlighter {
+  readonly highlight: (
+    code: string,
+    state?: GrammarState,
+  ) => { readonly lines: ReadonlyArray<ReactNode>; readonly state: GrammarState | undefined }
+}
+
+const ready = new Map<string, Highlighter>()
+
+export const readyHighlighter = (language: string) => (languageOf(language) === null ? null : ready.get(language))
 
 export async function loadHighlighter(language: string) {
   const lang = languageOf(language)
   if (!lang) return null
   const core = await shiki()
   if (lang !== "ansi" && !core.getLoadedLanguages().includes(lang)) await core.loadLanguage(languages[lang])
-  return {
-    highlight(code: string, state?: GrammarState) {
+  const highlighter: Highlighter = {
+    highlight(code, state) {
       const tokenize = (text: string) =>
         core.codeToTokens(text, {
           lang,
@@ -77,7 +86,7 @@ export async function loadHighlighter(language: string) {
           line.map((token) => (
             <span
               key={token.offset}
-              style={styleOf(token.htmlStyle)}
+              style={token.htmlStyle}
               className="text-(--shiki-light) dark:text-(--shiki-dark)"
             >
               {token.content}
@@ -88,4 +97,6 @@ export async function loadHighlighter(language: string) {
       }
     },
   }
+  ready.set(language, highlighter)
+  return highlighter
 }
