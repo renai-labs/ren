@@ -1,17 +1,20 @@
 import { Pagination } from "@ren/schema/pagination"
+import { Page } from "@ren/ui/page"
 import { createFileRoute } from "@tanstack/react-router"
 import { SpaceCredentials } from "../../../../../features/credentials/space-credentials.js"
+import { Loader } from "../../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/credentials")({
   head: () => ({ meta: [{ title: "Space credentials · Ren" }] }),
   loader: (options) => {
     const context = options.context
     const page = { page: 1, pageSize: Pagination.maximumPageSize }
-    return Promise.all([
+    Loader.start(
       context.queryClient.query(context.api.credential.list.queryOptions(page)),
       context.queryClient.query(context.api.space.list.queryOptions(page)),
-    ])
+    )
   },
+  pendingComponent: () => <Page.Skeletons body="rows" />,
   component: SpaceCredentialsRoute,
 })
 

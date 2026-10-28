@@ -4,8 +4,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Icon } from "@ren/ui/icon"
 import { Page } from "@ren/ui/page"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
-import { Spinner } from "@ren/ui/spinner"
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useNavigate, useRouteContext, useSearch } from "@tanstack/react-router"
 import { useDeferredValue, useState } from "react"
 import type { ReactNode } from "react"
@@ -60,7 +59,10 @@ function TasksView(props: {
   const catalog = Tasks.useCatalog(props.organizationId)
   const actions = Tasks.useTaskActions()
   const navigate = useNavigate()
-  const list = useQuery(TaskQueries.listOptions(context.api, props.view.filters))
+  const list = useQuery({
+    ...TaskQueries.listOptions(context.api, props.view.filters),
+    placeholderData: keepPreviousData,
+  })
   const spaceId = TaskView.preferredSpace(props.view.filters)
   const query = useDeferredValue(props.view.query)
   const [dialog, setDialog] = useState<Dialog>(null)
@@ -121,9 +123,18 @@ function TasksView(props: {
       }
     >
       {hasSpaces ? <ActiveFilters view={props.view} onChange={props.onViewChange} options={options} /> : null}
-      <section aria-label="Tasks" className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+      <section
+        aria-label="Tasks"
+        aria-busy={list.isPlaceholderData}
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 transition-opacity duration-150 ease-out aria-busy:opacity-60"
+      >
         <Collection
-          state={TaskView.collectionState({ status: list.status, spaces: creatable.length, tasks, rows })}
+          state={TaskView.collectionState({
+            status: catalog.pending ? "pending" : list.status,
+            spaces: creatable.length,
+            tasks,
+            rows,
+          })}
           view={view}
           onRetry={() => void list.refetch()}
           onCreate={() => openCreate({})}
@@ -238,16 +249,7 @@ function Collection(props: {
   onCreate: () => void
   children: ReactNode
 }) {
-  if (props.state === "loading")
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia>
-            <Spinner />
-          </EmptyMedia>
-        </EmptyHeader>
-      </Empty>
-    )
+  if (props.state === "loading") return <Page.Skeletons body="rows" />
   if (props.state === "no-spaces")
     return (
       <Empty>

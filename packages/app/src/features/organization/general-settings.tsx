@@ -3,7 +3,6 @@ import { Field, FieldTitle } from "@ren/ui/field"
 import { Icon } from "@ren/ui/icon"
 import { InlineEdit } from "@ren/ui/inline-edit"
 import { Page } from "@ren/ui/page"
-import { Spinner } from "@ren/ui/spinner"
 import { toast } from "@ren/ui/toast"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Auth } from "../../lib/auth.js"
@@ -16,13 +15,7 @@ export function GeneralSettings(props: { organizationId: string }) {
   const organization = useQuery(options)
   return (
     <Page.Root title="General">
-      {organization.isPending ? (
-        <Empty>
-          <EmptyMedia>
-            <Spinner />
-          </EmptyMedia>
-        </Empty>
-      ) : null}
+      {organization.isPending ? <Page.Skeletons body="settings" /> : null}
       {organization.isError ? (
         <Page.Section frame="divided">
           <Empty role="alert">

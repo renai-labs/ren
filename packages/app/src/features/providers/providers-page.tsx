@@ -45,13 +45,7 @@ export function ProvidersPage(props: { returnUrl: string }) {
         </Button>
       }
     >
-      {list.isPending ? (
-        <Empty>
-          <EmptyMedia>
-            <Spinner />
-          </EmptyMedia>
-        </Empty>
-      ) : null}
+      {list.isPending ? <Page.Skeletons body="rows" /> : null}
       {list.isError ? (
         <Empty role="alert">
           <EmptyHeader>

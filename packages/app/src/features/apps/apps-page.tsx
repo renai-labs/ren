@@ -3,7 +3,6 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Icon } from "@ren/ui/icon"
 import { Page } from "@ren/ui/page"
 import { SearchField } from "@ren/ui/search-field"
-import { Spinner } from "@ren/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
 import { useDeferredValue, useState } from "react"
 import { ProfileDialog } from "../../components/profile-dialog.js"
@@ -124,14 +123,7 @@ function Catalog(props: {
         </EmptyContent>
       </Empty>
     )
-  if (props.state === "loading")
-    return (
-      <Empty>
-        <EmptyMedia>
-          <Spinner />
-        </EmptyMedia>
-      </Empty>
-    )
+  if (props.state === "loading") return <Page.Skeletons body="rows" />
   if (props.rows.length === 0)
     return (
       <Empty>

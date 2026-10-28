@@ -1,14 +1,16 @@
 import { Pagination } from "@ren/schema/pagination"
+import { Page } from "@ren/ui/page"
 import { createFileRoute } from "@tanstack/react-router"
 import { SpaceMembers } from "../../../../../features/spaces/space-members.js"
 import { Auth } from "../../../../../lib/auth.js"
+import { Loader } from "../../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/members")({
   head: () => ({ meta: [{ title: "Space members · Ren" }] }),
   loader: (options) => {
     const context = options.context
     const organization = context.me.organization
-    return Promise.all([
+    Loader.start(
       context.queryClient.query(
         context.api["space-member"].list.queryOptions({
           spaceId: options.params.spaceId,
@@ -17,8 +19,9 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/members")(
         }),
       ),
       ...(organization ? [context.queryClient.query(Auth.organizationOptions(context.auth, organization.id))] : []),
-    ])
+    )
   },
+  pendingComponent: () => <Page.Skeletons body="rows" />,
   component: SpaceMembersRoute,
 })
 

@@ -11,6 +11,7 @@ import {
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
 import { Page } from "@ren/ui/page"
+import { Skeleton } from "@ren/ui/skeleton"
 import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
@@ -22,6 +23,10 @@ import { ScheduleActions } from "../../components/schedule-actions.js"
 import { ScheduleWhen } from "../../components/schedule-when.js"
 import { Schedules } from "../../components/schedules.js"
 
+export function SchedulePending() {
+  return <Page.Pending description={<Skeleton className="h-4 w-48" />} />
+}
+
 // oxlint-disable-next-line ren/no-comments -- schedules S24: the message, the agent, the owner, `when`, and the runs of 30 days.
 export function ScheduleDetailPage(props: { scheduleId: string; onArchived: () => void }) {
   const context = RouterContext.useRouterContext()
@@ -30,33 +35,24 @@ export function ScheduleDetailPage(props: { scheduleId: string; onArchived: () =
     refetchInterval: 10_000,
   })
   if (!detail.data)
-    return (
+    return detail.isError ? (
       <Page.Root title="Schedule">
-        {detail.isError ? (
-          <Empty role="alert">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Icon glyph="AlertCircle" tone="danger" />
-              </EmptyMedia>
-              <EmptyTitle>Couldn’t load this schedule.</EmptyTitle>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
-                Try again
-              </Button>
-            </EmptyContent>
-          </Empty>
-        ) : (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia>
-                <Spinner />
-              </EmptyMedia>
-              <EmptyTitle>Loading schedule…</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        )}
+        <Empty role="alert">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon glyph="AlertCircle" tone="danger" />
+            </EmptyMedia>
+            <EmptyTitle>Couldn’t load this schedule.</EmptyTitle>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
+              Try again
+            </Button>
+          </EmptyContent>
+        </Empty>
       </Page.Root>
+    ) : (
+      <SchedulePending />
     )
   return <Detail schedule={detail.data} onArchived={props.onArchived} />
 }

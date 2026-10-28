@@ -15,7 +15,6 @@ import {
 } from "@ren/ui/pagination"
 import { SearchField } from "@ren/ui/search-field"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
-import { Spinner } from "@ren/ui/spinner"
 import { Switch } from "@ren/ui/switch"
 import { Time } from "@ren/ui/time"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
@@ -181,16 +180,7 @@ function Grid(props: {
   onRetry: () => void
   children: ReactNode
 }) {
-  if (props.state === "loading")
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia>
-            <Spinner />
-          </EmptyMedia>
-        </EmptyHeader>
-      </Empty>
-    )
+  if (props.state === "loading") return <Page.Skeletons body="cards" columns={3} />
   if (props.state === "failed")
     return (
       <Empty role="alert">

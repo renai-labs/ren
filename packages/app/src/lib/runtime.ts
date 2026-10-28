@@ -3,6 +3,7 @@ export * as Runtime from "./runtime.js"
 import { Ren } from "@ren/client"
 import { RenQuery } from "@ren/client/react"
 import { MutationCache, QueryClient } from "@tanstack/react-query"
+import { Page } from "@ren/ui/page"
 import { createRouter } from "@tanstack/react-router"
 import { routeTree } from "../route-tree.gen.js"
 import type { Platform } from "../platform/platform.js"
@@ -54,6 +55,9 @@ export function make(platform: Platform.Info) {
     context,
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
+    defaultPendingMs: 200,
+    defaultPendingMinMs: 400,
+    defaultPendingComponent: Page.Pending,
     scrollRestoration: true,
     basepath: "/app",
     parseSearch: OAuthSearch.parse,
