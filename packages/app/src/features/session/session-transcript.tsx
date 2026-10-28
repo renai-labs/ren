@@ -22,6 +22,7 @@ import {
   TraceCollapsible,
   TraceCollapsibleContent,
   TraceCollapsibleTrigger,
+  TraceDescription,
   TraceIcon,
   TraceLine,
   TraceTitle,
@@ -215,6 +216,26 @@ const groupTitle = (
   return `${group.type === "read" ? "Read" : "Edited"} ${subjects.join(", ")}`
 }
 
+function GroupSteps(props: { shared: Shared; data: RowData; group: Exclude<TimelineRow.PartGroup, { type: "part" }> }) {
+  const found = entries(props.group.refs, props.data.messages ?? [])
+  const items = found.map((entry) => entry.item)
+  if (props.group.type === "file")
+    return (
+      <FileChanges
+        tools={items.filter((item): item is SessionMessage.Tool => item.type === "tool")}
+        open={props.group.refs.some((reference) => reference.partID === props.shared.part)}
+      />
+    )
+  return ToolDisplay.runs(items).map((run, index) => (
+    <Run
+      key={run.type === "item" ? `item:${index}` : (run.tools.at(0)?.id ?? `run:${index}`)}
+      shared={props.shared}
+      run={run}
+      entries={found}
+    />
+  ))
+}
+
 function Group(props: { shared: Shared; data: RowData; group: Exclude<TimelineRow.PartGroup, { type: "part" }> }) {
   const group = props.group
   const found = entries(group.refs, props.data.messages ?? [])
@@ -236,18 +257,7 @@ function Group(props: { shared: Shared; data: RowData; group: Exclude<TimelineRo
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="flex flex-col gap-2">
-          {group.type === "file" ? (
-            <FileChanges tools={tools} open={revealed} />
-          ) : (
-            ToolDisplay.runs(items).map((run, index) => (
-              <Run
-                key={run.type === "item" ? `item:${index}` : (run.tools.at(0)?.id ?? `run:${index}`)}
-                shared={props.shared}
-                run={run}
-                entries={found}
-              />
-            ))
-          )}
+          <GroupSteps shared={props.shared} data={props.data} group={group} />
         </TraceCollapsibleContent>
       </TraceCollapsible>
     </Trace>
@@ -391,6 +401,66 @@ function AssistantPart(props: { shared: Shared; data: RowData; group: TimelineRo
 
 function ShellRow(props: { message: SessionMessage.Info | undefined }) {
   return props.message?.type === "shell" ? <TranscriptShell message={props.message} /> : null
+}
+
+function StepText(props: { shared: Shared; data: RowData; reference: TimelineRow.PartRef }) {
+  const content = Projection.resolveContent(props.data.message, props.reference.partID)
+  if (content?.type !== "text") return null
+  return (
+    <div data-searchable className="min-w-0">
+      <Markdown streaming={streaming(props.data.message)} onOpenSession={props.shared.onOpenSession}>
+        {content.text}
+      </Markdown>
+    </div>
+  )
+}
+
+function TurnStep(props: { shared: Shared; data: RowData; row: TimelineRow.Row }) {
+  const row = props.row
+  if (row._tag !== "AssistantPart") return <TranscriptRow shared={props.shared} data={props.data} row={row} />
+  const group = row.group
+  if (group.type !== "part") return <GroupSteps shared={props.shared} data={props.data} group={group} />
+  const content = Projection.resolveContent(props.data.message, group.ref.partID)
+  if (content?.type === "text") return <StepText shared={props.shared} data={props.data} reference={group.ref} />
+  return <TranscriptRow shared={props.shared} data={props.data} row={row} />
+}
+
+const workedTitle = (turn: { readonly running: boolean; readonly duration: string | undefined }) => {
+  if (turn.running) return "Working"
+  return turn.duration ? `Worked for ${turn.duration}` : "Worked"
+}
+
+export function TurnGroup(props: {
+  shared: Shared
+  rows: ReadonlyArray<{ readonly key: string; readonly row: TimelineRow.Row; readonly data: RowData }>
+  running: boolean
+  workedFor: string | undefined
+  steps: number
+  revealed: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Trace>
+      <TraceCollapsible open={open || props.revealed} onOpenChange={setOpen}>
+        <TraceCollapsibleTrigger>
+          <TraceLine status={props.running ? "running" : undefined}>
+            <TraceIcon>
+              <IconClock />
+            </TraceIcon>
+            <TraceTitle>{workedTitle({ running: props.running, duration: props.workedFor })}</TraceTitle>
+            <TraceDescription>{props.steps === 1 ? "1 step" : `${props.steps} steps`}</TraceDescription>
+          </TraceLine>
+        </TraceCollapsibleTrigger>
+        <TraceCollapsibleContent className="flex flex-col gap-3">
+          {props.rows.map((item) => (
+            <div key={item.key} data-row-key={item.key} className="flex min-w-0 flex-col gap-3 empty:hidden">
+              <TurnStep shared={props.shared} data={item.data} row={item.row} />
+            </div>
+          ))}
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+    </Trace>
+  )
 }
 
 export function TranscriptRow(props: { shared: Shared; data: RowData; row: TimelineRow.Row }) {

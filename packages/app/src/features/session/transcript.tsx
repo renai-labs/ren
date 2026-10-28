@@ -21,6 +21,7 @@ import {
   type RowData,
   type Shared,
   TranscriptRow,
+  TurnGroup,
   Working,
 } from "./session-transcript.js"
 import { FilesReset } from "./transcript-notice.js"
@@ -71,6 +72,18 @@ const sameData = (left: RowData, right: RowData) => {
   return fieldsOf(left).every((value, index) => sameValue(value, next[index]))
 }
 
+const sameShared = (left: Shared, right: Shared) =>
+  left === right ||
+  (left.root === right.root &&
+    left.sessionID === right.sessionID &&
+    left.part === right.part &&
+    left.reverting === right.reverting &&
+    left.detail === right.detail &&
+    left.onRevert === right.onRevert &&
+    left.onPending === right.onPending &&
+    left.onOpenChild === right.onOpenChild &&
+    left.onOpenSession === right.onOpenSession)
+
 interface RowProps {
   readonly row: TimelineRow.Row
   readonly data: RowData
@@ -87,14 +100,50 @@ function RowView(props: RowProps) {
   )
 }
 
+interface GroupProps {
+  readonly rows: ReadonlyArray<{ readonly key: string; readonly row: TimelineRow.Row; readonly data: RowData }>
+  readonly shared: Shared
+  readonly running: boolean
+  readonly workedFor: string | undefined
+  readonly steps: number
+  readonly revealed: boolean
+}
+
+const Group = memo(
+  TurnGroup,
+  (previous: GroupProps, next: GroupProps) =>
+    sameShared(previous.shared, next.shared) &&
+    previous.running === next.running &&
+    previous.workedFor === next.workedFor &&
+    previous.steps === next.steps &&
+    previous.revealed === next.revealed &&
+    previous.rows.length === next.rows.length &&
+    previous.rows.every((item, index) => {
+      const other = next.rows[index]
+      return other !== undefined && item.row === other.row && sameData(item.data, other.data)
+    }),
+)
+
 const Row = memo(
   RowView,
   (previous, next) =>
     previous.row === next.row &&
-    previous.shared === next.shared &&
+    sameShared(previous.shared, next.shared) &&
     previous.reset === next.reset &&
     sameData(previous.data, next.data),
 )
+
+function Reveal(props: { item: string }) {
+  const scroller = useMessageScroller()
+  return (
+    <span
+      hidden
+      ref={(node) => {
+        if (node) scroller.scrollToMessage(props.item, { align: "start" })
+      }}
+    />
+  )
+}
 
 function LoadEarlier(props: { onVisible: () => void }) {
   return (
@@ -111,6 +160,124 @@ function LoadEarlier(props: { onVisible: () => void }) {
       }}
     />
   )
+}
+
+function rowData(input: {
+  messages: ReadonlyMap<string, SessionMessage.Info>
+  turns: TranscriptTurn.Turns
+  rows: ReadonlyArray<TimelineRow.Row>
+  all: ReadonlyArray<SessionMessage.Info>
+  statuses: ReadonlyMap<string, ChatState.PendingStatus>
+  viewer: string | undefined
+  people: ReadonlyMap<string, Person>
+  modelNames: ReadonlyMap<string, string>
+  updating: ReadonlySet<string>
+}) {
+  const messages = input.messages
+  const turns = input.turns
+  const lastGroups = Projection.indexes(input.rows).lastAssistantGroupKey
+  const contexts: ReadonlyMap<string, { readonly model: SessionModel.Ref }> = Projection.userContext(input.all)
+  const empty = (): RowData => ({})
+  return Match.typeTags<TimelineRow.Row, RowData>()({
+    UserMessage: (row) => {
+      const message = messages.get(row.userMessageID)
+      const context = contexts.get(row.userMessageID)
+      const status = input.statuses.get(row.userMessageID)
+      const senderID = message?.type === "user" ? message.sender?.userId : undefined
+      const sender = senderID && senderID !== input.viewer ? (input.people.get(senderID) ?? member) : undefined
+      return {
+        message,
+        status,
+        caption: [
+          status === "steering" || status === "stranded" ? "Pending" : undefined,
+          context ? TimelineText.modelLabel(context.model, input.modelNames) : undefined,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        sender: sender?.name,
+        senderImage: sender?.image,
+        updating: input.updating.has(row.userMessageID),
+      }
+    },
+    AssistantPart: (row) => {
+      const group = row.group
+      const working = TranscriptTurn.working(turns, row.userMessageID)
+      if (group.type !== "part")
+        return {
+          messages: group.refs.map((reference) => messages.get(reference.messageID)),
+          working: working && lastGroups.get(row.userMessageID) === group.key,
+        }
+      const assistants = turns.turns.get(row.userMessageID) ?? []
+      const copy = TimelineText.copyText(assistants)
+      const copyable = copy?.partID === group.ref.partID && !working
+      return {
+        message: messages.get(group.ref.messageID),
+        copy: copyable ? copy.text : undefined,
+        meta: copyable ? responseMeta(messages.get(row.userMessageID), assistants) : undefined,
+      }
+    },
+    Notice: (row) => ({ message: messages.get(row.messageID) }),
+    Shell: (row) => ({ message: messages.get(row.messageID) }),
+    Thinking: (row) => ({ message: messages.get(row.ref.messageID) }),
+    Retry: (row) => ({
+      retry:
+        turns.activeMessageID === row.userMessageID
+          ? TimelineText.retryStatus(turns.turns.get(row.userMessageID) ?? [])
+          : undefined,
+    }),
+    Error: empty,
+    TurnDivider: empty,
+    CompactionQueued: empty,
+    TurnGap: empty,
+  })
+}
+
+const keysOf = (rows: ReadonlyArray<TimelineRow.Row>) => rows.map((row) => TimelineRow.key(row))
+
+const revealedOf = (blocks: ReadonlyArray<TranscriptTurn.Block>, target: string | undefined) =>
+  target === undefined
+    ? undefined
+    : blocks.find((block) => (block.kind === "turn" ? keysOf(block.rows).includes(target) : block.key === target))?.key
+
+const busyOf = (rows: ReadonlyArray<TimelineRow.Row>, turns: TranscriptTurn.Turns) =>
+  rows.some((row) => TranscriptTurn.rowBusy(turns, row))
+
+const anchorOf = (row: TimelineRow.Row) => {
+  const message = Timeline.messageIDs(row).at(0)
+  return row._tag === "UserMessage" && message ? { id: `message-${message}` } : {}
+}
+
+const turnOf = (
+  block: Extract<TranscriptTurn.Block, { kind: "turn" }>,
+  context: { readonly messages: ReadonlyMap<string, SessionMessage.Info>; readonly turns: TranscriptTurn.Turns },
+) => {
+  const user = context.messages.get(block.turn)
+  const duration = TimelineText.turnDuration(
+    user?.type === "user" ? user : undefined,
+    context.turns.turns.get(block.turn) ?? [],
+  )
+  return {
+    running: context.turns.busy && context.turns.activeMessageID === block.turn,
+    workedFor: duration === undefined ? undefined : TimelineText.duration(duration),
+    steps: block.rows.reduce((total, row) => total + TranscriptTurn.steps(row, context.messages), 0),
+  }
+}
+
+// oxlint-disable-next-line ren/no-comments -- The chat moved to a new machine at filesResetAt: the notice goes before the first message after that time, or at the end (E117). It waits for the chat's rows, so the list never starts with the footer alone.
+const resetOf = (
+  rows: ReadonlyArray<TimelineRow.Row>,
+  messages: ReadonlyMap<string, SessionMessage.Info>,
+  filesResetAt: DateTime.Utc | null | undefined,
+) => {
+  const at = rows.length > 0 ? filesResetAt : undefined
+  if (!at) return { at: undefined, before: undefined }
+  return {
+    at,
+    before: rows.find((row) => {
+      const message = row._tag === "UserMessage" ? messages.get(row.userMessageID) : undefined
+      return message !== undefined && DateTime.isGreaterThanOrEqualTo(message.time.created, at)
+    }),
+  }
 }
 
 export interface History {
@@ -152,11 +319,6 @@ export function Transcript(props: {
     activeMessageID: props.activeMessageID,
     busy: props.busy,
   }
-  const modelNames = props.modelNames ?? unnamed
-  const people = props.people ?? nobody
-  const updating = props.updating ?? none
-  const lastGroups = Projection.indexes(props.rows).lastAssistantGroupKey
-  const contexts: ReadonlyMap<string, { readonly model: SessionModel.Ref }> = Projection.userContext(props.messages)
   const shared: Shared = {
     root: props.view.root,
     sessionID: props.view.sessionID,
@@ -168,100 +330,60 @@ export function Transcript(props: {
     onOpenChild: props.onOpenChild,
     onOpenSession: props.onOpenSession,
   }
-  const empty = (): RowData => ({})
-  const data = Match.typeTags<TimelineRow.Row, RowData>()({
-    UserMessage: (row) => {
-      const message = messages.get(row.userMessageID)
-      const context = contexts.get(row.userMessageID)
-      const status = props.statuses.get(row.userMessageID)
-      const senderID = message?.type === "user" ? message.sender?.userId : undefined
-      const sender = senderID && senderID !== props.viewer ? (people.get(senderID) ?? member) : undefined
-      return {
-        message,
-        status,
-        caption: [
-          status === "steering" || status === "stranded" ? "Pending" : undefined,
-          context ? TimelineText.modelLabel(context.model, modelNames) : undefined,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        sender: sender?.name,
-        senderImage: sender?.image,
-        updating: updating.has(row.userMessageID),
-      }
-    },
-    AssistantPart: (row) => {
-      const group = row.group
-      const working = TranscriptTurn.working(turns, row.userMessageID)
-      if (group.type !== "part")
-        return {
-          messages: group.refs.map((reference) => messages.get(reference.messageID)),
-          working: working && lastGroups.get(row.userMessageID) === group.key,
-        }
-      const assistants = turns.turns.get(row.userMessageID) ?? []
-      const copy = TimelineText.copyText(assistants)
-      const copyable = copy?.partID === group.ref.partID && !working
-      return {
-        message: messages.get(group.ref.messageID),
-        copy: copyable ? copy.text : undefined,
-        meta: copyable ? responseMeta(messages.get(row.userMessageID), assistants) : undefined,
-      }
-    },
-    Notice: (row) => ({ message: messages.get(row.messageID) }),
-    Shell: (row) => ({ message: messages.get(row.messageID) }),
-    Thinking: (row) => ({ message: messages.get(row.ref.messageID) }),
-    Retry: (row) => ({
-      retry:
-        props.activeMessageID === row.userMessageID
-          ? TimelineText.retryStatus(turns.turns.get(row.userMessageID) ?? [])
-          : undefined,
-    }),
-    Error: empty,
-    TurnDivider: empty,
-    CompactionQueued: empty,
-    TurnGap: empty,
+  const data = rowData({
+    messages,
+    turns,
+    rows: props.rows,
+    all: props.messages,
+    statuses: props.statuses,
+    viewer: props.viewer,
+    people: props.people ?? nobody,
+    modelNames: props.modelNames ?? unnamed,
+    updating: props.updating ?? none,
   })
-  // oxlint-disable-next-line ren/no-comments -- The chat moved to a new machine at filesResetAt: the notice goes before the first message after that time, or at the end (E117). It waits for the chat's rows, so the list never starts with the footer alone.
-  const resetAt = props.rows.length > 0 ? props.filesResetAt : undefined
-  const resetBefore = resetAt
-    ? props.rows.find((row) => {
-        const message = row._tag === "UserMessage" ? messages.get(row.userMessageID) : undefined
-        return message !== undefined && DateTime.isGreaterThanOrEqualTo(message.time.created, resetAt)
-      })
-    : undefined
+  const reset = resetOf(props.rows, messages, props.filesResetAt)
   const history = props.history
   const target = props.target
-  const scroller = useMessageScroller()
-  const reveal = (node: HTMLDivElement | null) => {
-    if (node && target) scroller.scrollToMessage(target, { align: "start" })
-  }
+  const blocks = TranscriptTurn.blocks(
+    props.rows.filter((row) => row._tag !== "TurnGap"),
+    messages,
+  )
+  const revealed = revealedOf(blocks, target)
+  const groupOf = (block: Extract<TranscriptTurn.Block, { kind: "turn" }>) => ({
+    ...turnOf(block, { messages, turns }),
+    rows: block.rows.map((row) => ({ key: TimelineRow.key(row), row, data: data(row) })),
+    shared,
+    revealed: block.key === revealed,
+  })
   return (
     <MessageScroller data-slot="transcript" className="flex-1">
       <MessageScrollerViewport aria-label={props.label} preserveScrollOnPrepend className="scrollbar-gutter-both">
         {history.more && !history.loading ? <LoadEarlier onVisible={history.onLoadOlder} /> : null}
         <MessageScrollerContent className="mx-auto w-full max-w-192 px-4 pt-6 pb-8 md:px-6">
-          {props.rows
-            .filter((row) => row._tag !== "TurnGap")
-            .map((row) => {
-              const key = TimelineRow.key(row)
-              const anchor = row._tag === "UserMessage"
-              const message = Timeline.messageIDs(row).at(0)
-              return (
-                <MessageScrollerItem
-                  key={key}
-                  messageId={key}
-                  scrollAnchor={anchor}
-                  data-row-key={key}
-                  aria-busy={TranscriptTurn.rowBusy(turns, row) || undefined}
-                  {...(anchor && message && { id: `message-${message}` })}
-                  ref={key === props.target ? reveal : undefined}
-                  className="flex flex-col gap-6 empty:hidden"
-                >
-                  <Row row={row} data={data(row)} shared={shared} reset={row === resetBefore} />
-                </MessageScrollerItem>
-              )
-            })}
-          {resetAt && !resetBefore ? (
+          {blocks.map((block) =>
+            block.kind === "turn" ? (
+              <MessageScrollerItem
+                key={block.key}
+                messageId={block.key}
+                aria-busy={busyOf(block.rows, turns) || undefined}
+              >
+                <Group {...groupOf(block)} />
+              </MessageScrollerItem>
+            ) : (
+              <MessageScrollerItem
+                key={block.key}
+                messageId={block.key}
+                scrollAnchor={block.row._tag === "UserMessage"}
+                data-row-key={block.key}
+                aria-busy={busyOf([block.row], turns) || undefined}
+                {...anchorOf(block.row)}
+                className="flex flex-col gap-6 empty:hidden"
+              >
+                <Row row={block.row} data={data(block.row)} shared={shared} reset={block.row === reset.before} />
+              </MessageScrollerItem>
+            ),
+          )}
+          {reset.at && !reset.before ? (
             <MessageScrollerItem messageId="files-reset">
               <FilesReset />
             </MessageScrollerItem>
@@ -278,6 +400,7 @@ export function Transcript(props: {
           <Spinner aria-label="Loading earlier messages" className="size-5 text-muted-foreground" />
         </div>
       ) : null}
+      {revealed ? <Reveal key={target} item={revealed} /> : null}
       <MessageScrollerButton onClick={() => props.onFollow?.()} />
     </MessageScroller>
   )
