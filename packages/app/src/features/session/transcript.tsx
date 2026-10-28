@@ -3,12 +3,29 @@ import type { ChatAtoms } from "@ren/chat"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
-import { Transcript } from "@ren/ui/transcript"
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerViewport,
+  useMessageScroller,
+} from "@ren/ui/message-scroller"
+import { Spinner } from "@ren/ui/spinner"
 import { DateTime, Match } from "effect"
-import { type PendingAction, type Person, type RowData, type Shared, TranscriptRow } from "./session-transcript.js"
-import { Timeline } from "./timeline.js"
+// oxlint-disable-next-line no-restricted-imports -- the React Compiler memoizes inside a component, not across the items of a list, so memo keeps a streaming reply from re-rendering every row
+import { memo } from "react"
+import {
+  type PendingAction,
+  type Person,
+  type RowData,
+  type Shared,
+  TranscriptRow,
+  Working,
+} from "./session-transcript.js"
 import { FilesReset } from "./transcript-notice.js"
 import { TranscriptTurn } from "./transcript-turn.js"
+import { Timeline } from "./timeline.js"
 
 const none: ReadonlySet<string> = new Set()
 
@@ -26,7 +43,84 @@ const responseMeta = (turn: SessionMessage.Info | undefined, assistants: Readonl
   return [duration, interrupted ? "Interrupted" : undefined].filter(Boolean).join(" · ")
 }
 
-export function useTranscriptRows(props: {
+const sameValue = (left: unknown, right: unknown) =>
+  left === right ||
+  (Array.isArray(left) &&
+    Array.isArray(right) &&
+    left.length === right.length &&
+    left.every((value, index) => value === right[index]))
+
+const fieldsOf = (data: RowData): ReadonlyArray<unknown> => [
+  data.message,
+  data.messages,
+  data.status,
+  data.caption,
+  data.sender,
+  data.senderImage,
+  data.updating,
+  data.working,
+  data.copy,
+  data.meta,
+  data.retry?.attempt,
+  data.retry?.message,
+  data.retry?.next,
+]
+
+const sameData = (left: RowData, right: RowData) => {
+  const next = fieldsOf(right)
+  return fieldsOf(left).every((value, index) => sameValue(value, next[index]))
+}
+
+interface RowProps {
+  readonly row: TimelineRow.Row
+  readonly data: RowData
+  readonly shared: Shared
+  readonly reset: boolean
+}
+
+function RowView(props: RowProps) {
+  return (
+    <>
+      {props.reset ? <FilesReset /> : null}
+      <TranscriptRow shared={props.shared} data={props.data} row={props.row} />
+    </>
+  )
+}
+
+const Row = memo(
+  RowView,
+  (previous, next) =>
+    previous.row === next.row &&
+    previous.shared === next.shared &&
+    previous.reset === next.reset &&
+    sameData(previous.data, next.data),
+)
+
+function LoadEarlier(props: { onVisible: () => void }) {
+  return (
+    <div
+      aria-hidden
+      className="h-px shrink-0"
+      ref={(node) => {
+        if (!node) return
+        const observer = new IntersectionObserver((found) => {
+          if (found.some((entry) => entry.isIntersecting)) props.onVisible()
+        })
+        observer.observe(node)
+        return () => observer.disconnect()
+      }}
+    />
+  )
+}
+
+export interface History {
+  readonly more: boolean
+  readonly loading: boolean
+  readonly onLoadOlder: () => void
+}
+
+export function Transcript(props: {
+  label: string
   view: ChatAtoms.View
   statuses: ReadonlyMap<string, ChatState.PendingStatus>
   messages: ReadonlyArray<SessionMessage.Info>
@@ -34,14 +128,17 @@ export function useTranscriptRows(props: {
   activeMessageID: string | undefined
   busy: boolean
   working: boolean
+  history: History
+  target?: string | undefined
   modelNames?: ReadonlyMap<string, string>
   part?: string | undefined
   reverting?: boolean
   updating?: ReadonlySet<string>
-  onRevert?: (message: SessionMessage.User) => void
+  onRevert?: ((message: SessionMessage.User) => void) | undefined
   onPending?: (action: PendingAction, message: SessionMessage.User) => void
   onOpenChild: (sessionID: Session.ID) => void
   onOpenSession?: (sessionID: string) => void
+  onFollow?: () => void
   detail?: TimelineDetail.Detail | undefined
   viewer?: string
   people?: ReadonlyMap<string, Person>
@@ -132,31 +229,56 @@ export function useTranscriptRows(props: {
         return message !== undefined && DateTime.isGreaterThanOrEqualTo(message.time.created, resetAt)
       })
     : undefined
-  const notice = resetAt ? <FilesReset /> : undefined
-  const working = props.working ? <Transcript.Working /> : undefined
-  return {
-    items: props.rows.filter((row) => row._tag !== "TurnGap"),
-    itemKey: TimelineRow.key,
-    marker: (row: TimelineRow.Row) => row._tag === "UserMessage",
-    itemMessage: (row: TimelineRow.Row) => Timeline.messageIDs(row).at(0),
-    itemBusy: (row: TimelineRow.Row) => TranscriptTurn.rowBusy(turns, row),
-    renderItem: (row: TimelineRow.Row) =>
-      row === resetBefore ? (
-        <>
-          <div className="pb-4 md:pb-6">{notice}</div>
-          <TranscriptRow shared={shared} data={data(row)} row={row} />
-        </>
-      ) : (
-        <TranscriptRow shared={shared} data={data(row)} row={row} />
-      ),
-    footer:
-      notice && !resetBefore ? (
-        <>
-          {notice}
-          {working}
-        </>
-      ) : (
-        working
-      ),
+  const history = props.history
+  const target = props.target
+  const scroller = useMessageScroller()
+  const reveal = (node: HTMLDivElement | null) => {
+    if (node && target) scroller.scrollToMessage(target, { align: "start" })
   }
+  return (
+    <MessageScroller data-slot="transcript" className="flex-1">
+      <MessageScrollerViewport aria-label={props.label} preserveScrollOnPrepend className="scrollbar-gutter-both">
+        {history.more && !history.loading ? <LoadEarlier onVisible={history.onLoadOlder} /> : null}
+        <MessageScrollerContent className="mx-auto w-full max-w-192 px-4 pt-6 pb-8 md:px-6">
+          {props.rows
+            .filter((row) => row._tag !== "TurnGap")
+            .map((row) => {
+              const key = TimelineRow.key(row)
+              const anchor = row._tag === "UserMessage"
+              const message = Timeline.messageIDs(row).at(0)
+              return (
+                <MessageScrollerItem
+                  key={key}
+                  messageId={key}
+                  scrollAnchor={anchor}
+                  data-row-key={key}
+                  aria-busy={TranscriptTurn.rowBusy(turns, row) || undefined}
+                  {...(anchor && message && { id: `message-${message}` })}
+                  ref={key === props.target ? reveal : undefined}
+                  className="flex flex-col gap-6 empty:hidden"
+                >
+                  <Row row={row} data={data(row)} shared={shared} reset={row === resetBefore} />
+                </MessageScrollerItem>
+              )
+            })}
+          {resetAt && !resetBefore ? (
+            <MessageScrollerItem messageId="files-reset">
+              <FilesReset />
+            </MessageScrollerItem>
+          ) : null}
+          {props.working ? (
+            <MessageScrollerItem messageId="working">
+              <Working label="Preparing the next step" />
+            </MessageScrollerItem>
+          ) : null}
+        </MessageScrollerContent>
+      </MessageScrollerViewport>
+      {history.loading ? (
+        <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
+          <Spinner aria-label="Loading earlier messages" className="size-5 text-muted-foreground" />
+        </div>
+      ) : null}
+      <MessageScrollerButton onClick={() => props.onFollow?.()} />
+    </MessageScroller>
+  )
 }

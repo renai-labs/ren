@@ -4,7 +4,7 @@ import { TaskComment } from "@ren/schema/task-comment"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
-import { Document } from "@ren/ui/document"
+import { Markdown } from "@ren/ui/markdown"
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
 import { Page } from "@ren/ui/page"
@@ -189,7 +189,7 @@ function Event(props: {
           <Icon glyph="AlertTriangle" tone="warning" />
           <AlertTitle>Requested human review</AlertTitle>
           <AlertDescription>
-            <Document.Markdown content={data.reason} />
+            <Markdown>{data.reason}</Markdown>
           </AlertDescription>
         </Alert>
       )
@@ -237,7 +237,7 @@ function ReviewEvent(props: { data: Extract<TaskEventData, { _tag: "reviewed" }>
   return (
     <div className="flex flex-col gap-2">
       <Text purpose="body">{props.data.decision === "approved" ? "Approved the review." : "Requested changes."}</Text>
-      {props.data.comment ? <Document.Markdown content={props.data.comment} /> : null}
+      {props.data.comment ? <Markdown>{props.data.comment}</Markdown> : null}
     </div>
   )
 }
@@ -269,7 +269,7 @@ function AssignmentEvent(props: {
         </Text>
       ) : null}
       {data.fromSpaceId !== data.toSpaceId ? <Text purpose="body">Moved the task to another space.</Text> : null}
-      {data.note ? <Document.Markdown content={data.note} /> : null}
+      {data.note ? <Markdown>{data.note}</Markdown> : null}
     </div>
   )
 }
@@ -280,11 +280,11 @@ function FieldEvent(props: { data: Extract<TaskEventData, { _tag: "field" }> }) 
       <Text purpose="caption" tone="secondary">
         Before
       </Text>
-      <Document.Markdown content={props.data.from ?? "Empty"} />
+      <Markdown>{props.data.from ?? "Empty"}</Markdown>
       <Text purpose="caption" tone="secondary">
         After
       </Text>
-      <Document.Markdown content={props.data.to ?? "Empty"} />
+      <Markdown>{props.data.to ?? "Empty"}</Markdown>
     </Details>
   )
 }
@@ -313,7 +313,7 @@ function Comment(props: { comment: TaskCommentInfo; author: string }) {
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <Document.Markdown content={props.comment.body} />
+        <Markdown>{props.comment.body}</Markdown>
       )}
       {props.comment.canUpdate && !editing ? (
         <div className="flex gap-2">

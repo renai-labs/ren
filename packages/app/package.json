@@ -22,6 +22,7 @@
     "@ren/schema": "workspace:*",
     "@ren/ui": "workspace:*",
     "@ren/util": "workspace:*",
+    "@tabler/icons-react": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
     "better-auth": "catalog:",

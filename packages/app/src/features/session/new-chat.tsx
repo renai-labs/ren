@@ -2,13 +2,13 @@ import { Composer, ComposerHistory } from "@ren/chat"
 import { Session } from "@ren/schema/session"
 import { SessionModel } from "@ren/schema/session/model"
 import { SessionMessage } from "@ren/schema/session/message"
-import { ConversationShell } from "@ren/ui/conversation-shell"
+import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Icon } from "@ren/ui/icon"
 import { Logotype } from "@ren/ui/logotype"
+import { Message, MessageContent } from "@ren/ui/message"
+import { PromptInput } from "@ren/ui/prompt-input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
-import { Text } from "@ren/ui/text"
 import { toast } from "@ren/ui/toast"
-import { Transcript } from "@ren/ui/transcript"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { startTransition, useId, useRef, useState, ViewTransition } from "react"
@@ -23,6 +23,7 @@ import { SpaceAppsStrip } from "../../components/apps-strip.js"
 import { ChatComposer } from "./chat-composer.js"
 import { ComposerCopy } from "./composer-copy.js"
 import { SessionDrafts } from "./session-drafts.js"
+import { Working } from "./transcript-notice.js"
 
 // oxlint-disable-next-line ren/no-comments -- With no listed pick the chat sends no model, so the brain takes the space's default.
 const listed = (
@@ -63,31 +64,29 @@ export function NewChat(props: { userId: string }) {
   }
   if (sent !== undefined)
     return (
-      <ConversationShell.Root
-        mode="pending"
-        populated
-        transcript={
-          <ConversationShell.Message author="user">
-            <ViewTransition name={transitionName} share="auto" default="none">
-              <ConversationShell.Bubble>
-                <Transcript.UserText text={sent} />
-              </ConversationShell.Bubble>
-            </ViewTransition>
-            <Transcript.Working label="Starting the chat" />
-          </ConversationShell.Message>
-        }
-      />
+      <div data-slot="chat" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="mx-auto flex w-full max-w-192 flex-col gap-6 px-4 pt-14 pb-8 md:px-6">
+          <Message align="end">
+            <MessageContent className="max-w-5/6 items-end">
+              <ViewTransition name={transitionName} share="auto" default="none">
+                <Bubble variant="muted" align="end">
+                  <BubbleContent className="rounded-tr-lg px-4 text-base/relaxed whitespace-pre-wrap">
+                    {sent}
+                  </BubbleContent>
+                </Bubble>
+              </ViewTransition>
+            </MessageContent>
+          </Message>
+          <Working label="Starting the chat" />
+        </div>
+      </div>
     )
   return (
-    <ConversationShell.Root
-      populated={false}
-      composerPosition="centered"
-      placeholder={
-        <span aria-hidden>
-          <Logotype size="display" tone="watermark" drawing="outline" label="" />
-        </span>
-      }
-      composer={
+    <div data-slot="chat" className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-4 md:px-6">
+      <span aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <Logotype size="display" tone="watermark" drawing="outline" label="" />
+      </span>
+      <div className="relative flex w-full max-w-192 flex-col">
         <ChatComposer
           label="Start a chat"
           layout="stacked"
@@ -102,9 +101,7 @@ export function NewChat(props: { userId: string }) {
                 aria-label="Space"
                 className="gap-2 border-0 px-1 text-muted-foreground hover:text-foreground data-popup-open:text-foreground"
               >
-                <Text purpose="body" tone="secondary" element="span">
-                  Working in
-                </Text>
+                <span className="text-muted-foreground">Working in</span>
                 <Icon glyph="Cube" />
                 <SelectValue className="text-foreground" />
               </SelectTrigger>
@@ -173,7 +170,7 @@ export function NewChat(props: { userId: string }) {
                   }}
                 />
               ) : null}
-              <ConversationShell.ComposerSubmit
+              <PromptInput.Submit
                 running={false}
                 content={Boolean(text)}
                 starting={create.isPending}
@@ -184,8 +181,10 @@ export function NewChat(props: { userId: string }) {
           }
         >
           <ViewTransition name={transitionName} share="auto" default="none">
-            <ConversationShell.ComposerInput
+            <PromptInput.Textarea
               ref={input}
+              layout="stacked"
+              size="lg"
               aria-label="Message"
               placeholder={ComposerCopy.placeholder}
               dir="auto"
@@ -197,7 +196,7 @@ export function NewChat(props: { userId: string }) {
             />
           </ViewTransition>
         </ChatComposer>
-      }
-    />
+      </div>
+    </div>
   )
 }
