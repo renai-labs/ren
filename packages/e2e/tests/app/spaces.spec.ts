@@ -18,8 +18,8 @@ test("a new organization starts with a protected shared space and a personal spa
   await expect(page.getByRole("link", { name: "Open Grace Hopper's Personal Space" })).toBeVisible()
 
   await page.getByRole("link", { name: "Open General Space" }).click()
-  await page.getByRole("button", { name: "Space actions" }).click()
-  await expect(page.getByRole("menuitem", { name: "Archive space" })).toBeDisabled()
+  await expect(page.getByRole("heading", { level: 1, name: "General Space" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Space actions" })).toBeHidden()
 })
 
 test("a member creates a space, manages its people and archives it", async ({ page, request }) => {
