@@ -15,7 +15,8 @@ The product SPA and its web host. Desktop and mobile hosts will import it throug
 ## Conventions
 
 - Compose `@ren/ui`, as shadcn apps do: use its variants and sizes, and pass `className` for layout and one-off looks at the call site. A look that repeats belongs in `@ren/ui`, in the component or a shared composition.
-- Server data comes from the generated query options in `@ren/client/react`, preloaded in route loaders with `queryClient.query(options)`. Build the query options from `context.api`, the `RenQuery` factory in the router context.
+- Server data comes from the generated query options in `@ren/client/react`. Route loaders start the fetches without awaiting them, with `Loader.start(queryClient.query(options))`, and the page reads them with `useQuery`, drawing skeletons in its `Page` frame while they are pending (the `react` skill has the rules). Build the query options from `context.api`, the `RenQuery` factory in the router context.
+- The boot loader (`AppBoot`) is the pending component of `_authed` only, whose `beforeLoad` reads `session` and `me` from the cache (`staleTime: "static"`), so it shows on the first load and never on a navigation. Every other route shows its own skeleton.
 - A generated mutation invalidates its own resource group when it succeeds, through the `MutationCache` in `src/lib/runtime.ts`, and `mutateAsync` resolves after the active queries refetch. When a mutation changes another resource, add that group to `invalidates` there instead of invalidating in the feature. Invalidate by hand only after calls that are not generated mutations, such as Better Auth and `@ren/chat`, with an `ast-grep-ignore: no-manual-invalidation` comment that names the call.
 - A detail route's loader seeds its query from the cached lists with `Seed.fromList`, so a page opened from a list renders without waiting for a fetch.
 - In development, `LayoutShift.watch` logs every layout shift the user did not cause. Fix each one.

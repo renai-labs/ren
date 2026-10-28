@@ -17,7 +17,10 @@ Lint enforces most React rules: run `bun run lint` and follow each message. This
 
 ## Data and async
 
-- Start independent work together. Route loaders `Promise.all` their `queryClient.query(...)` calls.
+- Route loaders start fetches and return without awaiting them (`Loader.start(queryClient.query(...), ...)`; lint enforces it). The page reads the same options with `useQuery`, renders its frame at once and draws skeletons where the data goes while the query is pending, so a navigation commits immediately. The route's `pendingComponent` is that page's skeleton in the same frame; the router shows it only while a lazy chunk or `beforeLoad` takes longer than `defaultPendingMs`.
+- A query the page cannot render without spreads `Loader.required`, so a failed first load reaches the route's error component as an awaited loader did. A list whose key follows the URL (filters, page) adds `placeholderData: keepPreviousData` and dims while `isPlaceholderData`.
+- Await in a loader only to redirect or act on the data, and say why in the ast-grep-ignore.
+- Start independent work together.
 - Inside a function, check cheap synchronous conditions first, and move each `await` into the branch that needs it.
 - Place `<Suspense>` around the region that waits, and keep the surrounding layout outside so it paints immediately. Give independently loading regions their own boundaries.
 - Subscribe to the narrowest value: Query `select`, router `useSearch({ select })`, store selectors that return booleans or primitives.
