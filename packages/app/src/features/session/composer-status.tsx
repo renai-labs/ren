@@ -38,8 +38,10 @@ function Starting() {
   const index = Rotation.useStep(phrases.length, 2400)
   return (
     <output className="flex min-w-0 items-center text-sm text-muted-foreground">
+      <span className="sr-only">Starting the sandbox</span>
       <span
         key={index}
+        aria-hidden
         className="shimmer animate-in truncate duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none motion-reduce:shimmer-none"
       >
         {phrases[index]}…
