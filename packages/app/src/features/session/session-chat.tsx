@@ -1,10 +1,8 @@
 import { Family, SessionTasks, type TimelineDetail, TimelineRow, TimelineSearch, ToolState } from "@ren/chat"
-import type { ChatSession } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import type { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
-import type { SessionModel } from "@ren/schema/session/model"
 import { Button } from "@ren/ui/button"
 import { FindBar } from "@ren/ui/find-bar"
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
@@ -216,17 +214,16 @@ function useOpenSession(input: {
   }
 }
 
-function useRevert(input: {
-  sessionID: Session.ID
-  model: SessionModel.Ref | undefined
-  restore: (message: Option.Option<SessionMessage.User>) => void
-}) {
+function useRevert(input: { sessionID: Session.ID; restore: (message: Option.Option<SessionMessage.User>) => void }) {
   const [reverting, setReverting] = useState(false)
   const revert = ChatReact.useAction(input.sessionID, (opened, messageID: SessionMessage.ID) =>
     opened.revert(messageID),
   )
-  const prompt = ChatReact.useAction(input.sessionID, (opened, request: ChatSession.PromptInput) =>
-    opened.prompt(request),
+  const prompt = ChatReact.useAction(input.sessionID, (opened, text: string) =>
+    Effect.flatMap(SubscriptionRef.get(opened.state), (current) => {
+      const model = current.info[input.sessionID]?.model
+      return opened.prompt({ id: SessionMessage.ID.create(), text, ...(model && { model }) })
+    }),
   )
   const run = (work: () => Promise<unknown>) => {
     if (reverting) return
@@ -240,7 +237,7 @@ function useRevert(input: {
     onEdit: (message: SessionMessage.User, text: string) =>
       run(() =>
         revert(message.id)
-          .then(() => prompt({ id: SessionMessage.ID.create(), text, ...(input.model && { model: input.model }) }))
+          .then(() => prompt(text))
           .catch(Failure.notify("Could not edit your message")),
       ),
   }
@@ -356,7 +353,7 @@ export function SessionChat(props: {
     SessionDrafts.prefill(platform.drafts, SessionDrafts.key(props.sessionID), message.value.text)
     setRestored((count) => count + 1)
   }
-  const reverter = useRevert({ sessionID: props.sessionID, model: info?.model, restore })
+  const reverter = useRevert({ sessionID: props.sessionID, restore })
   const onUndo = () => void undo().then(restore, Failure.notify("Could not undo the last message"))
   const onRedo = () => void redo().catch(Failure.notify("Could not restore the undone messages"))
   const onCompact = () => void compact().catch(Failure.notify("Could not compact the chat"))

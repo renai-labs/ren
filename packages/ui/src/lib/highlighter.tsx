@@ -84,11 +84,7 @@ export async function loadHighlighter(language: string) {
       return {
         lines: tokens.map((line) =>
           line.map((token) => (
-            <span
-              key={token.offset}
-              style={token.htmlStyle}
-              className="text-(--shiki-light) dark:text-(--shiki-dark)"
-            >
+            <span key={token.offset} style={token.htmlStyle} className="text-(--shiki-light) dark:text-(--shiki-dark)">
               {token.content}
             </span>
           )),

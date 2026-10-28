@@ -2,7 +2,7 @@ export * as Timeline from "./timeline.js"
 
 import { TimelineRow } from "@ren/chat"
 
-export const messageIDs = (row: TimelineRow.Row): ReadonlyArray<string> => {
+const messageIDs = (row: TimelineRow.Row): ReadonlyArray<string> => {
   if (row._tag === "UserMessage") return [row.userMessageID]
   if (row._tag === "Notice" || row._tag === "Shell") return [row.messageID]
   if (row._tag !== "AssistantPart") return []
