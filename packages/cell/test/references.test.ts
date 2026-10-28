@@ -287,6 +287,8 @@ it.live("files deleted under the root come back at the next turn", () =>
 
 const drivesRoot = join(workspace, ".ren", "drives")
 
+const remote = { type: "s3", bucket: "ren-drives", region: "us-east-1", placeholder: "ren:DRIVE" } as const
+
 const mounts: Drive.Availability = {
   type: "mounts",
   mounts: [
@@ -294,13 +296,14 @@ const mounts: Drive.Availability = {
       kind: "space",
       alias: "drive:space",
       description: "The space’s files",
-      remote: {
-        type: "s3",
-        bucket: "ren-drives",
-        prefix: "org_1/drives/spaces/spc_1/",
-        region: "us-east-1",
-        placeholder: "ren:DRIVE",
-      },
+      remote: { ...remote, prefix: "org_1/drives/spaces/spc_1/" },
+      access: "write",
+    },
+    {
+      kind: "org",
+      alias: "drive:org",
+      description: "The organization’s files",
+      remote: { ...remote, prefix: "org_1/drives/org/" },
       access: "read",
     },
   ],
@@ -320,7 +323,7 @@ it.live("a chat whose environment cannot mount gets a note and no drive referenc
 )
 
 it.live(
-  "a drive is a reference at its root, a mount that fails is a note in the tool result, and writes under it are denied",
+  "a drive is a reference at its root, a mount that fails is a note in the tool result, and writes are denied except under a writable drive",
   () =>
     Effect.gen(function* () {
       const github = yield* fresh()
@@ -330,8 +333,9 @@ it.live(
       expect(call.system).toContain(join(drivesRoot, "space"))
       expect(call.system).toContain("The space’s files")
       expect(result(call)).toContain("The reference drive:space is not on the environment:")
-      expect(
-        result(yield* chat.tool("write", { path: join(drivesRoot, "space", "notes.md"), content: "x" })),
-      ).toContain("is in a read-only drive")
+      const write = (path: string) => chat.tool("write", { path, content: "x" }).pipe(Effect.map(result))
+      expect(yield* write(join(drivesRoot, "org", "notes.md"))).toContain("is in a read-only drive")
+      expect(yield* write(join(drivesRoot, "notes.md"))).toContain("is in a read-only drive")
+      expect(yield* write(join(drivesRoot, "space", "notes.md"))).not.toContain("is in a read-only drive")
     }),
 )

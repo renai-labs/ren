@@ -46,8 +46,8 @@ resource "aws_iam_role_policy" "server_task_drives" {
   })
 }
 
-resource "aws_iam_role" "drive_reader" {
-  name = "${var.name}-drive-reader"
+resource "aws_iam_role" "drive_access" {
+  name = "${var.name}-drive-access"
 
   assume_role_policy = jsonencode({
     Version   = "2012-10-17"
@@ -55,25 +55,29 @@ resource "aws_iam_role" "drive_reader" {
   })
 }
 
-resource "aws_iam_role_policy" "drive_reader" {
+resource "aws_iam_role_policy" "drive_access" {
   name = "drives"
-  role = aws_iam_role.drive_reader.id
+  role = aws_iam_role.drive_access.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       { Effect = "Allow", Action = "s3:ListBucket", Resource = aws_s3_bucket.drives.arn },
-      { Effect = "Allow", Action = "s3:GetObject", Resource = "${aws_s3_bucket.drives.arn}/*" },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"]
+        Resource = "${aws_s3_bucket.drives.arn}/*"
+      },
     ]
   })
 }
 
-resource "aws_iam_role_policy" "server_task_drive_reader" {
-  name = "drive-reader"
+resource "aws_iam_role_policy" "server_task_drive_access" {
+  name = "drive-access"
   role = aws_iam_role.server_task.id
 
   policy = jsonencode({
     Version   = "2012-10-17"
-    Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Resource = aws_iam_role.drive_reader.arn }]
+    Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Resource = aws_iam_role.drive_access.arn }]
   })
 }

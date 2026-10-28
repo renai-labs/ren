@@ -150,6 +150,7 @@ it.live("a mount on an environment that cannot mount fails at once, and is tried
           endpoint: "http://127.0.0.1:1",
           placeholder: "ren:DRIVE",
         },
+        access: "read",
       },
     }
     const failure = { item, message: "its environment has no rclone or no usable /dev/fuse" }

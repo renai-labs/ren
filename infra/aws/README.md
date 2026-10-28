@@ -20,7 +20,7 @@ egress ──mTLS server.<name>.internal:4443──▶ server        server ─�
 | `egress.tf`  | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document     |
 | `waf.tf`     | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules         |
 | `app.tf`     | Site and app bucket and CloudFront distribution                                           |
-| `drives.tf`  | Drives bucket, its CORS for the app's uploads, the server's access to it                  |
+| `drives.tf`  | Drives bucket, CORS for the app's uploads, the server's access, the `drive-access` role   |
 | `deploy.tf`  | The role the deploy workflow assumes with GitHub OIDC                                     |
 
 ## Rules

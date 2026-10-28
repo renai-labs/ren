@@ -497,7 +497,7 @@ describe("Egress.resolve, a brain's drives", () => {
   const host = new URL(TestDrives.config.DRIVE_ENDPOINT).hostname
 
   it.live(
-    "ren:DRIVE on the bucket host is signed again with keys that read only the brain's space drive and the org drive",
+    "ren:DRIVE on the bucket host is signed again with keys that read the brain's space drive and the org drive, and write only the space drive",
     () =>
       Effect.gen(function* () {
         const resolver = yield* Egress.Service
@@ -533,9 +533,14 @@ describe("Egress.resolve, a brain's drives", () => {
         expect(yield* refused(() => minted.list({ prefix: prefixes.other }))).toContain("AccessDenied")
         expect(yield* refused(() => minted.file(`${prefixes.other}notes.txt`).text())).toContain("AccessDenied")
         expect(yield* refused(() => minted.list())).toContain("AccessDenied")
-        expect(yield* refused(() => minted.write(`${prefixes.space}new.txt`, "new"))).toContain("AccessDenied")
-        expect(yield* refused(() => minted.delete(`${prefixes.space}notes.txt`))).toContain("AccessDenied")
-        expect(yield* Effect.promise(() => root.file(`${prefixes.space}notes.txt`).text())).toBe("notes")
+        yield* Effect.promise(() => minted.write(`${prefixes.space}new.txt`, "new"))
+        expect(yield* Effect.promise(() => root.file(`${prefixes.space}new.txt`).text())).toBe("new")
+        yield* Effect.promise(() => minted.delete(`${prefixes.space}new.txt`))
+        expect(yield* Effect.promise(() => root.file(`${prefixes.space}new.txt`).exists())).toBe(false)
+        expect(yield* refused(() => minted.write(`${prefixes.org}new.txt`, "new"))).toContain("AccessDenied")
+        expect(yield* refused(() => minted.write(`${prefixes.other}new.txt`, "new"))).toContain("AccessDenied")
+        expect(yield* refused(() => minted.delete(`${prefixes.org}notes.txt`))).toContain("AccessDenied")
+        expect(yield* Effect.promise(() => root.file(`${prefixes.org}notes.txt`).text())).toBe("notes")
       }),
   )
 

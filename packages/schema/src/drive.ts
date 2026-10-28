@@ -108,6 +108,9 @@ export const Remote = Schema.Struct({
   }),
 }).annotate({ identifier: "Drive.Remote", description: "Where a drive’s files are, and how rclone reaches them." })
 
+export const Access = Schema.Literals(["read", "write"]).annotate({ identifier: "Drive.Access" })
+export type Access = typeof Access.Type
+
 export interface Mount extends Schema.Schema.Type<typeof Mount> {}
 export const Mount = Schema.Struct({
   kind: Kind,
@@ -115,12 +118,10 @@ export const Mount = Schema.Struct({
     description: "`drive:space` or `drive:org`. A user-written reference alias has no `:`.",
   }),
   description: Schema.NonEmptyString.annotate({
-    description: "What the drive is, and that it is read-only. The agent sees a reference only through it (R24).",
+    description: "What the drive is. The agent sees a reference only through it (R24).",
   }),
   remote: Remote,
-  access: Schema.Literals(["read", "write"]).annotate({
-    description: "`read`: the environment mounts the drive read-only. `write`: it may change the drive’s files.",
-  }),
+  access: Access,
 }).annotate({ identifier: "Drive.Mount", description: "A drive that a chat’s environment mounts." })
 
 export const UnavailableReason = Schema.Literals(["no_mount", "no_egress"]).annotate({

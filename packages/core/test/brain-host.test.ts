@@ -421,7 +421,7 @@ describe("BrainHost pull", () => {
               kind: "space",
               alias: "drive:space",
               remote: { ...remote, prefix: `${organizationId}/drives/spaces/${spaceId}/` },
-              access: "read",
+              access: "write",
             },
             {
               kind: "org",
