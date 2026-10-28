@@ -16,7 +16,7 @@ test("signs in with a password and returns to the requested page", async ({ page
   await page.getByLabel("Password", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Sign in" }).click()
   await expect(page).toHaveURL(`${appURL}/`)
-  await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
+  await expect(page.getByRole("combobox", { name: /Switch organization/ })).toContainText("Ada Lovelace")
 
   await page.goto("/app/login")
   await expect(page).toHaveURL(`${appURL}/`)
@@ -35,7 +35,7 @@ test("signs in with an emailed code", async ({ page, request }) => {
   await page.getByRole("textbox").first().click()
   await page.keyboard.type(code)
   await expect(page).toHaveURL(`${appURL}/`)
-  await expect(page.getByRole("heading", { name: "Welcome, Grace Hopper" })).toBeVisible()
+  await expect(page.getByRole("combobox", { name: /Switch organization/ })).toContainText("Grace Hopper")
 })
 
 test("an unverified account is sent to verify its email", async ({ page, request }) => {
