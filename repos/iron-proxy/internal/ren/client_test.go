@@ -23,8 +23,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/stretchr/testify/require"
 )
+
+const emptySHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 type certs struct {
 	dir    string
@@ -169,7 +173,7 @@ func TestResolveKeepsAnswers(t *testing.T) {
 	_, err = client.Resolve(ctx, stripe("ren-a"))
 	require.NoError(t, err)
 	require.Equal(t, int32(1), h.calls.Load(), "a fresh answer is reused for 30s")
-	require.Contains(t, h.lastBody.Load(), `"ops":["replace","setHeader","route"]`)
+	require.Contains(t, h.lastBody.Load(), `"ops":["replace","setHeader","route","awsSign"]`)
 
 	clk.advance(31 * time.Second)
 	h.down.Store(true)
@@ -436,4 +440,57 @@ func TestObserveIgnoresAnswersWithoutRefreshableLabels(t *testing.T) {
 	client.Observe(nil, upstreamAnswer(http.StatusUnauthorized, ""))
 	client.reporting.Wait()
 	require.Empty(t, h.reports)
+}
+
+func TestHandleSignsAgainWithRensAWSKeys(t *testing.T) {
+	cases := []struct{ name, url, host string }{
+		{"a list on the bucket host", "https://ren-drives.s3.us-east-1.amazonaws.com/?delimiter=%2F&list-type=2&prefix=org_1%2Fdrives%2Forg%2F", "ren-drives.s3.us-east-1.amazonaws.com"},
+		{"a ranged get of a Unicode key, path-style", "http://rustfs:9000/ren-drives/org_1/drives/org/r%C3%A9sum%C3%A9%20final.pdf", "rustfs:9000"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, h, _ := newClient(t)
+			h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", Inject: []Op{
+				{Op: "awsSign", AccessKeyID: "ASIAREALKEY", SecretAccessKey: "real-secret-access-key", SessionToken: "real-session-token"},
+			}})
+			req := newRequest(t, "GET", tc.url, nil, "")
+			req.Host = tc.host
+			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set("User-Agent", "rclone/v1.75.2")
+			req.Header.Set("Range", "bytes=0-99")
+			req.Header.Set("X-Amz-Content-Sha256", emptySHA256)
+			placeholder := aws.Credentials{AccessKeyID: "ren:DRIVE", SecretAccessKey: "ren:DRIVE"}
+			require.NoError(t, v4.NewSigner().SignHTTP(t.Context(), placeholder, req, emptySHA256, "s3", "us-east-1", time.Now().Add(-time.Minute), func(o *v4.SignerOptions) { o.DisableURIPathEscaping = true }))
+			require.Equal(t, []string{"ren:DRIVE"}, findPlaceholders(req))
+
+			resp, _ := client.Handle(t.Context(), req, "ren-a")
+			require.Nil(t, resp)
+			require.Empty(t, findPlaceholders(req))
+			require.Equal(t, "real-session-token", req.Header.Get("X-Amz-Security-Token"))
+			require.Contains(t, req.Header.Get("Authorization"), "SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token,")
+
+			signedAt, err := time.Parse("20060102T150405Z", req.Header.Get("X-Amz-Date"))
+			require.NoError(t, err)
+			expected, err := http.NewRequest("GET", tc.url, nil)
+			require.NoError(t, err)
+			expected.Host = tc.host
+			expected.Header.Set("X-Amz-Content-Sha256", emptySHA256)
+			real := aws.Credentials{AccessKeyID: "ASIAREALKEY", SecretAccessKey: "real-secret-access-key", SessionToken: "real-session-token"}
+			require.NoError(t, v4.NewSigner().SignHTTP(t.Context(), real, expected, emptySHA256, "s3", "us-east-1", signedAt, func(o *v4.SignerOptions) { o.DisableURIPathEscaping = true }))
+			require.Equal(t, expected.Header.Get("Authorization"), req.Header.Get("Authorization"))
+		})
+	}
+}
+
+func TestHandleRefusesAWSSignWithoutASignature(t *testing.T) {
+	client, h, _ := newClient(t)
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", Inject: []Op{
+		{Op: "awsSign", AccessKeyID: "ASIAREALKEY", SecretAccessKey: "real-secret-access-key", SessionToken: "real-session-token"},
+	}})
+	req := newRequest(t, "GET", "https://ren-drives.s3.us-east-1.amazonaws.com/?list-type=2", nil, "")
+	req.Host = "ren-drives.s3.us-east-1.amazonaws.com"
+	req.Header.Set("X-Amz-Meta-Note", "ren:DRIVE")
+	resp, _ := client.Handle(t.Context(), req, "ren-a")
+	require.NotNil(t, resp)
+	require.Equal(t, "credential_missing", resp.Header.Get("X-Ren-Egress"))
 }
