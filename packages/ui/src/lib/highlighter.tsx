@@ -64,7 +64,7 @@ export interface Highlighter {
 
 const ready = new Map<string, Highlighter>()
 
-export const readyHighlighter = (language: string) => (languageOf(language) === null ? null : ready.get(language))
+export const readyHighlighter = (language: string) => ready.get(language) ?? null
 
 export async function loadHighlighter(language: string) {
   const lang = languageOf(language)
