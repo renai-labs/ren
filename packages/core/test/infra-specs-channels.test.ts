@@ -220,7 +220,7 @@ describe("InfraSpecs channels", () => {
       expect(moved.changes).toEqual([
         InfraFixture.change("update", "channel", "spaces/eng/channels/site", {
           fields: ["space"],
-          from: "spaces/home/channels/acme-web",
+          from: "spaces/home/channels/site",
         }),
       ])
       expect(yield* mappings(o.admin)).toMatchObject([{ space: { id: eng.id }, fallback: false }])
@@ -288,7 +288,6 @@ describe("InfraSpecs channels", () => {
                 unbound: { kind: "github", purpose: "Unbound" },
                 mismatched: { kind: "github", purpose: "Mismatched" },
                 chat: { kind: "slack", purpose: "Chat" },
-                mail: { kind: "email", purpose: "Mail" },
                 first: { kind: "github", purpose: "First" },
                 second: { kind: "github", purpose: "Second" },
               },
@@ -327,7 +326,6 @@ describe("InfraSpecs channels", () => {
           path: "spaces/home/channels/first",
           message: "spaces/home/channels/second maps the same GitHub place. Map each place once.",
         },
-        { path: "spaces/home/channels/mail", message: "Infra does not apply email channels yet." },
         {
           path: "spaces/home/channels/second",
           message: "spaces/home/channels/first maps the same GitHub place. Map each place once.",

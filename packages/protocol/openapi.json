@@ -11653,24 +11653,6 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["email"]
-              },
-              "purpose": {
-                "type": "string",
-                "minLength": 1
-              },
-              "agent": {
-                "$ref": "#/components/schemas/Agent.Name_2"
-              }
-            },
-            "required": ["kind", "purpose"],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
                 "enum": ["github"]
               },
               "purpose": {
@@ -11704,40 +11686,9 @@
             },
             "required": ["kind", "purpose"],
             "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": ["telegram"]
-              },
-              "purpose": {
-                "type": "string",
-                "minLength": 1
-              },
-              "agent": {
-                "$ref": "#/components/schemas/Agent.Name_2"
-              },
-              "allowedSenders": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              },
-              "blockedSenders": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              }
-            },
-            "required": ["kind", "purpose"],
-            "additionalProperties": false
           }
-        ]
+        ],
+        "description": "A channel that maps a place to a space. The spec maps the channels that a person installed in Ren."
       },
       "Channel.Provider": {
         "type": "string",
@@ -11773,25 +11724,6 @@
               }
             },
             "required": ["kind", "repository"],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": ["telegram"]
-              },
-              "chatId": {
-                "type": "string",
-                "minLength": 1
-              },
-              "topicId": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": ["kind", "chatId"],
             "additionalProperties": false
           }
         ]

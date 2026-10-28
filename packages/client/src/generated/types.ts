@@ -252,10 +252,7 @@ export type GitHostKind = "github"
 
 export type AuthSignInProvider = "google" | "github" | "slack"
 
-export type ChannelTarget =
-  | { kind: "slack"; channelId: string }
-  | { kind: "github"; repository: string }
-  | { kind: "telegram"; chatId: string; topicId?: string }
+export type ChannelTarget = { kind: "slack"; channelId: string } | { kind: "github"; repository: string }
 
 export type AgentName = string
 
@@ -669,20 +666,12 @@ export type ChannelDeclaration =
       fallback?: boolean
       triggers?: { [x: ChannelTriggerID]: { prompt?: string } }
     }
-  | { kind: "email"; purpose: string; agent?: AgentName }
   | {
       kind: "github"
       purpose: string
       agent?: AgentName
       fallback?: boolean
       triggers?: { [x: ChannelTriggerID]: { prompt?: string } }
-    }
-  | {
-      kind: "telegram"
-      purpose: string
-      agent?: AgentName
-      allowedSenders?: Array<string>
-      blockedSenders?: Array<string>
     }
 
 export type InfraUses = { agents?: Array<AgentName> }
@@ -6886,20 +6875,12 @@ export type InfraPlanInput = {
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
                 }
-              | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
               | {
                   readonly kind: "github"
                   readonly purpose: string
                   readonly agent?: string
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
-                }
-              | {
-                  readonly kind: "telegram"
-                  readonly purpose: string
-                  readonly agent?: string
-                  readonly allowedSenders?: ReadonlyArray<string>
-                  readonly blockedSenders?: ReadonlyArray<string>
                 }
           }
           readonly environment?: {
@@ -6934,7 +6915,6 @@ export type InfraPlanInput = {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
               | { readonly kind: "github"; readonly repository: string }
-              | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
           readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
@@ -7206,20 +7186,12 @@ export type InfraPlanInput = {
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
                 }
-              | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
               | {
                   readonly kind: "github"
                   readonly purpose: string
                   readonly agent?: string
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
-                }
-              | {
-                  readonly kind: "telegram"
-                  readonly purpose: string
-                  readonly agent?: string
-                  readonly allowedSenders?: ReadonlyArray<string>
-                  readonly blockedSenders?: ReadonlyArray<string>
                 }
           }
           readonly environment?: {
@@ -7254,7 +7226,6 @@ export type InfraPlanInput = {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
               | { readonly kind: "github"; readonly repository: string }
-              | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
           readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
@@ -7531,20 +7502,12 @@ export type InfraApplyInput = {
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
                 }
-              | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
               | {
                   readonly kind: "github"
                   readonly purpose: string
                   readonly agent?: string
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
-                }
-              | {
-                  readonly kind: "telegram"
-                  readonly purpose: string
-                  readonly agent?: string
-                  readonly allowedSenders?: ReadonlyArray<string>
-                  readonly blockedSenders?: ReadonlyArray<string>
                 }
           }
           readonly environment?: {
@@ -7579,7 +7542,6 @@ export type InfraApplyInput = {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
               | { readonly kind: "github"; readonly repository: string }
-              | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
           readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
@@ -7852,20 +7814,12 @@ export type InfraApplyInput = {
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
                 }
-              | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
               | {
                   readonly kind: "github"
                   readonly purpose: string
                   readonly agent?: string
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
-                }
-              | {
-                  readonly kind: "telegram"
-                  readonly purpose: string
-                  readonly agent?: string
-                  readonly allowedSenders?: ReadonlyArray<string>
-                  readonly blockedSenders?: ReadonlyArray<string>
                 }
           }
           readonly environment?: {
@@ -7900,7 +7854,6 @@ export type InfraApplyInput = {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
               | { readonly kind: "github"; readonly repository: string }
-              | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
           readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
@@ -8173,20 +8126,12 @@ export type InfraApplyInput = {
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
                 }
-              | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
               | {
                   readonly kind: "github"
                   readonly purpose: string
                   readonly agent?: string
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
-                }
-              | {
-                  readonly kind: "telegram"
-                  readonly purpose: string
-                  readonly agent?: string
-                  readonly allowedSenders?: ReadonlyArray<string>
-                  readonly blockedSenders?: ReadonlyArray<string>
                 }
           }
           readonly environment?: {
@@ -8221,7 +8166,6 @@ export type InfraApplyInput = {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
               | { readonly kind: "github"; readonly repository: string }
-              | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
           readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
