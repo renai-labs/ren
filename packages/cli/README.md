@@ -72,7 +72,7 @@ ren2 --completions zsh > "${fpath[1]}/_ren2"   # bash, zsh, fish or sh
 ```sh
 bun run build --version 0.1.0
 bun run build --version 0.1.0 --target linux-x64
-REN_SLOW=1 bun run test
+bun run test
 ```
 
 Builds use the current platform by default. `--outdir` defaults to `dist`. `REN2_HOST_URL` sets the default release host of the generated installer and of `ren2 upgrade`, and overrides it at installation or upgrade time. `REN2_API_URL` sets the binary's default API (default `http://localhost:4000`); the release workflow uses the environment's `REN_API_URL`.
