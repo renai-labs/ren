@@ -14,7 +14,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 | Change lint rules or `oxlint.config.ts` | `script/AGENTS.md`.                                                          |
 | Change Turborepo config                 | `docs/` in the installed `turbo` package. Its behaviour differs from memory. |
 | Write a spec                            | `specs/README.md`.                                                           |
-| Add a runtime option or a feature flag  | `specs/runtime/README.md`.                                                   |
+| Add a feature flag                      | `specs/runtime/README.md`.                                                   |
 
 ## Vocabulary
 

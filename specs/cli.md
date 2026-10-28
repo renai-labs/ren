@@ -1,127 +1,20 @@
-# ren2 CLI
+# ren2 CLI: pending
 
-Status: partially implemented. The command/runtime foundation, binary release tooling, browser login, the output contract and generated API commands are implemented. Device login, profiles, `ren2 api`, chat and streaming output remain proposed. Publishing the first release requires running the release workflow. HTTP operations and domain shapes remain owned by the protocol and schema. Implementation work belongs in `TODO.md` or issues.
+`ren2` is the terminal client for Ren. Built: the command runtime on `effect/cli`, commands generated from the SDK operations, `--input`, the JSON and pretty output with its error envelope and exit codes, browser login with OAuth and PKCE, `ren2 infra`, binary releases with the curl installer, `ren2 upgrade`, the update notice and shell completions (`packages/cli`). The CLI calls Ren only through the SDK; authorization and domain rules stay on the server.
 
-## 1. Purpose
+## 1. `ren2 api`
 
-`ren2` is the terminal client for Ren, used by people, scripts and agents. It combines OpenCode V2's typed command structure with ren-v1's generated API coverage and automation conventions.
+A diagnostic and low-level command. It takes an operation ID, or an HTTP method and a path.
 
-The CLI calls Ren through `@renai-labs/sdk`. It owns argument parsing, terminal interaction, local configuration and file input/output. Authorization, reconciliation and domain rules remain on the server. Reusable API interaction belongs in the SDK/client.
+1. It uses the same endpoint and authentication as other commands. It does not bypass server authorization, and it does not make internal endpoints into public commands.
+2. A raw-request capability goes in the SDK/client transport, not in the CLI. Operation lookup names the contract version it uses.
+3. The response body goes to stdout, an HTTP failure sets a nonzero exit code, and diagnostics go to stderr. Raw output is different from the JSON output of other commands, and is documented.
 
-The CLI must work alongside the published ren-v1 CLI:
+Proposed file: `src/commands/api.ts`.
 
-- The executable, help, examples, completion and generated CLI documentation use `ren2`.
-- Installing it must not replace the `ren` executable.
-- The primary installation command fetches an `install.sh` shell script with curl and runs it with Bash.
-- Its user configuration and credentials use a separate `ren2` location and do not overwrite ren-v1 state.
-- The npm package name is a separate release decision. `@renai-labs/cli2` is proposed, not yet decided.
-- The executable rename does not rename the `.ren/` infrastructure folder or Ren's domain concepts.
+## 2. Connection profiles
 
-## 2. Baseline and references
-
-The comparison behind this proposal inspected OpenCode V2's `packages/cli` at version 2.0.26, the original ren-v1 checkout, and this repository. OpenCode V1 is not the architectural reference.
-
-### Current Ren
-
-The CLI currently exposes five actions: `health` and `infra validate`, `plan`, `apply`, `pull`. Root dispatch is handwritten; infra uses `node:util.parseArgs`. Connections use `REN_URL`, defaulting to `http://localhost:4000`, and optional `REN_TOKEN`.
-
-The useful existing behavior is preserved: SDK calls, shared-schema validation, file-and-field diagnostics, plan digests, explicit noninteractive archive handling, and filesystem/subprocess tests.
-
-Relevant sources:
-
-- [Entrypoint](../packages/cli/src/index.ts)
-- [Connection](../packages/cli/src/services/connection.ts)
-- [Infra commands](../packages/cli/src/infra/command.ts)
-- [Infra folder adapter](../packages/cli/src/infra/folder.ts)
-
-### OpenCode V2
-
-Adopt typed `effect/cli` declarations, separate lazy-loaded handlers, a shared connection resolver, and a scoped Effect runtime. Its local background service and embedded server serve OpenCode's own runtime; Ren does not need those facilities to adopt its CLI structure.
-
-Reference paths in the OpenCode checkout:
-
-- `packages/cli/src/commands/commands.ts`
-- `packages/cli/src/framework/spec.ts`
-- `packages/cli/src/framework/runtime.ts`
-- `packages/cli/src/services/server-connection.ts`
-- `packages/cli/src/commands/handlers/api.ts`
-- [V2 CLI documentation](https://opencode.ai/v2/docs/cli)
-
-### ren-v1
-
-The inspected generated manifest contains 250 operation descriptors across 36 resource groups, with custom handlers replacing or extending selected operations. This is manifest coverage, not a claim of end-to-end verification for every operation.
-
-Preserve generated operation coverage, structured input, terminal-aware output, profiles, interactive/headless authentication workflows, and command discovery. Generate against the current contracts rather than copying old endpoints or nouns.
-
-Reference paths in the ren-v1 checkout:
-
-- `packages/client-core/src/generated/ops.ts`
-- `packages/cli/src/runtime/executor.ts`
-- `packages/cli/src/runtime/output.ts`
-- `packages/cli/src/commands/tree.ts`
-- `packages/cli/src/commands/overrides.ts`
-- `packages/cli/src/commands/init.ts`
-
-## 3. Command architecture
-
-### 3.1 Definitions and execution
-
-Keep help copy short and direct. Use brief verb phrases for commands and concise labels for arguments. Let the parser show defaults and syntax; reserve explanations for errors and documentation. Preserve distinctions that affect behavior, such as noninteractive requirements and supported pull scope.
-
-Use `effect/cli` for command names, arguments, flags, descriptions and subcommands. Definitions drive parsing, help, completion and command documentation. Unknown flags, unsupported options and excess positional arguments fail with a usage error.
-
-Separate command definitions from handlers. Load a selected handler lazily so help and discovery do not load every workflow. Bind handlers to the command definitions with inferred input types. Start with direct Effect composition; add a small framework only where generated commands and lazy loading require it.
-
-One scoped Effect runtime owns each invocation. It supplies connection, configuration and output services, handles interruption and cleanup, and renders failures at the process boundary. Handlers do not independently create runtimes or exit the process.
-
-Help, version, completion and local infrastructure validation work without credentials or a reachable server.
-
-### 3.2 Generated operations and custom workflows
-
-Generate ordinary API commands from the current SDK-exposed contracts:
-
-- Primitive definitions supply domain names, plurals and supported actions.
-- Protocol definitions supply operation IDs, request shapes, descriptions and errors.
-- Exposure annotations determine the SDK surface available for generation.
-- Generated adapters invoke the SDK; commands do not maintain a second HTTP implementation.
-
-Do not infer plurals or create a handwritten endpoint registry. Preserve stable operation IDs independently of friendly command names. Generation must reject command-path collisions and ambiguous overrides.
-
-#### Command grammar
-
-Follow the pattern of large platform CLIs (az, gcloud, gh, AWS): `ren2 <noun> [<sub-noun>] <verb> [<resource>] [flags]`. Commands are generated from the API, and a reviewed table in the CLI's generation script fixes their names, as gcloud's declarative commands and az's aaz do.
-
-| Rule        | Convention                                                                                                                                                                                                                                                                                                                                                    |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Nouns       | Singular primitive name: `ren2 space`, `ren2 task`. The definition's declared `plural` is an alias (`ren2 spaces list`), accepted but not listed in help, as in gcloud and az; plurals are never inferred. Hyphenated names read as words: `environment template`, not `environment-template`.                                                                |
-| Child nouns | A resource that belongs to another nests under it and takes the parent as its first argument: `ren2 space member list eng`, `ren2 task comment add <task>`.                                                                                                                                                                                                   |
-| Verbs       | One set everywhere: `list`, `get`, `create`, `update`, `archive`, plus each action in kebab case (`transfer-ownership`, `pause`). `archive` stays `archive` because the API archives; a true delete is `delete`.                                                                                                                                              |
-| Membership  | Joining and leaving use `add` and `remove`, as `az ad group member add` does: `ren2 space member add eng --email ada@example.com`.                                                                                                                                                                                                                            |
-| Resources   | The resource is positional. Where the resource has a `get`, a slug works anywhere its ID does (`eng` or `spc_01…`); the CLI resolves it first, skipping the request when the value is already an ID. A reference the CLI can resolve drops its `Id` suffix (`spaceId` is `--space`); one it cannot keeps it (`--owner-id`), so the flag says an ID is needed. |
-| Flags       | Kebab-case field names (`--page-size`). Scalars, literal choices, booleans and lists of scalars are flags; a list takes comma-separated values or repeats. A flag is optional when the wire may omit it. Everything else comes through `--input` (section 5.1).                                                                                               |
-| Pages       | `--page` and `--page-size`; pretty output says how to get the next page. Nothing paginates silently.                                                                                                                                                                                                                                                          |
-| Help        | The table writes each command's description; a flag takes the first sentence of its schema description. Root help lists the hand-written workflows, then the generated nouns under `Resources:`.                                                                                                                                                              |
-| Output      | A list renders as a table of its identifying columns, anything else as YAML, in pretty format; JSON is the encoded API value (section 5.2). An operation with no content prints nothing in JSON and `Done.` in pretty format.                                                                                                                                 |
-
-Workflows stay hand-written: `login`, `infra`, `health`, `whoami` and chat. The generation script lists every SDK operation it does not generate, with the command that covers it or the reason, so a new endpoint fails generation until it is placed. Generation also fails on a repeated command path, a command that is also a group, a group without a description, two inputs with one name, or a name that collides with a hand-written command.
-
-The generator is `EmitCli` in `@ren/httpapi-codegen`; the table and the coverage check are `packages/cli/script/generate.ts`; the runtime that decodes flags with the endpoint's own schemas, resolves names, calls the SDK and renders the result is `packages/cli/src/operation.ts`.
-
-Handwritten commands own workflows such as login, infra reconciliation, file uploads and streaming runs. A custom handler can explicitly replace a generated action without registering two commands at the same path. Discovery describes the effective command, including its custom input behavior.
-
-Reusable generation mechanics belong in `@ren/httpapi-codegen`, which stays independent of Ren packages. Ren's generation scripts supply contracts and selection policy. Generated files follow the existing `bun run generate` workflow and are never edited by hand.
-
-### 3.3 API access
-
-Provide `ren2 api` as a diagnostic and low-level access command, accepting an operation ID or an HTTP method and path. It uses the same resolved endpoint and authentication as ordinary commands. It does not bypass server authorization or turn internal endpoints into generated public commands.
-
-Any raw-request capability needed by this command belongs in the SDK/client transport. Operation lookup must identify which contract version it uses. Response bodies go to stdout, HTTP failures set a nonzero exit status, and diagnostics go to stderr. Raw response output is distinct from ordinary command JSON formatting and must be documented.
-
-## 4. Connection, authentication and local state
-
-Resolve connection context once per invocation and reuse it across all requests in a workflow. This includes the endpoint, credential and organization selection. In particular, infra planning and applying use the same resolved identity and endpoint.
-
-Proposed precedence:
+A CLI profile selects a server, a login and an optional organization. It is not an app profile. Resolve the connection once per invocation and use it for every request of a workflow; infra plan and apply use the same identity and endpoint.
 
 | Setting      | Precedence                                                                                  |
 | ------------ | ------------------------------------------------------------------------------------------- |
@@ -130,201 +23,39 @@ Proposed precedence:
 | Credential   | Explicit environment credential, otherwise the credential for the selected endpoint/profile |
 | Organization | Command-specific explicit target, otherwise selected profile context                        |
 
-An endpoint override must not silently send a stored credential associated with another server. Invalid URLs and incomplete contexts produce actionable errors. Debug output must not reveal credential values.
+1. An endpoint override never sends a stored credential of another server.
+2. Debug output never shows a credential value.
+3. For infra, `deploy.yaml` names the target organization. Check it against the signed-in context; never apply to another active organization.
 
-For infra, `deploy.yaml` names the target organization. Resolve and check that target against the authenticated context; do not silently apply to a different active organization.
+Today the endpoint is `REN_URL`, then the release's built-in API URL, and switching organizations needs a new login. Pending: named profiles and their config format (`src/services/config.ts`), a `--server` flag, and organization selection without a new login.
 
-Keep connection profiles distinct from domain app profiles. A CLI profile selects a server, login and optional organization; an app profile represents accounts used by an app.
+## 3. Device login
 
-### 4.1 Login (implemented)
+Device authorization (RFC 8628) for SSH and remote machines. It needs the Better Auth device plugin, a migration and an approval page.
 
-`ren2 login` uses OAuth 2.1 authorization code with PKCE against Ren's existing OAuth provider (the one MCP clients use), with a loopback callback on `127.0.0.1` and any free port. It discovers endpoints through protected resource metadata (RFC 9728) and authorization server metadata (RFC 8414), and requests `openid offline_access ren` for the server's protected resource. The person picks the organization on the consent page; the token is bound to it, so switching organizations means logging in again. `--no-browser` prints the URL only.
+## 4. Chat and streaming
 
-The CLI is a public native client identified by a Client ID Metadata Document URL, `Auth.cliClient.client_id` in `@ren/schema`. The server resolves that document itself rather than fetching it, so login works in development and on any deployment without depending on the release host.
+1. Chat uses the SDK's Chat API and its access contract. It imports no server or harness code.
+2. A streaming command writes newline-delimited JSON, one event per line. Document the event format with the first streaming command.
+3. A finite command writes one complete result.
 
-Access tokens last an hour. The CLI refreshes a token within a minute of expiry and stores the rotated refresh token. The provider's 30-second refresh reuse window lets concurrent CLI processes refresh with the same token safely. `ren2 logout` revokes the refresh token and removes the credential. `ren2 whoami` shows the user and organization.
+## 5. Coverage of ren-v1 workflows
 
-Credentials live in `$XDG_CONFIG_HOME/ren2/credentials.json` (default `~/.config/ren2`), written atomically with mode `0600`, keyed by server origin. A credential is sent only to the server that issued it. Endpoint precedence today is `REN_URL`, then the release's built-in API URL (`REN2_API_URL` at build time; `http://localhost:4000` from source). `REN_TOKEN` overrides stored credentials for CI and headless use.
+Each ren-v1 CLI workflow gets a current equivalent, a documented replacement, or an explicit retirement. A missing CLI handler and a missing backend capability are separate gaps.
 
-### 4.2 Later
+| ren-v1 capability                                   | Direction                                                                             |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Pods, projects and membership                       | Map workflows to spaces, agents, apps and memberships; no mechanical noun replacement |
+| Sessions, messages, traces and usage                | Current session operations and the Chat API                                           |
+| Skills, MCPs, blueprints and registry               | Apps, registry and infra, with custom file workflows where needed                     |
+| Credentials, OAuth and inference                    | Generated operations plus custom connect workflows                                    |
+| Provider and messaging integrations                 | Decide each one against the channel install, mapping and repository capabilities      |
+| Artifacts, file stores, memory stores and databases | Decide each one against the storage and memory capabilities                           |
+| Billing, publishers, replays and onboarding         | Explicit product migration decisions                                                  |
 
-- Device authorization (RFC 8628) for SSH and remote machines. It needs the Better Auth device plugin, a migration and an approval page.
-- Named profiles, a `--server` flag and explicit organization selection without a new login.
+File and binary uploads use their own handlers where a JSON body is not enough.
 
-Project infrastructure declarations do not contain CLI login credentials.
+## 6. Open decisions
 
-## 5. Input, output and process behavior
-
-### 5.1 Structured input
-
-Generated commands expose path arguments, query flags and suitable scalar body flags. Nested bodies support `--input` with a JSON literal, `@file`, or `@-` for stdin, like AWS's `--cli-input-json`; it is not `--body` because payloads have fields named `body`. Scalar flags override the corresponding fields in the supplied input.
-
-Validate input at the boundary using the current contracts. Preserve meaningful differences between omitted fields, explicit nulls and empty values. Unsupported shapes need an explicit input strategy rather than guessed scalar flags. File and binary uploads use purpose-built handlers where a JSON body is insufficient.
-
-A command consuming stdin as data must not also use it for interactive confirmation.
-
-### 5.2 Output (implemented)
-
-Every command accepts the global flag `--output json|pretty`:
-
-- Explicit selection wins.
-- Default to pretty output when stdout is a terminal and JSON otherwise.
-- Results go to stdout; progress, prompts and diagnostics go to stderr. Help and version text go to stdout in either format.
-- A JSON result is one document: the command's value encoded with its schema, in the API's wire format (`Auth.Me` for `login` and `whoami`, `Infra.Plan` for `infra plan`, `Infra.Applied` for `infra apply`). Commands without an API value return a small object, such as `{"valid":true}` or `{"server":…,"loggedOut":true}`.
-- Lists preserve pagination information. Fetching additional pages must be explicit and documented.
-
-Errors are rendered once, at the process boundary. In JSON, the error is the last line on stderr:
-
-```json
-{ "error": { "type": "NotFoundError", "message": "No such space.", "resource": "space" } }
-```
-
-`type` is one of:
-
-- The tag of an error the Ren API declares, with its fields.
-- `UsageError` for parsing failures.
-- `CliError` for everything else the CLI reports, including connection failures. It carries `problems` (`path`, optional `field`, `message`) when a spec or plan is invalid.
-
-In pretty format, the error is its message; a usage error also prints the command's help.
-
-| Exit code | Meaning                                    |
-| --------- | ------------------------------------------ |
-| 0         | Success                                    |
-| 1         | Failure, including an invalid spec or plan |
-| 2         | Usage error                                |
-| 130       | Interrupted                                |
-
-`infra apply` shows the plan on stderr only when it asks for confirmation. Its result lists the applied changes.
-
-Finite commands emit one complete result. Streaming commands will use newline-delimited JSON, one event per line, documented with the first streaming command. They must not use an unbounded sequence where callers expect one JSON document.
-
-### 5.3 Infrastructure
-
-Keep `ren2 infra validate|plan|apply|pull` and the `.ren/` default folder. Preserve the existing interactive confirmation and noninteractive digest/archive rules. JSON plan output includes the structured changes, problems and digest, so scripts do not scrape a `Digest:` line. A plan with problems is still printed, then fails with them.
-
-The infrastructure scope is owned by [the infra design](infra.md) and [the Infra schema](../packages/schema/src/infra.ts). At the inspected baseline, validation accepts more declarations than reconciliation manages. `Infra.Kind` covers organization, space, agent and membership changes; `Infra.Pulled` covers organization settings, shared spaces and their agents. Private specs are unsupported.
-
-Help and results must distinguish validation support from apply/pull support. Successful validation is not evidence that every declaration will be reconciled. As supported kinds expand, their pull/write behavior and meaningful round-trip verification must expand with them.
-
-## 6. Coverage from ren-v1
-
-Coverage is measured as user capabilities mapped to current contracts, not as preservation of every old command name. A missing CLI handler and a missing backend capability are separate gaps.
-
-| ren-v1 capability                                   | Current direction                                                                       |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Login, profiles, identity, organizations            | Current authentication and explicit connection context                                  |
-| Pods, projects and membership                       | Map workflows to spaces, agents, apps and memberships; no mechanical noun replacement   |
-| Sessions, messages, traces and usage                | Current session operations and supported Chat API interactions                          |
-| Tasks, comments, events and labels                  | Task, comment, activity and label contracts                                             |
-| Environments and builds                             | Environment providers, templates and space-template relationships                       |
-| Skills, MCPs, blueprints and registry               | Apps, registry and infra, with custom file workflows where needed                       |
-| Credentials, OAuth and inference                    | Generated operations plus custom authorization/connect workflows                        |
-| Cron triggers                                       | Schedules and schedule runs                                                             |
-| Provider and messaging integrations                 | Assess current channel install/mapping/connect and repository capabilities individually |
-| Artifacts, file stores, memory stores and databases | Assess current storage/memory capabilities individually                                 |
-| Billing, publishers, replays and onboarding         | Explicit product migration decisions                                                    |
-| Upgrade, completion and docs                        | CLI release and discovery behavior                                                      |
-
-Each legacy workflow must ultimately have a current equivalent, a documented replacement, or an explicit retirement decision. The operation-by-operation migration inventory belongs with implementation tracking, rather than duplicating evolving API definitions in this document.
-
-Session streaming uses the SDK's Chat API surface and its access contract. It does not import server or harness internals into the CLI.
-
-## 7. Package layout and distribution
-
-Layout:
-
-```text
-packages/cli/
-  script/generate.ts       # command table and coverage check for generated commands
-  src/
-    index.ts               # runtime entrypoint
-    app.ts                 # binds definitions to lazy handlers
-    commands.ts            # hand-written command definitions
-    runtime.ts             # invocation, help, error envelope and exit codes
-    operation.ts           # runtime for generated commands
-    generated/             # generated definitions (commands.ts) and adapters (operations.ts)
-    commands/              # hand-written handlers: auth, health
-    infra/                 # infra handlers and the folder <-> Infra schema adapter
-    services/
-      connection.ts        # resolved endpoint, credential and SDK client
-      credentials.ts       # stored credentials per server
-      oauth.ts             # OAuth discovery and token requests
-      output.ts            # format, results, diagnostics and confirmation
-```
-
-Proposed additions: `commands/api.ts` for `ren2 api` and `services/config.ts` for profiles.
-
-### 7.1 Primary installation
-
-Publish a shell installer as the primary entrypoint. Keep the hosting origin in `REN2_HOST_URL`, currently `https://v2.useren.ai`. Release configuration and installation documentation use this variable so the origin can change at migration without changing installer paths or command behavior. This hosting variable is separate from the CLI's API endpoint selection.
-
-The release workflow publishes the paths below; these examples require a published release:
-
-```sh
-export REN2_HOST_URL="https://v2.useren.ai"
-curl -fsSL "${REN2_HOST_URL}/ren2/install.sh" | bash
-curl -fsSL "${REN2_HOST_URL}/ren2/install.sh" | bash -s -- --version <version>
-curl -fsSL "${REN2_HOST_URL}/ren2/install.sh" | bash -s -- --no-init
-```
-
-Keep the installer URL distinct from ren-v1's `https://useren.ai/install`. Its source references are ren-v1's `packages/site/src/scripts/install.sh` and OpenCode V2's root `install` script, served at `https://opencode.ai/v2/install`.
-
-The two references use different delivery mechanisms: the inspected ren-v1 script runs `npm install -g`, while OpenCode V2 downloads a platform-specific binary. `ren2` downloads a self-contained, Bun-built binary, requiring no existing Node, npm or Bun installation.
-
-Installer behavior:
-
-- Detect the supported operating system and architecture and select the matching release artifact. Unsupported targets fail with an actionable message.
-- Install the latest stable release by default; `--version` selects a specific release.
-- Install into `~/.ren2/bin` without replacing or removing ren-v1 binaries or credentials.
-- Add that directory to the shell path without duplicate entries. `--no-modify-path` skips shell configuration edits and prints the required setup.
-- Download and verify the selected artifact before replacing an existing installation. A failed download or verification leaves the working installation intact.
-- Verify the installed executable with `ren2 --version` and report its location.
-- When stdout is a terminal, run `ren2 login`; a failed login does not fail the installation. Otherwise print `ren2 login` as the next step. `--no-init` skips both.
-- Support `--help`; invalid options or missing option values fail clearly.
-
-Support macOS and glibc Linux on arm64 and x64. Use the existing app S3 bucket and CloudFront distribution for `/ren2/*`, separate from `/app/*`. Verify each binary against its SHA-256 sidecar, then check its embedded version before replacement. Windows and musl Linux are not in this release matrix.
-
-### 7.2 Release artifacts
-
-Use a Bun-based build, consistent with the existing Bun filesystem and YAML APIs. Each binary includes its runtime. Verify the downloaded and installed executable outside the repository, not only source execution. Disable Bun's automatic project configuration and dotenv loading in compiled artifacts; connection configuration comes from the explicit CLI environment.
-
-An npm package can be an additional installation route. If published, it exposes `ren2` through a coherent built bin entry and follows the same version and coexistence contract. The curl installation interface does not depend on choosing the npm package name.
-
-The workspace package remains private and its bin points at source for development. `bun run build` produces versioned platform binaries, checksums and a rendered installer under `dist`. The `cli release` workflow builds and tests each target natively before publishing all artifacts, then updates the installer and `latest.txt`. Existing release versions are immutable. A Node-only release would require explicitly replacing Bun-specific runtime behavior; it is not assumed by this design.
-
-Version output comes from release metadata. `ren2 --completions bash|zsh|fish|sh` prints a completion script for the whole tree, generated commands included. Every installation route must coexist with ren-v1 without executable or configuration collisions. Upgrade behavior follows the selected installation method; a shell-installed binary upgrades through the same release artifacts without switching the user to npm.
-
-#### Upgrade (implemented)
-
-`ren2 upgrade [version]` reads `latest.txt` (or takes the pinned version), downloads the binary for this platform with its checksum, checks the SHA-256 and that the new binary reports the expected version, and renames it over the running executable. A failure leaves the working binary and no temporary file. Without a version it never downgrades and says when the binary is up to date. A binary run from source refuses and says to rebuild. The release host is built in from `REN2_HOST_URL` and can be overridden by the same variable.
-
-At most once a day, a command in a terminal with pretty output checks `latest.txt`, caches the answer in the config directory (`update.json`), and prints `ren2 vX.Y.Z is available. Run ren2 upgrade.` on stderr when a newer release exists. The check runs beside the command, waits at most one second after it, and never fails it. It is off for JSON output, in CI, when `REN2_NO_UPDATE_CHECK` is set and for `ren2 upgrade` itself. There is no automatic replacement.
-
-## 8. Verification
-
-Verify behavior at the lowest owning layer, using existing tests where possible:
-
-- CLI subprocess tests for parsing failures, offline help, stdout/stderr separation and exit behavior.
-- Connection tests for profile precedence and endpoint/credential association.
-- Generator tests for real request-shape translation, command collisions and custom overrides.
-- Infra tests for file diagnostics, supported round trips and digest/archive behavior.
-- Real API integration tests for authentication and representative generated/custom workflows.
-- Cancellation and stream tests using observable events rather than real-time waits.
-- Installer/release smoke tests for default and pinned releases, noninteractive `--no-init`, `--no-modify-path`, repeat installation, failed-download preservation and coexistence with `ren`.
-- Run `ren2 --help`, `ren2 --version` and a local file-validation workflow against the installed artifact outside the repository. Test the npm installation separately if that route is published.
-
-Do not replace behavioral verification with snapshots of operation-name lists or tests of this specification. Generation checks establish coverage consistency; behavioral tests establish correctness.
-
-## 9. Delivery dependencies and open decisions
-
-The command/runtime foundation, output contract and package build precede expansion of the command surface. Connection context and the selected auth contract precede authenticated workflows. Generated operations then provide broad current-API coverage, with custom workflows layered on top. Legacy reconciliation distinguishes remaining CLI work from backend/product work.
-
-Resolve before the affected feature ships:
-
-1. npm package name; proposed `@renai-labs/cli2`.
-2. Device authorization for headless login (section 4.2).
-3. Named profiles and their config format.
-4. Connection and organization flags.
-5. The streaming event format (section 5.2).
-6. Additional platforms and any future package-manager installation routes. The initial binary/installer release contract is defined in section 7; `REN2_HOST_URL` remains configurable for migration.
-7. Per-capability migration decisions for legacy features without a current equivalent.
+1. The npm package name, if an npm route is published. Proposed: `@renai-labs/cli2`. It exposes `ren2`, and it never replaces the `ren` executable of ren-v1.
+2. More platforms: Windows and musl Linux are not in the release matrix.
