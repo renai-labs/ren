@@ -12,6 +12,7 @@ import { McpProvider } from "@ren/core/mcp-provider"
 import { ProviderConnect } from "@ren/core/mcp-provider/connect"
 import { AppProfiles } from "@ren/core/app/profiles"
 import { Envelope } from "@ren/core/envelope"
+import { Billing } from "@ren/core/billing"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { BrainPush } from "@ren/core/brain-push"
@@ -137,7 +138,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   ]),
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
-  Layer.provide([BrainClient.layer, Settings.layer]),
+  Layer.provide([BrainClient.layer, Settings.layer, Billing.layerNone]),
   Layer.provide([models, Environments.layer, GitHubApp.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),

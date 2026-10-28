@@ -15,6 +15,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Database } from "@ren/db/database"
 import { Access } from "../../src/access.js"
+import { Billing } from "../../src/billing.js"
 import { BrainClient } from "../../src/brain-client.js"
 import { BrainHost } from "../../src/brain-host.js"
 import { Brains } from "../../src/brains.js"
@@ -106,6 +107,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
       ),
     ),
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
+    Layer.provideMerge(Billing.layerNone),
     Layer.provide(Settings.layer),
     Layer.provide(options.models),
     Layer.provide(options.environments),
@@ -292,6 +294,7 @@ export const cellLayerWith =
       Layer.provideMerge(BrainHost.layerCell),
       Layer.provideMerge(runner),
       Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
+      Layer.provideMerge(Billing.layerNone),
       Layer.provide(Settings.layer),
       Layer.provide(models),
       Layer.provide(environments),

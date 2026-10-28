@@ -10,6 +10,7 @@ import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { EnvironmentCopies } from "@ren/brain/environment/copies"
 import { BrainSettings } from "@ren/brain/settings"
+import { UsageClaims } from "@ren/brain/usage-claims"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import type { Memory } from "@ren/schema/memory"
 import { AppCatalog } from "@ren/schema/app-catalog"
@@ -257,6 +258,7 @@ export const make = (
   members: {
     readonly egress: boolean
     readonly lastSpeaker: (sessionId: string) => Effect.Effect<Option.Option<OpenCodeChat.Speaker>>
+    readonly lastTurn: (sessionId: string) => Effect.Effect<Option.Option<string>>
   },
 ) =>
   Plugin.define({
@@ -540,15 +542,28 @@ export const make = (
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {
             delete event.headers[Models.personHeader]
-            if (event.kind === "title") return
             if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
-            const memberId = Option.flatMap(yield* members.lastSpeaker(yield* rootOf(event.sessionID)), (speaker) =>
-              Option.fromUndefinedOr(speaker.memberID),
+            const root = yield* rootOf(event.sessionID)
+            const memberId =
+              event.kind === "title"
+                ? Option.none<string>()
+                : Option.flatMap(yield* members.lastSpeaker(root), (speaker) =>
+                    Option.fromUndefinedOr(speaker.memberID),
+                  )
+            Object.assign(
+              event.headers,
+              UsageClaims.headers({
+                rootSession: root,
+                session: event.sessionID,
+                turn: Option.getOrUndefined(yield* members.lastTurn(root)),
+                member: Option.getOrUndefined(
+                  Option.map(memberId, (id) => (members.egress ? Models.personPlaceholder(id) : id)),
+                ),
+                agent: event.agent,
+                kind: event.kind,
+                variant: event.model.variant,
+              }),
             )
-            if (Option.isNone(memberId)) return
-            event.headers[Models.personHeader] = members.egress
-              ? Models.personPlaceholder(memberId.value)
-              : memberId.value
           }),
         )
         yield* context.session.hook("retry", (event) =>

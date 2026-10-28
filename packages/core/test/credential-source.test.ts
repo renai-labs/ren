@@ -91,6 +91,7 @@ const it = testEffect(
 
 const scope: Credentials.Scope = {
   organizationId: Auth.OrganizationID.make("org_01"),
+  brainId: Brain.ID.make("brn_01"),
   workload: { kind: "brain", id: Brain.ID.make("brn_01"), generation: 1 },
   spaceId: Option.none(),
   person: Option.none(),
