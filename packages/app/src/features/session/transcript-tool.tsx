@@ -333,11 +333,11 @@ const subagentDetail = (card: Card) =>
 
 const childOf = (card: Card) => (card.child?.startsWith("ses_") ? Session.ID.make(card.child) : undefined)
 
-function Opener(props: { label: string; onOpen: (() => void) | undefined; children: ReactNode }) {
+function Opener(props: { onOpen: (() => void) | undefined; children: ReactNode }) {
   if (!props.onOpen) return props.children
   return (
     // oxlint-disable-next-line react/forbid-elements -- the whole trace line opens the subagent, and Trace styles its button
-    <button type="button" aria-label={props.label} onClick={props.onOpen}>
+    <button type="button" onClick={props.onOpen}>
       {props.children}
     </button>
   )
@@ -362,7 +362,7 @@ function Subagent(props: { view: ChatAtoms.View; tool: SessionMessage.Tool; onOp
     )
   return (
     <Trace data-testid="message-subagent-task">
-      <Opener label={`Open ${card.title} subagent`} onOpen={child ? () => props.onOpen(child) : undefined}>
+      <Opener onOpen={child ? () => props.onOpen(child) : undefined}>
         <TraceLine status={status}>
           <TraceIcon>{status === "running" ? <Spinner /> : <IconGhost />}</TraceIcon>
           <TraceTitle className="shrink-0">{subagentTitle(card)}</TraceTitle>

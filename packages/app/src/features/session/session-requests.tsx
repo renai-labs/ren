@@ -178,6 +178,10 @@ function SessionWebSearch(props: {
   )
 }
 
+const arrive = (target: (node: HTMLElement) => HTMLElement | null) => (node: HTMLElement | null) => {
+  if (node && node.ownerDocument.activeElement === node.ownerDocument.body) target(node)?.focus()
+}
+
 function PermissionRequest(props: {
   request: Permission.Request
   pending: boolean
@@ -187,7 +191,12 @@ function PermissionRequest(props: {
   const [instead, setInstead] = useState("")
   const typed = instead.trim()
   return (
-    <Item variant="outline" className="bg-card shadow-composer">
+    <Item
+      ref={arrive((node) => node)}
+      tabIndex={-1}
+      variant="outline"
+      className="bg-card shadow-composer outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
       <ItemMedia variant="icon">
         <IconShieldQuestion />
       </ItemMedia>
@@ -258,7 +267,11 @@ function QuestionForm(props: {
   }
   const first = questions.at(0)?.key
   return (
-    <Card size="sm" className="shadow-composer">
+    <Card
+      ref={arrive((node) => node.querySelector<HTMLElement>('[data-slot="questionnaire-item"]:not([hidden])'))}
+      size="sm"
+      className="shadow-composer"
+    >
       <CardHeader>
         <CardTitle>{questions.length > 1 ? "Ren has a few questions" : "Ren has a question"}</CardTitle>
         {props.expired ? (

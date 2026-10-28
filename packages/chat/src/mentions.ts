@@ -66,13 +66,13 @@ const matches = (item: Item, query: string) =>
 export const suggest = (input: {
   readonly agents: ReadonlyArray<Item>
   readonly skills: ReadonlyArray<Item>
-  readonly apps?: ReadonlyArray<Item>
+  readonly apps: ReadonlyArray<Item>
   readonly files: ReadonlyArray<Item>
   readonly query: string
 }): ReadonlyArray<Item> => {
   const listed = [
     ...[...input.agents, ...input.skills].filter((item) => matches(item, input.query)),
-    ...(input.apps ?? []).filter((item) => named(item, input.query)),
+    ...input.apps.filter((item) => named(item, input.query)),
   ]
   return [...listed, ...input.files.filter((file) => !listed.some((item) => key(item) === key(file)))]
 }
