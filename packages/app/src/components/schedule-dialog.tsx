@@ -3,6 +3,7 @@ import { Pagination } from "@ren/schema/pagination"
 import { Primitive } from "@ren/schema/primitive"
 import { Schedule } from "@ren/schema/schedule"
 import { Space } from "@ren/schema/space"
+import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Combobox } from "@ren/ui/combobox"
 import { Field, FieldLegend, FieldSet, FieldTitle } from "@ren/ui/field"
@@ -180,19 +181,22 @@ export function ScheduleDialog(props: {
               {(field) => <field.TextField label="Name" placeholder="Daily report" />}
             </form.AppField>
             <form.Subscribe selector={(state) => state.values}>
-              {(values) => (
-                <>
-                  <CadenceFields form={form} cadence={values} />
-                  {setup.isChat ? null : <AgentField form={form} spaceId={values.spaceId} />}
-                  <TimeZoneField form={form} />
-                  {values.frequency === "once" ? null : <UntilFields form={form} until={values.until} />}
-                </>
-              )}
+              {(values) => <CadenceFields form={form} cadence={values} />}
+            </form.Subscribe>
+            {setup.isChat ? null : (
+              <form.Subscribe selector={(state) => state.values.spaceId}>
+                {(spaceId) => <AgentField form={form} spaceId={spaceId} />}
+              </form.Subscribe>
+            )}
+            <TimeZoneField form={form} />
+            <form.Subscribe selector={(state) => (state.values.frequency === "once" ? undefined : state.values.until)}>
+              {(until) => (until === undefined ? null : <UntilFields form={form} until={until} />)}
             </form.Subscribe>
             {saving.problem ? (
-              <Text purpose="body" tone="danger" role="alert">
-                {saving.problem}
-              </Text>
+              <Alert variant="destructive">
+                <Icon glyph="AlertCircle" />
+                <AlertDescription>{saving.problem}</AlertDescription>
+              </Alert>
             ) : null}
           </div>
           <SheetFooter>
@@ -215,7 +219,7 @@ function RunsLink(props: { scheduleId: string }) {
     <Link
       to="/schedules/$scheduleId"
       params={{ scheduleId: props.scheduleId }}
-      className={buttonVariants({ variant: "ghost" })}
+      className={buttonVariants({ variant: "ghost", size: "xs", className: "h-6.5 text-muted-foreground" })}
     >
       View runs
     </Link>
@@ -328,17 +332,20 @@ function CadenceFields(props: { form: ScheduleForm; cadence: Schedules.Cadence }
 
 function PreviewLine(props: { cadence: Schedules.Cadence }) {
   const preview = Schedules.preview(props.cadence)
-  if (preview.kind === "invalid") return null
   return (
-    <Text purpose="caption" element="p" aria-live="polite">
-      {preview.kind === "never" ? (
-        "No runs left"
-      ) : (
-        <>
-          Next <Time value={preview.at} format="date-time" timeZone={props.cadence.timeZone} />
-        </>
+    <div aria-live="polite" className="min-h-4">
+      {preview.kind === "invalid" ? null : (
+        <Text purpose="caption" element="p">
+          {preview.kind === "never" ? (
+            "No runs left"
+          ) : (
+            <>
+              Next <Time value={preview.at} format="date-time" timeZone={props.cadence.timeZone} />
+            </>
+          )}
+        </Text>
       )}
-    </Text>
+    </div>
   )
 }
 
