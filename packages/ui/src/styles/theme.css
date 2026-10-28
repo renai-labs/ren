@@ -100,8 +100,11 @@
   --container-dialog: var(--ren-container-dialog);
   --container-content: var(--ren-container-content);
 
-  --shadow-soft: var(--soft-shadow);
-  --shadow-overlay: var(--overlay-shadow);
+  --shadow-soft: var(--ren-shadow-soft);
+  --shadow-overlay: var(--ren-shadow-overlay);
+  --shadow-composer: var(--ren-shadow-composer);
+  --shadow-composer-focus: var(--ren-shadow-composer-focus);
+  --shadow-raised: var(--ren-shadow-raised);
   --shadow-dialog:
     0 0 0 1px var(--ren-color-border-primary),
     0 var(--ren-spacing-4) var(--ren-spacing-12) 0 var(--ren-color-overlay-primary);
@@ -158,36 +161,39 @@
 
 @custom-variant dark (&:is(.dark *));
 
-.dark,
-:root[data-theme="dark"] {
-  color-scheme: dark;
-}
-
-:root,
-.girliepop,
-:root[data-theme="girliepop"] {
-  color-scheme: light;
-}
-
 :root,
 .light,
 .girliepop,
 :root[data-theme="girliepop"] {
-  --soft-shadow:
+  color-scheme: light;
+  --ren-shadow-soft:
     0 1px 2px var(--ren-color-fill-primary),
     0 var(--ren-spacing-2) var(--ren-spacing-6) calc(var(--ren-spacing-3) * -1)
       color-mix(in srgb, var(--ren-color-overlay-primary) 28%, transparent);
-  --overlay-shadow: 0 0 0 1px var(--ren-color-border-primary), var(--soft-shadow);
+  --ren-shadow-overlay: 0 0 0 1px var(--ren-color-border-primary), var(--ren-shadow-soft);
+  --ren-shadow-composer:
+    0 1px 2px var(--ren-color-fill-primary),
+    0 calc(var(--ren-spacing-1) * 1.5) calc(var(--ren-spacing-1) * 5) calc(-1 * var(--ren-spacing-2))
+      var(--ren-color-fill-secondary);
+  --ren-shadow-composer-focus:
+    0 1px 2px var(--ren-color-fill-primary),
+    0 var(--ren-spacing-2) var(--ren-spacing-6) calc(-1 * var(--ren-spacing-2)) var(--ren-color-fill-secondary),
+    0 var(--ren-spacing-2) var(--ren-spacing-6) calc(-1 * var(--ren-spacing-2)) var(--ren-color-fill-secondary);
+  --ren-shadow-raised: 0 1px 2px 0 var(--ren-color-fill-secondary);
 }
 
 .dark,
 :root[data-theme="dark"] {
-  --soft-shadow: 0 0 #0000;
-  --overlay-shadow:
+  color-scheme: dark;
+  --ren-shadow-soft: 0 0 #0000;
+  --ren-shadow-overlay:
     0 0 0 1px var(--ren-color-border-primary),
     0 var(--ren-spacing-4) var(--ren-spacing-12) calc(var(--ren-spacing-1) * -1.5) var(--ren-color-overlay-primary),
     0 calc(var(--ren-spacing-1) * 1.5) var(--ren-spacing-3) calc(var(--ren-spacing-1) * -0.5)
       var(--ren-color-overlay-primary);
+  --ren-shadow-composer: 0 0 #0000;
+  --ren-shadow-composer-focus: 0 0 0 1px var(--ren-color-fill-primary);
+  --ren-shadow-raised: inset 0 1px 0 var(--ren-color-fill-primary), 0 1px 2px 0 var(--ren-color-overlay-primary);
 }
 
 @layer base {
