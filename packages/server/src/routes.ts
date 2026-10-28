@@ -182,7 +182,14 @@ export const layer = Layer.mergeAll(
         Memory.layer,
         settingsAndAgents,
         InfraSpecs.layer.pipe(
-          Layer.provide([Space.layer, AgentMembership.layer, settingsAndAgents, App.layer, ChannelMappings.layer, schedules]),
+          Layer.provide([
+            Space.layer,
+            AgentMembership.layer,
+            settingsAndAgents,
+            App.layer,
+            ChannelMappings.layer,
+            schedules,
+          ]),
         ),
         Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
           Layer.provide(SessionRunner.layer),

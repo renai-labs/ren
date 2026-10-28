@@ -252,9 +252,15 @@ export type GitHostKind = "github"
 
 export type AuthSignInProvider = "google" | "github" | "slack"
 
+export type ChannelTarget =
+  | { kind: "slack"; channelId: string }
+  | { kind: "linear"; projectId: string }
+  | { kind: "github"; repository: string }
+  | { kind: "telegram"; chatId: string; topicId?: string }
+
 export type AgentName = string
 
-export type InfraKind = "organization" | "space" | "agent" | "membership"
+export type InfraKind = "organization" | "space" | "agent" | "membership" | "app" | "schedule" | "channel" | "profile"
 
 export type InfraProblem = { path: string; message: string }
 
@@ -639,7 +645,53 @@ export type GitHostRepository = { kind: GitHostKind; url: string; name: string; 
 
 export type AuthSignInProviders = { items: Array<AuthSignInProvider> }
 
+export type InfraPulledBindings = {
+  channels?: { [x: PrimitiveSlug]: ChannelTarget }
+  profiles?: { [x: PrimitiveSlug]: Array<AppProfileSlug> }
+}
+
 export type InfraFactoryEdgeDeclaration = { agent: AgentName; max?: number; else?: AgentName; start?: FactoryStartMode }
+
+export type InfraPulledSchedule = {
+  name?: string
+  agent?: AgentName
+  cron: string
+  timeZone: string
+  message: string
+  until?: string
+  enabled?: boolean
+}
+
+export type ChannelDeclaration =
+  | {
+      kind: "slack"
+      purpose: string
+      agent?: AgentName
+      fallback?: boolean
+      triggers?: { [x: ChannelTriggerID]: { prompt?: string } }
+    }
+  | {
+      kind: "linear"
+      purpose: string
+      agent?: AgentName
+      fallback?: boolean
+      triggers?: { [x: ChannelTriggerID]: { prompt?: string } }
+    }
+  | { kind: "email"; purpose: string; agent?: AgentName }
+  | {
+      kind: "github"
+      purpose: string
+      agent?: AgentName
+      fallback?: boolean
+      triggers?: { [x: ChannelTriggerID]: { prompt?: string } }
+    }
+  | {
+      kind: "telegram"
+      purpose: string
+      agent?: AgentName
+      allowedSenders?: Array<string>
+      blockedSenders?: Array<string>
+    }
 
 export type InfraUses = { agents?: Array<AgentName> }
 
@@ -1089,15 +1141,6 @@ export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: numbe
 
 export type AgentPage = { items: Array<AgentInfo>; page: number; pageSize: number; total: number }
 
-export type InfraPulledSpace = {
-  name: string
-  description?: string | null
-  settings: SettingsInfo
-  factory?: InfraFactoryDeclaration
-  agents: { [x: AgentName]: AgentDeclaration }
-  uses: InfraUses
-}
-
 export type AppInfo = {
   id: AppID
   slug: PrimitiveSlug
@@ -1132,18 +1175,36 @@ export type AppRegistryInfo = {
   revision: number
 }
 
+export type InfraPulledApp = {
+  name: string
+  description: string
+  requiredCredentials?: Array<CredentialRequirement>
+  skills: { [x: PrimitiveSlug]: SkillInfo }
+  mcps: { [x: PrimitiveSlug]: McpInfo }
+  dependsOn?: Array<PrimitiveSlug>
+  icon?: string
+  environment?: AppEnvironment
+}
+
 export type SessionMessageContent = SessionMessageText | SessionMessageReasoning | SessionMessageTool
 
 export type TaskActivityPage = { items: Array<TaskActivityInfo>; page: number; pageSize: number; total: number }
 
-export type InfraPulled = {
-  bindings: { organization: string }
-  spec: { org: OrganizationSettingsUpdateInput2; spaces: { [x: PrimitiveSlug]: InfraPulledSpace } }
-}
-
 export type AppPage = { items: Array<AppInfo>; page: number; pageSize: number; total: number }
 
 export type AppRegistryPage = { items: Array<AppRegistryInfo>; page: number; pageSize: number; total: number }
+
+export type InfraPulledSpace = {
+  name: string
+  description?: string | null
+  settings: SettingsInfo
+  factory?: InfraFactoryDeclaration
+  agents: { [x: AgentName]: AgentDeclaration }
+  apps: { [x: PrimitiveSlug]: InfraPulledApp }
+  schedules: { [x: PrimitiveSlug]: InfraPulledSchedule }
+  channels: { [x: PrimitiveSlug]: ChannelDeclaration }
+  uses: InfraUses
+}
 
 export type SessionMessageAssistant = {
   id: SessionMessageID
@@ -1158,6 +1219,11 @@ export type SessionMessageAssistant = {
   tokens?: SessionMessageTokenUsage
   error?: SessionErrorInfo
   retry?: SessionMessageRetry
+}
+
+export type InfraPulled = {
+  bindings: { organization: string; spaces: { [x: PrimitiveSlug]: InfraPulledBindings } }
+  spec: { org: OrganizationSettingsUpdateInput2; spaces: { [x: PrimitiveSlug]: InfraPulledSpace } }
 }
 
 export type SessionMessageInfo =

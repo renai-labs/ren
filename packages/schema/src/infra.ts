@@ -297,14 +297,28 @@ export const ApplyInput = Schema.Struct({ ...PlanInput.fields, digest: Schema.St
 export interface Applied extends Schema.Schema.Type<typeof Applied> {}
 export const Applied = Schema.Struct({ changes: Schema.Array(Change) }).annotate({ identifier: "Infra.Applied" })
 
+export interface PulledApp extends Schema.Schema.Type<typeof PulledApp> {}
+export const PulledApp = Schema.Struct({
+  ...Struct.pick(App.Info.fields, ["name", "description", "requiredCredentials", "mcps", "skills", "dependsOn"]),
+  icon: Schema.optionalKey(Schema.String),
+  environment: App.Definition.fields.environment,
+}).annotate({ identifier: "Infra.PulledApp", description: "An App.Declaration, as the live app has it." })
+
+export interface PulledSchedule extends Schema.Schema.Type<typeof PulledSchedule> {}
+export const PulledSchedule = Schema.Struct({
+  ...Schedule.Declaration.fields,
+  cron: Schema.String,
+  timeZone: Schema.String,
+}).annotate({ identifier: "Infra.PulledSchedule", description: "A Schedule.Declaration, as the live schedule has it." })
+
 export interface PulledSpace extends Schema.Schema.Type<typeof PulledSpace> {}
 export const PulledSpace = Schema.Struct({
   ...Struct.omit(Space.CreateInput.fields, ["slug"]),
   settings: Settings.Info,
   factory: Schema.optionalKey(FactoryDeclaration),
   agents: Schema.Record(Agent.Name, Agent.Declaration),
-  apps: Schema.Record(Primitive.Slug, App.Declaration),
-  schedules: Schema.Record(Primitive.Slug, Schedule.Declaration),
+  apps: Schema.Record(Primitive.Slug, PulledApp),
+  schedules: Schema.Record(Primitive.Slug, PulledSchedule),
   channels: Schema.Record(Primitive.Slug, Channel.Declaration),
   uses: Uses,
 }).annotate({ identifier: "Infra.PulledSpace" })

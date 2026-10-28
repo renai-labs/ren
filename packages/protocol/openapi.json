@@ -9991,7 +9991,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The part of the org spec that infra applies today: organization settings, shared spaces and their agents.",
+            "description": "The part of the org spec that infra applies today: organization settings, shared spaces with their agents, apps, schedules and channels, and the channel and profile bindings of each space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10317,13 +10317,13 @@
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        "description": "Without it, the webhook runs on the ren agent."
+        "description": "Without it, the channel reaches the ren agent."
       },
       "Agent.Name_3": {
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        "description": "Without it, the channel reaches the ren agent."
+        "description": "Without it, the webhook runs on the ren agent."
       },
       "Agent.Page": {
         "type": "object",
@@ -11621,7 +11621,7 @@
                 "minLength": 1
               },
               "agent": {
-                "$ref": "#/components/schemas/Agent.Name_3"
+                "$ref": "#/components/schemas/Agent.Name_2"
               },
               "fallback": {
                 "type": "boolean",
@@ -11660,7 +11660,7 @@
                 "minLength": 1
               },
               "agent": {
-                "$ref": "#/components/schemas/Agent.Name_3"
+                "$ref": "#/components/schemas/Agent.Name_2"
               },
               "fallback": {
                 "type": "boolean",
@@ -11699,7 +11699,7 @@
                 "minLength": 1
               },
               "agent": {
-                "$ref": "#/components/schemas/Agent.Name_3"
+                "$ref": "#/components/schemas/Agent.Name_2"
               }
             },
             "required": ["kind", "purpose"],
@@ -11717,7 +11717,7 @@
                 "minLength": 1
               },
               "agent": {
-                "$ref": "#/components/schemas/Agent.Name_3"
+                "$ref": "#/components/schemas/Agent.Name_2"
               },
               "fallback": {
                 "type": "boolean",
@@ -11756,7 +11756,7 @@
                 "minLength": 1
               },
               "agent": {
-                "$ref": "#/components/schemas/Agent.Name_3"
+                "$ref": "#/components/schemas/Agent.Name_2"
               },
               "allowedSenders": {
                 "type": "array",
@@ -13795,7 +13795,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name> or spaces/<slug>/uses/agents/<name>."
+            "description": "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/channels/<slug> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
           },
           "from": {
             "type": "string",
@@ -13876,7 +13876,7 @@
       },
       "Infra.Kind": {
         "type": "string",
-        "enum": ["organization", "space", "agent", "membership"]
+        "enum": ["organization", "space", "agent", "membership", "app", "schedule", "channel", "profile"]
       },
       "Infra.Plan": {
         "type": "object",
@@ -13938,9 +13938,18 @@
                 "type": "string",
                 "minLength": 1,
                 "description": "The slug of the organization."
+              },
+              "spaces": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Primitive.Slug_1"
+                },
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Infra.PulledBindings"
+                }
               }
             },
-            "required": ["organization"],
+            "required": ["organization", "spaces"],
             "additionalProperties": false
           },
           "spec": {
@@ -13965,7 +13974,121 @@
         },
         "required": ["bindings", "spec"],
         "additionalProperties": false,
-        "description": "The part of the org spec that infra applies today: organization settings, shared spaces and their agents."
+        "description": "The part of the org spec that infra applies today: organization settings, shared spaces with their agents, apps, schedules and channels, and the channel and profile bindings of each space."
+      },
+      "Infra.PulledApp": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.Requirement"
+            }
+          },
+          "skills": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Skill.Info"
+            }
+          },
+          "mcps": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Mcp.Info"
+            }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            }
+          },
+          "icon": {
+            "type": "string"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/App.Environment"
+          }
+        },
+        "required": ["name", "description", "skills", "mcps"],
+        "additionalProperties": false,
+        "description": "An App.Declaration, as the live app has it."
+      },
+      "Infra.PulledBindings": {
+        "type": "object",
+        "properties": {
+          "channels": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Channel.Target"
+            }
+          },
+          "profiles": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/AppProfile.Slug"
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Infra.PulledSchedule": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Without it, the slug."
+          },
+          "agent": {
+            "$ref": "#/components/schemas/Agent.Name_1"
+          },
+          "cron": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Schedule.MessageEncoded"
+          },
+          "until": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["cron", "timeZone", "message"],
+        "additionalProperties": false,
+        "description": "A Schedule.Declaration, as the live schedule has it."
       },
       "Infra.PulledSpace": {
         "type": "object",
@@ -14001,11 +14124,38 @@
               "$ref": "#/components/schemas/Agent.Declaration"
             }
           },
+          "apps": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Infra.PulledApp"
+            }
+          },
+          "schedules": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Infra.PulledSchedule"
+            }
+          },
+          "channels": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Channel.Declaration"
+            }
+          },
           "uses": {
             "$ref": "#/components/schemas/Infra.Uses"
           }
         },
-        "required": ["name", "settings", "agents", "uses"],
+        "required": ["name", "settings", "agents", "apps", "schedules", "channels", "uses"],
         "additionalProperties": false
       },
       "Infra.SpaceBindings": {
@@ -19797,7 +19947,7 @@
         "type": "object",
         "properties": {
           "agent": {
-            "$ref": "#/components/schemas/Agent.Name_2"
+            "$ref": "#/components/schemas/Agent.Name_3"
           },
           "purpose": {
             "type": "string",

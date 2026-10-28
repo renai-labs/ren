@@ -393,7 +393,10 @@ describe("InfraSpecs", () => {
       })
 
       expect(plan.problems).toEqual([
-        { path: "deploy.yaml/spaces/gone", message: "deploy.yaml binds space “gone”, which the spec does not declare." },
+        {
+          path: "deploy.yaml/spaces/gone",
+          message: "deploy.yaml binds space “gone”, which the spec does not declare.",
+        },
         { path: "deploy.yaml/spaces/home/timezone", message: "Infra does not apply the timezone of a space yet." },
         { path: "deploy.yaml/spaces/home/webhooks", message: "Infra does not apply webhooks yet." },
         { path: "spaces/home/webhooks", message: "Infra does not apply webhooks yet." },

@@ -725,7 +725,10 @@ export const layer = Layer.effect(
           })),
         ...bound
           .filter(([, bindings]) => Object.keys(bindings.webhooks).length > 0)
-          .map(([slug]) => ({ path: `deploy.yaml/spaces/${slug}/webhooks`, message: "Infra does not apply webhooks yet." })),
+          .map(([slug]) => ({
+            path: `deploy.yaml/spaces/${slug}/webhooks`,
+            message: "Infra does not apply webhooks yet.",
+          })),
         ...bound
           .filter(([slug]) => !(slug in input.spec.spaces))
           .map(([slug]) => ({
