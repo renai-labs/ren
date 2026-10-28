@@ -158,6 +158,12 @@ export function SchedulesPage() {
         filtered={filtered}
         spaceCount={spaceItems.length}
         onRetry={() => void schedules.refetch()}
+        onCreate={() => setCreating(true)}
+        onClearFilters={() => {
+          setQuery("")
+          setSpaceId(allSpaces)
+          setState("any")
+        }}
       />
       {creating ? <ScheduleDialog onClose={() => setCreating(false)} /> : null}
     </Page.Root>
