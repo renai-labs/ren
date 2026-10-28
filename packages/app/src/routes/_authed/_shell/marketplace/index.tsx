@@ -1,4 +1,3 @@
-import { Page } from "@ren/ui/page"
 import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { AppsPage } from "../../../../features/apps/apps-page.js"
@@ -20,13 +19,6 @@ export const Route = createFileRoute("/_authed/_shell/marketplace/")({
       context.queryClient.query(Pages.all((index) => context.api.app.list.queryOptions({ ...Apps.page, page: index }))),
     )
   },
-  pendingComponent: () => (
-    <Page.Pending
-      title="Marketplace"
-      description="Add an app to a space, then connect its accounts. Every chat in the space can use it."
-      toolbar="row"
-    />
-  ),
   component: AppsRoute,
 })
 

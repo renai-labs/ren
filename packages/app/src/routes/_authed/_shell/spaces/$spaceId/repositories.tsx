@@ -1,4 +1,3 @@
-import { Page } from "@ren/ui/page"
 import { createFileRoute } from "@tanstack/react-router"
 import { SpaceRepositories } from "../../../../../features/spaces/space-repositories.js"
 import { Loader } from "../../../../../lib/loader.js"
@@ -12,7 +11,6 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/repositori
       ),
     )
   },
-  pendingComponent: () => <Page.Skeletons body="rows" />,
   component: SpaceRepositoriesRoute,
 })
 

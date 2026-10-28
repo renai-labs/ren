@@ -1,6 +1,6 @@
 import { Pagination } from "@ren/schema/pagination"
 import { createFileRoute } from "@tanstack/react-router"
-import { SpacesPage, SpacesPending } from "../../../../features/spaces/spaces-page.js"
+import { SpacesPage } from "../../../../features/spaces/spaces-page.js"
 import { Loader } from "../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/")({
@@ -12,7 +12,6 @@ export const Route = createFileRoute("/_authed/_shell/spaces/")({
       ),
     )
   },
-  pendingComponent: SpacesPending,
   component: SpacesRoute,
 })
 

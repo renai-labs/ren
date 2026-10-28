@@ -3,7 +3,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router"
 import { RouteError } from "../../../../../components/error-page.js"
 import { Loader } from "../../../../../lib/loader.js"
 import { Seed } from "../../../../../lib/seed.js"
-import { SpacePage, SpacePending } from "../../../../../features/spaces/space-page.js"
+import { SpacePage } from "../../../../../features/spaces/space-page.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId")({
   head: () => ({ meta: [{ title: "Space · Ren" }] }),
@@ -19,7 +19,6 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId")({
       }),
     )
   },
-  pendingComponent: SpacePending,
   errorComponent: (props) => <RouteError error={props.error} />,
   component: SpaceRoute,
 })
