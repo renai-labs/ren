@@ -174,7 +174,7 @@ const browserPatterns = [
   },
   {
     regex: "^(lucide-react|react-icons|@heroicons/.*|@phosphor-icons/.*|@carbon/icons-react)$",
-    message: "Use @ren/ui/icon.",
+    message: "Use @tabler/icons-react.",
   },
   {
     regex: "^(styled-components|@emotion/.*|@stitches/.*|@vanilla-extract/.*)$",

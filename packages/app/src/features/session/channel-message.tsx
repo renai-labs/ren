@@ -5,14 +5,19 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { Icon } from "@ren/ui/icon"
-import type { Glyph } from "@ren/ui/icon"
 import { Link } from "@ren/ui/link"
 import { Markdown } from "@ren/ui/markdown"
 import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
 import { Message, MessageContent, MessageHeader } from "@ren/ui/message"
-import { IconChevronRight } from "@tabler/icons-react"
+import { IconBrandGithub, IconBrandSlack, IconChevronRight } from "@tabler/icons-react"
+import type { ReactNode } from "react"
 
-const glyphs: Readonly<Record<Channel.Provider, Glyph>> = { github: "Github", slack: "Slack", linear: "Linear" }
+// oxlint-disable-next-line ren/no-comments -- Tabler has no Linear mark, so Linear's comes from @ren/ui/icon.
+const brands: Readonly<Record<Channel.Provider, ReactNode>> = {
+  github: <IconBrandGithub />,
+  slack: <IconBrandSlack />,
+  linear: <Icon glyph="Linear" />,
+}
 
 const senderOf = (origin: ChannelOrigin.Info) => {
   if (!origin.handle) return origin.sender
@@ -27,9 +32,7 @@ export function ChannelMessageHeader(props: { origin: ChannelOrigin.Info | undef
   return (
     <div className="flex min-w-0 flex-col items-end gap-1">
       <Marker className="justify-end text-xs">
-        <MarkerIcon>
-          <Icon glyph={glyphs[origin.provider]} size="small" />
-        </MarkerIcon>
+        <MarkerIcon>{brands[origin.provider]}</MarkerIcon>
         <MarkerContent>
           {origin.trigger
             ? `Started on ${title} by “${origin.trigger}” in ${origin.place}, for ${senderOf(origin)}`
@@ -67,8 +70,8 @@ export function ChannelReplyMessage(props: {
   return (
     <Message>
       <MessageContent>
-        <MessageHeader className="gap-2 px-0">
-          {reply.sent ? <Icon glyph={glyphs[reply.sent.provider]} size="small" /> : null}
+        <MessageHeader className="gap-2 px-0 [&_svg]:size-4">
+          {reply.sent ? brands[reply.sent.provider] : null}
           {reply.sent ? `Sent on ${Channel.titles[reply.sent.provider]}` : "Sending to the thread…"}
         </MessageHeader>
         <Bubble variant="ghost">
