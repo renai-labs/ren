@@ -10,7 +10,7 @@ import { composeClasses } from "../lib/compose-classes.js"
 export type TabsSize = "small" | "medium"
 
 const tabVariants = cva(
-  "relative inline-flex shrink-0 items-center gap-2 rounded-control px-3 whitespace-nowrap text-text-secondary transition-standard hover:bg-fill-primary hover:text-text-primary focus-visible:-outline-offset-2 aria-[current=page]:bg-fill-secondary aria-[current=page]:font-medium aria-[current=page]:text-text-primary data-active:bg-fill-secondary data-active:font-medium data-active:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-disabled [&_svg]:size-4",
+  "relative inline-flex shrink-0 items-center gap-2 rounded-control px-3 whitespace-nowrap text-text-secondary transition-standard hover:bg-fill-primary hover:text-text-primary focus-visible:-outline-offset-2 aria-selected:bg-fill-secondary aria-selected:font-medium aria-selected:text-text-primary aria-[current=page]:bg-fill-secondary aria-[current=page]:font-medium aria-[current=page]:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-disabled [&_svg]:size-4",
   {
     variants: { size: { small: "h-7 text-xs", medium: "h-8 text-sm" } },
     defaultVariants: { size: "medium" },

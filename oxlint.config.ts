@@ -195,7 +195,6 @@ const appPatterns = [
   ...browserPatterns,
   { regex: "^@base-ui/", message: "Compose @ren/ui components. Base UI is wrapped there." },
   { regex: "^(class-variance-authority|clsx|tailwind-merge)$", message: "Variants belong in @ren/ui components." },
-  { regex: "^@tabler/", message: "Use @ren/ui/icon." },
 ]
 
 const restrictedImports = (apis: string[], message: string, patterns: typeof browserPatterns) =>
@@ -261,22 +260,11 @@ const domProperties = [
 const forbiddenElements = [
   ["button", "Button"],
   ["a", "Link"],
-  ["input", "a field"],
-  ["textarea", "a field"],
+  ["input", "Input"],
+  ["textarea", "Textarea"],
   ["select", "Select"],
-  ["label", "a field"],
-  ["form", "the form hook from @ren/ui/form and Form"],
   ["dialog", "Dialog"],
   ["table", "Table"],
-  ["img", "an image component"],
-  ["svg", "Icon"],
-  ["h1", "Text"],
-  ["h2", "Text"],
-  ["h3", "Text"],
-  ["h4", "Text"],
-  ["h5", "Text"],
-  ["h6", "Text"],
-  ["p", "Text"],
 ].map((entry) => ({ element: entry[0], message: `Use ${entry[1]} from @ren/ui.` }))
 
 const tailwind = {
@@ -302,25 +290,6 @@ const tailwindRules = {
   "better-tailwindcss/enforce-consistent-variable-syntax": "error",
   "better-tailwindcss/enforce-consistent-important-position": "error",
 } as const
-
-const spacingStep = "(?:0|1|2|3|4|6|8|12)"
-const layoutUtilities = [
-  "flex|inline-flex|grid|inline-grid|block|inline-block|inline|hidden|contents|invisible|visible",
-  "flex-(?:row|col)|flex-(?:wrap|nowrap|1|none|auto)|grow(?:-0)?|shrink(?:-0)?",
-  "items-(?:start|end|center|baseline|stretch)",
-  "justify-(?:start|end|center|between|around|evenly|stretch|normal)",
-  "self-(?:auto|start|end|center|stretch|baseline)",
-  "content-(?:start|end|center|between|around|evenly|stretch|normal|baseline)",
-  "place-(?:content|items|self)-(?:start|end|center|between|around|evenly|stretch|baseline|auto)",
-  "justify-items-(?:start|end|center|stretch|normal)",
-  "justify-self-(?:auto|start|end|center|stretch)",
-  "grid-(?:cols|rows)-\\d+|(?:col|row)-span-(?:\\d+|full)|col-(?:start|end)-\\d+",
-  "text-(?:left|right|center|start|end)",
-  `(?:gap(?:-[xy])?|[pm][xytrblse]?)-${spacingStep}|m[xytrblse]?-auto`,
-  "(?:w|h|size|max-w|max-h|min-h)-full|(?:min-)?h-dvh|min-[wh]-0|(?:max-)?w-(?:sidebar|dialog|content)",
-  "overflow(?:-[xy])?-(?:auto|hidden|visible|scroll|clip)|overscroll(?:-[xy])?-(?:contain|auto|none)",
-  "relative|sticky|top-0",
-].join("|")
 
 const importantClass = {
   pattern: "^.*!$|^!.*$",
@@ -357,12 +326,6 @@ const colorRoleClass = {
 
 const siteTailwind = { cwd: new URL("packages/site", import.meta.url).pathname, entryPoint: "src/styles/globals.css" }
 const docsTailwind = { ...siteTailwind, entryPoint: "src/styles/docs.css" }
-
-const appClasses = {
-  pattern: `^(?!(?:(?:sm|md|lg):)*(?:${layoutUtilities})$).+$`,
-  message:
-    "App code only lays components out with flex, grid, gap, padding, margin, sizing and overflow on the token scale. Visual styling belongs in @ren/ui.",
-}
 
 export default defineConfig({
   plugins: ["typescript", "unicorn", "oxc", "import", "react", "jsx-a11y"],
@@ -737,16 +700,37 @@ export default defineConfig({
       },
     },
     {
+      files: ["packages/ui/src/**"],
+      rules: {
+        "better-tailwindcss/no-restricted-classes": [
+          "error",
+          { restrict: [viewportUnitClass, fontSmoothingClass, colorRoleClass] },
+        ],
+        "react/only-export-components": "off",
+      },
+    },
+    {
       files: ["packages/app/src/**"],
       rules: {
-        "better-tailwindcss/no-restricted-classes": ["error", { restrict: [importantClass, appClasses] }],
+        "better-tailwindcss/no-restricted-classes": [
+          "error",
+          {
+            restrict: [
+              importantClass,
+              rawArbitraryValue,
+              viewportUnitClass,
+              readingOrderClass,
+              fontSmoothingClass,
+              colorRoleClass,
+            ],
+          },
+        ],
         "ren/feature-boundaries": "error",
         "ren/narrow-chat-state": "error",
         "react/forbid-component-props": [
           "error",
           {
             forbid: [
-              "className",
               "style",
               {
                 propName: "viewTransition",

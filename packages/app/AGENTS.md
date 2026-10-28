@@ -14,7 +14,7 @@ The product SPA and its web host. Desktop and mobile hosts will import it throug
 
 ## Conventions
 
-- Compose `@ren/ui`. App code only lays components out, with the layout classes lint allows. When something visual is missing, add or extend a component in `@ren/ui`.
+- Compose `@ren/ui`, as shadcn apps do: use its variants and sizes, and pass `className` for layout and one-off looks at the call site. A look that repeats belongs in `@ren/ui`, in the component or a shared composition.
 - Server data comes from the generated query options in `@ren/client/react`, preloaded in route loaders with `queryClient.query(options)`. Build the query options from `context.api`, the `RenQuery` factory in the router context.
 - A generated mutation invalidates its own resource group when it succeeds, through the `MutationCache` in `src/lib/runtime.ts`, and `mutateAsync` resolves after the active queries refetch. When a mutation changes another resource, add that group to `invalidates` there instead of invalidating in the feature. Invalidate by hand only after calls that are not generated mutations, such as Better Auth and `@ren/chat`, with an `ast-grep-ignore: no-manual-invalidation` comment that names the call.
 - A detail route's loader seeds its query from the cached lists with `Seed.fromList`, so a page opened from a list renders without waiting for a fetch.

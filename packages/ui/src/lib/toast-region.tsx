@@ -68,7 +68,7 @@ function List(props: { placement: Placement; closeButton: "visible" | "hidden" }
       <Toast.Content className="flex min-w-0 flex-1 items-center gap-1.5 transition-extended data-behind:opacity-0 data-expanded:opacity-100">
         {isToastType(toast.type) ? <TypeIcon type={toast.type} /> : null}
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <Toast.Title className="text-sm/[1.5] font-medium" />
+          <Toast.Title className="text-sm/normal font-medium" />
           <Toast.Description className="text-xs/[1.4] text-text-secondary" />
         </div>
         <Toast.Action render={<Button appearance="primary" size="small" />} />
