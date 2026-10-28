@@ -1,6 +1,6 @@
 # Piece G: E2B template
 
-Status: spec written. Decisions: E119–E125, E132, E133 (README §6). It also uses E66 (separate providers), E69 (boot poll), E80 (E2B layer), E81 (failure budget), E88 (capacity), E89 (amended by E120), E97 (the brain's own hand) and E105, E117 (lost files).
+Status: spec written. Decisions: E119–E125, E132, E133, E147 (README §6). It also uses E66 (separate providers), E69 (boot poll), E80 (E2B layer), E81 (failure budget), E88 (capacity), E89 (amended by E120), E97 (the brain's own hand) and E105, E117 (lost files).
 
 ## Goal
 
@@ -18,32 +18,33 @@ Not in this piece:
 ## Layers
 
 ```
- build (developer, with the user's OK)                      run
+ build (developer with the user's OK, or each deploy)       run
  ┌──────────────────────────────────────────────┐           ┌──────────────────────────────────────────────────┐
  │ bun run template:e2b  (cell/e2b/stage.ts)     │           │ E2B sandbox  ren-brain-dev:<hash>  2 CPU / 2 GB   │
- │  1. stage the dependency closure of           │           │  start.sh (user "user"):                          │
- │     @ren/cell and @ren/executor               │  tag      │   wait for ~/.ren/brain.env (Ren writes it, E80)  │
- │  2. hash = staged files + Dockerfile +        │ ───────▶  │   loop: executor on 127.0.0.1:4100 (own hand)     │
- │     start.sh                                  │           │   loop: brain on :4800 (public, token checks)     │
- │  3. tag exists? skip. else build              │           │  REN_BRAIN_VERSION=<hash> in the image            │
- │  4. smoke: one sandbox → /ren/state ≤ 120 s   │           └──────────────────────────────────────────────────┘
- │  5. print the tag (only on success)           │                  ▲ create (tag)       │ /host/* at Ren's current
- └──────────────────────────────────────────────┘                  │                     ▼ address (E119)
+ │  1. stage the files that the entry points     │           │  start.sh (user "user"):                          │
+ │     of cell and executor import, at any depth │  tag      │   wait for ~/.ren/brain.env (Ren writes it, E80)  │
+ │  2. hash = those files + their manifests'     │ ───────▶  │   loop: executor on 127.0.0.1:4100 (own hand)     │
+ │     load fields + installed links +           │           │   loop: brain on :4800 (public, token checks)     │
+ │     Dockerfile + start.sh + Bun + size (E147) │           │  REN_BRAIN_VERSION=<hash> in the image            │
+ │  3. tag exists? skip. else build              │           └──────────────────────────────────────────────────┘
+ │  4. smoke: one sandbox → /ren/state ≤ 120 s   │                  ▲ create (tag)       │ /host/* at Ren's current
+ │  5. print the tag (only on success)           │                  │                     ▼ address (E119)
+ └──────────────────────────────────────────────┘                  │
                                     E2B_TEMPLATE=ren-brain-dev:<hash> → Ren (BrainLifecycle, SandboxProvider.layerE2B)
 ```
 
 ## Image
 
-| Part            | Value                                                                                             | Source                    |
-| --------------- | ------------------------------------------------------------------------------------------------- | ------------------------- |
-| Base            | `oven/bun:<version>`; the version comes from `packageManager` in the root `package.json`          | E122                      |
-| System packages | `ripgrep git procps ca-certificates curl`                                                         | `cell/e2b/e2b.Dockerfile` |
-| Ren code        | the staged dependency closure; `bun install --frozen-lockfile --production` for cell and executor | E122                      |
-| OpenCode        | npm dependencies of `@ren/cell` (`@opencode/*`)                                                   | `cell/package.json`       |
-| Version         | `REN_BRAIN_VERSION=<hash>`; the brain reports it on `/ren/state` and every `/host` call           | E120                      |
-| Processes       | `start.sh`: executor loop on 127.0.0.1:4100, brain loop on :4800, as user `user`                  | E7, E97                   |
-| Size            | 2 CPU, 2 GB                                                                                       | E124                      |
-| Secrets         | none; `brain.env` holds `REN_URL`, brain id, generation, public keys (E69)                        | E80                       |
+| Part            | Value                                                                                         | Source                    |
+| --------------- | --------------------------------------------------------------------------------------------- | ------------------------- |
+| Base            | `oven/bun:<version>`; the version comes from `packageManager` in the root `package.json`      | E122                      |
+| System packages | `ripgrep git procps ca-certificates curl`                                                     | `cell/e2b/e2b.Dockerfile` |
+| Ren code        | the imported files (E147); `bun install --frozen-lockfile --production` for cell and executor | E122, E147                |
+| OpenCode        | npm dependencies of `@ren/cell` (`@opencode/*`)                                               | `cell/package.json`       |
+| Version         | `REN_BRAIN_VERSION=<hash>`; the brain reports it on `/ren/state` and every `/host` call       | E120                      |
+| Processes       | `start.sh`: executor loop on 127.0.0.1:4100, brain loop on :4800, as user `user`              | E7, E97                   |
+| Size            | 2 CPU, 2 GB                                                                                   | E124                      |
+| Secrets         | none; `brain.env` holds `REN_URL`, brain id, generation, public keys (E69)                    | E80                       |
 
 ## Services and contracts
 
@@ -58,7 +59,7 @@ Not in this piece:
 - `SandboxProvider` gains `template: string | null`: the build it creates sandboxes from (`layerE2B`: `E2B_TEMPLATE`; `layerLocal`: null). `create` stores it on the `brain` row (`brain.template`).
 - `BrainLifecycle`, step `resuming`: when `brain.template` is not null and differs from `provider.template`, the step goes to `replacing` instead of `connect`. Only `resuming` does this, so a running or busy brain is never replaced for its build (ren-v1 INV-16). A brain that keeps running moves when it next pauses (keep-alive, E72).
 - `host-api` changes stay readable by the oldest brain still running (ren-v1 skew rule 1).
-- `cell/e2b/stage.ts`, as E122: closure of `workspace:*` dependencies, Bun version from `packageManager`, hash, skip an existing tag, smoke sandbox (`owner=ren-v2-dev`, test `brain.env`, `GET /ren/state` within 120 s, kill), print the tag and whether the tree had uncommitted files.
+- `cell/e2b/stage.ts`, as E122 and E147: the workspace files the entry points import, Bun version from `packageManager`, hash of what the image runs, skip an existing tag, smoke sandbox (`owner=ren-v2-dev`, test `brain.env`, `GET /ren/state` within 120 s, kill), print the tag and whether the tree had uncommitted files.
 
 ### Dead sandbox on access (E123)
 
@@ -142,7 +143,7 @@ Write each test first. Each test must fail before its change. No mocks.
 | 4   | `core/test/brain-lifecycle.test.ts` (live, skipped without `E2B_API_KEY`) | `create` with a tag the provider rejects fails with that tag in the reason; the third failure gives `failed` (E81).                                                                                                                                                                                        |
 | 5   | `core/test/session.test.ts`                                               | `Session.access` with `unreachable: true` on a `ready` brain whose process is gone returns `starting { phase: "replacing" }` in the same call; a `ready` brain that is paused (SIGSTOP) returns `starting { phase: "resuming" }` and wakes without a replace; with a live brain it returns `ready` (E123). |
 | 6   | `chat/test/connection.test.ts`                                            | A failed connection to the brain's URL makes the next access carry `unreachable: true`; a successful one does not (E123).                                                                                                                                                                                  |
-| 7   | `cell/test/stage.test.ts`                                                 | The staged files include every `workspace:*` dependency of `@ren/cell` and `@ren/executor`, followed through each level (INV-105). A changed staged file changes the hash; an unchanged tree gives the same hash (E122).                                                                                   |
+| 7   | `cell/test/stage.test.ts`                                                 | The staged sources are the workspace files that the entry points of `@ren/cell` and `@ren/executor` import, followed through each package (INV-105), and no others (E147). A changed staged file changes the hash; an unchanged tree gives the same hash (E122).                                           |
 | 8   | live, skipped without `E2B_API_KEY`                                       | `bun run template:e2b`: the smoke sandbox answers `/ren/state`, is killed afterwards, and the tag is printed. A second run with no change skips the build (E122).                                                                                                                                          |
 | 9   | live, skipped without `E2B_API_KEY`                                       | Ren with address A creates a brain; Ren restarts with address B; the brain syncs to B without a replace (E119).                                                                                                                                                                                            |
 | 10  | live, skipped without `E2B_API_KEY`                                       | A space brain with 5 chats, 2 running shells: log peak memory and CPU of the sandbox (E124).                                                                                                                                                                                                               |
