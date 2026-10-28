@@ -35,6 +35,7 @@ import { SlackApp } from "@ren/core/slack-app"
 import { PersonCredentials } from "@ren/core/person-credentials"
 import { CredentialEnv } from "@ren/core/credential-env"
 import { Access } from "@ren/core/access"
+import { Billing } from "@ren/core/billing"
 import { CredentialCallers } from "@ren/core/credential-callers"
 import { CredentialSource } from "@ren/core/credential-source"
 import { Credentials } from "@ren/core/credentials"
@@ -81,7 +82,7 @@ HttpRouter.serve(Routes.layer).pipe(
   ]),
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
-  Layer.provide([BrainClient.layer, Settings.layer]),
+  Layer.provide([BrainClient.layer, Settings.layer, Billing.layerNone]),
   Layer.provide([
     ChaosModels.layer,
     RenInference.layerConfig.pipe(Layer.provide([Signer.layerLocal, Access.layer])),

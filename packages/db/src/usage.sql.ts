@@ -1,0 +1,51 @@
+import type { Agent } from "@ren/schema/agent"
+import type { Auth } from "@ren/schema/auth"
+import type { Brain } from "@ren/schema/brain"
+import type { Session } from "@ren/schema/session"
+import type { Space } from "@ren/schema/space"
+import type { Usage } from "@ren/schema/usage"
+import { bigint, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
+
+// oxlint-disable-next-line ren/no-comments -- One row for each cost; it never changes (usage spec §4.3). No foreign keys: the row outlives the session, brain and space that it names.
+export const usage_event = pgTable(
+  "usage_event",
+  {
+    source: text().notNull(),
+    id: text().notNull(),
+    type: text().$type<Usage.Type>().notNull(),
+    time: timestamp().notNull(),
+    workload: text().notNull(),
+    organization: text().$type<Auth.OrganizationID>().notNull(),
+    space: text().$type<Space.ID>(),
+    brain: text().$type<Brain.ID>(),
+    root_session: text().$type<Session.ID>(),
+    session: text().$type<Session.ID>(),
+    turn: text(),
+    member: text().$type<typeof Auth.MemberID.Type>(),
+    agent: text().$type<Agent.ID>(),
+    agent_name: text(),
+    kind: text().$type<Usage.Kind>(),
+    requested_model: text().notNull(),
+    variant: text(),
+    payer: text().$type<Usage.Payer>().notNull(),
+    provider: text().notNull(),
+    served_model: text().notNull(),
+    input_tokens: integer().notNull().default(0),
+    output_tokens: integer().notNull().default(0),
+    reasoning_tokens: integer().notNull().default(0),
+    cache_read_tokens: integer().notNull().default(0),
+    cache_write_tokens: integer().notNull().default(0),
+    cache_write_1h_tokens: integer().notNull().default(0),
+    cost_micro_usd: bigint({ mode: "number" }),
+    latency_ms: integer(),
+    time_to_first_token_ms: integer(),
+    stop_reason: text(),
+    error: jsonb().$type<Usage.Failure>(),
+    received_at: timestamp().defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.source, table.id] }),
+    index("usage_event_organization_time_idx").on(table.organization, table.time),
+    index("usage_event_session_idx").on(table.session),
+  ],
+)

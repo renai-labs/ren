@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test"
 import { BunCrypto } from "@effect/platform-bun"
 import { PgClient } from "@effect/sql-pg"
 import { Access } from "@ren/core/access"
+import { Billing } from "@ren/core/billing"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
@@ -214,6 +215,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provideMerge(E2BSandbox.layer),
             Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
             Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
+            Layer.provideMerge(Billing.layerNone),
             Layer.provide(Settings.layer),
             Layer.provide(Models.layerLiteLLM),
             Layer.provide(

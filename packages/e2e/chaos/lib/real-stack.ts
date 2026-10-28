@@ -11,6 +11,7 @@ import { BrainRegistry } from "@ren/core/brain-registry"
 import { Settings } from "@ren/core/settings"
 import { Brain } from "@ren/schema/brain"
 import { Access } from "@ren/core/access"
+import { Billing } from "@ren/core/billing"
 import { Agent } from "@ren/core/agent"
 import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
@@ -299,6 +300,7 @@ export const start = async (options: {
         ),
       ),
       Layer.provide(Layer.succeedContext(databaseContext)),
+      Layer.provide(Billing.layerNone),
     ),
   )
   const core = <A, E>(effect: Effect.Effect<A, E, Brains.Service | SessionRunner.Service>) =>

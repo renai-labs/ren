@@ -36,6 +36,8 @@ import { SpaceSettings } from "@ren/core/space/settings"
 import { Task } from "@ren/core/task"
 import { TaskActivity } from "@ren/core/task/activity"
 import { TaskComment } from "@ren/core/task/comment"
+import { Usage } from "@ren/core/usage"
+import { UsageIngestApi } from "@ren/protocol/usage-ingest"
 import { Effect, Layer } from "effect"
 import { HttpEffect, HttpMiddleware, HttpPlatform, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
@@ -82,6 +84,7 @@ import { TaskHandler } from "./handlers/api/task.js"
 import { TaskActivityHandler } from "./handlers/api/task-activity.js"
 import { TaskCommentHandler } from "./handlers/api/task-comment.js"
 import { SyncHandler } from "./handlers/sync.js"
+import { UsageAuthenticationLayer, UsageHandler } from "./handlers/usage.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 import { bodyLimit } from "./middleware/body-limit.js"
@@ -212,6 +215,11 @@ export const layer = Layer.mergeAll(
     HttpApiBuilder.layer(RenHostApi).pipe(
       Layer.provide([HostPullHandler, HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
       Layer.provide(Brains.hostAuthentication),
+    ),
+    HttpApiBuilder.layer(UsageIngestApi).pipe(
+      Layer.provide(UsageHandler),
+      Layer.provide(UsageAuthenticationLayer),
+      Layer.provide(Usage.layer),
     ),
     AuthRoute,
     RenMcp.layer,

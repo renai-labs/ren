@@ -19,6 +19,7 @@ import { SessionPolicy } from "./session/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
 import { TranscriptCodec } from "./transcript-codec.js"
+import { Billing } from "./billing.js"
 
 export const ID = Session.ID
 export type ID = Session.ID
@@ -343,6 +344,8 @@ export const layer = Layer.effect(
             Effect.catchTags({
               BrainRejectedError: Effect.die,
               "SessionRunner.NotFound": Effect.die,
+              "Billing.Refused": (refused) =>
+                Effect.fail(new Primitive.Forbidden({ message: Billing.messages[refused.reason] })),
             }),
           )
         return toInfo(yield* read(actor, input.id))

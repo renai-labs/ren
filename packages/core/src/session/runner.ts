@@ -9,6 +9,7 @@ import type { Space } from "@ren/schema/space"
 import { and, eq, isNull } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
 import { AgentQueries } from "../agent/queries.js"
+import { Billing } from "../billing.js"
 import { BrainHost } from "../brain-host.js"
 import { Brains } from "../brains.js"
 import { BrainRegistry } from "../brain-registry.js"
@@ -44,10 +45,13 @@ export interface Interface {
     owner: Owner,
     input: Session.StartInput,
     options?: { readonly agentId?: Agent.ID },
-  ) => Effect.Effect<void, AlreadyExists | NotFound | Brains.BrainRejectedError>
+  ) => Effect.Effect<void, AlreadyExists | NotFound | Brains.BrainRejectedError | Billing.Refused>
   readonly send: (
     input: Session.SendInput,
-  ) => Effect.Effect<Session.Accepted, NotFound | BrainHost.BrainUnavailable | Brains.BrainRejectedError>
+  ) => Effect.Effect<
+    Session.Accepted,
+    NotFound | BrainHost.BrainUnavailable | Brains.BrainRejectedError | Billing.Refused
+  >
   readonly get: (sessionId: Session.ID) => Effect.Effect<Info, NotFound>
   // oxlint-disable-next-line ren/no-comments -- A started chat whose start the brain refused later; create returns before the brain starts.
   readonly onStartRejected: (listener: (sessionId: Session.ID) => Effect.Effect<void>) => Effect.Effect<void>
@@ -65,6 +69,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const brain = yield* Brains.Service
     const registry = yield* BrainRegistry.Service
+    const billing = yield* Billing.Service
 
     return Service.of({
       create: Effect.fn("SessionRunner.create")(function* (
@@ -72,6 +77,7 @@ export const layer = Layer.effect(
         input: Session.StartInput,
         options: { readonly agentId?: Agent.ID } = {},
       ) {
+        if (input.initialMessage) yield* billing.check(owner.organizationId)
         const startInput = yield* Schema.encodeEffect(Session.StartInput)(input).pipe(Effect.orDie)
         const brainId = yield* registry.assign({ ...owner, sessionId: input.sessionId })
         const created = yield* database.transaction((transaction) =>
@@ -127,6 +133,7 @@ export const layer = Layer.effect(
             .where(eq(Database.Schema.agent_session.id, input.sessionId)),
         )).at(0)
         if (!row) return yield* notFound
+        yield* billing.check(row.organizationId)
         return yield* brain.send(input).pipe(
           Effect.catchTag("SessionNotStartedError", (error) =>
             Effect.gen(function* () {

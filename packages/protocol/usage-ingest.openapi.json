@@ -1,0 +1,341 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ren Usage Ingest API",
+    "version": "1",
+    "description": "Internal API where a trusted producer, such as the model gateway, sends the costs that it saw."
+  },
+  "paths": {
+    "/usage/v1/events": {
+      "post": {
+        "tags": ["usage"],
+        "operationId": "usage.record",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage.Recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usage.Recorded"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Store a batch of 1 to 500 usage events. Ren answers after the insert commits. A repeat of `(source, id)` is ignored, so `inserted` counts only new rows. 400: an event is not valid, and Ren stores no event of the batch; do not send it again. 403: an event’s `source` is not the producer of the key. 503: send the same batch again later.",
+        "summary": "Record usage events",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Usage.Batch"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ForbiddenErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["ForbiddenError"]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "message"],
+        "additionalProperties": false
+      },
+      "InvalidRequestErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["InvalidRequestError"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["_tag", "message"],
+        "additionalProperties": false
+      },
+      "UnauthorizedErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["UnauthorizedError"]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "message"],
+        "additionalProperties": false
+      },
+      "UnavailableErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["UnavailableError"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryAfterMs": {
+            "type": "integer",
+            "description": "Ask again after this many milliseconds."
+          }
+        },
+        "required": ["_tag", "message", "retryAfterMs"],
+        "additionalProperties": false
+      },
+      "Usage.Batch": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Usage.Event"
+            },
+            "minItems": 1,
+            "maxItems": 500
+          }
+        },
+        "required": ["events"],
+        "additionalProperties": false
+      },
+      "Usage.Event": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "$ref": "#/components/schemas/Usage.Type"
+          },
+          "time": {
+            "type": "string"
+          },
+          "workload": {
+            "type": "string",
+            "description": "`brain:<id>` or `hand:<id>`, then `:<generation>` when known."
+          },
+          "root_session": {
+            "type": "string"
+          },
+          "session": {
+            "type": "string"
+          },
+          "turn": {
+            "type": "string"
+          },
+          "member": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "requested_model": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "payer": {
+            "$ref": "#/components/schemas/Usage.Payer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "served_model": {
+            "type": "string"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reasoning_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_read_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_write_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_write_1h_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cost_micro_usd": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latency_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "time_to_first_token_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "stop_reason": {
+            "type": "string"
+          },
+          "error": {
+            "$ref": "#/components/schemas/Usage.Failure"
+          }
+        },
+        "required": [
+          "source",
+          "id",
+          "type",
+          "time",
+          "workload",
+          "requested_model",
+          "payer",
+          "provider",
+          "served_model"
+        ],
+        "additionalProperties": false
+      },
+      "Usage.Failure": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["message"],
+        "additionalProperties": false
+      },
+      "Usage.Payer": {
+        "type": "string",
+        "enum": ["ren", "customer"]
+      },
+      "Usage.Recorded": {
+        "type": "object",
+        "properties": {
+          "inserted": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": ["inserted"],
+        "additionalProperties": false
+      },
+      "Usage.Type": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["model.call"]
+          }
+        ]
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "description": "A usage key. It names the producer that may send events.",
+        "type": "http",
+        "scheme": "Bearer"
+      }
+    }
+  },
+  "security": [],
+  "tags": [
+    {
+      "name": "usage"
+    }
+  ]
+}

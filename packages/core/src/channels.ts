@@ -16,6 +16,7 @@ import { DurableRunner } from "./durable-runner.js"
 import { SessionRunner } from "./session/runner.js"
 import { Task } from "./task.js"
 import { TaskTrail } from "./task/trail.js"
+import { Billing } from "./billing.js"
 
 export interface Reply {
   readonly status: 200 | 400 | 401 | 404 | 500
@@ -153,6 +154,11 @@ export const layer = Layer.effect(
       runner.send(input).pipe(
         Effect.catchTag("BrainRejectedError", (error) =>
           Effect.fail(new Stopped({ reason: "unknown", message: error.message, sessionId: input.sessionId })),
+        ),
+        Effect.catchTag("Billing.Refused", (refused) =>
+          Effect.fail(
+            new Stopped({ reason: "unknown", message: Billing.messages[refused.reason], sessionId: input.sessionId }),
+          ),
         ),
         Effect.catchTag("BrainUnavailable", (error) =>
           Effect.gen(function* () {

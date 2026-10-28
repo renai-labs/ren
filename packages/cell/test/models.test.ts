@@ -6,6 +6,7 @@ import { Auth } from "@ren/schema/auth"
 import type { Models } from "@ren/schema/models"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
+import { Usage } from "@ren/schema/usage"
 import { Context, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
@@ -118,7 +119,7 @@ const chatWith = Effect.fnUntraced(function* (options: { readonly egress?: boole
       sender: { userId: `usr_${memberId}`, memberId },
     })
   const idle = server.client.session.wait({ sessionID: Session.ID.make(sessionId) }).pipe(Effect.orDie)
-  return { send, idle }
+  return { sessionId, send, idle }
 })
 
 it.live(
@@ -140,20 +141,52 @@ it.live(
     }),
 )
 
-it.live("a subagent request names the sender of its root turn; a title request names nobody", () =>
-  Effect.gen(function* () {
-    const chat = yield* chatWith()
-    const child = stub.script()
-    const parent = stub.script({
-      tool: { name: "subagent", input: { agent: "general", description: "look around", prompt: child.marker } },
-    })
-    yield* chat.send(parent.marker, ada)
-    yield* chat.idle
-    const title = yield* Effect.promise(() =>
-      stub.waitFor((call) => call.kind === "title" && JSON.stringify(call.body).includes(parent.marker)),
-    )
-    expect([(yield* Effect.promise(() => child.called())).member, title.member]).toEqual([ada, null])
-  }),
+it.live(
+  "a subagent request names its root chat, its own session, the root turn and the sender of the root turn; a title request names nobody",
+  () =>
+    Effect.gen(function* () {
+      const chat = yield* chatWith()
+      const child = stub.script()
+      const parent = stub.script({
+        tool: { name: "subagent", input: { agent: "general", description: "look around", prompt: child.marker } },
+      })
+      const sent = yield* chat.send(parent.marker, ada)
+      yield* chat.idle
+      const title = yield* Effect.promise(() =>
+        stub.waitFor((call) => call.kind === "title" && JSON.stringify(call.body).includes(parent.marker)),
+      )
+      const parentCall = yield* Effect.promise(() => parent.called())
+      const childCall = yield* Effect.promise(() => child.called())
+      const claims = (call: typeof childCall) =>
+        Object.fromEntries(Object.entries(Usage.headers).map((entry) => [entry[0], call.headers.get(entry[1])]))
+      expect([claims(parentCall), claims(childCall), claims(title)]).toEqual([
+        {
+          rootSession: chat.sessionId,
+          session: chat.sessionId,
+          turn: sent.messageId,
+          agent: "build",
+          kind: "primary",
+          variant: null,
+        },
+        {
+          rootSession: chat.sessionId,
+          session: expect.not.stringMatching(chat.sessionId),
+          turn: sent.messageId,
+          agent: "general",
+          kind: "primary",
+          variant: null,
+        },
+        {
+          rootSession: chat.sessionId,
+          session: chat.sessionId,
+          turn: sent.messageId,
+          agent: "title",
+          kind: "title",
+          variant: null,
+        },
+      ])
+      expect([childCall.member, title.member]).toEqual([ada, null])
+    }),
 )
 
 it.live("behind the egress a step names its sender by placeholder, which the egress checks", () =>
