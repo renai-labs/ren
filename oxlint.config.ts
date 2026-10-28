@@ -627,8 +627,6 @@ export default defineConfig({
       },
     ],
 
-    "ren/story-coverage": "error",
-    "ren/story-location": "error",
     "no-restricted-globals": ["error", reflect],
     "no-restricted-properties": ["error", jsonParse],
     "no-restricted-imports": ["error", { patterns: [vendored] }],
@@ -652,28 +650,8 @@ export default defineConfig({
       rules: { "eslint/no-console": "off" },
     },
     {
-      files: [
-        "**/*.stories.tsx",
-        "**/*.config.ts",
-        "**/*.config.mjs",
-        "**/.storybook/**",
-        "script/oxlint/ren/index.ts",
-      ],
+      files: ["**/*.config.ts", "**/*.config.mjs", "script/oxlint/ren/index.ts"],
       rules: { "import/no-default-export": "off" },
-    },
-    {
-      files: ["**/parity/*.stories.tsx"],
-      rules: {
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-return": "off",
-        "typescript/no-unsafe-argument": "off",
-      },
-    },
-    {
-      files: ["**/*.stories.tsx"],
-      rules: { "jsx-a11y/control-has-associated-label": "off", "jsx-a11y/anchor-has-content": "off" },
     },
     {
       files: ["script/oxlint/**", "oxlint.config.ts"],

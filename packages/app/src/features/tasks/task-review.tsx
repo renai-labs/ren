@@ -58,7 +58,7 @@ const schemas = {
   }),
 }
 
-export function ReviewDecisionForm(props: {
+function ReviewDecisionForm(props: {
   decision: Task.Decision
   onSubmit: (input: Extract<TaskReviewInput["payload"], { humanReview: false }>) => Promise<unknown>
   onCancel: () => void

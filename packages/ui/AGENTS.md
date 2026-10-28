@@ -25,7 +25,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 ## Design fidelity
 
 - Tokens come from the Paper file "Ren UI" through `DESIGN.md` (use the `sync-with-paper` skill) and `bun run generate`. Never edit `DESIGN.md` or `tokens.generated.css` by hand, never rename a token, and never use a colour, size, radius or duration that is not a token.
-- When porting from `ren-v1/packages/ui`, keep class strings, variants, sizes and states identical. A visual change is a separate, explicit decision. Run the Storybook parity check in dark and light before merging.
+- When porting from `ren-v1/packages/ui`, keep class strings, variants, sizes and states identical. A visual change is a separate, explicit decision.
 - Approved deviations from ren-v1:
   - Text inputs use `text-base sm:text-sm`, so iOS doesn't zoom the page on focus.
   - `Text` balances headings (`text-balance`) and avoids orphans in body copy (`text-pretty`).
@@ -33,7 +33,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
   - Classes that borrow another role's colour move to role tokens with identical values: `bg-text-primary` to `bg-fill-inverse`, `bg-text-secondary` to `bg-fill-inverse-secondary`, and `border-`, `ring-` and `outline-text-primary` to `border-strong`. Lines drawn with `bg-border-primary` become borders.
   - `Checkbox` has an indeterminate state; ren-v1 had none.
   - Tabs, breadcrumb links, list rows and cards show a focus-visible ring; ren-v1's `outline-none` hid keyboard focus.
-  - `Toast` uses `text-text-secondary` descriptions and `shadow-overlay`, which sonner's stylesheet overrode in ren-v1. Toast has no parity file.
+  - `Toast` uses `text-text-secondary` descriptions and `shadow-overlay`, which sonner's stylesheet overrode in ren-v1.
   - `Dialog.Footer` stacks in DOM order on small screens, so Cancel sits above the primary action.
   - `ConfirmationDialog` ignores outside clicks; Escape and Cancel still close it.
   - `Menu.Search` keeps its glyph at 16px; ren-v1's input squeezed it.
@@ -46,7 +46,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
   - `Text activity="active"` pulses between `text-secondary` and `text-primary` instead of fading to 50% opacity, which failed contrast.
   - Light `accent-primary` is `#0065cc` (ren-v1 `#0067d0`) so accent text passes AA on its tint. Mirror it in Paper.
   - Searchable pickers use `Combobox.Popover`. `Menu` has no search field: a text field inside `role="menu"` is invalid ARIA.
-  - `ThemeSelector` draws the bars in its previews with borders instead of `bg-border-*` fills, so their rounded ends anti-alias differently. It has no parity file.
+  - `ThemeSelector` draws the bars in its previews with borders instead of `bg-border-*` fills, so their rounded ends anti-alias differently.
   - `ConversationShell.Message` has no `pending` pulse: ren-v1 faded the message, which failed contrast. `ConversationShell.Composer` takes a `label` that names its form.
   - `Questionnaire` names each question's group by its title, which ren-v1 lost on multi-step questionnaires. While a reply is pending, it dims only its controls and shows a spinner in the submit button; ren-v1 faded the whole form, which failed contrast.
   - Controls inside `Field` take their label, description and invalid state from Base UI, so a `Select` inside an invalid field turns red. ren-v1 dropped the invalid state there.
@@ -54,5 +54,4 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 
 ## Testing
 
-- Every component has stories and, where it has behaviour, a spec in `packages/storybook/ui/` (see `packages/storybook/AGENTS.md`). There are no `bun test` component tests.
-- `bun test` in this package covers only what no story can: design tokens (`test/design-tokens.test.ts`) and stylesheet rules (`test/styles.test.ts`).
+- This package has no tests. Do not add any. Check components in the running app, in dark and light.

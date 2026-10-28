@@ -41,9 +41,4 @@ export const gaps = (profile: AppProfileInfo) => [
     .map((gate) => ({ name: gate.name, status: "missing" as const })),
 ]
 
-export const gapLabel = (profiles: ReadonlyArray<AppProfileInfo>) => {
-  const count = profiles.reduce((total, profile) => total + gaps(profile).length, 0)
-  return count === 0 ? undefined : `${count} not connected`
-}
-
 export const slugOf = (name: string) => Slug.of(name, 32)

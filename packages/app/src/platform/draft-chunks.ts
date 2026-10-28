@@ -2,7 +2,7 @@ export * as DraftChunks from "./draft-chunks.js"
 
 const threshold = 16 * 1024
 
-export const size = 64 * 1024
+const size = 64 * 1024
 
 export const large = (text: string) => text.length >= threshold
 

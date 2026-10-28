@@ -9,7 +9,7 @@ Lint and tests enforce the checkable interface rules: colour roles, motion token
 
 ## Layout
 
-When porting a screen or component, inspect its source and feature usage before editing. Preserve its appearance, interactions and states unless a change is approved. Compare the port in dark and light; report parity as verified only after that comparison runs. Follow `packages/storybook/AGENTS.md` for the parity check.
+When porting a screen or component, inspect its source and feature usage before editing. Preserve its appearance, interactions and states unless a change is approved. Compare the port in dark and light in the running app (`bun run dev:app`); report parity as verified only after that comparison runs.
 
 - Group with space before lines. The gap between groups is at least twice the gap inside one.
 - Give each view one primary action. Move secondary actions into a menu once there are more than three.

@@ -11,7 +11,7 @@ export interface Activity {
   readonly asking: number
 }
 
-export function signal(previous: Activity, next: Activity): Signal | undefined {
+function signal(previous: Activity, next: Activity): Signal | undefined {
   if (next.asking > previous.asking) return "input"
   if (previous.running && !next.running && next.asking === 0) return "finished"
   return undefined
