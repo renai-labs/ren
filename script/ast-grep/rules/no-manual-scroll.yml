@@ -1,0 +1,14 @@
+id: no-manual-scroll
+language: Tsx
+message: Don't drive scroll position by hand. `MessageScroller` follows streaming chat, anchors turns and jumps to the latest message.
+severity: error
+files:
+  - packages/app/src/**
+ignores:
+  - packages/app/src/platform/**
+rule:
+  any:
+    - pattern: $EL.scrollTop = $VALUE
+    - pattern: $EL.scrollTop += $VALUE
+    - pattern: $EL.scrollTo($$$)
+    - pattern: new ResizeObserver($$$)

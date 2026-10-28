@@ -23,7 +23,7 @@ export function InvitationStateCard(props: { glyph: Glyph; title: string; descri
         </div>
         <div className="flex flex-col gap-3">
           {props.action}
-          <Button appearance="primary" width="full" render={<Link to="/" />}>
+          <Button appearance="primary" width="full" nativeButton={false} render={<Link to="/" />}>
             Return to homepage
           </Button>
         </div>

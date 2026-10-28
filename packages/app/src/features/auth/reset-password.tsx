@@ -18,7 +18,13 @@ export function ResetPassword(props: { token?: string | undefined }) {
       <AuthFlowLayout>
         <div className="flex flex-col gap-4">
           <Text tone="secondary">This reset link has expired or was already used. Request a new one to continue.</Text>
-          <Button appearance="primary" size="large" width="full" render={<Link to="/forgot-password" />}>
+          <Button
+            appearance="primary"
+            size="large"
+            width="full"
+            nativeButton={false}
+            render={<Link to="/forgot-password" />}
+          >
             Request a new link
           </Button>
         </div>

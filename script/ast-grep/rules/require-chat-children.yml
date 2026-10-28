@@ -1,0 +1,43 @@
+id: require-chat-children
+language: Tsx
+message: Give every `Bubble` a `BubbleContent`, every `TraceLine` a `TraceTitle`, and every `TraceCollapsible` a `TraceCollapsibleContent` beside its trigger.
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+rule:
+  kind: jsx_element
+  any:
+    - all:
+        - has:
+            field: open_tag
+            has:
+              field: name
+              regex: ^Bubble$
+        - not:
+            has:
+              stopBy: end
+              kind: identifier
+              regex: ^BubbleContent$
+    - all:
+        - has:
+            field: open_tag
+            has:
+              field: name
+              regex: ^TraceLine$
+        - not:
+            has:
+              stopBy: end
+              kind: identifier
+              regex: ^TraceTitle$
+    - all:
+        - has:
+            field: open_tag
+            has:
+              field: name
+              regex: ^TraceCollapsible$
+        - not:
+            has:
+              stopBy: end
+              kind: identifier
+              regex: ^TraceCollapsibleContent$

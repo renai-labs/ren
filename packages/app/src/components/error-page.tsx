@@ -37,7 +37,7 @@ function ErrorPage(props: { code: string; message: string; action?: ReactNode })
   return (
     <PublicShell.Status brand={<Logotype size="large" tone="subdued" />} title={props.code} description={props.message}>
       {props.action ?? (
-        <Button appearance="primary" render={<Link to="/" />}>
+        <Button appearance="primary" nativeButton={false} render={<Link to="/" />}>
           Go to homepage
         </Button>
       )}

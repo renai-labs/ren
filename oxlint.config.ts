@@ -266,6 +266,7 @@ const forbiddenElements = [
   ["dialog", "Dialog"],
   ["table", "Table"],
   ["hr", "Separator"],
+  ["pre", "CodeBlock"],
 ].map((entry) => ({ element: entry[0], message: `Use ${entry[1]} from @ren/ui.` }))
 
 const tailwind = {

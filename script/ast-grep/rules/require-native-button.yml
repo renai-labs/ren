@@ -1,0 +1,37 @@
+id: require-native-button
+language: Tsx
+message: "When `render` turns a button or trigger into a link or another element, add `nativeButton={false}` so it keeps button semantics."
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+rule:
+  any:
+    - kind: jsx_opening_element
+    - kind: jsx_self_closing_element
+  all:
+    - has:
+        field: name
+        regex: ^(Button|InputGroupButton|[A-Z]\w*(Trigger|Close))$
+    - has:
+        kind: jsx_attribute
+        all:
+          - has:
+              kind: property_identifier
+              regex: ^render$
+          - has:
+              kind: jsx_expression
+              has:
+                any:
+                  - kind: jsx_self_closing_element
+                  - kind: jsx_element
+                has:
+                  stopBy: end
+                  field: name
+                  regex: ^(a|span|div|Link|InputGroupAddon)$
+    - not:
+        has:
+          kind: jsx_attribute
+          has:
+            kind: property_identifier
+            regex: ^nativeButton$

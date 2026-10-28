@@ -7,7 +7,7 @@ description: Use when adding, updating, composing or styling shadcn components i
 
 `@ren/ui` is Ren's shadcn library: style `base-nova` on Base UI (never Radix), Tabler icons, and `cn` from the `cn` package. `packages/ui/components.json` configures the CLI, and `packages/ui/AGENTS.md` has Ren's rules for the files.
 
-Lint enforces the checkable shadcn rules: `gap-*` instead of `space-*`, `size-*` and `truncate` shorthands, no `dark:` overrides or raw colours in the app, `cn()` instead of template strings, `Skeleton` instead of `animate-pulse`, `Separator` instead of `<hr>`, `render` instead of `asChild`, a title in every overlay, no `z-*` on overlays, items inside their group, `TabsTrigger` inside `TabsList`, `AvatarFallback` in every `Avatar`, `InputGroupInput` inside `InputGroup`, and no sizing classes on icons inside components. Run `bun run check` and follow each message. This skill covers the judgment calls.
+Lint enforces the checkable shadcn rules: `gap-*` instead of `space-*`, `size-*` and `truncate` shorthands, no `dark:` overrides or raw colours in the app, `cn()` instead of template strings, `Skeleton` instead of `animate-pulse`, `Separator` instead of `<hr>`, `render` instead of `asChild` and `nativeButton={false}` when it renders a non-button, a title in every overlay, no `z-*` on overlays, items inside their group, `TabsTrigger` inside `TabsList`, `AvatarFallback` in every `Avatar`, `InputGroupInput` inside `InputGroup`, no sizing classes on icons inside components, `CodeBlock` instead of `<pre>`, and the chat structure (scroller part order, an ungated `MessageScrollerButton`, `BubbleContent`, `TraceTitle`, `TraceLine` in a `Trace` and never restyled, no hand-written scroll code). Run `bun run check` and follow each message. This skill covers the judgment calls.
 
 ## Workflow
 
@@ -40,7 +40,6 @@ Run the CLI from `packages/ui` with `bunx --bun shadcn@latest`.
 
 ## Base UI, not Radix
 
-- `render` replaces the element. When it turns a `Button` or trigger into a link or other non-button, add `nativeButton={false}`.
 - `Select` takes an `items` prop, and the placeholder is the item whose value is `null`. `Select` supports `multiple` and object values with `itemToStringValue`.
 - `ToggleGroup` and `Accordion` take `multiple` instead of `type`, and their values are arrays. A one-thumb `Slider` takes a number.
 

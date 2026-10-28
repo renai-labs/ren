@@ -1,0 +1,39 @@
+id: require-trace-parts
+language: Tsx
+message: Put each `TraceLine` in a `Trace`, and each `TraceCollapsibleTrigger` and `TraceCollapsibleContent` in a `TraceCollapsible`.
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+rule:
+  all:
+    - any:
+        - kind: jsx_opening_element
+        - kind: jsx_self_closing_element
+    - any:
+        - all:
+            - has:
+                field: name
+                regex: ^TraceLine$
+            - not:
+                inside:
+                  stopBy: end
+                  kind: jsx_element
+                  has:
+                    field: open_tag
+                    has:
+                      field: name
+                      regex: ^Trace$
+        - all:
+            - has:
+                field: name
+                regex: ^TraceCollapsible(Trigger|Content)$
+            - not:
+                inside:
+                  stopBy: end
+                  kind: jsx_element
+                  has:
+                    field: open_tag
+                    has:
+                      field: name
+                      regex: ^TraceCollapsible$
