@@ -40,6 +40,9 @@ func masksOf(ops []Op) []mask {
 			if _, token, ok := strings.Cut(op.Value, " "); ok {
 				add(token, "ren:MASKED")
 			}
+		case "awsSign":
+			add(op.SecretAccessKey, "ren:MASKED")
+			add(op.SessionToken, "ren:MASKED")
 		}
 	}
 	return out
