@@ -1,14 +1,23 @@
-import { Avatar } from "@ren/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
+import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { Menu } from "@ren/ui/menu"
-import { Select } from "@ren/ui/select"
-import { Table } from "@ren/ui/table"
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
-import { Toast } from "@ren/ui/toast"
+import { Initials } from "@ren/util/initials"
+import { toast } from "@ren/ui/toast"
 import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { Members } from "./members.js"
+import { RoleSelect } from "./role-select.js"
+import { SortableHead, StateRow } from "./table-parts.js"
 
 export function MembersTable(props: {
   rows: ReadonlyArray<Members.MemberRow>
@@ -30,37 +39,44 @@ export function MembersTable(props: {
   const query = props.query.trim()
   return (
     <>
-      <Table.Root
-        state={props.state === "ready" && visible.length === 0 ? "empty" : props.state}
-        failureMessage={props.failureMessage}
-        emptyMessage={query === "" ? "No members yet." : `Nothing matches “${query}”`}
-        caption="Organization members"
-      >
-        <Table.Header>
-          <Table.SortableHeaderCell direction={direction} onSortChange={setDirection}>
-            Name
-          </Table.SortableHeaderCell>
-          <Table.HeaderCell width="third" visibility="wide-screens">
-            Email
-          </Table.HeaderCell>
-          <Table.HeaderCell width="medium">Role</Table.HeaderCell>
-          <Table.RowActionsHeaderCell />
-        </Table.Header>
-        <Table.Body>
-          {visible.map((row) => (
-            <MemberRow
-              key={row.id}
-              row={row}
-              organizationId={props.organizationId}
-              onChanged={props.onChanged}
-              onRemove={() => {
-                setRemoving(row)
-                setConfirming(true)
-              }}
-            />
-          ))}
-        </Table.Body>
-      </Table.Root>
+      <div className="rounded-xl border bg-card p-2">
+        <Table className="table-fixed">
+          <TableCaption className="sr-only">Organization members</TableCaption>
+          <TableHeader>
+            <TableRow className="border-0 hover:bg-transparent">
+              <SortableHead direction={direction} onDirectionChange={setDirection}>
+                Name
+              </SortableHead>
+              <TableHead className="hidden w-1/3 px-4 font-normal text-muted-foreground md:table-cell">Email</TableHead>
+              <TableHead className="w-36 px-4 font-normal text-muted-foreground">Role</TableHead>
+              <TableHead className="w-15" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {props.state === "ready" && visible.length > 0 ? (
+              visible.map((row) => (
+                <MemberRow
+                  key={row.id}
+                  row={row}
+                  organizationId={props.organizationId}
+                  onChanged={props.onChanged}
+                  onRemove={() => {
+                    setRemoving(row)
+                    setConfirming(true)
+                  }}
+                />
+              ))
+            ) : (
+              <StateRow
+                columns={4}
+                state={props.state}
+                failureMessage={props.failureMessage}
+                emptyMessage={query === "" ? "No members yet." : `Nothing matches “${query}”`}
+              />
+            )}
+          </TableBody>
+        </Table>
+      </div>
       <ConfirmationDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -79,7 +95,7 @@ export function MembersTable(props: {
         }}
         onConfirmed={() => {
           if (removing !== undefined) {
-            Toast.manager.add({ type: "success", title: `${removing.name} removed from organization` })
+            toast.add({ type: "success", title: `${removing.name} removed from organization` })
           }
         }}
       />
@@ -104,44 +120,64 @@ function MemberRow(props: {
     })
     await props.onChanged()
     if (result.error === null) {
-      Toast.manager.add({ type: "success", title: `${row.name} is now ${role}` })
+      toast.add({ type: "success", title: `${row.name} is now ${role}` })
       return
     }
-    Toast.manager.add({ type: "error", title: "Couldn’t change role", description: result.error.message })
+    toast.add({ type: "error", title: "Couldn’t change role", description: result.error.message })
   }
   return (
-    <Table.Row>
-      <Table.Cell>
+    <TableRow className="border-0">
+      <TableCell className="px-4 py-3">
         <MemberName row={row} />
-      </Table.Cell>
-      <Table.Cell visibility="wide-screens">{row.email || "—"}</Table.Cell>
-      <Table.Cell>
-        <Select.Root
+      </TableCell>
+      <TableCell className="hidden truncate px-4 py-3 md:table-cell">{row.email || "—"}</TableCell>
+      <TableCell className="px-4 py-3">
+        <RoleSelect
+          label={`Role for ${row.name}`}
           value={row.role}
           disabled={row.isSelf}
           onValueChange={(role) => void changeRole(role)}
-          label={`Role for ${row.name}`}
-          appearance="filled"
-          size="small"
-          width="full"
-          options={Members.roleOptions}
+          size="sm"
+          className="w-28 justify-between border-transparent bg-muted px-2 text-xs"
         />
-      </Table.Cell>
-      <Table.RowActions label="Member actions">
+      </TableCell>
+      <TableCell className="px-4 py-3">
         {row.isSelf ? null : (
-          <Menu.Item tone="danger" icon={<Icon glyph="Trash2" />} onSelect={props.onRemove}>
-            Remove
-          </Menu.Item>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="-my-1 flex text-muted-foreground"
+                  aria-label="Member actions"
+                />
+              }
+            >
+              <Icon glyph="MoreHorizontal" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuGroup>
+                <DropdownMenuItem variant="destructive" onClick={props.onRemove}>
+                  <Icon glyph="Trash2" />
+                  Remove
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
-      </Table.RowActions>
-    </Table.Row>
+      </TableCell>
+    </TableRow>
   )
 }
 
 function MemberName(props: { row: Members.MemberRow }) {
   return (
     <span className="flex min-w-0 items-center gap-3">
-      <Avatar.Root name={props.row.name} image={props.row.image} size="small" decorative />
+      <Avatar size="sm" aria-hidden>
+        {props.row.image ? <AvatarImage src={props.row.image} alt="" /> : null}
+        <AvatarFallback>{Initials.of(props.row.name)}</AvatarFallback>
+      </Avatar>
       <Text truncation="single-line" element="span" title={props.row.name}>
         {props.row.name}
       </Text>

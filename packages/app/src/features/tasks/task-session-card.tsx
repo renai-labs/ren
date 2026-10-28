@@ -1,7 +1,9 @@
-import { Card } from "@ren/ui/card"
-import { StatusDot } from "@ren/ui/status-dot"
+import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Notice } from "@ren/ui/notice"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@ren/ui/card"
+import { Icon } from "@ren/ui/icon"
+import { Spinner } from "@ren/ui/spinner"
+import { StatusDot } from "@ren/ui/status-dot"
 import { Text } from "@ren/ui/text"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { RouterContext } from "../../lib/router-context.js"
@@ -23,6 +25,7 @@ export function TaskSessionCard(props: {
     refetchInterval: 5000,
   })
   const busy = session.data?.status === "busy"
+  const title = session.data?.title ?? "Agent session"
   const preview = useQuery({ ...SessionSummary.previewOptions(context, props.sessionId), enabled: session.isSuccess })
   const stop = useMutation({
     mutationFn: async () => {
@@ -44,28 +47,40 @@ export function TaskSessionCard(props: {
   })
   return (
     <div className="flex flex-col gap-2">
-      <Card.Root
-        title={session.data?.title ?? "Agent session"}
-        description={<Description agentName={props.agentName} mode={props.mode} preview={preview.data} />}
-        metadata={<Status status={session.status} busy={busy} />}
-        interaction="button"
-        label={`Open session: ${session.data?.title ?? "Agent session"}`}
-        {...(!session.isError && { onSelect: () => props.onOpen(props.sessionId) })}
-        actions={
-          busy && session.data?.capabilities.interrupt ? (
+      <Card size="sm" className="relative transition-standard hover:bg-muted">
+        <CardHeader>
+          <CardTitle>
             <Button
-              appearance="outline"
-              size="small"
-              pending={stop.isPending}
-              pendingLabel="Stopping…"
-              onClick={() => stop.mutate()}
+              variant="link"
+              aria-label={`Open session: ${title}`}
+              {...(!session.isError && { onClick: () => props.onOpen(props.sessionId) })}
+              className="h-auto p-0 text-left text-foreground after:absolute after:inset-0 after:rounded-xl hover:no-underline"
             >
-              Stop session
+              {title}
             </Button>
-          ) : undefined
-        }
-      />
-      {stop.error ? <Notice tone="danger">{Tasks.describe(stop.error)}</Notice> : null}
+          </CardTitle>
+          <CardDescription className="flex min-w-0 flex-col gap-1">
+            <Description agentName={props.agentName} mode={props.mode} preview={preview.data} />
+          </CardDescription>
+          {busy && session.data?.capabilities.interrupt ? (
+            <CardAction className="relative">
+              <Button variant="outline" size="sm" disabled={stop.isPending} onClick={() => stop.mutate()}>
+                {stop.isPending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+                {stop.isPending ? "Stopping…" : "Stop session"}
+              </Button>
+            </CardAction>
+          ) : null}
+        </CardHeader>
+        <CardContent className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Status status={session.status} busy={busy} />
+        </CardContent>
+      </Card>
+      {stop.error ? (
+        <Alert variant="destructive">
+          <Icon glyph="AlertCircle" />
+          <AlertDescription>{Tasks.describe(stop.error)}</AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   )
 }

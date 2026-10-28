@@ -33,7 +33,7 @@ export function LoginEmail(props: {
             />
           )}
         </form.AppField>
-        <Button type="submit" appearance="primary" size="large" width="full">
+        <Button type="submit" className="h-10 w-full">
           Continue
         </Button>
       </Form.Root>

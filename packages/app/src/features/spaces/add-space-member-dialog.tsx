@@ -1,11 +1,12 @@
-import { Avatar } from "@ren/ui/avatar"
+import { Alert, AlertDescription } from "@ren/ui/alert"
+import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Combobox } from "@ren/ui/combobox"
-import { Dialog } from "@ren/ui/dialog"
-import { Field } from "@ren/ui/field"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import { Field, FieldTitle } from "@ren/ui/field"
 import { FormActions } from "@ren/ui/form-actions"
 import { Icon } from "@ren/ui/icon"
-import { Notice } from "@ren/ui/notice"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
+import { Initials } from "@ren/util/initials"
 import type { SpaceMemberInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useState } from "react"
@@ -31,41 +32,44 @@ export function AddSpaceMemberDialog(props: {
       { payload: { spaceId: props.spaceId, ...candidate.target } },
       {
         onSuccess: () => {
-          Toast.manager.add({ type: "success", title: candidate.addedMessage })
+          toast.add({ type: "success", title: candidate.addedMessage })
           props.onClose()
         },
       },
     )
   }
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !create.isPending) props.onClose()
       }}
-      dismissal={create.isPending ? "blocked" : "allowed"}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>Add member</Dialog.Title>
-          <Dialog.Description>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add member</DialogTitle>
+          <DialogDescription>
             Pick someone from the organization, or someone invited to it. Invited people join once they accept.
-          </Dialog.Description>
-        </Dialog.Header>
-        <Dialog.Body>
-          <Field.Root label="Person">
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <Field>
+            <FieldTitle>Person</FieldTitle>
             <PersonPicker
               candidates={candidates}
               state={({ pending: "loading", error: "failed", success: "ready" } as const)[organization.status]}
               value={selected}
               onValueChange={setSelected}
             />
-          </Field.Root>
-          <Notice tone="danger" placement="inline">
-            {create.error?.message}
-          </Notice>
-        </Dialog.Body>
-        <Dialog.Footer>
+          </Field>
+          {create.error ? (
+            <Alert variant="destructive">
+              <Icon glyph="AlertCircle" />
+              <AlertDescription>{create.error.message}</AlertDescription>
+            </Alert>
+          ) : null}
+        </div>
+        <DialogFooter className="sm:justify-end">
           <FormActions.Root>
             <FormActions.Cancel onClick={props.onClose} disabled={create.isPending} />
             <FormActions.Submit
@@ -77,9 +81,9 @@ export function AddSpaceMemberDialog(props: {
               Add member
             </FormActions.Submit>
           </FormActions.Root>
-        </Dialog.Footer>
-      </Dialog.Content>
-    </Dialog.Root>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -106,7 +110,10 @@ function PersonPicker(props: {
         keywords: [each.description],
         icon:
           "userId" in each.target ? (
-            <Avatar.Root name={each.label} image={each.image} size="small" decorative />
+            <Avatar size="sm" aria-hidden>
+              {each.image ? <AvatarImage src={each.image} alt="" /> : null}
+              <AvatarFallback>{Initials.of(each.label)}</AvatarFallback>
+            </Avatar>
           ) : (
             <Icon glyph="Mail" />
           ),

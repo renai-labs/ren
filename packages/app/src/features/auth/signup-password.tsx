@@ -1,14 +1,15 @@
 import { Button } from "@ren/ui/button"
-import { Field } from "@ren/ui/field"
+import { Field, FieldLabel } from "@ren/ui/field"
 import { Form } from "@ren/ui/form"
-import { Notice } from "@ren/ui/notice"
-import { TextField } from "@ren/ui/text-field"
+import { Input } from "@ren/ui/input"
+import { Spinner } from "@ren/ui/spinner"
 import { useNavigate } from "@tanstack/react-router"
-import { useState } from "react"
+import { useId, useState } from "react"
 import { Auth } from "../../lib/auth.js"
 import { AuthError } from "./auth-error.js"
 import { BackLink } from "./back-link.js"
 import { CompleteAuth } from "./complete-auth.js"
+import { FormError } from "./form-error.js"
 import { AuthSchemas } from "./schemas.js"
 
 const emailRejections = new Set(["DISPOSABLE_EMAIL", "UNDELIVERABLE_EMAIL_DOMAIN", "ALIAS_EMAIL"])
@@ -23,6 +24,7 @@ export function SignupPassword(props: {
   const navigate = useNavigate()
   const completeAuth = CompleteAuth.useCompleteAuth(props.destination, { continueAuthorization: true })
   const [error, setError] = useState("")
+  const emailId = useId()
   const form = Form.useForm({
     defaultValues: { password: "" },
     schema: AuthSchemas.NewPasswordStep,
@@ -48,11 +50,18 @@ export function SignupPassword(props: {
   })
   return (
     <>
-      <Notice tone="danger">{error}</Notice>
+      <FormError>{error}</FormError>
       <Form.Root form={form}>
-        <Field.Root label="Email">
-          <TextField type="email" size="large" appearance="filled" value={props.details.email} readOnly />
-        </Field.Root>
+        <Field>
+          <FieldLabel htmlFor={emailId}>Email</FieldLabel>
+          <Input
+            id={emailId}
+            type="email"
+            className="h-10 border-transparent bg-muted"
+            value={props.details.email}
+            readOnly
+          />
+        </Field>
         <form.Subscribe selector={(state) => state.isSubmitting}>
           {(submitting) => (
             <>
@@ -70,15 +79,9 @@ export function SignupPassword(props: {
                   />
                 )}
               </form.AppField>
-              <Button
-                type="submit"
-                appearance="primary"
-                size="large"
-                width="full"
-                pending={submitting}
-                pendingLabel="Creating account…"
-              >
-                Continue
+              <Button type="submit" className="h-10 w-full" disabled={submitting}>
+                {submitting ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+                {submitting ? "Creating account…" : "Continue"}
               </Button>
             </>
           )}

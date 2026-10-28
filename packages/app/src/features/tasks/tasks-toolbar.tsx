@@ -1,23 +1,35 @@
 import { Task } from "@ren/schema/task"
-import { Avatar } from "@ren/ui/avatar"
 import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
+import { Field, FieldLabel } from "@ren/ui/field"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { Menu } from "@ren/ui/menu"
-import { Popover } from "@ren/ui/popover"
+import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { SearchField } from "@ren/ui/search-field"
-import { Select } from "@ren/ui/select"
-import { SegmentedControl } from "@ren/ui/segmented-control"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Separator } from "@ren/ui/separator"
 import { StatusDot } from "@ren/ui/status-dot"
 import { Switch } from "@ren/ui/switch"
 import { TaskPriorityIcon } from "@ren/ui/task-priority-icon"
 import { TaskStatusCircle } from "@ren/ui/task-status-circle"
 import { Text } from "@ren/ui/text"
+import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
 import { useId } from "react"
 import type { ReactNode } from "react"
 import { Schema } from "effect"
+import { PersonAvatar, SpaceAvatar } from "./task-controls.js"
 import { TaskSearch } from "./task-search.js"
 import { TaskView } from "./task-view.js"
 
@@ -84,78 +96,96 @@ function OptionIcon(props: { property: TaskView.FilterProperty; option: TaskView
     return none ? (
       <Icon glyph="UnassignedPerson" tone="secondary" />
     ) : (
-      <Avatar.Root name={props.option.label} image={props.option.image} size="extra-small" decorative />
+      <PersonAvatar name={props.option.label} image={props.option.image} />
     )
   if (props.property === "review")
     return <Icon glyph={props.option.value === "on" ? "Hand" : "Circle"} tone="secondary" />
-  if (props.property === "space")
-    return <Avatar.Root name={props.option.label} glyph="Cube" size="extra-small" shape="square" decorative />
+  if (props.property === "space") return <SpaceAvatar />
   return <Icon glyph="Bot" tone="secondary" />
 }
 
 function FilterMenu(props: FilterProps) {
   const modified = TaskView.filterProperties.some((property) => !TaskView.isDefaultFilter(props.view.filters, property))
   return (
-    <Menu.Root>
-      <Menu.Trigger
+    <DropdownMenu>
+      <DropdownMenuTrigger
         render={
-          <IconButton
-            label={modified ? "Filter tasks, filters on" : "Filter tasks"}
-            indicator={modified ? "attention" : "none"}
-          >
-            <Icon glyph="ListFilter" />
-          </IconButton>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="relative text-muted-foreground"
+            aria-label={modified ? "Filter tasks, filters on" : "Filter tasks"}
+          />
         }
-      />
-      <Menu.Popup alignment="end" width="medium" density="spacious">
-        <Menu.Section label="Properties">
+      >
+        <Icon glyph="ListFilter" />
+        {modified ? (
+          <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-ring ring-2 ring-background" />
+        ) : null}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="mb-1">Properties</DropdownMenuLabel>
           {menuProperties.map((property) => {
             const values = props.view.filters[property]
             return (
-              <Menu.SubmenuRoot key={property}>
-                <Menu.SubmenuTrigger
-                  icon={propertyGlyphs[property]}
-                  detail={values.length > 0 ? `${values.length} selected` : "Any"}
-                >
-                  {propertyLabels[property]}
-                </Menu.SubmenuTrigger>
-                <Menu.SubmenuPopup>
-                  {props.options[property].map((option) => (
-                    <Menu.CheckboxItem
-                      key={option.value}
-                      checked={values.includes(option.value)}
-                      onCheckedChange={(checked) =>
-                        props.onChange({
-                          ...props.view,
-                          filters: {
-                            ...props.view.filters,
-                            [property]: checked
-                              ? [...values, option.value]
-                              : values.filter((value) => value !== option.value),
-                          },
-                        })
-                      }
-                      icon={<OptionIcon property={property} option={option} />}
-                    >
-                      {option.label}
-                    </Menu.CheckboxItem>
-                  ))}
-                  {props.options[property].length === 0 ? <Menu.Message>No options</Menu.Message> : null}
-                </Menu.SubmenuPopup>
-              </Menu.SubmenuRoot>
+              <DropdownMenuSub key={property}>
+                <DropdownMenuSubTrigger className="h-9 gap-3 px-3">
+                  {propertyGlyphs[property]}
+                  <span className="flex-1">{propertyLabels[property]}</span>
+                  <span className="text-muted-foreground">
+                    {values.length > 0 ? `${values.length} selected` : "Any"}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-60">
+                  <FilterOptions {...props} property={property} />
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             )
           })}
-        </Menu.Section>
-        <Menu.Separator />
-        <Menu.Item
-          icon={<Icon glyph="Restore" />}
-          disabled={!modified}
-          onSelect={() => props.onChange({ ...props.view, filters: TaskSearch.defaultFilters })}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator className="mx-0 my-2" />
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            className="h-9 gap-3 px-3"
+            disabled={!modified}
+            onClick={() => props.onChange({ ...props.view, filters: TaskSearch.defaultFilters })}
+          >
+            <Icon glyph="Restore" />
+            Reset to default
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function FilterOptions(props: FilterProps & { property: TaskView.FilterProperty }) {
+  const property = props.property
+  const values = props.view.filters[property]
+  if (props.options[property].length === 0)
+    return <div className="px-2 py-1.5 text-sm text-muted-foreground">No options</div>
+  return (
+    <DropdownMenuGroup>
+      {props.options[property].map((option) => (
+        <DropdownMenuCheckboxItem
+          key={option.value}
+          checked={values.includes(option.value)}
+          onCheckedChange={(checked) =>
+            props.onChange({
+              ...props.view,
+              filters: {
+                ...props.view.filters,
+                [property]: checked ? [...values, option.value] : values.filter((value) => value !== option.value),
+              },
+            })
+          }
         >
-          Reset to default
-        </Menu.Item>
-      </Menu.Popup>
-    </Menu.Root>
+          <OptionIcon property={property} option={option} />
+          {option.label}
+        </DropdownMenuCheckboxItem>
+      ))}
+    </DropdownMenuGroup>
   )
 }
 
@@ -163,87 +193,99 @@ function DisplayPopover(props: ViewProps) {
   const switchId = useId()
   const subtasksId = useId()
   return (
-    <Popover.Root>
-      <Popover.Trigger
+    <Popover>
+      <PopoverTrigger
         render={
-          <IconButton label="Display options" title="Display">
-            <Icon glyph="Sliders" />
-          </IconButton>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label="Display options"
+            title="Display"
+          />
         }
-      />
-      <Popover.Content alignment="end" padding="large" label="Task display">
-        <div className="flex flex-col gap-4">
-          <SegmentedControl
-            label="Task layout"
-            width="full"
-            size="small"
-            value={props.view.layout}
-            onValueChange={(layout) => props.onChange({ ...props.view, layout })}
-            options={[
-              { value: "list", label: "List" },
-              { value: "board", label: "Board" },
-            ]}
-          />
-          {props.view.layout === "board" ? (
-            <div className="flex items-center justify-between gap-2">
-              <Text purpose="body">Group by</Text>
-              <Text purpose="body">Agent (fixed)</Text>
-            </div>
-          ) : (
-            <DisplaySelect
-              label="Group by"
-              value={props.view.group}
-              options={[
-                { value: "agent", label: "Agent" },
-                { value: "status", label: "Status" },
-              ]}
-              onChange={(group) => props.onChange({ ...props.view, group })}
-            />
-          )}
-          <DisplaySelect
-            label="Order by"
-            value={props.view.sort}
-            options={[
-              { value: "created", label: "Created" },
-              { value: "priority", label: "Priority" },
-            ]}
-            onChange={(sort) => props.onChange({ ...props.view, sort })}
-          />
-          <DisplaySelect
-            label="Direction"
-            value={props.view.direction}
-            options={[
-              { value: "asc", label: "Ascending" },
-              { value: "desc", label: "Descending" },
-            ]}
-            onChange={(direction) => props.onChange({ ...props.view, direction })}
-          />
-          {props.view.layout === "list" ? (
-            <div className="flex items-center justify-between gap-2">
-              <Text purpose="body" element="label" htmlFor={switchId}>
-                Show empty groups
-              </Text>
-              <Switch
-                id={switchId}
-                checked={props.view.empty}
-                onCheckedChange={(empty) => props.onChange({ ...props.view, empty })}
-              />
-            </div>
-          ) : null}
+      >
+        <Icon glyph="Sliders" />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 gap-4 p-4" aria-label="Task display">
+        <ToggleGroup
+          aria-label="Task layout"
+          variant="outline"
+          size="sm"
+          spacing={0}
+          className="w-full"
+          value={[props.view.layout]}
+          onValueChange={(next) => {
+            const layout = next.at(0)
+            if (layout === "list" || layout === "board") props.onChange({ ...props.view, layout })
+          }}
+        >
+          <ToggleGroupItem value="list" className="flex-1">
+            List
+          </ToggleGroupItem>
+          <ToggleGroupItem value="board" className="flex-1">
+            Board
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {props.view.layout === "board" ? (
           <div className="flex items-center justify-between gap-2">
-            <Text purpose="body" element="label" htmlFor={subtasksId}>
-              Show sub-tasks
-            </Text>
-            <Switch
-              id={subtasksId}
-              checked={props.view.subtasks}
-              onCheckedChange={(subtasks) => props.onChange({ ...props.view, subtasks })}
-            />
+            <Text purpose="body">Group by</Text>
+            <Text purpose="body">Agent (fixed)</Text>
           </div>
-          <PropertyToggles view={props.view} onChange={props.onChange} />
-        </div>
-      </Popover.Content>
-    </Popover.Root>
+        ) : (
+          <DisplaySelect
+            label="Group by"
+            value={props.view.group}
+            options={[
+              { value: "agent", label: "Agent" },
+              { value: "status", label: "Status" },
+            ]}
+            onChange={(group) => props.onChange({ ...props.view, group })}
+          />
+        )}
+        <DisplaySelect
+          label="Order by"
+          value={props.view.sort}
+          options={[
+            { value: "created", label: "Created" },
+            { value: "priority", label: "Priority" },
+          ]}
+          onChange={(sort) => props.onChange({ ...props.view, sort })}
+        />
+        <DisplaySelect
+          label="Direction"
+          value={props.view.direction}
+          options={[
+            { value: "asc", label: "Ascending" },
+            { value: "desc", label: "Descending" },
+          ]}
+          onChange={(direction) => props.onChange({ ...props.view, direction })}
+        />
+        {props.view.layout === "list" ? (
+          <Field orientation="horizontal" className="justify-between">
+            <FieldLabel htmlFor={switchId} className="font-normal">
+              Show empty groups
+            </FieldLabel>
+            <Switch
+              id={switchId}
+              checked={props.view.empty}
+              onCheckedChange={(empty) => props.onChange({ ...props.view, empty })}
+            />
+          </Field>
+        ) : null}
+        <Field orientation="horizontal" className="justify-between">
+          <FieldLabel htmlFor={subtasksId} className="font-normal">
+            Show sub-tasks
+          </FieldLabel>
+          <Switch
+            id={subtasksId}
+            checked={props.view.subtasks}
+            onCheckedChange={(subtasks) => props.onChange({ ...props.view, subtasks })}
+          />
+        </Field>
+        <PropertyToggles view={props.view} onChange={props.onChange} />
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -256,17 +298,26 @@ function DisplaySelect<T extends string>(props: {
   return (
     <div className="flex items-center justify-between gap-2">
       <Text purpose="body">{props.label}</Text>
-      <span className="shrink-0">
-        <Select.Root<T>
-          value={props.value}
-          onValueChange={props.onChange}
-          label={props.label}
-          appearance="filled"
-          size="compact"
-          width="compact"
-          options={props.options}
-        />
-      </span>
+      <Select
+        items={props.options}
+        value={props.value}
+        onValueChange={(next) => {
+          if (next !== null) props.onChange(next)
+        }}
+      >
+        <SelectTrigger size="sm" aria-label={props.label} className="w-36 border-transparent bg-muted">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {props.options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
     </div>
   )
 }
@@ -282,9 +333,7 @@ function PropertyToggles(props: ViewProps) {
     >
       <div className="flex items-center gap-2">
         <Text purpose="body">{props.view.layout === "board" ? "Board properties" : "List properties"}</Text>
-        <span className="flex flex-1 items-center">
-          <Separator />
-        </span>
+        <Separator className="flex-1" />
       </div>
       <div className="flex flex-wrap gap-1">
         {TaskSearch.properties.map((property) => {
@@ -292,9 +341,9 @@ function PropertyToggles(props: ViewProps) {
           return (
             <Button
               key={property}
-              shape="pill"
-              size="small"
-              appearance={shown ? "secondary" : "outline"}
+              variant={shown ? "secondary" : "outline"}
+              size="xs"
+              className="h-6.5 rounded-full"
               aria-pressed={shown}
               onClick={() =>
                 props.onChange({
@@ -329,34 +378,37 @@ export function ActiveFilters(props: FilterProps) {
         return props.view.filters[property].map((value) => {
           const option = options.get(value) ?? { value, label: value }
           return (
-            <Badge
-              key={`${property}:${value}`}
-              appearance="outline"
-              shape="pill"
-              size="medium"
-              icon={<OptionIcon property={property} option={option} />}
-              onRemove={() =>
-                props.onChange({
-                  ...props.view,
-                  filters: {
-                    ...props.view.filters,
-                    [property]: props.view.filters[property].filter((entry) => entry !== value),
-                  },
-                })
-              }
-              removeLabel={`Remove ${propertyLabels[property]} filter: ${option.label}`}
-            >
+            <Badge key={`${property}:${value}`} variant="outline" className="h-6.5 gap-1.5 rounded-full pr-0.5">
+              <OptionIcon property={property} option={option} />
               {propertyLabels[property]}{" "}
               <Text purpose="caption" tone="primary" element="span">
                 {option.label}
               </Text>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="size-5 rounded-full text-muted-foreground"
+                aria-label={`Remove ${propertyLabels[property]} filter: ${option.label}`}
+                onClick={() =>
+                  props.onChange({
+                    ...props.view,
+                    filters: {
+                      ...props.view.filters,
+                      [property]: props.view.filters[property].filter((entry) => entry !== value),
+                    },
+                  })
+                }
+              >
+                <Icon glyph="X" size="extra-small" />
+              </Button>
             </Badge>
           )
         })
       })}
       <Button
-        appearance="plain"
-        size="small"
+        variant="ghost"
+        size="xs"
+        className="h-6.5 text-muted-foreground"
         onClick={() => props.onChange({ ...props.view, filters: TaskSearch.defaultFilters })}
       >
         Clear filters

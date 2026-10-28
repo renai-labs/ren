@@ -1,16 +1,17 @@
 import { Button } from "@ren/ui/button"
-import { Field } from "@ren/ui/field"
+import { Field, FieldLabel } from "@ren/ui/field"
 import { Form } from "@ren/ui/form"
 import { Icon } from "@ren/ui/icon"
-import { Notice } from "@ren/ui/notice"
-import { TextField } from "@ren/ui/text-field"
+import { Input } from "@ren/ui/input"
+import { Spinner } from "@ren/ui/spinner"
 import { useNavigate } from "@tanstack/react-router"
-import { useState } from "react"
+import { useId, useState } from "react"
 import { TextLink } from "../../components/text-link.js"
 import { Auth } from "../../lib/auth.js"
 import { AuthError } from "./auth-error.js"
 import { BackLink } from "./back-link.js"
 import { CompleteAuth } from "./complete-auth.js"
+import { FormError } from "./form-error.js"
 import { AuthSchemas } from "./schemas.js"
 
 type Props = {
@@ -62,26 +63,36 @@ export function LoginPassword(props: Props) {
   const login = useLoginPassword(props)
   const form = login.form
   const sendingCode = login.sendingCode
+  const emailId = useId()
   return (
     <form.Subscribe selector={(state) => state.isSubmitting}>
       {(signingIn) => (
         <>
-          <Notice tone="danger">{login.error}</Notice>
+          <FormError>{login.error}</FormError>
           <Button
-            appearance="secondary"
-            size="large"
-            width="full"
-            disabled={signingIn}
-            pending={sendingCode}
-            leadingIcon={<Icon glyph="Mail" size="small" />}
+            variant="secondary"
+            className="h-10 w-full"
+            disabled={signingIn || sendingCode}
             onClick={() => void login.sendCode()}
           >
+            {sendingCode ? (
+              <Spinner aria-hidden data-icon="inline-start" />
+            ) : (
+              <Icon glyph="Mail" data-icon="inline-start" />
+            )}
             Email sign-in code
           </Button>
           <Form.Root form={form}>
-            <Field.Root label="Email">
-              <TextField type="email" size="large" appearance="filled" value={props.email} readOnly />
-            </Field.Root>
+            <Field>
+              <FieldLabel htmlFor={emailId}>Email</FieldLabel>
+              <Input
+                id={emailId}
+                type="email"
+                className="h-10 border-transparent bg-muted"
+                value={props.email}
+                readOnly
+              />
+            </Field>
             <form.AppField name="password">
               {(field) => (
                 <field.PasswordField
@@ -100,16 +111,9 @@ export function LoginPassword(props: Props) {
                 />
               )}
             </form.AppField>
-            <Button
-              type="submit"
-              appearance="primary"
-              size="large"
-              width="full"
-              disabled={sendingCode}
-              pending={signingIn}
-              pendingLabel="Signing in…"
-            >
-              Sign in
+            <Button type="submit" className="h-10 w-full" disabled={signingIn || sendingCode}>
+              {signingIn ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+              {signingIn ? "Signing in…" : "Sign in"}
             </Button>
           </Form.Root>
           <BackLink onClick={props.onBack} />

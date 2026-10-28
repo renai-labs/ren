@@ -3,7 +3,7 @@ import { ChatReact } from "@ren/chat/react"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { Shell } from "@ren/schema/shell"
 import { ImagePreview } from "@ren/ui/image-preview"
-import { List } from "@ren/ui/list"
+import { Item, ItemContent, ItemTitle } from "@ren/ui/item"
 import { Transcript } from "@ren/ui/transcript"
 import { AsyncResult } from "effect/reactivity"
 
@@ -123,11 +123,16 @@ function ToolRow(props: {
         <ToolBody tool={tool} status={props.status} output={props.output} follow={props.follow} />
       </Transcript.Tool>
       {loaded.length > 0 ? (
-        <List.TranscriptItem
-          appearance="event"
-          title={`Loaded ${loaded.join(", ")}`}
-          label={`Loaded ${loaded.join(", ")}`}
-        />
+        <Item
+          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the transcript list is a div with role="list", so its rows are divs too
+          role="listitem"
+          size="xs"
+          className="min-h-6 p-0 py-1 text-xs text-muted-foreground"
+        >
+          <ItemContent>
+            <ItemTitle className="line-clamp-none w-auto text-xs font-normal">{`Loaded ${loaded.join(", ")}`}</ItemTitle>
+          </ItemContent>
+        </Item>
       ) : null}
     </>
   )
@@ -153,7 +158,19 @@ function ShellTool(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; she
 export function TranscriptTool(props: { tool: SessionMessage.Tool; view: ChatAtoms.View | undefined; open?: boolean }) {
   const tool = props.tool
   if (ToolDisplay.hidden(tool)) return null
-  if (ToolDisplay.dismissed(tool)) return <List.TranscriptItem appearance="event" title="Questions dismissed" />
+  if (ToolDisplay.dismissed(tool))
+    return (
+      <Item
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the transcript list is a div with role="list", so its rows are divs too
+        role="listitem"
+        size="xs"
+        className="min-h-6 p-0 py-1 text-xs text-muted-foreground"
+      >
+        <ItemContent>
+          <ItemTitle className="line-clamp-none w-auto text-xs font-normal">Questions dismissed</ItemTitle>
+        </ItemContent>
+      </Item>
+    )
   const shellID = ToolState.liveShellID(tool)
   if (shellID && props.view)
     return <ShellTool tool={tool} view={props.view} shellID={shellID} open={props.open === true} />

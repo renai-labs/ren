@@ -1,9 +1,9 @@
 import type { AppProfileInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
-import { LoadingMessage } from "@ren/ui/loading-message"
-import { StateMessage } from "@ren/ui/state-message"
-import { Toast } from "@ren/ui/toast"
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
+import { Spinner } from "@ren/ui/spinner"
+import { toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useState } from "react"
@@ -40,7 +40,7 @@ export function SpaceApps(props: {
   const [adding, setAdding] = useState(false)
   const change = (input: Access, title: string) =>
     access.mutate(input, {
-      onError: (error) => Toast.manager.add({ type: "error", title, description: error.message }),
+      onError: (error) => toast.add({ type: "error", title, description: error.message }),
     })
   const byApp = Map.groupBy(reach.data?.profiles ?? [], (profile) => profile.appId)
   const apps = new Map(catalog.entries.map((entry) => [entry.id, entry]))
@@ -48,7 +48,8 @@ export function SpaceApps(props: {
   return (
     <>
       <Toolbar.Root>
-        <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setAdding(true)}>
+        <Button size="sm" onClick={() => setAdding(true)}>
+          <Icon glyph="Plus" data-icon="inline-start" />
           Add app
         </Button>
       </Toolbar.Root>
@@ -111,12 +112,48 @@ const reachedOf = (reach: {
 }
 
 function ReachState(props: { state: Reached; count: number; onRetry: () => void }) {
-  if (props.state === "loading") return <LoadingMessage placement="section" />
+  if (props.state === "loading")
+    return (
+      <Empty>
+        <EmptyMedia>
+          <Spinner />
+        </EmptyMedia>
+      </Empty>
+    )
   if (props.state === "hidden")
-    return <StateMessage state="unavailable" title="Only members of this space see its apps." />
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon glyph="Lock" />
+          </EmptyMedia>
+          <EmptyTitle>Only members of this space see its apps.</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    )
   if (props.state === "failed")
-    return <StateMessage state="failed" title="Couldn’t load apps." onRetry={props.onRetry} />
-  return props.count === 0 ? <StateMessage state="empty" title="No apps" /> : null
+    return (
+      <Empty role="alert">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon glyph="AlertCircle" />
+          </EmptyMedia>
+          <EmptyTitle>Couldn’t load apps.</EmptyTitle>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button variant="outline" size="sm" onClick={props.onRetry}>
+            Try again
+          </Button>
+        </EmptyContent>
+      </Empty>
+    )
+  return props.count === 0 ? (
+    <Empty>
+      <EmptyHeader>
+        <EmptyTitle>No apps</EmptyTitle>
+      </EmptyHeader>
+    </Empty>
+  ) : null
 }
 
 function SpaceAppRow(props: {
@@ -155,7 +192,8 @@ function Accounts(props: {
       <AccountList
         title="Accounts"
         actions={
-          <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={props.onNew}>
+          <Button size="sm" onClick={props.onNew}>
+            <Icon glyph="Plus" data-icon="inline-start" />
             New
           </Button>
         }
@@ -179,8 +217,8 @@ function Accounts(props: {
         caption={(profile) => Apps.source(profile, props.spaceId)}
         action={(profile) => (
           <Button
-            appearance="secondary"
-            size="small"
+            variant="outline"
+            size="sm"
             onClick={() => props.onChange({ id: profile.id, add: [props.spaceId] }, "Couldn’t add the account")}
           >
             Use here

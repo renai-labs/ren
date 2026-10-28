@@ -1,11 +1,12 @@
+import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { Document } from "@ren/ui/document"
 import { Form } from "@ren/ui/form"
-import { LoadingMessage } from "@ren/ui/loading-message"
-import { Notice } from "@ren/ui/notice"
+import { Icon } from "@ren/ui/icon"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
+import { Textarea } from "@ren/ui/textarea"
 import { MarkdownEditor } from "@ren/ui/markdown-editor"
-import { TextArea } from "@ren/ui/text-area"
 import { Task } from "@ren/schema/task"
 import { Autosave } from "../../lib/autosave.js"
 import { Schema } from "effect"
@@ -47,10 +48,8 @@ export function TaskTitleEditor(props: { value: string; onSave?: (value: string)
   return (
     <div className="flex flex-col gap-2">
       <Text purpose="title" element="h1">
-        <TextArea
-          appearance="plain"
-          height="automatic"
-          size="title"
+        <Textarea
+          className="min-h-0 resize-none rounded-none border-0 bg-transparent p-0 text-title/title font-medium tracking-tight focus-visible:ring-0 md:text-title/title"
           aria-label="Task title"
           value={draft}
           rows={1}
@@ -83,7 +82,12 @@ export function TaskTitleEditor(props: { value: string; onSave?: (value: string)
           }}
         />
       </Text>
-      {error ? <Notice tone="danger">{error}</Notice> : null}
+      {error ? (
+        <Alert variant="destructive">
+          <Icon glyph="AlertCircle" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   )
 }
@@ -107,10 +111,15 @@ export function TaskTextEditor(props: {
   return (
     <Form.Root form={form} label={props.label}>
       <form.AppField name="value">{(field) => <field.TextArea label={props.label} height="growing" />}</form.AppField>
-      {error ? <Notice tone="danger">{error}</Notice> : null}
+      {error ? (
+        <Alert variant="destructive">
+          <Icon glyph="AlertCircle" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <form.SubmitButton pendingLabel="Saving…">Save {props.label.toLowerCase()}</form.SubmitButton>
-        <Button appearance="plain" onClick={props.onCancel}>
+        <Button variant="ghost" onClick={props.onCancel}>
           Cancel
         </Button>
       </div>
@@ -143,18 +152,21 @@ function DescriptionEditor(props: { value: string; onSave: (value: string) => Pr
         label="Task description"
         placeholder="Add description…"
       />
-      {editor.pending ? <LoadingMessage placement="inline" title="Saving description…" /> : null}
+      {editor.pending ? (
+        <output aria-label="Saving description…" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner aria-hidden />
+        </output>
+      ) : null}
       {editor.error ? (
-        <Notice
-          tone="danger"
-          action={
-            <Button appearance="plain" onClick={editor.retry}>
+        <Alert variant="destructive" className="has-data-[slot=alert-action]:pr-52">
+          <Icon glyph="AlertCircle" />
+          <AlertDescription>{editor.error}</AlertDescription>
+          <AlertAction>
+            <Button variant="ghost" size="sm" onClick={editor.retry}>
               Retry saving description
             </Button>
-          }
-        >
-          {editor.error}
-        </Notice>
+          </AlertAction>
+        </Alert>
       ) : null}
     </section>
   )

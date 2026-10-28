@@ -1,7 +1,7 @@
 import { Button } from "@ren/ui/button"
 import { Form } from "@ren/ui/form"
-import { Notice } from "@ren/ui/notice"
 import { PublicShell } from "@ren/ui/public-shell"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { Link } from "@tanstack/react-router"
 import { useState } from "react"
@@ -9,6 +9,7 @@ import { Auth } from "../../lib/auth.js"
 import { AuthError } from "./auth-error.js"
 import { AuthFlowLayout } from "./auth-flow-layout.js"
 import { BackLink } from "./back-link.js"
+import { FormError } from "./form-error.js"
 import { AuthSchemas } from "./schemas.js"
 
 export function ForgotPassword(props: { email?: string | undefined }) {
@@ -33,7 +34,7 @@ export function ForgotPassword(props: { email?: string | undefined }) {
       <PublicShell.Step key={sentTo === undefined ? "form" : "sent"}>
         {sentTo === undefined ? (
           <Form.Root form={form}>
-            <Notice tone="danger">{error}</Notice>
+            <FormError>{error}</FormError>
             <Text tone="secondary">Enter your email and we’ll send you a link to reset your password.</Text>
             <form.Subscribe selector={(state) => state.isSubmitting}>
               {(submitting) => (
@@ -52,15 +53,9 @@ export function ForgotPassword(props: { email?: string | undefined }) {
                       />
                     )}
                   </form.AppField>
-                  <Button
-                    type="submit"
-                    appearance="primary"
-                    size="large"
-                    width="full"
-                    pending={submitting}
-                    pendingLabel="Sending…"
-                  >
-                    Send reset instructions
+                  <Button type="submit" className="h-10 w-full" disabled={submitting}>
+                    {submitting ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+                    {submitting ? "Sending…" : "Send reset instructions"}
                   </Button>
                 </>
               )}

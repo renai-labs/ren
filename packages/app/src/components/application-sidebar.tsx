@@ -1,7 +1,7 @@
 import { ApplicationShell } from "@ren/ui/application-shell"
+import { buttonVariants } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { KeyboardKey } from "@ren/ui/keyboard-key"
+import { Kbd } from "@ren/ui/kbd"
 import { Logotype } from "@ren/ui/logotype"
 import { Text } from "@ren/ui/text"
 import { Link, useRouterState } from "@tanstack/react-router"
@@ -41,7 +41,7 @@ export function ApplicationSidebar(props: { onSearch: () => void; chats: ReactNo
           icon={<Icon glyph="Search" />}
           label="Search"
           shortcut="Meta+K Control+K"
-          trailing={<KeyboardKey>{Viewport.shortcut("K")}</KeyboardKey>}
+          trailing={<Kbd>{Viewport.shortcut("K")}</Kbd>}
           onActivate={props.onSearch}
         />
         <ApplicationShell.NavigationItem
@@ -74,9 +74,14 @@ export function ApplicationSidebar(props: { onSearch: () => void; chats: ReactNo
         scrolling="contained"
         collapsedVisibility="hidden"
         actions={
-          <IconButton label="New chat" render={<Link to="/" activeOptions={{ exact: true }} />}>
+          <Link
+            to="/"
+            activeOptions={{ exact: true }}
+            className={buttonVariants({ variant: "ghost", size: "icon-sm", className: "text-muted-foreground" })}
+            aria-label="New chat"
+          >
             <Icon glyph="Plus" />
-          </IconButton>
+          </Link>
         }
       >
         {props.chats}

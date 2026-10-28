@@ -1,9 +1,18 @@
 import type { AppProfileInfo, AppProfileSpaceShape, SpaceInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { Menu } from "@ren/ui/menu"
-import { Toast } from "@ren/ui/toast"
+import { Spinner } from "@ren/ui/spinner"
+import { toast } from "@ren/ui/toast"
 import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
@@ -32,57 +41,62 @@ export function AccountAccess(props: { profile: AppProfileInfo; spaces: Readonly
       { id: props.profile.id, ...input },
       {
         onError: (error) =>
-          Toast.manager.add({ type: "error", title: "Couldn’t change the spaces", description: error.message }),
+          toast.add({ type: "error", title: "Couldn’t change the spaces", description: error.message }),
       },
     )
   return (
     <>
-      <Menu.Root>
-        <Menu.Trigger
+      <DropdownMenu>
+        <DropdownMenuTrigger
           render={
             <Button
-              appearance="secondary"
-              size="small"
-              pending={access.isPending}
-              trailingIcon={<Icon glyph="ChevronDown" />}
+              variant="outline"
+              size="xs"
+              className="h-6.5"
+              disabled={access.isPending}
               aria-label={`Spaces that use ${props.profile.name}`}
-            >
-              Spaces
-            </Button>
+            />
           }
-        />
-        <Menu.Popup alignment="end" width="medium">
+        >
+          {access.isPending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+          Spaces
+          <Icon glyph="ChevronDown" data-icon="inline-end" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
           {props.profile.canShareEverySpace ? (
             <>
-              <Menu.CheckboxItem
-                checked={props.profile.allSpaces}
-                icon={<Icon glyph="Building" />}
-                onCheckedChange={(checked) => change({ allSpaces: checked })}
-              >
-                Every space
-              </Menu.CheckboxItem>
-              <Menu.Separator />
+              <DropdownMenuGroup>
+                <DropdownMenuCheckboxItem
+                  checked={props.profile.allSpaces}
+                  onCheckedChange={(checked) => change({ allSpaces: checked })}
+                >
+                  <Icon glyph="Building" />
+                  Every space
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
             </>
           ) : null}
-          <Menu.Section label="Spaces">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Spaces</DropdownMenuLabel>
             {offered.map((space) => (
-              <Menu.CheckboxItem
+              <DropdownMenuCheckboxItem
                 key={space.id}
                 checked={props.profile.allSpaces || listed.has(space.id)}
                 disabled={props.profile.allSpaces}
-                icon={<Icon glyph={space.kind === "private" ? "Lock" : "Cube"} />}
                 onCheckedChange={(checked) => {
                   if (checked) change({ add: [space.id] })
                   else if (Apps.isLastSpace(props.profile)) setConfirming(space.id)
                   else change({ remove: [space.id] })
                 }}
               >
+                <Icon glyph={space.kind === "private" ? "Lock" : "Cube"} />
                 {space.name}
-              </Menu.CheckboxItem>
+              </DropdownMenuCheckboxItem>
             ))}
-          </Menu.Section>
-        </Menu.Popup>
-      </Menu.Root>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <ConfirmationDialog
         open={confirming !== undefined}
         onOpenChange={(open) => {

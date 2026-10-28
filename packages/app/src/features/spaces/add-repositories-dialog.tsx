@@ -1,19 +1,18 @@
 import { Reference } from "@ren/schema/reference"
-import { Button } from "@ren/ui/button"
+import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { Combobox } from "@ren/ui/combobox"
-import { Dialog } from "@ren/ui/dialog"
-import { Field } from "@ren/ui/field"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import { Field, FieldError, FieldLabel } from "@ren/ui/field"
 import { FormActions } from "@ren/ui/form-actions"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { Notice } from "@ren/ui/notice"
+import { Input } from "@ren/ui/input"
 import { Text } from "@ren/ui/text"
-import { TextField } from "@ren/ui/text-field"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
-import { useState } from "react"
+import { useId, useState } from "react"
 import type { ReactNode } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { Repositories } from "./repositories.js"
@@ -48,6 +47,7 @@ export function AddRepositoriesDialog(props: {
   const [failure, setFailure] = useState<string>()
   const [checked, setChecked] = useState(false)
   const [saving, setSaving] = useState(false)
+  const pasteId = useId()
   const known = new Set(props.existing.map((reference) => reference.repository))
   const taken = (except?: string) => [
     ...props.existing.map((reference) => reference.alias),
@@ -109,19 +109,18 @@ export function AddRepositoriesDialog(props: {
     setSaving(false)
   }
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !saving) props.onClose()
       }}
-      dismissal={saving ? "blocked" : "allowed"}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>Add repositories</Dialog.Title>
-          <Dialog.Description>{Repositories.copy}</Dialog.Description>
-        </Dialog.Header>
-        <Dialog.Body>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add repositories</DialogTitle>
+          <DialogDescription>{Repositories.copy}</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
           {props.places.kind === "installed" ? (
             <Combobox.Inline
               label="Repositories"
@@ -139,16 +138,21 @@ export function AddRepositoriesDialog(props: {
               }))}
             />
           ) : (
-            <Notice tone="neutral" placement="inline" action={props.places.install}>
-              Install the GitHub App to pick from your repositories.
-            </Notice>
+            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Alert renders a div, and the notice is a status
+            <Alert role="status" className="has-data-[slot=alert-action]:pr-34">
+              <Icon glyph="Info" />
+              <AlertDescription>Install the GitHub App to pick from your repositories.</AlertDescription>
+              <AlertAction>{props.places.install}</AlertAction>
+            </Alert>
           )}
-          <Field.Root label="Or paste a GitHub URL" error={pasteError}>
-            <TextField
+          <Field data-invalid={pasteError !== undefined}>
+            <FieldLabel htmlFor={pasteId}>Or paste a GitHub URL</FieldLabel>
+            <Input
+              id={pasteId}
               type="url"
               placeholder="https://github.com/Effect-TS/effect/tree/main"
               value={pasted}
-              invalid={pasteError !== undefined}
+              aria-invalid={pasteError !== undefined}
               onChange={(event) => setPasted(event.target.value)}
               onBlur={paste}
               onKeyDown={(event) => {
@@ -157,7 +161,8 @@ export function AddRepositoriesDialog(props: {
                 paste()
               }}
             />
-          </Field.Root>
+            <FieldError>{pasteError}</FieldError>
+          </Field>
           {rows.map((row) => (
             <div
               key={row.repository}
@@ -170,44 +175,47 @@ export function AddRepositoriesDialog(props: {
                 {Repositories.nameOf(row.repository)}
               </Text>
               <span className="flex min-w-0 flex-wrap items-center gap-2">
-                <TextField
+                <Input
                   aria-label={`Alias of ${Repositories.nameOf(row.repository)}`}
-                  width="compact"
+                  className="w-32"
                   value={row.alias}
                   onChange={(event) => update(row.repository, { alias: event.target.value })}
                 />
-                <TextField
+                <Input
                   aria-label={`Branch of ${Repositories.nameOf(row.repository)}`}
-                  width="compact"
+                  className="w-32"
                   placeholder="default"
                   value={row.branch}
                   onChange={(event) => update(row.repository, { branch: event.target.value })}
                 />
-                <TextField
+                <Input
                   aria-label={`Description of ${Repositories.nameOf(row.repository)}`}
-                  width="fill"
+                  className="w-auto min-w-40 flex-1"
                   placeholder="Product docs and style guide"
                   value={row.description}
-                  invalid={checked && !row.description.trim()}
+                  aria-invalid={checked && !row.description.trim()}
                   onChange={(event) => update(row.repository, { description: event.target.value })}
                 />
-                <IconButton
-                  label={`Remove ${Repositories.nameOf(row.repository)}`}
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Remove ${Repositories.nameOf(row.repository)}`}
                   onClick={() => setRows((current) => current.filter((each) => each.repository !== row.repository))}
                 >
                   <Icon glyph="X" />
-                </IconButton>
+                </Button>
               </span>
-              <Notice tone="danger" placement="inline">
-                {checked ? problemOf(row) : undefined}
-              </Notice>
+              {checked ? <FieldError>{problemOf(row)}</FieldError> : null}
             </div>
           ))}
-          <Notice tone="danger" placement="inline">
-            {failure}
-          </Notice>
-        </Dialog.Body>
-        <Dialog.Footer>
+          {failure ? (
+            <Alert variant="destructive">
+              <Icon glyph="AlertCircle" />
+              <AlertDescription>{failure}</AlertDescription>
+            </Alert>
+          ) : null}
+        </div>
+        <DialogFooter className="sm:justify-end">
           <FormActions.Root>
             <FormActions.Cancel onClick={props.onClose} disabled={saving} />
             <FormActions.Submit
@@ -219,9 +227,9 @@ export function AddRepositoriesDialog(props: {
               {rows.length > 1 ? `Add ${rows.length} repositories` : "Add repository"}
             </FormActions.Submit>
           </FormActions.Root>
-        </Dialog.Footer>
-      </Dialog.Content>
-    </Dialog.Root>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -233,14 +241,13 @@ function usePlaces(): Places {
     return {
       kind: "not-installed",
       install: (
-        <Button
-          appearance="secondary"
-          size="small"
-          nativeButton={false}
-          render={<Link to="/settings/channels/$provider" params={{ provider: "github" }} />}
+        <Link
+          to="/settings/channels/$provider"
+          params={{ provider: "github" }}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
         >
           Install GitHub App
-        </Button>
+        </Link>
       ),
     }
   const states = { pending: "loading", error: "failed", success: "ready" } as const
@@ -275,7 +282,7 @@ export function SpaceAddRepositories(props: { spaceId: string; onClose: () => vo
           id: props.spaceId,
           settings: { ...current, references: [...references, ...added] },
         })
-        Toast.manager.add({
+        toast.add({
           type: "success",
           title:
             added.length > 1 ? `${added.length} repositories added` : `${added.at(0)?.alias ?? "Repository"} added`,

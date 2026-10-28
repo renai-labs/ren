@@ -1,9 +1,10 @@
-import { Field } from "@ren/ui/field"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
+import { Field, FieldTitle } from "@ren/ui/field"
+import { Icon } from "@ren/ui/icon"
 import { InlineEdit } from "@ren/ui/inline-edit"
-import { LoadingMessage } from "@ren/ui/loading-message"
 import { PageShell } from "@ren/ui/page-shell"
-import { StateMessage } from "@ren/ui/state-message"
-import { Toast } from "@ren/ui/toast"
+import { Spinner } from "@ren/ui/spinner"
+import { toast } from "@ren/ui/toast"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Auth } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -15,20 +16,30 @@ export function GeneralSettings(props: { organizationId: string }) {
   const organization = useQuery(options)
   return (
     <PageShell.Root layout="settings" title="General">
-      {organization.isPending ? <LoadingMessage placement="section" /> : null}
+      {organization.isPending ? (
+        <Empty>
+          <EmptyMedia>
+            <Spinner />
+          </EmptyMedia>
+        </Empty>
+      ) : null}
       {organization.isError ? (
         <PageShell.Section frame="divided">
-          <StateMessage
-            state="failed"
-            placement="inline"
-            title="Couldn’t load the organization."
-            description={organization.error.message}
-          />
+          <Empty role="alert">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Icon glyph="AlertCircle" />
+              </EmptyMedia>
+              <EmptyTitle>Couldn’t load the organization.</EmptyTitle>
+              <EmptyDescription>{organization.error.message}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         </PageShell.Section>
       ) : null}
       {organization.isSuccess ? (
         <PageShell.Section frame="divided" key={organization.data.id}>
-          <Field.Root label="Name" orientation="row">
+          <Field orientation="horizontal">
+            <FieldTitle>Name</FieldTitle>
             <InlineEdit
               label="Organization name"
               alignment="end"
@@ -42,7 +53,7 @@ export function GeneralSettings(props: { organizationId: string }) {
                 })
                 if (result.error !== null) {
                   const message = result.error.message ?? "Failed to update organization"
-                  Toast.manager.add({ type: "error", title: message })
+                  toast.add({ type: "error", title: message })
                   throw new Error(message)
                 }
                 await Promise.all(
@@ -53,7 +64,7 @@ export function GeneralSettings(props: { organizationId: string }) {
                 )
               }}
             />
-          </Field.Root>
+          </Field>
         </PageShell.Section>
       ) : null}
     </PageShell.Root>

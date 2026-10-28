@@ -1,11 +1,11 @@
 import type { RenInference } from "@ren/schema/ren-inference"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { LoadingMessage } from "@ren/ui/loading-message"
 import { PageShell } from "@ren/ui/page-shell"
-import { StateMessage } from "@ren/ui/state-message"
-import { Toast } from "@ren/ui/toast"
+import { Spinner } from "@ren/ui/spinner"
+import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
@@ -25,8 +25,7 @@ export function ProvidersPage(props: { returnUrl: string }) {
   const connect = useMutation({
     ...api.connect.mutationOptions(),
     onSuccess: (result) => (platform.redirect ?? platform.openExternal)(result.url),
-    onError: (cause) =>
-      Toast.manager.add({ type: "error", title: "Couldn’t start the sign-in", description: cause.message }),
+    onError: (cause) => toast.add({ type: "error", title: "Couldn’t start the sign-in", description: cause.message }),
   })
   const startConnect = (connectionId?: string) =>
     connect.mutate({ returnUrl: props.returnUrl, ...(connectionId && { connectionId }) })
@@ -37,54 +36,71 @@ export function ProvidersPage(props: { returnUrl: string }) {
       title="Providers"
       subtitle="Model providers your agents run on."
       actions={
-        <Button
-          appearance="primary"
-          leadingIcon={<Icon glyph="Plus" />}
-          pending={connect.isPending}
-          onClick={() => startConnect()}
-        >
+        <Button disabled={connect.isPending} onClick={() => startConnect()}>
+          {connect.isPending ? (
+            <Spinner aria-hidden data-icon="inline-start" />
+          ) : (
+            <Icon glyph="Plus" data-icon="inline-start" />
+          )}
           Connect
         </Button>
       }
     >
-      {list.isPending ? <LoadingMessage placement="section" /> : null}
+      {list.isPending ? (
+        <Empty>
+          <EmptyMedia>
+            <Spinner />
+          </EmptyMedia>
+        </Empty>
+      ) : null}
       {list.isError ? (
-        <StateMessage
-          state="failed"
-          placement="section"
-          title="Couldn’t load connections."
-          description={list.error.message}
-          onRetry={() => void list.refetch()}
-        />
+        <Empty role="alert">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon glyph="AlertCircle" />
+            </EmptyMedia>
+            <EmptyTitle>Couldn’t load connections.</EmptyTitle>
+            <EmptyDescription>{list.error.message}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" size="sm" onClick={() => void list.refetch()}>
+              Try again
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : null}
       {list.isSuccess && list.data.length === 0 ? (
-        <StateMessage
-          state="empty"
-          placement="section"
-          icon={<Icon glyph="Server" size="medium" tone="secondary" />}
-          title="No providers connected yet"
-          description="Your organization uses Ren’s default models. Connect a model provider to use it instead."
-          action={
-            <Button appearance="primary" size="small" pending={connect.isPending} onClick={() => startConnect()}>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon glyph="Server" />
+            </EmptyMedia>
+            <EmptyTitle>No providers connected yet</EmptyTitle>
+            <EmptyDescription>
+              Your organization uses Ren’s default models. Connect a model provider to use it instead.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button size="sm" disabled={connect.isPending} onClick={() => startConnect()}>
+              {connect.isPending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
               Connect a provider
             </Button>
-          }
-        />
+          </EmptyContent>
+        </Empty>
       ) : null}
       {list.isSuccess && list.data.length > 0 ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {list.data.map((connection, index) => (
+          {list.data.map((connection) => (
             <ConnectionCard
               key={connection.id}
               connection={connection}
-              index={index}
               now={list.dataUpdatedAt}
               {...(connection.canManage && {
                 manage: {
                   onRename: async (label: string) => {
                     if (label === connection.label) return
                     await rename.mutateAsync({ id: connection.id, label }).catch((cause: Error) => {
-                      Toast.manager.add({
+                      toast.add({
                         type: "error",
                         title: "Couldn’t rename the connection",
                         description: cause.message,

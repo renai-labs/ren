@@ -1,12 +1,18 @@
 import { ApplicationShell } from "@ren/ui/application-shell"
-import { Avatar } from "@ren/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
+import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { Menu } from "@ren/ui/menu"
-import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
-import { Tooltip } from "@ren/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
+import { Initials } from "@ren/util/initials"
 import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
@@ -34,25 +40,30 @@ export function ProfileCard(props: {
         onCreate={() => setCreating(true)}
         onLogOut={() => setLoggingOut(true)}
         trigger={
-          <Select.Button
-            appearance="plain"
-            {...(navigation.collapsed
-              ? { shape: "circle", size: "medium", indicator: "none" }
-              : { size: "large", width: "fill", indicator: "chevron-up" })}
-            label={`Switch organization (current: ${props.organization.name})`}
-            leading={<Avatar.Root name={displayName} image={props.user.image ?? undefined} size="large" decorative />}
+          <Button
+            variant="ghost"
+            size={navigation.collapsed ? "icon" : "lg"}
+            className={navigation.collapsed ? "rounded-full" : "h-10 min-w-0 flex-1 justify-start gap-2 pl-1"}
+            aria-label={`Switch organization (current: ${props.organization.name})`}
           >
+            <Avatar aria-hidden>
+              {props.user.image ? <AvatarImage src={props.user.image} alt="" /> : null}
+              <AvatarFallback>{Initials.of(displayName)}</AvatarFallback>
+            </Avatar>
             {navigation.collapsed ? null : (
-              <span className="flex min-w-0 flex-1 flex-col text-start">
-                <Text element="span" truncation="single-line">
-                  {displayName}
-                </Text>
-                <Text purpose="caption" element="span" truncation="single-line">
-                  {props.organization.name}
-                </Text>
-              </span>
+              <>
+                <span className="flex min-w-0 flex-1 flex-col text-start">
+                  <Text element="span" truncation="single-line">
+                    {displayName}
+                  </Text>
+                  <Text purpose="caption" element="span" truncation="single-line">
+                    {props.organization.name}
+                  </Text>
+                </span>
+                <Icon glyph="ChevronUp" tone="secondary" data-icon="inline-end" />
+              </>
             )}
-          </Select.Button>
+          </Button>
         }
       />
       {navigation.collapsed ? null : <ProfileActions />}
@@ -80,34 +91,44 @@ function ProfileActions() {
   const navigation = ApplicationShell.useNavigation()
   return (
     <div className="flex shrink-0 items-center">
-      <Menu.Root>
-        <Menu.Trigger
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Help" />}
+        >
+          <Icon glyph="CircleHelp" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="end" className="w-48">
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={() => platform.openExternal(Links.founderCall)}>
+              <Icon glyph="Calendar" />
+              Talk to founder
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => platform.openExternal(Links.docs)}>
+              <Icon glyph="BookOpen" />
+              Documentation
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger
           render={
-            <IconButton label="Help">
-              <Icon glyph="CircleHelp" />
-            </IconButton>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              aria-label="Settings"
+              onClick={() => {
+                navigation.dismiss()
+                void navigate({ to: "/settings" })
+              }}
+            />
           }
-        />
-        <Menu.Popup placement="top" alignment="end" width="small">
-          <Menu.Item icon={<Icon glyph="Calendar" />} onSelect={() => platform.openExternal(Links.founderCall)}>
-            Talk to founder
-          </Menu.Item>
-          <Menu.Item icon={<Icon glyph="BookOpen" />} onSelect={() => platform.openExternal(Links.docs)}>
-            Documentation
-          </Menu.Item>
-        </Menu.Popup>
-      </Menu.Root>
-      <Tooltip.Root content="Settings">
-        <IconButton
-          label="Settings"
-          onClick={() => {
-            navigation.dismiss()
-            void navigate({ to: "/settings" })
-          }}
         >
           <Icon glyph="Settings" />
-        </IconButton>
-      </Tooltip.Root>
+        </TooltipTrigger>
+        <TooltipContent>Settings</TooltipContent>
+      </Tooltip>
     </div>
   )
 }

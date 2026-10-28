@@ -1,16 +1,16 @@
 import type { ChannelInstallInfo } from "@ren/client"
 import { Pagination } from "@ren/schema/pagination"
-import { Button } from "@ren/ui/button"
+import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
-import { Field } from "@ren/ui/field"
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@ren/ui/field"
 import { Icon } from "@ren/ui/icon"
-import { List } from "@ren/ui/list"
-import { Notice } from "@ren/ui/notice"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@ren/ui/item"
 import { PageShell } from "@ren/ui/page-shell"
-import { Select } from "@ren/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useState } from "react"
@@ -41,25 +41,20 @@ export function ChannelProviderPage(props: {
     <PageShell.Root
       layout="settings"
       context={
-        <Button
-          appearance="link"
-          leadingIcon={<Icon glyph="ArrowLeft" />}
-          nativeButton={false}
-          render={<Link to="/settings/channels" />}
+        <Link
+          to="/settings/channels"
+          className={buttonVariants({ variant: "ghost", size: "xs", className: "h-6.5 text-muted-foreground" })}
         >
+          <Icon glyph="ArrowLeft" data-icon="inline-start" />
           Back to channels
-        </Button>
+        </Link>
       }
       media={<Icon glyph={provider.glyph} size="large" tone="primary" />}
       title={provider.title}
       actions={
         install ? (
-          <Button
-            appearance="outline"
-            size="small"
-            leadingIcon={<Icon glyph="Unplug" />}
-            onClick={() => setResetting(true)}
-          >
+          <Button variant="outline" size="xs" className="h-6.5" onClick={() => setResetting(true)}>
+            <Icon glyph="Unplug" data-icon="inline-start" />
             Reset mappings
           </Button>
         ) : undefined
@@ -68,15 +63,23 @@ export function ChannelProviderPage(props: {
       <InstallOutcome title={provider.title} installed={props.installed} error={props.error} />
       {install ? (
         <>
-          <List.Root label={`${provider.title} install`}>
-            <List.Item
-              title={install.name}
-              description={
-                install.installedBy ? `Installed by ${install.installedBy.name}` : "Installed by a former member"
-              }
-              trailing={<Time value={install.createdAt} format="date" label="Installed" />}
-            />
-          </List.Root>
+          <ItemGroup aria-label={`${provider.title} install`} className="gap-0 rounded-xl border bg-card">
+            <Item
+              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div inside the ItemGroup list
+              role="listitem"
+              className="min-h-14 gap-x-6 gap-y-2 px-4 py-3"
+            >
+              <ItemContent>
+                <ItemTitle className="leading-5">{install.name}</ItemTitle>
+                <ItemDescription className="text-xs">
+                  {install.installedBy ? `Installed by ${install.installedBy.name}` : "Installed by a former member"}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions className="text-muted-foreground">
+                <Time value={install.createdAt} format="date" label="Installed" />
+              </ItemActions>
+            </Item>
+          </ItemGroup>
           <PageShell.Section frame="divided">
             <DefaultSpace install={install} noun={provider.place.noun} />
           </PageShell.Section>
@@ -85,9 +88,9 @@ export function ChannelProviderPage(props: {
       ) : (
         <Text purpose="body" tone="secondary">
           Connect {provider.title} from the{" "}
-          <Button appearance="link" nativeButton={false} render={<Link to="/settings/channels" />}>
+          <Link to="/settings/channels" className={buttonVariants({ variant: "link", className: "h-auto p-0" })}>
             Channels page
-          </Button>{" "}
+          </Link>{" "}
           before configuring it.
         </Text>
       )}
@@ -102,7 +105,7 @@ export function ChannelProviderPage(props: {
           if (!install) return
           await remove.mutateAsync({ id: install.id })
         }}
-        onConfirmed={() => Toast.manager.add({ type: "success", title: `${provider.title} mappings reset` })}
+        onConfirmed={() => toast.add({ type: "success", title: `${provider.title} mappings reset` })}
       />
     </PageShell.Root>
   )
@@ -121,45 +124,63 @@ function DefaultSpace(props: { install: ChannelInstallInfo; noun: string }) {
     ...(spaces.data?.items ?? []).map((space) => ({ value: space.id, label: space.name })),
   ]
   return (
-    <Field.Root
-      label="Default space"
-      orientation="row"
-      description={`Messages from ${props.noun === "repository" ? "repositories" : `${props.noun}s`} with no mapping go here. `}
-    >
-      <Select.Root
-        label="Default space"
-        width="limited"
+    <Field orientation="horizontal">
+      <FieldContent>
+        <FieldLabel htmlFor="default-space">Default space</FieldLabel>
+        <FieldDescription>
+          Messages from {props.noun === "repository" ? "repositories" : `${props.noun}s`} with no mapping go here.
+        </FieldDescription>
+      </FieldContent>
+      <Select
+        items={options}
         disabled={!props.install.canUpdate || update.isPending}
         value={current?.id ?? first}
-        onValueChange={(chosen) =>
+        onValueChange={(chosen) => {
+          if (!chosen) return
           void update
             .mutateAsync({ id: props.install.id, defaultSpaceId: chosen === first ? null : chosen })
             .catch((cause: unknown) =>
-              Toast.manager.add({
+              toast.add({
                 type: "error",
                 title: "Couldn’t change the default space",
                 description: Channels.describe(cause),
               }),
             )
-        }
-        options={options}
-      />
-    </Field.Root>
+        }}
+      >
+        <SelectTrigger id="default-space" aria-label="Default space" className="max-w-72">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </Field>
   )
 }
 
 function InstallOutcome(props: { title: string; installed: string | undefined; error: string | undefined }) {
   if (props.error)
     return (
-      <Notice tone="danger" title={`Couldn’t install Ren on ${props.title}`}>
-        {props.error}
-      </Notice>
+      <Alert variant="destructive">
+        <Icon glyph="AlertCircle" />
+        <AlertTitle>Couldn’t install Ren on {props.title}</AlertTitle>
+        <AlertDescription>{props.error}</AlertDescription>
+      </Alert>
     )
   if (props.installed)
     return (
-      <Notice tone="information" title={`Ren is installed on ${props.title}`}>
-        {props.installed}
-      </Notice>
+      <Alert>
+        <Icon glyph="Info" />
+        <AlertTitle>Ren is installed on {props.title}</AlertTitle>
+        <AlertDescription>{props.installed}</AlertDescription>
+      </Alert>
     )
   return null
 }

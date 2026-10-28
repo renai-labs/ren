@@ -1,14 +1,23 @@
 import { Pagination } from "@ren/schema/pagination"
-import { Avatar } from "@ren/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { Menu } from "@ren/ui/menu"
 import { SearchField } from "@ren/ui/search-field"
-import { Table } from "@ren/ui/table"
+import { Spinner } from "@ren/ui/spinner"
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
+import { Initials } from "@ren/util/initials"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
 import { Search } from "@ren/util/search"
@@ -41,7 +50,8 @@ export function SpaceMembers(props: { spaceId: string; organizationId: string; u
       <Toolbar.Root>
         <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search members" />
         {canAddMember ? (
-          <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setAdding(true)}>
+          <Button size="sm" onClick={() => setAdding(true)}>
+            <Icon glyph="Plus" data-icon="inline-start" />
             Add member
           </Button>
         ) : null}
@@ -96,7 +106,7 @@ function RemoveMemberDialog(props: {
         if (!props.member) return
         await remove.mutateAsync({ id: props.member.id })
       }}
-      onConfirmed={() => Toast.manager.add({ type: "success", title: `${props.member?.name ?? "Member"} removed` })}
+      onConfirmed={() => toast.add({ type: "success", title: `${props.member?.name ?? "Member"} removed` })}
     />
   )
 }
@@ -108,44 +118,106 @@ function MembersTable(props: {
   onRemove: ((row: Spaces.MemberRow) => void) | undefined
 }) {
   return (
-    <Table.Root
-      state={props.state}
-      failureMessage="Couldn’t load members."
-      emptyMessage={props.query ? `Nothing matches “${props.query}”` : "No members yet. Add one to get started."}
-      caption="Space members"
-    >
-      <Table.Header>
-        <Table.HeaderCell width="fill">Name</Table.HeaderCell>
-        <Table.HeaderCell width="third" visibility="wide-screens">
-          Email
-        </Table.HeaderCell>
-        {props.onRemove ? <Table.RowActionsHeaderCell /> : null}
-      </Table.Header>
-      <Table.Body>
-        {props.rows.map((row) => (
-          <Table.Row key={row.id}>
-            <Table.Cell>
-              <MemberName row={row} />
-            </Table.Cell>
-            <Table.Cell visibility="wide-screens">{row.email || "—"}</Table.Cell>
+    <div className="rounded-xl border bg-card p-2 [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3 [&_th]:font-normal [&_th]:text-muted-foreground [&_tr]:border-0">
+      <Table className="table-fixed">
+        <TableCaption className="sr-only">Space members</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead className="hidden w-1/3 md:table-cell">Email</TableHead>
             {props.onRemove ? (
-              <Table.RowActions label="Member actions">
-                <Menu.Item tone="danger" icon={<Icon glyph="Trash2" />} onSelect={() => props.onRemove?.(row)}>
-                  Remove
-                </Menu.Item>
-              </Table.RowActions>
+              <TableHead className="w-15">
+                <span className="sr-only">Actions</span>
+              </TableHead>
             ) : null}
-          </Table.Row>
-        ))}
-      </Table.Body>
-    </Table.Root>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {props.state === "ready" ? null : (
+            <StateRow
+              state={props.state}
+              emptyMessage={
+                props.query ? `Nothing matches “${props.query}”` : "No members yet. Add one to get started."
+              }
+            />
+          )}
+          {props.rows.map((row) => (
+            <TableRow key={row.id}>
+              <TableCell>
+                <MemberName row={row} />
+              </TableCell>
+              <TableCell className="hidden truncate md:table-cell">{row.email || "—"}</TableCell>
+              {props.onRemove ? (
+                <TableCell>
+                  <MemberActions onRemove={() => props.onRemove?.(row)} />
+                </TableCell>
+              ) : null}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+function StateRow(props: { state: "loading" | "failed" | "empty"; emptyMessage: string }) {
+  return (
+    <TableRow className="hover:bg-transparent">
+      <TableCell colSpan={3}>
+        {props.state === "loading" ? <Spinner className="mx-auto" /> : null}
+        {props.state === "failed" ? (
+          <Empty role="alert">
+            <EmptyHeader>
+              <EmptyTitle>Couldn’t load members.</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
+        ) : null}
+        {props.state === "empty" ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyDescription>{props.emptyMessage}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : null}
+      </TableCell>
+    </TableRow>
+  )
+}
+
+function MemberActions(props: { onRemove: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="-my-1 flex text-muted-foreground"
+            aria-label="Member actions"
+          />
+        }
+      >
+        <Icon glyph="MoreHorizontal" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuGroup>
+          <DropdownMenuItem variant="destructive" onClick={props.onRemove}>
+            <Icon glyph="Trash2" />
+            Remove
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
 function MemberName(props: { row: Spaces.MemberRow }) {
   return (
     <span className="flex min-w-0 items-center gap-3">
-      <Avatar.Root name={props.row.name} image={props.row.image} size="small" decorative />
+      <Avatar size="sm" aria-hidden>
+        {props.row.image ? <AvatarImage src={props.row.image} alt="" /> : null}
+        <AvatarFallback>{Initials.of(props.row.name)}</AvatarFallback>
+      </Avatar>
       <Text truncation="single-line" element="span" title={props.row.name}>
         {props.row.name}
       </Text>

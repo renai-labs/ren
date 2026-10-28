@@ -5,9 +5,9 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { ConversationShell } from "@ren/ui/conversation-shell"
 import { Icon } from "@ren/ui/icon"
 import { Logotype } from "@ren/ui/logotype"
-import { Select } from "@ren/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { Transcript } from "@ren/ui/transcript"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
@@ -92,23 +92,32 @@ export function NewChat(props: { userId: string }) {
           label="Start a chat"
           layout="stacked"
           header={
-            <Select.Root
-              label="Space"
-              appearance="inline"
-              leading={
-                <span className="flex items-center gap-2">
-                  <Text purpose="body" tone="secondary" element="span">
-                    Working in
-                  </Text>
-                  <Icon glyph="Cube" />
-                </span>
-              }
-              options={options}
+            <Select
+              items={[{ value: null, label: "Choose a space" }, ...options]}
               value={spaceId ?? null}
-              onValueChange={setChosen}
-              placeholder="Choose a space"
+              onValueChange={(next) => next && setChosen(next)}
               disabled={create.isPending}
-            />
+            >
+              <SelectTrigger
+                aria-label="Space"
+                className="gap-2 border-0 px-1 text-muted-foreground hover:text-foreground data-popup-open:text-foreground"
+              >
+                <Text purpose="body" tone="secondary" element="span">
+                  Working in
+                </Text>
+                <Icon glyph="Cube" />
+                <SelectValue className="text-foreground" />
+              </SelectTrigger>
+              <SelectContent align="start" className="w-72">
+                <SelectGroup>
+                  {options.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           }
           apps={spaceId ? <SpaceAppsStrip spaceId={spaceId} /> : null}
           onSubmit={() => {
@@ -140,7 +149,7 @@ export function NewChat(props: { userId: string }) {
                 onError: (error) => {
                   startTransition(() => setSent(undefined))
                   setSessionID(Session.ID.create())
-                  Toast.manager.add({
+                  toast.add({
                     type: "error",
                     title: "Could not start the chat",
                     description: Failure.describe(error),

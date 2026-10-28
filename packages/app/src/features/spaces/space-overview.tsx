@@ -1,4 +1,4 @@
-import { Field } from "@ren/ui/field"
+import { Field, FieldTitle } from "@ren/ui/field"
 import { InlineEdit } from "@ren/ui/inline-edit"
 import { PageShell } from "@ren/ui/page-shell"
 import { Text } from "@ren/ui/text"
@@ -16,7 +16,8 @@ export function SpaceOverview(props: { spaceId: string }) {
   }
   return (
     <PageShell.Section frame="divided">
-      <Field.Root label="Name" orientation="row">
+      <Field orientation="horizontal">
+        <FieldTitle>Name</FieldTitle>
         {space.data.canUpdate ? (
           <InlineEdit
             label="Space name"
@@ -30,8 +31,9 @@ export function SpaceOverview(props: { spaceId: string }) {
         ) : (
           <Text element="span">{space.data.name}</Text>
         )}
-      </Field.Root>
-      <Field.Root label="Description" orientation="row">
+      </Field>
+      <Field orientation="horizontal">
+        <FieldTitle>Description</FieldTitle>
         {space.data.canUpdate ? (
           <InlineEdit
             label="Space description"
@@ -43,7 +45,7 @@ export function SpaceOverview(props: { spaceId: string }) {
         ) : (
           <Text element="span">{space.data.description ?? "—"}</Text>
         )}
-      </Field.Root>
+      </Field>
     </PageShell.Section>
   )
 }

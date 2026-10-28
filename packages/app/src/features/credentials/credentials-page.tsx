@@ -3,7 +3,7 @@ import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
 import { PageShell } from "@ren/ui/page-shell"
 import { SearchField } from "@ren/ui/search-field"
-import { Tabs } from "@ren/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
@@ -39,14 +39,15 @@ export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNo
       title="Credentials"
       subtitle="The app accounts and credentials your organization’s chats use."
       navigation={
-        <Tabs.Root value={props.tab} onValueChange={props.onTabChange}>
-          <Tabs.List label="Credential kinds">
-            <Tabs.Tab value="apps">Apps</Tabs.Tab>
-            <Tabs.Tab value="credentials" count={items.length}>
+        <Tabs value={props.tab} onValueChange={(next: Tab) => props.onTabChange(next)}>
+          <TabsList variant="page" aria-label="Credential kinds">
+            <TabsTrigger value="apps">Apps</TabsTrigger>
+            <TabsTrigger value="credentials">
               Credentials
-            </Tabs.Tab>
-          </Tabs.List>
-        </Tabs.Root>
+              <span className="text-muted-foreground tabular-nums">{items.length}</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       }
     >
       {props.tab === "apps" ? props.apps : null}
@@ -54,12 +55,8 @@ export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNo
         <>
           <Toolbar.Root>
             <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
-            <Button
-              appearance="primary"
-              size="small"
-              leadingIcon={<Icon glyph="Plus" />}
-              onClick={() => setCreating(true)}
-            >
+            <Button size="sm" onClick={() => setCreating(true)}>
+              <Icon glyph="Plus" data-icon="inline-start" />
               Add credential
             </Button>
           </Toolbar.Root>

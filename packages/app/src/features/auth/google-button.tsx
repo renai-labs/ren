@@ -10,14 +10,13 @@ export function GoogleButton(props: { destination: CompleteAuth.Destination }) {
   const afterAuth = `${platform.appUrl}${CompleteAuth.href({ ...props.destination, join: true })}`
   return (
     <Button
-      appearance="secondary"
-      size="large"
-      width="full"
-      leadingIcon={<BrandMark brand="google" />}
+      variant="secondary"
+      className="h-10 w-full"
       onClick={() =>
         void auth.signIn.social({ provider: "google", callbackURL: afterAuth, newUserCallbackURL: afterAuth })
       }
     >
+      <BrandMark brand="google" />
       Continue with Google
     </Button>
   )

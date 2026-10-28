@@ -1,8 +1,10 @@
-import { Avatar } from "@ren/ui/avatar"
-import { Button } from "@ren/ui/button"
+import { Initials } from "@ren/util/initials"
+import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
+import { Avatar, AvatarFallback } from "@ren/ui/avatar"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
 import { PublicShell } from "@ren/ui/public-shell"
-import { Surface } from "@ren/ui/surface"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { Link } from "@tanstack/react-router"
 import type { InvitationActions } from "./invitation-actions.js"
@@ -16,7 +18,9 @@ export function PendingInvitation(props: PendingInvitationProps & { organization
     <PublicShell.Centered>
       <div className="flex flex-col gap-6 text-center">
         <div className="flex flex-col items-center gap-3">
-          <Avatar.Root name={props.organization.name} size="extra-large" shape="square" decorative />
+          <Avatar className="size-14 rounded-xl">
+            <AvatarFallback className="rounded-xl text-base">{Initials.of(props.organization.name)}</AvatarFallback>
+          </Avatar>
           <Text purpose="label" element="p">
             {props.organization.name}
           </Text>
@@ -35,13 +39,13 @@ export function PendingInvitation(props: PendingInvitationProps & { organization
         <div className="flex flex-col gap-3">
           <PrimaryAction invitation={invitation} />
           {authenticated && invitation.failure?.kind !== "mismatch" ? (
-            <Button appearance="link" disabled={invitation.action !== "idle"} onClick={() => void invitation.decline()}>
+            <Button variant="ghost" disabled={invitation.action !== "idle"} onClick={() => void invitation.decline()}>
               {invitation.action === "declining" ? "Declining…" : "No thanks, continue to Ren"}
             </Button>
           ) : (
-            <Button appearance="link" nativeButton={false} render={<Link to="/" />}>
+            <Link to="/" className={buttonVariants({ variant: "ghost" })}>
               No thanks, return to homepage
-            </Button>
+            </Link>
           )}
         </div>
       </div>
@@ -54,30 +58,30 @@ function PrimaryAction(props: { invitation: ReturnType<typeof usePendingInvitati
   switch (invitation.failure?.kind) {
     case "mismatch":
       return (
-        <Button appearance="primary" width="full" onClick={() => void invitation.signInWithAnotherAccount()}>
+        <Button className="w-full" onClick={() => void invitation.signInWithAnotherAccount()}>
           Sign in with another account
         </Button>
       )
     case "workspace-error":
       return (
-        <Button appearance="primary" width="full" onClick={() => void invitation.openWorkspace()}>
+        <Button className="w-full" onClick={() => void invitation.openWorkspace()}>
           Try opening the workspace again
         </Button>
       )
     case "error":
       return (
-        <Button appearance="primary" width="full" onClick={() => void invitation.join()}>
+        <Button className="w-full" onClick={() => void invitation.join()}>
           Try again
         </Button>
       )
     case undefined:
       return (
         <Button
-          appearance="primary"
-          width="full"
+          className="w-full"
           disabled={invitation.action === "accepting"}
           onClick={() => void invitation.continueToJoin()}
         >
+          {invitation.action === "accepting" ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           {invitation.action === "accepting" ? "Joining…" : "Continue to join"}
         </Button>
       )
@@ -88,22 +92,16 @@ function FailureCallout(props: { failure: InvitationActions.Failure | undefined;
   if (props.failure === undefined) return null
   const mismatch = props.failure.kind === "mismatch"
   return (
-    <Surface.Panel padding="medium" elevation="raised">
-      <div className="flex gap-3 text-left">
-        <span className="mt-1">
-          <Icon glyph="MailWarning" tone="secondary" />
-        </span>
-        <div className="flex flex-col gap-1">
-          <Text purpose="label" element="p">
-            {mismatch ? "This invitation is for another email address" : "We couldn’t finish joining the organization"}
-          </Text>
-          <Text tone="secondary">
-            {props.failure.message === "" && mismatch
-              ? `You’re signed in as ${props.userEmail ?? ""}. Sign in with the invited account to continue.`
-              : props.failure.message}
-          </Text>
-        </div>
-      </div>
-    </Surface.Panel>
+    <Alert>
+      <Icon glyph="MailWarning" />
+      <AlertTitle>
+        {mismatch ? "This invitation is for another email address" : "We couldn’t finish joining the organization"}
+      </AlertTitle>
+      <AlertDescription>
+        {props.failure.message === "" && mismatch
+          ? `You’re signed in as ${props.userEmail ?? ""}. Sign in with the invited account to continue.`
+          : props.failure.message}
+      </AlertDescription>
+    </Alert>
   )
 }

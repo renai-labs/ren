@@ -1,16 +1,18 @@
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
-import { Field } from "@ren/ui/field"
+import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "@ren/ui/field"
 import { InlineEdit } from "@ren/ui/inline-edit"
 import { PageShell } from "@ren/ui/page-shell"
-import { Select } from "@ren/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
+import { Spinner } from "@ren/ui/spinner"
 import { Switch } from "@ren/ui/switch"
 import { Text } from "@ren/ui/text"
 import { Theme } from "@ren/ui/theme"
 import { ThemeSelector } from "@ren/ui/theme-selector"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useQueryClient } from "@tanstack/react-query"
-import { useState } from "react"
+import { useId, useState } from "react"
+import type { ReactNode } from "react"
 import { Auth } from "../../lib/auth.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Forms } from "../../lib/forms.js"
@@ -19,7 +21,7 @@ import { Platform } from "../../platform/platform.js"
 import { PasswordDialog } from "./password-dialog.js"
 import { useAccountLink } from "../../lib/use-account-link.js"
 
-const detailOptions: ReadonlyArray<Select.Option<ChatPreferences.Detail>> = [
+const detailOptions: ReadonlyArray<{ value: ChatPreferences.Detail; label: string }> = [
   { value: "standard", label: "Standard" },
   { value: "everything", label: "Everything" },
   { value: "detailed", label: "Detailed" },
@@ -28,55 +30,96 @@ const detailOptions: ReadonlyArray<Select.Option<ChatPreferences.Detail>> = [
   { value: "text-only", label: "Text only" },
 ]
 
-const followUpOptions: ReadonlyArray<Select.Option<ChatPreferences.FollowUp>> = [
+const followUpOptions: ReadonlyArray<{ value: ChatPreferences.FollowUp; label: string }> = [
   { value: "steer", label: "Steer the current turn" },
   { value: "queue", label: "Queue for the next turn" },
 ]
 
+function Setting(props: { title: string; description?: string; controlId?: string; children: ReactNode }) {
+  return (
+    <Field orientation="horizontal" className="has-[>[data-slot=field-content]]:items-center">
+      <FieldContent>
+        {props.controlId === undefined ? (
+          <FieldTitle>{props.title}</FieldTitle>
+        ) : (
+          <FieldLabel htmlFor={props.controlId}>{props.title}</FieldLabel>
+        )}
+        {props.description === undefined ? null : <FieldDescription>{props.description}</FieldDescription>}
+      </FieldContent>
+      {props.children}
+    </Field>
+  )
+}
+
 function ChatSettings() {
   const platform = Platform.usePlatform()
+  const id = useId()
   const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
   const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
   const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
   return (
     <PageShell.Section title="Chats" frame="divided">
-      <Field.Root label="Detail" description="How much of Ren’s work a chat shows." orientation="horizontal">
-        <Select.Root
+      <Setting title="Detail" description="How much of Ren’s work a chat shows." controlId={`${id}-detail`}>
+        <Select
+          items={detailOptions}
           value={detail}
-          options={detailOptions}
-          appearance="filled"
-          size="small"
           onValueChange={(next) => {
-            if (next === detail) return
+            if (next === null || next === detail) return
             ChatPreferences.detail.write(platform.storage, next)
             setDetail(next)
             void import("../../lib/chat.js").then((loaded) => loaded.Chat.forget())
           }}
-        />
-      </Field.Root>
-      <Field.Root
-        label="Messages sent while Ren works"
+        >
+          <SelectTrigger id={`${id}-detail`} className="border-transparent text-muted-foreground">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {detailOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </Setting>
+      <Setting
+        title="Messages sent while Ren works"
         description="Steering adds them to the current turn. Queued messages wait for it to finish."
-        orientation="horizontal"
+        controlId={`${id}-follow-up`}
       >
-        <Select.Root
+        <Select
+          items={followUpOptions}
           value={followUp}
-          options={followUpOptions}
-          appearance="filled"
-          size="small"
           onValueChange={(next) => {
+            if (next === null) return
             ChatPreferences.followUp.write(platform.storage, next)
             setFollowUp(next)
           }}
-        />
-      </Field.Root>
+        >
+          <SelectTrigger id={`${id}-follow-up`} className="border-transparent text-muted-foreground">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {followUpOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </Setting>
       {platform.requestNotifications ? (
-        <Field.Root
-          label="Notify me when Ren finishes or needs input"
+        <Setting
+          title="Notify me when Ren finishes or needs input"
           description="Only while Ren’s tab is in the background."
-          orientation="horizontal"
+          controlId={`${id}-notify`}
         >
           <Switch
+            id={`${id}-notify`}
             checked={notify}
             onCheckedChange={(enabled) => {
               ChatPreferences.notify.write(platform.storage, enabled)
@@ -84,7 +127,7 @@ function ChatSettings() {
               if (!enabled) return
               void platform.requestNotifications?.().then((allowed) => {
                 if (!allowed)
-                  Toast.manager.add({
+                  toast.add({
                     type: "error",
                     title: "Notifications are blocked",
                     description: "Allow notifications for Ren in your browser’s site settings.",
@@ -92,7 +135,7 @@ function ChatSettings() {
               })
             }}
           />
-        </Field.Root>
+        </Setting>
       ) : null}
     </PageShell.Section>
   )
@@ -130,15 +173,14 @@ function LeaveOrganization(props: { organization: { id: string; name: string } }
   const [confirming, setConfirming] = useState(false)
   return (
     <PageShell.Section title="Organization" frame="divided">
-      <Field.Root
-        label={props.organization.name}
+      <Setting
+        title={props.organization.name}
         description="Leaving archives your private space and deletes your personal credentials here."
-        orientation="horizontal"
       >
-        <Button appearance="outline" size="small" onClick={() => setConfirming(true)}>
+        <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
           Leave organization
         </Button>
-      </Field.Root>
+      </Setting>
       <ConfirmationDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -156,7 +198,7 @@ function LeaveOrganization(props: { organization: { id: string; name: string } }
             ),
           )
         }}
-        onConfirmed={() => Toast.manager.add({ type: "success", title: `You left ${props.organization.name}` })}
+        onConfirmed={() => toast.add({ type: "success", title: `You left ${props.organization.name}` })}
       />
     </PageShell.Section>
   )
@@ -165,27 +207,24 @@ function LeaveOrganization(props: { organization: { id: string; name: string } }
 function LinkedAccount(props: { link: ReturnType<typeof useAccountLink> }) {
   const link = props.link
   return (
-    <Field.Root
-      label={link.title}
-      description={linkedDescriptions[link.provider][link.linked ? "linked" : "unlinked"]}
-      orientation="horizontal"
-    >
+    <Setting title={link.title} description={linkedDescriptions[link.provider][link.linked ? "linked" : "unlinked"]}>
       {link.linked ? (
-        <Button appearance="outline" size="small" pending={link.unlink.isPending} onClick={() => link.unlink.mutate()}>
+        <Button variant="outline" size="sm" disabled={link.unlink.isPending} onClick={() => link.unlink.mutate()}>
+          {link.unlink.isPending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           Disconnect {link.title}
         </Button>
       ) : (
         <Button
-          appearance="outline"
-          size="small"
-          pending={link.link.isPending}
-          disabled={link.loading}
+          variant="outline"
+          size="sm"
+          disabled={link.link.isPending || link.loading}
           onClick={() => link.link.mutate()}
         >
+          {link.link.isPending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           Connect {link.title}
         </Button>
       )}
-    </Field.Root>
+    </Setting>
   )
 }
 
@@ -200,14 +239,14 @@ export function Preferences(props: {
   return (
     <PageShell.Root layout="settings" title="Preferences">
       <PageShell.Section frame="divided">
-        <Field.Root label="Email" description="Contact support to change." orientation="row">
+        <Setting title="Email" description="Contact support to change.">
           <div className="min-w-0">
             <Text tone="secondary" wrapping="anywhere" element="span">
               {props.user.email}
             </Text>
           </div>
-        </Field.Root>
-        <Field.Root label="Name" orientation="horizontal">
+        </Setting>
+        <Setting title="Name">
           <InlineEdit
             label="Name"
             alignment="end"
@@ -218,7 +257,7 @@ export function Preferences(props: {
               const result = await context.auth.updateUser({ name })
               if (result.error !== null) {
                 const message = result.error.message ?? "Try again."
-                Toast.manager.add({ type: "error", title: "Couldn’t update profile", description: message })
+                toast.add({ type: "error", title: "Couldn’t update profile", description: message })
                 throw new Error(message)
               }
               await Promise.all(
@@ -229,22 +268,23 @@ export function Preferences(props: {
               )
             }}
           />
-        </Field.Root>
+        </Setting>
       </PageShell.Section>
       <PageShell.Section title="Appearance" frame="divided">
-        <Field.Root label="Theme">
+        <Field>
+          <FieldTitle>Theme</FieldTitle>
           <ThemeSelector value={theme.preference} onValueChange={theme.setPreference} />
-        </Field.Root>
+        </Field>
       </PageShell.Section>
       <ChatSettings />
       <LinkedAccounts />
       {props.organization ? <LeaveOrganization organization={props.organization} /> : null}
       <PageShell.Section title="Security" frame="divided">
-        <Field.Root label="Password" orientation="row">
-          <Button appearance="outline" size="small" onClick={() => setChangingPassword(true)}>
+        <Setting title="Password">
+          <Button variant="outline" size="xs" className="h-6.5" onClick={() => setChangingPassword(true)}>
             Change
           </Button>
-        </Field.Root>
+        </Setting>
       </PageShell.Section>
       {changingPassword ? <PasswordDialog onClose={() => setChangingPassword(false)} /> : null}
     </PageShell.Root>

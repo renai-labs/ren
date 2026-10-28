@@ -1,10 +1,10 @@
 import { Button } from "@ren/ui/button"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { LoadingMessage } from "@ren/ui/loading-message"
 import { PageShell } from "@ren/ui/page-shell"
 import { SearchField } from "@ren/ui/search-field"
-import { SegmentedControl } from "@ren/ui/segmented-control"
-import { StateMessage } from "@ren/ui/state-message"
+import { Spinner } from "@ren/ui/spinner"
+import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useDeferredValue, useState } from "react"
 import { ProfileDialog } from "../../components/profile-dialog.js"
@@ -41,15 +41,17 @@ export function AppsPage(props: {
         <Toolbar.Root
           alignment="split"
           leading={
-            <SegmentedControl<View>
-              label="Marketplace view"
-              value={props.view}
-              onValueChange={props.onViewChange}
-              options={[
-                { value: "browse", label: "Browse" },
-                { value: "in-use", label: "In use" },
-              ]}
-            />
+            <ToggleGroup
+              aria-label="Marketplace view"
+              value={[props.view]}
+              onValueChange={(next) => {
+                const view = next[0]
+                if (view === "browse" || view === "in-use") props.onViewChange(view)
+              }}
+            >
+              <ToggleGroupItem value="browse">Browse</ToggleGroupItem>
+              <ToggleGroupItem value="in-use">In use</ToggleGroupItem>
+            </ToggleGroup>
           }
         >
           <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search apps" />
@@ -87,7 +89,7 @@ export function AppsPage(props: {
           profiles={openedProfiles}
           caption={Profiles.audience}
           action={(profile) => (
-            <Button appearance="secondary" size="small" onClick={() => openProfile(profile.appId)(profile.id)}>
+            <Button variant="outline" size="sm" onClick={() => openProfile(profile.appId)(profile.id)}>
               {Apps.connectLabel(profile) ?? "Open"}
             </Button>
           )}
@@ -114,16 +116,40 @@ function Catalog(props: {
   onAdded: (appId: string) => (profileId: string) => void
 }) {
   if (props.state === "failed")
-    return <StateMessage state="failed" title="Couldn’t load apps." onRetry={props.onRetry} />
-  if (props.state === "loading") return <LoadingMessage placement="section" />
+    return (
+      <Empty role="alert">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon glyph="AlertCircle" />
+          </EmptyMedia>
+          <EmptyTitle>Couldn’t load apps.</EmptyTitle>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button variant="outline" size="sm" onClick={props.onRetry}>
+            Try again
+          </Button>
+        </EmptyContent>
+      </Empty>
+    )
+  if (props.state === "loading")
+    return (
+      <Empty>
+        <EmptyMedia>
+          <Spinner />
+        </EmptyMedia>
+      </Empty>
+    )
   if (props.rows.length === 0)
     return (
-      <StateMessage
-        state={props.needle ? "no-results" : "empty"}
-        icon={<Icon glyph="Extension" size="medium" tone="secondary" />}
-        title={props.needle ? `Nothing matches “${props.needle}”` : "No apps in use"}
-        description={props.needle ? undefined : "Browse apps and add one to a space."}
-      />
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon glyph="Extension" />
+          </EmptyMedia>
+          <EmptyTitle>{props.needle ? `Nothing matches “${props.needle}”` : "No apps in use"}</EmptyTitle>
+          {props.needle ? null : <EmptyDescription>Browse apps and add one to a space.</EmptyDescription>}
+        </EmptyHeader>
+      </Empty>
     )
   return (
     <AppGrid label="Apps">

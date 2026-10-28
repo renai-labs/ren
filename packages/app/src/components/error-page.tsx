@@ -1,7 +1,8 @@
 import { ClientError } from "@ren/client"
-import { Button } from "@ren/ui/button"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { Logotype } from "@ren/ui/logotype"
 import { PublicShell } from "@ren/ui/public-shell"
+import { Spinner } from "@ren/ui/spinner"
 import { Link, useRouter } from "@tanstack/react-router"
 import { useState } from "react"
 import type { ReactNode } from "react"
@@ -37,9 +38,9 @@ function ErrorPage(props: { code: string; message: string; action?: ReactNode })
   return (
     <PublicShell.Status brand={<Logotype size="large" tone="subdued" />} title={props.code} description={props.message}>
       {props.action ?? (
-        <Button appearance="primary" nativeButton={false} render={<Link to="/" />}>
+        <Link to="/" className={buttonVariants()}>
           Go to homepage
-        </Button>
+        </Link>
       )}
     </PublicShell.Status>
   )
@@ -77,13 +78,13 @@ function OfflineError() {
       message={retrying ? "Reconnecting…" : "Can’t reach Ren. We’ll reconnect automatically."}
       action={
         <Button
-          appearance="primary"
-          pending={retrying}
+          disabled={retrying}
           onClick={() => {
             setRetrying(true)
             void router.invalidate().finally(() => setRetrying(false))
           }}
         >
+          {retrying ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           Try again
         </Button>
       }

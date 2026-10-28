@@ -1,19 +1,17 @@
 import type { LabelSummary, TaskInfo } from "@ren/client"
 import { Task } from "@ren/schema/task"
-import { Avatar } from "@ren/ui/avatar"
+import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
+import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { Combobox } from "@ren/ui/combobox"
+import { Empty, EmptyDescription, EmptyHeader } from "@ren/ui/empty"
 import { FormActions } from "@ren/ui/form-actions"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { List } from "@ren/ui/list"
-import { LoadingMessage } from "@ren/ui/loading-message"
-import { Notice } from "@ren/ui/notice"
-import { Popover } from "@ren/ui/popover"
+import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from "@ren/ui/item"
+import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { SearchField } from "@ren/ui/search-field"
-import { SegmentedControl } from "@ren/ui/segmented-control"
-import { Select } from "@ren/ui/select"
-import { StateMessage } from "@ren/ui/state-message"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
+import { Spinner } from "@ren/ui/spinner"
 import { StatusDot } from "@ren/ui/status-dot"
 import { TaskDueDate } from "@ren/ui/task-due-date"
 import type { TaskControlPresentation } from "@ren/ui/task-due-date"
@@ -21,6 +19,8 @@ import { TaskLabel } from "@ren/ui/task-label"
 import { TaskPriorityIcon } from "@ren/ui/task-priority-icon"
 import { TaskStatusCircle } from "@ren/ui/task-status-circle"
 import { Text } from "@ren/ui/text"
+import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
+import { Initials } from "@ren/util/initials"
 import { Result, Schema, SchemaIssue } from "effect"
 import { useState } from "react"
 import type { ReactNode } from "react"
@@ -40,13 +40,52 @@ export type ControlProps = {
   onAssign?: ((assignment: Tasks.Assignment) => unknown) | undefined
 }
 
-const triggers = {
-  chip: { appearance: "chip", shape: "pill", size: "small", indicator: "none" },
-  row: { appearance: "property", shape: "pill", size: "small", indicator: "none" },
-  icon: { appearance: "plain", shape: "square", size: "small", indicator: "none" },
+const selectTriggers = {
+  chip: "gap-2 rounded-full px-3 text-xs font-medium data-[size=sm]:rounded-full *:[svg]:last:hidden",
+  row: "-ml-2 gap-2 border-transparent px-2 disabled:opacity-100 data-[size=sm]:h-8 *:[svg]:last:hidden",
+  icon: "justify-center rounded-full border-transparent p-0 text-muted-foreground data-[size=sm]:size-6 data-[size=sm]:rounded-full *:[svg]:last:hidden",
+}
+
+const buttonTriggers = {
+  chip: { variant: "outline", size: "xs", className: "h-7 gap-2 rounded-full px-3" },
+  row: { variant: "ghost", size: "default", className: "-ml-2 h-8 w-fit justify-start gap-2 px-2 font-normal" },
+  icon: { variant: "ghost", size: "icon-xs", className: "rounded-full text-muted-foreground" },
 } as const
 
 const subject = (task: Values) => task.title || "new task"
+
+export function PersonAvatar(props: { name: string; image?: string | null | undefined }) {
+  return (
+    <Avatar size="sm" className="data-[size=sm]:size-5" aria-hidden>
+      {props.image ? <AvatarImage src={props.image} alt="" /> : null}
+      <AvatarFallback className="bg-secondary">{Initials.of(props.name)}</AvatarFallback>
+    </Avatar>
+  )
+}
+
+export function SpaceAvatar() {
+  return (
+    <Avatar size="sm" className="rounded-md after:rounded-md data-[size=sm]:size-5" aria-hidden>
+      <AvatarFallback className="rounded-md bg-secondary">
+        <Icon glyph="Cube" size="extra-small" />
+      </AvatarFallback>
+    </Avatar>
+  )
+}
+
+function InlineNote(props: { tone: "danger" | "neutral"; action?: ReactNode; children: ReactNode }) {
+  return (
+    <Alert
+      variant={props.tone === "danger" ? "destructive" : "default"}
+      role={props.tone === "danger" ? "alert" : "status"}
+      className="border-0 bg-transparent p-0 has-data-[slot=alert-action]:pr-16"
+    >
+      <Icon glyph={props.tone === "danger" ? "AlertCircle" : "Info"} />
+      <AlertDescription>{props.children}</AlertDescription>
+      {props.action ? <AlertAction className="top-0 right-0">{props.action}</AlertAction> : null}
+    </Alert>
+  )
+}
 
 export function PropertyControls(
   props: ControlProps & { agentName: string | undefined; owner: Tasks.Person | undefined },
@@ -72,64 +111,86 @@ export function StatusControl(props: ControlProps) {
   const save = usePropertySave(props.onChange)
   return (
     <>
-      <Select.Root<Task.Status>
+      <Select
+        items={TaskView.statuses.map((status) => ({ label: TaskView.statusLabel[status], value: status }))}
         value={props.task.status}
         disabled={props.disabled === true || !props.onChange || save.pending}
-        onValueChange={(status) => save.change({ status })}
-        label={`Status for ${subject(props.task)}: ${TaskView.statusLabel[props.task.status]}`}
-        {...triggers[props.presentation]}
-        {...(props.presentation === "icon" && { renderValue: (option) => option?.icon })}
-        options={TaskView.statuses.map((status) => ({
-          value: status,
-          icon: <TaskStatusCircle status={status} />,
-          label: TaskView.statusLabel[status],
-        }))}
-      />
-      {save.error ? (
-        <Notice tone="danger" placement="inline">
-          {save.error}
-        </Notice>
-      ) : null}
+        onValueChange={(status) => {
+          if (status !== null) save.change({ status })
+        }}
+      >
+        <SelectTrigger
+          size="sm"
+          aria-label={`Status for ${subject(props.task)}: ${TaskView.statusLabel[props.task.status]}`}
+          className={selectTriggers[props.presentation]}
+        >
+          <SelectValue>
+            {(status: Task.Status) =>
+              triggerContent(props.presentation, <TaskStatusCircle status={status} />, TaskView.statusLabel[status])
+            }
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent align="start" className="w-48">
+          <SelectGroup>
+            {TaskView.statuses.map((status) => (
+              <SelectItem key={status} value={status}>
+                <TaskStatusCircle status={status} />
+                {TaskView.statusLabel[status]}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {save.error ? <InlineNote tone="danger">{save.error}</InlineNote> : null}
     </>
   )
 }
 
 export function PriorityControl(props: ControlProps) {
   const save = usePropertySave(props.onChange)
+  const options: ReadonlyArray<{ value: Task.Priority | typeof TaskView.none; label: string }> = [
+    { value: TaskView.none, label: TaskView.priorityLabel(null) },
+    ...TaskView.priorities.map((priority) => ({ value: priority, label: TaskView.priorityLabel(priority) })),
+  ]
   return (
     <>
-      <Select.Root<Task.Priority | typeof TaskView.none>
+      <Select<Task.Priority | typeof TaskView.none>
+        items={options}
         value={props.task.priority ?? TaskView.none}
         disabled={props.disabled === true || !props.onChange || save.pending}
-        onValueChange={(value) => save.change({ priority: value === TaskView.none ? null : value })}
-        label={`Priority for ${subject(props.task)}: ${TaskView.priorityLabel(props.task.priority)}`}
-        {...triggers[props.presentation]}
-        {...(props.presentation === "icon" && { renderValue: (option) => option?.icon })}
-        {...(props.presentation === "chip" &&
-          !props.task.priority && {
-            renderValue: () => (
-              <>
-                <TaskPriorityIcon priority={null} />
-                <Text purpose="caption" tone="secondary" element="span">
-                  Priority
-                </Text>
-              </>
-            ),
-          })}
-        options={[
-          { value: TaskView.none, icon: <TaskPriorityIcon priority={null} />, label: TaskView.priorityLabel(null) },
-          ...TaskView.priorities.map((priority) => ({
-            value: priority,
-            icon: <TaskPriorityIcon priority={priority} />,
-            label: TaskView.priorityLabel(priority),
-          })),
-        ]}
-      />
-      {save.error ? (
-        <Notice tone="danger" placement="inline">
-          {save.error}
-        </Notice>
-      ) : null}
+        onValueChange={(value) => {
+          if (value !== null) save.change({ priority: value === TaskView.none ? null : value })
+        }}
+      >
+        <SelectTrigger
+          size="sm"
+          aria-label={`Priority for ${subject(props.task)}: ${TaskView.priorityLabel(props.task.priority)}`}
+          className={selectTriggers[props.presentation]}
+        >
+          <SelectValue>
+            {() =>
+              triggerContent(
+                props.presentation,
+                <TaskPriorityIcon priority={props.task.priority} />,
+                props.presentation === "chip" && !props.task.priority
+                  ? "Priority"
+                  : TaskView.priorityLabel(props.task.priority),
+              )
+            }
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent align="start" className="w-48">
+          <SelectGroup>
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                <TaskPriorityIcon priority={option.value === TaskView.none ? null : option.value} />
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {save.error ? <InlineNote tone="danger">{save.error}</InlineNote> : null}
     </>
   )
 }
@@ -162,16 +223,9 @@ function triggerContent(presentation: TaskControlPresentation, glyph: ReactNode,
   return (
     <>
       {glyph}
-      <Text
-        purpose={presentation === "chip" ? "caption" : "label"}
-        weight={presentation === "chip" ? "medium" : "regular"}
-        tone="inherit"
-        element="span"
-        truncation="single-line"
-        title={text}
-      >
+      <span className="truncate" title={text}>
         {text}
-      </Text>
+      </span>
     </>
   )
 }
@@ -200,24 +254,18 @@ function useAssignment(onPick: (id: string | null) => unknown, onDone: () => voi
 function AssignFooter(props: { saving: Saving | null; onRetry: (saving: Saving) => void }) {
   const saving = props.saving
   if (saving === null) return null
-  if (saving.failure === null)
-    return (
-      <Notice tone="neutral" placement="inline">
-        Saving {saving.name}…
-      </Notice>
-    )
+  if (saving.failure === null) return <InlineNote tone="neutral">Saving {saving.name}…</InlineNote>
   return (
-    <Notice
+    <InlineNote
       tone="danger"
-      placement="inline"
       action={
-        <Button appearance="plain" size="small" onClick={() => props.onRetry(saving)}>
+        <Button variant="ghost" size="xs" onClick={() => props.onRetry(saving)}>
           Retry
         </Button>
       }
     >
       {saving.failure}
-    </Notice>
+    </InlineNote>
   )
 }
 
@@ -244,6 +292,7 @@ function Picker(props: PickerProps) {
   const assignment = useAssignment(props.onPick, () => props.onOpenChange(false))
   const blocked = props.disabled || assignment.pending
   const label = props.value ? (props.current?.name ?? props.property) : props.empty
+  const trigger = buttonTriggers[props.presentation]
   return (
     <Combobox.Popover
       label={props.heading}
@@ -290,29 +339,25 @@ function Picker(props: PickerProps) {
           })),
         },
       ]}
-      trigger={<Select.Button {...pickerButton(props, { label, disabled: blocked })} />}
+      trigger={
+        <Button
+          variant={trigger.variant}
+          size={trigger.size}
+          className={trigger.className}
+          disabled={blocked}
+          aria-label={`${props.property} for ${props.subject}: ${label}`}
+        >
+          {props.value
+            ? triggerContent(props.presentation, props.current?.glyph ?? props.noneIcon, label)
+            : triggerContent(
+                props.presentation,
+                props.noneIcon,
+                props.presentation === "chip" ? props.property : label,
+              )}
+        </Button>
+      }
     />
   )
-}
-
-function pickerButton(
-  props: PickerProps,
-  state: { readonly label: string; readonly disabled: boolean },
-): Select.ButtonProps {
-  return {
-    ...triggers[props.presentation],
-    shape: props.presentation === "icon" ? "circle" : triggers[props.presentation].shape,
-    disabled: state.disabled,
-    label: `${props.property} for ${props.subject}: ${state.label}`,
-    placeholder: triggerContent(
-      props.presentation,
-      props.noneIcon,
-      props.presentation === "chip" ? props.property : state.label,
-    ),
-    children: props.value
-      ? triggerContent(props.presentation, props.current?.glyph ?? props.noneIcon, state.label)
-      : null,
-  }
 }
 
 const queryStates = { pending: "loading", error: "failed", success: "ready" } as const
@@ -346,9 +391,6 @@ export function AgentControl(props: ControlProps & { agentName: string | undefin
 export function OwnerControl(props: ControlProps & { owner: Tasks.Person | undefined }) {
   const [open, setOpen] = useState(false)
   const owners = Tasks.useSpaceOwners(props.task.spaceId, { enabled: open })
-  const avatar = (person: Tasks.Person, size: "extra-small" | "compact", tone: "inverse" | "accent") => (
-    <Avatar.Root name={person.name} image={person.image} size={size} tone={tone} decorative />
-  )
   return (
     <Picker
       presentation={props.presentation}
@@ -361,7 +403,7 @@ export function OwnerControl(props: ControlProps & { owner: Tasks.Person | undef
       current={
         props.owner && {
           name: props.owner.name,
-          glyph: avatar(props.owner, props.presentation === "icon" ? "compact" : "extra-small", "inverse"),
+          glyph: <PersonAvatar name={props.owner.name} image={props.owner.image} />,
         }
       }
       subject={subject(props.task)}
@@ -370,7 +412,7 @@ export function OwnerControl(props: ControlProps & { owner: Tasks.Person | undef
       options={(owners.data ?? []).map((person) => ({
         id: person.id,
         name: person.name,
-        icon: avatar(person, "compact", "accent"),
+        icon: <PersonAvatar name={person.name} image={person.image} />,
       }))}
       open={open}
       onOpenChange={setOpen}
@@ -508,8 +550,9 @@ export function LabelsControl(props: ControlProps) {
       (failure: unknown) => setError(Tasks.describe(failure)),
     )
   }
+  const trigger = labelsTrigger(props)
   return (
-    <Popover.Root
+    <Popover
       open={open}
       onOpenChange={(next) => {
         if (pending) return
@@ -522,8 +565,22 @@ export function LabelsControl(props: ControlProps) {
         setOpen(next)
       }}
     >
-      <Popover.Trigger render={<Select.Button {...labelsButton(props)} />} />
-      <Popover.Content alignment="start" padding="small" label="Labels">
+      <PopoverTrigger
+        render={
+          <Button
+            variant={trigger.variant}
+            size={trigger.size}
+            className={trigger.className}
+            disabled={props.disabled === true || !props.onChange}
+            aria-label={`Labels for ${subject(props.task)}: ${
+              props.task.labels.map((label) => TaskLabel.display(label.name)).join(", ") || "none"
+            }`}
+          />
+        }
+      >
+        {trigger.children}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72" aria-label="Labels">
         {naming === null ? (
           <LabelSearchPanel
             query={query}
@@ -566,8 +623,8 @@ export function LabelsControl(props: ControlProps) {
             onConfirm={confirm}
           />
         )}
-      </Popover.Content>
-    </Popover.Root>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -603,41 +660,68 @@ function LabelSearchPanel(props: {
         }}
       />
       <div className="flex flex-col">
-        <List.Root frame="flush" height="limited" label="Labels">
+        <ItemGroup aria-label="Labels" className="max-h-64 overflow-y-auto overscroll-contain has-data-[size=xs]:gap-0">
           {props.matching.map((label) => {
             const checked = props.selected.some((entry) => entry.id === label.id)
             return (
-              <List.Item
+              <Item
                 key={label.id}
-                density="compact"
-                disabled={label.isSystem}
-                selected={checked}
-                selectionMark="checkbox"
-                onActivate={() => props.onToggle(label)}
-                leading={<StatusDot tone={TaskLabel.tone(label)} />}
-                title={TaskLabel.display(label.name)}
-                trailing={checked ? <Icon glyph="Check" size="extra-small" tone="secondary" /> : undefined}
-              />
+                size="xs"
+                className="h-auto justify-start text-left font-normal"
+                render={
+                  <Button
+                    variant="ghost"
+                    disabled={label.isSystem}
+                    aria-pressed={checked}
+                    onClick={() => props.onToggle(label)}
+                  />
+                }
+              >
+                <ItemMedia>
+                  <StatusDot tone={TaskLabel.tone(label)} />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle>{TaskLabel.display(label.name)}</ItemTitle>
+                </ItemContent>
+                {checked ? (
+                  <ItemActions>
+                    <Icon glyph="Check" size="extra-small" tone="secondary" />
+                  </ItemActions>
+                ) : null}
+              </Item>
             )
           })}
           {props.creatable ? (
-            <List.Item
-              density="compact"
-              onActivate={props.onCreate}
-              leading={<Icon glyph="Plus" />}
-              title={`Create label “${props.query.trim()}”`}
-            />
+            <Item
+              size="xs"
+              className="h-auto justify-start text-left font-normal"
+              render={<Button variant="ghost" onClick={props.onCreate} />}
+            >
+              <ItemMedia>
+                <Icon glyph="Plus" />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>Create label “{props.query.trim()}”</ItemTitle>
+              </ItemContent>
+            </Item>
           ) : null}
-        </List.Root>
-        {props.loading ? <LoadingMessage placement="inline" title="Loading labels…" /> : null}
-        {props.failed ? <StateMessage state="failed" placement="inline" title="Couldn’t load labels." /> : null}
+        </ItemGroup>
+        {props.loading ? (
+          <div className="flex items-center gap-2 px-2.5 py-2 text-sm text-muted-foreground">
+            <Spinner />
+            Loading labels…
+          </div>
+        ) : null}
+        {props.failed ? <InlineNote tone="danger">Couldn’t load labels.</InlineNote> : null}
         {props.matching.length === 0 && !props.creatable && !props.loading ? (
-          <StateMessage state="empty" placement="inline" title="No labels yet. Type to create one." />
+          <Empty className="p-2">
+            <EmptyHeader>
+              <EmptyDescription>No labels yet. Type to create one.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : null}
       </div>
-      <Notice tone="danger" placement="inline">
-        {props.error}
-      </Notice>
+      {props.error ? <InlineNote tone="danger">{props.error}</InlineNote> : null}
     </div>
   )
 }
@@ -662,61 +746,63 @@ function LabelCreatePanel(props: {
       }}
     >
       <div className="flex items-center gap-2">
-        <IconButton size="small" label="Back to label search" onClick={props.onCancel}>
+        <Button variant="ghost" size="icon-sm" aria-label="Back to label search" onClick={props.onCancel}>
           <Icon glyph="ChevronLeft" />
-        </IconButton>
+        </Button>
         <Text purpose="label" element="span" truncation="single-line">
           New label “{TaskLabel.display(props.name)}”
         </Text>
       </div>
-      <SegmentedControl
-        size="small"
-        label="Label color"
-        value={props.color}
-        onValueChange={props.onColorChange}
-        options={TaskLabel.swatches.map((swatch) => ({
-          value: swatch.hex,
-          label: <StatusDot tone={swatch.tone} label={colors[swatch.tone] ?? swatch.hex} />,
-        }))}
-      />
-      <Notice tone="danger" placement="inline">
-        {props.error}
-      </Notice>
+      <ToggleGroup
+        aria-label="Label color"
+        variant="outline"
+        size="sm"
+        spacing={1}
+        value={[props.color]}
+        onValueChange={(next) => {
+          const color = next.at(0)
+          if (color) props.onColorChange(color)
+        }}
+      >
+        {TaskLabel.swatches.map((swatch) => (
+          <ToggleGroupItem key={swatch.hex} value={swatch.hex}>
+            <StatusDot tone={swatch.tone} label={colors[swatch.tone] ?? swatch.hex} />
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      {props.error ? <InlineNote tone="danger">{props.error}</InlineNote> : null}
       <FormActions.Root>
-        <Button appearance="plain" size="small" disabled={props.pending} onClick={props.onCancel}>
+        <Button variant="ghost" size="sm" disabled={props.pending} onClick={props.onCancel}>
           Cancel
         </Button>
-        <Button
-          appearance="secondary"
-          size="small"
-          pending={props.pending}
-          pendingLabel="Creating…"
-          onClick={props.onConfirm}
-        >
-          Create label
+        <Button variant="outline" size="sm" disabled={props.pending} onClick={props.onConfirm}>
+          {props.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+          {props.pending ? "Creating…" : "Create label"}
         </Button>
       </FormActions.Root>
     </div>
   )
 }
 
-function labelsButton(props: ControlProps): Select.ButtonProps {
+function labelsTrigger(props: ControlProps) {
   const labels = props.task.labels
-  const shared = {
-    ...triggers[props.presentation],
-    disabled: props.disabled === true || !props.onChange,
-    label: `Labels for ${subject(props.task)}: ${
-      labels.map((label) => TaskLabel.display(label.name)).join(", ") || "none"
-    }`,
-  }
+  const fit = {
+    variant: "ghost",
+    size: "default",
+    className: "h-auto max-w-full rounded-full px-0 hover:bg-transparent",
+  } as const
   if (props.presentation === "icon")
     return labels.length > 0
-      ? { ...shared, shape: "fit", children: <TaskLabel.Chips labels={labels} /> }
-      : { ...shared, visibility: "on-container-hover", children: <Icon glyph="Plus" /> }
+      ? { ...fit, children: <TaskLabel.Chips labels={labels} /> }
+      : {
+          ...buttonTriggers.icon,
+          className:
+            "rounded-full text-muted-foreground focus-visible:opacity-100 data-popup-open:opacity-100 sm:opacity-0 sm:group-hover/board-card:opacity-100 sm:group-hover/task-row:opacity-100",
+          children: <Icon glyph="Plus" />,
+        }
   if (props.presentation === "row" && labels.length > 0)
     return {
-      ...shared,
-      shape: "fit",
+      ...fit,
       children: (
         <span className="flex min-w-0 flex-wrap items-center gap-1">
           {labels.map((label) => (
@@ -728,8 +814,9 @@ function labelsButton(props: ControlProps): Select.ButtonProps {
     }
   if (props.presentation === "row")
     return {
-      ...shared,
-      placeholder: (
+      ...buttonTriggers.row,
+      className: "-ml-2 h-8 w-fit justify-start gap-2 px-2 font-normal text-muted-foreground",
+      children: (
         <>
           <Icon glyph="Tag" />
           Add label
@@ -737,19 +824,18 @@ function labelsButton(props: ControlProps): Select.ButtonProps {
       ),
     }
   return {
-    ...shared,
-    placeholder: (
-      <>
-        <Icon glyph="Tag" />
-        Labels
-      </>
-    ),
+    ...buttonTriggers.chip,
     children:
       labels.length > 0 ? (
         <>
           <TaskLabel.Dots labels={labels} />
-          {labels.length === 1 ? TaskLabel.display(labels[0]?.name ?? "") : `${labels.length} labels`}
+          {labels.length === 1 ? TaskLabel.display(labels.at(0)?.name ?? "") : `${labels.length} labels`}
         </>
-      ) : null,
+      ) : (
+        <>
+          <Icon glyph="Tag" />
+          Labels
+        </>
+      ),
   }
 }

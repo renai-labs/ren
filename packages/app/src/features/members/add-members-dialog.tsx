@@ -1,12 +1,12 @@
-import { Dialog } from "@ren/ui/dialog"
-import { Field } from "@ren/ui/field"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import { Field, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { FormActions } from "@ren/ui/form-actions"
-import { Select } from "@ren/ui/select"
-import { TextArea } from "@ren/ui/text-area"
-import { Toast } from "@ren/ui/toast"
-import { useState } from "react"
+import { Textarea } from "@ren/ui/textarea"
+import { toast } from "@ren/ui/toast"
+import { useId, useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { Members } from "./members.js"
+import { RoleSelect } from "./role-select.js"
 
 export function AddMembersDialog(props: {
   organizationId: string
@@ -17,6 +17,7 @@ export function AddMembersDialog(props: {
   const [text, setText] = useState("")
   const [role, setRole] = useState<Members.Role>("member")
   const [pending, setPending] = useState(false)
+  const id = useId()
   const emails = Members.parseEmails(text)
   const error = emails.invalid.length > 0 ? `Not a valid email: ${emails.invalid.join(", ")}` : undefined
   const submit = async () => {
@@ -41,26 +42,31 @@ export function AddMembersDialog(props: {
     setText(failed.map((result) => result.email).join("\n"))
   }
   return (
-    <Dialog.Root
+    <Dialog
       open
-      onOpenChange={(open) => (open ? undefined : props.onClose())}
-      dismissal={pending ? "blocked" : "allowed"}
+      onOpenChange={(open) => {
+        if (!open && !pending) props.onClose()
+      }}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>Add members</Dialog.Title>
-          <Dialog.Description>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add members</DialogTitle>
+          <DialogDescription>
             Invitations are sent by email. Separate addresses with commas or new lines.
-          </Dialog.Description>
-        </Dialog.Header>
-        <Dialog.Body>
-          <Field.Root label="Emails" error={error}>
-            <TextArea
+          </DialogDescription>
+        </DialogHeader>
+        <FieldGroup className="gap-4">
+          <Field data-invalid={error !== undefined || undefined}>
+            <FieldLabel htmlFor={`${id}-emails`}>Emails</FieldLabel>
+            <Textarea
+              id={`${id}-emails`}
               rows={3}
               // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog exists to take these addresses
               autoFocus
               placeholder="name@company.com"
-              invalid={error !== undefined}
+              aria-invalid={error !== undefined || undefined}
+              aria-describedby={error === undefined ? undefined : `${id}-error`}
+              className="min-h-20"
               value={text}
               onChange={(event) => setText(event.target.value)}
               onKeyDown={(event) => {
@@ -69,30 +75,32 @@ export function AddMembersDialog(props: {
                 void submit()
               }}
             />
-          </Field.Root>
-          <Field.Root label="Role">
-            <Select.Root label="Invite role" value={role} onValueChange={setRole} options={Members.roleOptions} />
-          </Field.Root>
-        </Dialog.Body>
-        <Dialog.Footer>
+            {error === undefined ? null : <FieldError id={`${id}-error`}>{error}</FieldError>}
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${id}-role`}>Role</FieldLabel>
+            <RoleSelect id={`${id}-role`} label="Invite role" value={role} onValueChange={setRole} className="w-full" />
+          </Field>
+        </FieldGroup>
+        <DialogFooter>
           <FormActions.Root>
             <FormActions.Cancel onClick={props.onClose} disabled={pending} />
             <FormActions.Submit pending={pending} pendingLabel="Inviting…" onClick={() => void submit()}>
               {emails.valid.length > 1 ? `Invite ${emails.valid.length} people` : "Send invite"}
             </FormActions.Submit>
           </FormActions.Root>
-        </Dialog.Footer>
-      </Dialog.Content>
-    </Dialog.Root>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 function announce(results: ReadonlyArray<{ email: string; failure: string | undefined }>) {
   const sent = results.filter((result) => result.failure === undefined)
   const failed = results.filter((result) => result.failure !== undefined)
-  if (sent.length === 1) Toast.manager.add({ type: "success", title: `Invitation sent to ${sent[0]?.email ?? ""}` })
-  if (sent.length > 1) Toast.manager.add({ type: "success", title: `${sent.length} invitations sent` })
+  if (sent.length === 1) toast.add({ type: "success", title: `Invitation sent to ${sent[0]?.email ?? ""}` })
+  if (sent.length > 1) toast.add({ type: "success", title: `${sent.length} invitations sent` })
   for (const result of failed)
-    Toast.manager.add({ type: "error", title: `Couldn’t invite ${result.email}`, description: result.failure })
+    toast.add({ type: "error", title: `Couldn’t invite ${result.email}`, description: result.failure })
   return failed
 }

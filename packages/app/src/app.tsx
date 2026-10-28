@@ -1,5 +1,6 @@
 import { Theme } from "@ren/ui/theme"
-import { Toast } from "@ren/ui/toast"
+import { Toaster } from "@ren/ui/toast"
+import { TooltipProvider } from "@ren/ui/tooltip"
 import { Schema } from "effect"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { RouterProvider } from "@tanstack/react-router"
@@ -22,12 +23,13 @@ export function App(props: { runtime: ReturnType<typeof Runtime.make> }) {
           setTheme(preference)
         }}
       >
-        <Toast.Provider>
-          <QueryClientProvider client={props.runtime.context.queryClient}>
-            <RouterProvider router={props.runtime.router} />
-          </QueryClientProvider>
-          <Toast.Region />
-        </Toast.Provider>
+        <TooltipProvider>
+          <Toaster timeout={4000}>
+            <QueryClientProvider client={props.runtime.context.queryClient}>
+              <RouterProvider router={props.runtime.router} />
+            </QueryClientProvider>
+          </Toaster>
+        </TooltipProvider>
       </Theme.Provider>
     </Platform.Provider>
   )

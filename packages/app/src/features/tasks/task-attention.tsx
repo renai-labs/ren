@@ -1,6 +1,7 @@
 import type { TaskInfo } from "@ren/client"
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Notice } from "@ren/ui/notice"
+import { Icon } from "@ren/ui/icon"
 import { TaskTurn } from "@ren/ui/task-turn"
 import type { TaskTurnProps } from "@ren/ui/task-turn"
 import { useQuery } from "@tanstack/react-query"
@@ -31,14 +32,18 @@ export function AttentionNotice(props: { task: TaskInfo; onOpen: (id: string) =>
   const session = props.task.session
   if (!session || attention.reason === undefined) return null
   return (
-    <Notice
-      tone="warning"
-      title={attention.form ? "Needs you" : "Permission needed"}
-      action={
-        <Button onClick={() => props.onOpen(session.id)}>{attention.form ? "Answer" : "Review permission"}</Button>
-      }
-    >
-      {attention.form?.title ?? attention.permission?.message ?? attention.permission?.action}
-    </Notice>
+    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Alert renders a div; a warning is a status, not an alert
+    <Alert role="status" className="has-data-[slot=alert-action]:pr-40">
+      <Icon glyph="AlertTriangle" tone="warning" />
+      <AlertTitle>{attention.form ? "Needs you" : "Permission needed"}</AlertTitle>
+      <AlertDescription>
+        {attention.form?.title ?? attention.permission?.message ?? attention.permission?.action}
+      </AlertDescription>
+      <AlertAction>
+        <Button variant="outline" size="sm" onClick={() => props.onOpen(session.id)}>
+          {attention.form ? "Answer" : "Review permission"}
+        </Button>
+      </AlertAction>
+    </Alert>
   )
 }

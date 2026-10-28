@@ -1,4 +1,4 @@
-import { Button } from "@ren/ui/button"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { RouterContext } from "../../lib/router-context.js"
 import { InvitationActions } from "./invitation-actions.js"
@@ -31,8 +31,7 @@ export function UnavailableInvitation(props: {
           action={
             props.authenticated ? (
               <Button
-                appearance="primary"
-                width="full"
+                className="w-full"
                 onClick={() => {
                   if (organizationId === undefined) return
                   void InvitationActions.openWorkspace(context, { organizationId, redirect: props.redirect }).then(
@@ -43,9 +42,9 @@ export function UnavailableInvitation(props: {
                 Go to workspace
               </Button>
             ) : (
-              <Button appearance="primary" width="full" nativeButton={false} render={<Link to="/login" />}>
+              <Link to="/login" className={buttonVariants({ className: "w-full" })}>
                 Sign in to Ren
-              </Button>
+              </Link>
             )
           }
         />

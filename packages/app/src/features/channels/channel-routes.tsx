@@ -1,7 +1,7 @@
 import type { ChannelInstallInfo, ChannelMappingInfo } from "@ren/client"
 import { ConnectionBoard } from "@ren/ui/connection-board"
 import { Icon } from "@ren/ui/icon"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useState } from "react"
 import { Viewport } from "../../platform/viewport.js"
 import { ChannelMappingData } from "./channel-mapping-data.js"
@@ -68,10 +68,10 @@ export function ChannelRoutes(props: { install: ChannelInstallInfo; userId: stri
           onSave={(settings) =>
             changes.save({ installId: props.install.id, place: route.place.id, spaceId: route.space.id }, settings, {
               onSuccess: () => {
-                Toast.manager.add({ type: "success", title: "Connected" })
+                toast.add({ type: "success", title: "Connected" })
                 setRoute(undefined)
               },
-              onError: () => Toast.manager.add({ type: "error", title: "Could not connect" }),
+              onError: () => toast.add({ type: "error", title: "Could not connect" }),
             })
           }
           onClose={() => setRoute(undefined)}

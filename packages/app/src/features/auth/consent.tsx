@@ -1,12 +1,15 @@
-import { Avatar } from "@ren/ui/avatar"
+import { Initials } from "@ren/util/initials"
+import { Alert, AlertDescription } from "@ren/ui/alert"
+import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
-import { Field } from "@ren/ui/field"
-import { Notice } from "@ren/ui/notice"
+import { Field, FieldLabel } from "@ren/ui/field"
+import { Icon } from "@ren/ui/icon"
 import { PublicShell } from "@ren/ui/public-shell"
-import { Select } from "@ren/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { useMutation } from "@tanstack/react-query"
-import { useState } from "react"
+import { useId, useState } from "react"
 import { Auth } from "../../lib/auth.js"
 
 export function Consent(props: {
@@ -16,6 +19,7 @@ export function Consent(props: {
   activeOrganizationId: string | null
 }) {
   const auth = Auth.useClient()
+  const organizationFieldId = useId()
   const [organizationId, setOrganizationId] = useState(props.activeOrganizationId ?? props.organizations.at(0)?.id)
   const organization = props.organizations.find((candidate) => candidate.id === organizationId)
   const answer = useMutation({
@@ -31,7 +35,10 @@ export function Consent(props: {
     <PublicShell.Centered>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <Avatar.Root name={props.client.name} image={props.client.icon} size="extra-large" shape="square" />
+          <Avatar className="size-14 rounded-xl">
+            <AvatarImage src={props.client.icon} alt={props.client.name} className="rounded-xl" />
+            <AvatarFallback className="rounded-xl text-base">{Initials.of(props.client.name)}</AvatarFallback>
+          </Avatar>
           <Text purpose="title" alignment="center">
             Allow {props.client.name} to use Ren?
           </Text>
@@ -42,32 +49,51 @@ export function Consent(props: {
           </Text>
         </div>
         {props.organizations.length > 1 ? (
-          <Field.Root label="Organization">
-            <Select.Root
-              label="Organization"
+          <Field>
+            <FieldLabel htmlFor={organizationFieldId}>Organization</FieldLabel>
+            <Select
+              items={props.organizations.map((candidate) => ({ value: candidate.id, label: candidate.name }))}
               value={organizationId ?? null}
-              width="full"
-              options={props.organizations.map((candidate) => ({ value: candidate.id, label: candidate.name }))}
-              onValueChange={setOrganizationId}
+              onValueChange={(next) => setOrganizationId(next ?? undefined)}
               disabled={answer.isPending}
-            />
-          </Field.Root>
+            >
+              <SelectTrigger id={organizationFieldId} className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {props.organizations.map((candidate) => (
+                    <SelectItem key={candidate.id} value={candidate.id}>
+                      {candidate.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
         ) : null}
         {answer.error === null ? null : (
-          <Notice tone="danger" placement="inline">
-            {answer.error.message}
-          </Notice>
+          <Alert variant="destructive">
+            <Icon glyph="AlertCircle" />
+            <AlertDescription>{answer.error.message}</AlertDescription>
+          </Alert>
         )}
         <div className="flex flex-col gap-3">
           <Button
-            appearance="primary"
-            width="full"
+            className="w-full"
             disabled={answer.isPending || organizationId === undefined}
             onClick={() => answer.mutate(true)}
           >
-            {answer.isPending && answer.variables ? "Allowing…" : "Allow access"}
+            {answer.isPending && answer.variables ? (
+              <>
+                <Spinner aria-hidden data-icon="inline-start" />
+                Allowing…
+              </>
+            ) : (
+              "Allow access"
+            )}
           </Button>
-          <Button appearance="link" disabled={answer.isPending} onClick={() => answer.mutate(false)}>
+          <Button variant="ghost" disabled={answer.isPending} onClick={() => answer.mutate(false)}>
             {answer.isPending && !answer.variables ? "Denying…" : "Deny"}
           </Button>
         </div>

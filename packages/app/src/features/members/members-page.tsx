@@ -2,7 +2,7 @@ import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
 import { PageShell } from "@ren/ui/page-shell"
 import { SearchField } from "@ren/ui/search-field"
-import { Tabs } from "@ren/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
@@ -40,7 +40,7 @@ export function MembersPage(props: {
       <Toolbar.Root
         alignment="split"
         leading={
-          <Tabs.Root
+          <Tabs
             value={props.tab}
             onValueChange={(next: Members.Tab) => {
               if (next === props.tab) return
@@ -48,15 +48,17 @@ export function MembersPage(props: {
               props.onTabChange(next)
             }}
           >
-            <Tabs.List label="Members">
-              <Tabs.Tab value="members" count={members.length}>
+            <TabsList variant="page" aria-label="Members">
+              <TabsTrigger value="members">
                 Members
-              </Tabs.Tab>
-              <Tabs.Tab value="invitations" count={invitations.length}>
+                <span className="text-muted-foreground tabular-nums">{members.length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="invitations">
                 Invitations
-              </Tabs.Tab>
-            </Tabs.List>
-          </Tabs.Root>
+                <span className="text-muted-foreground tabular-nums">{invitations.length}</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         }
       >
         <SearchField.Expandable
@@ -64,7 +66,8 @@ export function MembersPage(props: {
           onValueChange={setQuery}
           placeholder={props.tab === "members" ? "Search for a member" : "Search for an invitation"}
         />
-        <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setAdding(true)}>
+        <Button size="xs" className="h-6.5" onClick={() => setAdding(true)}>
+          <Icon glyph="Plus" data-icon="inline-start" />
           Add member
         </Button>
       </Toolbar.Root>

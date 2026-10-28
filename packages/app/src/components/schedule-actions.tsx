@@ -2,7 +2,7 @@ export * as ScheduleActions from "./schedule-actions.js"
 
 import type { ScheduleInfo } from "@ren/client"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
@@ -20,11 +20,10 @@ export function useActions(schedule: ScheduleInfo, options: { readonly onArchive
   const context = RouterContext.useRouterContext()
   const [editing, setEditing] = useState(false)
   const [archiving, setArchiving] = useState(false)
-  const failed = (title: string) => (error: Error) =>
-    Toast.manager.add({ type: "error", title, description: error.message })
+  const failed = (title: string) => (error: Error) => toast.add({ type: "error", title, description: error.message })
   const run = useMutation({
     ...context.api.schedule.run.mutationOptions(),
-    onSuccess: () => Toast.manager.add({ type: "success", title: `${schedule.name} is running` }),
+    onSuccess: () => toast.add({ type: "success", title: `${schedule.name} is running` }),
     onError: failed("Couldn’t run the schedule"),
   })
   const pause = useMutation({
@@ -59,7 +58,7 @@ export function useActions(schedule: ScheduleInfo, options: { readonly onArchive
           tone="danger"
           onConfirm={() => archive.mutateAsync({ id })}
           onConfirmed={() => {
-            Toast.manager.add({ type: "success", title: `${schedule.name} archived` })
+            toast.add({ type: "success", title: `${schedule.name} archived` })
             options.onArchived?.()
           }}
         />

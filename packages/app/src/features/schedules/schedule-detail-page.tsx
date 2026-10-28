@@ -1,13 +1,18 @@
 import type { ScheduleInfo } from "@ren/client"
 import { Pagination } from "@ren/schema/pagination"
 import { Button } from "@ren/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { LoadingMessage } from "@ren/ui/loading-message"
-import { Menu } from "@ren/ui/menu"
 import { PageShell } from "@ren/ui/page-shell"
-import { StateMessage } from "@ren/ui/state-message"
-import { Table } from "@ren/ui/table"
+import { Spinner } from "@ren/ui/spinner"
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
 import { useQuery } from "@tanstack/react-query"
@@ -28,14 +33,28 @@ export function ScheduleDetailPage(props: { scheduleId: string; onArchived: () =
     return (
       <PageShell.Root title="Schedule">
         {detail.isError ? (
-          <StateMessage
-            state="failed"
-            placement="section"
-            title="Couldn’t load this schedule."
-            onRetry={() => void detail.refetch()}
-          />
+          <Empty role="alert">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Icon glyph="AlertCircle" tone="danger" />
+              </EmptyMedia>
+              <EmptyTitle>Couldn’t load this schedule.</EmptyTitle>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
+                Try again
+              </Button>
+            </EmptyContent>
+          </Empty>
         ) : (
-          <LoadingMessage placement="section" title="Loading schedule…" />
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia>
+                <Spinner />
+              </EmptyMedia>
+              <EmptyTitle>Loading schedule…</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         )}
       </PageShell.Root>
     )
@@ -43,17 +62,8 @@ export function ScheduleDetailPage(props: { scheduleId: string; onArchived: () =
 }
 
 function Detail(props: { schedule: ScheduleInfo; onArchived: () => void }) {
-  const context = RouterContext.useRouterContext()
   const schedule = props.schedule
   const actions = ScheduleActions.useActions(schedule, { onArchived: props.onArchived })
-  const runs = useQuery({
-    ...context.api["schedule-run"].list.queryOptions({
-      scheduleId: schedule.id,
-      page: 1,
-      pageSize: Pagination.maximumPageSize,
-    }),
-    refetchInterval: 10_000,
-  })
   const status = Schedules.statusOf(schedule)
   const target = schedule.target
   return (
@@ -66,31 +76,46 @@ function Detail(props: { schedule: ScheduleInfo; onArchived: () => void }) {
       }
       actions={
         <>
-          <Button size="small" leadingIcon={<Icon glyph="Play" />} pending={actions.isRunning} onClick={actions.run}>
+          <Button variant="outline" size="sm" disabled={actions.isRunning} onClick={actions.run}>
+            {actions.isRunning ? (
+              <Spinner aria-hidden data-icon="inline-start" />
+            ) : (
+              <Icon glyph="Play" data-icon="inline-start" />
+            )}
             Run now
           </Button>
-          <Button size="small" leadingIcon={<Icon glyph="Pencil" />} onClick={actions.edit}>
+          <Button variant="outline" size="sm" onClick={actions.edit}>
+            <Icon glyph="Pencil" data-icon="inline-start" />
             Edit
           </Button>
-          <Menu.Root>
-            <Menu.Trigger
+          <DropdownMenu>
+            <DropdownMenuTrigger
               render={
-                <IconButton label="More schedule actions">
-                  <Icon glyph="MoreHorizontal" />
-                </IconButton>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground"
+                  aria-label="More schedule actions"
+                />
               }
-            />
-            <Menu.Popup alignment="end" width="small">
-              {actions.toggle ? (
-                <Menu.Item icon={<Icon glyph={actions.toggle.glyph} />} onSelect={actions.toggle.onSelect}>
-                  {actions.toggle.label}
-                </Menu.Item>
-              ) : null}
-              <Menu.Item tone="danger" icon={<Icon glyph="Trash2" />} onSelect={actions.archive}>
-                Archive
-              </Menu.Item>
-            </Menu.Popup>
-          </Menu.Root>
+            >
+              <Icon glyph="MoreHorizontal" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuGroup>
+                {actions.toggle ? (
+                  <DropdownMenuItem onClick={actions.toggle.onSelect}>
+                    <Icon glyph={actions.toggle.glyph} />
+                    {actions.toggle.label}
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem variant="destructive" onClick={actions.archive}>
+                  <Icon glyph="Trash2" />
+                  Archive
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       }
     >
@@ -111,47 +136,105 @@ function Detail(props: { schedule: ScheduleInfo; onArchived: () => void }) {
         <Text purpose="label" element="h2">
           Runs in the last 30 days
         </Text>
-        <Table.Root
-          state={Schedules.tableState(runs, runs.data?.items.length ?? 0)}
-          caption="Runs"
-          emptyMessage="No runs yet"
-          emptyDescription={
-            schedule.nextRunAt ? (
-              <>
-                The next run is <Time value={schedule.nextRunAt} format="date-time" />.
-              </>
-            ) : undefined
-          }
-          failureMessage="Couldn’t load the runs."
-          onRetry={() => void runs.refetch()}
-        >
-          <Table.Header>
-            <Table.HeaderCell width="large">Time</Table.HeaderCell>
-            <Table.HeaderCell>Result</Table.HeaderCell>
-            <Table.HeaderCell width="medium">Chat</Table.HeaderCell>
-          </Table.Header>
-          <Table.Body>
-            {(runs.data?.items ?? []).map((run) => (
-              <Table.Row key={run.id}>
-                <Table.Cell>
-                  <Time value={run.scheduledAt} format="date-time" />
-                </Table.Cell>
-                <Table.Cell>{Schedules.runStatus(run)}</Table.Cell>
-                <Table.Cell>
-                  {run.status === "started" ? (
-                    <Link to="/sessions/$sessionId" params={{ sessionId: run.sessionId }}>
-                      Open
-                    </Link>
-                  ) : (
-                    "—"
-                  )}
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
+        <Runs schedule={schedule} />
       </section>
       {actions.dialogs}
     </PageShell.Root>
+  )
+}
+
+function Runs(props: { schedule: ScheduleInfo }) {
+  const context = RouterContext.useRouterContext()
+  const runs = useQuery({
+    ...context.api["schedule-run"].list.queryOptions({
+      scheduleId: props.schedule.id,
+      page: 1,
+      pageSize: Pagination.maximumPageSize,
+    }),
+    refetchInterval: 10_000,
+  })
+  const state = Schedules.tableState(runs, runs.data?.items.length ?? 0)
+  return (
+    <div className="rounded-xl border bg-card p-2 [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3 [&_th]:font-normal [&_th]:text-muted-foreground [&_tr]:border-0">
+      <Table className="table-fixed">
+        <TableCaption className="sr-only">Runs</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-48">Time</TableHead>
+            <TableHead>Result</TableHead>
+            <TableHead className="w-36">Chat</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {state === "ready" ? null : (
+            <RunsMessage state={state} nextRunAt={props.schedule.nextRunAt} onRetry={() => void runs.refetch()} />
+          )}
+          {(runs.data?.items ?? []).map((run) => (
+            <TableRow key={run.id}>
+              <TableCell className="truncate">
+                <Time value={run.scheduledAt} format="date-time" />
+              </TableCell>
+              <TableCell className="truncate">{Schedules.runStatus(run)}</TableCell>
+              <TableCell>
+                {run.status === "started" ? (
+                  <Link to="/sessions/$sessionId" params={{ sessionId: run.sessionId }}>
+                    Open
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+function RunsMessage(props: {
+  state: "loading" | "failed" | "empty"
+  nextRunAt: ScheduleInfo["nextRunAt"]
+  onRetry: () => void
+}) {
+  return (
+    <TableRow>
+      <TableCell colSpan={3} className="whitespace-normal">
+        {props.state === "loading" ? (
+          <Empty>
+            <EmptyMedia>
+              <Spinner />
+            </EmptyMedia>
+          </Empty>
+        ) : null}
+        {props.state === "failed" ? (
+          <Empty role="alert">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Icon glyph="AlertCircle" tone="danger" />
+              </EmptyMedia>
+              <EmptyTitle>Couldn’t load the runs.</EmptyTitle>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button variant="outline" size="sm" onClick={props.onRetry}>
+                Try again
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : null}
+        {props.state === "empty" ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No runs yet</EmptyTitle>
+              {props.nextRunAt ? (
+                <EmptyDescription>
+                  The next run is <Time value={props.nextRunAt} format="date-time" />.
+                </EmptyDescription>
+              ) : null}
+            </EmptyHeader>
+          </Empty>
+        ) : null}
+      </TableCell>
+    </TableRow>
   )
 }

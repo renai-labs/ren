@@ -1,20 +1,36 @@
 import type { SpaceInfo } from "@ren/client"
-import { Avatar } from "@ren/ui/avatar"
-import { Breadcrumbs } from "@ren/ui/breadcrumbs"
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@ren/ui/alert"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@ren/ui/breadcrumb"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { Button } from "@ren/ui/button"
-import { Menu } from "@ren/ui/menu"
-import { Notice } from "@ren/ui/notice"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { PageShell } from "@ren/ui/page-shell"
-import { Tabs } from "@ren/ui/tabs"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router"
 import { useState } from "react"
 import type { ReactNode } from "react"
 import { RouterContext } from "../../lib/router-context.js"
+
+const tabLink = buttonVariants({
+  variant: "ghost",
+  className:
+    "font-normal text-muted-foreground aria-[current=page]:bg-secondary aria-[current=page]:font-medium aria-[current=page]:text-foreground",
+})
 
 export function SpacePage(props: { spaceId: string; children: ReactNode }) {
   const context = RouterContext.useRouterContext()
@@ -30,65 +46,81 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
       layout="detail"
       heading="entity"
       context={
-        <Breadcrumbs.Root>
-          <Breadcrumbs.Link render={<Link to="/spaces" />}>Spaces</Breadcrumbs.Link>
-          <Breadcrumbs.Page>{space.data.name}</Breadcrumbs.Page>
-        </Breadcrumbs.Root>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink render={<Link to="/spaces" />}>Spaces</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{space.data.name}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
       }
       media={
-        <Avatar.Root
-          name={space.data.name}
-          glyph={space.data.kind === "private" ? "Lock" : "Cube"}
-          size="extra-large"
-          shape="square"
-          decorative
-        />
+        <span className="flex size-12 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+          <Icon glyph={space.data.kind === "private" ? "Lock" : "Cube"} size="extra-large" />
+        </span>
       }
       title={space.data.name}
       subtitle={space.data.description ?? undefined}
       actions={space.data.canArchive ? <SpaceMenu space={space.data} /> : undefined}
       navigation={
         isMember ? (
-          <Tabs.Navigation label={space.data.name}>
-            <Tabs.Link render={<Link to="/spaces/$spaceId" params={params} activeOptions={{ exact: true }} />}>
+          <nav aria-label={space.data.name} className="flex flex-wrap items-center gap-1">
+            <Link to="/spaces/$spaceId" params={params} activeOptions={{ exact: true }} className={tabLink}>
               Overview
-            </Tabs.Link>
-            <Tabs.Link render={<Link to="/spaces/$spaceId/members" params={params} />} count={space.data.memberCount}>
+            </Link>
+            <Link to="/spaces/$spaceId/members" params={params} className={tabLink}>
               Members
-            </Tabs.Link>
-            <Tabs.Link render={<Link to="/spaces/$spaceId/apps" params={params} />}>Apps</Tabs.Link>
-            <Tabs.Link render={<Link to="/spaces/$spaceId/credentials" params={params} />}>Credentials</Tabs.Link>
-            <Tabs.Link render={<Link to="/spaces/$spaceId/channels" params={params} />}>Channels</Tabs.Link>
-            <Tabs.Link render={<Link to="/spaces/$spaceId/repositories" params={params} />}>Repositories</Tabs.Link>
-            <Tabs.Link render={<Link to="/spaces/$spaceId/factory" params={params} />}>Factory</Tabs.Link>
-          </Tabs.Navigation>
+              <span className="text-muted-foreground tabular-nums">{space.data.memberCount}</span>
+            </Link>
+            <Link to="/spaces/$spaceId/apps" params={params} className={tabLink}>
+              Apps
+            </Link>
+            <Link to="/spaces/$spaceId/credentials" params={params} className={tabLink}>
+              Credentials
+            </Link>
+            <Link to="/spaces/$spaceId/channels" params={params} className={tabLink}>
+              Channels
+            </Link>
+            <Link to="/spaces/$spaceId/repositories" params={params} className={tabLink}>
+              Repositories
+            </Link>
+            <Link to="/spaces/$spaceId/factory" params={params} className={tabLink}>
+              Factory
+            </Link>
+          </nav>
         ) : undefined
       }
     >
       {isMember ? (
         props.children
       ) : (
-        // oxlint-disable-next-line ren/no-comments -- access AC4: a non-member sees the list entry and may join a shared space.
-        <Notice
-          tone="neutral"
-          title={space.data.kind === "private" ? "This is a private space" : "You are not a member of this space"}
-          action={
-            space.data.canJoin ? (
+        // oxlint-disable-next-line ren/no-comments, jsx-a11y/prefer-tag-over-role -- access AC4: a non-member sees the list entry and may join a shared space. Alert renders a div, and the notice is a status.
+        <Alert role="status" className="has-data-[slot=alert-action]:pr-26">
+          <Icon glyph="Info" />
+          <AlertTitle>
+            {space.data.kind === "private" ? "This is a private space" : "You are not a member of this space"}
+          </AlertTitle>
+          <AlertDescription>
+            {space.data.kind === "private"
+              ? "Only its owner sees its chats, tasks, files and settings."
+              : "Join it to see its chats, tasks and settings. Its members see you in the member list once you join."}
+          </AlertDescription>
+          {space.data.canJoin ? (
+            <AlertAction>
               <Button
-                appearance="primary"
-                size="small"
+                size="sm"
                 disabled={join.isPending}
                 onClick={() => join.mutate({ payload: { spaceId: props.spaceId, userId } })}
               >
                 Join space
               </Button>
-            ) : undefined
-          }
-        >
-          {space.data.kind === "private"
-            ? "Only its owner sees its chats, tasks, files and settings."
-            : "Join it to see its chats, tasks and settings. Its members see you in the member list once you join."}
-        </Notice>
+            </AlertAction>
+          ) : null}
+        </Alert>
       )}
     </PageShell.Root>
   )
@@ -101,20 +133,23 @@ function SpaceMenu(props: { space: SpaceInfo }) {
   const [confirming, setConfirming] = useState(false)
   return (
     <>
-      <Menu.Root>
-        <Menu.Trigger
+      <DropdownMenu>
+        <DropdownMenuTrigger
           render={
-            <IconButton label="Space actions">
-              <Icon glyph="MoreHorizontal" />
-            </IconButton>
+            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Space actions" />
           }
-        />
-        <Menu.Popup alignment="end">
-          <Menu.Item tone="danger" icon={<Icon glyph="Archive" />} onSelect={() => setConfirming(true)}>
-            Archive space
-          </Menu.Item>
-        </Menu.Popup>
-      </Menu.Root>
+        >
+          <Icon glyph="MoreHorizontal" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuGroup>
+            <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
+              <Icon glyph="Archive" />
+              Archive space
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <ConfirmationDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -126,7 +161,7 @@ function SpaceMenu(props: { space: SpaceInfo }) {
           await archive.mutateAsync({ id: props.space.id })
         }}
         onConfirmed={() => {
-          Toast.manager.add({ type: "success", title: `${props.space.name} archived` })
+          toast.add({ type: "success", title: `${props.space.name} archived` })
           void navigate({ to: "/spaces" })
         }}
       />

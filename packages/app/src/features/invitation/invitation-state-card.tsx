@@ -1,5 +1,6 @@
-import { Avatar } from "@ren/ui/avatar"
-import { Button } from "@ren/ui/button"
+import { Avatar, AvatarFallback } from "@ren/ui/avatar"
+import { buttonVariants } from "@ren/ui/button"
+import { Icon } from "@ren/ui/icon"
 import type { Glyph } from "@ren/ui/icon"
 import { PublicShell } from "@ren/ui/public-shell"
 import { Text } from "@ren/ui/text"
@@ -11,7 +12,11 @@ export function InvitationStateCard(props: { glyph: Glyph; title: string; descri
     <PublicShell.Centered>
       <div className="flex flex-col gap-6 text-center">
         <div className="flex justify-center">
-          <Avatar.Root name={props.title} glyph={props.glyph} size="extra-large" decorative />
+          <Avatar className="size-14">
+            <AvatarFallback>
+              <Icon glyph={props.glyph} size="extra-large" />
+            </AvatarFallback>
+          </Avatar>
         </div>
         <div className="flex flex-col gap-2">
           <Text purpose="title" alignment="center">
@@ -23,9 +28,9 @@ export function InvitationStateCard(props: { glyph: Glyph; title: string; descri
         </div>
         <div className="flex flex-col gap-3">
           {props.action}
-          <Button appearance="primary" width="full" nativeButton={false} render={<Link to="/" />}>
+          <Link to="/" className={buttonVariants({ className: "w-full" })}>
             Return to homepage
-          </Button>
+          </Link>
         </div>
       </div>
     </PublicShell.Centered>

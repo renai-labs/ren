@@ -1,11 +1,12 @@
 import type { ChannelInstallInfo } from "@ren/client"
 import { Pagination } from "@ren/schema/pagination"
+import { Button, buttonVariants } from "@ren/ui/button"
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { List } from "@ren/ui/list"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { PageShell } from "@ren/ui/page-shell"
-import { ProgressIndicator } from "@ren/ui/progress-indicator"
 import { SearchField } from "@ren/ui/search-field"
-import { StateMessage } from "@ren/ui/state-message"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import type { TextTone } from "@ren/ui/text"
 import { Search } from "@ren/util/search"
@@ -52,7 +53,7 @@ export function ChannelsPage(props: { query: string; onQueryChange: (query: stri
     >
       {sections.map((section) => (
         <PageShell.Section key={section.category} title={section.title} description={section.description}>
-          <List.Root frame="card" label={section.title}>
+          <ItemGroup aria-label={section.title} className="gap-0 divide-y rounded-xl border bg-card">
             {(byCategory.get(section.category) ?? []).map((provider) => (
               <ProviderRow
                 key={provider.id}
@@ -63,16 +64,23 @@ export function ChannelsPage(props: { query: string; onQueryChange: (query: stri
                 attention={attention[provider.id]}
               />
             ))}
-          </List.Root>
+          </ItemGroup>
         </PageShell.Section>
       ))}
       {sections.length === 0 ? (
-        <StateMessage
-          state="no-results"
-          title={`No channels match “${props.query.trim()}”`}
-          onRetry={() => props.onQueryChange("")}
-          retryLabel="Show all channels"
-        />
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon glyph="Search" />
+            </EmptyMedia>
+            <EmptyTitle>No channels match “{props.query.trim()}”</EmptyTitle>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" size="sm" onClick={() => props.onQueryChange("")}>
+              Show all channels
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : null}
     </PageShell.Root>
   )
@@ -110,33 +118,62 @@ function ProviderRow(props: {
   const started = useInstall(props.provider.id, props.provider.title)
   const busy = props.loading || started.isPending
   const status = statusOf(props)
-  const item = {
-    density: "spacious" as const,
-    leading: <Icon glyph={props.provider.glyph} size="large" tone="primary" />,
-    title: props.provider.title,
-    description: (
-      <Text purpose="caption" tone={busy ? "secondary" : status.tone} element="span">
-        {busy ? "Checking…" : status.label}
-      </Text>
-    ),
-    trailing: busy ? (
-      <ProgressIndicator label="Checking" />
-    ) : (
-      <span className="flex items-center gap-1">
-        {actionOf(props)}
-        <Icon glyph="ChevronRight" tone="secondary" />
-      </span>
-    ),
-  }
-  if (busy) return <List.Item {...item} disabled />
-  if (props.install && props.attention) return <List.Item {...item} onActivate={props.attention.act} />
-  if (props.install)
+  const idle = !props.install && !props.available
+  return (
+    <Item
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div inside the ItemGroup list
+      role="listitem"
+      className={idle ? "min-h-14 gap-x-6 px-4 py-3 opacity-50" : "min-h-14 gap-x-6 px-4 py-3"}
+    >
+      <ItemMedia>
+        <Icon glyph={props.provider.glyph} size="large" tone="primary" />
+      </ItemMedia>
+      <ItemContent className="min-w-0 gap-0.5">
+        <ItemTitle>{props.provider.title}</ItemTitle>
+        <ItemDescription className="text-xs">
+          <Text purpose="caption" tone={busy ? "secondary" : status.tone} element="span">
+            {busy ? "Checking…" : status.label}
+          </Text>
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        {busy ? <Spinner aria-label="Checking" /> : null}
+        {busy || idle ? null : <ProviderAction {...props} onInstall={started.install} />}
+      </ItemActions>
+    </Item>
+  )
+}
+
+function ProviderAction(props: {
+  provider: (typeof Channels.providers)[number]
+  install: ChannelInstallInfo | undefined
+  attention: Attention | undefined
+  onInstall: () => void
+}) {
+  const label = (
+    <>
+      {actionOf(props)}
+      <Icon glyph="ChevronRight" data-icon="inline-end" />
+    </>
+  )
+  if (props.install && !props.attention)
     return (
-      <List.Item
-        {...item}
-        render={<Link to="/settings/channels/$provider" params={{ provider: props.provider.id }} />}
-      />
+      <Link
+        to="/settings/channels/$provider"
+        params={{ provider: props.provider.id }}
+        className={buttonVariants({ variant: "ghost", size: "xs", className: "h-6.5 text-muted-foreground" })}
+      >
+        {label}
+      </Link>
     )
-  if (!props.available) return <List.Item {...item} trailing={undefined} disabled />
-  return <List.Item {...item} onActivate={started.install} />
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      className="h-6.5 text-muted-foreground"
+      onClick={props.install && props.attention ? props.attention.act : props.onInstall}
+    >
+      {label}
+    </Button>
+  )
 }

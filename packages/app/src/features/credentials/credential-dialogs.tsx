@@ -1,10 +1,10 @@
 import type { CredentialInfo } from "@ren/client"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
-import { Dialog } from "@ren/ui/dialog"
+import { Alert, AlertDescription } from "@ren/ui/alert"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { Form } from "@ren/ui/form"
-import { Notice } from "@ren/ui/notice"
 import { Icon } from "@ren/ui/icon"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation } from "@tanstack/react-query"
 import type { Owners } from "./owners.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -22,37 +22,39 @@ export function RotateCredentialDialog(props: { credential: CredentialInfo; onCl
         .catch(() => undefined)
       if (!saved) return
       props.onClose()
-      Toast.manager.add({ type: "success", title: `${props.credential.label} rotated` })
+      toast.add({ type: "success", title: `${props.credential.label} rotated` })
     },
   })
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !rotate.isPending) props.onClose()
       }}
-      dismissal={rotate.isPending ? "blocked" : "allowed"}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>Rotate {props.credential.label}</Dialog.Title>
-          <Dialog.Description>The next request of every chat uses the new key.</Dialog.Description>
-        </Dialog.Header>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Rotate {props.credential.label}</DialogTitle>
+          <DialogDescription>The next request of every chat uses the new key.</DialogDescription>
+        </DialogHeader>
         <Form.Root form={form} arrangement="contents">
-          <Dialog.Body>
+          <div className="flex flex-col gap-4">
             <form.AppField name="value">
               {(field) => <field.PasswordField label="New key" autoComplete="off" />}
             </form.AppField>
-            <Notice tone="danger" placement="inline">
-              {rotate.error?.message}
-            </Notice>
-          </Dialog.Body>
-          <Dialog.Footer>
+            {rotate.error ? (
+              <Alert variant="destructive">
+                <Icon glyph="AlertCircle" />
+                <AlertDescription>{rotate.error.message}</AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
+          <DialogFooter className="sm:justify-end">
             <form.SubmitButton pendingLabel="Saving…">Rotate key</form.SubmitButton>
-          </Dialog.Footer>
+          </DialogFooter>
         </Form.Root>
-      </Dialog.Content>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -79,33 +81,32 @@ export function MoveCredentialDialog(props: {
       )
       if (!saved) return
       props.onClose()
-      Toast.manager.add({
+      toast.add({
         type: "success",
         title: `${props.credential.label} ${props.action === "move" ? "moved" : "copied"}`,
       })
     },
   })
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !pending) props.onClose()
       }}
-      dismissal={pending ? "blocked" : "allowed"}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
             {props.action === "move" ? "Move" : "Copy"} {props.credential.label}
-          </Dialog.Title>
-          <Dialog.Description>
+          </DialogTitle>
+          <DialogDescription>
             {props.action === "move"
               ? "Chats of the old owner lose this key at once."
               : "The copy is a separate credential. Rotating one does not change the other."}
-          </Dialog.Description>
-        </Dialog.Header>
+          </DialogDescription>
+        </DialogHeader>
         <Form.Root form={form} arrangement="contents">
-          <Dialog.Body>
+          <div className="flex flex-col gap-4">
             <form.AppField name="owner">
               {(field) => (
                 <field.Select
@@ -118,18 +119,21 @@ export function MoveCredentialDialog(props: {
                 />
               )}
             </form.AppField>
-            <Notice tone="danger" placement="inline">
-              {(move.error ?? copy.error)?.message}
-            </Notice>
-          </Dialog.Body>
-          <Dialog.Footer>
+            {move.error || copy.error ? (
+              <Alert variant="destructive">
+                <Icon glyph="AlertCircle" />
+                <AlertDescription>{(move.error ?? copy.error)?.message}</AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
+          <DialogFooter className="sm:justify-end">
             <form.SubmitButton pendingLabel="Saving…">
               {props.action === "move" ? "Move credential" : "Copy credential"}
             </form.SubmitButton>
-          </Dialog.Footer>
+          </DialogFooter>
         </Form.Root>
-      </Dialog.Content>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -153,7 +157,7 @@ export function DeleteCredentialDialog(props: {
         if (!props.credential) return
         await remove.mutateAsync({ id: props.credential.id })
       }}
-      onConfirmed={() => Toast.manager.add({ type: "success", title: `${label} deleted` })}
+      onConfirmed={() => toast.add({ type: "success", title: `${label} deleted` })}
     />
   )
 }

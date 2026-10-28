@@ -3,15 +3,16 @@ import { Pagination } from "@ren/schema/pagination"
 import { Primitive } from "@ren/schema/primitive"
 import { Schedule } from "@ren/schema/schedule"
 import { Space } from "@ren/schema/space"
+import { Alert, AlertDescription } from "@ren/ui/alert"
+import { Button } from "@ren/ui/button"
 import { Combobox } from "@ren/ui/combobox"
-import { Dialog } from "@ren/ui/dialog"
-import { Field } from "@ren/ui/field"
+import { Field, FieldLegend, FieldSet, FieldTitle } from "@ren/ui/field"
 import { Form } from "@ren/ui/form"
-import { Menu } from "@ren/ui/menu"
-import { Notice } from "@ren/ui/notice"
-import { Select } from "@ren/ui/select"
+import { Icon } from "@ren/ui/icon"
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@ren/ui/sheet"
 import { Text } from "@ren/ui/text"
 import { localTimeZone, Time, timeZones } from "@ren/ui/time"
+import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Option, Schema } from "effect"
 import { useState } from "react"
@@ -149,20 +150,19 @@ export function ScheduleDialog(props: {
   const saving = useSave(props.schedule, setup.target, props.onClose)
   const form = useScheduleForm(setup.values, saving.save)
   return (
-    <Dialog.Root
+    <Sheet
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !saving.pending) props.onClose()
       }}
-      dismissal={saving.pending ? "blocked" : "allowed"}
     >
-      <Dialog.Content presentation="side" size="medium">
-        <Dialog.Header>
-          <Dialog.Title>{setup.title}</Dialog.Title>
-          <Dialog.Description>{setup.description}</Dialog.Description>
-        </Dialog.Header>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>{setup.title}</SheetTitle>
+          <SheetDescription>{setup.description}</SheetDescription>
+        </SheetHeader>
         <Form.Root form={form} arrangement="contents">
-          <Dialog.Body>
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 pb-4">
             {setup.pickSpace ? <SpaceField form={form} /> : null}
             <form.AppField name="message">
               {(field) => (
@@ -186,16 +186,19 @@ export function ScheduleDialog(props: {
             <form.Subscribe selector={(state) => state.values}>
               {(values) => <CadenceFields form={form} cadence={values} />}
             </form.Subscribe>
-            <Notice tone="danger" placement="inline">
-              {saving.problem}
-            </Notice>
-          </Dialog.Body>
-          <Dialog.Footer>
+            {saving.problem ? (
+              <Alert variant="destructive">
+                <Icon glyph="AlertCircle" />
+                <AlertDescription>{saving.problem}</AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
+          <SheetFooter className="justify-end">
             <form.SubmitButton pendingLabel={setup.pendingLabel}>{setup.submitLabel}</form.SubmitButton>
-          </Dialog.Footer>
+          </SheetFooter>
         </Form.Root>
-      </Dialog.Content>
-    </Dialog.Root>
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -311,52 +314,43 @@ function PreviewLine(props: { cadence: Schedules.Cadence }) {
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- ren-v1 picked several days for a weekly schedule from a menu of checkboxes.
+// oxlint-disable-next-line ren/no-comments -- ren-v1 picked several days for a weekly schedule; one day stays picked.
 function WeekdayField(props: { form: ScheduleForm }) {
   return (
     <props.form.AppField name="weekday">
-      {(field) => {
-        const selected = new Set(field.state.value.split(",").filter(Boolean))
-        const toggle = (value: string) => {
-          if (selected.has(value) && selected.size === 1) return
-          const next = new Set(selected)
-          if (next.has(value)) next.delete(value)
-          else next.add(value)
-          field.handleChange(
-            Schedules.weekdays
-              .filter((day) => next.has(day.value))
-              .map((day) => day.value)
-              .join(","),
-          )
-        }
-        return (
-          <Field.Root label="Days">
-            <Menu.Root>
-              <Menu.Trigger
-                render={
-                  <Select.Button label="Days" width="full">
-                    {Schedules.weekdays
-                      .filter((day) => selected.has(day.value))
-                      .map((day) => day.label)
-                      .join(", ")}
-                  </Select.Button>
-                }
-              />
-              <Menu.Popup alignment="start" width="small">
-                {Schedules.weekdays.map((day) => (
-                  <Menu.CheckboxItem
-                    key={day.value}
-                    checked={selected.has(day.value)}
-                    onCheckedChange={() => toggle(day.value)}
-                  >
-                    {day.label}
-                  </Menu.CheckboxItem>
-                ))}
-              </Menu.Popup>
-            </Menu.Root>
-          </Field.Root>
-        )
-      }}
+      {(field) => (
+        <FieldSet>
+          <FieldLegend variant="label">Days</FieldLegend>
+          <ToggleGroup
+            multiple
+            variant="outline"
+            spacing={1}
+            aria-label="Days"
+            className="w-full"
+            value={field.state.value.split(",").filter(Boolean)}
+            onValueChange={(values: string[]) => {
+              if (values.length === 0) return
+              field.handleChange(
+                Schedules.weekdays
+                  .filter((day) => values.includes(day.value))
+                  .map((day) => day.value)
+                  .join(","),
+              )
+            }}
+          >
+            {Schedules.weekdays.map((day) => (
+              <ToggleGroupItem
+                key={day.value}
+                value={day.value}
+                aria-label={day.label}
+                className="flex-1 text-muted-foreground aria-pressed:text-foreground"
+              >
+                {day.label.slice(0, 3)}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </FieldSet>
+      )}
     </props.form.AppField>
   )
 }
@@ -367,12 +361,14 @@ function TimeZoneField(props: { form: ScheduleForm }) {
   return (
     <props.form.AppField name="timeZone">
       {(field) => (
-        <Field.Root label="Time zone">
+        <Field>
+          <FieldTitle>Time zone</FieldTitle>
           <Combobox.Popover
             trigger={
-              <Select.Button label="Time zone" width="full" placeholder="Pick a time zone">
-                {field.state.value}
-              </Select.Button>
+              <Button variant="outline" className="w-full justify-between font-normal" aria-label="Time zone">
+                {field.state.value || "Pick a time zone"}
+                <Icon glyph="ChevronsUpDown" data-icon="inline-end" />
+              </Button>
             }
             open={open}
             onOpenChange={setOpen}
@@ -387,7 +383,7 @@ function TimeZoneField(props: { form: ScheduleForm }) {
               setOpen(false)
             }}
           />
-        </Field.Root>
+        </Field>
       )}
     </props.form.AppField>
   )

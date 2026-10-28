@@ -1,13 +1,21 @@
 import type { AppProfileInfo, SpaceInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
-import { Dialog } from "@ren/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { List } from "@ren/ui/list"
-import { Menu } from "@ren/ui/menu"
-import { Toast } from "@ren/ui/toast"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@ren/ui/item"
+import { Spinner } from "@ren/ui/spinner"
+import { toast } from "@ren/ui/toast"
 import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
 import { Apps } from "./apps.js"
 
@@ -29,7 +37,7 @@ function useAddition(props: {
     props.onAdded(profileId)
   }
   const failed = (error: Error) =>
-    Toast.manager.add({ type: "error", title: `Couldn’t add ${props.app.name}`, description: error.message })
+    toast.add({ type: "error", title: `Couldn’t add ${props.app.name}`, description: error.message })
   const createFor = (space: Target) =>
     create.mutate(
       {
@@ -74,29 +82,31 @@ export function AddToSpace(props: {
   const addition = useAddition(props)
   return (
     <>
-      <Menu.Root>
-        <Menu.Trigger
+      <DropdownMenu>
+        <DropdownMenuTrigger
           render={
             <Button
-              appearance={props.appearance ?? "secondary"}
-              size="small"
-              pending={addition.pending}
-              trailingIcon={<Icon glyph="ChevronDown" />}
+              variant={props.appearance === "primary" ? "default" : "outline"}
+              size={props.appearance === "primary" ? "default" : "xs"}
+              className={props.appearance === "primary" ? undefined : "h-6.5"}
+              disabled={addition.pending}
               aria-label={`Add ${props.app.name} to a space`}
-            >
-              Add to space
-            </Button>
+            />
           }
-        />
-        <Menu.Popup alignment="end" width="medium">
-          <Menu.Section label="Your spaces">
+        >
+          {addition.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+          Add to space
+          <Icon glyph="ChevronDown" data-icon="inline-end" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Your spaces</DropdownMenuLabel>
             {props.spaces.map((space) => {
               const added = props.profiles.some((profile) => Apps.lists(profile, space))
               return (
-                <Menu.Item
+                <DropdownMenuItem
                   key={space.id}
-                  icon={<Icon glyph={added ? "Check" : "Cube"} />}
-                  onSelect={() =>
+                  onClick={() =>
                     added
                       ? void navigate({
                           to: "/spaces/$spaceId/apps",
@@ -106,13 +116,14 @@ export function AddToSpace(props: {
                       : addition.add(space)
                   }
                 >
+                  <Icon glyph={added ? "Check" : "Cube"} />
                   {space.name}
-                </Menu.Item>
+                </DropdownMenuItem>
               )
             })}
-          </Menu.Section>
-        </Menu.Popup>
-      </Menu.Root>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {addition.dialog}
     </>
   )
@@ -128,13 +139,21 @@ export function AddHere(props: {
   const addition = useAddition(props)
   if (props.profiles.some((profile) => Apps.lists(profile, props.space)))
     return (
-      <Button appearance="plain" size="small" disabled leadingIcon={<Icon glyph="Check" />}>
+      <Button variant="ghost" size="xs" className="h-6.5" disabled>
+        <Icon glyph="Check" data-icon="inline-start" />
         Added
       </Button>
     )
   return (
     <>
-      <Button appearance="secondary" size="small" pending={addition.pending} onClick={() => addition.add(props.space)}>
+      <Button
+        variant="outline"
+        size="xs"
+        className="h-6.5"
+        disabled={addition.pending}
+        onClick={() => addition.add(props.space)}
+      >
+        {addition.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
         Add
       </Button>
       {addition.dialog}
@@ -152,51 +171,53 @@ function ChooseProfile(props: {
   onClose: () => void
 }) {
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !props.pending) props.onClose()
       }}
-      dismissal={props.pending ? "blocked" : "allowed"}
     >
-      <Dialog.Content size="small">
-        <Dialog.Header>
-          <Dialog.Title>{`Add ${props.app.name} to ${props.space.name}`}</Dialog.Title>
-          <Dialog.Description>
-            Use an account already connected, or connect a new one for this space.
-          </Dialog.Description>
-        </Dialog.Header>
-        <Dialog.Body>
-          <List.Root label="Accounts">
-            {props.shared.map((profile) => (
-              <List.Item
-                key={profile.id}
-                title={profile.name}
-                description={Apps.reach(profile)}
-                trailing={
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{`Add ${props.app.name} to ${props.space.name}`}</DialogTitle>
+          <DialogDescription>Use an account already connected, or connect a new one for this space.</DialogDescription>
+        </DialogHeader>
+        <ItemGroup aria-label="Accounts" className="gap-0 rounded-xl border bg-card">
+          {props.shared.map((profile) => (
+            <Fragment key={profile.id}>
+              <Item render={<li />} className="min-h-14 gap-x-6 gap-y-2 px-4 py-3">
+                <ItemContent>
+                  <ItemTitle className="leading-5">{profile.name}</ItemTitle>
+                  <ItemDescription className="text-xs">{Apps.reach(profile)}</ItemDescription>
+                </ItemContent>
+                <ItemActions>
                   <Button
-                    appearance="secondary"
-                    size="small"
+                    variant="outline"
+                    size="xs"
+                    className="h-6.5"
                     disabled={props.pending}
                     onClick={() => props.onUse(profile)}
                   >
                     Use
                   </Button>
-                }
-              />
-            ))}
-            <List.Item
-              title={`New account for ${props.space.name}`}
-              description="Only this space uses it."
-              trailing={
-                <Button appearance="primary" size="small" disabled={props.pending} onClick={props.onCreate}>
-                  Create
-                </Button>
-              }
-            />
-          </List.Root>
-        </Dialog.Body>
-      </Dialog.Content>
-    </Dialog.Root>
+                </ItemActions>
+              </Item>
+              <ItemSeparator className="my-0" />
+            </Fragment>
+          ))}
+          <Item render={<li />} className="min-h-14 gap-x-6 gap-y-2 px-4 py-3">
+            <ItemContent>
+              <ItemTitle className="leading-5">{`New account for ${props.space.name}`}</ItemTitle>
+              <ItemDescription className="text-xs">Only this space uses it.</ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <Button size="xs" className="h-6.5" disabled={props.pending} onClick={props.onCreate}>
+                Create
+              </Button>
+            </ItemActions>
+          </Item>
+        </ItemGroup>
+      </DialogContent>
+    </Dialog>
   )
 }

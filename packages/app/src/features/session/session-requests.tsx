@@ -32,7 +32,7 @@ function Source(props: {
           {props.title} needs your input
         </Text>
         <div className="ml-auto">
-          <Button appearance="plain" size="small" onClick={() => props.onOpen(props.sessionID)}>
+          <Button variant="ghost" size="sm" onClick={() => props.onOpen(props.sessionID)}>
             Open subagent
           </Button>
         </div>
@@ -191,7 +191,7 @@ export function SessionRequests(props: {
     if (sending === id) return
     setSending(id)
     void request()
-      .then(props.onAnswered, Failure.toast(title))
+      .then(props.onAnswered, Failure.notify(title))
       .finally(() => setSending((current) => (current === id ? undefined : current)))
   }
   const webSearch = (
@@ -260,7 +260,7 @@ export function SessionRequests(props: {
           onProgressChange={(progress) => FormProgress.write(form.id, progress)}
           onDismiss={dismiss}
           leadingAction={
-            <Button appearance="plain" size="small" disabled={sending === form.id} onClick={dismiss}>
+            <Button variant="ghost" size="sm" disabled={sending === form.id} onClick={dismiss}>
               Dismiss
             </Button>
           }

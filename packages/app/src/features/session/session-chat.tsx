@@ -6,10 +6,11 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import { Button } from "@ren/ui/button"
 import { ConversationShell } from "@ren/ui/conversation-shell"
 import { FindBar } from "@ren/ui/find-bar"
-import { Notice } from "@ren/ui/notice"
-import { StateMessage } from "@ren/ui/state-message"
+import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
+import { Icon } from "@ren/ui/icon"
 import { TaskProgress, type TaskStatus } from "@ren/ui/task-progress"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { DateTime, Effect, Option, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
@@ -92,18 +93,15 @@ function SessionInteraction(props: {
     <>
       <Tasks tasks={props.tasks} running={props.running} />
       {props.reverted ? (
-        <Notice
-          tone="neutral"
-          placement="banner"
-          layout="inline"
-          action={
-            <Button appearance="plain" size="small" onClick={props.onRedo}>
+        <Alert className="has-data-[slot=alert-action]:pr-36">
+          <Icon glyph="Info" tone="secondary" />
+          <AlertDescription>Later messages are undone. Sending a message discards them.</AlertDescription>
+          <AlertAction>
+            <Button variant="ghost" size="sm" onClick={props.onRedo}>
               Restore messages
             </Button>
-          }
-        >
-          Later messages are undone. Sending a message discards them.
-        </Notice>
+          </AlertAction>
+        </Alert>
       ) : null}
       {props.children}
     </>
@@ -198,7 +196,7 @@ function useInputActions(sessionID: Session.ID) {
     const request = action === "queue" ? queueInput(message.id) : cancelInput(message.id)
     void request
       .catch(
-        Failure.toast(action === "queue" ? "Could not move the message to the queue" : "Could not delete the message"),
+        Failure.notify(action === "queue" ? "Could not move the message to the queue" : "Could not delete the message"),
       )
       .finally(() => setUpdating((previous) => new Set([...previous].filter((id) => id !== message.id))))
   }
@@ -220,7 +218,7 @@ function useOpenSession(input: {
       if (tree.includes(id)) return input.onChild(Session.ID.make(id))
       void context.queryClient.query(context.api.session.get.queryOptions({ idOrSlug: id })).then(
         (found) => input.onNavigate(Session.ID.make(found.id)),
-        () => Toast.manager.add({ type: "error", title: "Could not find that chat" }),
+        () => toast.add({ type: "error", title: "Could not find that chat" }),
       )
     })
   }
@@ -235,7 +233,7 @@ function useRevert(sessionID: Session.ID, restore: (message: Option.Option<Sessi
       if (reverting) return
       setReverting(true)
       void revert(message.id)
-        .then(restore, Failure.toast("Could not revert to this message"))
+        .then(restore, Failure.notify("Could not revert to this message"))
         .finally(() => setReverting(false))
     },
   }
@@ -320,9 +318,9 @@ export function SessionChat(props: {
     setRestored((count) => count + 1)
   }
   const reverter = useRevert(props.sessionID, restore)
-  const onUndo = () => void undo().then(restore, Failure.toast("Could not undo the last message"))
-  const onRedo = () => void redo().catch(Failure.toast("Could not restore the undone messages"))
-  const onCompact = () => void compact().catch(Failure.toast("Could not compact the chat"))
+  const onUndo = () => void undo().then(restore, Failure.notify("Could not undo the last message"))
+  const onRedo = () => void redo().catch(Failure.notify("Could not restore the undone messages"))
+  const onCompact = () => void compact().catch(Failure.notify("Could not compact the chat"))
   const reopen = Chat.useRetry(props.sessionID)
   const restart = useMutation(context.api.chat.retry.mutationOptions())
   const retry = () => {
@@ -334,7 +332,7 @@ export function SessionChat(props: {
           platform.drafts?.remove(SessionDrafts.pending(props.sessionID))
           reopen()
         },
-        onError: Failure.toast("Could not start this chat again"),
+        onError: Failure.notify("Could not start this chat again"),
       },
     )
   }
@@ -350,7 +348,7 @@ export function SessionChat(props: {
     childParent: chat.childParent,
     blocking: chat.background.blocking.length > 0,
     scroller,
-    onBackground: () => void move().catch(Failure.toast("Could not move the work to the background")),
+    onBackground: () => void move().catch(Failure.notify("Could not move the work to the background")),
     onFind: finder.open,
     onChild: props.onChild,
   })
@@ -384,7 +382,21 @@ export function SessionChat(props: {
       populated={messages.length > 0}
       hidden={props.child !== undefined}
       placeholder={
-        chat.failed ? <StateMessage state="failed" title="Could not open this chat" onRetry={retry} /> : undefined
+        chat.failed ? (
+          <Empty role="alert">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Icon glyph="AlertCircle" tone="danger" />
+              </EmptyMedia>
+              <EmptyTitle>Could not open this chat</EmptyTitle>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button variant="outline" size="sm" onClick={retry}>
+                Try again
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : undefined
       }
       header={
         <>
@@ -411,7 +423,7 @@ export function SessionChat(props: {
           history={{
             more: chat.more,
             loading: chat.loadingHistory,
-            onLoadOlder: () => void loadMore().catch(Failure.toast("Could not load earlier messages")),
+            onLoadOlder: () => void loadMore().catch(Failure.notify("Could not load earlier messages")),
           }}
           target={reveal.target}
           hold={reveal.hold}
