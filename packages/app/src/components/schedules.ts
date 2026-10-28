@@ -56,7 +56,7 @@ const partsOf = (time: string) => {
 }
 
 // oxlint-disable-next-line ren/no-comments -- The cron of a cadence, as ren-v1's schedule builder wrote it.
-export const cronOf = (cadence: Cadence) => {
+const cronOf = (cadence: Cadence) => {
   if (cadence.frequency === "custom") return cadence.cron.trim()
   if (cadence.frequency === "hourly") return "0 * * * *"
   const time = partsOf(cadence.time)

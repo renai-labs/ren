@@ -5,9 +5,9 @@ import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
 import type { QuestionnaireQuestion } from "@ren/ui/questionnaire"
 
-export const permissionField = "permission"
+const permissionField = "permission"
 
-export const permissionInstructionsField = "permission-instructions"
+const permissionInstructionsField = "permission-instructions"
 
 const replies: ReadonlyArray<Permission.Reply> = ["once", "always", "reject"]
 

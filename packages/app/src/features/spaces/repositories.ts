@@ -54,7 +54,7 @@ export const parse = (input: string): Parsed | undefined => {
 }
 
 // oxlint-disable-next-line ren/no-comments -- §5a step 4: the repository name in lower case, and -2, -3 for a taken one. An alias has no slash, backslash, space, backtick or comma (Reference.Alias).
-export const aliasFor = (name: string, taken: Iterable<string>) => {
+const aliasFor = (name: string, taken: Iterable<string>) => {
   const used = new Set(taken)
   const base =
     name

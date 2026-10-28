@@ -11,11 +11,7 @@ export type LooseOwner =
 
 export type Owner = LooseOwner | { readonly kind: "profile"; readonly profileId: string }
 
-export type Group = "mcp" | "other"
-
 export const hosts = Credential.splitHosts
-
-export const group = (label: string): Group => (label.startsWith("MCP_") ? "mcp" : "other")
 
 export const ownerLabel = (owner: Owner, spaces: ReadonlyMap<string, string>, userId: string) => {
   if (owner.kind === "org") return "Organization"

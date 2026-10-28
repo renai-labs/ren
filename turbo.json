@@ -34,11 +34,6 @@
       "dependsOn": ["transit"],
       "env": ["VITE_*"],
       "outputs": ["dist/**"]
-    },
-    "@ren/storybook#build": {
-      "dependsOn": ["transit"],
-      "env": ["REN_V1_PATH"],
-      "outputs": ["storybook-static/**"]
     }
   }
 }

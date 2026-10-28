@@ -9,10 +9,6 @@
     "packages/*": {
       "entry": ["test/**/*.test.{ts,tsx}", "script/**/*.ts"]
     },
-    "packages/storybook": {
-      "entry": ["parity/*.stories.tsx", "test/**/*.test.{ts,tsx}", "script/**/*.ts"],
-      "ignoreDependencies": ["@ren/app", "ren-v1"]
-    },
     "packages/cell": {
       "entry": [
         "src/worker.ts",

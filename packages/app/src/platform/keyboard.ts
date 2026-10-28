@@ -19,7 +19,7 @@ export function isTyping(event: KeyboardEvent) {
   return editable(event.target)
 }
 
-export const covered = (input: {
+const covered = (input: {
   readonly editing: boolean
   readonly layoutHeight: number
   readonly viewportHeight: number

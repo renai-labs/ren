@@ -20,7 +20,7 @@ export interface Large {
   readonly remove: (key: string) => Promise<void>
 }
 
-export interface Shared {
+interface Shared {
   readonly key: string
   readonly value: string | undefined
 }
