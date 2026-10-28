@@ -45,3 +45,35 @@ resource "aws_iam_role_policy" "server_task_drives" {
     ]
   })
 }
+
+resource "aws_iam_role" "drive_reader" {
+  name = "${var.name}-drive-reader"
+
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Principal = { AWS = aws_iam_role.server_task.arn } }]
+  })
+}
+
+resource "aws_iam_role_policy" "drive_reader" {
+  name = "drives"
+  role = aws_iam_role.drive_reader.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Effect = "Allow", Action = "s3:ListBucket", Resource = aws_s3_bucket.drives.arn },
+      { Effect = "Allow", Action = "s3:GetObject", Resource = "${aws_s3_bucket.drives.arn}/*" },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "server_task_drive_reader" {
+  name = "drive-reader"
+  role = aws_iam_role.server_task.id
+
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Resource = aws_iam_role.drive_reader.arn }]
+  })
+}

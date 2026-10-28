@@ -19,13 +19,26 @@ const secretOf = (value: CredentialSource.Value, field: Option.Option<string>) =
   return Option.none()
 }
 
-// oxlint-disable-next-line ren/no-comments -- Pure: where one credential's value goes in a request, as the three ops an egress knows (C36). The egress encodes each replaced value for its location; Ren refuses a value that would break a header (README §6.3 rule 6).
+const signedWith = (value: CredentialSource.Value): Result.Result<ReadonlyArray<Op>, "invalid_value"> =>
+  value.type === "aws"
+    ? Result.succeed([
+        {
+          op: "awsSign",
+          accessKeyId: value.accessKeyId,
+          secretAccessKey: value.secretAccessKey,
+          sessionToken: value.sessionToken,
+        },
+      ])
+    : Result.fail("invalid_value")
+
+// oxlint-disable-next-line ren/no-comments -- Pure: where one credential's value goes in a request, as the ops an egress knows (C36). The egress encodes each replaced value for its location; Ren refuses a value that would break a header (README §6.3 rule 6).
 export const plan = (
   candidate: Credentials.Candidate,
   value: CredentialSource.Value,
   placeholder: Credentials.Matched["placeholder"],
 ): Result.Result<ReadonlyArray<Op>, "invalid_value"> => {
   const inject = candidate.inject
+  if (inject.op === "awsSign") return signedWith(value)
   if (inject.op === "route") {
     if (value.type !== "route") return Result.fail("invalid_value")
     if (value.headers.some((header) => breaksHeader(Redacted.value(header.value)))) return Result.fail("invalid_value")

@@ -10,6 +10,7 @@ export const config = {
   DRIVE_ENDPOINT: "http://127.0.0.1:59000",
   DRIVE_ACCESS_KEY_ID: "rendev",
   DRIVE_SECRET_ACCESS_KEY: "ren-dev-secret",
+  DRIVE_ROLE_ARN: "arn:aws:iam::000000000000:role/drive",
 }
 
 export const layer = ConfigProvider.layerAdd(

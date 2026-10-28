@@ -9,10 +9,12 @@ import {
   S3Client,
   S3ServiceException,
 } from "@aws-sdk/client-s3"
+import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts"
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
+import { Credential } from "@ren/schema/credential"
 import type { Drive } from "@ren/schema/drive"
 import type { Space } from "@ren/schema/space"
 import type { WriteResult } from "@ren/schema/write-result"
@@ -27,6 +29,13 @@ import { SpaceQueries } from "./space/queries.js"
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Drives.Unavailable", {
   cause: Schema.Defect(),
 }) {}
+
+export interface Keys {
+  readonly accessKeyId: string
+  readonly secretAccessKey: Redacted.Redacted
+  readonly sessionToken: Redacted.Redacted
+  readonly expiresAt: DateTime.Utc
+}
 
 export interface Interface {
   readonly list: (
@@ -50,13 +59,22 @@ export interface Interface {
     owner: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
     environment: { readonly canMount: boolean; readonly egress: boolean },
   ) => Drive.Availability
+  readonly hosts: ReadonlyArray<string>
+  readonly keys: (owner: {
+    readonly organizationId: Auth.OrganizationID
+    readonly spaceId: Space.ID
+  }) => Effect.Effect<Keys, Unavailable>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Drives") {}
 
 export const linkLifetime = Duration.minutes(15)
 
-export const placeholder = "ren:DRIVE"
+export const keysLifetime = Duration.hours(1)
+
+export const label = "DRIVE"
+
+export const placeholder = Credential.placeholder(label)
 
 const descriptions: Record<Drive.Kind, string> = {
   space: "The files that the people of this space upload to its drive in Ren. Read-only.",
@@ -81,15 +99,16 @@ export const layer = Layer.effect(
       bucket: Config.String("DRIVE_BUCKET"),
       region: Config.String("DRIVE_REGION").pipe(Config.withDefault("us-east-1")),
       endpoint: Config.option(Config.String("DRIVE_ENDPOINT")),
+      roleArn: Config.String("DRIVE_ROLE_ARN"),
       accessKeyId: Config.option(Config.String("DRIVE_ACCESS_KEY_ID")),
       secretAccessKey: Config.option(Config.Redacted("DRIVE_SECRET_ACCESS_KEY")),
       maxFileBytes: Config.ByteSize("DRIVE_MAX_FILE_SIZE").pipe(Config.withDefault(ByteSize.mebibytes(100))),
     })
     const database = yield* Database.Service
     const access = yield* Access.Service
-    const s3 = new S3Client({
+    const client = {
       region: config.region,
-      ...(Option.isSome(config.endpoint) && { endpoint: config.endpoint.value, forcePathStyle: true }),
+      ...(Option.isSome(config.endpoint) && { endpoint: config.endpoint.value }),
       ...(Option.isSome(config.accessKeyId) &&
         Option.isSome(config.secretAccessKey) && {
           credentials: {
@@ -97,8 +116,15 @@ export const layer = Layer.effect(
             secretAccessKey: Redacted.value(config.secretAccessKey.value),
           },
         }),
-    })
-    yield* Effect.addFinalizer(() => Effect.sync(() => s3.destroy()))
+    }
+    const s3 = new S3Client({ ...client, forcePathStyle: Option.isSome(config.endpoint) })
+    const sts = new STSClient(client)
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        s3.destroy()
+        sts.destroy()
+      }),
+    )
     const bucket = config.bucket
     const maxFileBytes = ByteSize.toNumberUnsafe(config.maxFileBytes)
     const lifetime = Duration.toSeconds(linkLifetime)
@@ -263,6 +289,48 @@ export const layer = Layer.effect(
           })),
         }
       },
+      hosts: Option.match(config.endpoint, {
+        onNone: () => [`${bucket}.s3.${config.region}.amazonaws.com`],
+        onSome: (endpoint) => [new URL(endpoint).hostname],
+      }),
+      keys: Effect.fn("Drives.keys")(function* (owner) {
+        const prefixes = [prefixOf(owner), prefixOf({ organizationId: owner.organizationId })]
+        const assumed = yield* send((signal) =>
+          sts.send(
+            new AssumeRoleCommand({
+              RoleArn: config.roleArn,
+              RoleSessionName: `drive-${owner.spaceId}`,
+              DurationSeconds: Duration.toSeconds(keysLifetime),
+              Policy: JSON.stringify({
+                Version: "2012-10-17",
+                Statement: [
+                  {
+                    Effect: "Allow",
+                    Action: ["s3:ListBucket"],
+                    Resource: [`arn:aws:s3:::${bucket}`],
+                    Condition: { StringLike: { "s3:prefix": prefixes.map((each) => `${each}*`) } },
+                  },
+                  {
+                    Effect: "Allow",
+                    Action: ["s3:GetObject"],
+                    Resource: prefixes.map((each) => `arn:aws:s3:::${bucket}/${each}*`),
+                  },
+                ],
+              }),
+            }),
+            { abortSignal: signal },
+          ),
+        )
+        const keys = assumed.Credentials
+        if (!keys?.AccessKeyId || !keys.SecretAccessKey || !keys.SessionToken || !keys.Expiration)
+          return yield* new Unavailable({ cause: new Error("STS answered without keys") })
+        return {
+          accessKeyId: keys.AccessKeyId,
+          secretAccessKey: Redacted.make(keys.SecretAccessKey),
+          sessionToken: Redacted.make(keys.SessionToken),
+          expiresAt: DateTime.makeUnsafe(keys.Expiration),
+        }
+      }),
       sweep: Effect.fn("Drives.sweep")(function* (archivedBefore: Date) {
         const spaces = yield* database.db
           .select({ spaceId: Database.Schema.space.id, organizationId: Database.Schema.space.organization_id })
