@@ -22,7 +22,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 
 ## Ren components
 
-Ren's own components and compositions (`Form`, `FormActions`, `FormSection`, `ConfirmationDialog`, `SearchField`, `InlineEdit`, `Combobox`, the shells, `Toolbar`, `Text`, `Icon`, `Link`, `Time`, `StatusDot`, `ModelPicker`, `ThemeSelector`, `CopyButton`, `FindBar`, the chat components, `ConnectionBoard`, the `Task*` components and the rest without a shadcn file) follow these rules. Build their insides from the shadcn components.
+Ren's own components and compositions (`Form`, `FormActions`, `FormSection`, `ConfirmationDialog`, `SearchField`, `InlineEdit`, `Combobox`, the shells, `Page`, `Text`, `Icon`, `Link`, `Time`, `StatusDot`, `ModelPicker`, `ThemeSelector`, `CopyButton`, `FindBar`, the chat components, `ConnectionBoard`, the `Task*` components and the rest without a shadcn file) follow these rules. Build their insides from the shadcn components.
 
 - Follow Base UI's shape:
   - A multi-part component uses Ren's module pattern. The file starts with `export * as Dialog from "./dialog.js"` and exports parts named `Root`, `Trigger`, `Popup`, `Title` and so on. Consumers write `<Dialog.Root>`.

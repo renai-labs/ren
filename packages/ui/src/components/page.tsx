@@ -3,7 +3,7 @@ export * as Page from "./page.js"
 import { cva } from "class-variance-authority"
 import type { ReactNode } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "./empty.js"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "./empty.js"
 import { Icon } from "./icon.js"
 import type { Glyph } from "./icon.js"
 import { Skeleton } from "./skeleton.js"
@@ -25,7 +25,6 @@ export type RootProps = {
   title: ReactNode
   description?: ReactNode
   back?: ReactNode
-  scope?: ReactNode
   media?: ReactNode
   menu?: ReactNode
   leading?: ReactNode
@@ -38,17 +37,10 @@ export type RootProps = {
 export function Root(props: RootProps) {
   const full = props.width === "full"
   return (
-    <div data-slot="page" data-width={props.width ?? "column"} className={frameVariants({ width: props.width })}>
-      {props.scope ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center">
-          <div data-slot="page-scope" className="pointer-events-auto relative flex items-center px-4 pt-1 pb-2">
-            {props.scope}
-          </div>
-        </div>
-      ) : null}
+    <div data-slot="page" className={frameVariants({ width: props.width })}>
       {props.back ? <div className="flex h-5 min-w-0 items-center">{props.back}</div> : null}
       <Heading {...props} trailing={full ? props.actions : undefined} />
-      {full ? props.leading : <Toolbar leading={props.leading} actions={props.actions} />}
+      {full ? null : <Toolbar leading={props.leading} actions={props.actions} />}
       <div
         data-slot="page-body"
         className={composeClasses("flex min-w-0 flex-col gap-8", full && "min-h-0 flex-1 gap-4")}
@@ -158,7 +150,7 @@ export function Record(props: { banner: ReactNode; aside?: ReactNode; children: 
 export function Pending(
   props: Omit<RootProps, "children" | "title"> & {
     title?: ReactNode
-    toolbar?: "none" | "row"
+    toolbar?: "row"
     body?: "rows" | "cards" | "settings"
     columns?: 2 | 3
   },
@@ -167,9 +159,7 @@ export function Pending(
     <Root
       {...props}
       title={props.title ?? <Skeleton className="h-5 w-40" />}
-      {...(props.toolbar === "row" && {
-        actions: props.actions ?? <Skeleton className="h-8 w-48" />,
-      })}
+      {...(props.toolbar === "row" && { actions: <Skeleton className="h-8 w-48" /> })}
     >
       <output className="sr-only">Loading</output>
       <Skeletons body={props.body ?? "rows"} columns={props.columns} />
@@ -256,9 +246,10 @@ export function TableState(props: TableStateProps) {
   if (props.state === "ready") return null
   if (props.state === "loading")
     return Array.from({ length: props.rows ?? 3 }, (_, index) => (
-      <TableRow key={index} aria-hidden className="hover:bg-transparent">
+      <TableRow key={index} aria-hidden={index > 0} className="hover:bg-transparent">
         <TableCell colSpan={props.columns}>
-          <Skeleton className="h-5 w-full" />
+          {index === 0 ? <output className="sr-only">Loading</output> : null}
+          <Skeleton aria-hidden className="h-5 w-full" />
         </TableCell>
       </TableRow>
     ))
@@ -273,9 +264,7 @@ export function TableState(props: TableStateProps) {
                 <Icon glyph={glyph} />
               </EmptyMedia>
             ) : null}
-            <EmptyTitle className="text-sm font-normal text-muted-foreground">
-              {props.state === "failed" ? props.failureMessage : props.emptyMessage}
-            </EmptyTitle>
+            <EmptyDescription>{props.state === "failed" ? props.failureMessage : props.emptyMessage}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       </TableCell>

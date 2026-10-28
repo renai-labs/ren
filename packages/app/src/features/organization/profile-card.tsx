@@ -28,8 +28,6 @@ export function ProfileCard(props: {
   const auth = Auth.useClient()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const sidebar = useSidebar()
-  const collapsed = sidebar.state === "collapsed" && !sidebar.isMobile
   const [loggingOut, setLoggingOut] = useState(false)
   const [creating, setCreating] = useState(false)
   const displayName = props.user.name || props.user.email || "User"
@@ -58,7 +56,7 @@ export function ProfileCard(props: {
             </SidebarMenuButton>
           }
         />
-        {collapsed ? null : <ProfileActions />}
+        <ProfileActions />
       </SidebarMenuItem>
       {creating ? <CreateOrganizationDialog onOpenChange={setCreating} /> : null}
       <ConfirmationDialog
@@ -83,7 +81,7 @@ function ProfileActions() {
   const navigate = useNavigate()
   const sidebar = useSidebar()
   return (
-    <div className="flex shrink-0 items-center">
+    <div className="flex shrink-0 items-center group-data-[collapsible=icon]:hidden">
       <DropdownMenu>
         <DropdownMenuTrigger
           render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Help" />}

@@ -14,8 +14,9 @@ const ChatListStatus = lazy(() =>
 
 const skeletons = (count: number) =>
   Array.from({ length: count }, (_, index) => (
-    <SidebarMenuItem key={`loading-${index}`} aria-hidden>
-      <SidebarMenuSkeleton className="h-9" showIcon />
+    <SidebarMenuItem key={`loading-${index}`} aria-hidden={index > 0}>
+      {index === 0 ? <output className="sr-only">Loading chats</output> : null}
+      <SidebarMenuSkeleton aria-hidden showIcon />
     </SidebarMenuItem>
   ))
 
@@ -38,7 +39,7 @@ export function ChatList() {
       {items.map((chat) => (
         <SidebarMenuItem key={chat.id}>
           <SidebarMenuButton
-            className="h-9 group-has-data-[sidebar=menu-badge]/menu-item:pr-7"
+            className="group-has-data-[sidebar=menu-badge]/menu-item:pr-7"
             isActive={open === chat.id}
             onClick={() => sidebar.setOpenMobile(false)}
             render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}

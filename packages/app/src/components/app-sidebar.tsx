@@ -66,7 +66,7 @@ export function AppSidebar(props: { onSearch: () => void; chats: ReactNode; foot
               shortcut="Meta+K Control+K"
               onClick={props.onSearch}
               trailing={
-                <SidebarMenuBadge className="peer-data-[size=default]/menu-button:top-2">
+                <SidebarMenuBadge>
                   <Kbd className="border">{Viewport.shortcut("K")}</Kbd>
                 </SidebarMenuBadge>
               }
