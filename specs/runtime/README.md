@@ -1,70 +1,33 @@
-# Runtimes
+# Feature flags
 
-A runtime is the shape a brain runs in: which harness, which host, where its tools run, and whether it serves one session or a whole space. Ren supports several runtimes at once so that we can iterate on them. This file tracks every runtime, what each supports, and every feature flag. Update it in the same change that adds an option, closes a gap or adds or removes a flag.
-
-The design and the build order are in [plan.md](plan.md).
+Status: not built. No flag service is in the code. This file lists every feature flag and the design of the flag service. Update it in the same change that adds or removes a flag.
 
 ## Rules
 
-- A **runtime** is placement data, not a flag. A space has one; a session pins the runtime it started with and keeps it for life. Changing a space's runtime affects only new sessions.
-- A **feature flag** switches one behaviour, is short-lived and is removed when its work ships. Flags are evaluated through OpenFeature, backed by PostHog ([plan.md §2.8](plan.md#28-feature-flags)).
-- Code asks for a **capability**, never for a runtime, host or harness by name. Only the server's composition root reads runtime options to choose layers.
-- Every gap below has a reason. A gap is closed by building the feature and changing its cell here.
+- A **feature flag** switches one behaviour, is short-lived and is removed when its work ships.
+- Each flag is declared once in code with its default and listed in the table below.
 
-## Axes
+## Design
 
-| Axis        | Options                                                                                                  | Implemented by                                      |
-| ----------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Harness     | `opencode`                                                                                               | `Harness.Service` in `cell`                         |
-| Host        | `cell` (a Durable Object on celld or Cloudflare), `docker`, `e2b` (a Bun process in a sandbox)           | `BrainHost.Service` in `core`                       |
-| Environment | `none`, `colocated` (tools run natively in the brain's sandbox), `docker`, `e2b` (an executor's sandbox) | `EnvironmentProvider` in `core`, or the host itself |
-| Scope       | `session` (one brain per session), `space` (one brain for every session in a space)                      | `BrainHost.Service`                                 |
+A `FeatureFlags` service in core wraps an OpenFeature client in its own domain (`ren`) with `PostHogServerProvider`:
 
-Combinations that are not valid:
+- `posthog-node` with `strictLocalEvaluation: true`. Without it a flag that cannot be evaluated locally costs one PostHog request per evaluation.
+- `requestTimeout` of a few seconds, and the flag's default until `isLocalEvaluationReady()`. Until definitions load, every evaluation waits on a fetch.
+- `sendFeatureFlagEvents: false`, and `posthog.shutdown()` on release. The provider does not close the client.
+- The evaluation context: `targetingKey` is the entity a rollout buckets by (usually the space), plus `spaceId`, `organizationId` and `userId` as properties. No Group Analytics needed. Never name a property `groups` or `groupProperties`; the provider reads them as PostHog groups.
+- Without `POSTHOG_PROJECT_KEY` and `POSTHOG_SECRET_KEY`, every flag returns its default. Tests use OpenFeature's in-memory provider.
+- Core evaluates flags. A value that a brain needs travels in `start`. The PostHog key never reaches a sandbox.
+- If PostHog's UI does not offer `spaceId` as a property before one is ingested, create the flag through the API.
 
-- `colocated` needs a `docker` or `e2b` host.
-- A `cell` host serves one session only, so it cannot have `space` scope.
-- A `cell` host on Cloudflare cannot use a `docker` environment: Docker's executor listens on `127.0.0.1`.
+Done when a flag targets one space through local evaluation.
 
-## Profiles
+## Waiting for this service
 
-A profile names one valid combination.
+| Item                                                                                   | Where                 |
+| -------------------------------------------------------------------------------------- | --------------------- |
+| `Task.reviewStart` becomes a flag targeted by space (see [`../tasks.md`](../tasks.md)) | `core/src/task.ts:44` |
 
-| Profile        | Harness    | Host     | Environment | Scope     | Status                                      |
-| -------------- | ---------- | -------- | ----------- | --------- | ------------------------------------------- |
-| `cell`         | `opencode` | `cell`   | `none`      | `session` | Built. The default today                    |
-| `cell-docker`  | `opencode` | `cell`   | `docker`    | `session` | Built. celld and Docker on one machine      |
-| `docker-space` | `opencode` | `docker` | `colocated` | `space`   | Planned. The local stand-in for `e2b-space` |
-| `e2b-space`    | `opencode` | `e2b`    | `colocated` | `space`   | Planned. The hot path, and ren-v1's model   |
-
-## Capabilities
-
-✅ works · 🔨 planned, no blocker known · ⚠️ works with a limit · ❌ not possible in this profile
-
-| Capability                                                | `cell`                            | `cell-docker`           | `docker-space`, `e2b-space`           |
-| --------------------------------------------------------- | --------------------------------- | ----------------------- | ------------------------------------- |
-| Chat: prompt, steer, queue, interrupt, permissions, forms | ✅                                | ✅                      | 🔨                                    |
-| Model switch, subagents, revert of messages               | ✅                                | ✅                      | 🔨                                    |
-| Read, edit, glob and grep files                           | ❌ no environment                 | ✅ through the executor | 🔨 native                             |
-| Shell tool                                                | ❌ no environment                 | ✅ through the executor | 🔨 native                             |
-| `@` file search                                           | ❌                                | ⚠️ unverified           | 🔨                                    |
-| Interactive terminal                                      | ❌ workerd has no PTY             | ❌ workerd has no PTY   | 🔨                                    |
-| Revert of file changes                                    | ❌ Snapshot is a no-op in workerd | ❌ same                 | 🔨                                    |
-| Git diff view                                             | ❌ Vcs is a no-op in workerd      | ❌ same                 | 🔨                                    |
-| Remote MCP                                                | ⚠️ unverified                     | ⚠️ unverified           | 🔨                                    |
-| Local (stdio) MCP                                         | ❌ no process in workerd          | ❌ same                 | 🔨                                    |
-| Skills and plugins from disk                              | ❌ precompiled plugins only       | ❌ same                 | 🔨                                    |
-| Sync to Postgres                                          | ✅                                | ✅                      | 🔨                                    |
-| History survives the loss of the host                     | ✅ Durable Object storage         | ✅ same                 | ⚠️ transcripts only; files need pause |
-| Turns longer than 15 minutes                              | ⚠️ unverified on Cloudflare       | ⚠️ same                 | 🔨                                    |
-| Messages over 2 MB                                        | ⚠️ celld refuses the row          | ⚠️ same                 | 🔨                                    |
-| No cost while idle                                        | ✅ the cell closes                | ✅ same                 | 🔨 pause once every session is idle   |
-| The agent cannot read the brain's secrets                 | ✅                                | ✅                      | ❌ they share a machine               |
-| One session's crash leaves the others running             | ✅                                | ✅                      | ❌ one process per space              |
-
-`SessionCapabilities.of` in `@ren/schema` computes the flags that clients read. Today it takes only the harness; the plan makes it take the runtime.
-
-## Feature flags
+## Flags
 
 | Key  | Type | Default | What it switches | Issue | Remove when |
 | ---- | ---- | ------- | ---------------- | ----- | ----------- |
