@@ -4,6 +4,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#components/*": "./src/components/*.tsx",
+    "#lib/*": "./src/lib/*.ts",
+    "#hooks/*": "./src/hooks/*.ts"
+  },
   "license": "UNLICENSED",
   "exports": {
     "./styles": "./src/styles/index.css",
@@ -13,7 +18,8 @@
   "scripts": {
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo --noEmit",
-    "generate": "bun run script/design-tokens.ts"
+    "generate": "bun run script/design-tokens.ts",
+    "notes": "bun run script/component-notes.ts"
   },
   "peerDependencies": {
     "react": "catalog:",
@@ -41,9 +47,11 @@
     "@tanstack/react-virtual": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
+    "shadcn": "catalog:",
     "streamdown": "catalog:",
     "tailwind-merge": "catalog:",
-    "tailwindcss": "catalog:"
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "catalog:"
   },
   "sideEffects": [
     "**/*.css"

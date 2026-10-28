@@ -22,8 +22,36 @@
   --color-status-danger: var(--ren-color-status-danger);
   --color-overlay-primary: var(--ren-color-overlay-primary);
 
+  --color-background: var(--ren-color-bg-primary);
+  --color-foreground: var(--ren-color-text-primary);
+  --color-card: var(--ren-color-bg-secondary);
+  --color-card-foreground: var(--ren-color-text-primary);
+  --color-popover: var(--ren-color-bg-secondary);
+  --color-popover-foreground: var(--ren-color-text-primary);
+  --color-primary: var(--ren-color-fill-inverse);
+  --color-primary-foreground: var(--ren-color-text-inverse);
+  --color-secondary: var(--ren-color-fill-secondary);
+  --color-secondary-foreground: var(--ren-color-text-primary);
+  --color-muted: var(--ren-color-fill-primary);
+  --color-muted-foreground: var(--ren-color-text-secondary);
+  --color-accent: var(--ren-color-fill-secondary);
+  --color-accent-foreground: var(--ren-color-text-primary);
+  --color-destructive: var(--ren-color-status-danger);
+  --color-border: var(--ren-color-border-primary);
+  --color-input: var(--ren-color-border-primary);
+  --color-ring: var(--ren-color-accent-primary);
+  --color-sidebar: var(--ren-color-bg-tertiary);
+  --color-sidebar-foreground: var(--ren-color-text-secondary);
+  --color-sidebar-primary: var(--ren-color-text-primary);
+  --color-sidebar-primary-foreground: var(--ren-color-text-inverse);
+  --color-sidebar-accent: var(--ren-color-fill-secondary);
+  --color-sidebar-accent-foreground: var(--ren-color-text-primary);
+  --color-sidebar-border: var(--ren-color-border-primary);
+  --color-sidebar-ring: var(--ren-color-accent-primary);
+
   --font-sans: var(--ren-font-sans);
   --font-mono: var(--ren-font-mono);
+  --font-heading: var(--ren-font-sans);
 
   --text-2xs: var(--ren-text-2xs);
   --text-2xs--line-height: var(--ren-leading-xs);
@@ -39,6 +67,7 @@
   --text-display--line-height: var(--ren-leading-display);
 
   --font-weight-regular: var(--ren-font-weight-regular);
+  --font-weight-normal: var(--ren-font-weight-regular);
   --font-weight-medium: var(--ren-font-weight-medium);
   --font-weight-reading-semibold: var(--ren-font-weight-reading-semibold);
 
@@ -58,6 +87,11 @@
   --radius-container: var(--ren-radius-container);
   --radius-large: var(--ren-radius-large);
   --radius-full: var(--ren-radius-full);
+  --radius-sm: var(--ren-radius-small);
+  --radius-md: var(--ren-radius-control);
+  --radius-lg: var(--ren-radius-control);
+  --radius-xl: var(--ren-radius-container);
+  --radius-2xl: var(--ren-radius-large);
 
   --opacity-tint: var(--ren-opacity-tint);
   --opacity-disabled: var(--ren-opacity-disabled);
@@ -68,6 +102,49 @@
 }
 
 @theme {
+  --color-black: #000;
+  --color-white: #fff;
+
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2rem;
+
+  --blur-xs: 4px;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+  --tracking-widest: 0.1em;
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --container-xs: 20rem;
+  --container-sm: 24rem;
+  --container-md: 28rem;
+  --container-lg: 32rem;
+
+  --animate-spin: spin 1s linear infinite;
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+
   --breakpoint-sm: 40rem;
   --breakpoint-md: 48rem;
   --breakpoint-lg: 64rem;

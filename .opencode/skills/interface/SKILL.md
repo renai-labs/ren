@@ -5,7 +5,7 @@ description: Use when designing or reviewing screens, layouts, motion, accessibi
 
 # Interface in Ren
 
-Lint and tests enforce the checkable interface rules: colour roles, motion tokens, focus rings, scroll containment, reading order, copy punctuation and banned phrases, page titles and submit buttons. Run `bun run check` and follow each message. This skill covers the judgment calls. Tokens and the look are fixed by `packages/ui/DESIGN.md`; nothing here overrides a token.
+Lint and tests enforce the checkable interface rules: colour roles, focus rings, scroll containment, reading order, copy punctuation and banned phrases, page titles and submit buttons. Run `bun run check` and follow each message. This skill covers the judgment calls. Tokens and the look are fixed by `packages/ui/DESIGN.md`; nothing here overrides a token. Components are shadcn's (the `shadcn` skill); polish and motion follow the `emil-design-eng` skill.
 
 ## Layout
 
@@ -20,7 +20,7 @@ When porting a screen or component, inspect its source and feature usage before 
 
 ## Motion
 
-- Interactions that happen often (typing, row hover, tab switches) get no animation beyond `transition-standard` on colour or opacity.
+- Interactions that happen often (typing, row hover, tab switches) get no animation beyond a short transition on colour or opacity.
 - Reserve expressive motion for rare moments: first load, success, empty states.
 - Every animated change also leaves a static cue (colour, icon or label). Motion is never the only feedback.
 

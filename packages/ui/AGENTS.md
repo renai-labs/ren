@@ -1,14 +1,27 @@
 # @ren/ui
 
-The design system. It owns every visual decision in Ren: tokens, components and motion. Load the `react` and `interface` skills before writing components.
+The design system. It owns every visual decision in Ren: tokens, components and motion. It is moving from Ren's own components to shadcn's (style `base-nova` on Base UI, Tabler icons), replaced one at a time under the same `@ren/ui/<name>` path. Load the `shadcn`, `emil-design-eng`, `react` and `interface` skills before writing components.
 
 ## Structure
 
-- `src/components/<name>.tsx` holds one component namespace per file and is exported as `@ren/ui/<name>`. There is no root barrel and there are no tiers.
+- `src/components/<name>.tsx` holds one component per file, exported as `@ren/ui/<name>`. There is no root barrel and there are no tiers.
 - `src/lib/` holds internal helpers such as `composeClasses` and formatters. It is never exported.
-- `src/styles/` holds `index.css`, `tokens.generated.css`, `theme.css`, `fonts.css` and `motion.css`.
+- `src/styles/` holds `index.css`, `tokens.generated.css`, `theme.css`, `fonts.css` and `motion.css`. `index.css` also loads `tw-animate-css` and `shadcn/tailwind.css`.
+- `components.json` configures the shadcn CLI. Its aliases are the package's `#components/*`, `#lib/*` and `#hooks/*` imports.
 
-## Components
+## shadcn components
+
+- Add or update one with `bunx --bun shadcn@latest add <name>` from this directory. Move any dependency the CLI adds into the root catalog. Then `bun run notes <name>` writes `<name>.md`, and `bun run check` lists what to fix: Ren's lint and TypeScript settings (`exactOptionalPropertyTypes`, no comments, a focus ring wherever `outline-none` appears) are stricter than shadcn's.
+- Keep shadcn's API: its named exports and parts (`Tabs`, `TabsList`, `TabsTrigger`), `variant` and `size`, and `className` on every part. Don't rename props, variants or parts, so `shadcn diff` keeps working.
+- A look that is the same everywhere in Ren is a change in the component file, listed in its `<name>.md` under "Changes to the component". A one-off look is a `className` at the call site.
+- Every shadcn component has a `<name>.md` beside it that says, in plain English, how it differs from stock shadcn. Remove a component and its note when nothing uses it.
+- shadcn's theme variables (`background`, `primary`, `muted-foreground`, `sidebar`…) and its radius scale map onto Ren's tokens in `theme.css`. Style with those names or Ren's tokens, never a raw colour.
+- Merge classes with `cn` from the `cn` package, as shadcn ships it, and import icons from `@tabler/icons-react`.
+- Motion follows `emil-design-eng`: transition colour, opacity and transform only, under 300 ms with `ease-out`, nothing on frequent or keyboard-driven actions, and respect `prefers-reduced-motion`.
+
+## Ren components
+
+The components not yet replaced keep these rules until their shadcn version lands.
 
 - Follow Base UI's shape:
   - A multi-part component uses Ren's module pattern. The file starts with `export * as Dialog from "./dialog.js"` and exports parts named `Root`, `Trigger`, `Popup`, `Title` and so on. Consumers write `<Dialog.Root>`.
@@ -16,15 +29,15 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 - Wrap Base UI parts. Don't re-implement behaviour Base UI already provides, such as focus management, dismissal, positioning or ARIA.
 - When a single-part component shares its name with the Base UI namespace it wraps (`Checkbox`, `Switch`), name the function `<Name>Control` and end the file with `export { <Name>Control as <Name> }`. Imports stay unaliased.
 - Keep ren-v1's `data-slot` names. Theme decorations such as girliepop target them.
-- Public props are semantic (`appearance`, `tone`, `size`, `purpose`). Omit `className` and `style` from public props so app code cannot restyle components. Layout belongs to the parent.
+- Public props are semantic (`appearance`, `tone`, `size`, `purpose`).
 - Define variants with cva, and merge classes with `composeClasses`. Never concatenate class strings by hand.
-- Style Base UI states with data-attribute variants (`data-checked:`, `data-highlighted:`, `data-disabled:`) and Base UI's CSS variables (`--anchor-width`, `--available-height`, `--transform-origin`).
-- Animate with CSS transitions on `data-starting-style:` and `data-ending-style:`, using the durations and easings in `motion.css`. Respect `prefers-reduced-motion`.
-- Glyphs come only from the icon wrapper (`@ren/ui/icon`), which maps Tabler icons. Load heavy renderers (charts, code highlighting, markdown editing) lazily behind the component.
+- Style Base UI states with data-attribute variants (`data-checked:`, `data-highlighted:`, `data-disabled:`) and Base UI's CSS variables (`--anchor-width`, `--available-height`, `--transform-origin`). `shadcn/tailwind.css` redefines `data-open`, `data-closed`, `data-checked`, `data-unchecked`, `data-selected`, `data-disabled`, `data-active`, `data-horizontal` and `data-vertical` with `:where()`, so they lose to `hover:` and other pseudo-classes on the same property.
+- Animate with the durations and easings in `motion.css`.
+- Glyphs come from the icon wrapper (`@ren/ui/icon`), which maps Tabler icons. Load heavy renderers (charts, code highlighting, markdown editing) lazily behind the component.
 
 ## Design fidelity
 
-- Tokens come from the Paper file "Ren UI" through `DESIGN.md` (use the `sync-with-paper` skill) and `bun run generate`. Never edit `DESIGN.md` or `tokens.generated.css` by hand, never rename a token, and never use a colour, size, radius or duration that is not a token.
+- Tokens come from the Paper file "Ren UI" through `DESIGN.md` (use the `sync-with-paper` skill) and `bun run generate`. Never edit `DESIGN.md` or `tokens.generated.css` by hand, and never rename a token. `theme.css` maps shadcn's names onto the tokens.
 - When porting from `ren-v1/packages/ui`, keep class strings, variants, sizes and states identical. A visual change is a separate, explicit decision.
 - Approved deviations from ren-v1:
   - Text inputs use `text-base sm:text-sm`, so iOS doesn't zoom the page on focus.

@@ -13,7 +13,7 @@ export type SegmentedControlOption<Value extends string> = {
 }
 
 const segmentVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-control px-2 font-medium whitespace-nowrap text-text-secondary transition-standard not-data-pressed:hover:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-disabled data-pressed:bg-fill-secondary data-pressed:text-text-primary [&_svg]:size-4",
+  "inline-flex items-center justify-center gap-2 rounded-control px-2 font-medium whitespace-nowrap text-text-secondary transition-standard not-data-pressed:hover:text-text-primary data-pressed:bg-fill-secondary data-pressed:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-disabled [&_svg]:size-4",
   {
     variants: { size: { small: "h-6 text-xs", medium: "h-7 text-sm" } },
     defaultVariants: { size: "medium" },
