@@ -6,7 +6,6 @@
   "ignorePatterns": [
     "**/*.toml",
     "repos/",
-    ".opencode/skills/shadcn/",
     "packages/client/src/generated/",
     "packages/client/src/effect/generated/",
     "packages/db/migration/",

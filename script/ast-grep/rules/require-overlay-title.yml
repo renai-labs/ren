@@ -1,0 +1,19 @@
+id: require-overlay-title
+language: Tsx
+message: Give every dialog, alert dialog, sheet and drawer a title (`DialogTitle`, `AlertDialogTitle`, `SheetTitle`, `DrawerTitle`). Screen readers announce it. Hide it with `className="sr-only"` when the design has none.
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+rule:
+  kind: jsx_element
+  has:
+    field: open_tag
+    has:
+      field: name
+      regex: ^(Dialog|AlertDialog|Sheet|Drawer)Content$
+  not:
+    has:
+      stopBy: end
+      kind: identifier
+      regex: ^(Dialog|AlertDialog|Sheet|Drawer)Title$

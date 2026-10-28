@@ -3,10 +3,8 @@
 Components for conversation and chat UI. Compose these instead of hand-rolling
 bubbles, scroll containers, dividers, or attachment cards.
 
-Install: `npx shadcn@latest add message-scroller message bubble attachment marker trace code-block`
-
-The same component names and props ship for both `base` and `radix`; only
-composition differs (`render` vs `asChild`). See [base-vs-radix.md](./base-vs-radix.md).
+Install from `packages/ui`: `bunx --bun shadcn@latest add message-scroller message bubble attachment marker trace code-block`.
+Map `@ren/chat`'s narrow values onto these parts; there is no AI SDK.
 
 ## Contents
 
@@ -54,14 +52,8 @@ track visibility, and jump to it. `MessageScrollerButton` sits inside
     <MessageScrollerViewport>
       <MessageScrollerContent>
         {messages.map((message) => (
-          <MessageScrollerItem
-            key={message.id}
-            messageId={message.id}
-            scrollAnchor={message.role === "user"}
-          >
-            <Message align={message.role === "user" ? "end" : "start"}>
-              {/* ...message content... */}
-            </Message>
+          <MessageScrollerItem key={message.id} messageId={message.id} scrollAnchor={message.role === "user"}>
+            <Message align={message.role === "user" ? "end" : "start"}>{/* ...message content... */}</Message>
           </MessageScrollerItem>
         ))}
       </MessageScrollerContent>
@@ -116,9 +108,7 @@ with absolutely-positioned `Badge`s.
 **Incorrect:**
 
 ```tsx
-<div className="w-fit rounded-2xl bg-primary px-3 py-2 text-primary-foreground">
-  {text}
-</div>
+<div className="w-fit rounded-2xl bg-primary px-3 py-2 text-primary-foreground">{text}</div>
 ```
 
 **Correct:**
@@ -427,9 +417,7 @@ a `CodeBlock`, never a hand-rolled `<pre>`.
 **Incorrect:**
 
 ```tsx
-<pre className="rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap">
-  {output}
-</pre>
+<pre className="rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap">{output}</pre>
 ```
 
 **Correct:**
@@ -465,36 +453,12 @@ write a `useStickToBottom` hook, a `ResizeObserver`, or manual `scrollTop` math.
   and scrolls back on click. `direction="end"` (default) or `direction="start"`.
   It is a self-managing control, so don't gate it behind your own scroll-position
   state.
-- **Open a saved transcript without a flash.** `defaultScrollPosition` applies
-  after mount. When it is `"end"` or `"last-anchor"`, the viewport has
-  `data-pending-scroll` until that position is applied. The styled viewport
-  hides. For `"end"` on first paint when messages are in the server HTML, copy
-  this script into the page, not into the primitive. Skip it for `"last-anchor"`
-  and for client-fetched messages. Keep `suppressHydrationWarning` on the
-  viewport. Pass a `nonce` if you use a Content Security Policy.
-
-```tsx
-const scrollToEndScript = `(function () {
-  var viewport = document.getElementById("messages")
-  if (!viewport) {
-    return
-  }
-  viewport.scrollTop = viewport.scrollHeight
-  viewport.removeAttribute("data-pending-scroll")
-})()`
-
-<MessageScroller>
-  <MessageScrollerViewport id="messages" suppressHydrationWarning>
-    <MessageScrollerContent>{/* transcript */}</MessageScrollerContent>
-  </MessageScrollerViewport>
-  <script dangerouslySetInnerHTML={{ __html: scrollToEndScript }} />
-  <MessageScrollerButton />
-</MessageScroller>
-```
+- **Open a saved transcript without a flash.** `defaultScrollPosition="end"` or
+  `"last-anchor"` applies after mount; the viewport carries
+  `data-pending-scroll` and stays hidden until then.
 
 For a "thinking…" indicator while the model generates, apply the `shimmer`
-utility to text. Don't author a custom keyframe animation. See
-[styling.md](./styling.md).
+utility to text. Don't author a custom keyframe animation.
 
 ---
 

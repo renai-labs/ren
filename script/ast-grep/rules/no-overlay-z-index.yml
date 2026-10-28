@@ -1,0 +1,25 @@
+id: no-overlay-z-index
+language: Tsx
+message: Overlays stack themselves. Drop the `z-*` class from the dialog, sheet, popover, menu, select or tooltip content.
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+rule:
+  any:
+    - kind: jsx_opening_element
+    - kind: jsx_self_closing_element
+  all:
+    - has:
+        field: name
+        regex: ^(Dialog|AlertDialog|Sheet|Drawer|Popover|DropdownMenu|ContextMenu|Select|Combobox|Tooltip|HoverCard)Content$
+    - has:
+        kind: jsx_attribute
+        all:
+          - has:
+              kind: property_identifier
+              regex: ^className$
+          - has:
+              stopBy: end
+              kind: string_fragment
+              regex: (^|\s)-?z-

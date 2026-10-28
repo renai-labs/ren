@@ -1,0 +1,32 @@
+id: no-icon-size-in-component
+language: Tsx
+message: Components size the icons inside them. Drop the `size-*`, `w-*` and `h-*` classes, and mark an icon beside a label with `data-icon="inline-start"` or `"inline-end"`.
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+rule:
+  any:
+    - kind: jsx_opening_element
+    - kind: jsx_self_closing_element
+  all:
+    - has:
+        field: name
+        regex: ^Icon[A-Z]
+    - has:
+        kind: jsx_attribute
+        all:
+          - has:
+              kind: property_identifier
+              regex: ^className$
+          - has:
+              kind: string
+              regex: (^|["'\s])(size|w|h)-
+  inside:
+    stopBy: end
+    kind: jsx_element
+    has:
+      field: open_tag
+      has:
+        field: name
+        regex: ^(Button|Badge|InputGroupButton|InputGroupAddon|DropdownMenuItem|SelectItem|CommandItem|TabsTrigger|ToggleGroupItem|Alert|Item)$
