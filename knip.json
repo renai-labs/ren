@@ -47,7 +47,8 @@
       "ignoreDependencies": ["@ren/server"]
     },
     "packages/site": {
-      "entry": ["src/layouts/legal.astro"]
+      "entry": ["src/layouts/legal.astro"],
+      "ignoreDependencies": ["react-dom", "@types/react-dom"]
     },
     "packages/httpapi-codegen": {
       "entry": ["test/**/*.test.ts", "script/**/*.ts"]
