@@ -13,7 +13,7 @@ export function ChatListStatus(props: { sessionID: Session.ID; busy: boolean }) 
     (props.busy ? "running" : "idle")
   if (attention === "idle") return null
   return (
-    <SidebarMenuBadge className="peer-data-[size=default]/menu-button:top-2">
+    <SidebarMenuBadge>
       {attention === "asking" ? (
         <StatusDot tone="accent" label="Needs your input" />
       ) : (

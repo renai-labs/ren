@@ -32,9 +32,10 @@ export function AppShell(props: { sidebar: ReactNode; children: ReactNode }) {
     >
       {props.sidebar}
       <SidebarInset className="h-svh min-w-0 overflow-hidden md:h-[calc(100svh-var(--ren-spacing-4))] md:shadow-none md:inset-ring md:inset-ring-border">
-        <span className="absolute top-2 left-2 z-20 md:hidden">
-          <SidebarTrigger aria-label="Open navigation" className="text-muted-foreground" />
-        </span>
+        <SidebarTrigger
+          aria-label="Open navigation"
+          className="absolute top-2 left-2 z-20 text-muted-foreground md:hidden"
+        />
         <div
           data-slot="page-scroll"
           className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
@@ -75,7 +76,6 @@ export function SidebarItem(props: {
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        className="h-9"
         tooltip={props.label}
         isActive={props.isActive ?? false}
         aria-keyshortcuts={props.shortcut}

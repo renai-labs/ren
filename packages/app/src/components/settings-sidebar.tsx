@@ -95,9 +95,7 @@ export function SettingsSidebar() {
             </SidebarMenu>
           </SidebarGroup>
         ))}
-        {needle !== "" && sections.length === 0 ? (
-          <p className="px-2 text-sm text-sidebar-foreground">No matching settings.</p>
-        ) : null}
+        {sections.length === 0 ? <p className="px-2 text-sm text-sidebar-foreground">No matching settings.</p> : null}
       </SidebarContent>
     </Sidebar>
   )
