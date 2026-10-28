@@ -380,6 +380,7 @@ export function SessionComposer(props: {
     remember(ComposerHistory.prepend(history, submission.sent))
     setBrowsing(ComposerHistory.idle)
     setSuggesting(undefined)
+    setGrown(false)
     change(submission.next)
     if (mobile) input.current?.blur()
     const failure = (title: string) => (error: unknown) => {
