@@ -1,6 +1,6 @@
 # @ren/ui
 
-The design system. It owns every visual decision in Ren: tokens, components and motion. It is moving from Ren's own components to shadcn's (style `base-nova` on Base UI, Tabler icons), replaced one at a time under the same `@ren/ui/<name>` path. Load the `shadcn`, `emil-design-eng`, `react` and `interface` skills before writing components.
+The design system. It owns every visual decision in Ren: tokens, components and motion. It is moving from Ren's own components to shadcn's (style `base-nova` on Base UI, Tabler icons), replaced one at a time under the same `@ren/ui/<name>` path. Load the `shadcn`, `react` and `interface` skills before writing components.
 
 ## Structure
 
@@ -17,7 +17,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 - Every shadcn component has a `<name>.md` beside it that says, in plain English, how it differs from stock shadcn. Remove a component and its note when nothing uses it.
 - shadcn's theme variables (`background`, `primary`, `muted-foreground`, `sidebar`…) and its radius scale map onto Ren's tokens in `theme.css`. Style with those names or Ren's tokens, never a raw colour.
 - Merge classes with `cn` from the `cn` package, as shadcn ships it, and import icons from `@tabler/icons-react`.
-- Motion follows `emil-design-eng`: transition colour, opacity and transform only, under 300 ms with `ease-out`, nothing on frequent or keyboard-driven actions, and respect `prefers-reduced-motion`.
+- Motion: transition colour, opacity and transform only, under 300 ms with `ease-out`, nothing on frequent or keyboard-driven actions, and respect `prefers-reduced-motion`.
 
 ## Ren components
 
