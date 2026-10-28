@@ -67,15 +67,21 @@ export const run = <Name extends string, Input, ContextInput, E, R>(
       Effect.provide(
         CliOutput.layer({
           formatHelpDoc: (doc) =>
-            formatter.formatHelpDoc({
-              ...doc,
-              ...(doc.subcommands && {
-                subcommands: doc.subcommands.map((group) => ({
-                  ...group,
-                  commands: Array.map(group.commands, (command) => ({ ...command, alias: undefined })),
-                })),
+            [
+              doc.description,
+              formatter.formatHelpDoc({
+                ...doc,
+                description: "",
+                ...(doc.subcommands && {
+                  subcommands: doc.subcommands.map((group) => ({
+                    ...group,
+                    commands: Array.map(group.commands, (command) => ({ ...command, alias: undefined })),
+                  })),
+                }),
               }),
-            }),
+            ]
+              .filter(Boolean)
+              .join("\n\n"),
           formatCliError: formatter.formatCliError,
           formatError: formatter.formatError,
           formatVersion: formatter.formatVersion,
@@ -90,9 +96,11 @@ export const run = <Name extends string, Input, ContextInput, E, R>(
       return
     }
     if (Cause.hasInterruptsOnly(exit.cause)) return yield* Effect.failCause(exit.cause)
-    const failure = describe(Cause.squash(exit.cause))
+    const error = Cause.squash(exit.cause)
+    const failure = describe(error)
     const usage = failure.type === "UsageError"
+    const helpOnly = CliError.isCliError(error) && error._tag === "ShowHelp" && error.errors.length === 0
     if (output.format === "json") yield* output.diagnostic(JSON.stringify({ error: failure }))
-    else yield* output.diagnostic([...(usage ? helpOutput : []), failure.message].join("\n"))
+    else yield* output.diagnostic([...(usage ? helpOutput : []), ...(helpOnly ? [] : [failure.message])].join("\n"))
     return yield* usage ? Effect.fail(new Exited({ [Runtime.errorExitCode]: 2 })) : Effect.failCause(exit.cause)
   })

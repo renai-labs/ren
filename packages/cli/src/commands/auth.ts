@@ -18,6 +18,7 @@ export const login = Effect.fn("AuthCommand.login")(function* (
   const credentials = yield* Credentials.Service
   const output = yield* Output.Service
   const server = yield* connection.server
+  yield* output.progress(`Connecting to ${server.origin}…`)
   const endpoints = yield* OAuth.discover(server)
   const verifier = random(32)
   const state = random(16)
@@ -64,6 +65,7 @@ export const login = Effect.fn("AuthCommand.login")(function* (
         stderr: "ignore",
       }).unref(),
     ).pipe(Effect.ignore)
+  yield* output.progress("Waiting for you to sign in…")
   const params = yield* Deferred.await(callback).pipe(
     Effect.timeoutOrElse({
       duration: "5 minutes",
@@ -73,6 +75,7 @@ export const login = Effect.fn("AuthCommand.login")(function* (
   if (params.get("state") !== state) return yield* Effect.fail(new Error("Sign-in failed. Try again."))
   const code = params.get("code")
   if (!code) return yield* Effect.fail(new Error(params.get("error_description") ?? "Sign-in was cancelled."))
+  yield* output.progress("Finishing sign-in…")
   const credential = yield* OAuth.token(endpoints, {
     grant_type: "authorization_code",
     code,
