@@ -17,13 +17,23 @@ import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useDeferredValue, useState } from "react"
 import { Search } from "@ren/util/search"
+import { Loader } from "../../lib/loader.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { CreateSpaceDialog } from "./create-space-dialog.js"
 import { JoinSpaceDialog } from "./join-space-dialog.js"
 
+const description = "Each space gives a team its own credentials, apps and agents."
+
+export function SpacesPending() {
+  return <Page.Pending title="Spaces" description={description} toolbar="row" body="cards" />
+}
+
 export function SpacesPage(props: { userId: string }) {
   const context = RouterContext.useRouterContext()
-  const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
+  const spaces = useQuery({
+    ...context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }),
+    ...Loader.required,
+  })
   const [query, setQuery] = useState("")
   const needle = useDeferredValue(query).trim()
   const visible = (spaces.data?.items ?? []).filter((space) =>
@@ -32,7 +42,7 @@ export function SpacesPage(props: { userId: string }) {
   return (
     <Page.Root
       title="Spaces"
-      description="Each space gives a team its own credentials, apps and agents."
+      description={description}
       actions={
         <>
           <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search spaces" />
@@ -41,7 +51,8 @@ export function SpacesPage(props: { userId: string }) {
       }
     >
       <section aria-label="Spaces" aria-live="polite">
-        {visible.length === 0 ? (
+        {spaces.isPending ? <Page.Skeletons body="cards" /> : null}
+        {!spaces.isPending && visible.length === 0 ? (
           <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">

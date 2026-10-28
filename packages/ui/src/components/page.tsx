@@ -159,7 +159,7 @@ export function Pending(
   props: Omit<RootProps, "children" | "title"> & {
     title?: ReactNode
     toolbar?: "none" | "row"
-    body?: "rows" | "cards" | "settings" | "record"
+    body?: "rows" | "cards" | "settings"
     columns?: 2 | 3
   },
 ) {
@@ -172,12 +172,31 @@ export function Pending(
       })}
     >
       <output className="sr-only">Loading</output>
-      <PendingBody body={props.body ?? "rows"} columns={props.columns} />
+      <Skeletons body={props.body ?? "rows"} columns={props.columns} />
     </Root>
   )
 }
 
-function PendingBody(props: { body: "rows" | "cards" | "settings" | "record"; columns?: 2 | 3 | undefined }) {
+export function RecordPending() {
+  return (
+    <Record
+      banner={<Skeleton className="h-4 w-40" />}
+      aside={
+        <div aria-hidden className="flex flex-col gap-2">
+          {Array.from({ length: 6 }, (_, index) => (
+            <Skeleton key={index} className="h-7 w-full" />
+          ))}
+        </div>
+      }
+    >
+      <output className="sr-only">Loading</output>
+      <Skeleton className="h-9 w-2/3" />
+      <Skeletons body="rows" />
+    </Record>
+  )
+}
+
+export function Skeletons(props: { body: "rows" | "cards" | "settings"; columns?: 2 | 3 | undefined }) {
   if (props.body === "cards")
     return (
       <div

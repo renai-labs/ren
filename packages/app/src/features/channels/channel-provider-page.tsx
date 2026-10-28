@@ -60,6 +60,7 @@ export function ChannelProviderPage(props: {
       }
     >
       <InstallOutcome title={provider.title} installed={props.installed} error={props.error} />
+      {installs.isPending ? <Page.Skeletons body="rows" /> : null}
       {install ? (
         <>
           <ItemGroup aria-label={`${provider.title} install`} className="gap-0 rounded-xl border bg-card">
@@ -84,7 +85,8 @@ export function ChannelProviderPage(props: {
           </Page.Section>
           <ChannelRoutes install={install} userId={props.userId} />
         </>
-      ) : (
+      ) : null}
+      {install || installs.isPending ? null : (
         <Text purpose="body" tone="secondary">
           Connect {provider.title} from the{" "}
           <Link to="/settings/channels" className={buttonVariants({ variant: "link", className: "h-auto p-0" })}>

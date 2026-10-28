@@ -6,9 +6,9 @@ export const Route = createFileRoute("/_authed")({
   head: () => ({ meta: [{ title: "Ren" }] }),
   beforeLoad: async (options) => {
     const context = options.context
-    const session = await context.queryClient.query(Auth.sessionOptions(context.auth))
+    const session = await context.queryClient.query({ ...Auth.sessionOptions(context.auth), staleTime: "static" })
     if (session === null) throw redirect({ to: "/login", search: { redirect: options.location.href } })
-    const me = await context.queryClient.query(context.api.me.get.queryOptions())
+    const me = await context.queryClient.query({ ...context.api.me.get.queryOptions(), staleTime: "static" })
     if (me.organization !== null) return { session, me }
     const invitations = await context.auth.organization.listUserInvitations()
     const pending = invitations.data?.find((invitation) => invitation.status === "pending")

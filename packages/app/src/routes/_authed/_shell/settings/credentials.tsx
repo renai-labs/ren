@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { OrgApps } from "../../../../features/apps/org-apps.js"
 import { CredentialsPage } from "../../../../features/credentials/credentials-page.js"
+import { Loader } from "../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/settings/credentials")({
   head: () => ({ meta: [{ title: "Credentials · Ren" }] }),
@@ -12,10 +13,10 @@ export const Route = createFileRoute("/_authed/_shell/settings/credentials")({
   loader: (options) => {
     const context = options.context
     const page = { page: 1, pageSize: Pagination.maximumPageSize }
-    return Promise.all([
+    Loader.start(
       context.queryClient.query(context.api.credential.list.queryOptions(page)),
       context.queryClient.query(context.api.space.list.queryOptions(page)),
-    ])
+    )
   },
   component: CredentialsRoute,
 })

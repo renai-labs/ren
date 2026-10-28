@@ -19,11 +19,13 @@ import {
 import { Icon } from "@ren/ui/icon"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Page } from "@ren/ui/page"
+import { Skeleton } from "@ren/ui/skeleton"
 import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router"
 import { useState } from "react"
 import type { ReactNode } from "react"
+import { Loader } from "../../lib/loader.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 const tabLink = buttonVariants({
@@ -32,12 +34,23 @@ const tabLink = buttonVariants({
     "font-normal text-muted-foreground aria-[current=page]:bg-secondary aria-[current=page]:font-medium aria-[current=page]:text-foreground",
 })
 
+export function SpacePending() {
+  return (
+    <Page.Pending
+      back={<Skeleton className="h-4 w-32" />}
+      media={<Skeleton className="size-12 rounded-lg" />}
+      description={<Skeleton className="h-4 w-64" />}
+      leading={<Skeleton className="h-8 w-96 max-w-full" />}
+    />
+  )
+}
+
 export function SpacePage(props: { spaceId: string; children: ReactNode }) {
   const context = RouterContext.useRouterContext()
   const authed = useRouteContext({ from: "/_authed" })
-  const space = useQuery(context.api.space.get.queryOptions({ idOrSlug: props.spaceId }))
+  const space = useQuery({ ...context.api.space.get.queryOptions({ idOrSlug: props.spaceId }), ...Loader.required })
   const join = useMutation(context.api["space-member"].create.mutationOptions())
-  if (!space.data) return null
+  if (!space.data) return <SpacePending />
   const params = { spaceId: props.spaceId }
   const isMember = Boolean(space.data.membershipId)
   const userId = authed.me.user.id

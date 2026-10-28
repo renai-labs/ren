@@ -61,33 +61,24 @@ export function TaskDetailPage(props: PageProps) {
   const detail = useQuery({ ...context.api.task.get.queryOptions({ idOrSlug: props.taskId }), refetchInterval: 5000 })
   const catalog = Tasks.useCatalog(props.organizationId)
   if (!detail.data)
-    return (
+    return detail.isError ? (
       <Page.Root title="Task">
-        {detail.isError ? (
-          <Empty role="alert">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Icon glyph="AlertCircle" tone="danger" />
-              </EmptyMedia>
-              <EmptyTitle>Couldn’t load this task.</EmptyTitle>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
-                Try again
-              </Button>
-            </EmptyContent>
-          </Empty>
-        ) : (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia>
-                <Spinner />
-              </EmptyMedia>
-              <EmptyTitle>Loading task…</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        )}
+        <Empty role="alert">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon glyph="AlertCircle" tone="danger" />
+            </EmptyMedia>
+            <EmptyTitle>Couldn’t load this task.</EmptyTitle>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
+              Try again
+            </Button>
+          </EmptyContent>
+        </Empty>
       </Page.Root>
+    ) : (
+      <Page.RecordPending />
     )
   return <Detail key={detail.data.id} {...props} task={detail.data} catalog={catalog} refreshError={detail.isError} />
 }

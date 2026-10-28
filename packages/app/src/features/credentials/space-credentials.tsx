@@ -15,6 +15,7 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle }
 import { SearchField } from "@ren/ui/search-field"
 import { toast } from "@ren/ui/toast"
 import { Page } from "@ren/ui/page"
+import { Skeleton } from "@ren/ui/skeleton"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
@@ -78,7 +79,7 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
         actions={
           <>
             <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
-            {add}
+            {all.isPending ? <Skeleton className="h-7 w-32" /> : add}
           </>
         }
       />

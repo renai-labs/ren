@@ -20,7 +20,6 @@ import { Icon } from "@ren/ui/icon"
 import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { Page } from "@ren/ui/page"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
-import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Struct } from "effect"
@@ -99,14 +98,7 @@ export function SpaceFactory(props: { spaceId: string }) {
         </EmptyContent>
       </Empty>
     )
-  if (!space.data || !agents.data)
-    return (
-      <Empty>
-        <EmptyMedia>
-          <Spinner />
-        </EmptyMedia>
-      </Empty>
-    )
+  if (!space.data || !agents.data) return <Page.Skeletons body="rows" />
   const factory = space.data.factory
   const maxHandoffs = factory.maxHandoffs ?? Factory.defaultMaxHandoffs
   const order = factory.agents

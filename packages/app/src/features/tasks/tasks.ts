@@ -64,7 +64,8 @@ export const describe = (error: unknown) => (error instanceof Error ? error.mess
 export function useCatalog(organizationId: string) {
   const context = RouterContext.useRouterContext()
   const options = TaskQueries.catalogOptions(context.api)
-  const spaces = useQuery(options[0]).data?.items ?? []
+  const spaceList = useQuery(options[0])
+  const spaces = spaceList.data?.items ?? []
   const agents = (useQuery(options[1]).data?.items ?? []).map(toAgent)
   const labels = useQuery(options[2]).data?.items ?? []
   const people = (useQuery(Auth.organizationOptions(context.auth, organizationId)).data?.members ?? []).map(
@@ -75,6 +76,7 @@ export function useCatalog(organizationId: string) {
     }),
   )
   return {
+    pending: spaceList.isPending,
     spaces,
     agents,
     labels,

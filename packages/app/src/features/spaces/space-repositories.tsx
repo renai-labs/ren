@@ -75,7 +75,7 @@ export function SpaceRepositories(props: { spaceId: string }) {
     page,
     pageSize,
   )
-  const canUpdate = settings.data?.canUpdate === true
+  const canUpdate = settings.data?.canUpdate
   const state = { pending: "loading", error: "failed", success: visible.total > 0 ? "ready" : "empty" } as const
   const status = state[settings.status]
   return (
@@ -91,12 +91,12 @@ export function SpaceRepositories(props: { spaceId: string }) {
               }}
               placeholder="Search repositories"
             />
-            {canUpdate ? (
-              <Button size="sm" onClick={() => setAdding(true)}>
+            {canUpdate === false ? null : (
+              <Button size="sm" disabled={canUpdate === undefined} onClick={() => setAdding(true)}>
                 <Icon glyph="Plus" data-icon="inline-start" />
                 Add repositories
               </Button>
-            ) : null}
+            )}
           </>
         }
       />

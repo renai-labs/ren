@@ -4,6 +4,7 @@ import { createFileRoute, notFound, redirect } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { ChannelProviderPage } from "../../../../../features/channels/channel-provider-page.js"
 import { Channels } from "../../../../../features/channels/channels.js"
+import { Loader } from "../../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/settings/channels/$provider")({
   head: () => ({ meta: [{ title: "Channels · Ren" }] }),
@@ -23,11 +24,14 @@ export const Route = createFileRoute("/_authed/_shell/settings/channels/$provide
   loaderDeps: (options) => ({ connect: options.search.connect === true }),
   loader: async (options) => {
     const context = options.context
-    const installs = await context.queryClient.query(
-      context.api["channel-install"].list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }),
-    )
-    if (!options.deps.connect || installs.items.some((install) => install.provider === options.params.provider))
-      return installs
+    const list = context.api["channel-install"].list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize })
+    if (!options.deps.connect) {
+      Loader.start(context.queryClient.query(list))
+      return
+    }
+    // ast-grep-ignore: no-awaiting-loader -- ?connect=true installs the provider unless it is installed already, so it needs the installs first
+    const installs = await context.queryClient.query(list)
+    if (installs.items.some((install) => install.provider === options.params.provider)) return
     const started = await context.client["channel-connect"]["channel-install"]
       .start({ provider: options.params.provider })
       .catch((cause: unknown) => {
@@ -40,7 +44,6 @@ export const Route = createFileRoute("/_authed/_shell/settings/channels/$provide
       })
     if (context.platform.redirect) context.platform.redirect(started.redirectUrl)
     else context.platform.openExternal(started.redirectUrl)
-    return installs
   },
   component: ChannelProviderRoute,
 })
