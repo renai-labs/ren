@@ -5,6 +5,7 @@ import { CredentialCallers } from "@ren/core/credential-callers"
 import { CredentialRefresh } from "@ren/core/credential-refresh"
 import { CredentialSource } from "@ren/core/credential-source"
 import { Credentials } from "@ren/core/credentials"
+import { Drives } from "@ren/core/drives"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { Egress } from "@ren/core/egress"
 import { EgressControl } from "@ren/core/egress-control"
@@ -14,7 +15,7 @@ import { OAuthFetch } from "@ren/core/oauth-fetch"
 import { AppProfiles } from "@ren/core/app/profiles"
 import { Models } from "@ren/core/models"
 import { Signer } from "@ren/core/signer"
-import { GitHubServer, Seed, testEffect } from "@ren/core/testing"
+import { GitHubServer, Seed, TestDrives, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { HostMcp } from "@ren/host-api/host-mcp"
@@ -149,7 +150,14 @@ const ren = () => {
       Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
     ),
     Layer.provideMerge(
-      Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, Models.layerNone, GitHubApp.layer),
+      Layer.mergeAll(
+        Credentials.layer,
+        CredentialCallers.layer,
+        BrainClient.layer,
+        Models.layerNone,
+        GitHubApp.layer,
+        Drives.layer,
+      ),
     ),
     Layer.provideMerge(
       Layer.mergeAll(
@@ -175,6 +183,7 @@ const ren = () => {
             },
           ]),
           REN_URL: `http://ren.test:${upstream.port}`,
+          ...TestDrives.config,
           EGRESS_PORT: String(state.renPort),
           EGRESS_TLS_CERT: certs.serverCert,
           EGRESS_TLS_KEY: certs.serverKey,

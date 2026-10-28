@@ -32,6 +32,7 @@
       "@astrojs/mdx": "8.1.1",
       "@astrojs/react": "7.0.1",
       "@aws-sdk/client-s3": "3.1154.0",
+      "@aws-sdk/client-sts": "3.1154.0",
       "@aws-sdk/s3-presigned-post": "3.1154.0",
       "@aws-sdk/s3-request-presigner": "3.1154.0",
       "@babel/core": "7.29.7",

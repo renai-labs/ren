@@ -112,6 +112,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(
     Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
   ),
+  Layer.provideMerge(Drives.layer),
   Layer.provideMerge(GitHubAccounts.layer),
   Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, PersonCredentials.layer)),
   Layer.provideMerge(SlackApp.layer.pipe(Layer.provideMerge(ChannelSecrets.layer))),
@@ -134,7 +135,6 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
-  Layer.provideMerge(Drives.layer),
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provide([BrainClient.layer, Settings.layer]),
