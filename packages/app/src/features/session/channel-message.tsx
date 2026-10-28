@@ -2,14 +2,15 @@ import { ChannelReply } from "@ren/chat"
 import { Channel } from "@ren/schema/channel"
 import type { ChannelOrigin } from "@ren/schema/channel-origin"
 import type { SessionMessage } from "@ren/schema/session/message"
-import { Button } from "@ren/ui/button"
+import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
-import { ConversationShell } from "@ren/ui/conversation-shell"
 import { Icon } from "@ren/ui/icon"
 import type { Glyph } from "@ren/ui/icon"
 import { Link } from "@ren/ui/link"
-import { Text } from "@ren/ui/text"
-import { Transcript } from "@ren/ui/transcript"
+import { Markdown } from "@ren/ui/markdown"
+import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
+import { Message, MessageContent, MessageHeader } from "@ren/ui/message"
+import { IconChevronRight } from "@tabler/icons-react"
 
 const glyphs: Readonly<Record<Channel.Provider, Glyph>> = { github: "Github", slack: "Slack", linear: "Linear" }
 
@@ -24,40 +25,33 @@ export function ChannelMessageHeader(props: { origin: ChannelOrigin.Info | undef
   if (!origin) return null
   const title = Channel.titles[origin.provider]
   return (
-    <div className="flex min-w-0 flex-col gap-1 pb-2">
-      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        <Icon glyph={glyphs[origin.provider]} size="small" tone="secondary" />
-        <Text purpose="caption" tone="secondary" element="span" wrapping="anywhere">
+    <div className="flex min-w-0 flex-col items-end gap-1">
+      <Marker className="justify-end text-xs">
+        <MarkerIcon>
+          <Icon glyph={glyphs[origin.provider]} size="small" />
+        </MarkerIcon>
+        <MarkerContent>
           {origin.trigger
             ? `Started on ${title} by “${origin.trigger}” in ${origin.place}, for ${senderOf(origin)}`
             : `Sent from ${title} by ${senderOf(origin)} in ${origin.place}`}
-        </Text>
-        {origin.threadUrl ? (
-          <Text purpose="caption" element="span">
-            <Link appearance="quiet" href={origin.threadUrl} external>
-              Open on {title}
-            </Link>
-          </Text>
-        ) : null}
-      </span>
+          {origin.threadUrl ? (
+            <>
+              {" · "}
+              <Link href={origin.threadUrl} external>
+                Open on {title}
+              </Link>
+            </>
+          ) : null}
+        </MarkerContent>
+      </Marker>
       {origin.context ? (
-        <Collapsible className="flex min-w-0 flex-col">
-          <CollapsibleTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="xs"
-                className="-mx-2 self-start text-muted-foreground [&_svg]:transition-transform data-panel-open:[&_svg]:rotate-90"
-              />
-            }
-          >
-            <Icon glyph="ChevronRight" data-icon="inline-start" />
+        <Collapsible className="flex min-w-0 flex-col items-end">
+          <CollapsibleTrigger className="group/context flex items-center gap-1 rounded-md text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
             Included context
+            <IconChevronRight className="size-3.5 transition-transform group-aria-expanded/context:rotate-90" />
           </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3">
-            <Text purpose="caption" tone="secondary" element="p" wrapping="preserved">
-              {origin.context}
-            </Text>
+          <CollapsibleContent className="pt-2">
+            <p className="text-xs whitespace-pre-wrap text-muted-foreground">{origin.context}</p>
           </CollapsibleContent>
         </Collapsible>
       ) : null}
@@ -71,14 +65,20 @@ export function ChannelReplyMessage(props: {
 }) {
   const reply = ChannelReply.of(props.tool)
   return (
-    <ConversationShell.Message author="assistant">
-      <span className="flex items-center gap-2">
-        {reply.sent ? <Icon glyph={glyphs[reply.sent.provider]} size="small" tone="secondary" /> : null}
-        <Text purpose="caption" tone="secondary" element="span">
+    <Message>
+      <MessageContent>
+        <MessageHeader className="gap-2 px-0">
+          {reply.sent ? <Icon glyph={glyphs[reply.sent.provider]} size="small" /> : null}
           {reply.sent ? `Sent on ${Channel.titles[reply.sent.provider]}` : "Sending to the thread…"}
-        </Text>
-      </span>
-      <Transcript.Response content={reply.text} streaming={false} onOpenSession={props.onOpenSession} />
-    </ConversationShell.Message>
+        </MessageHeader>
+        <Bubble variant="ghost">
+          <BubbleContent>
+            <Markdown size="lg" onOpenSession={props.onOpenSession}>
+              {reply.text}
+            </Markdown>
+          </BubbleContent>
+        </Bubble>
+      </MessageContent>
+    </Message>
   )
 }

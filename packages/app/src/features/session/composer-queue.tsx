@@ -2,7 +2,7 @@ import { ChatSession, type Composer } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
-import { ConversationShell } from "@ren/ui/conversation-shell"
+import { PromptInput } from "@ren/ui/prompt-input"
 import { toast } from "@ren/ui/toast"
 import { useState } from "react"
 import { Failure } from "./failure.js"
@@ -57,13 +57,13 @@ export function ComposerQueue(props: {
   if (props.queued.length === 0) return null
   const last = props.queued.length - 1
   return (
-    <ConversationShell.Queue
+    <PromptInput.Queue
       label={`${props.queued.length} queued`}
       count={props.queued.length}
       onReorder={blocked || props.queued.length < 2 ? undefined : reorder}
     >
       {props.queued.map((item, index) => (
-        <ConversationShell.QueueItem
+        <PromptInput.QueueItem
           key={item.id}
           text={item.text}
           {...(item.attachments > 0 && { detail: item.attachments === 1 ? "1 file" : `${item.attachments} files` })}
@@ -81,6 +81,6 @@ export function ComposerQueue(props: {
           }
         />
       ))}
-    </ConversationShell.Queue>
+    </PromptInput.Queue>
   )
 }

@@ -4,9 +4,29 @@ import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
 import { Session } from "@ren/schema/session"
 import { Button } from "@ren/ui/button"
-import { Icon } from "@ren/ui/icon"
-import { Questionnaire } from "@ren/ui/questionnaire"
-import { Text } from "@ren/ui/text"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@ren/ui/card"
+import { InputGroup, InputGroupInput } from "@ren/ui/input-group"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemFooter, ItemMedia, ItemTitle } from "@ren/ui/item"
+import { useMessageScroller } from "@ren/ui/message-scroller"
+import {
+  Questionnaire,
+  QuestionnaireActions,
+  QuestionnaireChoice,
+  QuestionnaireChoiceDescription,
+  QuestionnaireChoices,
+  QuestionnaireDescription,
+  QuestionnaireError,
+  QuestionnaireInput,
+  QuestionnaireItem,
+  QuestionnaireNext,
+  QuestionnairePrevious,
+  QuestionnaireProgress,
+  QuestionnaireSkip,
+  QuestionnaireSubmit,
+  QuestionnaireTitle,
+} from "@ren/ui/questionnaire"
+import { Spinner } from "@ren/ui/spinner"
+import { IconGhost, IconShieldQuestion, IconX } from "@tabler/icons-react"
 import { WebSearchConsent, type WebSearchProvider, type WebSearchProviders } from "@ren/ui/web-search-consent"
 import { AsyncResult } from "effect/reactivity"
 import { useState } from "react"
@@ -26,16 +46,12 @@ function Source(props: {
   if (props.sessionID === props.viewed) return props.children
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex min-w-0 items-center gap-2 px-1">
-        <Icon glyph="Ghost" tone="secondary" />
-        <Text purpose="caption" element="span" truncation="single-line">
-          {props.title} needs your input
-        </Text>
-        <div className="ml-auto">
-          <Button variant="ghost" size="sm" onClick={() => props.onOpen(props.sessionID)}>
-            Open subagent
-          </Button>
-        </div>
+      <div className="flex min-w-0 items-center gap-2 px-1 text-xs text-muted-foreground">
+        <IconGhost className="size-4 shrink-0" />
+        <span className="truncate">{props.title} needs your input</span>
+        <Button variant="ghost" size="xs" className="ml-auto" onClick={() => props.onOpen(props.sessionID)}>
+          Open subagent
+        </Button>
       </div>
       {props.children}
     </div>
@@ -162,6 +178,183 @@ function SessionWebSearch(props: {
   )
 }
 
+function PermissionRequest(props: {
+  request: Permission.Request
+  pending: boolean
+  onReply: (reply: Permission.Reply, message?: string) => void
+}) {
+  const request = props.request
+  const [instead, setInstead] = useState("")
+  const typed = instead.trim()
+  return (
+    <Item variant="outline" className="bg-card shadow-composer">
+      <ItemMedia variant="icon">
+        <IconShieldQuestion />
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>Allow {request.action}?</ItemTitle>
+        {request.resources.length > 0 ? (
+          <ItemDescription className="font-mono text-xs break-all whitespace-pre-wrap">
+            {request.resources.join("\n")}
+          </ItemDescription>
+        ) : null}
+        {request.message ? <ItemDescription>{request.message}</ItemDescription> : null}
+      </ItemContent>
+      <ItemActions>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={props.pending}
+          onClick={() => (typed ? props.onReply("reject", typed) : props.onReply("reject"))}
+        >
+          Deny
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={props.pending || typed !== ""}
+          title={request.save && request.save.length > 0 ? request.save.join(", ") : undefined}
+          onClick={() => props.onReply("always")}
+        >
+          Allow always
+        </Button>
+        <Button size="sm" disabled={props.pending || typed !== ""} onClick={() => props.onReply("once")}>
+          {props.pending ? <Spinner data-icon="inline-start" /> : null}
+          Allow once
+        </Button>
+      </ItemActions>
+      <ItemFooter>
+        <InputGroup>
+          <InputGroupInput
+            value={instead}
+            aria-label="Deny and tell Ren what to do instead"
+            placeholder="Deny and tell Ren what to do instead…"
+            disabled={props.pending}
+            onChange={(event) => setInstead(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.nativeEvent.isComposing || !typed) return
+              event.preventDefault()
+              props.onReply("reject", typed)
+            }}
+          />
+        </InputGroup>
+      </ItemFooter>
+    </Item>
+  )
+}
+
+function QuestionForm(props: {
+  form: Form.Info
+  expired: boolean
+  pending: boolean
+  onSubmit: (answer: Form.Answer) => void
+  onDismiss: () => void
+}) {
+  const questions = props.form.fields.filter(Requests.isQuestion)
+  const [progress, setProgress] = useState(() => FormProgress.read(props.form.id) ?? FormProgress.empty)
+  const update = (next: FormProgress.Progress) => {
+    setProgress(next)
+    FormProgress.write(props.form.id, next)
+  }
+  const first = questions.at(0)?.key
+  return (
+    <Card size="sm" className="shadow-composer">
+      <CardHeader>
+        <CardTitle>{questions.length > 1 ? "Ren has a few questions" : "Ren has a question"}</CardTitle>
+        {props.expired ? (
+          <CardDescription>This question expired. Your answer goes to the chat as a new message.</CardDescription>
+        ) : null}
+        <CardAction>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Dismiss"
+            className="text-muted-foreground"
+            disabled={props.pending}
+            onClick={props.onDismiss}
+          >
+            <IconX />
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <Questionnaire
+          items={questions.map((field) => ({
+            name: field.key,
+            required: field.required === true,
+            choices: (field.options ?? []).map((option) => ({ value: option.value })),
+          }))}
+          item={progress.item ?? first ?? ""}
+          onItemChange={(item) => update({ ...progress, item })}
+          shortcuts="letters"
+          onSubmit={(event) => {
+            event.preventDefault()
+            props.onSubmit(Requests.readFormAnswer(props.form, new FormData(event.currentTarget)))
+          }}
+        >
+          {questions.length > 1 ? <QuestionnaireProgress /> : null}
+          {questions.map((field) => {
+            const chosen = progress.answers[field.key] ?? []
+            const multiple = field.type === "multiselect"
+            return (
+              <QuestionnaireItem
+                key={field.key}
+                name={field.key}
+                required={field.required === true}
+                multiple={multiple}
+              >
+                <QuestionnaireTitle>{field.description ?? field.title ?? props.form.title}</QuestionnaireTitle>
+                {multiple ? <QuestionnaireDescription>Select all that apply.</QuestionnaireDescription> : null}
+                <QuestionnaireChoices>
+                  {(field.options ?? []).map((option) => (
+                    <QuestionnaireChoice
+                      key={option.value}
+                      value={option.value}
+                      disabled={props.pending}
+                      checked={chosen.includes(option.value)}
+                      onChange={(event) => {
+                        const rest = multiple ? chosen.filter((value) => value !== option.value) : []
+                        const next = event.currentTarget.checked ? [...rest, option.value] : rest
+                        update({ ...progress, answers: { ...progress.answers, [field.key]: next } })
+                      }}
+                    >
+                      <span className="font-medium">{option.label}</span>
+                      {option.description ? (
+                        <QuestionnaireChoiceDescription>{option.description}</QuestionnaireChoiceDescription>
+                      ) : null}
+                    </QuestionnaireChoice>
+                  ))}
+                  {field.custom === false && (field.options ?? []).length > 0 ? null : (
+                    <QuestionnaireInput
+                      aria-label="Type your own answer"
+                      placeholder="Something else…"
+                      disabled={props.pending}
+                      value={progress.custom[field.key] ?? ""}
+                      onChange={(event) =>
+                        update({ ...progress, custom: { ...progress.custom, [field.key]: event.currentTarget.value } })
+                      }
+                    />
+                  )}
+                </QuestionnaireChoices>
+                <QuestionnaireError />
+              </QuestionnaireItem>
+            )
+          })}
+          <QuestionnaireActions>
+            <QuestionnairePrevious size="sm" />
+            <QuestionnaireSkip size="sm" />
+            <QuestionnaireNext size="sm" />
+            <QuestionnaireSubmit size="sm" disabled={props.pending}>
+              {props.pending ? <Spinner data-icon="inline-start" /> : null}
+              Send
+            </QuestionnaireSubmit>
+          </QuestionnaireActions>
+        </Questionnaire>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function SessionRequests(props: {
   root: Session.ID
   sessionID: Session.ID
@@ -172,9 +365,9 @@ export function SessionRequests(props: {
   formExpired: boolean
   connection: number
   onOpen: (sessionID: Session.ID) => void
-  onAnswered: () => void
 }) {
   const [sending, setSending] = useState<string>()
+  const scroller = useMessageScroller()
   const approving = Chat.useAutoApprove(props.root).enabled
   const permission = approving ? undefined : props.permission
   const form = props.form?.kind === "question" ? props.form : undefined
@@ -187,11 +380,12 @@ export function SessionRequests(props: {
   const cancelForm = ChatReact.useAction(props.root, (opened, cancel: Parameters<typeof opened.cancelForm>) =>
     opened.cancelForm(...cancel),
   )
+  const answered = () => scroller.scrollToEnd({ behavior: "smooth" })
   const settle = (id: string, request: () => Promise<unknown>, title: string) => {
     if (sending === id) return
     setSending(id)
     void request()
-      .then(props.onAnswered, Failure.notify(title))
+      .then(answered, Failure.notify(title))
       .finally(() => setSending((current) => (current === id ? undefined : current)))
   }
   const webSearch = (
@@ -203,7 +397,7 @@ export function SessionRequests(props: {
       connection={props.connection}
       covered={permission !== undefined}
       onOpen={props.onOpen}
-      onAnswered={props.onAnswered}
+      onAnswered={answered}
     />
   )
   if (permission)
@@ -216,61 +410,43 @@ export function SessionRequests(props: {
           viewed={props.sessionID}
           onOpen={props.onOpen}
         >
-          <Questionnaire
-            resetKey={permission.id}
-            questions={[Requests.permissionQuestion(permission)]}
+          <PermissionRequest
+            key={permission.id}
+            request={permission}
             pending={sending === permission.id}
-            submitLabel="Continue"
-            onSubmit={(data) => {
-              const reply = Requests.readPermissionReply(data)
-              if (!reply) return
+            onReply={(reply, message) =>
               settle(
                 permission.id,
-                () => replyPermission([permission.sessionID, permission.id, reply.reply, reply.message]),
+                () => replyPermission([permission.sessionID, permission.id, reply, message]),
                 "Could not answer the permission request",
               )
-            }}
+            }
           />
         </Source>
       </>
     )
   if (!form) return webSearch
   const owner = Session.ID.make(form.sessionID)
-  const dismiss = () =>
-    settle(
-      form.id,
-      () => cancelForm([owner, form.id]).then(() => FormProgress.clear(form.id)),
-      "Could not dismiss the question",
-    )
   return (
     <>
       {webSearch}
       <Source title={props.formTitle} sessionID={owner} viewed={props.sessionID} onOpen={props.onOpen}>
-        {props.formExpired ? (
-          <Text purpose="caption" element="p" tone="secondary">
-            This question expired. Your answer goes to the chat as a new message.
-          </Text>
-        ) : null}
-        <Questionnaire
-          resetKey={form.id}
-          questions={Requests.formQuestions(form)}
+        <QuestionForm
+          key={form.id}
+          form={form}
+          expired={props.formExpired}
           pending={sending === form.id}
-          collapsible
-          progress={FormProgress.read(form.id)}
-          onProgressChange={(progress) => FormProgress.write(form.id, progress)}
-          onDismiss={dismiss}
-          leadingAction={
-            <Button variant="ghost" size="sm" disabled={sending === form.id} onClick={dismiss}>
-              Dismiss
-            </Button>
-          }
-          onSubmit={(data) =>
+          onDismiss={() =>
             settle(
               form.id,
-              () =>
-                replyForm([owner, form.id, Requests.readFormAnswer(form, data)]).then(() =>
-                  FormProgress.clear(form.id),
-                ),
+              () => cancelForm([owner, form.id]).then(() => FormProgress.clear(form.id)),
+              "Could not dismiss the question",
+            )
+          }
+          onSubmit={(answer) =>
+            settle(
+              form.id,
+              () => replyForm([owner, form.id, answer]).then(() => FormProgress.clear(form.id)),
               "Could not send your answer",
             )
           }

@@ -1,21 +1,20 @@
-import { Family, SessionTasks, type TimelineDetail, type TimelineRow, TimelineSearch, ToolState } from "@ren/chat"
+import { Family, SessionTasks, type TimelineDetail, TimelineRow, TimelineSearch, ToolState } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import type { SessionInfo } from "@ren/schema/session/info"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { Button } from "@ren/ui/button"
-import { ConversationShell } from "@ren/ui/conversation-shell"
 import { FindBar } from "@ren/ui/find-bar"
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
-import { Icon } from "@ren/ui/icon"
-import { TaskProgress, type TaskStatus } from "@ren/ui/task-progress"
+import { MessageScrollerProvider, useMessageScroller, useMessageScrollerVisibility } from "@ren/ui/message-scroller"
 import { toast } from "@ren/ui/toast"
+import { IconAlertCircle, IconRestore } from "@tabler/icons-react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { DateTime, Effect, Option, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { useDeferredValue, useRef, useState } from "react"
-import type { ReactNode, RefObject } from "react"
+import { useDeferredValue, useState } from "react"
+import type { ReactNode } from "react"
 import { Auth } from "../../lib/auth.js"
 import { Chat } from "../../lib/chat.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -33,53 +32,50 @@ import { SessionHeader } from "./session-header.js"
 import { SessionKeys } from "./session-keys.js"
 import { SessionRequests } from "./session-requests.js"
 import { SessionTitle } from "./session-title.js"
-import { useTranscriptRows } from "./transcript-rows.js"
+import { SessionTodos } from "./session-tasks.js"
+import { Transcript } from "./transcript.js"
 import { Timeline } from "./timeline.js"
 import type { ComposerRepositories } from "./composer-repositories.js"
 
-function useShortcuts(input: {
+function SessionShortcuts(props: {
+  rows: ReadonlyArray<TimelineRow.Row>
   child: Session.ID | undefined
   childParent: Session.ID | undefined
   blocking: boolean
-  scroller: RefObject<ConversationShell.TimelineHandle | null>
   onBackground: () => void
   onFind: () => void
   onChild: (sessionID: Session.ID | undefined) => void
 }) {
+  const scroller = useMessageScroller()
+  const current = useMessageScrollerVisibility().currentAnchorId
+  const anchors = props.rows.flatMap((row) => (row._tag === "UserMessage" ? [TimelineRow.key(row)] : []))
+  const step = (offset: number) => {
+    const index = current ? anchors.indexOf(current) : -1
+    const next = (index === -1 ? anchors.length : index) + offset
+    if (anchors.length === 0 || next < 0 || next > anchors.length) return
+    const target = anchors[next]
+    if (target === undefined) scroller.scrollToEnd({ behavior: "smooth" })
+    else scroller.scrollToMessage(target, { align: "start", behavior: "smooth" })
+  }
   Keyboard.useKeyDown((event) => {
     if (event.defaultPrevented) return
     const intent = SessionKeys.intent(event, {
       apple: Viewport.apple,
-      child: input.child !== undefined,
-      blocking: input.blocking,
+      child: props.child !== undefined,
+      blocking: props.blocking,
     })
     if (!intent || (intent === "parent" && Keyboard.isTyping(event))) return
     event.preventDefault()
     const run: Readonly<Record<SessionKeys.Intent, () => void>> = {
-      previous: () => input.scroller.current?.step(-1),
-      next: () => input.scroller.current?.step(1),
-      background: input.onBackground,
-      find: input.onFind,
-      parent: () => input.onChild(input.childParent),
+      previous: () => step(-1),
+      next: () => step(1),
+      background: props.onBackground,
+      find: props.onFind,
+      parent: () => props.onChild(props.childParent),
     }
     run[intent]()
   })
-}
-
-const taskStatus: Readonly<Record<SessionTasks.Status, TaskStatus>> = {
-  pending: "pending",
-  in_progress: "in-progress",
-  completed: "completed",
-  cancelled: "cancelled",
-}
-
-function Tasks(props: { tasks: ReadonlyArray<SessionTasks.Task>; running: boolean }) {
-  if (props.tasks.length === 0 || !(props.running || SessionTasks.unfinished(props.tasks))) return null
-  return (
-    <TaskProgress
-      tasks={props.tasks.map((task) => ({ id: task.id, content: task.content, status: taskStatus[task.status] }))}
-    />
-  )
+  return null
 }
 
 function SessionInteraction(props: {
@@ -91,13 +87,15 @@ function SessionInteraction(props: {
 }) {
   return (
     <>
-      <Tasks tasks={props.tasks} running={props.running} />
+      {props.tasks.length > 0 && (props.running || SessionTasks.unfinished(props.tasks)) ? (
+        <SessionTodos tasks={props.tasks} running={props.running} />
+      ) : null}
       {props.reverted ? (
-        <Alert className="has-data-[slot=alert-action]:pr-36">
-          <Icon glyph="Info" tone="secondary" />
+        <Alert>
+          <IconRestore />
           <AlertDescription>Later messages are undone. Sending a message discards them.</AlertDescription>
           <AlertAction>
-            <Button variant="ghost" size="sm" onClick={props.onRedo}>
+            <Button variant="outline" size="xs" onClick={props.onRedo}>
               Restore messages
             </Button>
           </AlertAction>
@@ -145,15 +143,6 @@ const partTarget = (
   )
   return Timeline.rowForPart(rows, (reference) => reference.partID === part || shells.has(reference.partID))
 }
-
-const revealTarget = (rows: {
-  readonly search: string | undefined
-  readonly part: string | undefined
-  readonly message: string | undefined
-}) => ({
-  target: rows.search ?? rows.part ?? rows.message,
-  hold: rows.search === undefined && rows.part !== undefined,
-})
 
 function useFind(messages: ReadonlyArray<SessionMessage.Info>, rows: ReadonlyArray<TimelineRow.Row>) {
   const [find, setFind] = useState<Find>()
@@ -265,6 +254,43 @@ const liveOf = (info: SessionInfo.Info | undefined, session: { readonly running:
 const modelNamesOf = (models: ReturnType<typeof ChatReact.useModels>) =>
   new Map(AsyncResult.getOrElse(models, () => []).map((model) => [model.id, model.name]))
 
+function OpenFailed(props: { onRetry: () => void }) {
+  return (
+    <Empty role="alert" className="flex-1">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <IconAlertCircle className="text-destructive" />
+        </EmptyMedia>
+        <EmptyTitle>Could not open this chat</EmptyTitle>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button variant="outline" size="sm" onClick={props.onRetry}>
+          Try again
+        </Button>
+      </EmptyContent>
+    </Empty>
+  )
+}
+
+const revertible = (info: SessionInfo.Info | undefined) => info?.capabilities.revert !== false
+
+function ChildOverlay(props: {
+  root: Session.ID
+  child: Session.ID | undefined
+  rootTitle: string
+  onOpen: (sessionID: Session.ID | undefined) => void
+}) {
+  if (!props.child) return null
+  return (
+    <div className="absolute inset-0 flex min-h-0 flex-col bg-background">
+      <SessionChild root={props.root} sessionID={props.child} rootTitle={props.rootTitle} onOpen={props.onOpen} />
+    </div>
+  )
+}
+
+const filesResetOf = (stored: { readonly filesResetAt: string | null } | undefined) =>
+  stored?.filesResetAt ? DateTime.makeUnsafe(stored.filesResetAt) : null
+
 export function SessionChat(props: {
   sessionID: Session.ID
   viewer: string
@@ -291,14 +317,9 @@ export function SessionChat(props: {
   const info = chat.info
   const running = chat.running
   const title = SessionTitle.display(info?.title ?? stored.data?.title, SessionTitle.untitled)
-  const scroller = useRef<ConversationShell.TimelineHandle>(null)
   const [restored, setRestored] = useState(0)
   const finder = useFind(messages, rows)
-  const reveal = revealTarget({
-    search: finder.row,
-    part: partTarget(rows, messages, props.part),
-    message: Timeline.rowFor(rows, props.message),
-  })
+  const reveal = finder.row ?? partTarget(rows, messages, props.part) ?? Timeline.rowFor(rows, props.message)
   const modelNames = modelNamesOf(ChatReact.useModels(props.sessionID))
   const inputs = useInputActions(props.sessionID)
   const openSession = useOpenSession({
@@ -343,139 +364,109 @@ export function SessionChat(props: {
 
   Attention.useNotify({ running, asking: chat.asking, title })
 
-  useShortcuts({
-    child: props.child,
-    childParent: chat.childParent,
-    blocking: chat.background.blocking.length > 0,
-    scroller,
-    onBackground: () => void move().catch(Failure.notify("Could not move the work to the background")),
-    onFind: finder.open,
-    onChild: props.onChild,
-  })
-
-  const transcript = useTranscriptRows({
-    view: { root: props.sessionID, sessionID: props.sessionID },
-    statuses: chat.statuses,
-    messages,
-    modelNames,
-    part: props.part,
-    reverting: reverter.reverting,
-    updating: inputs.updating,
-    onPending: inputs.act,
-    onOpenSession: openSession,
-    rows,
-    activeMessageID: chat.activeMessageID,
-    busy: running,
-    working: chat.working,
-    ...(info?.capabilities.revert !== false && {
-      onRevert: reverter.onRevert,
-    }),
-    onOpenChild: props.onChild,
-    detail: props.detail,
-    viewer: props.viewer,
-    people,
-    filesResetAt: stored.data?.filesResetAt ? DateTime.makeUnsafe(stored.data.filesResetAt) : null,
-  })
-
+  const hidden = props.child !== undefined
   return (
-    <ConversationShell.Root
-      populated={messages.length > 0}
-      hidden={props.child !== undefined}
-      placeholder={
-        chat.failed ? (
-          <Empty role="alert">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Icon glyph="AlertCircle" tone="danger" />
-              </EmptyMedia>
-              <EmptyTitle>Could not open this chat</EmptyTitle>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button variant="outline" size="sm" onClick={retry}>
-                Try again
-              </Button>
-            </EmptyContent>
-          </Empty>
-        ) : undefined
-      }
-      header={
-        <>
-          <SessionHeader
-            sessionID={props.sessionID}
-            title={title}
-            capabilities={info?.capabilities}
-            prompted={chat.prompted}
-            reverted={chat.reverted}
-            background={chat.background}
-            onOpen={props.onChild}
-            onUndo={onUndo}
-            onRedo={onRedo}
-            onCompact={onCompact}
-            onArchived={props.onArchived}
-          />
-          {finder.bar}
-        </>
-      }
-      timeline={
-        <ConversationShell.Timeline
-          ref={scroller}
-          label="Conversation"
-          history={{
-            more: chat.more,
-            loading: chat.loadingHistory,
-            onLoadOlder: () => void loadMore().catch(Failure.notify("Could not load earlier messages")),
-          }}
-          target={reveal.target}
-          hold={reveal.hold}
-          onFollowChange={(following) => {
-            if (following) props.onFollow()
-          }}
-          {...transcript}
+    <MessageScrollerProvider autoScroll>
+      <div data-slot="chat" className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+        <div inert={hidden} className="relative flex min-h-0 flex-1 flex-col inert:invisible">
+          <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2 pl-12 md:pl-3">
+            <SessionHeader
+              sessionID={props.sessionID}
+              title={title}
+              capabilities={info?.capabilities}
+              prompted={chat.prompted}
+              reverted={chat.reverted}
+              background={chat.background}
+              onOpen={props.onChild}
+              onUndo={onUndo}
+              onRedo={onRedo}
+              onCompact={onCompact}
+              onArchived={props.onArchived}
+            />
+            {finder.bar}
+          </header>
+          {chat.failed && messages.length === 0 ? (
+            <OpenFailed onRetry={retry} />
+          ) : (
+            <Transcript
+              label="Conversation"
+              view={{ root: props.sessionID, sessionID: props.sessionID }}
+              statuses={chat.statuses}
+              messages={messages}
+              rows={rows}
+              activeMessageID={chat.activeMessageID}
+              busy={running}
+              working={chat.working}
+              history={{
+                more: chat.more,
+                loading: chat.loadingHistory,
+                onLoadOlder: () => void loadMore().catch(Failure.notify("Could not load earlier messages")),
+              }}
+              target={reveal}
+              modelNames={modelNames}
+              part={props.part}
+              reverting={reverter.reverting}
+              updating={inputs.updating}
+              onPending={inputs.act}
+              onOpenSession={openSession}
+              onRevert={revertible(info) ? reverter.onRevert : undefined}
+              onOpenChild={props.onChild}
+              onFollow={props.onFollow}
+              detail={props.detail}
+              viewer={props.viewer}
+              people={people}
+              filesResetAt={filesResetOf(stored.data)}
+            />
+          )}
+          <div className="shrink-0 px-4 pb-4 md:px-6">
+            <div className="mx-auto flex w-full max-w-192 flex-col gap-2">
+              <SessionInteraction tasks={chat.tasks} running={running} reverted={chat.reverted} onRedo={onRedo}>
+                <SessionRequests
+                  root={props.sessionID}
+                  sessionID={props.sessionID}
+                  permission={chat.requests.permission}
+                  permissionTitle={chat.requests.permissionTitle}
+                  form={chat.requests.form}
+                  formTitle={chat.requests.formTitle}
+                  formExpired={chat.requests.formExpired}
+                  connection={chat.requests.connection}
+                  onOpen={props.onChild}
+                />
+              </SessionInteraction>
+              {blocking ? null : (
+                <SessionComposer
+                  key={`${props.sessionID}:${restored}`}
+                  sessionID={props.sessionID}
+                  info={info}
+                  running={running}
+                  pending={chat.pending}
+                  prompted={chat.prompted}
+                  reverted={chat.reverted}
+                  unavailable={chat.failed}
+                  covered={hidden}
+                  notice={chat.notice}
+                  retrying={restart.isPending}
+                  onRetry={retry}
+                  onUndo={onUndo}
+                  onRedo={onRedo}
+                  onCompact={onCompact}
+                  addRepositories={props.addRepositories}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+        <ChildOverlay root={props.sessionID} child={props.child} rootTitle={title} onOpen={props.onChild} />
+        <SessionShortcuts
+          rows={rows}
+          child={props.child}
+          childParent={chat.childParent}
+          blocking={chat.background.blocking.length > 0}
+          onBackground={() => void move().catch(Failure.notify("Could not move the work to the background"))}
+          onFind={finder.open}
+          onChild={props.onChild}
         />
-      }
-      interaction={
-        <SessionInteraction tasks={chat.tasks} running={running} reverted={chat.reverted} onRedo={onRedo}>
-          <SessionRequests
-            root={props.sessionID}
-            sessionID={props.sessionID}
-            permission={chat.requests.permission}
-            permissionTitle={chat.requests.permissionTitle}
-            form={chat.requests.form}
-            formTitle={chat.requests.formTitle}
-            formExpired={chat.requests.formExpired}
-            connection={chat.requests.connection}
-            onOpen={props.onChild}
-            onAnswered={() => scroller.current?.resume()}
-          />
-        </SessionInteraction>
-      }
-      composer={
-        blocking ? undefined : (
-          <SessionComposer
-            key={`${props.sessionID}:${restored}`}
-            sessionID={props.sessionID}
-            info={info}
-            running={running}
-            pending={chat.pending}
-            prompted={chat.prompted}
-            reverted={chat.reverted}
-            unavailable={chat.failed}
-            covered={props.child !== undefined}
-            notice={chat.notice}
-            retrying={restart.isPending}
-            onRetry={retry}
-            onUndo={onUndo}
-            onRedo={onRedo}
-            onCompact={onCompact}
-            addRepositories={props.addRepositories}
-          />
-        )
-      }
-      overlay={
-        props.child ? (
-          <SessionChild root={props.sessionID} sessionID={props.child} rootTitle={title} onOpen={props.onChild} />
-        ) : undefined
-      }
-    />
+      </div>
+    </MessageScrollerProvider>
   )
 }

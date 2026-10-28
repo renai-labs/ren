@@ -1,6 +1,6 @@
 import type { AppProfileInfo } from "@ren/client"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
-import { Document } from "@ren/ui/document"
+import { Markdown } from "@ren/ui/markdown"
 import { Icon } from "@ren/ui/icon"
 import type { Glyph } from "@ren/ui/icon"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@ren/ui/item"
@@ -106,7 +106,7 @@ function About(props: { text: string | null }) {
   if (!props.text) return null
   return (
     <Section title="About">
-      <Document.Markdown content={props.text} tone="secondary" />
+      <Markdown className="text-muted-foreground">{props.text}</Markdown>
     </Section>
   )
 }

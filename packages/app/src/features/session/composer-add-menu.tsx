@@ -36,7 +36,7 @@ export function ComposerAddMenu(props: {
           render={
             <Button
               variant="outline"
-              size="icon"
+              size="icon-sm"
               className="rounded-full data-popup-open:bg-secondary [&_svg]:transition-transform data-popup-open:[&_svg]:rotate-45"
               aria-label="Add to this chat"
               disabled={props.disabled}

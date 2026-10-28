@@ -3,7 +3,7 @@ import { Task } from "@ren/schema/task"
 import { TaskComment } from "@ren/schema/task-comment"
 import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Document } from "@ren/ui/document"
+import { Markdown } from "@ren/ui/markdown"
 import { Form } from "@ren/ui/form"
 import { Icon } from "@ren/ui/icon"
 import { useMutation } from "@tanstack/react-query"
@@ -19,7 +19,7 @@ export function TaskReview(props: { task: TaskInfo }) {
       <Icon glyph="AlertTriangle" tone="warning" />
       <AlertTitle>Needs review</AlertTitle>
       <div className="col-start-2 flex flex-col gap-4 pt-1">
-        <Document.Markdown content={props.task.humanReviewReason ?? "Review this task."} />
+        <Markdown>{props.task.humanReviewReason ?? "Review this task."}</Markdown>
         {props.task.canUpdate ? <ReviewActions task={props.task} /> : null}
       </div>
     </Alert>

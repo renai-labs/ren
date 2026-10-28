@@ -1,18 +1,24 @@
 import { cjk } from "@streamdown/cjk"
-import { code } from "@streamdown/code"
 import { createMathPlugin } from "@streamdown/math"
 import { createMermaidPlugin } from "@streamdown/mermaid"
 import { createContext, use } from "react"
 import type { ComponentProps, ReactNode } from "react"
-import { defaultComponents, defaultRemarkPlugins, Streamdown } from "streamdown"
+import { defaultComponents, defaultRemarkPlugins, Streamdown, useIsCodeFenceIncomplete } from "streamdown"
 import type { Components, ExtraProps } from "streamdown"
-import { ImagePreview } from "../components/image-preview.js"
-
-const gradualReveal = { animation: "blurIn", duration: 360, easing: "ease-out", sep: "char", stagger: 0 } as const
+import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockContent,
+  CodeBlockCopyButton,
+  CodeBlockHeader,
+  CodeBlockLine,
+  CodeBlockTitle,
+} from "../components/code-block.js"
+import { ImageLightbox } from "../components/image-lightbox.js"
+import { useHighlightedCode } from "../hooks/use-highlighted-code.js"
 
 const plugins = {
   cjk,
-  code,
   math: createMathPlugin({ singleDollarTextMath: true }),
   mermaid: createMermaidPlugin({ config: { fontFamily: "var(--ren-font-sans)" } }),
 }
@@ -22,6 +28,7 @@ const linkSafety = { enabled: false }
 const sessionPattern = /(?<![\w/.-])(ses_[A-Za-z0-9]{26})(?![\w/-])/g
 const sessionExact = /^ses_[A-Za-z0-9]{26}$/
 const urlExact = /^https?:\/\/\S+$/
+const languagePattern = /language-(\S+)/u
 
 interface MarkdownNode {
   type: string
@@ -71,7 +78,7 @@ function SessionButton(props: { session: string; children: ReactNode }) {
       type="button"
       data-slot="session-link"
       onClick={() => open(props.session)}
-      className="cursor-pointer text-accent-primary underline underline-offset-2 transition-standard hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent-primary"
+      className="cursor-pointer rounded-sm text-primary underline underline-offset-2 transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       {props.children}
     </button>
@@ -99,26 +106,59 @@ function SessionLink(props: Record<string, unknown> & ExtraProps) {
   return <SessionButton session={session}>{session}</SessionButton>
 }
 
-function Image(props: ComponentProps<"img"> & ExtraProps) {
-  if (typeof props.src !== "string" || !props.src) return null
-  return <ImagePreview source={props.src} description={props.alt ?? ""} />
+function MarkdownCodeBlock(props: { code: string; language: string }) {
+  const incomplete = useIsCodeFenceIncomplete()
+  const lines = useHighlightedCode(props.code, props.language)
+  return (
+    <CodeBlock className="my-3">
+      <CodeBlockHeader>
+        <CodeBlockTitle>{props.language || "text"}</CodeBlockTitle>
+        <CodeBlockActions>
+          <CodeBlockCopyButton value={props.code} disabled={incomplete} />
+        </CodeBlockActions>
+      </CodeBlockHeader>
+      <CodeBlockContent className="max-h-96">
+        {lines.map((line, index) => (
+          // oxlint-disable-next-line react/no-array-index-key -- a line's position is its identity in highlighted code
+          <CodeBlockLine key={index}>{line}</CodeBlockLine>
+        ))}
+      </CodeBlockContent>
+    </CodeBlock>
+  )
 }
 
-const components: Components = { inlineCode: InlineCode, "session-link": SessionLink, img: Image }
+function BlockCode(props: ComponentProps<"code"> & ExtraProps) {
+  const language = languagePattern.exec(props.className ?? "")?.[1] ?? ""
+  if (language === "mermaid") return <DefaultCode {...props} />
+  return <MarkdownCodeBlock code={text(props.children) ?? ""} language={language} />
+}
+
+function Image(props: ComponentProps<"img"> & ExtraProps) {
+  if (typeof props.src !== "string" || !props.src) return null
+  return (
+    <ImageLightbox src={props.src} alt={props.alt ?? ""} className="my-2 block">
+      <img src={props.src} alt={props.alt ?? ""} className="max-h-96 max-w-full rounded-md border object-contain" />
+    </ImageLightbox>
+  )
+}
+
+const components: Components = {
+  inlineCode: InlineCode,
+  code: BlockCode,
+  "session-link": SessionLink,
+  img: Image,
+}
 
 export function MarkdownRenderer(props: {
   content: string
-  source: "static" | "streaming"
-  reveal: "none" | "gradual"
+  streaming: boolean
   onOpenSession?: ((sessionID: string) => void) | undefined
 }) {
-  const streaming = props.source === "streaming"
   return (
     <SessionContext value={props.onOpenSession}>
       <Streamdown
-        mode={props.source}
-        isAnimating={streaming}
-        animated={streaming && props.reveal === "gradual" ? gradualReveal : false}
+        mode={props.streaming ? "streaming" : "static"}
+        isAnimating={props.streaming}
         plugins={plugins}
         controls={controls}
         linkSafety={linkSafety}

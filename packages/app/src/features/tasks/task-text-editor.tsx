@@ -1,6 +1,6 @@
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Document } from "@ren/ui/document"
+import { Markdown } from "@ren/ui/markdown"
 import { Form } from "@ren/ui/form"
 import { Icon } from "@ren/ui/icon"
 import { Spinner } from "@ren/ui/spinner"
@@ -132,7 +132,7 @@ export function TaskDescription(props: { value: string | null; onSave?: (value: 
   return (
     <section aria-label="Description" className="flex flex-col gap-3">
       {props.value ? (
-        <Document.Markdown content={props.value} />
+        <Markdown>{props.value}</Markdown>
       ) : (
         <Text purpose="body" tone="secondary">
           No description yet.

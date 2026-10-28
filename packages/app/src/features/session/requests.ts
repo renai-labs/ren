@@ -2,69 +2,11 @@ export * as Requests from "./requests.js"
 
 import { WebSearch } from "@ren/chat"
 import type { Form } from "@ren/schema/form"
-import type { Permission } from "@ren/schema/permission"
-import type { QuestionnaireQuestion } from "@ren/ui/questionnaire"
 
-const permissionField = "permission"
+export type QuestionField = Form.StringField | Form.MultiselectField
 
-const permissionInstructionsField = "permission-instructions"
-
-const replies: ReadonlyArray<Permission.Reply> = ["once", "always", "reject"]
-
-export function permissionQuestion(request: Permission.Request): QuestionnaireQuestion {
-  return {
-    name: permissionField,
-    title: `Allow ${request.action}?`,
-    ...(request.resources.length > 0 && { detail: request.resources.join("\n") }),
-    required: true,
-    choices: [
-      { value: "once", label: "Allow once" },
-      {
-        value: "always",
-        label: "Allow always",
-        ...(request.save && request.save.length > 0 && { description: request.save.join(", ") }),
-      },
-      { value: "reject", label: "Deny" },
-    ],
-    customAnswer: {
-      name: permissionInstructionsField,
-      label: "Deny and tell Ren what to do instead",
-      placeholder: "Deny and tell Ren what to do instead…",
-    },
-  }
-}
-
-export function readPermissionReply(data: FormData): { reply: Permission.Reply; message?: string } | undefined {
-  const typed = data.get(permissionInstructionsField)
-  const message = typeof typed === "string" ? typed.trim() : ""
-  if (message) return { reply: "reject", message }
-  const value = data.get(permissionField)
-  const reply = replies.find((item) => item === value)
-  return reply && { reply }
-}
-
-type QuestionField = Form.StringField | Form.MultiselectField
-
-const isQuestion = (field: Form.Field): field is QuestionField =>
+export const isQuestion = (field: Form.Field): field is QuestionField =>
   field.type === "string" || field.type === "multiselect"
-
-export function formQuestions(form: Form.Info): ReadonlyArray<QuestionnaireQuestion> {
-  return form.fields.filter(isQuestion).map((field) => ({
-    name: field.key,
-    title: field.description ?? field.title ?? form.title,
-    required: field.required === true,
-    multiple: field.type === "multiselect",
-    choices: (field.options ?? []).map((option) => ({
-      value: option.value,
-      label: option.label,
-      description: option.description,
-    })),
-    customAnswer:
-      field.custom === false && (field.options ?? []).length > 0
-        ? null
-        : { label: "Type your own answer", placeholder: "Something else" },
-  }))
-}
 
 export function readFormAnswer(form: Form.Info, data: FormData): Form.Answer {
   return Object.fromEntries(

@@ -22,7 +22,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 
 ## Ren components
 
-Ren's own components and compositions (`Form`, `FormActions`, `FormSection`, `ConfirmationDialog`, `SearchField`, `InlineEdit`, `Combobox`, the shells, `Page`, `Text`, `Icon`, `Link`, `Time`, `StatusDot`, `ModelPicker`, `ThemeSelector`, `CopyButton`, `FindBar`, the chat components, `ConnectionBoard`, the `Task*` components and the rest without a shadcn file) follow these rules. Build their insides from the shadcn components.
+Ren's own components and compositions (`Form`, `FormActions`, `FormSection`, `ConfirmationDialog`, `SearchField`, `InlineEdit`, `Combobox`, the shells, `Page`, `Text`, `Icon`, `Link`, `Time`, `StatusDot`, `ModelPicker`, `ThemeSelector`, `CopyButton`, `FindBar`, `PromptInput`, `Markdown`, `ImageLightbox`, `ConnectionBoard`, the `Task*` components and the rest without a shadcn file) follow these rules. Build their insides from the shadcn components.
 
 - Follow Base UI's shape:
   - A multi-part component uses Ren's module pattern. The file starts with `export * as Dialog from "./dialog.js"` and exports parts named `Root`, `Trigger`, `Popup`, `Title` and so on. Consumers write `<Dialog.Root>`.
@@ -46,13 +46,10 @@ Ren's own components and compositions (`Form`, `FormActions`, `FormSection`, `Co
   - Classes that borrow another role's colour move to role tokens with identical values: `bg-text-primary` to `bg-fill-inverse`, `bg-text-secondary` to `bg-fill-inverse-secondary`, and `border-`, `ring-` and `outline-text-primary` to `border-strong`. Lines drawn with `bg-border-primary` become borders.
   - `ConfirmationDialog` ignores outside clicks; Escape and Cancel still close it.
   - `InlineEdit` returns focus to its Edit button after Enter or Escape, and shows validation and save errors while editing, linked to the input.
-  - `Document` streams in with Ren's motion easing instead of `ease-out`.
   - `Text activity="active"` pulses between `text-secondary` and `text-primary` instead of fading to 50% opacity, which failed contrast.
   - Light `accent-primary` is `#0065cc` (ren-v1 `#0067d0`) so accent text passes AA on its tint. Mirror it in Paper.
   - Searchable pickers use `Combobox.Popover`. `DropdownMenu` has no search field: a text field inside `role="menu"` is invalid ARIA.
   - `ThemeSelector` draws the bars in its previews with borders instead of `bg-border-*` fills, so their rounded ends anti-alias differently.
-  - `ConversationShell.Message` has no `pending` pulse: ren-v1 faded the message, which failed contrast. `ConversationShell.Composer` takes a `label` that names its form.
-  - `Questionnaire` names each question's group by its title, which ren-v1 lost on multi-step questionnaires. While a reply is pending, it dims only its controls and shows a spinner in the submit button; ren-v1 faded the whole form, which failed contrast.
   - `ConnectionBoard` columns use `overscroll-contain`, so scrolling past a column's end doesn't scroll the page. Their socket dots are drawn with borders instead of `bg-border-secondary` fills, with identical pixels.
 
 ## Testing

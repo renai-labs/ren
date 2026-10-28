@@ -20,7 +20,7 @@ export type FindBarProps = {
 
 const hitName = "ren-find-hit"
 const activeName = "ren-find-active"
-const bodies = '[data-slot="message-bubble"], [data-searchable]'
+const bodies = '[data-slot="bubble-content"], [data-searchable]'
 const seekFrames = 12
 const steps: Readonly<Record<string, number>> = { Enter: 1, ShiftEnter: -1, ArrowDown: 1, ArrowUp: -1 }
 
@@ -101,9 +101,7 @@ export function FindBar(props: FindBarProps) {
   })
 
   useEffect(() => {
-    const root = input.current
-      ?.closest('[data-slot="conversation-shell"]')
-      ?.querySelector('[data-slot="transcript-viewport"]')
+    const root = input.current?.closest('[data-slot="chat"]')?.querySelector('[data-slot="message-scroller-viewport"]')
     const loop = { frame: 0, tries: 0, apply: 0 }
     const seek = () => {
       if (highlight(root, { seek: true }) || loop.tries++ >= seekFrames) return
