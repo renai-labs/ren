@@ -524,10 +524,10 @@ export function TurnGroup(props: {
   steps: number
   revealed: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState<boolean>()
   return (
     <Trace>
-      <TraceCollapsible open={open || props.revealed} onOpenChange={setOpen}>
+      <TraceCollapsible open={open ?? props.revealed} onOpenChange={setOpen}>
         <TraceCollapsibleTrigger>
           <TraceLine status={props.running ? "running" : undefined}>
             <TraceIcon>
