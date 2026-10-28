@@ -40,6 +40,9 @@ func awsSign(req *http.Request, op Op, now time.Time) error {
 	if payloadHash == "" {
 		payloadHash = "UNSIGNED-PAYLOAD"
 	}
+	if strings.HasPrefix(payloadHash, "STREAMING-AWS4-") {
+		return errors.New("awsSign: the body's chunks are signed with the removed signature")
+	}
 	signed := req.Clone(req.Context())
 	signed.Header = http.Header{}
 	for name, values := range req.Header {
