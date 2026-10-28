@@ -80,6 +80,7 @@ const sameShared = (left: Shared, right: Shared) =>
     left.reverting === right.reverting &&
     left.detail === right.detail &&
     left.onRevert === right.onRevert &&
+    left.onEdit === right.onEdit &&
     left.onPending === right.onPending &&
     left.onOpenChild === right.onOpenChild &&
     left.onOpenSession === right.onOpenSession)
@@ -302,6 +303,7 @@ export function Transcript(props: {
   reverting?: boolean
   updating?: ReadonlySet<string>
   onRevert?: ((message: SessionMessage.User) => void) | undefined
+  onEdit?: ((message: SessionMessage.User, text: string) => void) | undefined
   onPending?: (action: PendingAction, message: SessionMessage.User) => void
   onOpenChild: (sessionID: Session.ID) => void
   onOpenSession?: (sessionID: string) => void
@@ -326,6 +328,7 @@ export function Transcript(props: {
     reverting: props.reverting === true,
     detail: props.detail,
     onRevert: props.onRevert,
+    onEdit: props.onEdit,
     onPending: props.onPending,
     onOpenChild: props.onOpenChild,
     onOpenSession: props.onOpenSession,
