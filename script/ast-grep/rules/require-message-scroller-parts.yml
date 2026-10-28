@@ -1,0 +1,52 @@
+id: require-message-scroller-parts
+language: Tsx
+message: Nest the scroller in order, `MessageScroller` > `MessageScrollerViewport` > `MessageScrollerContent` > `MessageScrollerItem`. Each part reads scroll state from its parent.
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+rule:
+  all:
+    - any:
+        - kind: jsx_opening_element
+        - kind: jsx_self_closing_element
+    - any:
+        - all:
+            - has:
+                field: name
+                regex: ^MessageScrollerItem$
+            - not:
+                inside:
+                  stopBy: end
+                  kind: jsx_element
+                  has:
+                    field: open_tag
+                    has:
+                      field: name
+                      regex: ^MessageScrollerContent$
+        - all:
+            - has:
+                field: name
+                regex: ^MessageScrollerContent$
+            - not:
+                inside:
+                  stopBy: end
+                  kind: jsx_element
+                  has:
+                    field: open_tag
+                    has:
+                      field: name
+                      regex: ^MessageScrollerViewport$
+        - all:
+            - has:
+                field: name
+                regex: ^MessageScrollerViewport$
+            - not:
+                inside:
+                  stopBy: end
+                  kind: jsx_element
+                  has:
+                    field: open_tag
+                    has:
+                      field: name
+                      regex: ^MessageScroller$

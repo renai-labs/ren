@@ -236,6 +236,7 @@ function usePlaces(): Places {
         <Button
           appearance="secondary"
           size="small"
+          nativeButton={false}
           render={<Link to="/settings/channels/$provider" params={{ provider: "github" }} />}
         >
           Install GitHub App

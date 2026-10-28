@@ -43,7 +43,7 @@ export function UnavailableInvitation(props: {
                 Go to workspace
               </Button>
             ) : (
-              <Button appearance="primary" width="full" render={<Link to="/login" />}>
+              <Button appearance="primary" width="full" nativeButton={false} render={<Link to="/login" />}>
                 Sign in to Ren
               </Button>
             )

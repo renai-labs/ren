@@ -72,6 +72,7 @@ export type ButtonProps = Omit<useRender.ComponentProps<"button">, "className" |
   shape?: "rounded" | "pill"
   labelVisibility?: LabelVisibility
   wrapping?: "none" | "normal"
+  nativeButton?: boolean
   pending?: boolean
   pendingLabel?: ReactNode
   leadingIcon?: ReactElement
@@ -87,6 +88,7 @@ export function Button(props: ButtonProps) {
     shape,
     labelVisibility,
     wrapping,
+    nativeButton,
     pending,
     pendingLabel,
     leadingIcon,
@@ -96,7 +98,7 @@ export function Button(props: ButtonProps) {
     render,
     ...rest
   } = props
-  const native = render === undefined
+  const native = nativeButton ?? render === undefined
   const inert = disabled === true || pending === true
   return useRender({
     defaultTagName: "button",
@@ -104,9 +106,7 @@ export function Button(props: ButtonProps) {
     props: mergeProps(
       {
         "data-slot": "button",
-        type: native ? "button" : undefined,
-        disabled: native ? inert : undefined,
-        "aria-disabled": native ? undefined : inert || undefined,
+        ...(native ? { type: "button" as const, disabled: inert } : { "aria-disabled": inert || undefined }),
         "aria-busy": pending === true || undefined,
         className: composeClasses(
           buttonVariants({ appearance, size, width, alignment, shape, labelVisibility, wrapping }),

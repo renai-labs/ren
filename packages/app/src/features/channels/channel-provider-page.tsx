@@ -41,7 +41,12 @@ export function ChannelProviderPage(props: {
     <PageShell.Root
       layout="settings"
       context={
-        <Button appearance="link" leadingIcon={<Icon glyph="ArrowLeft" />} render={<Link to="/settings/channels" />}>
+        <Button
+          appearance="link"
+          leadingIcon={<Icon glyph="ArrowLeft" />}
+          nativeButton={false}
+          render={<Link to="/settings/channels" />}
+        >
           Back to channels
         </Button>
       }
@@ -80,7 +85,7 @@ export function ChannelProviderPage(props: {
       ) : (
         <Text purpose="body" tone="secondary">
           Connect {provider.title} from the{" "}
-          <Button appearance="link" render={<Link to="/settings/channels" />}>
+          <Button appearance="link" nativeButton={false} render={<Link to="/settings/channels" />}>
             Channels page
           </Button>{" "}
           before configuring it.

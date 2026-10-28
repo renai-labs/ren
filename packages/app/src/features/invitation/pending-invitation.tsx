@@ -39,7 +39,7 @@ export function PendingInvitation(props: PendingInvitationProps & { organization
               {invitation.action === "declining" ? "Declining…" : "No thanks, continue to Ren"}
             </Button>
           ) : (
-            <Button appearance="link" render={<Link to="/" />}>
+            <Button appearance="link" nativeButton={false} render={<Link to="/" />}>
               No thanks, return to homepage
             </Button>
           )}
