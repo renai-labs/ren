@@ -11,6 +11,7 @@ import {
   toDate,
 } from "../lib/date.js"
 import type { DateInput } from "../lib/date.js"
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip.js"
 
 type AbsoluteFormat = "date" | "short-date" | "date-time" | "time-of-day"
 type RelativeFormat = "relative" | "elapsed"
@@ -18,9 +19,10 @@ type RelativeFormat = "relative" | "elapsed"
 export type TimeProps = {
   value: DateInput
   format: AbsoluteFormat | RelativeFormat
-  timeZone?: string
+  timeZone?: string | undefined
   relativeStyle?: "long" | "narrow"
   label?: string
+  hint?: "title" | "tooltip"
 }
 
 export function Time(props: TimeProps) {
@@ -33,11 +35,12 @@ export function Time(props: TimeProps) {
         format={props.format}
         relativeStyle={props.relativeStyle ?? "long"}
         title={title ?? dateTime}
+        hint={props.hint ?? "title"}
       />
     )
   }
   return (
-    <TimeElement value={props.value} title={title}>
+    <TimeElement value={props.value} title={title} hint={props.hint ?? "title"}>
       {formatAbsolute(props.value, props.format, props.timeZone)}
     </TimeElement>
   )
@@ -56,10 +59,11 @@ function RelativeTime(props: {
   format: RelativeFormat
   relativeStyle: "long" | "narrow"
   title: string
+  hint: "title" | "tooltip"
 }) {
   const now = useSyncExternalStore(subscribeClock, readClock, readClock)
   return (
-    <TimeElement value={props.value} title={props.title}>
+    <TimeElement value={props.value} title={props.title} hint={props.hint}>
       {props.format === "relative"
         ? formatRelative(props.value, now, props.relativeStyle)
         : formatElapsed(props.value, now)}
@@ -67,18 +71,31 @@ function RelativeTime(props: {
   )
 }
 
-function TimeElement(props: { value: DateInput; title?: string | undefined; children: string }) {
+function TimeElement(props: {
+  value: DateInput
+  title?: string | undefined
+  hint: "title" | "tooltip"
+  children: string
+}) {
   const date = toDate(props.value)
   const valid = !Number.isNaN(date.getTime())
-  return (
+  const title = valid ? props.title : undefined
+  const element = (
     <time
       data-slot="time"
       className="tabular-nums"
       dateTime={valid ? date.toISOString() : undefined}
-      title={valid ? props.title : undefined}
+      title={props.hint === "title" ? title : undefined}
     >
       {props.children}
     </time>
+  )
+  if (props.hint === "title" || title === undefined) return element
+  return (
+    <Tooltip>
+      <TooltipTrigger render={element} />
+      <TooltipContent>{title}</TooltipContent>
+    </Tooltip>
   )
 }
 
