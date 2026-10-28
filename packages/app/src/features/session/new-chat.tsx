@@ -183,7 +183,6 @@ export function NewChat(props: { userId: string }) {
           <ViewTransition name={transitionName} share="auto" default="none">
             <PromptInput.Textarea
               ref={input}
-              layout="stacked"
               size="lg"
               aria-label="Message"
               placeholder={ComposerCopy.placeholder}

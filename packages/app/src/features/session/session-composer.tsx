@@ -83,6 +83,13 @@ const mentionIcons: Readonly<Record<Exclude<Mentions.Kind, "app">, ReactNode>> =
   file: <IconFile />,
 }
 
+const mentionGroups: Readonly<Record<Mentions.Kind, string>> = {
+  agent: "Agents",
+  skill: "Skills",
+  file: "Files",
+  app: "Apps",
+}
+
 const iconOf = (item: Mentions.Item, apps: ReadonlyMap<string, SessionApps.App>) =>
   item.kind === "app" ? (
     <AppMention.Logo name={item.label} icon={apps.get(item.id)?.icon ?? null} className="size-4" />
@@ -93,7 +100,7 @@ const iconOf = (item: Mentions.Item, apps: ReadonlyMap<string, SessionApps.App>)
 const commandSuggestions = (commands: ReadonlyArray<ClientCommand.Suggestion>): ReadonlyArray<PromptInput.Suggestion> =>
   commands.map((item) => ({
     value: item.value,
-    kind: "command",
+    group: "Commands",
     label: `/${item.trigger}`,
     description: item.description,
     icon: <IconTerminal2 />,
@@ -105,7 +112,7 @@ const mentionSuggestions = (
 ): ReadonlyArray<PromptInput.Suggestion> =>
   items.map((item) => ({
     value: Mentions.key(item),
-    kind: item.kind,
+    group: mentionGroups[item.kind],
     label: item.label,
     description: item.description,
     icon: iconOf(item, apps),
@@ -598,7 +605,6 @@ export function SessionComposer(props: {
     >
       <PromptInput.Textarea
         ref={input}
-        layout={layout}
         aria-label="Message"
         dir="auto"
         autoComplete="off"

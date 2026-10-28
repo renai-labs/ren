@@ -20,14 +20,14 @@ export function ChatComposer(props: {
 }) {
   const stacked = props.layout === "stacked"
   return (
-    <PromptInput.Root label={props.label} onSubmit={props.onSubmit}>
+    <PromptInput.Root label={props.label} layout={props.layout} onSubmit={props.onSubmit}>
       {props.suggestions}
       {props.header}
       {props.queue}
       {props.attachments ? (
         <AttachmentGroup data-testid="attachments-preview">{props.attachments}</AttachmentGroup>
       ) : null}
-      <PromptInput.Group layout={props.layout}>
+      <PromptInput.Group>
         {stacked ? null : (
           <InputGroupAddon className="self-end py-2 pl-1">
             {props.addMenu}
