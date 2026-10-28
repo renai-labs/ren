@@ -56,7 +56,7 @@ export function ConfirmationDialog(props: ConfirmationDialogProps) {
         props.onOpenChange(next)
       }}
     >
-      <AlertDialogContent className="gap-3 text-sm ring-0 shadow-dialog data-[size=default]:sm:max-w-md">
+      <AlertDialogContent className="gap-3 text-sm shadow-dialog ring-0 data-[size=default]:sm:max-w-md">
         <AlertDialogHeader className="gap-1">
           <AlertDialogTitle>{props.title}</AlertDialogTitle>
           {props.description ? <AlertDialogDescription>{props.description}</AlertDialogDescription> : null}
