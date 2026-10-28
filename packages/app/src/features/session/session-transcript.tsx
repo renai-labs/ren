@@ -2,22 +2,21 @@ import {
   ChannelReply,
   type ChatState,
   Projection,
-  type TimelineDetail,
   TimelineOpen,
-  type TimelineRow,
+  TimelineRow,
   TimelineText,
   ToolDisplay,
 } from "@ren/chat"
-import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { AppMention } from "@ren/ui/app-mention"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
 import { CopyButton } from "@ren/ui/copy-button"
-import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@ren/ui/input-group"
+import { InputGroupAddon } from "@ren/ui/input-group"
 import { Markdown } from "@ren/ui/markdown"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
+import { PromptInput } from "@ren/ui/prompt-input"
 import { Time } from "@ren/ui/time"
 import {
   Trace,
@@ -37,32 +36,19 @@ import { Countdown } from "../../lib/countdown.js"
 import { Platform } from "../../platform/platform.js"
 import { ChannelMessageHeader, ChannelReplyMessage } from "./channel-message.js"
 import { ScheduleMessageHeader } from "./schedule-message.js"
-import { Separator, TranscriptError, TranscriptNotice, TranscriptShell, Working } from "./transcript-notice.js"
+import { TranscriptContext } from "./transcript-context.js"
+import { Separator, TranscriptError, TranscriptNotice, TranscriptShell } from "./transcript-notice.js"
 import { FileChanges, Note, Output, Reasoning, Step, Tool } from "./transcript-tool.js"
-
-export type PendingAction = "queue" | "cancel"
 
 export interface Person {
   readonly name: string
   readonly image: string | undefined
 }
 
-export interface Shared {
-  readonly root: Session.ID
-  readonly sessionID: Session.ID
-  readonly part: string | undefined
-  readonly reverting: boolean
-  readonly detail: TimelineDetail.Detail | undefined
-  readonly onRevert: ((message: SessionMessage.User) => void) | undefined
-  readonly onEdit: ((message: SessionMessage.User, text: string) => void) | undefined
-  readonly onPending: ((action: PendingAction, message: SessionMessage.User) => void) | undefined
-  readonly onOpenChild: (sessionID: Session.ID) => void
-  readonly onOpenSession: ((sessionID: string) => void) | undefined
-  readonly apps: ReadonlyArray<AppMention.App>
-}
-
 export interface RowData {
   readonly message?: SessionMessage.Info | undefined
+  readonly content?: SessionMessage.Content | undefined
+  readonly streaming?: boolean
   readonly messages?: ReadonlyArray<SessionMessage.Info | undefined>
   readonly status?: ChatState.PendingStatus | undefined
   readonly caption?: string | undefined
@@ -82,10 +68,9 @@ const reasoningDuration = (content: SessionMessage.Reasoning) =>
       )
     : undefined
 
-const streaming = (message: SessionMessage.Info | undefined) => message?.type === "assistant" && !message.time.completed
-
-function Response(props: { shared: Shared; data: RowData; text: string }) {
+function Response(props: { data: RowData; text: string }) {
   const platform = Platform.usePlatform()
+  const transcript = TranscriptContext.useValue()
   const write = platform.writeClipboardText
   const copy = props.data.copy
   return (
@@ -95,9 +80,9 @@ function Response(props: { shared: Shared; data: RowData; text: string }) {
           <BubbleContent>
             <Markdown
               size="lg"
-              streaming={streaming(props.data.message)}
-              onOpenSession={props.shared.onOpenSession}
-              apps={props.shared.apps}
+              streaming={props.data.streaming === true}
+              onOpenSession={transcript.actions.onOpenSession}
+              apps={transcript.state.apps}
             >
               {props.text}
             </Markdown>
@@ -114,27 +99,28 @@ function Response(props: { shared: Shared; data: RowData; text: string }) {
   )
 }
 
-function Part(props: { shared: Shared; data: RowData; reference: TimelineRow.PartRef }) {
-  const content = Projection.resolveContent(props.data.message, props.reference.partID)
+function Part(props: { data: RowData }) {
+  const transcript = TranscriptContext.useValue()
+  const content = props.data.content
   if (!content) return null
-  if (content.type === "text") return <Response shared={props.shared} data={props.data} text={content.text} />
+  if (content.type === "text") return <Response data={props.data} text={content.text} />
   if (content.type === "reasoning")
     return (
       <Reasoning
         text={content.text}
-        streaming={streaming(props.data.message) && !content.time?.completed}
+        streaming={props.data.streaming === true && !content.time?.completed}
         duration={reasoningDuration(content)}
-        open={TimelineOpen.defaultOpen(content, props.shared.detail)}
+        open={TimelineOpen.defaultOpen(content, transcript.state.detail)}
       />
     )
   if (ChannelReply.shown(content))
-    return <ChannelReplyMessage tool={content} onOpenSession={props.shared.onOpenSession} />
+    return <ChannelReplyMessage tool={content} onOpenSession={transcript.actions.onOpenSession} />
   return (
     <Tool
       tool={content}
-      view={{ root: props.shared.root, sessionID: props.shared.sessionID }}
-      open={props.shared.part === content.id || TimelineOpen.defaultOpen(content, props.shared.detail)}
-      onOpenChild={props.shared.onOpenChild}
+      view={{ root: transcript.state.root, sessionID: transcript.state.sessionID }}
+      open={transcript.state.part === content.id || TimelineOpen.defaultOpen(content, transcript.state.detail)}
+      onOpenChild={transcript.actions.onOpenChild}
     />
   )
 }
@@ -168,13 +154,15 @@ const entries = (
 const running = (tools: ReadonlyArray<SessionMessage.Tool>) =>
   tools.some((tool) => ToolDisplay.status(tool) === "running")
 
+const isTool = (item: ToolDisplay.GroupItem): item is SessionMessage.Tool => item.type === "tool"
+
 function RunItem(props: { item: ToolDisplay.GroupItem; entries: ReadonlyArray<Entry> }) {
   const message = props.entries.find((candidate) => candidate.item === props.item)?.message
   if (props.item.type === "reasoning")
     return (
       <Reasoning
         text={props.item.text}
-        streaming={streaming(message) && !props.item.time?.completed}
+        streaming={message?.type === "assistant" && !message.time.completed && !props.item.time?.completed}
         duration={reasoningDuration(props.item)}
       />
     )
@@ -183,7 +171,8 @@ function RunItem(props: { item: ToolDisplay.GroupItem; entries: ReadonlyArray<En
   return notice ? <Note title={notice.title} detail={notice.detail} /> : null
 }
 
-function Run(props: { shared: Shared; run: ToolDisplay.Run; entries: ReadonlyArray<Entry> }) {
+function Run(props: { run: ToolDisplay.Run; entries: ReadonlyArray<Entry> }) {
+  const transcript = TranscriptContext.useValue()
   const run = props.run
   if (run.type === "item") return <RunItem item={run.item} entries={props.entries} />
   const first = run.tools.at(0)
@@ -191,13 +180,13 @@ function Run(props: { shared: Shared; run: ToolDisplay.Run; entries: ReadonlyArr
     return first ? (
       <Tool
         tool={first}
-        view={{ root: props.shared.root, sessionID: props.shared.sessionID }}
-        open={props.shared.part === first.id}
-        onOpenChild={props.shared.onOpenChild}
+        view={{ root: transcript.state.root, sessionID: transcript.state.sessionID }}
+        open={transcript.state.part === first.id}
+        onOpenChild={transcript.actions.onOpenChild}
       />
     ) : null
   if (run.kind === "file")
-    return <FileChanges tools={run.tools} open={run.tools.some((tool) => tool.id === props.shared.part)} />
+    return <FileChanges tools={run.tools} open={run.tools.some((tool) => tool.id === transcript.state.part)} />
   const names = run.tools.flatMap((tool) => ToolDisplay.subtitle(tool) ?? []).join(", ")
   if (run.kind === "skill") return <Note title="Loaded skills" detail={names} />
   return (
@@ -225,34 +214,33 @@ const groupTitle = (
   return `${group.type === "read" ? "Read" : "Edited"} ${subjects.join(", ")}`
 }
 
-function GroupSteps(props: { shared: Shared; data: RowData; group: Exclude<TimelineRow.PartGroup, { type: "part" }> }) {
-  const found = entries(props.group.refs, props.data.messages ?? [])
-  const items = found.map((entry) => entry.item)
+function GroupSteps(props: { group: Exclude<TimelineRow.PartGroup, { type: "part" }>; entries: ReadonlyArray<Entry> }) {
+  const transcript = TranscriptContext.useValue()
+  const items = props.entries.map((entry) => entry.item)
   if (props.group.type === "file")
     return (
       <FileChanges
-        tools={items.filter((item): item is SessionMessage.Tool => item.type === "tool")}
-        open={props.group.refs.some((reference) => reference.partID === props.shared.part)}
+        tools={items.filter(isTool)}
+        open={props.group.refs.some((reference) => reference.partID === transcript.state.part)}
       />
     )
   return ToolDisplay.runs(items).map((run, index) => (
     <Run
       key={run.type === "item" ? `item:${index}` : (run.tools.at(0)?.id ?? `run:${index}`)}
-      shared={props.shared}
       run={run}
-      entries={found}
+      entries={props.entries}
     />
   ))
 }
 
-function Group(props: { shared: Shared; data: RowData; group: Exclude<TimelineRow.PartGroup, { type: "part" }> }) {
+function Group(props: { data: RowData; group: Exclude<TimelineRow.PartGroup, { type: "part" }> }) {
+  const transcript = TranscriptContext.useValue()
   const group = props.group
   const found = entries(group.refs, props.data.messages ?? [])
   const items = found.map((entry) => entry.item)
-  const tools = items.filter((item): item is SessionMessage.Tool => item.type === "tool")
-  const working = props.data.working === true || running(tools)
+  const working = props.data.working === true || running(items.filter(isTool))
   const [choice, setChoice] = useState<{ working: boolean; open: boolean }>()
-  const revealed = group.refs.some((reference) => reference.partID === props.shared.part)
+  const revealed = group.refs.some((reference) => reference.partID === transcript.state.part)
   const open = working || (choice?.working === working ? choice.open : revealed)
   return (
     <Trace>
@@ -266,7 +254,7 @@ function Group(props: { shared: Shared; data: RowData; group: Exclude<TimelineRo
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="flex flex-col gap-2">
-          <GroupSteps shared={props.shared} data={props.data} group={group} />
+          <GroupSteps group={group} entries={found} />
         </TraceCollapsibleContent>
       </TraceCollapsible>
     </Trace>
@@ -296,22 +284,24 @@ function UserText(props: {
   )
 }
 
-function UserActions(props: { shared: Shared; message: SessionMessage.User; pending: boolean; onEdit: () => void }) {
+function UserActions(props: { message: SessionMessage.User; pending: boolean; refocus: boolean; onEdit: () => void }) {
   const platform = Platform.usePlatform()
+  const transcript = TranscriptContext.useValue()
   const write = props.message.text ? platform.writeClipboardText : undefined
-  const revert = props.pending ? undefined : props.shared.onRevert
-  const editable = !props.pending && props.shared.onEdit !== undefined && props.message.text !== ""
+  const revert = props.pending ? undefined : transcript.actions.onRevert
   const message = props.message
   if (!write && !revert) return null
   return (
     <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100 pointer-coarse:opacity-100">
-      {editable ? (
+      {!props.pending && transcript.actions.onEdit !== undefined && message.text !== "" ? (
         <Button
           variant="ghost"
           size="icon-xs"
           className="text-muted-foreground"
           aria-label="Edit message"
-          disabled={props.shared.reverting}
+          disabled={transcript.state.reverting}
+          // oxlint-disable-next-line jsx-a11y/no-autofocus -- closing the editor removed the focused field, so focus returns to the button that opened it
+          autoFocus={props.refocus}
           onClick={props.onEdit}
         >
           <IconPencil />
@@ -323,7 +313,7 @@ function UserActions(props: { shared: Shared; message: SessionMessage.User; pend
           size="icon-xs"
           className="text-muted-foreground"
           aria-label="Revert to this message"
-          disabled={props.shared.reverting}
+          disabled={transcript.state.reverting}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => revert(message)}
         >
@@ -335,8 +325,8 @@ function UserActions(props: { shared: Shared; message: SessionMessage.User; pend
   )
 }
 
-function PendingActions(props: { shared: Shared; message: SessionMessage.User; updating: boolean }) {
-  const act = props.shared.onPending
+function PendingActions(props: { message: SessionMessage.User; updating: boolean }) {
+  const act = TranscriptContext.useValue().actions.onPending
   if (!act) return null
   return (
     <span className="flex items-center gap-1">
@@ -364,36 +354,36 @@ function PendingActions(props: { shared: Shared; message: SessionMessage.User; u
 
 function EditMessage(props: { text: string; onCancel: () => void; onSave: (text: string) => void }) {
   const [text, setText] = useState(props.text)
-  const save = () => {
-    if (!text.trim() || text.trim() === props.text.trim()) props.onCancel()
-    else props.onSave(text.trim())
-  }
   return (
     <div className="flex w-full flex-col gap-1.5">
-      <InputGroup className="rounded-xl bg-card shadow-composer dark:bg-card">
-        <InputGroupTextarea
-          value={text}
-          aria-label="Edit message"
-          // oxlint-disable-next-line jsx-a11y/no-autofocus -- the editor opens because the person asked to edit
-          autoFocus
-          className="max-h-60 min-h-16 px-4 pt-3 text-base/relaxed md:text-sm/relaxed"
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") props.onCancel()
-            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
-            event.preventDefault()
-            save()
-          }}
-        />
-        <InputGroupAddon align="block-end" className="justify-end gap-2 px-3 pt-0 pb-3">
-          <Button variant="ghost" size="sm" onClick={props.onCancel}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={save}>
-            Send
-          </Button>
-        </InputGroupAddon>
-      </InputGroup>
+      <PromptInput.Root
+        label="Edit your message"
+        layout="stacked"
+        onSubmit={() => {
+          if (!text.trim() || text.trim() === props.text.trim()) props.onCancel()
+          else props.onSave(text.trim())
+        }}
+      >
+        <PromptInput.Group>
+          <PromptInput.Textarea
+            value={text}
+            aria-label="Edit message"
+            focusOnMount
+            onChange={(event) => setText(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") props.onCancel()
+            }}
+          />
+          <InputGroupAddon align="block-end" className="justify-end gap-2 px-3 pt-0 pb-3">
+            <Button type="button" variant="ghost" size="sm" onClick={props.onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm">
+              Send
+            </Button>
+          </InputGroupAddon>
+        </PromptInput.Group>
+      </PromptInput.Root>
       <p className="px-1 text-xs text-muted-foreground">
         Sending replaces this message and removes everything after it.
       </p>
@@ -401,21 +391,22 @@ function EditMessage(props: { text: string; onCancel: () => void; onSave: (text:
   )
 }
 
-function UserMessage(props: { shared: Shared; data: RowData }) {
-  const [editing, setEditing] = useState(false)
+function UserMessage(props: { data: RowData }) {
+  const transcript = TranscriptContext.useValue()
+  const [editor, setEditor] = useState<"closed" | "open" | "returned">("closed")
   const message = props.data.message
   if (message?.type !== "user") return null
   const pending = steerable.has(props.data.status)
-  const onEdit = props.shared.onEdit
-  if (editing && onEdit)
+  const onEdit = transcript.actions.onEdit
+  if (editor === "open" && onEdit)
     return (
       <Message align="end">
         <MessageContent>
           <EditMessage
             text={message.text}
-            onCancel={() => setEditing(false)}
+            onCancel={() => setEditor("returned")}
             onSave={(text) => {
-              setEditing(false)
+              setEditor("returned")
               onEdit(message, text)
             }}
           />
@@ -438,7 +429,7 @@ function UserMessage(props: { shared: Shared; data: RowData }) {
         <ScheduleMessageHeader origin={message.schedule} />
         <Bubble variant="muted" align="end">
           <BubbleContent className="rounded-tr-lg px-4 text-base/relaxed whitespace-pre-wrap">
-            <UserText text={message.text} highlights={TimelineText.mentions(message)} apps={props.shared.apps} />
+            <UserText text={message.text} highlights={TimelineText.mentions(message)} apps={transcript.state.apps} />
           </BubbleContent>
         </Bubble>
         <MessageFooter className="min-h-6 gap-1 px-0">
@@ -446,20 +437,17 @@ function UserMessage(props: { shared: Shared; data: RowData }) {
             {props.data.caption ? `${props.data.caption} · ` : ""}
             <Time value={DateTime.toEpochMillis(message.time.created)} format="time-of-day" />
           </span>
-          <UserActions shared={props.shared} message={message} pending={pending} onEdit={() => setEditing(true)} />
+          <UserActions
+            message={message}
+            pending={pending}
+            refocus={editor === "returned"}
+            onEdit={() => setEditor("open")}
+          />
         </MessageFooter>
-        {pending ? (
-          <PendingActions shared={props.shared} message={message} updating={props.data.updating === true} />
-        ) : null}
+        {pending ? <PendingActions message={message} updating={props.data.updating === true} /> : null}
       </MessageContent>
     </Message>
   )
-}
-
-function Thinking(props: { data: RowData; reference: TimelineRow.PartRef }) {
-  const content = Projection.resolveContent(props.data.message, props.reference.partID)
-  if (content?.type !== "reasoning") return null
-  return <Reasoning text={content.text} streaming />
 }
 
 function Retry(props: { retry: TimelineText.Retry }) {
@@ -468,32 +456,26 @@ function Retry(props: { retry: TimelineText.Retry }) {
     <output className="flex min-w-0 flex-col gap-1 text-sm">
       <span className="text-foreground">{props.retry.message}</span>
       <span className="shimmer text-muted-foreground motion-reduce:shimmer-none">
-        {remaining > 0
-          ? `Attempt ${props.retry.attempt}, retrying in ${remaining}s`
-          : `Attempt ${props.retry.attempt}, retrying now`}
+        {`Attempt ${props.retry.attempt}, retrying `}
+        <span aria-hidden>{remaining > 0 ? `in ${remaining}s` : "now"}</span>
       </span>
     </output>
   )
 }
 
-function AssistantPart(props: { shared: Shared; data: RowData; group: TimelineRow.PartGroup }) {
-  if (props.group.type === "part") return <Part shared={props.shared} data={props.data} reference={props.group.ref} />
-  return <Group shared={props.shared} data={props.data} group={props.group} />
-}
-
-function ShellRow(props: { message: SessionMessage.Info | undefined }) {
-  return props.message?.type === "shell" ? <TranscriptShell message={props.message} /> : null
-}
-
-function StepText(props: { shared: Shared; data: RowData; reference: TimelineRow.PartRef }) {
-  const content = Projection.resolveContent(props.data.message, props.reference.partID)
-  if (content?.type !== "text") return null
+function TurnStep(props: { data: RowData; row: TimelineRow.Row }) {
+  const transcript = TranscriptContext.useValue()
+  const row = props.row
+  const content = props.data.content
+  if (row._tag === "AssistantPart" && row.group.type !== "part")
+    return <GroupSteps group={row.group} entries={entries(row.group.refs, props.data.messages ?? [])} />
+  if (row._tag !== "AssistantPart" || content?.type !== "text") return <TranscriptRow data={props.data} row={row} />
   return (
     <div data-searchable className="min-w-0">
       <Markdown
-        streaming={streaming(props.data.message)}
-        onOpenSession={props.shared.onOpenSession}
-        apps={props.shared.apps}
+        streaming={props.data.streaming === true}
+        onOpenSession={transcript.actions.onOpenSession}
+        apps={transcript.state.apps}
       >
         {content.text}
       </Markdown>
@@ -501,24 +483,8 @@ function StepText(props: { shared: Shared; data: RowData; reference: TimelineRow
   )
 }
 
-function TurnStep(props: { shared: Shared; data: RowData; row: TimelineRow.Row }) {
-  const row = props.row
-  if (row._tag !== "AssistantPart") return <TranscriptRow shared={props.shared} data={props.data} row={row} />
-  const group = row.group
-  if (group.type !== "part") return <GroupSteps shared={props.shared} data={props.data} group={group} />
-  const content = Projection.resolveContent(props.data.message, group.ref.partID)
-  if (content?.type === "text") return <StepText shared={props.shared} data={props.data} reference={group.ref} />
-  return <TranscriptRow shared={props.shared} data={props.data} row={row} />
-}
-
-const workedTitle = (turn: { readonly running: boolean; readonly duration: string | undefined }) => {
-  if (turn.running) return "Working"
-  return turn.duration ? `Worked for ${turn.duration}` : "Worked"
-}
-
 export function TurnGroup(props: {
-  shared: Shared
-  rows: ReadonlyArray<{ readonly key: string; readonly row: TimelineRow.Row; readonly data: RowData }>
+  rows: ReadonlyArray<{ readonly row: TimelineRow.Row; readonly data: RowData }>
   running: boolean
   workedFor: string | undefined
   steps: number
@@ -533,14 +499,20 @@ export function TurnGroup(props: {
             <TraceIcon>
               <IconClock />
             </TraceIcon>
-            <TraceTitle>{workedTitle({ running: props.running, duration: props.workedFor })}</TraceTitle>
+            <TraceTitle>
+              {props.running ? "Working" : `Worked${props.workedFor ? ` for ${props.workedFor}` : ""}`}
+            </TraceTitle>
             <TraceDescription>{props.steps === 1 ? "1 step" : `${props.steps} steps`}</TraceDescription>
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="flex flex-col gap-3">
           {props.rows.map((item) => (
-            <div key={item.key} data-row-key={item.key} className="flex min-w-0 flex-col gap-3 empty:hidden">
-              <TurnStep shared={props.shared} data={item.data} row={item.row} />
+            <div
+              key={TimelineRow.key(item.row)}
+              data-row-key={TimelineRow.key(item.row)}
+              className="flex min-w-0 flex-col gap-3 empty:hidden"
+            >
+              <TurnStep data={item.data} row={item.row} />
             </div>
           ))}
         </TraceCollapsibleContent>
@@ -549,19 +521,32 @@ export function TurnGroup(props: {
   )
 }
 
-export function TranscriptRow(props: { shared: Shared; data: RowData; row: TimelineRow.Row }) {
+function AssistantPart(props: { data: RowData; group: TimelineRow.PartGroup }) {
+  if (props.group.type === "part") return <Part data={props.data} />
+  return <Group data={props.data} group={props.group} />
+}
+
+function ShellRow(props: { message: SessionMessage.Info | undefined }) {
+  return props.message?.type === "shell" ? <TranscriptShell message={props.message} /> : null
+}
+
+function Thinking(props: { content: SessionMessage.Content | undefined }) {
+  return props.content?.type === "reasoning" ? <Reasoning text={props.content.text} streaming /> : null
+}
+
+export function TranscriptRow(props: { data: RowData; row: TimelineRow.Row }) {
   const row = props.row
   switch (row._tag) {
     case "UserMessage":
-      return <UserMessage shared={props.shared} data={props.data} />
+      return <UserMessage data={props.data} />
     case "AssistantPart":
-      return <AssistantPart shared={props.shared} data={props.data} group={row.group} />
+      return <AssistantPart data={props.data} group={row.group} />
     case "Notice":
       return <TranscriptNotice message={props.data.message} />
     case "Shell":
       return <ShellRow message={props.data.message} />
     case "Thinking":
-      return <Thinking data={props.data} reference={row.ref} />
+      return <Thinking content={props.data.content} />
     case "Retry":
       return props.data.retry ? <Retry retry={props.data.retry} /> : null
     case "Error":
@@ -574,5 +559,3 @@ export function TranscriptRow(props: { shared: Shared; data: RowData; row: Timel
       return null
   }
 }
-
-export { Working }
