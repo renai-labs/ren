@@ -1,7 +1,4 @@
-import type { ScheduleInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
-import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@ren/ui/card"
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
 import { Page } from "@ren/ui/page"
 import {
@@ -15,20 +12,13 @@ import {
 } from "@ren/ui/pagination"
 import { SearchField } from "@ren/ui/search-field"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
-import { Switch } from "@ren/ui/switch"
-import { Time } from "@ren/ui/time"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { Search } from "@ren/util/search"
 import { useQuery } from "@tanstack/react-query"
-import { Link } from "@tanstack/react-router"
 import { Fragment, useDeferredValue, useState } from "react"
-import type { ReactNode } from "react"
-import { ScheduleActions } from "../../components/schedule-actions.js"
 import { ScheduleDialog } from "../../components/schedule-dialog.js"
-import { ScheduleWhen } from "../../components/schedule-when.js"
-import { Schedules } from "../../components/schedules.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { ScheduleQueries } from "./schedule-queries.js"
+import { SchedulesGrid } from "./schedules-grid.js"
 
 const allSpaces = "all"
 
@@ -160,129 +150,16 @@ export function SchedulesPage() {
         ) : undefined
       }
     >
-      <Grid
-        state={Schedules.tableState(schedules, visible.length)}
+      <SchedulesGrid
+        status={schedules.status}
+        schedules={visible}
+        spaceNames={spaceNames}
+        pageCount={pageCount}
         filtered={filtered}
+        spaceCount={spaceItems.length}
         onRetry={() => void schedules.refetch()}
-      >
-        {visible.map((schedule) => (
-          <ScheduleCard key={schedule.id} schedule={schedule} spaceName={spaceNames.get(schedule.spaceId) ?? "—"} />
-        ))}
-      </Grid>
+      />
       {creating ? <ScheduleDialog onClose={() => setCreating(false)} /> : null}
     </Page.Root>
-  )
-}
-
-function Grid(props: {
-  state: "loading" | "failed" | "empty" | "ready"
-  filtered: boolean
-  onRetry: () => void
-  children: ReactNode
-}) {
-  if (props.state === "loading") return <Page.Skeletons body="cards" columns={3} />
-  if (props.state === "failed")
-    return (
-      <Empty role="alert">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <Icon glyph="AlertCircle" tone="danger" />
-          </EmptyMedia>
-          <EmptyTitle>Couldn’t load every schedule.</EmptyTitle>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button variant="outline" size="sm" onClick={props.onRetry}>
-            Try again
-          </Button>
-        </EmptyContent>
-      </Empty>
-    )
-  if (props.state === "empty")
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <Icon glyph="Clock" />
-          </EmptyMedia>
-          <EmptyTitle>{props.filtered ? "No matching schedules" : "No schedules yet"}</EmptyTitle>
-          <EmptyDescription>
-            {props.filtered
-              ? "Try a different search or filter."
-              : "Create one to run a prompt on a recurring cadence."}
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    )
-  return (
-    <section aria-label="Schedules" aria-live="polite">
-      <div className="grid grid-cols-1 content-start gap-3 sm:grid-cols-2 lg:grid-cols-3">{props.children}</div>
-    </section>
-  )
-}
-
-// oxlint-disable-next-line ren/no-comments -- ren-v1's schedule card: the next run as a relative time, archive, and a switch that pauses or resumes; an ended schedule's switch is off and says why.
-function ScheduleCard(props: { schedule: ScheduleInfo; spaceName: string }) {
-  const schedule = props.schedule
-  const actions = ScheduleActions.useActions(schedule)
-  const status = Schedules.statusOf(schedule)
-  const ended = schedule.status === "ended"
-  const toggle = (
-    <Switch
-      checked={schedule.status === "active"}
-      disabled={ended}
-      onCheckedChange={() => actions.toggle?.onSelect()}
-      aria-label={`${schedule.status === "active" ? "Pause" : "Resume"} schedule: ${schedule.name}`}
-    />
-  )
-  return (
-    <>
-      <Card className="relative gap-4 border shadow-soft ring-0 transition-colors hover:bg-muted active:scale-99">
-        <CardHeader>
-          <div className="mb-3 flex size-12 items-center justify-center rounded-lg bg-secondary">
-            <Icon glyph="Clock" size="large" tone="secondary" />
-          </div>
-          <Link
-            to="/schedules/$scheduleId"
-            params={{ scheduleId: schedule.id }}
-            aria-label={`Open schedule: ${schedule.name}`}
-            className="col-span-2 flex min-w-0 flex-col gap-1 outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
-          >
-            <CardTitle className="truncate text-sm">{schedule.name}</CardTitle>
-            <CardDescription className="line-clamp-2 min-h-8 text-xs">
-              {props.spaceName} · <ScheduleWhen when={schedule.when} />
-            </CardDescription>
-          </Link>
-          <CardAction className="relative row-span-1 flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-              aria-label={`Archive schedule: ${schedule.name}`}
-              onClick={actions.archive}
-            >
-              <Icon glyph="Trash2" />
-            </Button>
-            {ended ? (
-              <Tooltip>
-                <TooltipTrigger render={<span className="inline-flex" />}>{toggle}</TooltipTrigger>
-                <TooltipContent>It ended. Edit its time to run it again.</TooltipContent>
-              </Tooltip>
-            ) : (
-              toggle
-            )}
-          </CardAction>
-        </CardHeader>
-        {schedule.status === "paused" ? null : (
-          <CardFooter className="mx-4 mb-4 bg-transparent px-0 pt-3 pb-0 text-xs text-muted-foreground tabular-nums">
-            {schedule.nextRunAt ? (
-              <Time value={schedule.nextRunAt} format="relative" relativeStyle="narrow" label="Next run" />
-            ) : (
-              status.label
-            )}
-          </CardFooter>
-        )}
-      </Card>
-      {actions.dialogs}
-    </>
   )
 }
