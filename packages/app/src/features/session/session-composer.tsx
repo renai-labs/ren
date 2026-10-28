@@ -104,6 +104,12 @@ const commandQuery = (trigger: Composer.Trigger | undefined) => (trigger?.kind =
 const layoutOf = (draft: Composer.Draft, state: { readonly grown: boolean }): PromptInput.Layout =>
   state.grown || draft.text.includes("\n") || draft.pasted.length > 0 ? "stacked" : "inline"
 
+const startingOf = (notice: ChatView.Notice | undefined) => notice?._tag === "Starting"
+
+// oxlint-disable-next-line ren/no-comments -- While the sandbox starts the composer is read-only and always shows the rotating line; other notices give way to a draft.
+const shownNotice = (notice: ChatView.Notice | undefined, draft: Composer.Draft) =>
+  notice && (startingOf(notice) || !draft.text) ? notice : undefined
+
 interface Suggesting {
   readonly trigger: Composer.Trigger
   readonly active?: string
@@ -282,7 +288,9 @@ export function SessionComposer(props: {
   const stoppable = status.stoppable
   const content = !Composer.isBlank(draft)
   const queued = Composer.queued(props.pending)
-  const readOnly = props.unavailable || moving
+  const notice = shownNotice(props.notice, draft)
+  const unavailable = props.unavailable || startingOf(props.notice)
+  const readOnly = unavailable || moving
   const suggested = useSuggestions({
     sessionID: props.sessionID,
     commands: status.commands,
@@ -503,7 +511,7 @@ export function SessionComposer(props: {
       running={running}
       stoppable={stoppable}
       content={content}
-      unavailable={props.unavailable}
+      unavailable={unavailable}
       alternate={status.queue ? Composer.alternate(behavior, { working: running }) : undefined}
       model={
         status.picker ? (
@@ -565,10 +573,9 @@ export function SessionComposer(props: {
       }
       addMenu={addMenu}
       apps={<SessionAppsStrip sessionId={props.sessionID} />}
-      {...(props.notice &&
-        !draft.text && {
-          status: <ComposerStatus notice={props.notice} retrying={props.retrying} onRetry={props.onRetry} />,
-        })}
+      {...(notice && {
+        status: <ComposerStatus notice={notice} retrying={props.retrying} onRetry={props.onRetry} />,
+      })}
       controls={controls}
     >
       <PromptInput.Textarea
