@@ -13,7 +13,7 @@ export interface Live {
   readonly status: Session.Status | undefined
 }
 
-function usePatch(sessionID: Session.ID) {
+export function usePatch(sessionID: Session.ID) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
   return (patch: Partial<SessionInfo>) => {

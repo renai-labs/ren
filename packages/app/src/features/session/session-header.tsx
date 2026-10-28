@@ -1,4 +1,3 @@
-import type { SessionInfo, SessionPage } from "@ren/client"
 import { Family } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
@@ -28,12 +27,13 @@ import { InlineEdit } from "@ren/ui/inline-edit"
 import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { toast } from "@ren/ui/toast"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { Fragment, useState } from "react"
 import { ScheduleDialog } from "../../components/schedule-dialog.js"
 import { Chat } from "../../lib/chat.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { SessionCache } from "../../lib/session-cache.js"
 import { Platform } from "../../platform/platform.js"
 import { Failure } from "./failure.js"
 
@@ -205,8 +205,7 @@ function Actions(props: {
 }
 
 function Title(props: { sessionID: Session.ID; title: string; renamable: boolean }) {
-  const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
+  const patch = SessionCache.usePatch(props.sessionID)
   const rename = ChatReact.useAction(props.sessionID, (opened, title: string) => opened.rename(title))
   if (!props.renamable)
     return (
@@ -221,13 +220,7 @@ function Title(props: { sessionID: Session.ID; title: string; renamable: boolean
       required
       onCommit={async (next) => {
         await rename(next)
-        const renamed = (item: SessionInfo) => (item.id === props.sessionID ? { ...item, title: next } : item)
-        queryClient.setQueriesData<SessionPage>({ queryKey: context.api.session.list.queryKey() }, (page) =>
-          page ? { ...page, items: page.items.map(renamed) } : page,
-        )
-        queryClient.setQueriesData<SessionInfo>({ queryKey: context.api.session.get.queryKey() }, (info) =>
-          info ? renamed(info) : info,
-        )
+        patch({ title: next })
       }}
     />
   )
