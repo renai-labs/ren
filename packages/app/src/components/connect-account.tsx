@@ -13,7 +13,7 @@ import { Notice } from "@ren/ui/notice"
 import { ProgressIndicator } from "@ren/ui/progress-indicator"
 import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useRouteContext } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
@@ -51,7 +51,6 @@ const hostOf = (item: AppProfileItem, mcps: Mcps) => {
 // oxlint-disable-next-line ren/no-comments -- ren-v1 AppConnectionModal: the app first, one row per item, a sign-in in a new tab with a waiting state, keys pasted in place, and a done state. Edit changes the account's name and spaces.
 function useAccount(profileId: string, options: { readonly polling: boolean }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const profile = useQuery({
     ...context.api["app-profile"].get.queryOptions({ idOrSlug: profileId }),
     refetchOnWindowFocus: "always",
@@ -61,19 +60,11 @@ function useAccount(profileId: string, options: { readonly polling: boolean }) {
     ...context.api.app.get.queryOptions({ idOrSlug: profile.data?.appId ?? "" }),
     enabled: Boolean(profile.data),
   })
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: context.api["app-profile"].get.queryKey() }),
-      queryClient.invalidateQueries({ queryKey: context.api["app-profile"].list.queryKey() }),
-      queryClient.invalidateQueries({ queryKey: context.api["app-profile-reach"].space.profiles.queryKey() }),
-      queryClient.invalidateQueries({ queryKey: context.api["app-profile-reach"].session.profiles.queryKey() }),
-    ])
   return {
     profile: profile.data,
     name: app.data?.name ?? profile.data?.appSlug ?? "",
     icon: app.data?.icon ?? undefined,
     mcps: app.data?.mcps ?? {},
-    refresh,
   }
 }
 
@@ -96,14 +87,13 @@ export function ConnectAccount(props: { profileId: string; onClose: () => void }
       />
       <Dialog.Body>
         {editing ? (
-          <EditAccount profile={found} onChanged={account.refresh} />
+          <EditAccount profile={found} />
         ) : (
           <Items
             profile={found}
             mcps={account.mcps}
             waiting={waiting}
             onWaiting={(label) => setWaiting((current) => new Set([...current, label]))}
-            onSaved={account.refresh}
           />
         )}
       </Dialog.Body>
@@ -154,7 +144,6 @@ function Items(props: {
   mcps: Mcps
   waiting: ReadonlySet<string>
   onWaiting: (label: string) => void
-  onSaved: () => Promise<unknown>
 }) {
   const context = RouterContext.useRouterContext()
   const platform = Platform.usePlatform()
@@ -165,7 +154,7 @@ function Items(props: {
       { profileId: props.profile.id, item: item.item, ...(item.status !== "missing" && { reconnect: true }) },
       {
         onSuccess: (result) => {
-          if (!("redirectUrl" in result)) return void props.onSaved()
+          if (!("redirectUrl" in result)) return
           props.onWaiting(item.label)
           platform.openExternal(result.redirectUrl)
         },
@@ -198,12 +187,11 @@ function Items(props: {
               item={item}
               field={fieldOf(item, props.mcps)}
               host={hostOf(item, props.mcps)}
-              onSaved={props.onSaved}
             />
           ),
         )}
       </List.Root>
-      <Links profile={props.profile} onChanged={props.onSaved} />
+      <Links profile={props.profile} />
       <Notice tone="danger" placement="inline">
         {connect.error?.message}
       </Notice>
@@ -253,13 +241,7 @@ function SignInRow(props: { item: AppProfileItem; waiting: boolean; pending: boo
   )
 }
 
-function KeyRow(props: {
-  profileId: string
-  item: AppProfileItem
-  field: string | undefined
-  host: string
-  onSaved: () => Promise<unknown>
-}) {
+function KeyRow(props: { profileId: string; item: AppProfileItem; field: string | undefined; host: string }) {
   const context = RouterContext.useRouterContext()
   const create = useMutation(context.api.credential.create.mutationOptions())
   const [replacing, setReplacing] = useState(false)
@@ -282,7 +264,6 @@ function KeyRow(props: {
       if (!saved) return
       setReplacing(false)
       form.reset()
-      await props.onSaved()
     },
   })
   if (props.item.status === "ok" && !replacing)
@@ -322,7 +303,7 @@ function KeyRow(props: {
   )
 }
 
-function EditAccount(props: { profile: AppProfileInfo; onChanged: () => Promise<unknown> }) {
+function EditAccount(props: { profile: AppProfileInfo }) {
   const context = RouterContext.useRouterContext()
   const authed = useRouteContext({ from: "/_authed" })
   const spaces = useQuery(context.api.space.list.queryOptions(Apps.page))
@@ -336,7 +317,7 @@ function EditAccount(props: { profile: AppProfileInfo; onChanged: () => Promise<
           required
           schema={Schema.toStandardSchemaV1(Primitive.Name)}
           value={props.profile.name}
-          onCommit={(name) => update.mutateAsync({ id: props.profile.id, name }).then(props.onChanged)}
+          onCommit={(name) => update.mutateAsync({ id: props.profile.id, name })}
         />
       </Field.Root>
       <Field.Root label="Used in" orientation="row" description={Apps.reach(props.profile)}>
@@ -350,7 +331,7 @@ function EditAccount(props: { profile: AppProfileInfo; onChanged: () => Promise<
 }
 
 // oxlint-disable-next-line ren/no-comments -- §9 rule 10 (P8): one section per dependency app with items; a missing link is a gap and does not block.
-function Links(props: { profile: AppProfileInfo; onChanged: () => Promise<unknown> }) {
+function Links(props: { profile: AppProfileInfo }) {
   const context = RouterContext.useRouterContext()
   const link = useMutation(context.api["app-profile"].link.mutationOptions())
   const candidates = useQuery({
@@ -380,10 +361,7 @@ function Links(props: { profile: AppProfileInfo; onChanged: () => Promise<unknow
                 value={each.profileId}
                 options={options}
                 onValueChange={(profileId) =>
-                  void link
-                    .mutateAsync({ id: props.profile.id, appId: each.appId, profileId })
-                    .then(props.onChanged)
-                    .catch(() => undefined)
+                  void link.mutateAsync({ id: props.profile.id, appId: each.appId, profileId }).catch(() => undefined)
                 }
               />
             }

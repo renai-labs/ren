@@ -6,7 +6,7 @@ import { LoadingMessage } from "@ren/ui/loading-message"
 import { PageShell } from "@ren/ui/page-shell"
 import { StateMessage } from "@ren/ui/state-message"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { usePlatform } from "../../platform/platform.js"
@@ -17,13 +17,11 @@ const REFRESH_MS = 60_000
 export function ProvidersPage(props: { returnUrl: string }) {
   const context = RouterContext.useRouterContext()
   const platform = usePlatform()
-  const queryClient = useQueryClient()
   const api = context.api["ren-inference"]
   const [removing, setRemoving] = useState<RenInference.Connection | null>(null)
   const list = useQuery({ ...api.connection.list.queryOptions(), refetchInterval: REFRESH_MS })
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: api.connection.list.queryKey() })
-  const rename = useMutation({ ...api.connection.rename.mutationOptions(), onSuccess: invalidate })
-  const remove = useMutation({ ...api.connection.remove.mutationOptions(), onSuccess: invalidate })
+  const rename = useMutation(api.connection.rename.mutationOptions())
+  const remove = useMutation(api.connection.remove.mutationOptions())
   const connect = useMutation({
     ...api.connect.mutationOptions(),
     onSuccess: (result) => (platform.redirect ?? platform.openExternal)(result.url),

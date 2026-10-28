@@ -18,7 +18,6 @@ export function AddSpaceMemberDialog(props: {
   organizationId: string
   members: ReadonlyArray<SpaceMemberInfo>
   onClose: () => void
-  onChanged: () => Promise<unknown>
 }) {
   const context = RouterContext.useRouterContext()
   const organization = useQuery(Auth.organizationOptions(context.auth, props.organizationId))
@@ -34,7 +33,6 @@ export function AddSpaceMemberDialog(props: {
         onSuccess: () => {
           Toast.manager.add({ type: "success", title: candidate.addedMessage })
           props.onClose()
-          void props.onChanged()
         },
       },
     )

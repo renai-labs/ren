@@ -9,7 +9,7 @@ import { IconButton } from "@ren/ui/icon-button"
 import { Notice } from "@ren/ui/notice"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
@@ -23,7 +23,6 @@ const schema = Schema.toStandardSchemaV1(
 
 export function CreateSpaceDialog(props: { onClose: () => void }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const create = useMutation(context.api.space.create.mutationOptions())
   const update = useMutation(context.api["space-settings"].update.mutationOptions())
@@ -38,7 +37,6 @@ export function CreateSpaceDialog(props: { onClose: () => void }) {
         .mutateAsync({ name: value.name.trim(), ...(description && { description }) })
         .catch(() => undefined)
       if (!space) return
-      await queryClient.invalidateQueries({ queryKey: context.api.space.list.queryKey() })
       props.onClose()
       if (references.length === 0) return navigate({ to: "/spaces/$spaceId", params: { spaceId: space.id } })
       // oxlint-disable-next-line ren/no-comments -- §5a: Space.CreateInput has no settings, so the repositories are a second save; a refused one leaves the space and opens its Repositories tab with the reason.

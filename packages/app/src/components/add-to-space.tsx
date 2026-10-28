@@ -5,7 +5,7 @@ import { Icon } from "@ren/ui/icon"
 import { List } from "@ren/ui/list"
 import { Menu } from "@ren/ui/menu"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
@@ -20,16 +20,12 @@ function useAddition(props: {
   onAdded: (profileId: string) => void
 }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const create = useMutation(context.api["app-profile"].create.mutationOptions())
   const access = useMutation(context.api["app-profile"].access.mutationOptions())
   const [choosing, setChoosing] = useState<Target>()
   const shared = props.profiles.filter((profile) => profile.kind === "shared")
   const done = (profileId: string) => {
     setChoosing(undefined)
-    void queryClient.invalidateQueries({ queryKey: context.api["app-profile"].list.queryKey() })
-    void queryClient.invalidateQueries({ queryKey: context.api["app-profile-reach"].space.profiles.queryKey() })
-    void queryClient.invalidateQueries({ queryKey: context.api["app-profile-reach"].session.profiles.queryKey() })
     props.onAdded(profileId)
   }
   const failed = (error: Error) =>

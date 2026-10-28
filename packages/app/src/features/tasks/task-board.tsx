@@ -10,7 +10,7 @@ import { TaskLinkBadge } from "@ren/ui/task-link-badge"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
 import { Toast } from "@ren/ui/toast"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { RouterContext } from "../../lib/router-context.js"
 import { DueDateControl, LabelsControl, OwnerControl, PriorityControl, StatusControl } from "./task-controls.js"
 import { AttentionTurn } from "./task-attention.js"
@@ -171,8 +171,8 @@ function Card(props: Props & { task: TaskInfo }) {
 function CardActions(props: Props & { task: TaskInfo }) {
   const context = RouterContext.useRouterContext()
   const agents = Tasks.useSpaceAgents(props.task.spaceId, { enabled: true })
-  const assign = Tasks.useTaskMutation(context.api.task.assign.mutationOptions())
-  const start = Tasks.useTaskMutation(context.api.task.start.mutationOptions())
+  const assign = useMutation(context.api.task.assign.mutationOptions())
+  const start = useMutation(context.api.task.start.mutationOptions())
   const fail = (cause: unknown) =>
     Toast.manager.add({ type: "error", title: "Couldn’t update task", description: Tasks.describe(cause) })
   const move = (agentId: string | null) =>

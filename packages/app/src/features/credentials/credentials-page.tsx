@@ -5,7 +5,7 @@ import { PageShell } from "@ren/ui/page-shell"
 import { SearchField } from "@ren/ui/search-field"
 import { Tabs } from "@ren/ui/tabs"
 import { Toolbar } from "@ren/ui/toolbar"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
 import type { ReactNode } from "react"
 import { RouterContext } from "../../lib/router-context.js"
@@ -19,7 +19,6 @@ export type Tab = "apps" | "credentials"
 // oxlint-disable-next-line ren/no-comments -- The space Apps and Credentials tabs, for the whole org: app accounts, and loose credentials.
 export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNode; onTabChange: (tab: Tab) => void }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const credentials = useQuery(
     context.api.credential.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }),
   )
@@ -34,7 +33,6 @@ export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNo
   const items = (credentials.data?.items ?? []).filter((item) => item.owner.kind !== "profile")
   const visible = items.filter((item) => Credentials.matches(item, needle))
   const owners = Owners.options(spaceList)
-  const refresh = () => queryClient.invalidateQueries({ queryKey: context.api.credential.list.queryKey() })
   const state = { pending: "loading", error: "failed", success: visible.length > 0 ? "ready" : "empty" } as const
   return (
     <PageShell.Root
@@ -73,7 +71,6 @@ export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNo
             owners={owners}
             userId={props.userId}
             emptyMessage="No credentials"
-            onChanged={refresh}
           />
         </>
       ) : null}
@@ -85,7 +82,6 @@ export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNo
           userId={props.userId}
           submitLabel="Save credential"
           onClose={() => setCreating(false)}
-          onSaved={refresh}
         />
       ) : null}
     </PageShell.Root>

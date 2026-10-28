@@ -19,7 +19,6 @@ export function CredentialsTable(props: {
   owners: ReadonlyArray<Owners.Option>
   userId: string
   emptyMessage: string
-  onChanged: () => Promise<unknown>
 }) {
   const [editing, setEditing] = useState<Editing>()
   const [deleting, setDeleting] = useState<CredentialInfo>()
@@ -107,9 +106,7 @@ export function CredentialsTable(props: {
           ))}
         </Table.Body>
       </Table.Root>
-      {editing?.kind === "rotate" ? (
-        <RotateCredentialDialog credential={editing.credential} onClose={close} onSaved={props.onChanged} />
-      ) : null}
+      {editing?.kind === "rotate" ? <RotateCredentialDialog credential={editing.credential} onClose={close} /> : null}
       {editing?.kind === "move" || editing?.kind === "copy" ? (
         <MoveCredentialDialog
           credential={editing.credential}
@@ -117,15 +114,9 @@ export function CredentialsTable(props: {
           owners={props.owners}
           userId={props.userId}
           onClose={close}
-          onSaved={props.onChanged}
         />
       ) : null}
-      <DeleteCredentialDialog
-        credential={deleting}
-        open={confirming}
-        onOpenChange={setConfirming}
-        onDeleted={props.onChanged}
-      />
+      <DeleteCredentialDialog credential={deleting} open={confirming} onOpenChange={setConfirming} />
     </>
   )
 }

@@ -9,7 +9,7 @@ import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
 import { Transcript } from "@ren/ui/transcript"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { startTransition, useId, useRef, useState, ViewTransition } from "react"
 import { Attention } from "../../lib/attention.js"
@@ -32,7 +32,6 @@ const listed = (
 
 export function NewChat(props: { userId: string }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [sessionID, setSessionID] = useState(() => Session.ID.create())
   const [sent, setSent] = useState<string>()
@@ -132,7 +131,6 @@ export function NewChat(props: { userId: string }) {
                       }),
                     ),
                   )
-                  void queryClient.invalidateQueries({ queryKey: context.api.session.list.queryKey() })
                   void import("../../lib/chat.js")
                     .then((loaded) => loaded.Chat.forUser(platform, props.userId).atoms.handoff(sessionID, message))
                     .finally(() => {

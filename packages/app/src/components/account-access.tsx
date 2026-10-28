@@ -4,7 +4,7 @@ import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import { Icon } from "@ren/ui/icon"
 import { Menu } from "@ren/ui/menu"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
 import { Apps } from "./apps.js"
@@ -12,7 +12,6 @@ import { Apps } from "./apps.js"
 // oxlint-disable-next-line ren/no-comments -- profiles.md §10 (P19, P20): the server decides, through canAccess and canShareEverySpace.
 export function AccountAccess(props: { profile: AppProfileInfo; spaces: ReadonlyArray<SpaceInfo>; userId: string }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const access = useMutation(context.api["app-profile"].access.mutationOptions())
   const [confirming, setConfirming] = useState<string>()
   if (props.profile.kind === "private" || !props.profile.canAccess) return null
@@ -32,10 +31,6 @@ export function AccountAccess(props: { profile: AppProfileInfo; spaces: Readonly
     access.mutate(
       { id: props.profile.id, ...input },
       {
-        onSuccess: () => {
-          void queryClient.invalidateQueries({ queryKey: context.api["app-profile"].list.queryKey() })
-          void queryClient.invalidateQueries({ queryKey: context.api["app-profile-reach"].space.profiles.queryKey() })
-        },
         onError: (error) =>
           Toast.manager.add({ type: "error", title: "Couldn’t change the spaces", description: error.message }),
       },

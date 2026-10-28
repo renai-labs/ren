@@ -5,14 +5,13 @@ import { Dialog } from "@ren/ui/dialog"
 import { FormActions } from "@ren/ui/form-actions"
 import { Notice } from "@ren/ui/notice"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 
 export function JoinSpaceDialog(props: { spaces: ReadonlyArray<SpaceInfo>; userId: string; onClose: () => void }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const join = useMutation(context.api["space-member"].create.mutationOptions())
   const [selected, setSelected] = useState<string | null>(null)
@@ -26,7 +25,6 @@ export function JoinSpaceDialog(props: { spaces: ReadonlyArray<SpaceInfo>; userI
         onSuccess: () => {
           Toast.manager.add({ type: "success", title: `Joined ${space.name}` })
           props.onClose()
-          void queryClient.invalidateQueries({ queryKey: context.api.space.list.queryKey() })
           void navigate({ to: "/spaces/$spaceId", params: { spaceId: space.id } })
         },
       },

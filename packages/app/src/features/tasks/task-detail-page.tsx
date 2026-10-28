@@ -9,7 +9,7 @@ import { Notice } from "@ren/ui/notice"
 import { PageShell } from "@ren/ui/page-shell"
 import { StateMessage } from "@ren/ui/state-message"
 import { TaskLinkBadge } from "@ren/ui/task-link-badge"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
@@ -68,10 +68,10 @@ type DetailProps = PageProps & { task: TaskInfo; catalog: ReturnType<typeof Task
 function useHeaderActions() {
   const context = RouterContext.useRouterContext()
   return {
-    update: Tasks.useTaskMutation(context.api.task.update.mutationOptions()),
-    assign: Tasks.useTaskMutation(context.api.task.assign.mutationOptions()),
-    start: Tasks.useTaskMutation(context.api.task.start.mutationOptions()),
-    archive: Tasks.useTaskMutation(context.api.task.archive.mutationOptions()),
+    update: useMutation(context.api.task.update.mutationOptions()),
+    assign: useMutation(context.api.task.assign.mutationOptions()),
+    start: useMutation(context.api.task.start.mutationOptions()),
+    archive: useMutation(context.api.task.archive.mutationOptions()),
   }
 }
 
@@ -80,7 +80,7 @@ function Detail(props: DetailProps) {
   const task = props.task
   const actions = Tasks.useTaskActions()
   const header = useHeaderActions()
-  const review = Tasks.useTaskMutation(context.api.task.review.mutationOptions())
+  const review = useMutation(context.api.task.review.mutationOptions())
   const [requesting, setRequesting] = useState(false)
   const error = header.update.error ?? header.assign.error ?? header.start.error
   return (
