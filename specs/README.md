@@ -18,14 +18,15 @@ Generated clients follow the protocol `HttpApi`.
 
 ## Index
 
-| Spec                                                                 | Pending                                                                     |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| [tasks.md](tasks.md)                                                 | Handoff to the next agent, drag and drop, review start as a flag, dashboard |
-| [cli.md](cli.md)                                                     | `ren2 api`, connection profiles, device login, chat and streaming           |
-| [infra.md](infra.md)                                                 | Apply of webhooks, environments and timezones; listings                     |
-| [runtime/README.md](runtime/README.md)                               | The `FeatureFlags` service and the flag list                                |
-| [runtime/e2b-brain/README.md](runtime/e2b-brain/README.md)           | Harness-neutral sync, restore leftovers, live E2B tests, retries            |
-| [runtime/hot-reload/README.md](runtime/hot-reload/README.md)         | Tests not written, a model key per brain                                    |
-| [runtime/channels/README.md](runtime/channels/README.md)             | Linear, Slack task card and onboarding, GitHub live checks                  |
-| [runtime/credentials/README.md](runtime/credentials/README.md)       | `oauth-session.complete`, KMS, traffic the egress cannot inject             |
-| [runtime/private-spaces/README.md](runtime/private-spaces/README.md) | Usage totals, files spec alignment                                          |
+| Spec                                                                 | Pending                                                                                     |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [tasks.md](tasks.md)                                                 | Handoff to the next agent, drag and drop, review start as a flag, dashboard                 |
+| [cli.md](cli.md)                                                     | `ren2 api`, connection profiles, device login, chat and streaming                           |
+| [infra.md](infra.md)                                                 | Apply of webhooks, environments and timezones; listings                                     |
+| [usage.md](usage.md)                                                 | The billing check for app chats, an automated usage e2e case, the PostHog and billing loops |
+| [runtime/README.md](runtime/README.md)                               | The `FeatureFlags` service and the flag list                                                |
+| [runtime/e2b-brain/README.md](runtime/e2b-brain/README.md)           | Harness-neutral sync, restore leftovers, live E2B tests, retries                            |
+| [runtime/hot-reload/README.md](runtime/hot-reload/README.md)         | Tests not written, a model key per brain                                                    |
+| [runtime/channels/README.md](runtime/channels/README.md)             | Linear, Slack task card and onboarding, GitHub live checks                                  |
+| [runtime/credentials/README.md](runtime/credentials/README.md)       | `oauth-session.complete`, KMS, traffic the egress cannot inject                             |
+| [runtime/private-spaces/README.md](runtime/private-spaces/README.md) | Usage totals, files spec alignment                                                          |
