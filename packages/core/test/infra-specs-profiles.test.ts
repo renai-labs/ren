@@ -116,10 +116,15 @@ describe("InfraSpecs profiles", () => {
         problems: [
           {
             path: `deploy.yaml/spaces/home/profiles/${s.slug}/team`,
-            message: `No other space lists profile team of ${s.slug}, so removing it would delete the profile and its credentials. Delete it in the app instead, or keep it listed.`,
+            message: `No other space lists profile team of ${s.slug}, so removing it would delete the profile and its credentials. Infra never deletes a profile: keep it listed, or delete it in the app.`,
           },
         ],
       })
+      const profiles = yield* AppProfiles.Service
+      expect((yield* profiles.unlist(s.o.admin, s.team.id, [s.o.home.id]).pipe(Effect.flip))._tag).toBe(
+        "Primitive.Conflict",
+      )
+      expect(yield* listed(s.o.admin, s.team.id)).toEqual(["Home"])
     }),
   )
 

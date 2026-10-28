@@ -15,6 +15,20 @@ const decode = (spaces: Record<string, unknown>) =>
   Schema.decodeUnknownExit(Infra.Spec)({ org: { settings: {} }, spaces })
 
 describe("Infra.Spec", () => {
+  test("rejects a Linear channel and a Linear binding: the spec maps GitHub and Slack, not Linear", () => {
+    expect(
+      Exit.isFailure(decode({ home: { name: "Home", channels: { tickets: { kind: "linear", purpose: "T" } } } })),
+    ).toBe(true)
+    expect(
+      Exit.isFailure(
+        Schema.decodeUnknownExit(Infra.Bindings)({
+          organization: "acme",
+          spaces: { home: { channels: { tickets: { kind: "linear", projectId: "P1" } } } },
+        }),
+      ),
+    ).toBe(true)
+  })
+
   test("a space uses an agent that another space owns", () => {
     const exit = decode({
       engineering: { name: "Engineering", agents: { build: agent } },

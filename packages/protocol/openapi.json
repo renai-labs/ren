@@ -11653,45 +11653,6 @@
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": ["linear"]
-              },
-              "purpose": {
-                "type": "string",
-                "minLength": 1
-              },
-              "agent": {
-                "$ref": "#/components/schemas/Agent.Name_2"
-              },
-              "fallback": {
-                "type": "boolean",
-                "description": "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository."
-              },
-              "triggers": {
-                "type": "object",
-                "propertyNames": {
-                  "$ref": "#/components/schemas/Channel.TriggerID"
-                },
-                "additionalProperties": {
-                  "type": "object",
-                  "properties": {
-                    "prompt": {
-                      "type": "string",
-                      "minLength": 1
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                "description": "The provider’s triggers to turn on, such as GitHub’s pull_request_ready. All are off by default."
-              }
-            },
-            "required": ["kind", "purpose"],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
                 "enum": ["email"]
               },
               "purpose": {
@@ -11797,21 +11758,6 @@
               }
             },
             "required": ["kind", "channelId"],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": ["linear"]
-              },
-              "projectId": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": ["kind", "projectId"],
             "additionalProperties": false
           },
           {

@@ -288,7 +288,7 @@ describe("InfraSpecs channels", () => {
                 unbound: { kind: "github", purpose: "Unbound" },
                 mismatched: { kind: "github", purpose: "Mismatched" },
                 chat: { kind: "slack", purpose: "Chat" },
-                tickets: { kind: "linear", purpose: "Tickets" },
+                mail: { kind: "email", purpose: "Mail" },
                 first: { kind: "github", purpose: "First" },
                 second: { kind: "github", purpose: "Second" },
               },
@@ -327,11 +327,11 @@ describe("InfraSpecs channels", () => {
           path: "spaces/home/channels/first",
           message: "spaces/home/channels/second maps the same GitHub place. Map each place once.",
         },
+        { path: "spaces/home/channels/mail", message: "Infra does not apply email channels yet." },
         {
           path: "spaces/home/channels/second",
           message: "spaces/home/channels/first maps the same GitHub place. Map each place once.",
         },
-        { path: "spaces/home/channels/tickets", message: "Infra does not apply linear channels yet." },
       ])
     }),
   )

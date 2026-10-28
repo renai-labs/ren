@@ -39,6 +39,11 @@ export interface Interface extends Primitive.Interface<typeof AppProfile.definit
     actor: Actor.Info,
     id: AppProfile.ID,
   ) => Effect.Effect<AppProfile.Info, Primitive.NotFound | Primitive.Forbidden>
+  readonly unlist: (
+    actor: Actor.Info,
+    id: AppProfile.ID,
+    spaceIds: ReadonlyArray<Space.ID>,
+  ) => Effect.Effect<AppProfile.Info, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid>
   readonly reachable: (scope: Reach) => Effect.Effect<ReadonlyArray<Reached>>
   readonly infos: (
     actor: Actor.Info,
@@ -596,6 +601,61 @@ export const layer = Layer.effect(
         .set({ updated_at: sql`now()` })
         .where(eq(profiles.id, id))
 
+    const changeAccess = Effect.fnUntraced(function* (
+      actor: Actor.Info,
+      id: AppProfile.ID,
+      input: AppProfile.AccessInput,
+      options: { readonly isKept: boolean },
+    ) {
+      const changed = yield* database.transaction((transaction) =>
+        Effect.gen(function* () {
+          const row = yield* find(transaction, actor, id, AppProfilePolicy.actions.access)
+          const holds = holdsOf(actor, row, (yield* listedOf(transaction, actor, [row.id])).get(row.id) ?? [])
+          if (typeof input.allSpaces === "boolean" && !allowed(actor, AppProfilePolicy.actions.allSpaces, holds))
+            return yield* new Primitive.Forbidden({ message: "Only admins share a profile with every space (P20)." })
+          const add = input.add ?? []
+          const remove = input.remove ?? []
+          yield* checkSpaces(transaction, actor, holds, [
+            ...add.map((space) => ({ id: space, action: AppProfilePolicy.actions.addSpace })),
+            ...remove.map((space) => ({ id: space, action: AppProfilePolicy.actions.removeSpace })),
+          ])
+          if (add.length)
+            yield* transaction
+              .insert(listed)
+              .values(add.map((space_id) => ({ profile_id: row.id, space_id })))
+              .onConflictDoNothing()
+          if (remove.length)
+            yield* transaction
+              .delete(listed)
+              .where(and(eq(listed.profile_id, row.id), inArray(listed.space_id, [...remove])))
+          if (typeof input.allSpaces === "boolean")
+            yield* transaction.update(profiles).set({ all_spaces: input.allSpaces }).where(eq(profiles.id, row.id))
+          yield* touch(transaction, row.id)
+          const left = yield* transaction
+            .select({ space: listed.space_id })
+            .from(listed)
+            .where(eq(listed.profile_id, row.id))
+          const unused = unusedAfter(input, { allSpaces: row.all_spaces, left: left.length })
+          if (unused && options.isKept)
+            return yield* new Primitive.Conflict({
+              message: "This is the profile’s last space. Ren keeps the profile, so it keeps this space too.",
+            })
+          return {
+            info: yield* infoOf(transaction, actor, row.id),
+            labels: yield* labelsOf(transaction, row.id),
+            unused,
+          }
+        }),
+      )
+      // oxlint-disable-next-line ren/no-comments -- A shared profile that no space uses any more is deleted, with its sign-ins, as a delete does.
+      if (changed.unused) {
+        yield* store.removeForProfile(changed.info.id)
+        yield* database.db.delete(profiles).where(eq(profiles.id, changed.info.id)).pipe(Effect.orDie)
+      }
+      yield* invalidate(changed.labels)
+      return changed.info
+    })
+
     return Service.of({
       list: Effect.fn("AppProfiles.list")(function* (actor, input) {
         return yield* database
@@ -748,48 +808,11 @@ export const layer = Layer.effect(
       }),
 
       access: Effect.fn("AppProfiles.access")(function* (actor, id, input) {
-        const changed = yield* database.transaction((transaction) =>
-          Effect.gen(function* () {
-            const row = yield* find(transaction, actor, id, AppProfilePolicy.actions.access)
-            const holds = holdsOf(actor, row, (yield* listedOf(transaction, actor, [row.id])).get(row.id) ?? [])
-            if (typeof input.allSpaces === "boolean" && !allowed(actor, AppProfilePolicy.actions.allSpaces, holds))
-              return yield* new Primitive.Forbidden({ message: "Only admins share a profile with every space (P20)." })
-            const add = input.add ?? []
-            const remove = input.remove ?? []
-            yield* checkSpaces(transaction, actor, holds, [
-              ...add.map((space) => ({ id: space, action: AppProfilePolicy.actions.addSpace })),
-              ...remove.map((space) => ({ id: space, action: AppProfilePolicy.actions.removeSpace })),
-            ])
-            if (add.length)
-              yield* transaction
-                .insert(listed)
-                .values(add.map((space_id) => ({ profile_id: row.id, space_id })))
-                .onConflictDoNothing()
-            if (remove.length)
-              yield* transaction
-                .delete(listed)
-                .where(and(eq(listed.profile_id, row.id), inArray(listed.space_id, [...remove])))
-            if (typeof input.allSpaces === "boolean")
-              yield* transaction.update(profiles).set({ all_spaces: input.allSpaces }).where(eq(profiles.id, row.id))
-            yield* touch(transaction, row.id)
-            const left = yield* transaction
-              .select({ space: listed.space_id })
-              .from(listed)
-              .where(eq(listed.profile_id, row.id))
-            return {
-              info: yield* infoOf(transaction, actor, row.id),
-              labels: yield* labelsOf(transaction, row.id),
-              unused: unusedAfter(input, { allSpaces: row.all_spaces, left: left.length }),
-            }
-          }),
-        )
-        // oxlint-disable-next-line ren/no-comments -- A shared profile that no space uses any more is deleted, with its sign-ins, as a delete does.
-        if (changed.unused) {
-          yield* store.removeForProfile(changed.info.id)
-          yield* database.db.delete(profiles).where(eq(profiles.id, changed.info.id)).pipe(Effect.orDie)
-        }
-        yield* invalidate(changed.labels)
-        return changed.info
+        return yield* changeAccess(actor, id, input, { isKept: false })
+      }),
+
+      unlist: Effect.fn("AppProfiles.unlist")(function* (actor, id, spaceIds) {
+        return yield* changeAccess(actor, id, { remove: spaceIds }, { isKept: true })
       }),
 
       link: Effect.fn("AppProfiles.link")(function* (actor, id, input) {
