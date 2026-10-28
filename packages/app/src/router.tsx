@@ -308,6 +308,16 @@ const spaceAppsRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/space/space-apps"), "SpaceAppsTab"),
 })
 
+const spaceRepositoriesRoute = createRoute({
+  getParentRoute: () => spaceRoute,
+  path: "repositories",
+  validateSearch: PageSearch,
+  loader: ({ params }) => {
+    void queryClient.query(api["space-settings"].get.queryOptions({ idOrSlug: params.spaceId })).catch(ignore)
+  },
+  component: lazyRouteComponent(() => import("@/routes/space/space-repositories"), "SpaceRepositoriesTab"),
+})
+
 const spaceSchedulesRoute = createRoute({
   getParentRoute: () => spaceRoute,
   path: "schedules",
@@ -476,6 +486,7 @@ const routeTree = rootRoute.addChildren([
         spaceCredentialsRoute,
         spaceFactoryRoute,
         spaceAppsRoute,
+        spaceRepositoriesRoute,
         spaceSchedulesRoute,
       ]),
       tasksRoute,
