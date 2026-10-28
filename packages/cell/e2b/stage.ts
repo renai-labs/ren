@@ -40,7 +40,7 @@ const Manifest = Schema.Struct({
 
 const Root = Schema.Struct({ packageManager: Schema.String })
 
-// oxlint-disable-next-line ren/no-comments -- The workspace files that the brain and its hand import, at any depth (ren-v1 INV-105). A file that no entry point imports never reaches the image, so its change never rebuilds the template.
+// oxlint-disable-next-line ren/no-comments -- Follows imports at any depth (ren-v1 INV-105). A file that no entry point imports never reaches the image, so its change never rebuilds the template.
 export const sources = async (repository: string) => {
   const build = await Bun.build({
     entrypoints: ["packages/cell/src/bun.ts", "packages/executor/src/main.ts"].map((file) => join(repository, file)),
