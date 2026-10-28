@@ -9,7 +9,7 @@ import { Table } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
 import { Search } from "@ren/util/search"
 import { RouterContext } from "../../lib/router-context.js"
@@ -18,7 +18,6 @@ import { Spaces } from "./spaces.js"
 
 export function SpaceMembers(props: { spaceId: string; organizationId: string; userId: string }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const space = useQuery(context.api.space.get.queryOptions({ idOrSlug: props.spaceId }))
   const members = useQuery(
     context.api["space-member"].list.queryOptions({
@@ -36,12 +35,6 @@ export function SpaceMembers(props: { spaceId: string; organizationId: string; u
   const canAddMember = space.data?.canAddMember ?? false
   const canRemoveMember = space.data?.canRemoveMember ?? false
   const visible = Spaces.memberRows(items, props.userId).filter((row) => Search.matches([row.name, row.email], needle))
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: context.api["space-member"].list.queryKey() }),
-      queryClient.invalidateQueries({ queryKey: context.api.space.get.queryKey() }),
-      queryClient.invalidateQueries({ queryKey: context.api.space.list.queryKey() }),
-    ])
   const state = { pending: "loading", error: "failed", success: visible.length > 0 ? "ready" : "empty" } as const
   return (
     <>
@@ -72,10 +65,9 @@ export function SpaceMembers(props: { spaceId: string; organizationId: string; u
           organizationId={props.organizationId}
           members={items}
           onClose={() => setAdding(false)}
-          onChanged={refresh}
         />
       ) : null}
-      <RemoveMemberDialog member={removing} open={confirming} onOpenChange={setConfirming} onRemoved={refresh} />
+      <RemoveMemberDialog member={removing} open={confirming} onOpenChange={setConfirming} />
     </>
   )
 }
@@ -84,7 +76,6 @@ function RemoveMemberDialog(props: {
   member: Spaces.MemberRow | undefined
   open: boolean
   onOpenChange: (open: boolean) => void
-  onRemoved: () => Promise<unknown>
 }) {
   const context = RouterContext.useRouterContext()
   const remove = useMutation(context.api["space-member"].archive.mutationOptions())
@@ -104,7 +95,6 @@ function RemoveMemberDialog(props: {
       onConfirm={async () => {
         if (!props.member) return
         await remove.mutateAsync({ id: props.member.id })
-        await props.onRemoved()
       }}
       onConfirmed={() => Toast.manager.add({ type: "success", title: `${props.member?.name ?? "Member"} removed` })}
     />

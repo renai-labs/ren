@@ -16,7 +16,7 @@ import { Text } from "@ren/ui/text"
 import { TextField } from "@ren/ui/text-field"
 import { Toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Schema } from "effect"
 import { useDeferredValue, useState } from "react"
 import type { ReactNode } from "react"
@@ -36,12 +36,10 @@ const matches = (reference: ReferenceInfo, needle: string) =>
 
 function useSave(spaceId: string, settings: SettingsInfo | undefined) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const update = useMutation(context.api["space-settings"].update.mutationOptions())
   return async (references: ReadonlyArray<ReferenceInfo>) => {
     if (!settings) return
     await update.mutateAsync({ id: spaceId, settings: { ...settings, references: [...references] } })
-    await queryClient.invalidateQueries({ queryKey: context.api["space-settings"].get.queryKey() })
   }
 }
 

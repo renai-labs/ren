@@ -2,7 +2,7 @@ export * as ChannelMappingData from "./channel-mapping-data.js"
 
 import type { ChannelMappingInfo, ChannelTriggerSetting } from "@ren/client"
 import { Pagination } from "@ren/schema/pagination"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Pages } from "../../lib/pages.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -46,14 +46,8 @@ export function useSpaces() {
 
 export function useChanges() {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: context.api["channel-mapping"].list.queryKey() }),
-      queryClient.invalidateQueries({ queryKey: context.api["channel-connect"]["channel-place"].list.queryKey() }),
-    ])
-  const create = useMutation({ ...context.api["channel-mapping"].create.mutationOptions(), onSuccess: refresh })
-  const remove = useMutation({ ...context.api["channel-mapping"].remove.mutationOptions(), onSuccess: refresh })
+  const create = useMutation(context.api["channel-mapping"].create.mutationOptions())
+  const remove = useMutation(context.api["channel-mapping"].remove.mutationOptions())
   return {
     pending: create.isPending || remove.isPending,
     creating: create.isPending,

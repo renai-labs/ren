@@ -14,7 +14,7 @@ import { PageShell } from "@ren/ui/page-shell"
 import { Select } from "@ren/ui/select"
 import { StateMessage } from "@ren/ui/state-message"
 import { Text } from "@ren/ui/text"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Struct } from "effect"
 import { Pages } from "../../lib/pages.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -54,7 +54,6 @@ const withHandoff = (entry: FactoryEntry, edge: FactoryEdge) =>
 
 export function SpaceFactory(props: { spaceId: string }) {
   const context = RouterContext.useRouterContext()
-  const client = useQueryClient()
   const space = useQuery(context.api.space.get.queryOptions({ idOrSlug: props.spaceId }))
   const agents = useQuery(
     Pages.all((page) =>
@@ -66,14 +65,7 @@ export function SpaceFactory(props: { spaceId: string }) {
       }),
     ),
   )
-  const update = useMutation({
-    ...context.api.space.update.mutationOptions(),
-    onSuccess: () =>
-      Promise.all([
-        client.invalidateQueries({ queryKey: context.api.space.get.queryKey() }),
-        client.invalidateQueries({ queryKey: context.api.space.list.queryKey() }),
-      ]),
-  })
+  const update = useMutation(context.api.space.update.mutationOptions())
   if (space.isError || agents.isError)
     return (
       <StateMessage

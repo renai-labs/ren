@@ -1,9 +1,11 @@
+import type { SessionInfo } from "@ren/client"
 import { createFileRoute, lazyRouteComponent } from "@tanstack/react-router"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Effect, Schema } from "effect"
 import { lazy, Suspense } from "react"
 import { RouteError } from "../../../../../components/error-page.js"
+import { Seed } from "../../../../../lib/seed.js"
 
 export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
   validateSearch: Schema.toStandardSchemaV1(
@@ -16,9 +18,14 @@ export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
   loader: async (options) => {
     // oxlint-disable-next-line ren/no-comments -- The router preloads only the route's own component; SessionRoute renders SessionPage, so the loader loads it, and it never suspends in a render.
     await SessionPage.preload?.()
-    return options.context.queryClient.query(
-      options.context.api.session.get.queryOptions({ idOrSlug: options.params.sessionId }),
-    )
+    return options.context.queryClient.query({
+      ...options.context.api.session.get.queryOptions({ idOrSlug: options.params.sessionId }),
+      ...Seed.fromList<SessionInfo>(
+        options.context.queryClient,
+        options.context.api.session.list.queryKey(),
+        options.params.sessionId,
+      ),
+    })
   },
   head: (options) => ({ meta: [{ title: `${options.loaderData?.title ?? "Chat"} · Ren` }] }),
   errorComponent: (props) => <RouteError error={props.error} />,

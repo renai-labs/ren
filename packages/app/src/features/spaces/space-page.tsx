@@ -10,7 +10,7 @@ import { Notice } from "@ren/ui/notice"
 import { PageShell } from "@ren/ui/page-shell"
 import { Tabs } from "@ren/ui/tabs"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router"
 import { useState } from "react"
 import type { ReactNode } from "react"
@@ -19,7 +19,6 @@ import { RouterContext } from "../../lib/router-context.js"
 export function SpacePage(props: { spaceId: string; children: ReactNode }) {
   const context = RouterContext.useRouterContext()
   const authed = useRouteContext({ from: "/_authed" })
-  const queryClient = useQueryClient()
   const space = useQuery(context.api.space.get.queryOptions({ idOrSlug: props.spaceId }))
   const join = useMutation(context.api["space-member"].create.mutationOptions())
   if (!space.data) return null
@@ -79,16 +78,7 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
                 appearance="primary"
                 size="small"
                 disabled={join.isPending}
-                onClick={() =>
-                  join.mutate(
-                    { payload: { spaceId: props.spaceId, userId } },
-                    {
-                      onSuccess: () => {
-                        void queryClient.invalidateQueries({ queryKey: context.api.space.get.queryKey() })
-                      },
-                    },
-                  )
-                }
+                onClick={() => join.mutate({ payload: { spaceId: props.spaceId, userId } })}
               >
                 Join space
               </Button>
@@ -106,7 +96,6 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
 
 function SpaceMenu(props: { space: SpaceInfo }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const archive = useMutation(context.api.space.archive.mutationOptions())
   const [confirming, setConfirming] = useState(false)
@@ -135,7 +124,6 @@ function SpaceMenu(props: { space: SpaceInfo }) {
         tone="danger"
         onConfirm={async () => {
           await archive.mutateAsync({ id: props.space.id })
-          await queryClient.invalidateQueries({ queryKey: context.api.space.list.queryKey() })
         }}
         onConfirmed={() => {
           Toast.manager.add({ type: "success", title: `${props.space.name} archived` })

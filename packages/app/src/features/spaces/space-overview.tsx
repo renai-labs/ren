@@ -2,20 +2,17 @@ import { Field } from "@ren/ui/field"
 import { InlineEdit } from "@ren/ui/inline-edit"
 import { PageShell } from "@ren/ui/page-shell"
 import { Text } from "@ren/ui/text"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Forms } from "../../lib/forms.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 export function SpaceOverview(props: { spaceId: string }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
-  const options = context.api.space.get.queryOptions({ idOrSlug: props.spaceId })
-  const space = useQuery(options)
+  const space = useQuery(context.api.space.get.queryOptions({ idOrSlug: props.spaceId }))
   const update = useMutation(context.api.space.update.mutationOptions())
   if (!space.data) return null
   const save = async (change: { name?: string; description?: string | null }) => {
-    queryClient.setQueryData(options.queryKey, await update.mutateAsync({ id: props.spaceId, ...change }))
-    await queryClient.invalidateQueries({ queryKey: context.api.space.list.queryKey() })
+    await update.mutateAsync({ id: props.spaceId, ...change })
   }
   return (
     <PageShell.Section frame="divided">

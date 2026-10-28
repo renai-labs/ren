@@ -5,7 +5,7 @@ import { LoadingMessage } from "@ren/ui/loading-message"
 import { StateMessage } from "@ren/ui/state-message"
 import { Toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { ProfileDialog } from "../../components/profile-dialog.js"
@@ -29,7 +29,6 @@ export function SpaceApps(props: {
   onAppChange: (appId?: string) => void
 }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const catalog = Apps.useCatalog()
   const space = useQuery(context.api.space.get.queryOptions({ idOrSlug: props.spaceId }))
   const reach = useQuery({
@@ -39,14 +38,8 @@ export function SpaceApps(props: {
   const access = useMutation(context.api["app-profile"].access.mutationOptions())
   const [dialog, setDialog] = useState<Opened>()
   const [adding, setAdding] = useState(false)
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: context.api["app-profile-reach"].space.profiles.queryKey() }),
-      queryClient.invalidateQueries({ queryKey: context.api["app-profile"].list.queryKey() }),
-    ])
   const change = (input: Access, title: string) =>
     access.mutate(input, {
-      onSuccess: () => void refresh(),
       onError: (error) => Toast.manager.add({ type: "error", title, description: error.message }),
     })
   const byApp = Map.groupBy(reach.data?.profiles ?? [], (profile) => profile.appId)
@@ -89,7 +82,6 @@ export function SpaceApps(props: {
           added={new Set(byApp.keys())}
           onAdded={(added) => {
             setAdding(false)
-            void refresh()
             setDialog(added)
           }}
           onClose={() => setAdding(false)}
@@ -100,10 +92,7 @@ export function SpaceApps(props: {
           appId={dialog.appId}
           {...(dialog.profileId && { profileId: dialog.profileId })}
           {...(space.data && { from: { spaceId: props.spaceId, kind: space.data.kind } })}
-          onClose={() => {
-            setDialog(undefined)
-            void refresh()
-          }}
+          onClose={() => setDialog(undefined)}
         />
       ) : null}
     </>

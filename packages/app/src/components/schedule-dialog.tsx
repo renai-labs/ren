@@ -12,7 +12,7 @@ import { Notice } from "@ren/ui/notice"
 import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { localTimeZone, Time, timeZones } from "@ren/ui/time"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Option, Schema } from "effect"
 import { useState } from "react"
 import { Pages } from "../lib/pages.js"
@@ -56,7 +56,6 @@ const zones = timeZones().map((zone) => ({ value: zone, label: zone, keywords: [
 // oxlint-disable-next-line ren/no-comments -- Create or update, and refresh the lists that show schedules.
 function useSave(schedule: ScheduleInfo | undefined, target: ScheduleTarget, onSaved: () => void) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const create = useMutation(context.api.schedule.create.mutationOptions())
   const update = useMutation(context.api.schedule.update.mutationOptions())
   const [problem, setProblem] = useState<string>()
@@ -80,8 +79,6 @@ function useSave(schedule: ScheduleInfo | undefined, target: ScheduleTarget, onS
           })
     ).catch(() => undefined)
     if (!saved) return
-    await queryClient.invalidateQueries({ queryKey: context.api.schedule.list.queryKey() })
-    await queryClient.invalidateQueries({ queryKey: context.api.schedule.get.queryKey() })
     onSaved()
   }
   return {

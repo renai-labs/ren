@@ -8,7 +8,7 @@ import { Field } from "@ren/ui/field"
 import { Form } from "@ren/ui/form"
 import { Notice } from "@ren/ui/notice"
 import { RadioGroup } from "@ren/ui/radio-group"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Schema } from "effect"
 import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
@@ -53,7 +53,6 @@ function CreateProfile(props: {
   onCreated: (id: string) => void
 }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const create = useMutation(context.api["app-profile"].create.mutationOptions())
   const spaces = useQuery(context.api.space.list.queryOptions(page))
   const kinds = Profiles.kinds(props.from)
@@ -74,7 +73,6 @@ function CreateProfile(props: {
         })
         .catch(() => undefined)
       if (!created) return
-      await queryClient.invalidateQueries({ queryKey: context.api["app-profile"].list.queryKey() })
       props.onCreated(created.id)
     },
   })

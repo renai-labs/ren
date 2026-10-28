@@ -3,7 +3,7 @@ export * as ScheduleActions from "./schedule-actions.js"
 import type { ScheduleInfo } from "@ren/client"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
 import { ScheduleDialog } from "./schedule-dialog.js"
@@ -18,32 +18,21 @@ const toggleOf = (schedule: ScheduleInfo, actions: { readonly resume: () => void
 // oxlint-disable-next-line ren/no-comments -- schedules S23, S24: run now, pause or resume, edit and archive, for the row menu and the detail.
 export function useActions(schedule: ScheduleInfo, options: { readonly onArchived?: () => void } = {}) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [archiving, setArchiving] = useState(false)
-  const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: context.api.schedule.list.queryKey() })
-    await queryClient.invalidateQueries({ queryKey: context.api.schedule.get.queryKey() })
-    await queryClient.invalidateQueries({ queryKey: context.api["schedule-run"].list.queryKey() })
-  }
   const failed = (title: string) => (error: Error) =>
     Toast.manager.add({ type: "error", title, description: error.message })
   const run = useMutation({
     ...context.api.schedule.run.mutationOptions(),
-    onSuccess: () => {
-      Toast.manager.add({ type: "success", title: `${schedule.name} is running` })
-      return refresh()
-    },
+    onSuccess: () => Toast.manager.add({ type: "success", title: `${schedule.name} is running` }),
     onError: failed("Couldn’t run the schedule"),
   })
   const pause = useMutation({
     ...context.api.schedule.pause.mutationOptions(),
-    onSuccess: refresh,
     onError: failed("Couldn’t pause the schedule"),
   })
   const resume = useMutation({
     ...context.api.schedule.resume.mutationOptions(),
-    onSuccess: refresh,
     onError: failed("Couldn’t resume the schedule"),
   })
   const archive = useMutation(context.api.schedule.archive.mutationOptions())
@@ -68,10 +57,7 @@ export function useActions(schedule: ScheduleInfo, options: { readonly onArchive
           description="It stops running. Chats it started stay."
           confirmLabel="Archive"
           tone="danger"
-          onConfirm={async () => {
-            await archive.mutateAsync({ id })
-            await refresh()
-          }}
+          onConfirm={() => archive.mutateAsync({ id })}
           onConfirmed={() => {
             Toast.manager.add({ type: "success", title: `${schedule.name} archived` })
             options.onArchived?.()

@@ -10,7 +10,7 @@ import { Notice } from "@ren/ui/notice"
 import { SearchField } from "@ren/ui/search-field"
 import { Toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { PasteCredentialDialog } from "../../components/paste-credential-dialog.js"
@@ -20,7 +20,6 @@ import { Owners } from "./owners.js"
 
 export function SpaceCredentials(props: { spaceId: string; userId: string }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const all = useQuery(context.api.credential.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
   const spaces = useQuery(
     context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize, joined: true }),
@@ -42,7 +41,6 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
       Credentials.canCopy(item) &&
       !here.some((own) => own.label === item.label),
   )
-  const refresh = () => queryClient.invalidateQueries({ queryKey: context.api.credential.list.queryKey() })
   const state = { pending: "loading", error: "failed", success: visible.length > 0 ? "ready" : "empty" } as const
   return (
     <>
@@ -85,7 +83,6 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
         owners={Owners.options(spaceList)}
         userId={props.userId}
         emptyMessage="No credentials"
-        onChanged={refresh}
       />
       {creating ? (
         <PasteCredentialDialog
@@ -95,7 +92,6 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
           userId={props.userId}
           submitLabel="Save credential"
           onClose={() => setCreating(false)}
-          onSaved={refresh}
         />
       ) : null}
       {copying ? (
@@ -104,7 +100,6 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
           candidates={elsewhere}
           spaces={names}
           onClose={() => setCopying(false)}
-          onCopied={refresh}
         />
       ) : null}
     </>
@@ -116,7 +111,6 @@ function CopyFromSpaceDialog(props: {
   candidates: ReadonlyArray<CredentialInfo>
   spaces: ReadonlyMap<string, string>
   onClose: () => void
-  onCopied: () => Promise<unknown>
 }) {
   const context = RouterContext.useRouterContext()
   const copy = useMutation(context.api.credential.copy.mutationOptions())
@@ -150,7 +144,6 @@ function CopyFromSpaceDialog(props: {
                     onClick={() =>
                       void copy
                         .mutateAsync({ id: candidate.id, owner: { kind: "space", spaceId: props.spaceId } })
-                        .then(props.onCopied)
                         .then(() => Toast.manager.add({ type: "success", title: `${candidate.label} copied` }))
                         .catch(() => undefined)
                     }

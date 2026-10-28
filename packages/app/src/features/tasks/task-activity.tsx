@@ -9,7 +9,7 @@ import { Notice } from "@ren/ui/notice"
 import { PageShell } from "@ren/ui/page-shell"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { Schema } from "effect"
 import { RouterContext } from "../../lib/router-context.js"
@@ -110,7 +110,7 @@ function ActivityGroup(props: { quiet: boolean; children: ReadonlyArray<ReactNod
 
 function CommentComposer(props: { taskId: string }) {
   const context = RouterContext.useRouterContext()
-  const create = Tasks.useTaskMutation(context.api["task-comment"].create.mutationOptions())
+  const create = useMutation(context.api["task-comment"].create.mutationOptions())
   const [composing, setComposing] = useState(false)
   if (composing)
     return (
@@ -260,8 +260,8 @@ function FieldEvent(props: { data: Extract<TaskEventData, { _tag: "field" }> }) 
 
 function Comment(props: { comment: TaskCommentInfo; author: string }) {
   const context = RouterContext.useRouterContext()
-  const edit = Tasks.useTaskMutation(context.api["task-comment"].update.mutationOptions())
-  const archive = Tasks.useTaskMutation(context.api["task-comment"].archive.mutationOptions())
+  const edit = useMutation(context.api["task-comment"].update.mutationOptions())
+  const archive = useMutation(context.api["task-comment"].archive.mutationOptions())
   const [editing, setEditing] = useState(false)
   return (
     <article aria-label={`Comment by ${props.author}`} className="flex flex-col gap-3">

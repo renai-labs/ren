@@ -5,7 +5,7 @@ import { Icon } from "@ren/ui/icon"
 import { IconButton } from "@ren/ui/icon-button"
 import { Menu } from "@ren/ui/menu"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
@@ -16,7 +16,6 @@ const signsIn = (item: AppProfileItem) => "mcp" in item.item && (item.kind === "
 // oxlint-disable-next-line ren/no-comments -- A sign-in opens in a new tab; the lists ask again when the window gets focus.
 export function useSignIn() {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const platform = Platform.usePlatform()
   const connect = useMutation(context.api["credential-connect"].credential.connect.mutationOptions())
   const start = (profile: AppProfileInfo, item: AppProfileItem) => {
@@ -26,7 +25,6 @@ export function useSignIn() {
       {
         onSuccess: (result) => {
           if ("redirectUrl" in result) platform.openExternal(result.redirectUrl)
-          else void queryClient.invalidateQueries({ queryKey: context.api["app-profile"].list.queryKey() })
         },
         onError: (error) =>
           Toast.manager.add({ type: "error", title: `Couldn’t connect ${item.name}`, description: error.message }),

@@ -16,7 +16,9 @@ The product SPA and its web host. Desktop and mobile hosts will import it throug
 
 - Compose `@ren/ui`. App code only lays components out, with the layout classes lint allows. When something visual is missing, add or extend a component in `@ren/ui`.
 - Server data comes from the generated query options in `@ren/client/react`, preloaded in route loaders with `queryClient.query(options)`. Build the query options from `context.api`, the `RenQuery` factory in the router context.
-- Mutations invalidate or update the queries they affect.
+- A generated mutation invalidates its own resource group when it succeeds, through the `MutationCache` in `src/lib/runtime.ts`, and `mutateAsync` resolves after the active queries refetch. When a mutation changes another resource, add that group to `invalidates` there instead of invalidating in the feature. Invalidate by hand only after calls that are not generated mutations, such as Better Auth and `@ren/chat`.
+- A detail route's loader seeds its query from the cached lists with `Seed.fromList`, so a page opened from a list renders without waiting for a fetch.
+- In development, `LayoutShift.watch` logs every layout shift the user did not cause. Fix each one.
 - Realtime events from the sync layer write into the query cache.
 - State lives in one place:
   - Server data lives in TanStack Query.

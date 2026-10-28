@@ -71,7 +71,12 @@ function TimeElement(props: { value: DateInput; title?: string | undefined; chil
   const date = toDate(props.value)
   const valid = !Number.isNaN(date.getTime())
   return (
-    <time data-slot="time" dateTime={valid ? date.toISOString() : undefined} title={valid ? props.title : undefined}>
+    <time
+      data-slot="time"
+      className="tabular-nums"
+      dateTime={valid ? date.toISOString() : undefined}
+      title={valid ? props.title : undefined}
+    >
       {props.children}
     </time>
   )

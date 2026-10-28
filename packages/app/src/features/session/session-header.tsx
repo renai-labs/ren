@@ -93,7 +93,6 @@ function Actions(props: {
 }) {
   const context = RouterContext.useRouterContext()
   const platform = Platform.usePlatform()
-  const queryClient = useQueryClient()
   const write = platform.writeClipboardText
   const archive = useMutation(context.api.session.archive.mutationOptions())
   const [confirming, setConfirming] = useState(false)
@@ -174,13 +173,7 @@ function Actions(props: {
         description="It leaves your chat list. Only the API can bring it back."
         confirmLabel="Archive"
         tone="danger"
-        onConfirm={async () => {
-          await archive.mutateAsync({ id: props.sessionID })
-          queryClient.setQueriesData<SessionPage>({ queryKey: context.api.session.list.queryKey() }, (page) =>
-            page ? { ...page, items: page.items.filter((item) => item.id !== props.sessionID) } : page,
-          )
-          await queryClient.invalidateQueries({ queryKey: context.api.session.list.queryKey() })
-        }}
+        onConfirm={() => archive.mutateAsync({ id: props.sessionID })}
         onConfirmed={() => {
           Toast.manager.add({ type: "success", title: `${props.title} archived` })
           props.onArchived()

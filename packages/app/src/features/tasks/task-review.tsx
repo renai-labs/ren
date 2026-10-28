@@ -5,6 +5,7 @@ import { Button } from "@ren/ui/button"
 import { Document } from "@ren/ui/document"
 import { Form } from "@ren/ui/form"
 import { Notice } from "@ren/ui/notice"
+import { useMutation } from "@tanstack/react-query"
 import { Schema } from "effect"
 import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
@@ -37,7 +38,7 @@ function ReviewActions(props: { task: TaskInfo }) {
 
 function ReviewDecision(props: { task: TaskInfo; decision: Task.Decision; onCancel: () => void }) {
   const context = RouterContext.useRouterContext()
-  const review = Tasks.useTaskMutation(context.api.task.review.mutationOptions())
+  const review = useMutation(context.api.task.review.mutationOptions())
   return (
     <ReviewDecisionForm
       decision={props.decision}

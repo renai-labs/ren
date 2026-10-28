@@ -10,11 +10,7 @@ import type { Owners } from "./owners.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Credentials } from "../../components/credentials.js"
 
-export function RotateCredentialDialog(props: {
-  credential: CredentialInfo
-  onClose: () => void
-  onSaved: () => Promise<unknown>
-}) {
+export function RotateCredentialDialog(props: { credential: CredentialInfo; onClose: () => void }) {
   const context = RouterContext.useRouterContext()
   const rotate = useMutation(context.api.credential.rotate.mutationOptions())
   const form = Form.useForm({
@@ -25,7 +21,6 @@ export function RotateCredentialDialog(props: {
         .mutateAsync({ id: props.credential.id, value: { type: "key", value: value.value } })
         .catch(() => undefined)
       if (!saved) return
-      await props.onSaved()
       props.onClose()
       Toast.manager.add({ type: "success", title: `${props.credential.label} rotated` })
     },
@@ -67,7 +62,6 @@ export function MoveCredentialDialog(props: {
   owners: ReadonlyArray<Owners.Option>
   userId: string
   onClose: () => void
-  onSaved: () => Promise<unknown>
 }) {
   const context = RouterContext.useRouterContext()
   const move = useMutation(context.api.credential.move.mutationOptions())
@@ -84,7 +78,6 @@ export function MoveCredentialDialog(props: {
         () => undefined,
       )
       if (!saved) return
-      await props.onSaved()
       props.onClose()
       Toast.manager.add({
         type: "success",
@@ -144,7 +137,6 @@ export function DeleteCredentialDialog(props: {
   credential: CredentialInfo | undefined
   open: boolean
   onOpenChange: (open: boolean) => void
-  onDeleted: () => Promise<unknown>
 }) {
   const context = RouterContext.useRouterContext()
   const remove = useMutation(context.api.credential.remove.mutationOptions())
@@ -160,7 +152,6 @@ export function DeleteCredentialDialog(props: {
       onConfirm={async () => {
         if (!props.credential) return
         await remove.mutateAsync({ id: props.credential.id })
-        await props.onDeleted()
       }}
       onConfirmed={() => Toast.manager.add({ type: "success", title: `${label} deleted` })}
     />

@@ -5,7 +5,7 @@ import { Icon } from "@ren/ui/icon"
 import { Menu } from "@ren/ui/menu"
 import { Select } from "@ren/ui/select"
 import { StatusDot } from "@ren/ui/status-dot"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { useNavigate, useRouteContext } from "@tanstack/react-router"
 import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
@@ -47,7 +47,6 @@ type Dialogs =
 function Strip(props: { spaceId: string; profiles: ReadonlyArray<AppProfileInfo> }) {
   const context = RouterContext.useRouterContext()
   const authed = useRouteContext({ from: "/_authed" })
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const catalog = Apps.useCatalog()
   const space = useQuery(context.api.space.get.queryOptions({ idOrSlug: props.spaceId }))
@@ -147,7 +146,6 @@ function Strip(props: { spaceId: string; profiles: ReadonlyArray<AppProfileInfo>
         added={new Set(byApp.map(([appId]) => appId))}
         userId={authed.me.user.id}
         onChange={setDialog}
-        onSaved={() => queryClient.invalidateQueries({ queryKey: context.api.credential.list.queryKey() })}
       />
     </>
   )
@@ -160,7 +158,6 @@ function StripDialogs(props: {
   added: ReadonlySet<string>
   userId: string
   onChange: (dialog: Dialogs) => void
-  onSaved: () => Promise<unknown>
 }) {
   const dialog = props.dialog
   const close = () => props.onChange(undefined)
@@ -191,7 +188,6 @@ function StripDialogs(props: {
         userId={props.userId}
         submitLabel="Save credential"
         onClose={close}
-        onSaved={props.onSaved}
       />
     )
   return null

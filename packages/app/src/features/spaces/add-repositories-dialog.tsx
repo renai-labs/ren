@@ -10,7 +10,7 @@ import { Notice } from "@ren/ui/notice"
 import { Text } from "@ren/ui/text"
 import { TextField } from "@ren/ui/text-field"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
@@ -258,7 +258,6 @@ function usePlaces(): Places {
 
 export function SpaceAddRepositories(props: { spaceId: string; onClose: () => void }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const settings = useQuery(context.api["space-settings"].get.queryOptions({ idOrSlug: props.spaceId }))
   const update = useMutation(context.api["space-settings"].update.mutationOptions())
   const places = usePlaces()
@@ -275,7 +274,6 @@ export function SpaceAddRepositories(props: { spaceId: string; onClose: () => vo
           id: props.spaceId,
           settings: { ...current, references: [...references, ...added] },
         })
-        await queryClient.invalidateQueries({ queryKey: context.api["space-settings"].get.queryKey() })
         Toast.manager.add({
           type: "success",
           title:

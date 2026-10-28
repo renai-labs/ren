@@ -5,7 +5,6 @@ import { Pagination } from "@ren/schema/pagination"
 import type { Task } from "@ren/schema/task"
 import { Toast } from "@ren/ui/toast"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { UseMutationOptions } from "@tanstack/react-query"
 import { Struct } from "effect"
 import { Auth } from "../../lib/auth.js"
 import { Pages } from "../../lib/pages.js"
@@ -143,27 +142,7 @@ export function useLabels(options: { readonly enabled: boolean; readonly spaceId
 
 export function useCreateLabel() {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
-  return useMutation({
-    ...context.api.label.create.mutationOptions(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: context.api.label.list.queryKey() }),
-  })
-}
-
-function useRefresh() {
-  const context = RouterContext.useRouterContext()
-  const client = useQueryClient()
-  return () =>
-    Promise.all([
-      client.invalidateQueries({ queryKey: context.api.task.get.queryKey() }),
-      client.invalidateQueries({ queryKey: context.api.task.list.queryKey() }),
-      client.invalidateQueries({ queryKey: context.api["task-activity"].list.queryKey() }),
-      client.invalidateQueries({ queryKey: context.api.label.list.queryKey() }),
-    ])
-}
-
-export function useTaskMutation<A, I>(options: UseMutationOptions<A, Error, I>) {
-  return useMutation({ ...options, onSuccess: useRefresh() })
+  return useMutation(context.api.label.create.mutationOptions())
 }
 
 const labelNames = (labels: ReadonlyArray<LabelSummary>) => labels.map((label) => label.name)
@@ -177,10 +156,10 @@ const plural = (count: number) => `${count} ${count === 1 ? "task" : "tasks"}`
 
 export function useTaskActions() {
   const context = RouterContext.useRouterContext()
-  const refresh = useRefresh()
-  const updating = useTaskMutation(context.api.task.update.mutationOptions())
-  const assigning = useTaskMutation(context.api.task.assign.mutationOptions())
-  const creating = useTaskMutation(context.api.task.create.mutationOptions())
+  const queryClient = useQueryClient()
+  const updating = useMutation(context.api.task.update.mutationOptions())
+  const assigning = useMutation(context.api.task.assign.mutationOptions())
+  const creating = useMutation(context.api.task.create.mutationOptions())
   const update = (task: Pick<TaskInfo, "id">, patch: Patch) =>
     updating.mutateAsync({
       id: task.id,
@@ -202,7 +181,13 @@ export function useTaskActions() {
         return context.client.task.assign({ id: task.id, agentId: operation.agentId, start: "none" })
       return context.client.task.archive({ id: task.id })
     })
-    await refresh()
+    await Promise.all(
+      [
+        context.api.task.list.queryKey(),
+        context.api.task.get.queryKey(),
+        context.api["task-activity"].list.queryKey(),
+      ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+    )
     const failed = targets.filter((_task, index) => results[index]?.status === "rejected")
     const reason = results.find((result) => result.status === "rejected")
     const verb = { status: "Updated", move: "Moved", archive: "Archived" }[operation.kind]

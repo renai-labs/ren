@@ -1,4 +1,3 @@
-import type { CredentialInfo } from "@ren/client"
 import { Dialog } from "@ren/ui/dialog"
 import { Form } from "@ren/ui/form"
 import { Notice } from "@ren/ui/notice"
@@ -19,7 +18,6 @@ export function PasteCredentialDialog(props: {
   warning?: ReactNode
   submitLabel: string
   onClose: () => void
-  onSaved: (credential: CredentialInfo) => Promise<unknown>
 }) {
   const context = RouterContext.useRouterContext()
   const create = useMutation(context.api.credential.create.mutationOptions())
@@ -44,7 +42,6 @@ export function PasteCredentialDialog(props: {
         })
         .catch(() => undefined)
       if (!saved) return
-      await props.onSaved(saved)
       props.onClose()
     },
   })

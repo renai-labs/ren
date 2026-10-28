@@ -11,7 +11,7 @@ import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
@@ -29,7 +29,6 @@ export function ChannelProviderPage(props: {
   error?: string | undefined
 }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const provider = Channels.byId[props.provider]
   const installs = useQuery({
     ...context.api["channel-install"].list.queryOptions(page),
@@ -97,7 +96,6 @@ export function ChannelProviderPage(props: {
         onConfirm={async () => {
           if (!install) return
           await remove.mutateAsync({ id: install.id })
-          await queryClient.invalidateQueries({ queryKey: context.api["channel-install"].list.queryKey() })
         }}
         onConfirmed={() => Toast.manager.add({ type: "success", title: `${provider.title} mappings reset` })}
       />
@@ -107,7 +105,6 @@ export function ChannelProviderPage(props: {
 
 function DefaultSpace(props: { install: ChannelInstallInfo; noun: string }) {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
   const spaces = useQuery(context.api.space.list.queryOptions({ ...page, joined: true }))
   const update = useMutation(context.api["channel-install"].update.mutationOptions())
   const current = props.install.defaultSpace
@@ -130,15 +127,15 @@ function DefaultSpace(props: { install: ChannelInstallInfo; noun: string }) {
         disabled={!props.install.canUpdate || update.isPending}
         value={current?.id ?? first}
         onValueChange={(chosen) =>
-          void update.mutateAsync({ id: props.install.id, defaultSpaceId: chosen === first ? null : chosen }).then(
-            () => queryClient.invalidateQueries({ queryKey: context.api["channel-install"].list.queryKey() }),
-            (cause: unknown) =>
+          void update
+            .mutateAsync({ id: props.install.id, defaultSpaceId: chosen === first ? null : chosen })
+            .catch((cause: unknown) =>
               Toast.manager.add({
                 type: "error",
                 title: "Couldn’t change the default space",
                 description: Channels.describe(cause),
               }),
-          )
+            )
         }
         options={options}
       />
