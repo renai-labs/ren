@@ -10,7 +10,7 @@ import { InfraFixture } from "./lib/infra.js"
 const it = testEffect(InfraFixture.layer(ChannelProvider.layer(Effect.succeed([]))))
 
 const skill = (instructions: string) => ({
-  type: "content",
+  type: "content" as const,
   description: "Takes notes.",
   instructions,
 })
