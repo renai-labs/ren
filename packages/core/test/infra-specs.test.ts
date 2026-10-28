@@ -1,72 +1,32 @@
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
-import { Testing } from "@ren/db/testing"
 import { App } from "@ren/schema/app"
-import type { Auth } from "@ren/schema/auth"
 import { Infra } from "@ren/schema/infra"
-import { eq } from "drizzle-orm"
-import { Effect, Layer, Schema } from "effect"
-import { Access } from "../src/access.js"
+import { Effect, Schema } from "effect"
 import { Agent } from "../src/agent.js"
 import { AgentMembership } from "../src/agent/membership.js"
-import { EgressControl } from "../src/egress-control.js"
+import { ChannelProvider } from "../src/channel-provider.js"
 import { InfraSpecs } from "../src/infra-specs.js"
 import { OrganizationSettings } from "../src/organization-settings.js"
-import { ReferenceCheck } from "../src/reference-check.js"
 import { Space } from "../src/space.js"
-import { SpaceMember } from "../src/space/member.js"
 import { SpaceSettings } from "../src/space/settings.js"
 import { testEffect } from "./lib/effect.js"
+import { InfraFixture } from "./lib/infra.js"
 import { Seed } from "./lib/seed.js"
 
-const it = testEffect(
-  InfraSpecs.layer.pipe(
-    Layer.provideMerge(
-      Layer.mergeAll(Agent.layer, AgentMembership.layer, OrganizationSettings.layer, SpaceSettings.layer),
-    ),
-    Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer)),
-    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, ReferenceCheck.layerNone)),
-    Layer.provideMerge(Testing.layer),
-  ),
-)
+const it = testEffect(InfraFixture.layer(ChannelProvider.layer(Effect.succeed([]))))
 
-const empty = { permissions: [], references: [] }
+const empty = InfraFixture.empty
 
-const spec = (spaces: Record<string, unknown>, org: Record<string, unknown> = {}) =>
-  Schema.decodeUnknownSync(Infra.Spec)({ org: { settings: org }, spaces })
+const spec = InfraFixture.spec
 
-const org = Effect.gen(function* () {
-  const spaces = yield* Space.Service
-  const organizationId = yield* Seed.organization()
-  const admin = yield* Seed.actor(organizationId, "admin")
-  const home = yield* spaces.create(admin, { name: "Home", slug: "home" })
-  return { organizationId, admin, home, bindings: { organization: organizationId.toLowerCase(), spaces: {} } }
-})
+const org = InfraFixture.org
 
-const privateSpace = Effect.fnUntraced(function* (o: { readonly organizationId: Auth.OrganizationID }, slug: string) {
-  const database = yield* Database.Service
-  const owner = yield* Seed.actor(o.organizationId, "member")
-  const id = yield* Seed.space(o.organizationId)
-  yield* database.db
-    .update(Database.Schema.space)
-    .set({ slug, kind: "private", owner_user_id: owner.userId })
-    .where(eq(Database.Schema.space.id, id))
-  yield* Seed.join(id, owner.userId)
-  return id
-})
+const privateSpace = InfraFixture.privateSpace
 
-const replan = (pulled: Infra.Pulled) =>
-  Schema.encodeEffect(Infra.Pulled)(pulled).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Infra.PlanInput)),
-    Effect.orDie,
-  )
+const replan = InfraFixture.replan
 
-const change = (
-  action: Infra.Change["action"],
-  kind: Infra.Change["kind"],
-  path: string,
-  more: { readonly fields?: ReadonlyArray<string>; readonly from?: string } = {},
-) => ({ action, kind, path, fields: more.fields ?? [], ...(more.from && { from: more.from }) })
+const change = InfraFixture.change
 
 describe("InfraSpecs", () => {
   it.live("pull writes the shared spaces with their agents, settings and uses, and its plan has no changes", () =>
@@ -98,11 +58,19 @@ describe("InfraSpecs", () => {
       const pulled = yield* infra.pull(o.admin)
 
       expect(pulled).toEqual({
-        bindings: { organization: o.bindings.organization },
+        bindings: { organization: o.bindings.organization, spaces: {} },
         spec: {
           org: { settings: { ...empty, instructions: "Be brief." } },
           spaces: {
-            home: { name: "Home", settings: empty, agents: {}, uses: { agents: ["build"] } },
+            home: {
+              name: "Home",
+              settings: empty,
+              agents: {},
+              apps: {},
+              schedules: {},
+              channels: {},
+              uses: { agents: ["build"] },
+            },
             engineering: {
               name: "Engineering",
               description: "Builds.",
@@ -114,6 +82,9 @@ describe("InfraSpecs", () => {
                   settings: { ...empty, instructions: "Test first." },
                 },
               },
+              apps: {},
+              schedules: {},
+              channels: {},
               uses: { agents: [] },
             },
           },
@@ -294,16 +265,17 @@ describe("InfraSpecs", () => {
     }),
   )
 
-  it.live("a plan cannot archive a space that still owns apps", () =>
+  it.live("a plan archives the apps of a space it archives, before the space", () =>
     Effect.gen(function* () {
       const spaces = yield* Space.Service
       const database = yield* Database.Service
       const infra = yield* InfraSpecs.Service
       const o = yield* org
       const eng = yield* spaces.create(o.admin, { name: "Eng", slug: "eng" })
+      const slug = `notes-${eng.id.toLowerCase()}`
       yield* database.db.insert(Database.Schema.app).values({
         id: App.ID.create(),
-        slug: `notes-${eng.id.toLowerCase()}`,
+        slug,
         organization_id: o.organizationId,
         owner_space_id: eng.id,
         name: "Notes",
@@ -312,15 +284,16 @@ describe("InfraSpecs", () => {
         mcps: {},
         skills: {},
       })
+      const input = { bindings: o.bindings, spec: spec({ home: { name: "Home" } }) }
 
-      const plan = yield* infra.plan(o.admin, { bindings: o.bindings, spec: spec({ home: { name: "Home" } }) })
+      const plan = yield* infra.plan(o.admin, input)
 
-      expect(plan.problems).toEqual([
-        {
-          path: "spaces/eng",
-          message: `This space owns apps notes-${eng.id.toLowerCase()}. Move or archive them in the app first.`,
-        },
-      ])
+      expect(plan).toMatchObject({
+        changes: [change("archive", "app", `spaces/eng/apps/${slug}`), change("archive", "space", "spaces/eng")],
+        problems: [],
+      })
+      yield* infra.apply(o.admin, { ...input, digest: plan.digest })
+      expect(yield* infra.plan(o.admin, input)).toMatchObject({ changes: [], problems: [] })
     }),
   )
 
@@ -412,23 +385,18 @@ describe("InfraSpecs", () => {
       const o = yield* org
 
       const plan = yield* infra.plan(o.admin, {
-        bindings: {
+        bindings: Schema.decodeUnknownSync(Infra.Bindings)({
           organization: o.bindings.organization,
-          spaces: { home: { profiles: { linear: ["acme"] }, channels: {}, webhooks: {} } },
-        },
-        spec: spec({
-          home: {
-            name: "Home",
-            apps: { notes: { name: "Notes", description: "Writes notes." } },
-            schedules: { nightly: { cron: "0 3 * * *", timeZone: "UTC", message: "Go." } },
-          },
+          spaces: { home: { timezone: "Asia/Kolkata", webhooks: { hook: { secret: "HOOK" } } }, gone: {} },
         }),
+        spec: spec({ home: { name: "Home", webhooks: { hook: { purpose: "Deploys." } } } }),
       })
 
       expect(plan.problems).toEqual([
-        { path: "deploy.yaml", message: "Infra does not apply the bindings of spaces yet." },
-        { path: "spaces/home/apps", message: "Infra does not apply apps yet." },
-        { path: "spaces/home/schedules", message: "Infra does not apply schedules yet." },
+        { path: "deploy.yaml/spaces/gone", message: "deploy.yaml binds space “gone”, which the spec does not declare." },
+        { path: "deploy.yaml/spaces/home/timezone", message: "Infra does not apply the timezone of a space yet." },
+        { path: "deploy.yaml/spaces/home/webhooks", message: "Infra does not apply webhooks yet." },
+        { path: "spaces/home/webhooks", message: "Infra does not apply webhooks yet." },
       ])
     }),
   )

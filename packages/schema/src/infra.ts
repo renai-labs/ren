@@ -248,7 +248,16 @@ export const Bindings = Schema.Struct({
   spaces: Schema.Record(Primitive.Slug, SpaceBindings).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
 }).annotate({ identifier: "Infra.Bindings" })
 
-export const Kind = Schema.Literals(["organization", "space", "agent", "membership"]).annotate({
+export const Kind = Schema.Literals([
+  "organization",
+  "space",
+  "agent",
+  "membership",
+  "app",
+  "schedule",
+  "channel",
+  "profile",
+]).annotate({
   identifier: "Infra.Kind",
 })
 export type Kind = typeof Kind.Type
@@ -259,7 +268,7 @@ export const Change = Schema.Struct({
   kind: Kind,
   path: Schema.String.annotate({
     description:
-      "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name> or spaces/<slug>/uses/agents/<name>.",
+      "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/channels/<slug> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
   }),
   from: Schema.optionalKey(Schema.String.annotate({ description: "The path before a rename or a move." })),
   fields: Schema.Array(Schema.String).annotate({ description: "The fields that an update changes." }),
@@ -294,12 +303,24 @@ export const PulledSpace = Schema.Struct({
   settings: Settings.Info,
   factory: Schema.optionalKey(FactoryDeclaration),
   agents: Schema.Record(Agent.Name, Agent.Declaration),
+  apps: Schema.Record(Primitive.Slug, App.Declaration),
+  schedules: Schema.Record(Primitive.Slug, Schedule.Declaration),
+  channels: Schema.Record(Primitive.Slug, Channel.Declaration),
   uses: Uses,
 }).annotate({ identifier: "Infra.PulledSpace" })
 
+export interface PulledBindings extends Schema.Schema.Type<typeof PulledBindings> {}
+export const PulledBindings = Schema.Struct({
+  channels: SpaceBindings.fields.channels,
+  profiles: SpaceBindings.fields.profiles,
+}).annotate({ identifier: "Infra.PulledBindings" })
+
 export interface Pulled extends Schema.Schema.Type<typeof Pulled> {}
 export const Pulled = Schema.Struct({
-  bindings: Schema.Struct({ organization: Bindings.fields.organization }),
+  bindings: Schema.Struct({
+    organization: Bindings.fields.organization,
+    spaces: Schema.Record(Primitive.Slug, PulledBindings),
+  }),
   spec: Schema.Struct({
     org: OrganizationSettings.UpdateInput,
     spaces: Schema.Record(Primitive.Slug, PulledSpace),
@@ -307,5 +328,5 @@ export const Pulled = Schema.Struct({
 }).annotate({
   identifier: "Infra.Pulled",
   description:
-    "The part of the org spec that infra applies today: organization settings, shared spaces and their agents.",
+    "The part of the org spec that infra applies today: organization settings, shared spaces with their agents, apps, schedules and channels, and the channel and profile bindings of each space.",
 })
