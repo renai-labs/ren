@@ -65,6 +65,15 @@ describe("ren2", () => {
     expect(nested.stderr).toBe("")
   })
 
+  test("without a subcommand, a terminal shows only the help, led by the description", async () => {
+    const result = await ren(["--output", "pretty"])
+
+    expect(result.code).toBe(2)
+    expect(result.stderr).toStartWith("Ren CLI\n\nUSAGE\n")
+    expect(result.stderr).not.toContain("DESCRIPTION")
+    expect(result.stderr).not.toContain("Choose a subcommand")
+  })
+
   test("prints a shell completion script that covers generated resources", async () => {
     const result = await ren(["--completions", "zsh"])
 

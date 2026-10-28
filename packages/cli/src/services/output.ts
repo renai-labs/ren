@@ -41,6 +41,7 @@ export class Service extends Context.Service<
     ) => Effect.Effect<void, Schema.SchemaError, S["EncodingServices"]>
     readonly print: (text: string) => Effect.Effect<void>
     readonly diagnostic: (text: string) => Effect.Effect<void>
+    readonly progress: (text: string) => Effect.Effect<void>
     readonly confirm: (organization: string) => Effect.Effect<boolean, Terminal.QuitError>
   }
 >()("@ren/cli/Output") {}
@@ -68,6 +69,7 @@ export const layer = Layer.effect(
             ),
       print: (text) => write(1, text),
       diagnostic: (text) => write(2, text),
+      progress: (text) => (format === "pretty" && process.stderr.isTTY ? write(2, text) : Effect.void),
       confirm: Effect.fn("Output.confirm")(function* (organization) {
         yield* Effect.sync(() => {
           writeSync(2, `\nType ${organization} to apply: `)

@@ -71,6 +71,7 @@ export const run = Effect.fn("Upgrade.run")(function* (
   const asset = `ren2-${process.platform}-${process.arch}`
   const url = `${origin}/ren2/releases/${wanted}/${asset}`
   const unavailable = () => new Output.Failure({ message: `Couldn’t download ren2 v${wanted}.` })
+  yield* output.progress(`Downloading ren2 v${wanted}…`)
   const bytes = new Uint8Array(
     yield* http.get(url).pipe(
       Effect.flatMap((response) => response.arrayBuffer),

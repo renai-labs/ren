@@ -20,7 +20,7 @@ while [ "$#" -gt 0 ]; do
 Install ren2
 
   --version <version>  Install a specific release
-  --no-modify-path     Leave shell config alone
+  --no-modify-path     Leave PATH and shell config alone
   --no-init            Skip onboarding
   --help              Show help
 
@@ -79,7 +79,12 @@ mkdir -p "$directory"
 temporary=$(mktemp -d "$directory/.install.XXXXXX")
 trap 'rm -rf "$temporary"' EXIT
 url="$host/ren2/releases/$version/$asset"
-download "$url" -o "$temporary/ren2" || fail "Could not download ren2 $version"
+printf 'Downloading ren2 v%s (%s-%s)\n' "$version" "$os" "$arch"
+if [ -t 2 ]; then
+  download --no-silent --progress-bar "$url" -o "$temporary/ren2" || fail "Could not download ren2 $version"
+else
+  download "$url" -o "$temporary/ren2" || fail "Could not download ren2 $version"
+fi
 download "$url.sha256" -o "$temporary/checksum" || fail 'Could not download the checksum'
 read -r expected filename extra < "$temporary/checksum" || fail 'Invalid checksum file'
 [[ "$expected" =~ ^[0-9a-f]{64}$ ]] && [ "$filename" = "$asset" ] && [ -z "$extra" ] || fail 'Invalid checksum file'
@@ -95,6 +100,27 @@ chmod 755 "$temporary/ren2"
 installed=$("$temporary/ren2" --version) || fail 'The downloaded executable could not start'
 [ "$installed" = "ren2 v$version" ] || fail 'The downloaded executable has the wrong version'
 mv -f "$temporary/ren2" "$directory/ren2"
+printf 'Installed %s at %s/ren2\n' "$installed" "$directory"
+
+on_path() {
+  case ":$PATH:" in
+    *":$1:"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+linked=
+if [ "$modify_path" = true ] && ! on_path "$directory"; then
+  for bin in "$HOME/.local/bin" "$HOME/bin"; do
+    if on_path "$bin" && [ -d "$bin" ] && [ -w "$bin" ] &&
+      { [ ! -e "$bin/ren2" ] || [ "$(readlink "$bin/ren2")" = "$directory/ren2" ]; }; then
+      ln -sf "$directory/ren2" "$bin/ren2"
+      linked="$bin/ren2"
+      printf 'Linked %s\n' "$linked"
+      break
+    fi
+  done
+fi
 
 profile=
 line="export PATH=\"\$HOME/.ren2/bin:\$PATH\""
@@ -113,14 +139,26 @@ if [ "$modify_path" = true ]; then
 fi
 if [ -n "$profile" ]; then
   mkdir -p "$(dirname "$profile")"
-  if ! grep -Fqx "$line" "$profile" 2>/dev/null; then printf '\n%s\n' "$line" >> "$profile"; fi
-  printf 'PATH: %s (open a new shell)\n' "$profile"
-else
-  printf 'Add %s to PATH.\n' "$directory"
+  if ! grep -Fqx "$line" "$profile" 2>/dev/null; then
+    printf '\n%s\n' "$line" >> "$profile"
+    printf 'Added %s to PATH in %s\n' "$directory" "$profile"
+  fi
 fi
-printf 'Installed %s at %s/ren2\n' "$installed" "$directory"
+
+# The installer runs in a child shell, so it cannot change the PATH of the terminal that started it.
+path_hint() {
+  if on_path "$directory" || [ -n "$linked" ]; then return; fi
+  if [ -n "$profile" ]; then
+    printf 'To use ren2 in this terminal, run:\n  source %q\n' "$profile"
+  else
+    printf 'Add %s to PATH.\n' "$directory"
+  fi
+}
+
 if [ "$init" = true ] && [ -t 1 ]; then
-  "$directory/ren2" login || printf 'Run ren2 login to sign in.\n'
-elif [ "$init" = true ]; then
-  printf 'Next: ren2 login\n'
+  "$directory/ren2" login </dev/tty || printf 'Run ren2 login to sign in.\n'
+  path_hint
+else
+  path_hint
+  if [ "$init" = true ]; then printf 'Next: ren2 login\n'; fi
 fi
