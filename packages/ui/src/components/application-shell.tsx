@@ -5,10 +5,10 @@ import { useRender } from "@base-ui/react/use-render"
 import { createContext, use, useEffect, useEffectEvent, useState } from "react"
 import type { ReactElement, ReactNode } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
-import { IconButton } from "./icon-button.js"
+import { Button } from "./button.js"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "./hover-card.js"
 import { Icon } from "./icon.js"
-import { PreviewCard } from "./preview-card.js"
-import { Tooltip } from "./tooltip.js"
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip.js"
 
 export type NavigationState = "expanded" | "collapsed"
 
@@ -117,9 +117,9 @@ function ContentRegion(props: RootProps) {
           <span className="absolute top-2 left-2 z-20">
             <Drawer.Trigger
               render={
-                <IconButton label="Open navigation">
+                <Button variant="ghost" size="icon-sm" aria-label="Open navigation" className="text-muted-foreground">
                   <Icon glyph="PanelLeft" />
-                </IconButton>
+                </Button>
               }
             />
           </span>
@@ -135,17 +135,27 @@ function Panel(props: RootProps & { toggle: () => void }) {
   const desktopLabel = props.state === "collapsed" ? "Expand sidebar" : "Collapse sidebar"
   const label = props.mobile ? "Close navigation" : desktopLabel
   const button = (
-    <IconButton label={label} onClick={props.mobile ? undefined : props.toggle} aria-keyshortcuts="Meta+B Control+B">
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={label}
+      onClick={props.mobile ? undefined : props.toggle}
+      aria-keyshortcuts="Meta+B Control+B"
+      className="text-muted-foreground"
+    >
       <Icon glyph="PanelLeft" />
-    </IconButton>
+    </Button>
   )
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 py-2">
       <div className="flex shrink-0 items-center gap-1 px-2">
         {props.navigationHeader}
-        <Tooltip.Root content={props.toggleShortcut ? `${label} (${props.toggleShortcut})` : label} placement="right">
-          {props.mobile ? <Drawer.Close render={button} /> : button}
-        </Tooltip.Root>
+        <Tooltip>
+          <TooltipTrigger render={props.mobile ? <Drawer.Close render={button} /> : button} />
+          <TooltipContent side="right">
+            {props.toggleShortcut ? `${label} (${props.toggleShortcut})` : label}
+          </TooltipContent>
+        </Tooltip>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">{props.navigation}</div>
       {props.navigationFooter ? (
@@ -240,9 +250,10 @@ export function NavigationItem(props: NavigationItemProps) {
       )}
     >
       {navigation.collapsed && typeof props.label === "string" ? (
-        <Tooltip.Root content={props.label} placement="right">
-          {element}
-        </Tooltip.Root>
+        <Tooltip>
+          <TooltipTrigger render={element} />
+          <TooltipContent side="right">{props.label}</TooltipContent>
+        </Tooltip>
       ) : (
         <Preview {...props} element={element} />
       )}
@@ -253,11 +264,11 @@ export function NavigationItem(props: NavigationItemProps) {
 function Preview(props: NavigationItemProps & { element: ReactElement }) {
   if (!props.preview) return props.element
   return (
-    <PreviewCard.Root onOpenChange={props.onPreviewChange}>
-      <PreviewCard.Trigger render={props.element} />
-      <PreviewCard.Content placement="right" alignment="start" padding="small">
+    <HoverCard onOpenChange={(open) => props.onPreviewChange?.(open)}>
+      <HoverCardTrigger render={props.element} />
+      <HoverCardContent side="right" align="start" sideOffset={8} className="w-72 p-1">
         {props.preview}
-      </PreviewCard.Content>
-    </PreviewCard.Root>
+      </HoverCardContent>
+    </HoverCard>
   )
 }

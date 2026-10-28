@@ -1,6 +1,18 @@
 import type { ReactNode } from "react"
-import { Menu } from "./menu.js"
-import { Select } from "./select.js"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "./dropdown-menu.js"
+import { Icon } from "./icon.js"
+import { InputGroupButton } from "./input-group.js"
 import { Text } from "./text.js"
 
 export type Variant = { value: string; label: string }
@@ -45,32 +57,23 @@ export function ModelPicker(props: ModelPickerProps) {
   const effort = shown.effort
   const groups = [...Map.groupBy(props.models, (model) => model.group)]
   return (
-    <Menu.Root open={props.open} onOpenChange={props.onOpenChange}>
-      <Menu.Trigger
-        render={
-          <Select.Button
-            appearance="plain"
-            width="limited"
-            size="medium"
-            disabled={props.disabled === true || props.loading === true || props.models.length === 0}
-            label={triggerLabel(name, effort)}
-          >
-            <TriggerContent icon={props.loading ? undefined : selected?.icon} name={name} effort={effort} />
-          </Select.Button>
-        }
-      />
-      <Menu.Popup placement="top" alignment="start" width="large">
+    <DropdownMenu open={props.open} onOpenChange={(open) => props.onOpenChange?.(open)}>
+      <DropdownMenuTrigger
+        disabled={props.disabled === true || props.loading === true || props.models.length === 0}
+        aria-label={triggerLabel(name, effort)}
+        render={<InputGroupButton size="sm" className="max-w-72 min-w-0 pr-1.5 font-normal text-muted-foreground" />}
+      >
+        <TriggerContent icon={props.loading ? undefined : selected?.icon} name={name} effort={effort} />
+        <Icon glyph="ChevronDown" data-icon="inline-end" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-72">
         {groups.map(([group, models]) => (
-          <Menu.Section
-            key={group}
-            label={
-              <span className="flex items-center gap-2">
-                {models[0]?.icon}
-                {group}
-              </span>
-            }
-          >
-            <Menu.RadioGroup
+          <DropdownMenuGroup key={group}>
+            <DropdownMenuLabel className="flex items-center gap-2">
+              {models.at(0)?.icon}
+              {group}
+            </DropdownMenuLabel>
+            <DropdownMenuRadioGroup
               value={selected?.group === group ? selected.value : ""}
               onValueChange={(value) => {
                 const model = props.models.find((item) => item.value === value)
@@ -87,11 +90,11 @@ export function ModelPicker(props: ModelPickerProps) {
                   onValueChange={props.onValueChange}
                 />
               ))}
-            </Menu.RadioGroup>
-          </Menu.Section>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuGroup>
         ))}
-      </Menu.Popup>
-    </Menu.Root>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -126,27 +129,42 @@ function Choice(props: {
   onValueChange: (value: Selection) => void
 }) {
   if (props.model.variants.length === 0)
-    return <Menu.RadioItem value={props.model.value}>{props.model.label}</Menu.RadioItem>
-  return (
-    <Menu.SubmenuRoot>
-      <Menu.SubmenuTrigger current={props.selected} detail={props.effort}>
+    return (
+      <DropdownMenuRadioItem value={props.model.value} closeOnClick>
         {props.model.label}
-      </Menu.SubmenuTrigger>
-      <Menu.SubmenuPopup>
-        <Menu.Section label="Reasoning effort">
-          <Menu.RadioGroup
+      </DropdownMenuRadioItem>
+    )
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className={props.selected ? "font-medium" : undefined}>
+        <span className="min-w-0 flex-1 truncate">{props.model.label}</span>
+        {props.selected ? (
+          <span className="flex shrink-0 items-center gap-1 text-xs font-normal text-muted-foreground">
+            {props.effort}
+            <Icon glyph="Check" tone="primary" />
+          </span>
+        ) : null}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="min-w-40">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Reasoning effort</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
             value={props.selected ? (props.variant ?? defaultVariant) : ""}
-            onValueChange={(variant) => props.onValueChange(select(props.model, variant))}
+            onValueChange={(variant) => {
+              if (typeof variant === "string") props.onValueChange(select(props.model, variant))
+            }}
           >
-            <Menu.RadioItem value={defaultVariant}>Default</Menu.RadioItem>
+            <DropdownMenuRadioItem value={defaultVariant} closeOnClick>
+              Default
+            </DropdownMenuRadioItem>
             {props.model.variants.map((variant) => (
-              <Menu.RadioItem key={variant.value} value={variant.value}>
+              <DropdownMenuRadioItem key={variant.value} value={variant.value} closeOnClick>
                 {variant.label}
-              </Menu.RadioItem>
+              </DropdownMenuRadioItem>
             ))}
-          </Menu.RadioGroup>
-        </Menu.Section>
-      </Menu.SubmenuPopup>
-    </Menu.SubmenuRoot>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }

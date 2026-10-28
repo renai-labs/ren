@@ -1,21 +1,29 @@
 import { useState, useSyncExternalStore } from "react"
-import type { ComponentPropsWithRef } from "react"
+import type { ComponentProps } from "react"
 import { readClock, subscribeClock } from "../lib/clock.js"
-import { civilDate, formatDateShort } from "../lib/date.js"
+import { composeClasses } from "../lib/compose-classes.js"
+import { revealOnContainerHover } from "../lib/control-chrome.js"
+import { civilDate, formatDateShort, parseCivilDate } from "../lib/date.js"
+import { Alert, AlertDescription } from "./alert.js"
 import { Badge } from "./badge.js"
 import { Button } from "./button.js"
 import { Calendar } from "./calendar.js"
 import { Icon } from "./icon.js"
-import { Notice } from "./notice.js"
-import { Popover } from "./popover.js"
-import { Select } from "./select.js"
+import { Popover, PopoverContent, PopoverTrigger } from "./popover.js"
 import { Separator } from "./separator.js"
 
 export type TaskControlPresentation = "chip" | "row" | "icon"
 
-const appearances = { chip: "chip", row: "property", icon: "plain" } as const
-
 const placeholders = { chip: "Due date", row: "Set due date", icon: "" }
+
+const triggers = {
+  chip: { variant: "outline", size: "xs", className: "h-7 rounded-full px-3 [&_svg]:size-3.5" },
+  row: {
+    variant: "ghost",
+    size: "default",
+    className: "max-w-full justify-start gap-2 px-2 font-normal [&_svg]:text-muted-foreground",
+  },
+} as const
 
 const fallbackError = "Couldn’t save the due date. Try again."
 
@@ -34,6 +42,7 @@ export function TaskDueDate(props: TaskDueDateProps) {
   const [error, setError] = useState<string | null>(null)
   const today = civilDate(new Date(useSyncExternalStore(subscribeClock, readClock, readClock)))
   const value = props.value ?? ""
+  const selected = parseCivilDate(value)
   const display = value ? formatDateShort(`${value}T00:00:00Z`, { timeZone: "UTC" }) : ""
   const overdue = value !== "" && value < today && props.closed !== true
   const locked = props.disabled === true || props.onChange === undefined
@@ -54,7 +63,7 @@ export function TaskDueDate(props: TaskDueDateProps) {
     )
   }
   return (
-    <Popover.Root
+    <Popover
       open={open}
       onOpenChange={(next) => {
         if (pending) return
@@ -62,46 +71,54 @@ export function TaskDueDate(props: TaskDueDateProps) {
         setOpen(next)
       }}
     >
-      <Popover.Trigger
+      <PopoverTrigger
+        disabled={locked}
         render={
           <Trigger
             presentation={props.presentation}
             display={display}
             overdue={overdue}
-            disabled={locked}
             label={[display || placeholders[props.presentation], overdue ? "overdue" : "", props.label]
               .filter(Boolean)
               .join(", ")}
           />
         }
       />
-      <Popover.Content alignment="start" label="Due date">
-        <div className="flex flex-col gap-3">
-          <Calendar value={value} onSelect={save} initialFocus="day" />
-          <Notice tone="danger" placement="inline">
-            {error}
-          </Notice>
-          <div className="flex flex-col gap-2">
-            <Separator />
-            <div className="flex items-center justify-between gap-2">
-              <Button appearance="ghost" size="small" disabled={blocked} onClick={() => save(today)}>
-                Today
-              </Button>
-              {value ? (
-                <Button appearance="ghost" size="small" disabled={blocked} onClick={() => save("")}>
-                  Clear date
-                </Button>
-              ) : null}
-            </div>
-          </div>
+      <PopoverContent align="start" aria-label="Due date" className="w-72 gap-2 p-3">
+        <Calendar
+          mode="single"
+          // oxlint-disable-next-line jsx-a11y/no-autofocus -- a caller that opens the calendar to pick a day moves focus into the grid
+          autoFocus
+          {...(selected && { selected, defaultMonth: selected })}
+          onSelect={(date: Date | undefined) => {
+            if (date) save(civilDate(date))
+          }}
+          className="w-full p-0"
+        />
+        {error ? (
+          <Alert variant="destructive">
+            <Icon glyph="AlertCircle" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        <Separator />
+        <div className="flex items-center justify-between gap-2">
+          <Button variant="ghost" size="xs" className="h-6.5" disabled={blocked} onClick={() => save(today)}>
+            Today
+          </Button>
+          {value ? (
+            <Button variant="ghost" size="xs" className="h-6.5" disabled={blocked} onClick={() => save("")}>
+              Clear date
+            </Button>
+          ) : null}
         </div>
-      </Popover.Content>
-    </Popover.Root>
+      </PopoverContent>
+    </Popover>
   )
 }
 
 function Trigger(
-  props: Omit<ComponentPropsWithRef<"button">, "className" | "style"> & {
+  props: Omit<ComponentProps<typeof Button>, "className" | "children" | "variant" | "size"> & {
     presentation: TaskControlPresentation
     display: string
     overdue: boolean
@@ -109,43 +126,52 @@ function Trigger(
   },
 ) {
   const { presentation, display, overdue, label, ...rest } = props
-  const icon = presentation === "icon"
-  const iconShape = display ? "fit" : "square"
   const glyph = <Icon glyph={overdue ? "AlertCircle" : "Calendar"} />
-  const content = icon ? (
-    <Badge
-      appearance={overdue ? "subtle" : "tag"}
-      tone={overdue ? "danger" : "neutral"}
-      size="medium"
-      shape="pill"
-      icon={glyph}
-    >
-      {display}
-    </Badge>
-  ) : (
-    <>
-      {glyph}
-      {display}
-    </>
-  )
+  if (presentation === "icon" && !display) {
+    return (
+      <Button
+        {...rest}
+        variant="ghost"
+        size="icon-xs"
+        aria-label={label}
+        className={composeClasses("text-muted-foreground", revealOnContainerHover)}
+      >
+        {glyph}
+      </Button>
+    )
+  }
+  if (presentation === "icon") {
+    return (
+      <Button
+        {...rest}
+        variant="ghost"
+        aria-label={label}
+        className="h-auto max-w-full rounded-full p-0 hover:bg-transparent aria-expanded:bg-transparent"
+      >
+        <Badge
+          variant={overdue ? "destructive" : "outline"}
+          className={composeClasses("h-6 max-w-full rounded-full", !overdue && "bg-muted")}
+        >
+          {glyph}
+          <span className="truncate">{display}</span>
+        </Badge>
+      </Button>
+    )
+  }
   return (
-    <Select.Button
+    <Button
       {...rest}
-      appearance={appearances[presentation]}
-      size="small"
-      shape={icon ? iconShape : "pill"}
-      indicator="none"
-      invalid={overdue}
-      visibility={icon && !display ? "on-container-hover" : "always"}
-      label={label}
-      placeholder={
-        <>
-          <Icon glyph="Calendar" />
-          {placeholders[presentation]}
-        </>
-      }
+      variant={triggers[presentation].variant}
+      size={triggers[presentation].size}
+      aria-label={label}
+      className={composeClasses(
+        triggers[presentation].className,
+        display ? "text-foreground" : "text-muted-foreground",
+        overdue && "text-destructive [&_svg]:text-destructive",
+      )}
     >
-      {display ? content : null}
-    </Select.Button>
+      {glyph}
+      <span className="truncate">{display || placeholders[presentation]}</span>
+    </Button>
   )
 }

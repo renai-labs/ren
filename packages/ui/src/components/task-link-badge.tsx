@@ -1,8 +1,9 @@
+import { composeClasses } from "../lib/compose-classes.js"
 import { Badge } from "./badge.js"
 import { Icon } from "./icon.js"
 import type { Glyph } from "./icon.js"
 import { Link } from "./link.js"
-import { Tooltip } from "./tooltip.js"
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip.js"
 
 export type TaskLink = { kind: "github_pr" | "github_issue" | "linear_issue" | "slack_thread" | "url"; url: string }
 
@@ -33,25 +34,31 @@ export function TaskLinkBadge(props: { link: TaskLink; size?: "small" | "control
     url: props.link.url,
   }[props.link.kind]
   const badge = (
-    <Badge appearance="tag" shape="pill" size={props.size ?? "control"} icon={<Icon glyph={glyphs[props.link.kind]} />}>
-      {label}
+    <Badge
+      variant="outline"
+      className={composeClasses("max-w-full gap-2 rounded-full bg-muted", props.size === "small" ? "h-5" : "h-7 px-3")}
+    >
+      <Icon glyph={glyphs[props.link.kind]} />
+      <span className="truncate">{label}</span>
     </Badge>
   )
+  const trigger = href ? (
+    <Link appearance="quiet" href={href} external aria-label={`${description} (opens in a new tab)`}>
+      {badge}
+    </Link>
+  ) : (
+    <span
+      // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard users need the tooltip to read the full URL
+      tabIndex={0}
+      className="flex min-w-0 rounded-full focus-visible:outline-2 focus-visible:outline-accent-primary"
+    >
+      {badge}
+    </span>
+  )
   return (
-    <Tooltip.Root content={props.link.url}>
-      {href ? (
-        <Link appearance="quiet" href={href} external aria-label={`${description} (opens in a new tab)`}>
-          {badge}
-        </Link>
-      ) : (
-        <span
-          // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard users need the tooltip to read the full URL
-          tabIndex={0}
-          className="flex min-w-0 rounded-full focus-visible:outline-2 focus-visible:outline-accent-primary"
-        >
-          {badge}
-        </span>
-      )}
-    </Tooltip.Root>
+    <Tooltip>
+      <TooltipTrigger render={trigger} />
+      <TooltipContent>{props.link.url}</TooltipContent>
+    </Tooltip>
   )
 }

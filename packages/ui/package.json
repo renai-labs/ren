@@ -6,8 +6,7 @@
   "type": "module",
   "imports": {
     "#components/*": "./src/components/*.tsx",
-    "#lib/*": "./src/lib/*.ts",
-    "#hooks/*": "./src/hooks/*.ts"
+    "#lib/*": "./src/lib/*.ts"
   },
   "license": "UNLICENSED",
   "exports": {
@@ -18,8 +17,7 @@
   "scripts": {
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo --noEmit",
-    "generate": "bun run script/design-tokens.ts",
-    "notes": "bun run script/component-notes.ts"
+    "generate": "bun run script/design-tokens.ts"
   },
   "peerDependencies": {
     "react": "catalog:",
@@ -35,7 +33,6 @@
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
-    "@daypicker/react": "catalog:",
     "@fontsource/ibm-plex-mono": "catalog:",
     "@mdxeditor/editor": "catalog:",
     "@streamdown/cjk": "catalog:",
@@ -47,6 +44,9 @@
     "@tanstack/react-virtual": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
+    "cn": "catalog:",
+    "input-otp": "catalog:",
+    "react-day-picker": "catalog:",
     "shadcn": "catalog:",
     "streamdown": "catalog:",
     "tailwind-merge": "catalog:",

@@ -7,7 +7,7 @@ description: Use when adding, updating, composing or styling shadcn components i
 
 `@ren/ui` is Ren's shadcn library: style `base-nova` on Base UI (never Radix), Tabler icons, and `cn` from the `cn` package. `packages/ui/components.json` configures the CLI, and `packages/ui/AGENTS.md` has Ren's rules for the files.
 
-Lint enforces every rule it can check: class restrictions in `oxlint.config.ts`, and component structure (overlay titles, item groups, `render` and `nativeButton`, icon sizing, the chat parts) in `script/ast-grep/rules/`. Run `bun run check` and follow each message. This skill covers the judgment calls.
+Lint enforces every rule it can check: class restrictions in `oxlint.config.ts`, and component structure (overlay titles, item groups, `render` and `nativeButton`, links styled with `buttonVariants`, icon sizing, the chat parts) in `script/ast-grep/rules/`. Run `bun run check` and follow each message. This skill covers the judgment calls.
 
 ## Workflow
 
@@ -16,8 +16,8 @@ Run the CLI from `packages/ui` with `bunx --bun shadcn@latest`.
 1. Read the docs first: `docs <name>` prints the documentation and example URLs; fetch them rather than guessing an API.
 2. Check `packages/ui/src/components/` before adding. `@ren/ui/<name>` may already be shadcn's, or still Ren's own component with a different API.
 3. Preview with `add <name> --dry-run`, and `--diff <file>` for a file that exists. Never fetch component source from GitHub by hand.
-4. Add with `add <name>`. Overwrite a changed file only after reading the diff and carrying the local changes forward; list them in its `<name>.md`.
-5. Run `bun run notes <name>`, move any new dependency into the root catalog, then fix what `bun run check` reports.
+4. Add with `add <name>`. Overwrite a changed file only after reading the diff and carrying the local changes forward.
+5. Move any new dependency into the root catalog, then fix what `bun run check` reports.
 
 ## Compose
 

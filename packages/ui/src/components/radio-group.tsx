@@ -1,62 +1,28 @@
-export * as RadioGroup from "./radio-group.js"
+"use client"
 
-import { Radio } from "@base-ui/react/radio"
-import { RadioGroup } from "@base-ui/react/radio-group"
-import { useId } from "react"
-import type { ReactNode } from "react"
+import { Radio as RadioPrimitive } from "@base-ui/react/radio"
+import { RadioGroup as RadioGroupPrimitive } from "@base-ui/react/radio-group"
+import { cn } from "cn"
 
-export type RootProps<Value extends string> = {
-  value?: Value
-  onValueChange?: (value: Value) => void
-  label?: string
-  children: ReactNode
+function RadioGroup({ className, ...props }: RadioGroupPrimitive.Props) {
+  return <RadioGroupPrimitive data-slot="radio-group" className={cn("grid w-full gap-2", className)} {...props} />
 }
 
-export function Root<Value extends string>(props: RootProps<Value>) {
+function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
   return (
-    <RadioGroup<Value>
-      value={props.value}
-      onValueChange={(next) => props.onValueChange?.(next)}
-      aria-label={props.label}
-      data-slot="radio-group"
-      className="grid grid-cols-2 gap-2"
+    <RadioPrimitive.Root
+      data-slot="radio-group-item"
+      className={cn(
+        "group/radio-group-item peer relative flex aspect-square size-4 shrink-0 rounded-full border border-input outline-none group-has-focus-visible/field-label:ring-0 group-has-focus-visible/field-label:not-data-checked:border-input after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-focus-visible/field-label:data-checked:border-primary dark:data-checked:bg-primary",
+        className,
+      )}
+      {...props}
     >
-      {props.children}
-    </RadioGroup>
+      <RadioPrimitive.Indicator data-slot="radio-group-indicator" className="flex size-4 items-center justify-center">
+        <span className="absolute top-1/2 left-1/2 size-2 -translate-1/2 rounded-full bg-primary-foreground" />
+      </RadioPrimitive.Indicator>
+    </RadioPrimitive.Root>
   )
 }
 
-export type ItemProps = {
-  value: string
-  label: ReactNode
-  description?: ReactNode
-}
-
-export function Item(props: ItemProps) {
-  const id = useId()
-  return (
-    <label className="flex cursor-default items-start gap-3 rounded-container bg-background-secondary p-3 text-sm inset-ring-1 inset-ring-border-primary transition-standard hover:bg-fill-primary has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent-primary data-checked:inset-ring-border-strong">
-      <span className="flex h-lh shrink-0 items-center">
-        <Radio.Root
-          value={props.value}
-          aria-labelledby={`${id}-label`}
-          aria-describedby={props.description ? `${id}-description` : undefined}
-          // oxlint-disable-next-line ren/require-companion-class -- the enclosing label draws the ring with has-focus-visible
-          className="inline-grid size-4 shrink-0 place-items-center rounded-full bg-background-secondary inset-ring-1 inset-ring-border-secondary outline-none data-checked:inset-ring-border-strong"
-        >
-          <Radio.Indicator className="size-2 rounded-full bg-fill-inverse" />
-        </Radio.Root>
-      </span>
-      <span className="flex min-w-0 flex-col gap-1">
-        <span id={`${id}-label`} className="text-text-primary">
-          {props.label}
-        </span>
-        {props.description ? (
-          <span id={`${id}-description`} className="text-xs text-text-secondary">
-            {props.description}
-          </span>
-        ) : null}
-      </span>
-    </label>
-  )
-}
+export { RadioGroup, RadioGroupItem }

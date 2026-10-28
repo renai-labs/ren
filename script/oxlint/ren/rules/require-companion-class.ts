@@ -1,14 +1,14 @@
 import { defineRule } from "@oxlint/plugins"
 import type { ESTree } from "@oxlint/plugins"
 
-const CLASS_FUNCTIONS = new Set(["cva", "composeClasses"])
+const CLASS_FUNCTIONS = new Set(["cva", "composeClasses", "cn"])
 
 const companions = [
   {
     when: /(?:^|:)outline-none$/,
-    require: /(?:^|:)focus-visible:/,
+    require: /(?:^|:)(?:focus-visible|focus-within|data-\[active=true\]):|:focus-visible\]:/,
     message:
-      "`outline-none` removes the focus ring. Add a `focus-visible:` replacement in the same class list so keyboard users can see focus.",
+      "`outline-none` removes the focus ring. Add a `focus-visible:` (or `focus-within:`) replacement in the same class list so keyboard users can see focus.",
   },
   {
     when: /(?:^|:)overflow(?:-[xy])?-(?:auto|scroll)$/,

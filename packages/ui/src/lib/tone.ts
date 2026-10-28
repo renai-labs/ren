@@ -16,10 +16,3 @@ export const toneFill = {
   warning: "bg-status-warning",
   danger: "bg-status-danger",
 } as const
-
-export const toneTint = {
-  accent: "bg-accent-primary/tint text-accent-primary",
-  success: "bg-status-success/tint text-status-success",
-  warning: "bg-status-warning/tint text-status-warning",
-  danger: "bg-status-danger/tint text-status-danger",
-} as const

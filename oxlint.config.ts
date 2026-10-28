@@ -330,11 +330,6 @@ const spaceClass = {
   pattern: `${anyVariant}space-[xy]-.+$`,
   message: "Space children with `flex` or `grid` and `gap-*`. `space-*` margins break when a child wraps or hides.",
 }
-const darkClass = {
-  pattern: "^(?:[^:]*:)*dark:.+$",
-  message:
-    "Theme colours already switch with the theme. Use shadcn's names or Ren's tokens instead of `dark:` overrides.",
-}
 const pulseClass = {
   pattern: `${anyVariant}animate-pulse$`,
   message: "Use `Skeleton` from @ren/ui for loading placeholders.",
@@ -723,7 +718,11 @@ export default defineConfig({
           "error",
           { restrict: [viewportUnitClass, fontSmoothingClass, colorRoleClass, spaceClass] },
         ],
+        "better-tailwindcss/no-unknown-classes": ["error", { ...tailwind, ignore: ["^cn-"] }],
         "react/only-export-components": "off",
+        "import/no-namespace": ["error", { ignore: ["react"] }],
+        "no-restricted-imports": ["error", { paths: authPaths, patterns: browserPatterns }],
+        "jsx-a11y/prefer-tag-over-role": "off",
       },
     },
     {
@@ -740,7 +739,6 @@ export default defineConfig({
               fontSmoothingClass,
               colorRoleClass,
               spaceClass,
-              darkClass,
               pulseClass,
             ],
           },

@@ -30,12 +30,19 @@ const iconVariants = cva("shrink-0", {
   },
 })
 
-export function Icon(props: { glyph: Glyph; size?: IconSize; tone?: IconTone; label?: string }) {
+export function Icon(props: {
+  glyph: Glyph
+  size?: IconSize
+  tone?: IconTone
+  label?: string
+  "data-icon"?: "inline-start" | "inline-end"
+}) {
   const tone = props.tone ?? "inherit"
   const Svg = glyphs[props.glyph]
   return (
     <Svg
       data-slot="icon"
+      data-icon={props["data-icon"]}
       data-tone={tone === "inherit" ? undefined : tone}
       aria-hidden={props.label === undefined ? true : undefined}
       aria-label={props.label}

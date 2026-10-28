@@ -3,10 +3,10 @@ export * as AttachmentTile from "./attachment-tile.js"
 import { useState } from "react"
 import type { ReactNode } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
+import { Button } from "./button.js"
 import { Icon } from "./icon.js"
 import type { Glyph } from "./icon.js"
-import { IconButton } from "./icon-button.js"
-import { ProgressIndicator } from "./progress-indicator.js"
+import { Spinner } from "./spinner.js"
 import { Text } from "./text.js"
 
 type Removal = {
@@ -17,9 +17,15 @@ type Removal = {
 
 function Remove(props: { name: string; label: string | undefined; onRemove: () => void }) {
   return (
-    <IconButton label={props.label ?? `Remove ${props.name}`} size="extra-small" onClick={props.onRemove}>
-      <Icon glyph="X" />
-    </IconButton>
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      aria-label={props.label ?? `Remove ${props.name}`}
+      className="text-muted-foreground"
+      onClick={props.onRemove}
+    >
+      <Icon glyph="X" size="extra-small" />
+    </Button>
   )
 }
 
@@ -72,20 +78,20 @@ export function Thumbnail(
       )}
       {resolving ? (
         <div className="absolute inset-0 flex items-center justify-center">
-          <ProgressIndicator />
+          <Spinner className="text-text-secondary" />
         </div>
       ) : null}
       {props.onRemove === undefined ? null : (
         <span className="absolute top-2 right-2">
-          <IconButton
-            label={props.removeLabel ?? `Remove ${props.name}`}
-            size="extra-small"
-            appearance="overlay"
-            shape="circle"
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={props.removeLabel ?? `Remove ${props.name}`}
+            className="rounded-full bg-overlay-primary text-text-inverse hover:bg-overlay-primary/disabled hover:text-text-inverse"
             onClick={props.onRemove}
           >
-            <Icon glyph="X" />
-          </IconButton>
+            <Icon glyph="X" size="extra-small" />
+          </Button>
         </span>
       )}
     </div>

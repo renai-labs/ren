@@ -1,7 +1,7 @@
 import { Combobox } from "@base-ui/react/combobox"
 import type { ReactNode } from "react"
 import { Icon } from "../components/icon.js"
-import { ProgressIndicator } from "../components/progress-indicator.js"
+import { Spinner } from "../components/spinner.js"
 import type { Option, Row, Tree } from "./combobox-tree.js"
 import { composeClasses } from "./compose-classes.js"
 import { optionRow } from "./control-chrome.js"
@@ -93,7 +93,7 @@ function Creatable(props: RowProps & { row: Extract<Row, { kind: "create" | "ste
 }
 
 function CreateIcon(props: { pending: boolean; option: Option | undefined }) {
-  if (props.pending) return <ProgressIndicator size="small" announcement="none" />
+  if (props.pending) return <Spinner aria-hidden className="text-text-secondary" />
   return props.option?.icon ?? <Icon glyph="Plus" tone="secondary" />
 }
 

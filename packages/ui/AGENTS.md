@@ -11,17 +11,18 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 
 ## shadcn components
 
-- Add or update one with `bunx --bun shadcn@latest add <name>` from this directory. Move any dependency the CLI adds into the root catalog. Then `bun run notes <name>` writes `<name>.md`, and `bun run check` lists what to fix: Ren's lint and TypeScript settings (`exactOptionalPropertyTypes`, no comments, a focus ring wherever `outline-none` appears) are stricter than shadcn's.
+- Add or update one with `bunx --bun shadcn@latest add <name>` from this directory. Move any dependency the CLI adds into the root catalog, then fix what `bun run check` reports: Ren's lint and TypeScript settings (`exactOptionalPropertyTypes`, no comments, a focus ring wherever `outline-none` appears) are stricter than shadcn's.
 - Keep shadcn's API: its named exports and parts (`Tabs`, `TabsList`, `TabsTrigger`), `variant` and `size`, and `className` on every part. Don't rename props, variants or parts, so `shadcn diff` keeps working.
-- A look that is the same everywhere in Ren is a change in the component file, listed in its `<name>.md` under "Changes to the component". A one-off look is a `className` at the call site.
-- Every shadcn component has a `<name>.md` beside it that says, in plain English, how it differs from stock shadcn. Remove a component and its note when nothing uses it.
+- A look that is the same everywhere in Ren is a change in the component file; describe it in the commit that makes it, so the next `shadcn diff` can carry it forward. A one-off look is a `className` at the call site.
+- Use the variants and sizes `VARIANTS.md` lists for each component. A link styled as a button keeps its link role: put `className={buttonVariants({ variant, size })}` on the `Link`.
+- Remove a component when nothing uses it.
 - shadcn's theme variables (`background`, `primary`, `muted-foreground`, `sidebar`…) and its radius scale map onto Ren's tokens in `theme.css`. Style with those names or Ren's tokens, never a raw colour.
 - Merge classes with `cn` from the `cn` package, as shadcn ships it, and import icons from `@tabler/icons-react`.
 - Motion: transition colour, opacity and transform only, under 300 ms with `ease-out`, nothing on frequent or keyboard-driven actions, and respect `prefers-reduced-motion`.
 
 ## Ren components
 
-The components not yet replaced keep these rules until their shadcn version lands.
+Ren's own components and compositions (`Form`, `FormActions`, `FormSection`, `ConfirmationDialog`, `SearchField`, `InlineEdit`, `Combobox`, the shells, `Toolbar`, `Text`, `Icon`, `Link`, `Time`, `StatusDot`, `ModelPicker`, `ThemeSelector`, `CopyButton`, `FindBar`, the chat components, `ConnectionBoard`, the `Task*` components and the rest without a shadcn file) follow these rules. Build their insides from the shadcn components.
 
 - Follow Base UI's shape:
   - A multi-part component uses Ren's module pattern. The file starts with `export * as Dialog from "./dialog.js"` and exports parts named `Root`, `Trigger`, `Popup`, `Title` and so on. Consumers write `<Dialog.Root>`.
@@ -40,29 +41,19 @@ The components not yet replaced keep these rules until their shadcn version land
 - Tokens come from the Paper file "Ren UI" through `DESIGN.md` (use the `sync-with-paper` skill) and `bun run generate`. Never edit `DESIGN.md` or `tokens.generated.css` by hand, and never rename a token. `theme.css` maps shadcn's names onto the tokens.
 - When porting from `ren-v1/packages/ui`, keep class strings, variants, sizes and states identical. A visual change is a separate, explicit decision.
 - Approved deviations from ren-v1:
-  - Text inputs use `text-base sm:text-sm`, so iOS doesn't zoom the page on focus.
   - `Text` balances headings (`text-balance`) and avoids orphans in body copy (`text-pretty`).
   - `Text purpose="display"` renders at `text-display`. ren-v1's `composeClasses` did not know the size, so its tone class stripped it.
   - Classes that borrow another role's colour move to role tokens with identical values: `bg-text-primary` to `bg-fill-inverse`, `bg-text-secondary` to `bg-fill-inverse-secondary`, and `border-`, `ring-` and `outline-text-primary` to `border-strong`. Lines drawn with `bg-border-primary` become borders.
-  - `Checkbox` has an indeterminate state; ren-v1 had none.
-  - Tabs, breadcrumb links, list rows and cards show a focus-visible ring; ren-v1's `outline-none` hid keyboard focus.
-  - `Toast` uses `text-text-secondary` descriptions and `shadow-overlay`, which sonner's stylesheet overrode in ren-v1.
-  - `Dialog.Footer` stacks in DOM order on small screens, so Cancel sits above the primary action.
   - `ConfirmationDialog` ignores outside clicks; Escape and Cancel still close it.
-  - `Menu.Search` keeps its glyph at 16px; ren-v1's input squeezed it.
   - `InlineEdit` returns focus to its Edit button after Enter or Escape, and shows validation and save errors while editing, linked to the input.
   - `ApplicationShell` gives collapsed navigation items an accessible name, and its mobile drawer's panel button reads "Close navigation".
-  - Image avatars that are not decorative get `role="img"`.
   - `Document` streams in with Ren's motion easing instead of `ease-out`.
-  - Drawn placeholders (`Select.Button` with no value, empty `InlineEdit`) use `text-secondary` at full opacity; ren-v1's 50% opacity failed contrast.
-  - `Avatar tone="accent"` uses `text-text-inverse`; ren-v1's `text-text-primary` failed contrast on `bg-accent-primary`.
   - `Text activity="active"` pulses between `text-secondary` and `text-primary` instead of fading to 50% opacity, which failed contrast.
   - Light `accent-primary` is `#0065cc` (ren-v1 `#0067d0`) so accent text passes AA on its tint. Mirror it in Paper.
-  - Searchable pickers use `Combobox.Popover`. `Menu` has no search field: a text field inside `role="menu"` is invalid ARIA.
+  - Searchable pickers use `Combobox.Popover`. `DropdownMenu` has no search field: a text field inside `role="menu"` is invalid ARIA.
   - `ThemeSelector` draws the bars in its previews with borders instead of `bg-border-*` fills, so their rounded ends anti-alias differently.
   - `ConversationShell.Message` has no `pending` pulse: ren-v1 faded the message, which failed contrast. `ConversationShell.Composer` takes a `label` that names its form.
   - `Questionnaire` names each question's group by its title, which ren-v1 lost on multi-step questionnaires. While a reply is pending, it dims only its controls and shows a spinner in the submit button; ren-v1 faded the whole form, which failed contrast.
-  - Controls inside `Field` take their label, description and invalid state from Base UI, so a `Select` inside an invalid field turns red. ren-v1 dropped the invalid state there.
   - `ConnectionBoard` columns use `overscroll-contain`, so scrolling past a column's end doesn't scroll the page. Their socket dots are drawn with borders instead of `bg-border-secondary` fills, with identical pixels.
 
 ## Testing

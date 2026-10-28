@@ -1,31 +1,20 @@
-import { useRender } from "@base-ui/react/use-render"
-import { composeClasses } from "../lib/compose-classes.js"
+"use client"
 
-export type SeparatorProps = { orientation?: "horizontal"; label?: string } | { orientation: "vertical" }
+import { Separator as SeparatorPrimitive } from "@base-ui/react/separator"
+import { cn } from "cn"
 
-export function Separator(props: SeparatorProps) {
-  const orientation = props.orientation ?? "horizontal"
-  const label = props.orientation === "vertical" ? undefined : props.label
-  const rule = useRender({
-    defaultTagName: "div",
-    state: { orientation },
-    props: {
-      role: "separator",
-      "aria-orientation": orientation,
-      "data-slot": "separator",
-      className: composeClasses(
-        "shrink-0 border-border-primary",
-        orientation === "horizontal" ? "w-full border-t" : "h-full self-stretch border-l",
-        label === undefined ? "" : "min-w-0 flex-1",
-      ),
-    },
-  })
-  if (label === undefined) return rule
+function Separator({ className, orientation = "horizontal", ...props }: SeparatorPrimitive.Props) {
   return (
-    <div data-slot="labeled-separator" className="flex w-full items-center gap-3">
-      {rule}
-      <span className="shrink-0 text-xs font-medium tracking-normal text-text-secondary uppercase">{label}</span>
-      <span aria-hidden="true" className="min-w-0 flex-1 border-t border-border-primary" />
-    </div>
+    <SeparatorPrimitive
+      data-slot="separator"
+      orientation={orientation}
+      className={cn(
+        "shrink-0 bg-border data-horizontal:h-px data-horizontal:w-full data-vertical:w-px data-vertical:self-stretch",
+        className,
+      )}
+      {...props}
+    />
   )
 }
+
+export { Separator }

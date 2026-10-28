@@ -1,135 +1,77 @@
-export * as Tabs from "./tabs.js"
+"use client"
 
-import { Tabs } from "@base-ui/react/tabs"
-import { useRender } from "@base-ui/react/use-render"
-import { cva } from "class-variance-authority"
-import { createContext, use } from "react"
-import type { ReactElement, ReactNode } from "react"
-import { composeClasses } from "../lib/compose-classes.js"
+import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
+import { cva, type VariantProps } from "class-variance-authority"
+import { cn } from "cn"
 
-export type TabsSize = "small" | "medium"
+function Tabs({ className, orientation = "horizontal", ...props }: TabsPrimitive.Root.Props) {
+  return (
+    <TabsPrimitive.Root
+      data-slot="tabs"
+      data-orientation={orientation}
+      className={cn("group/tabs flex gap-2 data-horizontal:flex-col", className)}
+      {...props}
+    />
+  )
+}
 
-const tabVariants = cva(
-  "relative inline-flex shrink-0 items-center gap-2 rounded-control px-3 whitespace-nowrap text-text-secondary transition-standard hover:bg-fill-primary hover:text-text-primary focus-visible:-outline-offset-2 aria-selected:bg-fill-secondary aria-selected:font-medium aria-selected:text-text-primary aria-[current=page]:bg-fill-secondary aria-[current=page]:font-medium aria-[current=page]:text-text-primary data-disabled:pointer-events-none data-disabled:opacity-disabled [&_svg]:size-4",
+const tabsListVariants = cva(
+  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
   {
-    variants: { size: { small: "h-7 text-xs", medium: "h-8 text-sm" } },
-    defaultVariants: { size: "medium" },
+    variants: {
+      variant: {
+        default: "bg-muted",
+        line: "gap-1 bg-transparent",
+        page: "gap-1 bg-transparent p-0",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
   },
 )
 
-const listClasses = "relative isolate flex max-w-full items-center gap-1 overflow-x-auto"
-
-const SizeContext = createContext<TabsSize>("medium")
-
-export type RootProps<Value extends string> = {
-  value: Value | null
-  onValueChange: (value: Value) => void
-  children: ReactNode
-}
-
-export function Root<Value extends string>(props: RootProps<Value>) {
+function TabsList({
+  className,
+  variant = "default",
+  ...props
+}: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
   return (
-    <Tabs.Root
-      value={props.value}
-      onValueChange={(next: Value | null) => {
-        if (next !== null) props.onValueChange(next)
-      }}
-      data-slot="tabs"
-      className="flex min-w-0 flex-col gap-4"
-    >
-      {props.children}
-    </Tabs.Root>
+    <TabsPrimitive.List
+      data-slot="tabs-list"
+      data-variant={variant}
+      className={cn(tabsListVariants({ variant }), className)}
+      {...props}
+    />
   )
 }
 
-export type ListProps = {
-  label: string
-  size?: TabsSize
-  children: ReactNode
-}
-
-export function List(props: ListProps) {
+function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   return (
-    <SizeContext value={props.size ?? "medium"}>
-      <Tabs.List aria-label={props.label} data-slot="tabs-list" className={listClasses}>
-        {props.children}
-      </Tabs.List>
-    </SizeContext>
+    <TabsPrimitive.Tab
+      data-slot="tabs-trigger"
+      className={cn(
+        "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 transition-[color,background-color,border-color,box-shadow] group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
+        "data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground",
+        "group-data-[variant=page]/tabs-list:h-8 group-data-[variant=page]/tabs-list:flex-none group-data-[variant=page]/tabs-list:gap-2 group-data-[variant=page]/tabs-list:px-3 group-data-[variant=page]/tabs-list:font-normal group-data-[variant=page]/tabs-list:data-active:border-transparent group-data-[variant=page]/tabs-list:data-active:bg-secondary group-data-[variant=page]/tabs-list:data-active:font-medium group-data-[variant=page]/tabs-list:data-active:shadow-none dark:group-data-[variant=page]/tabs-list:data-active:border-transparent dark:group-data-[variant=page]/tabs-list:data-active:bg-secondary",
+        "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
+        className,
+      )}
+      {...props}
+    />
   )
 }
 
-export type TabProps = {
-  value: string
-  icon?: ReactNode
-  count?: number
-  disabled?: boolean
-  render?: ReactElement
-  children: ReactNode
-}
-
-export function Tab(props: TabProps) {
-  const size = use(SizeContext)
+function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
-    <Tabs.Tab
-      value={props.value}
-      disabled={props.disabled}
-      render={props.render}
-      nativeButton={props.render === undefined}
-      data-slot="tab"
-      className={composeClasses(tabVariants({ size }))}
-    >
-      <Label icon={props.icon} count={props.count}>
-        {props.children}
-      </Label>
-    </Tabs.Tab>
+    <TabsPrimitive.Panel
+      data-slot="tabs-content"
+      // oxlint-disable-next-line ren/require-companion-class -- the panel takes focus only to move reading position; the tab shows the ring
+      className={cn("flex-1 text-sm outline-none", className)}
+      {...props}
+    />
   )
 }
 
-export function Panel(props: { value: string; children: ReactNode }) {
-  return (
-    <Tabs.Panel value={props.value} data-slot="tabs-panel" className="rounded-control">
-      {props.children}
-    </Tabs.Panel>
-  )
-}
-
-export function Navigation(props: { label: string; children: ReactNode }) {
-  return (
-    <nav aria-label={props.label} data-slot="tabs-navigation" className={listClasses}>
-      {props.children}
-    </nav>
-  )
-}
-
-export type LinkProps = {
-  render: ReactElement
-  icon?: ReactNode
-  count?: number
-  children: ReactNode
-}
-
-export function Link(props: LinkProps) {
-  return useRender({
-    defaultTagName: "a",
-    render: props.render,
-    props: {
-      "data-slot": "tab",
-      className: composeClasses(tabVariants({ size: "medium" })),
-      children: (
-        <Label icon={props.icon} count={props.count}>
-          {props.children}
-        </Label>
-      ),
-    },
-  })
-}
-
-function Label(props: { icon: ReactNode; count: number | undefined; children: ReactNode }) {
-  return (
-    <>
-      {props.icon}
-      {props.children}
-      {props.count === undefined ? null : <span className="text-text-secondary tabular-nums">{props.count}</span>}
-    </>
-  )
-}
+export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants }

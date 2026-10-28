@@ -1,9 +1,10 @@
 import type { StandardSchemaV1 } from "@tanstack/react-form"
 import { useId, useState } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
+import { Button } from "./button.js"
 import { Icon } from "./icon.js"
+import { Input } from "./input.js"
 import { Text } from "./text.js"
-import { TextField } from "./text-field.js"
 
 export function InlineEdit(props: {
   value: string
@@ -96,14 +97,14 @@ function Editor(props: {
   const errorId = useId()
   return (
     <span className="flex w-full min-w-0 flex-col gap-1">
-      <TextField
+      <Input
         // oxlint-disable-next-line jsx-a11y/no-autofocus -- the field replaces the Edit button the user just pressed
         autoFocus
         value={props.draft}
         disabled={props.saving}
         placeholder={props.placeholder}
         aria-label={props.label}
-        invalid={props.error !== null}
+        aria-invalid={props.error !== null || undefined}
         aria-describedby={props.error === null ? undefined : errorId}
         onChange={(event) => props.onDraftChange(event.target.value)}
         onBlur={props.onBlur}
@@ -137,23 +138,23 @@ function Display(props: {
         props.alignment === "end" ? "-mr-2 items-end" : "w-full",
       )}
     >
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         // oxlint-disable-next-line jsx-a11y/no-autofocus -- Enter or Escape removed the focused field, so focus returns to the button that replaced it
         autoFocus={props.refocus}
         aria-label={`Edit ${props.label}`}
         onClick={props.onEdit}
         className={composeClasses(
-          "flex max-w-full min-w-0 items-center gap-2 rounded-control px-2 py-1 text-start text-sm transition-standard hover:bg-fill-primary",
-          props.alignment === "end" ? "justify-end" : "-ml-2",
-          props.value ? "text-text-primary" : "text-text-secondary",
+          "h-auto max-w-full min-w-0 gap-2 px-2 py-1 text-start font-normal",
+          props.alignment === "end" ? "justify-end" : "-ml-2 justify-start",
+          props.value ? "text-foreground" : "text-muted-foreground",
         )}
       >
         <span className="min-w-0 truncate">{props.value || props.placeholder}</span>
-        <span className="flex shrink-0 text-text-secondary transition-standard [button:hover>&]:text-text-primary">
+        <span className="flex shrink-0 text-muted-foreground transition-colors group-hover/button:text-foreground">
           <Icon glyph="Pencil" size="extra-small" />
         </span>
-      </button>
+      </Button>
     </span>
   )
 }

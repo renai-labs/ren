@@ -2,7 +2,7 @@ import { Collapsible } from "@base-ui/react/collapsible"
 import { cva } from "class-variance-authority"
 import { composeClasses } from "../lib/compose-classes.js"
 import { Icon } from "./icon.js"
-import { ProgressIndicator } from "./progress-indicator.js"
+import { Spinner } from "./spinner.js"
 import { Text } from "./text.js"
 
 export type TaskStatus = "pending" | "in-progress" | "completed" | "cancelled"
@@ -37,7 +37,7 @@ const contentVariants = cva("min-w-0 flex-1", {
 })
 
 function StatusGlyph(props: { status: TaskStatus }) {
-  if (props.status === "in-progress") return <ProgressIndicator size="small" announcement="none" />
+  if (props.status === "in-progress") return <Spinner aria-hidden className="text-muted-foreground" />
   if (props.status === "completed") return <Icon glyph="CircleCheck" tone="success" />
   if (props.status === "cancelled") return <Icon glyph="X" tone="secondary" />
   return <Icon glyph="Circle" tone="secondary" />
