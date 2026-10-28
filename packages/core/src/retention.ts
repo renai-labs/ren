@@ -61,11 +61,7 @@ export const layer = Layer.effect(
         .delete(Database.Schema.schedule_run)
         .where(lt(Database.Schema.schedule_run.scheduled_at, cutoff))
         .pipe(Effect.orDie)
-      yield* drives
-        .sweep(cutoff)
-        .pipe(
-          Effect.catch((error) => Effect.logWarning("Retention kept archived drives for the next run", error.cause)),
-        )
+      yield* drives.sweep(cutoff)
       if (stale.length > 0) yield* Effect.logInfo(`Retention deleted ${stale.length} chats`)
     }).pipe(Effect.withSpan("Retention.run"))
 
