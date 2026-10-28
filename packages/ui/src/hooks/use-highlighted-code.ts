@@ -13,10 +13,10 @@ type Highlighted = {
 export function useHighlightedCode(value: string, language: string) {
   const code = value.endsWith("\n") ? value.slice(0, -1) : value
   const [loaded, setLoaded] = useState<{ language: string; highlighter: Highlighter | null }>()
-  const highlighter = loaded?.language === language ? loaded.highlighter : (readyHighlighter(language) ?? null)
+  const highlighter = loaded?.language === language ? loaded.highlighter : readyHighlighter(language)
 
   useEffect(() => {
-    if (readyHighlighter(language) !== undefined) return
+    if (readyHighlighter(language)) return
     const run = { cancelled: false }
     loadHighlighter(language)
       .then((next) => {

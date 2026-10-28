@@ -138,6 +138,19 @@ function submitOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
   form?.requestSubmit()
 }
 
+const paddingOf = (layout: Layout, size: "default" | "lg" | undefined) =>
+  cn(
+    "text-base/relaxed md:text-sm/relaxed",
+    layout === "stacked" ? "min-h-16 px-4 pt-4 pb-2" : "min-h-0 px-2 py-3",
+    layout === "stacked" && size === "lg" && "min-h-24",
+  )
+
+const suggestionAttributes = (listbox: string, active: string | undefined) => ({
+  "aria-autocomplete": "list" as const,
+  "aria-controls": listbox,
+  ...(active && { "aria-activedescendant": suggestionID(listbox, active) }),
+})
+
 function assignRef<T>(ref: Ref<T> | undefined, node: T | null) {
   if (typeof ref === "function") return ref(node)
   if (ref) ref.current = node
@@ -169,11 +182,7 @@ export function Textarea(
     node.focus()
     node.setSelectionRange(node.value.length, node.value.length)
   }, [focusOnMount])
-  const padding = cn(
-    "text-base/relaxed md:text-sm/relaxed",
-    root.layout === "stacked" ? "min-h-16 px-4 pt-4 pb-2" : "min-h-0 px-2 py-3",
-    root.layout === "stacked" && size === "lg" && "min-h-24",
-  )
+  const padding = paddingOf(root.layout, size)
   return (
     <div data-slot="prompt-input-field" className="relative flex min-w-0 flex-1 self-stretch">
       {marked ? (
@@ -189,11 +198,7 @@ export function Textarea(
         </div>
       ) : null}
       <InputGroupTextarea
-        {...(suggesting && {
-          "aria-autocomplete": "list" as const,
-          "aria-controls": root.listbox,
-          ...(activeSuggestion && { "aria-activedescendant": suggestionID(root.listbox, activeSuggestion) }),
-        })}
+        {...(suggesting && suggestionAttributes(root.listbox, activeSuggestion))}
         {...(marked && { spellCheck: false })}
         ref={(node) => {
           input.current = node
