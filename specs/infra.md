@@ -1,6 +1,6 @@
 # Infra
 
-Status: proposal. Nothing in this document is built yet. Sections 1 to 7 are decided. Section 8 lists the open areas.
+Status: partly built. Sections 1 to 7 are decided, and section 6.4 lists what `ren infra apply` covers today. Section 8 lists the open areas.
 
 ## 1. Purpose
 
@@ -211,6 +211,19 @@ Ren keeps no state for infra. No row keeps a hash.
 2. `apply` sends the spec and the digest. In the lock, the server computes the diff again. If the digest is different, apply fails with "plan is stale, run ren infra plan again".
 3. This finds every change since the plan: another apply, a UI edit, or a new registry version.
 4. Two people who apply from two different local folders is a human problem. Each person must update their folder before they apply. Ren does not check where a folder came from.
+
+### 6.4 What apply covers
+
+| Part                              | Applied | Natural key                        | Notes                                                                                                                                                   |
+| --------------------------------- | ------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Organization settings             | Yes     | —                                  |                                                                                                                                                         |
+| Shared spaces, agents, `uses`     | Yes     | slug, agent name                   | `renamedFrom` keeps the row.                                                                                                                            |
+| `factory`                         | Yes     | —                                  |                                                                                                                                                         |
+| `apps/<slug>/`                    | Yes     | app slug                           | Created in dependency order. Moving the folder transfers the app. `renamedFrom` is a problem: an app slug cannot change.                                |
+| `schedules.yaml`                  | Yes     | space and slug                     | Recurring schedules that start a new chat. One-time schedules and schedules that send to a chat are not managed.                                       |
+| `channels.yaml` + bindings        | Yes     | install and place                  | GitHub and Slack. A mapping has no slug or purpose, so pull names it from its place.                                                                    |
+| `profiles` bindings               | Yes     | app, profile slug and space        | Only the apps a space's bindings name. Apply never removes the last space of a profile: that would delete the profile and its sign-ins. It is a problem. |
+| Webhooks, environment, `timezone` | No      | —                                  | A problem in the plan.                                                                                                                                  |
 
 ## 7. Commands
 
