@@ -1,4 +1,3 @@
-import { ApplicationShell } from "@ren/ui/application-shell"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
@@ -10,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { Text } from "@ren/ui/text"
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@ren/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { Initials } from "@ren/util/initials"
 import { useQueryClient } from "@tanstack/react-query"
@@ -29,44 +28,38 @@ export function ProfileCard(props: {
   const auth = Auth.useClient()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const navigation = ApplicationShell.useNavigation()
+  const sidebar = useSidebar()
+  const collapsed = sidebar.state === "collapsed" && !sidebar.isMobile
   const [loggingOut, setLoggingOut] = useState(false)
   const [creating, setCreating] = useState(false)
   const displayName = props.user.name || props.user.email || "User"
   return (
-    <div className="flex items-center gap-1">
-      <OrganizationSwitcher
-        active={props.organization}
-        onCreate={() => setCreating(true)}
-        onLogOut={() => setLoggingOut(true)}
-        trigger={
-          <Button
-            variant="ghost"
-            size={navigation.collapsed ? "icon" : "lg"}
-            className={navigation.collapsed ? "rounded-full" : "h-10 min-w-0 flex-1 justify-start gap-2 pl-1"}
-            aria-label={`Switch organization (current: ${props.organization.name})`}
-          >
-            <Avatar aria-hidden>
-              {props.user.image ? <AvatarImage src={props.user.image} alt="" /> : null}
-              <AvatarFallback>{Initials.of(displayName)}</AvatarFallback>
-            </Avatar>
-            {navigation.collapsed ? null : (
-              <>
-                <span className="flex min-w-0 flex-1 flex-col text-start">
-                  <Text element="span" truncation="single-line">
-                    {displayName}
-                  </Text>
-                  <Text purpose="caption" element="span" truncation="single-line">
-                    {props.organization.name}
-                  </Text>
-                </span>
-                <Icon glyph="ChevronUp" tone="secondary" data-icon="inline-end" />
-              </>
-            )}
-          </Button>
-        }
-      />
-      {navigation.collapsed ? null : <ProfileActions />}
+    <SidebarMenu>
+      <SidebarMenuItem className="flex items-center gap-1">
+        <OrganizationSwitcher
+          active={props.organization}
+          onCreate={() => setCreating(true)}
+          onLogOut={() => setLoggingOut(true)}
+          trigger={
+            <SidebarMenuButton
+              size="lg"
+              className="h-10 min-w-0 flex-1 pl-3 group-data-[collapsible=icon]:pl-2"
+              aria-label={`Switch organization (current: ${props.organization.name})`}
+            >
+              <Avatar aria-hidden className="group-data-[collapsible=icon]:size-6">
+                {props.user.image ? <AvatarImage src={props.user.image} alt="" /> : null}
+                <AvatarFallback>{Initials.of(displayName)}</AvatarFallback>
+              </Avatar>
+              <span className="flex min-w-0 flex-1 flex-col text-start leading-tight">
+                <span className="truncate font-medium text-foreground">{displayName}</span>
+                <span className="truncate text-xs">{props.organization.name}</span>
+              </span>
+              <Icon glyph="ChevronUp" />
+            </SidebarMenuButton>
+          }
+        />
+        {collapsed ? null : <ProfileActions />}
+      </SidebarMenuItem>
       {creating ? <CreateOrganizationDialog onOpenChange={setCreating} /> : null}
       <ConfirmationDialog
         open={loggingOut}
@@ -81,14 +74,14 @@ export function ProfileCard(props: {
           await navigate({ to: "/login" })
         }}
       />
-    </div>
+    </SidebarMenu>
   )
 }
 
 function ProfileActions() {
   const platform = Platform.usePlatform()
   const navigate = useNavigate()
-  const navigation = ApplicationShell.useNavigation()
+  const sidebar = useSidebar()
   return (
     <div className="flex shrink-0 items-center">
       <DropdownMenu>
@@ -119,7 +112,7 @@ function ProfileActions() {
               className="text-muted-foreground"
               aria-label="Settings"
               onClick={() => {
-                navigation.dismiss()
+                sidebar.setOpenMobile(false)
                 void navigate({ to: "/settings" })
               }}
             />

@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_authed/_shell/tasks/$taskId/")({
         ...options.context.api.task.get.queryOptions({ idOrSlug: options.params.taskId }),
         ...Seed.fromList<TaskInfo>(
           options.context.queryClient,
-          options.context.api.task.list.queryKey(),
+          [options.context.api.task.list.queryKey()],
           options.params.taskId,
         ),
       }),

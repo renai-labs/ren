@@ -6,6 +6,7 @@ import { Effect, Schema } from "effect"
 import { lazy, Suspense } from "react"
 import { RouteError } from "../../../../../components/error-page.js"
 import { Seed } from "../../../../../lib/seed.js"
+import { SessionList } from "../../../../../lib/session-list.js"
 
 export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
   validateSearch: Schema.toStandardSchemaV1(
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
       ...options.context.api.session.get.queryOptions({ idOrSlug: options.params.sessionId }),
       ...Seed.fromList<SessionInfo>(
         options.context.queryClient,
-        options.context.api.session.list.queryKey(),
+        [options.context.api.session.list.queryKey(), SessionList.sidebarKey],
         options.params.sessionId,
       ),
     })

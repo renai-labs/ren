@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId")({
       ...options.context.api.space.get.queryOptions({ idOrSlug: options.params.spaceId }),
       ...Seed.fromList<SpaceInfo>(
         options.context.queryClient,
-        options.context.api.space.list.queryKey(),
+        [options.context.api.space.list.queryKey()],
         options.params.spaceId,
       ),
     }),

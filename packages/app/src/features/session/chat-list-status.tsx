@@ -1,4 +1,5 @@
 import type { Session } from "@ren/schema/session"
+import { SidebarMenuBadge } from "@ren/ui/sidebar"
 import { Spinner } from "@ren/ui/spinner"
 import { StatusDot } from "@ren/ui/status-dot"
 import { useRouteContext } from "@tanstack/react-router"
@@ -10,7 +11,14 @@ export function ChatListStatus(props: { sessionID: Session.ID; busy: boolean }) 
   const attention =
     ChatAttention.useAttention(Chat.forUser(context.platform, context.me.user.id), props.sessionID) ??
     (props.busy ? "running" : "idle")
-  if (attention === "asking") return <StatusDot tone="accent" label="Needs your input" />
-  if (attention === "running") return <Spinner aria-hidden className="size-3 text-muted-foreground" />
-  return null
+  if (attention === "idle") return null
+  return (
+    <SidebarMenuBadge className="peer-data-[size=default]/menu-button:top-2">
+      {attention === "asking" ? (
+        <StatusDot tone="accent" label="Needs your input" />
+      ) : (
+        <Spinner aria-hidden className="size-3 text-muted-foreground" />
+      )}
+    </SidebarMenuBadge>
+  )
 }

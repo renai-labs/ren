@@ -8,12 +8,24 @@ interface Listed {
   readonly slug?: string
 }
 
-export function fromList<Item extends Listed>(queryClient: QueryClient, listKey: QueryKey, idOrSlug: string) {
+interface Page<Item> {
+  readonly items: ReadonlyArray<Item>
+}
+
+type Cached<Item> = Page<Item> | { readonly pages: ReadonlyArray<Page<Item>> }
+
+export function fromList<Item extends Listed>(
+  queryClient: QueryClient,
+  listKeys: ReadonlyArray<QueryKey>,
+  idOrSlug: string,
+) {
   const found = () =>
-    queryClient
-      .getQueriesData<{ readonly items: ReadonlyArray<Item> }>({ queryKey: listKey })
+    listKeys
+      .flatMap((listKey) => queryClient.getQueriesData<Cached<Item>>({ queryKey: listKey }))
       .flatMap(([queryKey, data]) =>
-        (data?.items ?? []).map((item) => ({ item, updatedAt: queryClient.getQueryState(queryKey)?.dataUpdatedAt })),
+        (data && "pages" in data ? data.pages : [data]).flatMap((page) =>
+          (page?.items ?? []).map((item) => ({ item, updatedAt: queryClient.getQueryState(queryKey)?.dataUpdatedAt })),
+        ),
       )
       .find((entry) => [entry.item.id, entry.item.identifier, entry.item.slug].includes(idOrSlug))
   return { initialData: () => found()?.item, initialDataUpdatedAt: () => found()?.updatedAt }

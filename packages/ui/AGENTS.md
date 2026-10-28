@@ -46,7 +46,6 @@ Ren's own components and compositions (`Form`, `FormActions`, `FormSection`, `Co
   - Classes that borrow another role's colour move to role tokens with identical values: `bg-text-primary` to `bg-fill-inverse`, `bg-text-secondary` to `bg-fill-inverse-secondary`, and `border-`, `ring-` and `outline-text-primary` to `border-strong`. Lines drawn with `bg-border-primary` become borders.
   - `ConfirmationDialog` ignores outside clicks; Escape and Cancel still close it.
   - `InlineEdit` returns focus to its Edit button after Enter or Escape, and shows validation and save errors while editing, linked to the input.
-  - `ApplicationShell` gives collapsed navigation items an accessible name, and its mobile drawer's panel button reads "Close navigation".
   - `Document` streams in with Ren's motion easing instead of `ease-out`.
   - `Text activity="active"` pulses between `text-secondary` and `text-primary` instead of fading to 50% opacity, which failed contrast.
   - Light `accent-primary` is `#0065cc` (ren-v1 `#0067d0`) so accent text passes AA on its tint. Mirror it in Paper.
