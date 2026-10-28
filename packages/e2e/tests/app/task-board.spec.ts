@@ -12,7 +12,7 @@ test("a member arranges the factory, moves a card and restores the single-space 
   const space = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await response.json())
   await page.goto(`/app/spaces/${space.id}`)
   await page.getByRole("link", { name: "Factory", exact: true }).click()
-  await expect(page.getByRole("button", { name: "Remove ren from factory order", exact: true })).toBeDisabled()
+  await expect(page.getByRole("button", { name: "Remove ren from the factory", exact: true })).toBeDisabled()
   await expect(
     page.getByText("Spaces without their own primary agents use global agents as the default factory order.", {
       exact: true,
@@ -41,22 +41,22 @@ test("a member arranges the factory, moves a card and restores the single-space 
 
   await page.goto(`/app/spaces/${space.id}`)
   await page.getByRole("link", { name: "Factory", exact: true }).click()
-  await page.getByRole("button", { name: "Add build to factory order", exact: true }).click()
+  const factory = page.getByRole("list", { name: "Factory", exact: true }).getByRole("listitem")
+  const add = async (name: string) => {
+    await page.getByRole("button", { name: "Add agent", exact: true }).click()
+    await page.getByRole("menuitem", { name, exact: true }).click()
+  }
+  await add("build")
   await expect(page.getByRole("button", { name: "Move build up", exact: true })).toBeDisabled()
-  await page.getByRole("button", { name: "Add plan to factory order", exact: true }).click()
+  await add("plan")
   await page.getByRole("button", { name: "Move plan up", exact: true }).click()
-  await expect(page.getByRole("list", { name: "Factory order", exact: true }).getByRole("listitem")).toHaveText([
-    "plan",
-    "build",
-  ])
-  await page.getByRole("button", { name: "Add ren to factory order", exact: true }).click()
-  await page.getByRole("button", { name: "Remove ren from factory order", exact: true }).click()
-  await expect(page.getByRole("button", { name: "Add ren to factory order", exact: true })).toBeVisible()
+  await expect(factory).toHaveText([/^plan/, /^build/])
+  await add("ren")
+  await expect(factory).toHaveText([/^plan/, /^build/, /^ren/])
+  await page.getByRole("button", { name: "Remove ren from the factory", exact: true }).click()
+  await expect(factory).toHaveText([/^plan/, /^build/])
   await page.reload()
-  await expect(page.getByRole("list", { name: "Factory order", exact: true }).getByRole("listitem")).toHaveText([
-    "plan",
-    "build",
-  ])
+  await expect(factory).toHaveText([/^plan/, /^build/])
 
   await page.goto("/app/tasks?group=status&direction=asc")
   await page.getByRole("button", { name: "Display options" }).click()
