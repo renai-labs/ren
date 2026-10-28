@@ -87,7 +87,13 @@ export function ThemeSelector(props: { value: Preference; onValueChange: (value:
         ))}
       </RadioGroup>
       {additionalSelected ? null : (
-        <Button appearance="link" size="small" aria-expanded={expanded} onClick={() => setExpanded((open) => !open)}>
+        <Button
+          variant="link"
+          size="sm"
+          className="self-center"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((open) => !open)}
+        >
           {expanded ? "Show less" : "Show more"}
         </Button>
       )}

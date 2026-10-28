@@ -1,24 +1,35 @@
 export * as TaskLabel from "./task-label.js"
 
 import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { composeClasses } from "../lib/compose-classes.js"
 import { display, tone } from "../lib/label-color.js"
 import { Badge } from "./badge.js"
 import { StatusDot } from "./status-dot.js"
-import { Tooltip } from "./tooltip.js"
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip.js"
 
 export { display, swatches, tone } from "../lib/label-color.js"
 
 export type Label = { id: string; name: string; color?: string | null }
 
+const tag = "h-6 max-w-40 gap-2 rounded-full bg-muted"
+
+function LabelName(props: { label: Label }) {
+  return (
+    <>
+      <StatusDot tone={tone(props.label)} />
+      <span className="truncate">{display(props.label.name)}</span>
+    </>
+  )
+}
+
 export function Pill(props: { label: Label }) {
   return (
-    <Tooltip.Root content={display(props.label.name)}>
-      <span className="flex min-w-0">
-        <Badge appearance="tag" size="medium" shape="pill" marker="dot" markerTone={tone(props.label)}>
-          {display(props.label.name)}
-        </Badge>
-      </span>
-    </Tooltip.Root>
+    <Tooltip>
+      <TooltipTrigger render={<Badge variant="outline" className={composeClasses(tag, "min-w-0 shrink")} />}>
+        <LabelName label={props.label} />
+      </TooltipTrigger>
+      <TooltipContent>{display(props.label.name)}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -66,19 +77,18 @@ export function Chips(props: { labels: ReadonlyArray<Label> }) {
         <Pill key={label.id} label={label} />
       ))}
       {hidden.length > 0 ? (
-        <Tooltip.Root content={hidden.map((label) => display(label.name)).join(", ")}>
-          <span className="flex">
-            <Badge appearance="tag" size="medium" shape="pill" tone="muted">
-              +{hidden.length}
-            </Badge>
-          </span>
-        </Tooltip.Root>
+        <Tooltip>
+          <TooltipTrigger render={<Badge variant="outline" className={composeClasses(tag, "text-muted-foreground")} />}>
+            +{hidden.length}
+          </TooltipTrigger>
+          <TooltipContent>{hidden.map((label) => display(label.name)).join(", ")}</TooltipContent>
+        </Tooltip>
       ) : null}
       <span aria-hidden="true" className="pointer-events-none invisible absolute flex gap-1" ref={measurement}>
         {props.labels.map((label) => (
           <span key={label.id} className="flex shrink-0">
-            <Badge appearance="tag" size="medium" shape="pill" marker="dot" markerTone={tone(label)}>
-              {display(label.name)}
+            <Badge variant="outline" className={tag}>
+              <LabelName label={label} />
             </Badge>
           </span>
         ))}

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react"
-import { LoadingMessage } from "./loading-message.js"
+import { Empty, EmptyHeader, EmptyMedia } from "./empty.js"
+import { Spinner } from "./spinner.js"
 
 export interface MarkdownEditorProps {
   value: string
@@ -15,7 +16,17 @@ const Editor = lazy(() =>
 
 export function MarkdownEditor(props: MarkdownEditorProps) {
   return (
-    <Suspense fallback={<LoadingMessage placement="section" />}>
+    <Suspense
+      fallback={
+        <Empty className="min-h-40">
+          <EmptyHeader>
+            <EmptyMedia>
+              <Spinner />
+            </EmptyMedia>
+          </EmptyHeader>
+        </Empty>
+      }
+    >
       <Editor {...props} />
     </Suspense>
   )

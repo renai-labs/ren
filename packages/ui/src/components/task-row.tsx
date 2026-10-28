@@ -50,7 +50,12 @@ export function TaskRow(props: TaskRowProps) {
       ) : null}
       {props.leading}
       <span className="flex min-w-0 items-center gap-2">
-        <Button appearance="text" onClick={props.onOpen} title={props.title}>
+        <Button
+          variant="link"
+          onClick={props.onOpen}
+          title={props.title}
+          className="h-auto max-w-full min-w-0 shrink justify-start truncate px-0 text-start text-foreground hover:no-underline active:not-aria-[haspopup]:scale-100"
+        >
           {props.title}
         </Button>
         {props.parent ? (

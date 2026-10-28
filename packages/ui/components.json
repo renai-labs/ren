@@ -16,8 +16,7 @@
     "components": "#components",
     "ui": "#components",
     "utils": "#lib/utils",
-    "lib": "#lib",
-    "hooks": "#hooks"
+    "lib": "#lib"
   },
   "menuColor": "default",
   "menuAccent": "subtle",

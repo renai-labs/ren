@@ -1,13 +1,17 @@
 id: no-boolean-mode-props
 language: Tsx
 message: >-
-  This boolean switches the component between modes. Compose an explicit variant (`ThreadComposer`, not `Composer isThread`) or compound parts instead.
+  This boolean switches the component between modes. Compose an explicit variant (`ThreadComposer`, not `Composer isThread`) or compound parts instead. shadcn's own `showCloseButton` and `isActive` are allowed.
 severity: error
 files:
   - "**/*.tsx"
 rule:
   kind: property_signature
   all:
+    - not:
+        has:
+          field: name
+          regex: ^(showCloseButton|isActive)$
     - has:
         field: name
         regex: ^(is|show|hide|has|with|without|enable|disable|use|should|can|allow)[A-Z]

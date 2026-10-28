@@ -4,6 +4,7 @@ import { cva } from "class-variance-authority"
 import type { ReactNode } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
 import { Button } from "./button.js"
+import { Spinner } from "./spinner.js"
 
 const rootVariants = cva("flex w-full items-center gap-2", {
   variants: { alignment: { end: "justify-end", split: "justify-between" } },
@@ -19,7 +20,7 @@ export function Root(props: { alignment?: "end" | "split"; children: ReactNode }
 
 export function Cancel(props: { onClick: () => void; disabled?: boolean }) {
   return (
-    <Button appearance="ghost" onClick={props.onClick} disabled={props.disabled}>
+    <Button variant="ghost" onClick={props.onClick} disabled={props.disabled}>
       Cancel
     </Button>
   )
@@ -40,12 +41,18 @@ export function Submit(props: SubmitProps) {
       form={props.form}
       type={props.onClick === undefined ? "submit" : "button"}
       onClick={props.onClick}
-      pending={props.pending}
-      pendingLabel={props.pendingLabel}
-      disabled={props.disabled}
-      appearance="primary"
+      disabled={props.pending || props.disabled === true}
+      aria-busy={props.pending || undefined}
+      variant="default"
     >
-      {props.children}
+      {props.pending ? (
+        <>
+          <Spinner aria-hidden data-icon="inline-start" />
+          {props.pendingLabel}
+        </>
+      ) : (
+        props.children
+      )}
     </Button>
   )
 }

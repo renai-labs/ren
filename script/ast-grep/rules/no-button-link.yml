@@ -1,0 +1,33 @@
+id: no-button-link
+language: Tsx
+message: 'A link styled as a button is still a link. Put `className={buttonVariants({ variant, size })}` on the `Link` or `a`; rendering it through `Button` gives it `role="button"`.'
+severity: error
+files:
+  - packages/ui/src/**
+  - packages/app/src/**
+ignores:
+  - packages/ui/src/components/pagination.tsx
+rule:
+  any:
+    - kind: jsx_opening_element
+    - kind: jsx_self_closing_element
+  all:
+    - has:
+        field: name
+        regex: ^(Button|InputGroupButton)$
+    - has:
+        kind: jsx_attribute
+        all:
+          - has:
+              kind: property_identifier
+              regex: ^render$
+          - has:
+              kind: jsx_expression
+              has:
+                any:
+                  - kind: jsx_self_closing_element
+                  - kind: jsx_element
+                has:
+                  stopBy: end
+                  field: name
+                  regex: ^(a|Link)$

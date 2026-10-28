@@ -5,8 +5,8 @@ import { useConnectionInteraction } from "../lib/connection-board-interaction.js
 import type { PendingLink } from "../lib/connection-board-interaction.js"
 import { useConnectionSearch } from "../lib/connection-board-search.js"
 import { Icon } from "./icon.js"
-import { ProgressIndicator } from "./progress-indicator.js"
 import { SearchField } from "./search-field.js"
+import { Spinner } from "./spinner.js"
 import { Text } from "./text.js"
 
 export type ConnectionBoardNode = { id: string; title: string }
@@ -450,7 +450,7 @@ function PendingSpinner(props: { top: number }) {
       className="pointer-events-none absolute left-1/2 flex size-6 -translate-1/2 items-center justify-center rounded-full border border-border-secondary bg-background-secondary"
       style={{ top: props.top }}
     >
-      <ProgressIndicator size="small" label="Connecting" />
+      <Spinner aria-label="Connecting" className="text-text-secondary" />
     </span>
   )
 }

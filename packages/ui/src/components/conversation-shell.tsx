@@ -19,12 +19,17 @@ import { JumpToLatest } from "../lib/conversation-timeline.js"
 import { itemVariants, leadingSlot } from "../lib/list-chrome.js"
 import { AttachmentTile } from "./attachment-tile.js"
 import { Button } from "./button.js"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./dropdown-menu.js"
 import { Icon } from "./icon.js"
 import type { Glyph } from "./icon.js"
-import { IconButton } from "./icon-button.js"
-import { KeyboardKey } from "./keyboard-key.js"
-import { Menu } from "./menu.js"
-import { Surface } from "./surface.js"
+import { Kbd } from "./kbd.js"
+import { Spinner } from "./spinner.js"
 import { Text } from "./text.js"
 
 export { Timeline } from "../lib/conversation-timeline.js"
@@ -660,14 +665,12 @@ export function Suggestions(props: SuggestionsProps) {
     list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
   }, [props.active])
   return (
-    <Surface.Overlay
+    <div
       id={listbox}
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the text field keeps focus and points into the options, which a <select> cannot do
       role="listbox"
       aria-label={props.label}
-      padding="small"
-      overflow="scrolling"
-      height="limited"
+      className="max-h-64 min-h-0 overflow-y-auto overscroll-contain rounded-container border border-border-primary bg-background-secondary p-2 shadow-overlay"
     >
       <div ref={list} className="flex flex-col">
         {groups.map((group) => (
@@ -685,7 +688,7 @@ export function Suggestions(props: SuggestionsProps) {
           </SuggestionGroup>
         ))}
       </div>
-    </Surface.Overlay>
+    </div>
   )
 }
 
@@ -756,36 +759,44 @@ export type ComposerSubmitProps = {
 export function ComposerSubmit(props: ComposerSubmitProps) {
   if (props.starting)
     return (
-      <IconButton type="submit" appearance="secondary" shape="circle" size="medium" pending label="Starting session">
-        <Icon glyph="ArrowUp" />
-      </IconButton>
+      <Button
+        type="submit"
+        variant="secondary"
+        size="icon"
+        aria-label="Starting session"
+        aria-busy
+        disabled
+        className="rounded-full"
+      >
+        <Spinner />
+      </Button>
     )
   const stop = (appearance: "primary" | "secondary") => (
-    <IconButton
-      appearance={appearance}
-      shape="circle"
-      size="medium"
-      label="Stop"
+    <Button
+      variant={appearance === "primary" ? "default" : "secondary"}
+      size="icon"
+      aria-label="Stop"
+      className="rounded-full"
       onClick={(event) => {
         event.preventDefault()
         props.onStop()
       }}
     >
       <Icon glyph="Stop" />
-    </IconButton>
+    </Button>
   )
   if (props.running && !props.content) return stop("primary")
   const send = (
-    <IconButton
+    <Button
       type="submit"
-      appearance={props.content ? "primary" : "secondary"}
-      shape="circle"
-      size="medium"
-      label="Send"
+      variant={props.content ? "default" : "secondary"}
+      size="icon"
+      aria-label="Send"
+      className="rounded-full"
       disabled={props.disabled}
     >
       <Icon glyph="ArrowUp" />
-    </IconButton>
+    </Button>
   )
   if (!props.running) return send
   return (
@@ -805,9 +816,9 @@ export type ComposerAlternateProps = {
 
 export function ComposerAlternate(props: ComposerAlternateProps) {
   return (
-    <Button appearance="ghost" size="small" title={props.description} onClick={props.onActivate}>
+    <Button variant="ghost" size="xs" className="h-6.5" title={props.description} onClick={props.onActivate}>
       {props.label}
-      <KeyboardKey>{props.shortcut}</KeyboardKey>
+      <Kbd>{props.shortcut}</Kbd>
     </Button>
   )
 }
@@ -951,31 +962,33 @@ function QueueReorder(props: {
   onMoveDown: (() => void) | undefined
 }) {
   return (
-    <Menu.Root>
-      <Menu.Trigger
+    <DropdownMenu>
+      <DropdownMenuTrigger
         render={
-          <IconButton label="Reorder" size="compact" disabled={props.busy}>
-            <Icon glyph="SortArrows" />
-          </IconButton>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Reorder"
+            className="text-muted-foreground"
+            disabled={props.busy}
+          />
         }
-      />
-      <Menu.Popup placement="top" alignment="end">
-        <Menu.Item
-          icon={<Icon glyph="ArrowUp" />}
-          disabled={!props.onMoveUp}
-          {...(props.onMoveUp && { onSelect: props.onMoveUp })}
-        >
-          Move up
-        </Menu.Item>
-        <Menu.Item
-          icon={<Icon glyph="ArrowDown" />}
-          disabled={!props.onMoveDown}
-          {...(props.onMoveDown && { onSelect: props.onMoveDown })}
-        >
-          Move down
-        </Menu.Item>
-      </Menu.Popup>
-    </Menu.Root>
+      >
+        <Icon glyph="SortArrows" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="end" className="w-40">
+        <DropdownMenuGroup>
+          <DropdownMenuItem disabled={!props.onMoveUp} {...(props.onMoveUp && { onClick: props.onMoveUp })}>
+            <Icon glyph="ArrowUp" />
+            Move up
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={!props.onMoveDown} {...(props.onMoveDown && { onClick: props.onMoveDown })}>
+            <Icon glyph="ArrowDown" />
+            Move down
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -1011,22 +1024,43 @@ function QueueActions(props: QueueItemProps) {
       )}
     >
       {props.onSend ? (
-        <IconButton label={props.sendLabel ?? "Send now"} size="compact" disabled={props.busy} onClick={props.onSend}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={props.sendLabel ?? "Send now"}
+          className="text-muted-foreground"
+          disabled={props.busy}
+          onClick={props.onSend}
+        >
           <Icon glyph="ArrowUp" />
-        </IconButton>
+        </Button>
       ) : null}
       {props.onMove ? (
-        <IconButton label="Move to composer" size="compact" disabled={props.busy} onClick={props.onMove}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Move to composer"
+          className="text-muted-foreground"
+          disabled={props.busy}
+          onClick={props.onMove}
+        >
           <Icon glyph="Restore" />
-        </IconButton>
+        </Button>
       ) : null}
       {props.onMoveUp || props.onMoveDown ? (
         <QueueReorder busy={props.busy === true} onMoveUp={props.onMoveUp} onMoveDown={props.onMoveDown} />
       ) : null}
       {props.onRemove ? (
-        <IconButton label="Remove" size="compact" disabled={props.busy} onClick={props.onRemove}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Remove"
+          className="text-muted-foreground"
+          disabled={props.busy}
+          onClick={props.onRemove}
+        >
           <Icon glyph="X" />
-        </IconButton>
+        </Button>
       ) : null}
     </span>
   )
@@ -1082,7 +1116,7 @@ export function PastedText(props: PastedTextProps) {
           <Text purpose="caption" element="span">
             {characters.format(props.text.length)} characters
           </Text>
-          <Button appearance="link" disabled={props.disabled} onClick={props.onShowInTextField}>
+          <Button variant="link" className="h-auto px-0" disabled={props.disabled} onClick={props.onShowInTextField}>
             Show in text field
           </Button>
         </>

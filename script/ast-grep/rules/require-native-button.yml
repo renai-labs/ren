@@ -1,6 +1,6 @@
 id: require-native-button
 language: Tsx
-message: "When `render` turns a button or trigger into a link or another element, add `nativeButton={false}` so it keeps button semantics."
+message: "When `render` turns a trigger into a non-button element, add `nativeButton={false}` so Base UI gives it button semantics."
 severity: error
 files:
   - packages/ui/src/**
@@ -12,7 +12,11 @@ rule:
   all:
     - has:
         field: name
-        regex: ^(Button|InputGroupButton|[A-Z]\w*(Trigger|Close))$
+        regex: ^[A-Z]\w*(Trigger|Close)$
+    - not:
+        has:
+          field: name
+          regex: ^(Tooltip|HoverCard)Trigger$
     - has:
         kind: jsx_attribute
         all:
@@ -28,7 +32,7 @@ rule:
                 has:
                   stopBy: end
                   field: name
-                  regex: ^(a|span|div|Link|InputGroupAddon)$
+                  regex: ^(span|div|InputGroupAddon)$
     - not:
         has:
           kind: jsx_attribute

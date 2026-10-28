@@ -2,9 +2,9 @@ import { Combobox } from "@base-ui/react/combobox"
 import type { BaseUIEvent } from "@base-ui/react/types"
 import { cva } from "class-variance-authority"
 import type { KeyboardEvent, KeyboardEventHandler, ReactNode } from "react"
+import { Empty, EmptyHeader, EmptyTitle } from "../components/empty.js"
 import { Icon } from "../components/icon.js"
-import { LoadingMessage } from "../components/loading-message.js"
-import { StateMessage } from "../components/state-message.js"
+import { Spinner } from "../components/spinner.js"
 import { RowView } from "./combobox-row.js"
 import type { Row, Section, Tree } from "./combobox-tree.js"
 import { composeClasses } from "./compose-classes.js"
@@ -107,9 +107,19 @@ function Results(props: BodyProps) {
   const spacious = props.density === "spacious"
   return (
     <div className={composeClasses(resultsVariants({ scale: scale(props) }))}>
-      {props.state === "loading" ? <LoadingMessage placement="inline" /> : null}
+      {props.state === "loading" ? (
+        <div className="flex min-h-10 items-center justify-center py-2">
+          <Spinner className="size-5 text-text-secondary" />
+        </div>
+      ) : null}
       {props.state === "failed" ? (
-        <StateMessage state="failed" placement="inline" title={props.failureMessage ?? "Couldn’t load options."} />
+        <Empty role="alert" className="min-h-10 flex-row gap-2 px-0 py-2">
+          <EmptyHeader>
+            <EmptyTitle className="font-normal text-destructive">
+              {props.failureMessage ?? "Couldn’t load options."}
+            </EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       ) : null}
       {props.state === "loading" || props.state === "failed" ? null : (
         <Combobox.Empty

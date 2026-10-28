@@ -1,6 +1,6 @@
 id: no-import-alias
 language: Tsx
-message: Do not alias value imports. For type name collisions, alias inside a dedicated `import type` statement.
+message: Do not alias value imports. For type name collisions, alias inside a dedicated `import type` statement. shadcn components may import a Base UI namespace as `<Name>Primitive`.
 severity: error
 rule:
   all:
@@ -8,6 +8,10 @@ rule:
     - has:
         field: alias
         kind: identifier
+    - not:
+        has:
+          field: alias
+          regex: Primitive$
     - not:
         inside:
           pattern: import type { $$$SPECS } from "$MOD"

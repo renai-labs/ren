@@ -13,8 +13,7 @@ import { composeClasses } from "../lib/compose-classes.js"
 import { SelectionMark } from "../lib/selection-mark.js"
 import { Button } from "./button.js"
 import { Icon } from "./icon.js"
-import { IconButton } from "./icon-button.js"
-import { Surface } from "./surface.js"
+import { Spinner } from "./spinner.js"
 import { Text } from "./text.js"
 
 export type QuestionnaireChoice = {
@@ -280,13 +279,13 @@ function Item(props: {
       <div hidden={props.collapsed} className="flex min-w-0 flex-col">
         {props.question.detail ? (
           <div className="mt-2 flex max-h-40 flex-col">
-            <Surface.Well padding="row" overflow="scrolling" growth="fill">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain rounded-container bg-fill-primary px-4 py-3">
               <pre className="break-all whitespace-pre-wrap">
                 <Text purpose="code" tone="primary" element="span">
                   {props.question.detail}
                 </Text>
               </pre>
-            </Surface.Well>
+            </div>
           </div>
         ) : null}
         <Choices question={props.question} answer={props.answer} pending={props.pending} onChoose={props.onChoose} />
@@ -434,14 +433,16 @@ function Steps(props: QuestionnaireProps) {
             collapsed={collapsed}
             toggle={
               props.collapsible === true ? (
-                <IconButton
-                  label={collapsed ? "Expand question" : "Minimize question"}
-                  size="extra-small"
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={collapsed ? "Expand question" : "Minimize question"}
                   aria-expanded={!collapsed}
+                  className="text-muted-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-muted aria-expanded:hover:text-foreground"
                   onClick={() => setCollapsed((previous) => !previous)}
                 >
-                  <Icon glyph={collapsed ? "Maximize2" : "Minimize2"} />
-                </IconButton>
+                  <Icon glyph={collapsed ? "Maximize2" : "Minimize2"} size="extra-small" />
+                </Button>
               ) : null
             }
             invalid={attempted.includes(question.name) && !settled(question)}
@@ -465,8 +466,9 @@ function Steps(props: QuestionnaireProps) {
         {active > 0 ? (
           <Button
             data-slot="questionnaire-previous"
-            appearance="plain"
-            size="small"
+            variant="ghost"
+            size="xs"
+            className="h-6.5 text-muted-foreground"
             disabled={pending}
             onClick={(event) => {
               if (event.currentTarget.form) go(event.currentTarget.form, active - 1)
@@ -478,8 +480,9 @@ function Steps(props: QuestionnaireProps) {
         {current?.required === true ? null : (
           <Button
             data-slot="questionnaire-skip"
-            appearance="plain"
-            size="small"
+            variant="ghost"
+            size="xs"
+            className="h-6.5 text-muted-foreground"
             disabled={pending}
             onClick={(event) => {
               if (event.currentTarget.form) skip(event.currentTarget.form)
@@ -491,8 +494,8 @@ function Steps(props: QuestionnaireProps) {
         {active < last ? (
           <Button
             data-slot="questionnaire-next"
-            appearance="primary"
-            size="small"
+            size="xs"
+            className="h-6.5"
             disabled={pending}
             onClick={(event) => {
               if (event.currentTarget.form) advance(event.currentTarget.form)
@@ -501,7 +504,15 @@ function Steps(props: QuestionnaireProps) {
             Next
           </Button>
         ) : (
-          <Button data-slot="questionnaire-submit" type="submit" appearance="primary" size="small" pending={pending}>
+          <Button
+            data-slot="questionnaire-submit"
+            type="submit"
+            size="xs"
+            className="h-6.5"
+            disabled={pending}
+            aria-busy={pending || undefined}
+          >
+            {pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
             {props.submitLabel ?? "Submit"}
           </Button>
         )}

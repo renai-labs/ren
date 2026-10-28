@@ -1,6 +1,7 @@
 import { useId } from "react"
 import { Button } from "./button.js"
-import { Select } from "./select.js"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./select.js"
+import { Spinner } from "./spinner.js"
 import { Text } from "./text.js"
 
 export type WebSearchProvider = { value: string; label: string }
@@ -27,7 +28,7 @@ function Status(props: WebSearchConsentProps & { busy: boolean }) {
         <Text purpose="caption" element="span">
           Could not load the search providers.
         </Text>
-        <Button appearance="plain" size="small" disabled={props.busy} onClick={props.onRetry}>
+        <Button variant="ghost" size="sm" disabled={props.busy} onClick={props.onRetry}>
           Try again
         </Button>
       </>
@@ -77,33 +78,39 @@ export function WebSearchConsent(props: WebSearchConsentProps) {
             Choose the search provider Ren uses to search the web.
           </Text>
         </div>
-        <Select.Root
-          label="Search provider"
-          size="small"
-          width="limited"
-          placeholder="Search provider"
-          options={props.providers}
+        <Select
+          items={[{ value: null, label: "Search provider" }, ...props.providers]}
           value={chosen ? (props.value ?? null) : null}
-          onValueChange={props.onValueChange}
+          onValueChange={(next) => {
+            if (typeof next === "string") props.onValueChange(next)
+          }}
           disabled={busy || unavailable}
-        />
+        >
+          <SelectTrigger size="sm" aria-label="Search provider" className="max-w-72">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {props.providers.map((provider) => (
+                <SelectItem key={provider.value} value={provider.value}>
+                  {provider.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       </div>
       <div className="flex min-h-9 w-full min-w-0 flex-wrap items-center justify-end gap-1 pt-1">
         <output className="mr-auto flex min-w-0 items-center gap-2">
           <Status {...props} busy={busy} />
         </output>
         {props.onDisable ? (
-          <Button appearance="plain" size="small" disabled={busy} onClick={props.onDisable}>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={props.onDisable}>
             Turn off web search
           </Button>
         ) : null}
-        <Button
-          appearance="primary"
-          size="small"
-          pending={pending}
-          disabled={props.disabled === true || unavailable || !chosen}
-          onClick={props.onEnable}
-        >
+        <Button variant="default" size="sm" disabled={busy || unavailable || !chosen} onClick={props.onEnable}>
+          {pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           Turn on web search
         </Button>
       </div>

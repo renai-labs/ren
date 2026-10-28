@@ -1,66 +1,25 @@
-import { Checkbox } from "@base-ui/react/checkbox"
-import { useId } from "react"
-import type { ReactNode } from "react"
-import { composeClasses } from "../lib/compose-classes.js"
-import { revealOnContainerHover } from "../lib/control-chrome.js"
-import { SelectionMark } from "../lib/selection-mark.js"
+import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox"
+import { cn } from "cn"
+import { IconCheck } from "@tabler/icons-react"
 
-export type CheckboxProps = {
-  checked?: boolean
-  indeterminate?: boolean
-  onCheckedChange?: (checked: boolean) => void
-  disabled?: boolean | undefined
-  label?: string
-  labelVisibility?: "assistive" | "visible"
-  description?: ReactNode
-  id?: string
-  size?: "small" | "medium" | undefined
-  visibility?: "always" | "on-container-hover"
-}
-
-function CheckboxControl(props: CheckboxProps) {
-  const id = useId()
-  const visible = props.labelVisibility === "visible"
-  const size = props.size ?? "medium"
-  const box = (
-    <Checkbox.Root
-      id={props.id}
-      checked={props.checked}
-      indeterminate={props.indeterminate}
-      onCheckedChange={(next) => props.onCheckedChange?.(next)}
-      disabled={props.disabled}
-      aria-label={visible ? undefined : props.label}
-      aria-labelledby={visible ? `${id}-label` : undefined}
-      aria-describedby={visible && props.description ? `${id}-description` : undefined}
-      data-slot="checkbox"
-      className={composeClasses(
-        "inline-grid shrink-0 rounded-small bg-background-secondary transition-standard data-disabled:opacity-disabled",
-        size === "small" ? "mx-1 size-3.5" : "size-4",
-        props.visibility === "on-container-hover" && revealOnContainerHover,
-      )}
-      render={(rootProps, state) => (
-        <span {...rootProps}>
-          <SelectionMark kind="checkbox" checked={state.checked} indeterminate={state.indeterminate} size={size} />
-        </span>
-      )}
-    />
-  )
-  if (!visible) return box
+function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
   return (
-    <label className="flex cursor-default items-start gap-2 text-sm">
-      <span className="flex h-lh shrink-0 items-center">{box}</span>
-      <span className={composeClasses("flex min-w-0 flex-col gap-1", props.disabled === true && "opacity-disabled")}>
-        <span id={`${id}-label`} className="text-text-primary">
-          {props.label}
-        </span>
-        {props.description ? (
-          <span id={`${id}-description`} className="text-xs text-text-secondary">
-            {props.description}
-          </span>
-        ) : null}
-      </span>
-    </label>
+    <CheckboxPrimitive.Root
+      data-slot="checkbox"
+      className={cn(
+        "peer relative flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input transition-colors outline-none group-has-focus-visible/field-label:ring-0 group-has-focus-visible/field-label:not-data-checked:border-input group-has-disabled/field:opacity-50 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-focus-visible/field-label:data-checked:border-primary dark:data-checked:bg-primary",
+        className,
+      )}
+      {...props}
+    >
+      <CheckboxPrimitive.Indicator
+        data-slot="checkbox-indicator"
+        className="grid place-content-center text-current transition-none [&>svg]:size-3.5"
+      >
+        <IconCheck />
+      </CheckboxPrimitive.Indicator>
+    </CheckboxPrimitive.Root>
   )
 }
 
-export { CheckboxControl as Checkbox }
+export { Checkbox }

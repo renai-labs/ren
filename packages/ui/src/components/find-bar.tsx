@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef } from "react"
+import { Button } from "./button.js"
 import { Icon } from "./icon.js"
-import { IconButton } from "./icon-button.js"
-import { TextField } from "./text-field.js"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "./input-group.js"
 
 export type FindBarMatch = {
   row: string
@@ -131,17 +131,17 @@ export function FindBar(props: FindBarProps) {
       aria-label="Find in chat"
       className="flex min-w-0 items-center gap-1 rounded-control border border-border-primary bg-background-secondary p-1 shadow-overlay"
     >
-      <span className="w-48 min-w-0">
-        <TextField
+      <InputGroup className="h-7 w-48 min-w-0 border-0 bg-muted inset-ring inset-ring-transparent transition-colors hover:bg-secondary has-[[data-slot=input-group-control]:focus-visible]:inset-ring-ring dark:bg-muted">
+        <InputGroupAddon className="pl-3">
+          <Icon glyph="Search" />
+        </InputGroupAddon>
+        <InputGroupInput
           ref={input}
           type="search"
-          size="small"
-          appearance="filled"
-          width="full"
           value={props.value}
           placeholder="Find in chat"
           aria-label="Find in chat"
-          leading={<Icon glyph="Search" />}
+          className="h-full pl-1 [&::-webkit-search-cancel-button]:appearance-none"
           onChange={(event) => props.onValueChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -156,26 +156,42 @@ export function FindBar(props: FindBarProps) {
             props.onStep(delta)
           }}
         />
-      </span>
+      </InputGroup>
       {query ? (
         <output aria-live="polite" className="shrink-0 px-1 text-xs text-text-secondary tabular-nums">
           {status(props.count, props.active)}
         </output>
       ) : null}
-      <IconButton label="Previous match" size="small" disabled={props.count === 0} onClick={() => props.onStep(-1)}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Previous match"
+        className="text-muted-foreground"
+        disabled={props.count === 0}
+        onClick={() => props.onStep(-1)}
+      >
         <Icon glyph="ChevronUp" />
-      </IconButton>
-      <IconButton label="Next match" size="small" disabled={props.count === 0} onClick={() => props.onStep(1)}>
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Next match"
+        className="text-muted-foreground"
+        disabled={props.count === 0}
+        onClick={() => props.onStep(1)}
+      >
         <Icon glyph="ChevronDown" />
-      </IconButton>
-      <IconButton
-        label="Close find"
-        size="small"
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Close find"
+        className="text-muted-foreground"
         onMouseDown={(event) => event.preventDefault()}
         onClick={props.onClose}
       >
         <Icon glyph="X" />
-      </IconButton>
+      </Button>
     </search>
   )
 }

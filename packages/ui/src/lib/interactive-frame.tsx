@@ -4,7 +4,7 @@ import type { ComponentProps, HTMLAttributes, ReactElement, ReactNode } from "re
 
 type Slotted = { "data-slot"?: string }
 
-export type InteractiveTarget =
+type InteractiveTarget =
   | { kind: "link"; render: ReactElement; props: HTMLAttributes<HTMLElement> & Slotted }
   | { kind: "button"; props: ComponentProps<"button"> & Slotted }
   | { kind: "static"; props: ComponentProps<"div"> & Slotted }

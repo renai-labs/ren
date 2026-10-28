@@ -8,13 +8,12 @@ import type { DiffHunk } from "../lib/diff-view.js"
 import { flushSync } from "react-dom"
 import { TranscriptDisclosure, TranscriptItem } from "../lib/list-transcript.js"
 import { useStreamingText } from "../lib/streaming-text.js"
+import { Alert, AlertDescription, AlertTitle } from "./alert.js"
 import { Badge } from "./badge.js"
 import { Button } from "./button.js"
 import { Markdown } from "./document.js"
 import { Icon } from "./icon.js"
 import type { Glyph } from "./icon.js"
-import { Notice } from "./notice.js"
-import { Surface } from "./surface.js"
 import { Text } from "./text.js"
 
 export type { DiffHunk, DiffLine } from "../lib/diff-view.js"
@@ -115,13 +114,13 @@ export type ToolProps = {
 function ToolSubtitle(props: { subtitle: string; command: boolean }) {
   if (!props.command) return <span title={props.subtitle}>{props.subtitle}</span>
   return (
-    <Surface.Well depth="sunken" radius="small" element="span" title={props.subtitle}>
+    <span title={props.subtitle} className="rounded-small bg-fill-primary">
       <span className="px-2">
         <Text purpose="code" tone="inherit" element="span">
           {props.subtitle}
         </Text>
       </span>
-    </Surface.Well>
+    </span>
   )
 }
 
@@ -154,9 +153,9 @@ export function Tool(props: ToolProps) {
       defaultOpen={props.defaultOpen ?? false}
       entrance={props.entrance ?? "none"}
     >
-      <Surface.Well depth="recessed" radius="container">
+      <div className="rounded-container bg-background-tertiary">
         <div className="flex flex-col gap-3 p-3">{props.children}</div>
-      </Surface.Well>
+      </div>
     </TranscriptDisclosure>
   )
 }
@@ -257,7 +256,7 @@ const subagentProblems: Partial<Record<SubagentStatus, string>> = { failed: "Fai
 function SubagentState(props: SubagentProps) {
   if (props.needsInput === true)
     return (
-      <Badge size="small" shape="pill">
+      <Badge variant="secondary" className="rounded-full">
         Needs input
       </Badge>
     )
@@ -352,7 +351,8 @@ export function Links(props: LinksProps) {
       {remaining > 0 ? (
         <span className="flex">
           <Button
-            appearance="link"
+            variant="link"
+            className="h-auto px-0"
             onClick={() => {
               flushSync(() => setAll(true))
               first.current?.focus()
@@ -580,12 +580,20 @@ export function Retry(props: RetryProps) {
   const now = useSyncExternalStore(subscribeSeconds, readSeconds, readSeconds)
   const remaining = Math.max(0, Math.round((props.next - now) / 1000))
   return (
-    <Notice tone="warning" title={props.message}>
-      <Text purpose="caption" activity="shimmer" element="span">
-        {remaining > 0
-          ? `Attempt ${props.attempt}, retrying in ${remaining}s`
-          : `Attempt ${props.attempt}, retrying now`}
-      </Text>
-    </Notice>
+    <Alert
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a retry is not an error, so it stays a polite status instead of Alert's role="alert"
+      role="status"
+      className="rounded-container border-status-warning/disabled bg-status-warning/tint px-4 py-3 has-[>svg]:gap-x-3 *:[svg]:text-status-warning"
+    >
+      <Icon glyph="AlertTriangle" />
+      <AlertTitle>{props.message}</AlertTitle>
+      <AlertDescription>
+        <Text purpose="caption" activity="shimmer" element="span">
+          {remaining > 0
+            ? `Attempt ${props.attempt}, retrying in ${remaining}s`
+            : `Attempt ${props.attempt}, retrying now`}
+        </Text>
+      </AlertDescription>
+    </Alert>
   )
 }

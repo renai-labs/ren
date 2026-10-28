@@ -3,7 +3,7 @@ import type { VirtualItem } from "@tanstack/react-virtual"
 import { use, useEffect, useEffectEvent, useImperativeHandle, useLayoutEffect, useRef, useState } from "react"
 import type { ReactNode, Ref } from "react"
 import { Icon } from "../components/icon.js"
-import { LoadingMessage } from "../components/loading-message.js"
+import { Spinner } from "../components/spinner.js"
 import { composeClasses } from "./compose-classes.js"
 import { ShellContext } from "./conversation-context.js"
 
@@ -508,7 +508,9 @@ export function Timeline<Item>(props: TimelineProps<Item>) {
       </section>
       {loading ? (
         <div className="pointer-events-none absolute inset-x-0 top-12 z-10 flex justify-center">
-          <LoadingMessage placement="inline" title="Loading earlier messages" />
+          <div className="flex min-h-10 items-center justify-center py-2">
+            <Spinner aria-label="Loading earlier messages" className="size-5 text-text-secondary" />
+          </div>
         </div>
       ) : null}
       <JumpToLatest visible={jump} onActivate={resume} composerHeight={dockHeight} />

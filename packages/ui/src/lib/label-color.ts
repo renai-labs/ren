@@ -1,4 +1,6 @@
-import type { BadgeTone } from "../components/badge.js"
+import type { StatusTone } from "../components/status-dot.js"
+
+type LabelTone = Exclude<StatusTone, "muted">
 
 const palette = [
   { rgb: 0xd45f5f, tone: "danger" },
@@ -6,14 +8,14 @@ const palette = [
   { rgb: 0x2b9ca6, tone: "neutral" },
   { rgb: 0xc88424, tone: "warning" },
   { rgb: 0x2d9b68, tone: "success" },
-] as const satisfies ReadonlyArray<{ rgb: number; tone: BadgeTone }>
+] as const satisfies ReadonlyArray<{ rgb: number; tone: LabelTone }>
 
 export const swatches = palette.map((swatch) => ({
   hex: `#${swatch.rgb.toString(16).padStart(6, "0")}`,
   tone: swatch.tone,
 }))
 
-export function tone(label: { name: string; color?: string | null }): BadgeTone {
+export function tone(label: { name: string; color?: string | null }): LabelTone {
   if (label.color) {
     const color = Number.parseInt(label.color.slice(1), 16)
     return palette.reduce((best, swatch) => {
