@@ -236,7 +236,7 @@ function ScheduleCard(props: { schedule: ScheduleInfo; spaceName: string }) {
   )
   return (
     <>
-      <Card className="relative gap-4 border ring-0 transition-colors hover:bg-muted active:scale-99">
+      <Card className="relative gap-4 border shadow-soft ring-0 transition-colors hover:bg-muted active:scale-99">
         <CardHeader>
           <div className="mb-3 flex size-12 items-center justify-center rounded-lg bg-secondary">
             <Icon glyph="Clock" size="large" tone="secondary" />

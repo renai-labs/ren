@@ -80,7 +80,7 @@ function SpaceCard(props: { space: SpaceInfo }) {
       aria-label={`Open ${space.name}`}
       className="group/space rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
-      <Card className="h-full gap-4 border shadow-xs ring-0 transition-colors [--card-spacing:--spacing(6)] group-hover/space:bg-muted">
+      <Card className="h-full gap-4 border shadow-soft ring-0 transition-colors [--card-spacing:--spacing(6)] group-hover/space:bg-muted">
         <CardHeader>
           <span className="mb-3 flex size-12 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
             <Icon glyph={space.kind === "private" ? "Lock" : "Cube"} size="extra-large" />
