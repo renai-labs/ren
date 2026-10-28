@@ -167,8 +167,10 @@ const browserPatterns = [
   },
   { regex: "^(moment|dayjs|date-fns|luxon)(/|$)", message: "Use the formatters in @ren/ui." },
   {
-    regex: "^(@radix-ui|@headlessui|@mui|@chakra-ui|@mantine|@ark-ui|react-aria|react-aria-components|@shadcn)(/|$)",
-    message: "Base UI is the only primitive library.",
+    regex:
+      "^(@radix-ui|@headlessui|@mui|@chakra-ui|@mantine|@ark-ui|react-aria|react-aria-components)(/|$)|^@shadcn/(?!react/(message-scroller|questionnaire)$)",
+    message:
+      "Base UI is the only primitive library. @shadcn/react serves only the chat's message scroller and questionnaire.",
   },
   {
     regex: "^(lucide-react|react-icons|@heroicons/.*|@phosphor-icons/.*|@carbon/icons-react)$",
