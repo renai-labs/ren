@@ -390,7 +390,7 @@ export function Transcript(props: {
           ) : null}
           {props.working ? (
             <MessageScrollerItem messageId="working">
-              <Working label="Preparing the next step" />
+              <Working label="Working on the next step" />
             </MessageScrollerItem>
           ) : null}
         </MessageScrollerContent>
