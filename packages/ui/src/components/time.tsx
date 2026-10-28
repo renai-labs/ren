@@ -22,7 +22,6 @@ export type TimeProps = {
   timeZone?: string | undefined
   relativeStyle?: "long" | "narrow"
   label?: string
-  hint?: "title" | "tooltip"
 }
 
 export function Time(props: TimeProps) {
@@ -35,12 +34,11 @@ export function Time(props: TimeProps) {
         format={props.format}
         relativeStyle={props.relativeStyle ?? "long"}
         title={title ?? dateTime}
-        hint={props.hint ?? "title"}
       />
     )
   }
   return (
-    <TimeElement value={props.value} title={title} hint={props.hint ?? "title"}>
+    <TimeElement value={props.value} title={title}>
       {formatAbsolute(props.value, props.format, props.timeZone)}
     </TimeElement>
   )
@@ -59,11 +57,10 @@ function RelativeTime(props: {
   format: RelativeFormat
   relativeStyle: "long" | "narrow"
   title: string
-  hint: "title" | "tooltip"
 }) {
   const now = useSyncExternalStore(subscribeClock, readClock, readClock)
   return (
-    <TimeElement value={props.value} title={props.title} hint={props.hint}>
+    <TimeElement value={props.value} title={props.title}>
       {props.format === "relative"
         ? formatRelative(props.value, now, props.relativeStyle)
         : formatElapsed(props.value, now)}
@@ -71,30 +68,19 @@ function RelativeTime(props: {
   )
 }
 
-function TimeElement(props: {
-  value: DateInput
-  title?: string | undefined
-  hint: "title" | "tooltip"
-  children: string
-}) {
+function TimeElement(props: { value: DateInput; title?: string | undefined; children: string }) {
   const date = toDate(props.value)
   const valid = !Number.isNaN(date.getTime())
-  const title = valid ? props.title : undefined
   const element = (
-    <time
-      data-slot="time"
-      className="tabular-nums"
-      dateTime={valid ? date.toISOString() : undefined}
-      title={props.hint === "title" ? title : undefined}
-    >
+    <time data-slot="time" className="tabular-nums" dateTime={valid ? date.toISOString() : undefined}>
       {props.children}
     </time>
   )
-  if (props.hint === "title" || title === undefined) return element
+  if (!valid || props.title === undefined) return element
   return (
     <Tooltip>
       <TooltipTrigger render={element} />
-      <TooltipContent>{title}</TooltipContent>
+      <TooltipContent>{props.title}</TooltipContent>
     </Tooltip>
   )
 }
