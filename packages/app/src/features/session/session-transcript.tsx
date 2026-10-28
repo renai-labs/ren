@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
 import { CopyButton } from "@ren/ui/copy-button"
+import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@ren/ui/input-group"
 import { Markdown } from "@ren/ui/markdown"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
 import { Time } from "@ren/ui/time"
@@ -28,7 +29,7 @@ import {
   TraceTitle,
 } from "@ren/ui/trace"
 import { Initials } from "@ren/util/initials"
-import { IconClock, IconRestore, IconTool } from "@tabler/icons-react"
+import { IconClock, IconPencil, IconRestore, IconTool } from "@tabler/icons-react"
 import { DateTime } from "effect"
 import { useState } from "react"
 import { Countdown } from "../../lib/countdown.js"
@@ -52,6 +53,7 @@ export interface Shared {
   readonly reverting: boolean
   readonly detail: TimelineDetail.Detail | undefined
   readonly onRevert: ((message: SessionMessage.User) => void) | undefined
+  readonly onEdit: ((message: SessionMessage.User, text: string) => void) | undefined
   readonly onPending: ((action: PendingAction, message: SessionMessage.User) => void) | undefined
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onOpenSession: ((sessionID: string) => void) | undefined
@@ -283,14 +285,27 @@ function UserText(props: { text: string; highlights: ReadonlyArray<{ start: numb
   )
 }
 
-function UserActions(props: { shared: Shared; message: SessionMessage.User; pending: boolean }) {
+function UserActions(props: { shared: Shared; message: SessionMessage.User; pending: boolean; onEdit: () => void }) {
   const platform = Platform.usePlatform()
   const write = props.message.text ? platform.writeClipboardText : undefined
   const revert = props.pending ? undefined : props.shared.onRevert
+  const editable = !props.pending && props.shared.onEdit !== undefined && props.message.text !== ""
   const message = props.message
   if (!write && !revert) return null
   return (
     <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100 pointer-coarse:opacity-100">
+      {editable ? (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted-foreground"
+          aria-label="Edit message"
+          disabled={props.shared.reverting}
+          onClick={props.onEdit}
+        >
+          <IconPencil />
+        </Button>
+      ) : null}
       {revert ? (
         <Button
           variant="ghost"
@@ -336,10 +351,66 @@ function PendingActions(props: { shared: Shared; message: SessionMessage.User; u
   )
 }
 
+function EditMessage(props: { text: string; onCancel: () => void; onSave: (text: string) => void }) {
+  const [text, setText] = useState(props.text)
+  const save = () => {
+    if (!text.trim() || text.trim() === props.text.trim()) props.onCancel()
+    else props.onSave(text.trim())
+  }
+  return (
+    <div className="flex w-full flex-col gap-1.5">
+      <InputGroup className="rounded-xl bg-card shadow-composer dark:bg-card">
+        <InputGroupTextarea
+          value={text}
+          aria-label="Edit message"
+          // oxlint-disable-next-line jsx-a11y/no-autofocus -- the editor opens because the person asked to edit
+          autoFocus
+          className="max-h-60 min-h-16 px-4 pt-3 text-base/relaxed md:text-sm/relaxed"
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") props.onCancel()
+            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
+            event.preventDefault()
+            save()
+          }}
+        />
+        <InputGroupAddon align="block-end" className="justify-end gap-2 px-3 pt-0 pb-3">
+          <Button variant="ghost" size="sm" onClick={props.onCancel}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={save}>
+            Send
+          </Button>
+        </InputGroupAddon>
+      </InputGroup>
+      <p className="px-1 text-xs text-muted-foreground">
+        Sending replaces this message and removes everything after it.
+      </p>
+    </div>
+  )
+}
+
 function UserMessage(props: { shared: Shared; data: RowData }) {
+  const [editing, setEditing] = useState(false)
   const message = props.data.message
   if (message?.type !== "user") return null
   const pending = steerable.has(props.data.status)
+  const onEdit = props.shared.onEdit
+  if (editing && onEdit)
+    return (
+      <Message align="end">
+        <MessageContent>
+          <EditMessage
+            text={message.text}
+            onCancel={() => setEditing(false)}
+            onSave={(text) => {
+              setEditing(false)
+              onEdit(message, text)
+            }}
+          />
+        </MessageContent>
+      </Message>
+    )
   return (
     <Message align="end">
       {props.data.sender ? (
@@ -364,7 +435,7 @@ function UserMessage(props: { shared: Shared; data: RowData }) {
             {props.data.caption ? `${props.data.caption} · ` : ""}
             <Time value={DateTime.toEpochMillis(message.time.created)} format="time-of-day" />
           </span>
-          <UserActions shared={props.shared} message={message} pending={pending} />
+          <UserActions shared={props.shared} message={message} pending={pending} onEdit={() => setEditing(true)} />
         </MessageFooter>
         {pending ? (
           <PendingActions shared={props.shared} message={message} updating={props.data.updating === true} />
