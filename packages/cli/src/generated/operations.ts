@@ -1554,6 +1554,48 @@ export const MemoryDelete = (input: Command.Command.Config.Infer<typeof Commands
     (client, request) => client["memory"]["delete"]({ ...request.query }),
   )
 
+export const DriveList = (input: Command.Command.Config.Infer<typeof Commands.DriveList>) =>
+  Operation.run(
+    ClientApi.groups["drive"].endpoints["drive.list"],
+    {
+      query: { spaceId: input["spaceId"], folder: input["folder"], cursor: input["cursor"] },
+      labels: { spaceId: "--space", folder: "--folder", cursor: "--cursor" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["drive"]["list"]({ ...request.query }),
+  )
+
+export const DriveDownload = (input: Command.Command.Config.Infer<typeof Commands.DriveDownload>) =>
+  Operation.run(
+    ClientApi.groups["drive"].endpoints["drive.download"],
+    {
+      query: { path: input["path"], spaceId: input["spaceId"] },
+      labels: { path: "<path>", spaceId: "--space" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["drive"]["download"]({ ...request.query }),
+  )
+
+export const DriveDelete = (input: Command.Command.Config.Infer<typeof Commands.DriveDelete>) =>
+  Operation.run(
+    ClientApi.groups["drive"].endpoints["drive.delete"],
+    {
+      query: { path: input["path"], spaceId: input["spaceId"] },
+      labels: { path: "<path>", spaceId: "--space" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["drive"]["delete"]({ ...request.query }),
+  )
+
 export const CredentialConnect = (input: Command.Command.Config.Infer<typeof Commands.CredentialConnect>) =>
   Operation.run(
     ClientApi.groups["credential-connect"].endpoints["credential.connect"],

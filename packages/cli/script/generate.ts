@@ -228,6 +228,7 @@ const resources: ReadonlyArray<Resource> = [
 const groups: ReadonlyArray<EmitCli.Group> = [
   { path: ["org"], description: "Manage the organization" },
   { path: ["memory"], description: "Manage memory files" },
+  { path: ["drive"], description: "Manage drive files" },
   { path: ["environment"], description: "Manage environments" },
   { path: ["oauth"], description: "Manage OAuth apps and sessions" },
   { path: ["channel"], description: "Manage channels" },
@@ -290,6 +291,9 @@ const extra: ReadonlyArray<EmitCli.Command> = [
   { operation: "memory.write", path: ["memory", "write"], arguments: ["path"] },
   { operation: "memory.edit", path: ["memory", "edit"], arguments: ["path"] },
   { operation: "memory.delete", path: ["memory", "delete"], arguments: ["path"] },
+  { operation: "drive.list", path: ["drive", "list"] },
+  { operation: "drive.download", path: ["drive", "download"], arguments: ["path"] },
+  { operation: "drive.delete", path: ["drive", "delete"], arguments: ["path"] },
   { operation: "credential.connect", path: ["credential", "connect"], description: "Sign in to an MCP of a profile" },
   { operation: "environmentProvider.list", path: ["environment", "provider", "list"] },
   { operation: "channel-provider.list", path: ["channel", "provider", "list"] },
@@ -325,6 +329,7 @@ const elsewhere = new Map([
   ["chat.models", "Chat commands, which stream."],
   ["invitation.preview", "The sign-up page shows an invitation before its invitee signs in."],
   ["ren-inference.connect", "The provider sign-in returns to the app in a browser."],
+  ["drive.startUpload", "The upload posts its file to the bucket with the returned form; the app does it."],
 ])
 
 const handwritten = new Set(["login", "logout", "whoami", "upgrade", "health", "infra", "api"])
