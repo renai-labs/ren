@@ -230,7 +230,7 @@ const nonEmpty = <A>(key: string, values: ReadonlyArray<A> | undefined) =>
 const record = async (path: string, value: Record<string, unknown>) =>
   Object.keys(value).length > 0 ? Bun.write(path, dump(value)) : rm(path, { force: true })
 
-type PulledSkill = NonNullable<PulledApp["skills"]>[string]
+type PulledSkill = PulledApp["skills"][string]
 
 const writeSkill = async (folder: string, slug: string, skill: PulledSkill) => {
   const existing = await list(folder)
@@ -242,7 +242,9 @@ const writeSkill = async (folder: string, slug: string, skill: PulledSkill) => {
     )
     return
   }
-  const previous = existing.includes("SKILL.md") ? frontmatter.exec(await Bun.file(join(folder, "SKILL.md")).text()) : null
+  const previous = existing.includes("SKILL.md")
+    ? frontmatter.exec(await Bun.file(join(folder, "SKILL.md")).text())
+    : null
   const parsed = Result.try(() => Bun.YAML.parse(previous?.at(1) ?? "")).pipe(Result.getOrUndefined)
   const header = Predicate.isObject(parsed) ? parsed : {}
   const metadata = Predicate.isObject(header["metadata"]) ? header["metadata"] : {}
@@ -264,11 +266,11 @@ const writeSkill = async (folder: string, slug: string, skill: PulledSkill) => {
 }
 
 const writeApp = async (folder: string, app: PulledApp) => {
-  const skills = Object.entries(app.skills ?? {})
+  const skills = Object.entries(app.skills)
   const existing = children(await list(folder), "skills/")
   await Promise.all(
     existing
-      .filter((slug) => !(slug in (app.skills ?? {})))
+      .filter((slug) => !(slug in app.skills))
       .map((slug) => rm(join(folder, "skills", slug), { recursive: true, force: true })),
   )
   await Promise.all([
@@ -283,7 +285,7 @@ const writeApp = async (folder: string, app: PulledApp) => {
         ...nonEmpty("dependsOn", app.dependsOn),
       }),
     ),
-    record(join(folder, "mcps.yaml"), app.mcps ?? {}),
+    record(join(folder, "mcps.yaml"), app.mcps),
     ...skills.map(([slug, skill]) => writeSkill(join(folder, "skills", slug), slug, skill)),
   ])
 }
@@ -303,8 +305,10 @@ const writeBindings = async (root: string, pulled: typeof Infra.Pulled.Encoded) 
       const pulledSpace = pulled.bindings.spaces[slug]
       const merged = {
         ...kept,
-        ...(pulledSpace?.channels && Object.keys(pulledSpace.channels).length > 0 && { channels: pulledSpace.channels }),
-        ...(pulledSpace?.profiles && Object.keys(pulledSpace.profiles).length > 0 && { profiles: pulledSpace.profiles }),
+        ...(pulledSpace?.channels &&
+          Object.keys(pulledSpace.channels).length > 0 && { channels: pulledSpace.channels }),
+        ...(pulledSpace?.profiles &&
+          Object.keys(pulledSpace.profiles).length > 0 && { profiles: pulledSpace.profiles }),
       }
       return Object.keys(merged).length > 0 ? [[slug, merged]] : []
     }),

@@ -214,16 +214,16 @@ Ren keeps no state for infra. No row keeps a hash.
 
 ### 6.4 What apply covers
 
-| Part                              | Applied | Natural key                        | Notes                                                                                                                                                   |
-| --------------------------------- | ------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Organization settings             | Yes     | —                                  |                                                                                                                                                         |
-| Shared spaces, agents, `uses`     | Yes     | slug, agent name                   | `renamedFrom` keeps the row.                                                                                                                            |
-| `factory`                         | Yes     | —                                  |                                                                                                                                                         |
-| `apps/<slug>/`                    | Yes     | app slug                           | Created in dependency order. Moving the folder transfers the app. `renamedFrom` is a problem: an app slug cannot change.                                |
-| `schedules.yaml`                  | Yes     | space and slug                     | Recurring schedules that start a new chat. One-time schedules and schedules that send to a chat are not managed.                                       |
-| `channels.yaml` + bindings        | Yes     | install and place                  | GitHub and Slack. A mapping has no slug or purpose, so pull names it from its place.                                                                    |
-| `profiles` bindings               | Yes     | app, profile slug and space        | Only the apps a space's bindings name. Apply never removes the last space of a profile: that would delete the profile and its sign-ins. It is a problem. |
-| Webhooks, environment, `timezone` | No      | —                                  | A problem in the plan.                                                                                                                                  |
+| Part                              | Applied | Natural key                 | Notes                                                                                                                                                    |
+| --------------------------------- | ------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Organization settings             | Yes     | —                           |                                                                                                                                                          |
+| Shared spaces, agents, `uses`     | Yes     | slug, agent name            | `renamedFrom` keeps the row.                                                                                                                             |
+| `factory`                         | Yes     | —                           |                                                                                                                                                          |
+| `apps/<slug>/`                    | Yes     | app slug                    | Created in dependency order. Moving the folder transfers the app. `renamedFrom` is a problem: an app slug cannot change.                                 |
+| `schedules.yaml`                  | Yes     | space and slug              | Recurring schedules that start a new chat. One-time schedules and schedules that send to a chat are not managed.                                         |
+| `channels.yaml` + bindings        | Yes     | install and place           | GitHub and Slack. A mapping has no slug or purpose, so pull names it from its place.                                                                     |
+| `profiles` bindings               | Yes     | app, profile slug and space | Only the apps a space's bindings name. Apply never removes the last space of a profile: that would delete the profile and its sign-ins. It is a problem. |
+| Webhooks, environment, `timezone` | No      | —                           | A problem in the plan.                                                                                                                                   |
 
 ## 7. Commands
 

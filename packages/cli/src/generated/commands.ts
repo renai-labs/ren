@@ -24,11 +24,6 @@ export const SpaceCreate = {
 
 export const SpaceUpdate = {
   id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
-  agentOrder: Flag.String("agent-order").pipe(
-    Flag.atLeast(0),
-    Flag.withMetavar("list"),
-    Flag.withDescription("Separate values with commas."),
-  ),
   name: Flag.String("name").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
   brainScope: Flag.Literals("brain-scope", ["session", "space"]).pipe(Flag.optional),

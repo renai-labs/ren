@@ -48,7 +48,10 @@ describe("InfraSpecs apps", () => {
       const second = input({
         home: {
           name: "Home",
-          apps: notes(slug, { description: "Writes better notes.", skills: { [`${slug}-write`]: skill("Write well.") } }),
+          apps: notes(slug, {
+            description: "Writes better notes.",
+            skills: { [`${slug}-write`]: skill("Write well.") },
+          }),
         },
       })
       const updated = yield* infra.plan(o.admin, second)
@@ -117,7 +120,10 @@ describe("InfraSpecs apps", () => {
       const o = yield* InfraFixture.org
       const other = yield* InfraFixture.org
       const slug = unique()
-      const theirs = { bindings: other.bindings, spec: InfraFixture.spec({ home: { name: "Home", apps: notes(slug) } }) }
+      const theirs = {
+        bindings: other.bindings,
+        spec: InfraFixture.spec({ home: { name: "Home", apps: notes(slug) } }),
+      }
       yield* infra.apply(other.admin, { ...theirs, digest: (yield* infra.plan(other.admin, theirs)).digest })
 
       const plan = yield* infra.plan(o.admin, {

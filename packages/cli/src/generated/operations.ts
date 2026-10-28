@@ -38,20 +38,9 @@ export const SpaceUpdate = (input: Command.Command.Config.Infer<typeof Commands.
     ClientApi.groups["space"].endpoints["space.update"],
     {
       params: { id: input["id"] },
-      payload: {
-        agentOrder: input["agentOrder"],
-        name: input["name"],
-        description: input["description"],
-        brainScope: input["brainScope"],
-      },
+      payload: { name: input["name"], description: input["description"], brainScope: input["brainScope"] },
       input: input["input"],
-      labels: {
-        id: "<space>",
-        agentOrder: "--agent-order",
-        name: "--name",
-        description: "--description",
-        brainScope: "--brain-scope",
-      },
+      labels: { id: "<space>", name: "--name", description: "--description", brainScope: "--brain-scope" },
       lookups: {
         id: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },

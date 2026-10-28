@@ -85,9 +85,7 @@ export const make = Effect.gen(function* () {
     const unmanaged = new Set(live.unmanaged.map((schedule) => key(schedule.spaceId, schedule.slug)))
     const subagents = new Set(
       context.spaces.flatMap((space) =>
-        Object.entries(space.declaration.agents)
-          .filter((entry) => entry[1].isSubagent)
-          .map((entry) => entry[0]),
+        Object.keys(space.declaration.agents).filter((name) => space.declaration.agents[name]?.isSubagent),
       ),
     )
     const declared = context.spaces.flatMap((space) =>
