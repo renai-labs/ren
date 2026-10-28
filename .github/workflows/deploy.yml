@@ -39,9 +39,7 @@ jobs:
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
 
-      # A part deploys only when its code changed since the last successful deploy, so a failed or
-      # cancelled run never drops a change. Turborepo follows workspace dependencies and the lockfile
-      # per package. A manual run, a change to this workflow or an unknown base deploys every part.
+      # The base is the last successful deploy, so a failed or cancelled run never drops a change.
       # The brain template decides for itself (cell/e2b/stage.ts).
       - name: Find changed parts
         id: diff
@@ -89,8 +87,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           mask-aws-account-id: true
 
-      # Builds only when no template with this hash exists, and then prints the existing tag. The hash
-      # covers only what the image runs: the files the brain imports and the dependencies it installs.
+      # Builds only when no template with this hash exists, and then prints the existing tag.
       - name: Build the brain template
         id: build
         env:
