@@ -3,19 +3,34 @@ import { Family } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import type { SessionCapabilities } from "@ren/schema/session/capabilities"
-import { Breadcrumbs } from "@ren/ui/breadcrumbs"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@ren/ui/breadcrumb"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
 import { InlineEdit } from "@ren/ui/inline-edit"
-import { Menu } from "@ren/ui/menu"
-import { ProgressIndicator } from "@ren/ui/progress-indicator"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { ScheduleDialog } from "../../components/schedule-dialog.js"
 import { Chat } from "../../lib/chat.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -33,50 +48,48 @@ function RunningMenu(props: {
   if (props.background.tasks.length === 0 && props.background.blocking.length === 0) return null
   const count = props.background.tasks.length + props.background.blocking.length
   return (
-    <Menu.Root>
-      <Menu.Trigger
-        render={
-          <Button appearance="secondary" size="small">
-            <ProgressIndicator size="extra-small" announcement="none" />
-            {count} running
-          </Button>
-        }
-      />
-      <Menu.Popup alignment="end">
-        {props.background.tasks.map((task) => (
-          <Menu.Item
-            key={task.id}
-            icon={<Icon glyph={task.type === "subagent" ? "Ghost" : "EnvVariable"} />}
-            disabled={task.type !== "subagent"}
-            onSelect={() => props.onOpen(Session.ID.make(task.id))}
-          >
-            {task.label}
-          </Menu.Item>
-        ))}
-        {props.background.blocking.length > 0 ? (
-          <Menu.Item
-            icon={<Icon glyph="ArrowDown" />}
-            shortcut="Ctrl+B"
-            onSelect={() => void move().catch(Failure.toast("Could not move the work to the background"))}
-          >
-            Move to background
-          </Menu.Item>
-        ) : null}
-        {subagents.length > 0 ? (
-          <Menu.Item
-            tone="danger"
-            icon={<Icon glyph="Stop" />}
-            onSelect={() =>
-              void Promise.all(subagents.map((task) => stop(Session.ID.make(task.id)))).catch(
-                Failure.toast("Could not stop the subagents"),
-              )
-            }
-          >
-            Stop subagents
-          </Menu.Item>
-        ) : null}
-      </Menu.Popup>
-    </Menu.Root>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+        <Spinner aria-hidden data-icon="inline-start" />
+        {count} running
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuGroup>
+          {props.background.tasks.map((task) => (
+            <DropdownMenuItem
+              key={task.id}
+              disabled={task.type !== "subagent"}
+              onClick={() => props.onOpen(Session.ID.make(task.id))}
+            >
+              <Icon glyph={task.type === "subagent" ? "Ghost" : "EnvVariable"} />
+              {task.label}
+            </DropdownMenuItem>
+          ))}
+          {props.background.blocking.length > 0 ? (
+            <DropdownMenuItem
+              onClick={() => void move().catch(Failure.notify("Could not move the work to the background"))}
+            >
+              <Icon glyph="ArrowDown" />
+              Move to background
+              <DropdownMenuShortcut>Ctrl+B</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          ) : null}
+          {subagents.length > 0 ? (
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() =>
+                void Promise.all(subagents.map((task) => stop(Session.ID.make(task.id)))).catch(
+                  Failure.notify("Could not stop the subagents"),
+                )
+              }
+            >
+              <Icon glyph="Stop" />
+              Stop subagents
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -102,67 +115,75 @@ function Actions(props: {
     select: (session) => session.spaceId,
   }).data
   const approval = Chat.useAutoApprove(props.sessionID)
+  const revertible = props.capabilities?.revert !== false
   return (
     <>
-      <Menu.Root>
-        <Menu.Trigger
-          render={
-            <IconButton label="Chat actions">
-              <Icon glyph="MoreHorizontal" />
-            </IconButton>
-          }
-        />
-        <Menu.Popup alignment="end">
-          {props.capabilities?.revert === false ? null : (
-            <>
-              <Menu.Item icon={<Icon glyph="Restore" />} disabled={!props.prompted} onSelect={props.onUndo}>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Chat actions" />}
+        >
+          <Icon glyph="MoreHorizontal" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuGroup>
+            {revertible ? (
+              <DropdownMenuItem disabled={!props.prompted} onClick={props.onUndo}>
+                <Icon glyph="Restore" />
                 Undo last message
-              </Menu.Item>
-              <Menu.Item icon={<Icon glyph="Repeat" />} disabled={!props.reverted} onSelect={props.onRedo}>
+              </DropdownMenuItem>
+            ) : null}
+            {revertible ? (
+              <DropdownMenuItem disabled={!props.reverted} onClick={props.onRedo}>
+                <Icon glyph="Repeat" />
                 Restore undone messages
-              </Menu.Item>
-            </>
-          )}
-          {props.capabilities?.compact === false ? null : (
-            <Menu.Item icon={<Icon glyph="Minimize2" />} disabled={!props.prompted} onSelect={props.onCompact}>
-              Compact chat
-            </Menu.Item>
-          )}
-          {props.capabilities?.permissions === false ? null : (
-            <Menu.CheckboxItem
-              icon={<Icon glyph="BadgeCheck" />}
-              checked={approval.enabled}
-              onCheckedChange={(enabled) =>
-                void approval.set({ enabled }).catch(Failure.toast("Could not change automatic approval"))
-              }
-            >
-              Approve every request automatically
-            </Menu.CheckboxItem>
-          )}
-          {write ? (
-            <Menu.Item
-              icon={<Icon glyph="Copy" />}
-              onSelect={() =>
-                void write(props.sessionID).then(
-                  () => Toast.manager.add({ type: "success", title: "Chat ID copied", description: props.sessionID }),
-                  Failure.toast("Could not copy the chat ID"),
-                )
-              }
-            >
-              Copy chat ID
-            </Menu.Item>
-          ) : null}
-          {spaceId ? (
-            <Menu.Item icon={<Icon glyph="Clock" />} onSelect={() => setScheduling(true)}>
-              Schedule a message
-            </Menu.Item>
-          ) : null}
-          <Menu.Separator />
-          <Menu.Item tone="danger" icon={<Icon glyph="Archive" />} onSelect={() => setConfirming(true)}>
-            Archive chat
-          </Menu.Item>
-        </Menu.Popup>
-      </Menu.Root>
+              </DropdownMenuItem>
+            ) : null}
+            {props.capabilities?.compact === false ? null : (
+              <DropdownMenuItem disabled={!props.prompted} onClick={props.onCompact}>
+                <Icon glyph="Minimize2" />
+                Compact chat
+              </DropdownMenuItem>
+            )}
+            {props.capabilities?.permissions === false ? null : (
+              <DropdownMenuCheckboxItem
+                checked={approval.enabled}
+                onCheckedChange={(enabled) =>
+                  void approval.set({ enabled }).catch(Failure.notify("Could not change automatic approval"))
+                }
+              >
+                <Icon glyph="BadgeCheck" />
+                Approve every request automatically
+              </DropdownMenuCheckboxItem>
+            )}
+            {write ? (
+              <DropdownMenuItem
+                onClick={() =>
+                  void write(props.sessionID).then(
+                    () => toast.add({ type: "success", title: "Chat ID copied", description: props.sessionID }),
+                    Failure.notify("Could not copy the chat ID"),
+                  )
+                }
+              >
+                <Icon glyph="Copy" />
+                Copy chat ID
+              </DropdownMenuItem>
+            ) : null}
+            {spaceId ? (
+              <DropdownMenuItem onClick={() => setScheduling(true)}>
+                <Icon glyph="Clock" />
+                Schedule a message
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
+              <Icon glyph="Archive" />
+              Archive chat
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {scheduling && spaceId ? (
         <ScheduleDialog chat={{ spaceId, sessionId: props.sessionID }} onClose={() => setScheduling(false)} />
       ) : null}
@@ -175,7 +196,7 @@ function Actions(props: {
         tone="danger"
         onConfirm={() => archive.mutateAsync({ id: props.sessionID })}
         onConfirmed={() => {
-          Toast.manager.add({ type: "success", title: `${props.title} archived` })
+          toast.add({ type: "success", title: `${props.title} archived` })
           props.onArchived()
         }}
       />
@@ -257,27 +278,42 @@ export function ChildHeader(props: {
   const open = (id: string) => props.onOpen(id === props.root ? undefined : Session.ID.make(id))
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
-      <IconButton label={`Back to ${parent?.title ?? ""}`} size="small" onClick={() => open(parent?.id ?? props.root)}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="text-muted-foreground"
+        aria-label={`Back to ${parent?.title ?? ""}`}
+        onClick={() => open(parent?.id ?? props.root)}
+      >
         <Icon glyph="ArrowLeft" />
-      </IconButton>
-      <Breadcrumbs.Root>
-        {props.ancestors.map((ancestor) => (
-          <Breadcrumbs.Link
-            key={ancestor.id}
-            render={
-              <Link
-                to="/sessions/$sessionId"
-                params={{ sessionId: props.root }}
-                search={ancestor.id === props.root ? {} : { child: Session.ID.make(ancestor.id) }}
-              />
-            }
-          >
-            {ancestor.title}
-          </Breadcrumbs.Link>
-        ))}
-        <Breadcrumbs.Page>{props.title}</Breadcrumbs.Page>
-      </Breadcrumbs.Root>
-      {props.running ? <ProgressIndicator size="small" label="Running" /> : null}
+      </Button>
+      <Breadcrumb aria-label="Breadcrumb" className="min-w-0">
+        <BreadcrumbList className="flex-nowrap">
+          {props.ancestors.map((ancestor) => (
+            <Fragment key={ancestor.id}>
+              <BreadcrumbItem className="min-w-0 shrink-0">
+                <BreadcrumbLink
+                  className="truncate font-medium text-foreground hover:text-muted-foreground"
+                  render={
+                    <Link
+                      to="/sessions/$sessionId"
+                      params={{ sessionId: props.root }}
+                      search={ancestor.id === props.root ? {} : { child: Session.ID.make(ancestor.id) }}
+                    />
+                  }
+                >
+                  {ancestor.title}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+            </Fragment>
+          ))}
+          <BreadcrumbItem className="min-w-0">
+            <BreadcrumbPage className="truncate font-medium">{props.title}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+      {props.running ? <Spinner aria-label="Running" className="text-muted-foreground" /> : null}
     </div>
   )
 }

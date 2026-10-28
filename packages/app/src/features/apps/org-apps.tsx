@@ -1,8 +1,8 @@
 import type { AppProfileInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
-import { LoadingMessage } from "@ren/ui/loading-message"
-import { StateMessage } from "@ren/ui/state-message"
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
+import { Spinner } from "@ren/ui/spinner"
 import { useQuery } from "@tanstack/react-query"
 import { useRouteContext } from "@tanstack/react-router"
 import { useState } from "react"
@@ -26,11 +26,35 @@ export function OrgApps(props: { appId: string | undefined; onAppChange: (appId?
   const opened = used.find((entry) => entry.id === props.appId)
   return (
     <>
-      {catalog.state === "loading" ? <LoadingMessage placement="section" /> : null}
-      {catalog.state === "failed" ? (
-        <StateMessage state="failed" title="Couldn’t load apps." onRetry={() => void catalog.retry()} />
+      {catalog.state === "loading" ? (
+        <Empty>
+          <EmptyMedia>
+            <Spinner />
+          </EmptyMedia>
+        </Empty>
       ) : null}
-      {catalog.state === "ready" && used.length === 0 ? <StateMessage state="empty" title="No apps" /> : null}
+      {catalog.state === "failed" ? (
+        <Empty role="alert">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon glyph="AlertCircle" />
+            </EmptyMedia>
+            <EmptyTitle>Couldn’t load apps.</EmptyTitle>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" size="sm" onClick={() => void catalog.retry()}>
+              Try again
+            </Button>
+          </EmptyContent>
+        </Empty>
+      ) : null}
+      {catalog.state === "ready" && used.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No apps</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      ) : null}
       <AppGrid label="Apps in your organization">
         {used.map((entry) => {
           const profiles = catalog.profiles.get(entry.id) ?? []
@@ -51,12 +75,8 @@ export function OrgApps(props: { appId: string | undefined; onAppChange: (appId?
           <AccountList
             title="Accounts"
             actions={
-              <Button
-                appearance="primary"
-                size="small"
-                leadingIcon={<Icon glyph="Plus" />}
-                onClick={() => setDialog({ appId: opened.id })}
-              >
+              <Button size="sm" onClick={() => setDialog({ appId: opened.id })}>
+                <Icon glyph="Plus" data-icon="inline-start" />
                 New
               </Button>
             }

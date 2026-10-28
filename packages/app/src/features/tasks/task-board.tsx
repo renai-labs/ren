@@ -1,15 +1,25 @@
 import type { TaskInfo } from "@ren/client"
 import { Board } from "@ren/ui/board"
 import { Button } from "@ren/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { Menu } from "@ren/ui/menu"
-import { LoadingMessage } from "@ren/ui/loading-message"
-import { StateMessage } from "@ren/ui/state-message"
+import { Spinner } from "@ren/ui/spinner"
 import { TaskLinkBadge } from "@ren/ui/task-link-badge"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { RouterContext } from "../../lib/router-context.js"
 import { DueDateControl, LabelsControl, OwnerControl, PriorityControl, StatusControl } from "./task-controls.js"
@@ -27,15 +37,41 @@ export function TaskBoard(props: Props) {
   const space = useQuery({ ...context.api.space.get.queryOptions({ idOrSlug: spaceId }), enabled: spaceId !== "" })
   if (!spaceId)
     return (
-      <StateMessage
-        state="empty"
-        title="Choose a space"
-        description="The board follows one space’s factory order. Choose a space to see its tasks."
-      />
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Choose a space</EmptyTitle>
+          <EmptyDescription>
+            The board follows one space’s factory order. Choose a space to see its tasks.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     )
   if (space.isError)
-    return <StateMessage state="failed" title="Couldn’t load factory order." onRetry={() => void space.refetch()} />
-  if (!space.data) return <LoadingMessage placement="section" />
+    return (
+      <Empty role="alert">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon glyph="AlertCircle" tone="danger" />
+          </EmptyMedia>
+          <EmptyTitle>Couldn’t load factory order.</EmptyTitle>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button variant="outline" size="sm" onClick={() => void space.refetch()}>
+            Try again
+          </Button>
+        </EmptyContent>
+      </Empty>
+    )
+  if (!space.data)
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia>
+            <Spinner />
+          </EmptyMedia>
+        </EmptyHeader>
+      </Empty>
+    )
   return (
     <Columns
       {...props}
@@ -70,13 +106,15 @@ function Columns(props: Props) {
                 {group.tasks.length}
               </Text>
               <span className="ml-auto flex">
-                <IconButton
-                  size="compact"
-                  label={`Add task to ${group.name}`}
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground"
+                  aria-label={`Add task to ${group.name}`}
                   onClick={() => props.onCreate({ agentId: group.agentId })}
                 >
                   <Icon glyph="Plus" />
-                </IconButton>
+                </Button>
               </span>
             </>
           }
@@ -123,7 +161,12 @@ function Card(props: Props & { task: TaskInfo }) {
       }
       leading={shown.has("status") ? <StatusControl {...control} /> : undefined}
       title={
-        <Button appearance="text" wrapping="normal" onClick={() => props.onOpen(task)} title={task.title}>
+        <Button
+          variant="link"
+          className="h-auto min-w-0 justify-start px-0 text-left wrap-break-word whitespace-normal text-foreground hover:no-underline"
+          onClick={() => props.onOpen(task)}
+          title={task.title}
+        >
           {task.title}
         </Button>
       }
@@ -174,79 +217,109 @@ function CardActions(props: Props & { task: TaskInfo }) {
   const assign = useMutation(context.api.task.assign.mutationOptions())
   const start = useMutation(context.api.task.start.mutationOptions())
   const fail = (cause: unknown) =>
-    Toast.manager.add({ type: "error", title: "Couldn’t update task", description: Tasks.describe(cause) })
-  const move = (agentId: string | null) =>
-    assign.mutate({ id: props.task.id, agentId, start: "none" }, { onError: fail })
+    toast.add({ type: "error", title: "Couldn’t update task", description: Tasks.describe(cause) })
   return (
     <>
-      <Menu.Root>
-        <Menu.Trigger
+      <DropdownMenu>
+        <DropdownMenuTrigger
           render={
-            <IconButton size="small" label={`Actions for ${props.task.title}`}>
-              <Icon glyph="MoreHorizontal" />
-            </IconButton>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              aria-label={`Actions for ${props.task.title}`}
+            />
           }
-        />
-        <Menu.Popup alignment="end">
-          <Menu.Item onSelect={() => props.onOpen(props.task)}>Open task</Menu.Item>
-          {props.task.canUpdate ? (
-            <Menu.SubmenuRoot>
-              <Menu.SubmenuTrigger>Move to agent</Menu.SubmenuTrigger>
-              <Menu.SubmenuPopup>
-                {agents.isPending ? <Menu.Message>Loading agents…</Menu.Message> : null}
-                {agents.isError ? (
-                  <Menu.Item onSelect={() => void agents.refetch()}>Retry loading agents</Menu.Item>
-                ) : null}
-                {agents.data?.map((agent) => (
-                  <Menu.Item
-                    key={agent.id}
-                    disabled={assign.isPending}
-                    onSelect={() => move(agent.id)}
-                    icon={props.task.agentId === agent.id ? <Icon glyph="Check" /> : undefined}
-                  >
-                    {agent.name}
-                  </Menu.Item>
-                ))}
-                <Menu.Separator />
-                <Menu.Item
-                  disabled={assign.isPending}
-                  onSelect={() => move(null)}
-                  icon={props.task.agentId === null ? <Icon glyph="Check" /> : undefined}
-                >
-                  No agent
-                </Menu.Item>
-              </Menu.SubmenuPopup>
-            </Menu.SubmenuRoot>
-          ) : null}
-          <Menu.Separator />
-          <Menu.Item tone="danger" disabled={!props.task.canUpdate} onSelect={() => props.onArchive(props.task)}>
-            Archive task
-          </Menu.Item>
-        </Menu.Popup>
-      </Menu.Root>
+        >
+          <Icon glyph="MoreHorizontal" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={() => props.onOpen(props.task)}>Open task</DropdownMenuItem>
+            {props.task.canUpdate ? (
+              <MoveToAgent
+                task={props.task}
+                agents={agents}
+                pending={assign.isPending}
+                onMove={(agentId) => assign.mutate({ id: props.task.id, agentId, start: "none" }, { onError: fail })}
+              />
+            ) : null}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={!props.task.canUpdate}
+              onClick={() => props.onArchive(props.task)}
+            >
+              Archive task
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {props.task.agentId && TaskView.isActionable(props.task) ? (
-        <Menu.Root>
-          <Menu.Trigger
+        <DropdownMenu>
+          <DropdownMenuTrigger
             render={
-              <IconButton
-                size="small"
-                label={`Start agent for ${props.task.title}`}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                aria-label={`Start agent for ${props.task.title}`}
                 disabled={!props.task.canUpdate || start.isPending}
-              >
-                <Icon glyph="Play" />
-              </IconButton>
+              />
             }
-          />
-          <Menu.Popup alignment="end">
-            <Menu.Item onSelect={() => start.mutate({ id: props.task.id, mode: "continue" }, { onError: fail })}>
-              Continue session
-            </Menu.Item>
-            <Menu.Item onSelect={() => start.mutate({ id: props.task.id, mode: "new" }, { onError: fail })}>
-              Start new session
-            </Menu.Item>
-          </Menu.Popup>
-        </Menu.Root>
+          >
+            <Icon glyph="Play" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                onClick={() => start.mutate({ id: props.task.id, mode: "continue" }, { onError: fail })}
+              >
+                Continue session
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => start.mutate({ id: props.task.id, mode: "new" }, { onError: fail })}>
+                Start new session
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : null}
     </>
+  )
+}
+
+function MoveToAgent(props: {
+  task: TaskInfo
+  agents: ReturnType<typeof Tasks.useSpaceAgents>
+  pending: boolean
+  onMove: (agentId: string | null) => void
+}) {
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>Move to agent</DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-48">
+        <DropdownMenuGroup>
+          {props.agents.isPending ? <DropdownMenuLabel>Loading agents…</DropdownMenuLabel> : null}
+          {props.agents.isError ? (
+            <DropdownMenuItem onClick={() => void props.agents.refetch()}>Retry loading agents</DropdownMenuItem>
+          ) : null}
+          {props.agents.data?.map((agent) => (
+            <DropdownMenuItem key={agent.id} disabled={props.pending} onClick={() => props.onMove(agent.id)}>
+              {props.task.agentId === agent.id ? <Icon glyph="Check" /> : null}
+              {agent.name}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem disabled={props.pending} onClick={() => props.onMove(null)}>
+            {props.task.agentId === null ? <Icon glyph="Check" /> : null}
+            No agent
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }

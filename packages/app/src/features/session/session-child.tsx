@@ -2,9 +2,10 @@ import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { Button } from "@ren/ui/button"
 import { ConversationShell } from "@ren/ui/conversation-shell"
-import { Notice } from "@ren/ui/notice"
-import { StateMessage } from "@ren/ui/state-message"
-import { Toast } from "@ren/ui/toast"
+import { Alert, AlertDescription } from "@ren/ui/alert"
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
+import { Icon } from "@ren/ui/icon"
+import { toast } from "@ren/ui/toast"
 import { useRef } from "react"
 import { Chat } from "../../lib/chat.js"
 import { ChatView } from "./chat-view.js"
@@ -41,9 +42,25 @@ export function SessionChild(props: {
         populated={chat.messages.length > 0}
         placeholder={
           chat.failed ? (
-            <StateMessage state="failed" title="Could not load this subagent" onRetry={retry} />
+            <Empty role="alert">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Icon glyph="AlertCircle" tone="danger" />
+                </EmptyMedia>
+                <EmptyTitle>Could not load this subagent</EmptyTitle>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button variant="outline" size="sm" onClick={retry}>
+                  Try again
+                </Button>
+              </EmptyContent>
+            </Empty>
           ) : (
-            <StateMessage state="empty" title="No messages yet" />
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>No messages yet</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
           )
         }
         header={
@@ -63,9 +80,7 @@ export function SessionChild(props: {
               more: chat.more,
               loading: chat.loadingHistory,
               onLoadOlder: () =>
-                void loadMore().catch(() =>
-                  Toast.manager.add({ type: "error", title: "Could not load earlier messages" }),
-                ),
+                void loadMore().catch(() => toast.add({ type: "error", title: "Could not load earlier messages" })),
             }}
             {...transcript}
           />
@@ -85,12 +100,15 @@ export function SessionChild(props: {
               onAnswered={() => scroller.current?.resume()}
             />
             {(chat.requests.permission ?? chat.requests.form) ? null : (
-              <Notice tone="neutral" placement="banner" layout="inline">
-                Subagent sessions cannot be prompted.{" "}
-                <Button appearance="link" onClick={back}>
-                  Back to {chat.parentTitle}
-                </Button>
-              </Notice>
+              <Alert>
+                <Icon glyph="Info" tone="secondary" />
+                <AlertDescription>
+                  Subagent sessions cannot be prompted.{" "}
+                  <Button variant="link" className="h-auto p-0" onClick={back}>
+                    Back to {chat.parentTitle}
+                  </Button>
+                </AlertDescription>
+              </Alert>
             )}
           </>
         }

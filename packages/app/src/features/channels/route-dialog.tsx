@@ -1,14 +1,14 @@
 import type { ChannelMappingInfo, ChannelTriggerSetting } from "@ren/client"
 import { Button } from "@ren/ui/button"
-import { Dialog } from "@ren/ui/dialog"
-import { Field } from "@ren/ui/field"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "@ren/ui/field"
 import { FormActions } from "@ren/ui/form-actions"
 import { Icon } from "@ren/ui/icon"
 import type { Glyph } from "@ren/ui/icon"
-import { Select } from "@ren/ui/select"
-import { SwitchRow } from "@ren/ui/switch-row"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
+import { Switch } from "@ren/ui/switch"
 import { Text } from "@ren/ui/text"
-import { TextArea } from "@ren/ui/text-area"
+import { Textarea } from "@ren/ui/textarea"
 import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { Pages } from "../../lib/pages.js"
@@ -42,23 +42,27 @@ export function RouteDialog(props: {
   const [triggers, setTriggers] = useState<ReadonlyArray<ChannelTriggerSetting>>(props.mapping?.triggers ?? [])
   const place = `${provider.board.prefix}${props.place.name}`
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
         if (!open && !props.busy) props.onClose()
       }}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>{props.mapping ? "Edit route" : "Create route"}</Dialog.Title>
-          <Dialog.Description visibility="hidden">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{props.mapping ? "Edit route" : "Create route"}</DialogTitle>
+          <DialogDescription className="sr-only">
             Route {provider.title} {provider.board.noun} {place} to Ren space {props.space.name}.
-          </Dialog.Description>
-        </Dialog.Header>
-        <Dialog.Body>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
           <RouteHeader glyph={provider.glyph} place={place} space={props.space.name} />
           {showFallbackSender ? (
-            <Field.Root label="Fallback sender" necessity="optional">
+            <Field>
+              <FieldTitle>
+                Fallback sender
+                <span className="font-normal text-muted-foreground">Optional</span>
+              </FieldTitle>
               <MemberSelect
                 spaceId={props.space.id}
                 label="Fallback sender"
@@ -67,25 +71,25 @@ export function RouteDialog(props: {
                 value={fallbackUserId}
                 onChange={setFallbackUserId}
               />
-            </Field.Root>
+            </Field>
           ) : (
             <div className="self-start">
-              <Button
-                type="button"
-                appearance="outline"
-                leadingIcon={<Icon glyph="UserPlus" />}
-                onClick={() => setShowFallbackSender(true)}
-              >
+              <Button type="button" variant="outline" onClick={() => setShowFallbackSender(true)}>
+                <Icon glyph="UserPlus" data-icon="inline-start" />
                 Fallback sender
               </Button>
             </div>
           )}
-          <Field.Root label="Agent" necessity="optional">
+          <Field>
+            <FieldTitle>
+              Agent
+              <span className="font-normal text-muted-foreground">Optional</span>
+            </FieldTitle>
             <AgentSelect spaceId={props.space.id} value={agentId} onChange={setAgentId} />
-          </Field.Root>
+          </Field>
           <TriggerSettings provider={props.provider} value={triggers} onChange={setTriggers} />
-        </Dialog.Body>
-        <Dialog.Footer>
+        </div>
+        <DialogFooter>
           <FormActions.Root>
             <FormActions.Cancel onClick={props.onClose} disabled={props.busy} />
             <FormActions.Submit
@@ -103,9 +107,9 @@ export function RouteDialog(props: {
               {props.mapping ? "Save" : "Route"}
             </FormActions.Submit>
           </FormActions.Root>
-        </Dialog.Footer>
-      </Dialog.Content>
-    </Dialog.Root>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -138,7 +142,7 @@ export function MemberSelect(props: {
   label: string
   placeholder: string
   clearLabel: string
-  size?: "small"
+  size?: "sm"
   value: string
   onChange: (userId: string) => void
 }) {
@@ -152,20 +156,27 @@ export function MemberSelect(props: {
       }),
     ),
   )
+  const options = [
+    { value: "", label: props.clearLabel },
+    ...(members.data?.items ?? []).flatMap((member) =>
+      member.status === "active" ? [{ value: member.userId, label: member.name || member.email }] : [],
+    ),
+  ]
   return (
-    <Select.Root
-      label={props.label}
-      placeholder={props.placeholder}
-      {...(props.size && { size: props.size })}
-      value={props.value}
-      onValueChange={props.onChange}
-      options={[
-        { value: "", label: props.clearLabel },
-        ...(members.data?.items ?? []).flatMap((member) =>
-          member.status === "active" ? [{ value: member.userId, label: member.name || member.email }] : [],
-        ),
-      ]}
-    />
+    <Select items={options} value={props.value} onValueChange={(next) => props.onChange(next ?? "")}>
+      <SelectTrigger aria-label={props.label} size={props.size ?? "default"} className="w-full">
+        <SelectValue placeholder={props.placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -181,17 +192,25 @@ function AgentSelect(props: { spaceId: string; value: string; onChange: (agentId
       }),
     ),
   )
+  const options = [
+    { value: "", label: "ren (default)" },
+    ...(agents.data?.items ?? []).map((agent) => ({ value: agent.id, label: agent.name })),
+  ]
   return (
-    <Select.Root
-      label="Agent"
-      placeholder="Agent (optional)"
-      value={props.value}
-      onValueChange={props.onChange}
-      options={[
-        { value: "", label: "ren (default)" },
-        ...(agents.data?.items ?? []).map((agent) => ({ value: agent.id, label: agent.name })),
-      ]}
-    />
+    <Select items={options} value={props.value} onValueChange={(next) => props.onChange(next ?? "")}>
+      <SelectTrigger aria-label="Agent" className="w-full">
+        <SelectValue placeholder="Agent (optional)" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -213,14 +232,19 @@ export function TriggerSettings(props: {
     const setting = settings.get(trigger.id)
     return (
       <div key={trigger.id} className="contents">
-        <SwitchRow
-          title={trigger.title}
-          description={trigger.description}
-          checked={setting !== undefined}
-          onCheckedChange={(on) => replace(trigger.id, on ? { id: trigger.id } : undefined)}
-        />
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor={`trigger-${trigger.id}`}>{trigger.title}</FieldLabel>
+            <FieldDescription>{trigger.description}</FieldDescription>
+          </FieldContent>
+          <Switch
+            id={`trigger-${trigger.id}`}
+            checked={setting !== undefined}
+            onCheckedChange={(on) => replace(trigger.id, on ? { id: trigger.id } : undefined)}
+          />
+        </Field>
         {setting ? (
-          <TextArea
+          <Textarea
             rows={2}
             placeholder={trigger.defaultPrompt}
             value={setting.prompt ?? ""}

@@ -1,14 +1,13 @@
 import { Primitive } from "@ren/schema/primitive"
 import type { Reference } from "@ren/schema/reference"
+import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Dialog } from "@ren/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { Form } from "@ren/ui/form"
 import { FormSection } from "@ren/ui/form-section"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { Notice } from "@ren/ui/notice"
 import { Text } from "@ren/ui/text"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { Schema } from "effect"
@@ -45,7 +44,7 @@ export function CreateSpaceDialog(props: { onClose: () => void }) {
         .then(() => undefined)
         .catch((error: unknown) => Repositories.refusal(error).message)
       if (refused)
-        Toast.manager.add({
+        toast.add({
           type: "error",
           title: "The space has no repositories yet",
           description: refused,
@@ -58,20 +57,19 @@ export function CreateSpaceDialog(props: { onClose: () => void }) {
     },
   })
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !create.isPending) props.onClose()
       }}
-      dismissal={create.isPending ? "blocked" : "allowed"}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>New space</Dialog.Title>
-          <Dialog.Description>You join it as its first member.</Dialog.Description>
-        </Dialog.Header>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New space</DialogTitle>
+          <DialogDescription>You join it as its first member.</DialogDescription>
+        </DialogHeader>
         <Form.Root form={form} arrangement="contents">
-          <Dialog.Body>
+          <div className="flex flex-col gap-4">
             <form.AppField name="name">
               {(field) => (
                 <field.TextField
@@ -97,15 +95,18 @@ export function CreateSpaceDialog(props: { onClose: () => void }) {
               onRemove={(reference) => setReferences((current) => current.filter((each) => each !== reference))}
               onAdd={() => setAdding(true)}
             />
-            <Notice tone="danger" placement="inline">
-              {create.error?.message}
-            </Notice>
-          </Dialog.Body>
-          <Dialog.Footer>
+            {create.error ? (
+              <Alert variant="destructive">
+                <Icon glyph="AlertCircle" />
+                <AlertDescription>{create.error.message}</AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
+          <DialogFooter className="sm:justify-end">
             <form.SubmitButton pendingLabel="Creating…">Create space</form.SubmitButton>
-          </Dialog.Footer>
+          </DialogFooter>
         </Form.Root>
-      </Dialog.Content>
+      </DialogContent>
       {adding ? (
         <CollectRepositories
           existing={references}
@@ -113,7 +114,7 @@ export function CreateSpaceDialog(props: { onClose: () => void }) {
           onClose={() => setAdding(false)}
         />
       ) : null}
-    </Dialog.Root>
+    </Dialog>
   )
 }
 
@@ -129,12 +130,18 @@ function RepositoriesSection(props: {
           <Text truncation="single-line" element="span">
             {`${reference.alias} · ${Repositories.nameOf(reference.repository)}`}
           </Text>
-          <IconButton label={`Remove ${reference.alias}`} size="extra-small" onClick={() => props.onRemove(reference)}>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Remove ${reference.alias}`}
+            onClick={() => props.onRemove(reference)}
+          >
             <Icon glyph="X" />
-          </IconButton>
+          </Button>
         </span>
       ))}
-      <Button appearance="secondary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={props.onAdd}>
+      <Button variant="outline" size="sm" className="self-start" onClick={props.onAdd}>
+        <Icon glyph="Plus" data-icon="inline-start" />
         Add repositories
       </Button>
     </FormSection>

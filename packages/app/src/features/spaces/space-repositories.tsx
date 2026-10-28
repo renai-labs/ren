@@ -1,24 +1,40 @@
 import type { ReferenceInfo, SettingsInfo } from "@ren/client"
 import { Reference } from "@ren/schema/reference"
+import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import { CopyButton } from "@ren/ui/copy-button"
-import { Dialog } from "@ren/ui/dialog"
-import { Field } from "@ren/ui/field"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@ren/ui/empty"
+import { Field, FieldError, FieldLabel } from "@ren/ui/field"
 import { FormActions } from "@ren/ui/form-actions"
 import { Icon } from "@ren/ui/icon"
-import { Menu } from "@ren/ui/menu"
-import { Notice } from "@ren/ui/notice"
-import { Pagination } from "@ren/ui/pagination"
+import { Input } from "@ren/ui/input"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@ren/ui/pagination"
 import { SearchField } from "@ren/ui/search-field"
-import { Table } from "@ren/ui/table"
+import { Spinner } from "@ren/ui/spinner"
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
-import { TextField } from "@ren/ui/text-field"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Schema } from "effect"
-import { useDeferredValue, useState } from "react"
+import { Fragment, useDeferredValue, useId, useState } from "react"
 import type { ReactNode } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
@@ -63,6 +79,7 @@ export function SpaceRepositories(props: { spaceId: string }) {
   )
   const canUpdate = settings.data?.canUpdate === true
   const state = { pending: "loading", error: "failed", success: visible.total > 0 ? "ready" : "empty" } as const
+  const status = state[settings.status]
   return (
     <>
       <Toolbar.Root>
@@ -75,7 +92,8 @@ export function SpaceRepositories(props: { spaceId: string }) {
           placeholder="Search repositories"
         />
         {canUpdate ? (
-          <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setAdding(true)}>
+          <Button size="sm" onClick={() => setAdding(true)}>
+            <Icon glyph="Plus" data-icon="inline-start" />
             Add repositories
           </Button>
         ) : null}
@@ -83,40 +101,41 @@ export function SpaceRepositories(props: { spaceId: string }) {
       <Text purpose="body" tone="secondary">
         {Repositories.tabCopy}
       </Text>
-      <Table.Root
-        state={state[settings.status]}
-        failureMessage="Couldn’t load the repositories of this space."
+      <RepositoriesTable
+        state={status}
         emptyMessage={needle ? `Nothing matches “${needle}”` : "No repositories yet. Add one so Ren can read it."}
-        caption="Repositories"
+        columns={
+          <>
+            <TableHead className="w-1/3">Name</TableHead>
+            <TableHead>Repository</TableHead>
+            {canUpdate ? (
+              <TableHead className="w-15">
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            ) : null}
+          </>
+        }
       >
-        <Table.Header>
-          <Table.HeaderCell width="third">Name</Table.HeaderCell>
-          <Table.HeaderCell width="fill">Repository</Table.HeaderCell>
-          {canUpdate ? <Table.RowActionsHeaderCell /> : null}
-        </Table.Header>
-        <Table.Body>
-          {visible.items.map((reference) => (
-            <RepositoryRow
-              key={reference.alias}
-              reference={reference}
-              copy={platform.writeClipboardText}
-              actions={
-                canUpdate ? (
-                  <Table.RowActions label={`${reference.alias} actions`}>
-                    <Menu.Item icon={<Icon glyph="Pencil" />} onSelect={() => setEditing(reference)}>
-                      Edit
-                    </Menu.Item>
-                    <Menu.Item tone="danger" icon={<Icon glyph="Trash2" />} onSelect={() => setRemoving(reference)}>
-                      Remove
-                    </Menu.Item>
-                  </Table.RowActions>
-                ) : null
-              }
-            />
-          ))}
-        </Table.Body>
-      </Table.Root>
-      <Pagination.Numbered page={visible.page} pageCount={visible.pageCount} onPageChange={setPage} />
+        {visible.items.map((reference) => (
+          <RepositoryRow
+            key={reference.alias}
+            reference={reference}
+            copy={platform.writeClipboardText}
+            actions={
+              canUpdate ? (
+                <TableCell>
+                  <RepositoryActions
+                    alias={reference.alias}
+                    onEdit={() => setEditing(reference)}
+                    onRemove={() => setRemoving(reference)}
+                  />
+                </TableCell>
+              ) : null
+            }
+          />
+        ))}
+      </RepositoriesTable>
+      <RepositoriesPagination page={visible.page} pageCount={visible.pageCount} onPageChange={setPage} />
       {adding ? <SpaceAddRepositories spaceId={props.spaceId} onClose={() => setAdding(false)} /> : null}
       {editing ? (
         <EditRepositoryDialog
@@ -137,6 +156,130 @@ export function SpaceRepositories(props: { spaceId: string }) {
   )
 }
 
+function RepositoriesTable(props: {
+  state: "loading" | "failed" | "ready" | "empty"
+  emptyMessage: string
+  columns: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-2 [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3 [&_th]:font-normal [&_th]:text-muted-foreground [&_tr]:border-0">
+      <Table className="table-fixed">
+        <TableCaption className="sr-only">Repositories</TableCaption>
+        <TableHeader>
+          <TableRow>{props.columns}</TableRow>
+        </TableHeader>
+        <TableBody>
+          {props.state === "ready" ? null : (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={3}>
+                <TableState state={props.state} emptyMessage={props.emptyMessage} />
+              </TableCell>
+            </TableRow>
+          )}
+          {props.children}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+function TableState(props: { state: "loading" | "failed" | "empty"; emptyMessage: string }) {
+  if (props.state === "loading") return <Spinner className="mx-auto" />
+  if (props.state === "failed")
+    return (
+      <Empty role="alert">
+        <EmptyHeader>
+          <EmptyTitle>Couldn’t load the repositories of this space.</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    )
+  return (
+    <Empty>
+      <EmptyHeader>
+        <EmptyDescription>{props.emptyMessage}</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  )
+}
+
+function RepositoryActions(props: { alias: string; onEdit: () => void; onRemove: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="-my-1 flex text-muted-foreground"
+            aria-label={`${props.alias} actions`}
+          />
+        }
+      >
+        <Icon glyph="MoreHorizontal" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuGroup>
+          <DropdownMenuItem onClick={props.onEdit}>
+            <Icon glyph="Pencil" />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onClick={props.onRemove}>
+            <Icon glyph="Trash2" />
+            Remove
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function RepositoriesPagination(props: { page: number; pageCount: number; onPageChange: (page: number) => void }) {
+  if (props.pageCount <= 1) return null
+  const shown =
+    props.pageCount <= 7
+      ? Array.from({ length: props.pageCount }, (_, index) => index + 1)
+      : [...new Set([1, props.pageCount, props.page - 1, props.page, props.page + 1])]
+          .filter((value) => value >= 1 && value <= props.pageCount)
+          .toSorted((a, b) => a - b)
+  return (
+    <Pagination className="justify-end">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious
+            aria-label="Previous page"
+            aria-disabled={props.page <= 1}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            onClick={() => props.onPageChange(props.page - 1)}
+          />
+        </PaginationItem>
+        {shown.map((value, index) => (
+          <Fragment key={value}>
+            {value - (shown[index - 1] ?? value - 1) > 1 ? (
+              <PaginationItem>
+                <PaginationEllipsis />
+              </PaginationItem>
+            ) : null}
+            <PaginationItem>
+              <PaginationLink isActive={value === props.page} onClick={() => props.onPageChange(value)}>
+                {value}
+              </PaginationLink>
+            </PaginationItem>
+          </Fragment>
+        ))}
+        <PaginationItem>
+          <PaginationNext
+            aria-label="Next page"
+            aria-disabled={props.page >= props.pageCount}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            onClick={() => props.onPageChange(props.page + 1)}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  )
+}
+
 function RemoveRepositoryDialog(props: {
   reference: ReferenceInfo
   onRemove: () => Promise<void>
@@ -154,7 +297,7 @@ function RemoveRepositoryDialog(props: {
       tone="danger"
       onConfirm={props.onRemove}
       onConfirmed={() => {
-        Toast.manager.add({ type: "success", title: `${props.reference.alias} removed` })
+        toast.add({ type: "success", title: `${props.reference.alias} removed` })
         props.onClose()
       }}
     />
@@ -168,8 +311,8 @@ function RepositoryRow(props: {
 }) {
   const reference = props.reference
   return (
-    <Table.Row>
-      <Table.Cell>
+    <TableRow>
+      <TableCell>
         <span className="flex min-w-0 flex-col">
           <Text truncation="single-line" element="span">
             {reference.alias}
@@ -178,8 +321,8 @@ function RepositoryRow(props: {
             {reference.description}
           </Text>
         </span>
-      </Table.Cell>
-      <Table.Cell>
+      </TableCell>
+      <TableCell>
         <span className="flex min-w-0 items-center gap-2">
           <span className="flex min-w-0 flex-col">
             <Text truncation="single-line" element="span" title={reference.repository}>
@@ -198,9 +341,9 @@ function RepositoryRow(props: {
             />
           ) : null}
         </span>
-      </Table.Cell>
+      </TableCell>
       {props.actions}
-    </Table.Row>
+    </TableRow>
   )
 }
 
@@ -223,12 +366,14 @@ function EditRepositoryDialog(props: {
   const [checked, setChecked] = useState(false)
   const [failure, setFailure] = useState<string>()
   const [saving, setSaving] = useState(false)
+  const id = useId()
   const parsed = Repositories.parse(repository)
   const problems = {
     repository: parsed ? undefined : "Paste a repository address, like https://github.com/acme/docs.",
     alias: aliasProblem(alias.trim(), props.others),
     description: description.trim() ? undefined : "Description is required.",
   }
+  const shown = checked ? problems : { repository: undefined, alias: undefined, description: undefined }
   const submit = async () => {
     setChecked(true)
     setFailure(undefined)
@@ -248,24 +393,25 @@ function EditRepositoryDialog(props: {
     setSaving(false)
   }
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !saving) props.onClose()
       }}
-      dismissal={saving ? "blocked" : "allowed"}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>Edit {props.reference.alias}</Dialog.Title>
-          <Dialog.Description>{Repositories.copy}</Dialog.Description>
-        </Dialog.Header>
-        <Dialog.Body>
-          <Field.Root label="Repository URL" error={checked ? problems.repository : undefined}>
-            <TextField
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit {props.reference.alias}</DialogTitle>
+          <DialogDescription>{Repositories.copy}</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <Field data-invalid={shown.repository !== undefined}>
+            <FieldLabel htmlFor={`${id}-repository`}>Repository URL</FieldLabel>
+            <Input
+              id={`${id}-repository`}
               type="url"
               value={repository}
-              invalid={checked && problems.repository !== undefined}
+              aria-invalid={shown.repository !== undefined}
               onChange={(event) => setRepository(event.target.value)}
               onBlur={() => {
                 if (!parsed) return
@@ -273,34 +419,57 @@ function EditRepositoryDialog(props: {
                 if (parsed.branch) setBranch(parsed.branch)
               }}
             />
-          </Field.Root>
-          <Field.Root label="Alias" error={checked ? problems.alias : undefined}>
-            <TextField value={alias} onChange={(event) => setAlias(event.target.value)} />
-          </Field.Root>
-          <Field.Root label="Branch" necessity="optional">
-            <TextField placeholder="default" value={branch} onChange={(event) => setBranch(event.target.value)} />
-          </Field.Root>
-          <Field.Root label="Description" error={checked ? problems.description : undefined}>
-            <TextField
+            <FieldError>{shown.repository}</FieldError>
+          </Field>
+          <Field data-invalid={shown.alias !== undefined}>
+            <FieldLabel htmlFor={`${id}-alias`}>Alias</FieldLabel>
+            <Input
+              id={`${id}-alias`}
+              value={alias}
+              aria-invalid={shown.alias !== undefined}
+              onChange={(event) => setAlias(event.target.value)}
+            />
+            <FieldError>{shown.alias}</FieldError>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${id}-branch`}>
+              Branch
+              <span className="font-normal text-muted-foreground">Optional</span>
+            </FieldLabel>
+            <Input
+              id={`${id}-branch`}
+              placeholder="default"
+              value={branch}
+              onChange={(event) => setBranch(event.target.value)}
+            />
+          </Field>
+          <Field data-invalid={shown.description !== undefined}>
+            <FieldLabel htmlFor={`${id}-description`}>Description</FieldLabel>
+            <Input
+              id={`${id}-description`}
               placeholder="Product docs and style guide"
               value={description}
-              invalid={checked && problems.description !== undefined}
+              aria-invalid={shown.description !== undefined}
               onChange={(event) => setDescription(event.target.value)}
             />
-          </Field.Root>
-          <Notice tone="danger" placement="inline">
-            {failure}
-          </Notice>
-        </Dialog.Body>
-        <Dialog.Footer>
+            <FieldError>{shown.description}</FieldError>
+          </Field>
+          {failure ? (
+            <Alert variant="destructive">
+              <Icon glyph="AlertCircle" />
+              <AlertDescription>{failure}</AlertDescription>
+            </Alert>
+          ) : null}
+        </div>
+        <DialogFooter className="sm:justify-end">
           <FormActions.Root>
             <FormActions.Cancel onClick={props.onClose} disabled={saving} />
             <FormActions.Submit pending={saving} pendingLabel="Saving…" onClick={() => void submit()}>
               Save repository
             </FormActions.Submit>
           </FormActions.Root>
-        </Dialog.Footer>
-      </Dialog.Content>
-    </Dialog.Root>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

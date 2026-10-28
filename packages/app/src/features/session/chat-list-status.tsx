@@ -1,5 +1,5 @@
 import type { Session } from "@ren/schema/session"
-import { ProgressIndicator } from "@ren/ui/progress-indicator"
+import { Spinner } from "@ren/ui/spinner"
 import { StatusDot } from "@ren/ui/status-dot"
 import { useRouteContext } from "@tanstack/react-router"
 import { Chat } from "../../lib/chat.js"
@@ -11,6 +11,6 @@ export function ChatListStatus(props: { sessionID: Session.ID; busy: boolean }) 
     ChatAttention.useAttention(Chat.forUser(context.platform, context.me.user.id), props.sessionID) ??
     (props.busy ? "running" : "idle")
   if (attention === "asking") return <StatusDot tone="accent" label="Needs your input" />
-  if (attention === "running") return <ProgressIndicator size="extra-small" label="Working" announcement="none" />
+  if (attention === "running") return <Spinner aria-hidden className="size-3 text-muted-foreground" />
   return null
 }

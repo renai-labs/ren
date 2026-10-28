@@ -1,9 +1,10 @@
 import { ApplicationShell } from "@ren/ui/application-shell"
-import { Avatar } from "@ren/ui/avatar"
+import { Avatar, AvatarFallback } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { Combobox } from "@ren/ui/combobox"
 import { Icon } from "@ren/ui/icon"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
+import { Initials } from "@ren/util/initials"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
@@ -29,7 +30,11 @@ export function OrganizationSwitcher(props: {
   ].map((organization) => ({
     value: organization.id,
     label: organization.name,
-    icon: <Avatar.Root name={organization.name} size="small" decorative />,
+    icon: (
+      <Avatar size="sm" aria-hidden>
+        <AvatarFallback>{Initials.of(organization.name)}</AvatarFallback>
+      </Avatar>
+    ),
   }))
 
   const switchTo = async (organizationId: string) => {
@@ -37,7 +42,7 @@ export function OrganizationSwitcher(props: {
     if (organizationId !== props.active.id) {
       const result = await auth.organization.setActive({ organizationId })
       if (result.error !== null) {
-        Toast.manager.add({
+        toast.add({
           type: "error",
           title: "Couldn’t switch organization",
           description: result.error.message ?? undefined,
@@ -83,24 +88,12 @@ export function OrganizationSwitcher(props: {
 function SwitcherActions(props: { onCreate: () => void; onLogOut: () => void }) {
   return (
     <>
-      <Button
-        appearance="ghost"
-        size="small"
-        width="full"
-        alignment="start"
-        leadingIcon={<Icon glyph="Plus" />}
-        onClick={props.onCreate}
-      >
+      <Button variant="ghost" size="sm" className="w-full justify-start" onClick={props.onCreate}>
+        <Icon glyph="Plus" data-icon="inline-start" />
         Create organization
       </Button>
-      <Button
-        appearance="ghost"
-        size="small"
-        width="full"
-        alignment="start"
-        leadingIcon={<Icon glyph="LogOut" />}
-        onClick={props.onLogOut}
-      >
+      <Button variant="ghost" size="sm" className="w-full justify-start" onClick={props.onLogOut}>
+        <Icon glyph="LogOut" data-icon="inline-start" />
         Log out
       </Button>
     </>

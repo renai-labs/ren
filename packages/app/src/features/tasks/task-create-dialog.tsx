@@ -1,20 +1,18 @@
 import type { SpaceInfo, TaskCreateInput } from "@ren/client"
 import { Task } from "@ren/schema/task"
-import { Avatar } from "@ren/ui/avatar"
+import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { Combobox } from "@ren/ui/combobox"
-import { Dialog } from "@ren/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { Notice } from "@ren/ui/notice"
 import { Form } from "@ren/ui/form"
-import { Select } from "@ren/ui/select"
+import { Label } from "@ren/ui/label"
 import { Switch } from "@ren/ui/switch"
 import { Text } from "@ren/ui/text"
 import { Schema } from "effect"
 import { useId, useRef, useState } from "react"
-import type { KeyboardEvent, ReactNode } from "react"
-import { PropertyControls } from "./task-controls.js"
+import type { KeyboardEvent } from "react"
+import { PropertyControls, SpaceAvatar } from "./task-controls.js"
 import type { Values } from "./task-controls.js"
 import { Tasks } from "./tasks.js"
 
@@ -66,22 +64,51 @@ export function TaskCreateDialog(props: {
   const [chosenSpaceId, setChosenSpaceId] = useState(initialSpaceId)
   const spaceId = props.spaces.some((space) => space.id === chosenSpaceId) ? chosenSpaceId : initialSpaceId
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !pending) props.onClose()
       }}
-      dismissal={pending ? "blocked" : "allowed"}
     >
-      <Dialog.Content size={expanded ? "extra-wide" : "wide"} closeButton="hidden" placement="top">
-        <TaskComposerHeader
-          spaceField={
-            <SpacePicker spaces={props.spaces} value={spaceId} onChange={setChosenSpaceId} disabled={pending} />
-          }
-          expanded={expanded}
-          onExpandedChange={setExpanded}
-          pending={pending}
-        />
+      <DialogContent
+        showCloseButton={false}
+        className={
+          expanded ? "top-[12%] translate-y-0 gap-0 p-0 sm:max-w-256" : "top-[12%] translate-y-0 gap-0 p-0 sm:max-w-192"
+        }
+      >
+        <div className="flex min-w-0 items-center gap-2 px-4 pt-4 pb-2">
+          <SpacePicker spaces={props.spaces} value={spaceId} onChange={setChosenSpaceId} disabled={pending} />
+          <Icon glyph="ChevronRight" tone="secondary" />
+          <DialogTitle>New task</DialogTitle>
+          <DialogDescription className="sr-only">
+            Add a task to a space. Assigning an agent does not start it.
+          </DialogDescription>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="hidden text-muted-foreground sm:inline-flex"
+              aria-label={expanded ? "Collapse task composer" : "Expand task composer"}
+              onClick={() => setExpanded(!expanded)}
+            >
+              <Icon glyph={expanded ? "Minimize2" : "Maximize2"} />
+            </Button>
+            <DialogClose
+              disabled={pending}
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground"
+                  aria-label="Close task composer"
+                  disabled={pending}
+                />
+              }
+            >
+              <Icon glyph="X" />
+            </DialogClose>
+          </div>
+        </div>
         {spaceId ? (
           <TaskComposer
             spaceId={spaceId}
@@ -99,44 +126,8 @@ export function TaskCreateDialog(props: {
             </Text>
           </div>
         )}
-      </Dialog.Content>
-    </Dialog.Root>
-  )
-}
-
-function TaskComposerHeader(props: {
-  spaceField: ReactNode
-  expanded: boolean
-  onExpandedChange: (expanded: boolean) => void
-  pending: boolean
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-2 px-4 pt-4 pb-2">
-      {props.spaceField}
-      <Icon glyph="ChevronRight" tone="secondary" />
-      <Dialog.Title>New task</Dialog.Title>
-      <Dialog.Description visibility="hidden">
-        Add a task to a space. Assigning an agent does not start it.
-      </Dialog.Description>
-      <div className="ml-auto flex shrink-0 items-center gap-1">
-        <div className="hidden sm:block">
-          <IconButton
-            onClick={() => props.onExpandedChange(!props.expanded)}
-            label={props.expanded ? "Collapse task composer" : "Expand task composer"}
-          >
-            <Icon glyph={props.expanded ? "Minimize2" : "Maximize2"} />
-          </IconButton>
-        </div>
-        <Dialog.Close
-          disabled={props.pending}
-          render={
-            <IconButton label="Close task composer" disabled={props.pending}>
-              <Icon glyph="X" />
-            </IconButton>
-          }
-        />
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -165,27 +156,22 @@ function SpacePicker(props: {
           items: props.spaces.map((entry) => ({
             value: entry.id,
             label: entry.name,
-            icon: <Avatar.Root name={entry.name} glyph="Cube" size="extra-small" shape="square" decorative />,
+            icon: <SpaceAvatar />,
           })),
         },
       ]}
       trigger={
-        <Select.Button
-          appearance="filled"
-          shape="pill"
-          size="small"
-          indicator="chevron"
+        <Button
+          variant="outline"
+          size="xs"
+          className="h-7 rounded-full px-3 font-normal text-foreground"
           disabled={props.disabled}
-          label={`Space: ${space?.name ?? "none"}`}
-          placeholder="Choose a space"
+          aria-label={`Space: ${space?.name ?? "none"}`}
         >
-          {space ? (
-            <>
-              <Avatar.Root name={space.name} glyph="Cube" size="extra-small" shape="square" decorative />
-              {space.name}
-            </>
-          ) : null}
-        </Select.Button>
+          {space ? <SpaceAvatar /> : null}
+          {space ? space.name : "Choose a space"}
+          <Icon glyph="ChevronDown" tone="secondary" data-icon="inline-end" />
+        </Button>
       }
     />
   )
@@ -292,18 +278,21 @@ export function TaskComposer(props: {
       </div>
       <div className="flex items-center gap-4 px-4 pt-2 pb-4">
         <div className="min-w-0 flex-1">
-          <Notice tone="danger" placement="inline">
-            {error}
-          </Notice>
+          {error ? (
+            <Alert variant="destructive" className="border-0 bg-transparent p-0">
+              <Icon glyph="AlertCircle" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Switch id={createMoreId} checked={createMore} onCheckedChange={setCreateMore} disabled={props.pending} />
-          <Text purpose="caption" tone="primary" element="label" htmlFor={createMoreId}>
+          <Label htmlFor={createMoreId} className="text-xs font-normal">
             Create more
-          </Text>
+          </Label>
         </div>
         {props.onCancel ? (
-          <Button appearance="plain" disabled={props.pending} onClick={props.onCancel}>
+          <Button variant="ghost" disabled={props.pending} onClick={props.onCancel}>
             Cancel
           </Button>
         ) : null}

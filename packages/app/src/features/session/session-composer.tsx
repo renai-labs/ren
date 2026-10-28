@@ -8,7 +8,7 @@ import type { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { ConversationShell } from "@ren/ui/conversation-shell"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { Effect, Predicate, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useRef, useState } from "react"
@@ -301,7 +301,7 @@ export function SessionComposer(props: {
       node.focus()
       node.setSelectionRange(position, position)
     })
-  const stop = () => void interrupt().catch(Failure.toast("Could not stop Ren"))
+  const stop = () => void interrupt().catch(Failure.notify("Could not stop Ren"))
   const move = (item: Composer.Queued) => {
     if (moving) return
     setMoving(true)
@@ -315,7 +315,7 @@ export function SessionComposer(props: {
           })
         },
         (error: unknown) =>
-          Toast.manager.add({
+          toast.add({
             type: "error",
             title: "Could not move the message to the text field",
             description: Predicate.isTagged(error, "ConflictError")
@@ -349,7 +349,7 @@ export function SessionComposer(props: {
     const failure = (title: string) => (error: unknown) => {
       remember(ComposerHistory.remove(latest.current.history, submission.sent))
       change(Composer.restore(latest.current.draft, submission.sent, id))
-      Toast.manager.add({ type: "error", title, description: `${Failure.describe(error)} Your draft has been kept.` })
+      toast.add({ type: "error", title, description: `${Failure.describe(error)} Your draft has been kept.` })
     }
     const selection = { delivery: submission.delivery, ...(submission.model && { model: submission.model }) }
     if (slash)
@@ -584,7 +584,7 @@ export function SessionComposer(props: {
           )
           if (kind === "text") return
           event.preventDefault()
-          if (kind === "attachment") Toast.manager.add({ title: "Files can’t be attached yet" })
+          if (kind === "attachment") toast.add({ title: "Files can’t be attached yet" })
           else change(Composer.addPasted(draft, { id: SessionMessage.ID.create(), text }))
         }}
         onKeyDown={(event) => {

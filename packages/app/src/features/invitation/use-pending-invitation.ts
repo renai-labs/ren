@@ -1,4 +1,4 @@
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
@@ -63,7 +63,7 @@ export function usePendingInvitation(props: PendingInvitationProps) {
       const result = await context.auth.organization.rejectInvitation({ invitationId: props.id })
       if (result.error) {
         setAction("idle")
-        Toast.manager.add({
+        toast.add({
           type: "error",
           title: "Couldn’t decline invitation",
           description: result.error.message ?? "Try again.",

@@ -1,6 +1,7 @@
-import { Dialog } from "@ren/ui/dialog"
+import { Alert, AlertDescription } from "@ren/ui/alert"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { Form } from "@ren/ui/form"
-import { Notice } from "@ren/ui/notice"
+import { Icon } from "@ren/ui/icon"
 import { Text } from "@ren/ui/text"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
@@ -39,27 +40,35 @@ export function CreateOrganizationDialog(props: { onOpenChange: (open: boolean) 
     },
   })
   return (
-    <Dialog.Root open onOpenChange={props.onOpenChange} dismissal={pending ? "blocked" : "allowed"}>
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>Create organization</Dialog.Title>
-          <Dialog.Description>A shared home for your teams and their projects.</Dialog.Description>
-        </Dialog.Header>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (open || !pending) props.onOpenChange(open)
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create organization</DialogTitle>
+          <DialogDescription>A shared home for your teams and their projects.</DialogDescription>
+        </DialogHeader>
         <Form.Root form={form} arrangement="contents">
-          <Dialog.Body>
+          <div className="flex flex-col gap-4">
             <form.Subscribe selector={(state) => Auth.organizationSlug(state.values.name)}>
               {(slug) => <NameField form={form} slug={slug} takenSlug={takenSlug} />}
             </form.Subscribe>
-            <Notice tone="danger" placement="inline">
-              {error}
-            </Notice>
-          </Dialog.Body>
-          <Dialog.Footer>
+            {error ? (
+              <Alert variant="destructive">
+                <Icon glyph="AlertCircle" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
+          <DialogFooter className="sm:justify-end">
             <form.SubmitButton pendingLabel="Creating…">Create organization</form.SubmitButton>
-          </Dialog.Footer>
+          </DialogFooter>
         </Form.Root>
-      </Dialog.Content>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   )
 }
 

@@ -1,9 +1,9 @@
 import { Combobox } from "@ren/ui/combobox"
-import { Dialog } from "@ren/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
 import { Icon } from "@ren/ui/icon"
 import type { Glyph } from "@ren/ui/icon"
-import { KeyboardKey } from "@ren/ui/keyboard-key"
-import { Tabs } from "@ren/ui/tabs"
+import { Kbd } from "@ren/ui/kbd"
+import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { Text } from "@ren/ui/text"
 import { Theme } from "@ren/ui/theme"
 import { useNavigate } from "@tanstack/react-router"
@@ -91,10 +91,10 @@ export function WorkspaceSearch(props: { onClose: () => void }) {
     void navigate({ to: page?.to ?? "/settings" })
   }
   return (
-    <Dialog.Root open onOpenChange={(open) => (open ? undefined : props.onClose())}>
-      <Dialog.Content height="compact" closeButton="hidden" size="large">
-        <Dialog.Title visibility="hidden">Search</Dialog.Title>
-        <Dialog.Description visibility="hidden">Search actions and settings.</Dialog.Description>
+    <Dialog open onOpenChange={(open) => (open ? undefined : props.onClose())}>
+      <DialogContent showCloseButton={false} className="flex h-120 flex-col gap-0 overflow-hidden p-0 sm:max-w-168">
+        <DialogTitle className="sr-only">Search</DialogTitle>
+        <DialogDescription className="sr-only">Search actions and settings.</DialogDescription>
         <Combobox.Panel
           purpose="command"
           filtering="external"
@@ -114,22 +114,20 @@ export function WorkspaceSearch(props: { onClose: () => void }) {
           emptyMessage="No results."
           groups={groups}
           header={
-            <div className="shrink-0 p-2">
-              <Tabs.Root value={filter} onValueChange={setFilter}>
-                <Tabs.List label="Filter results" size="small">
-                  {filters.map((value) => (
-                    <Tabs.Tab key={value} value={value}>
-                      {filterLabels[value]}
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-              </Tabs.Root>
-            </div>
+            <Tabs value={filter} onValueChange={(value: Filter) => setFilter(value)} className="shrink-0 border-b p-2">
+              <TabsList variant="page" aria-label="Filter results" className="h-7">
+                {filters.map((value) => (
+                  <TabsTrigger key={value} value={value} className="h-7 text-xs">
+                    {filterLabels[value]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           }
           footer={<Hints />}
         />
-      </Dialog.Content>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -141,17 +139,17 @@ function Hints() {
         element="span"
         leadingIcon={
           <>
-            <KeyboardKey>↑</KeyboardKey>
-            <KeyboardKey>↓</KeyboardKey>
+            <Kbd>↑</Kbd>
+            <Kbd>↓</Kbd>
           </>
         }
       >
         Select
       </Text>
-      <Text purpose="caption" element="span" leadingIcon={<KeyboardKey>↵</KeyboardKey>}>
+      <Text purpose="caption" element="span" leadingIcon={<Kbd>↵</Kbd>}>
         Open
       </Text>
-      <Text purpose="caption" element="span" leadingIcon={<KeyboardKey>Tab</KeyboardKey>}>
+      <Text purpose="caption" element="span" leadingIcon={<Kbd>Tab</Kbd>}>
         Change filter
       </Text>
     </div>

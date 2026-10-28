@@ -1,18 +1,26 @@
 import type { FactoryEdge, FactoryEntry } from "@ren/client"
 import { Factory } from "@ren/schema/factory"
 import { Pagination } from "@ren/schema/pagination"
-import { Avatar } from "@ren/ui/avatar"
+import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Disclosure } from "@ren/ui/disclosure"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { List } from "@ren/ui/list"
-import { LoadingMessage } from "@ren/ui/loading-message"
-import { Menu } from "@ren/ui/menu"
-import { Notice } from "@ren/ui/notice"
+import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { PageShell } from "@ren/ui/page-shell"
-import { Select } from "@ren/ui/select"
-import { StateMessage } from "@ren/ui/state-message"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Struct } from "effect"
@@ -26,6 +34,8 @@ const handoffLimits = ["5", "10", "20", "30", "50", "100"]
 const loopLimits = ["1", "2", "3", "5", "10"]
 
 const defaultLoopLimit = 3
+
+const runs = [{ value: "none", label: "No limit" }, ...range(20).map((value) => ({ value, label: value }))]
 
 interface Change {
   readonly maxHandoffs?: number
@@ -68,16 +78,35 @@ export function SpaceFactory(props: { spaceId: string }) {
   const update = useMutation(context.api.space.update.mutationOptions())
   if (space.isError || agents.isError)
     return (
-      <StateMessage
-        state="failed"
-        title="Couldn’t load the factory."
-        onRetry={() => {
-          void space.refetch()
-          void agents.refetch()
-        }}
-      />
+      <Empty role="alert">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon glyph="AlertCircle" />
+          </EmptyMedia>
+          <EmptyTitle>Couldn’t load the factory.</EmptyTitle>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void space.refetch()
+              void agents.refetch()
+            }}
+          >
+            Try again
+          </Button>
+        </EmptyContent>
+      </Empty>
     )
-  if (!space.data || !agents.data) return <LoadingMessage placement="section" />
+  if (!space.data || !agents.data)
+    return (
+      <Empty>
+        <EmptyMedia>
+          <Spinner />
+        </EmptyMedia>
+      </Empty>
+    )
   const factory = space.data.factory
   const maxHandoffs = factory.maxHandoffs ?? Factory.defaultMaxHandoffs
   const order = factory.agents
@@ -94,9 +123,11 @@ export function SpaceFactory(props: { spaceId: string }) {
     <PageShell.Section>
       <div className="flex flex-col gap-6">
         {update.isError ? (
-          <Notice tone="danger" title="Couldn’t save the factory">
-            {update.error.message}
-          </Notice>
+          <Alert variant="destructive">
+            <Icon glyph="AlertCircle" />
+            <AlertTitle>Couldn’t save the factory</AlertTitle>
+            <AlertDescription>{update.error.message}</AlertDescription>
+          </Alert>
         ) : null}
         <FactoryList
           spaceId={space.data.id}
@@ -156,8 +187,8 @@ function FactoryList(props: {
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button
-          size="small"
-          appearance="outline"
+          size="sm"
+          variant="outline"
           disabled={props.disabled || order.length < 2}
           onClick={() =>
             props.onChange(
@@ -171,61 +202,72 @@ function FactoryList(props: {
           Pass work down the order
         </Button>
         {unlisted.length > 0 ? (
-          <Menu.Root>
-            <Menu.Trigger
-              render={
-                <Button size="small" appearance="outline" disabled={props.disabled}>
-                  Add agent
-                </Button>
-              }
-            />
-            <Menu.Popup alignment="start" width="medium">
-              {unlisted.map((agent) => (
-                <Menu.Item key={agent.id} onSelect={() => props.onChange([...order, { agentId: agent.id }])}>
-                  {agent.name}
-                </Menu.Item>
-              ))}
-            </Menu.Popup>
-          </Menu.Root>
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button size="sm" variant="outline" disabled={props.disabled} />}>
+              Add agent
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuGroup>
+                {unlisted.map((agent) => (
+                  <DropdownMenuItem key={agent.id} onClick={() => props.onChange([...order, { agentId: agent.id }])}>
+                    {agent.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : null}
       </div>
-      <List.Root
-        label="Factory"
-        state={order.length ? "ready" : "empty"}
-        emptyMessage="Add an agent to set the factory order."
-      >
-        {order.map((entry, index) => (
-          <List.Item
-            key={entry.agentId}
-            title={props.name(entry.agentId)}
-            leading={<Avatar.Root name={props.name(entry.agentId)} glyph="Bot" size="small" decorative />}
-            trailing={
-              <OrderActions
-                name={props.name(entry.agentId)}
-                disabled={props.disabled}
-                {...(index > 0 && {
-                  onUp: () => props.onChange(order.toSpliced(index - 1, 2, entry, order[index - 1] ?? entry)),
-                })}
-                {...(index < order.length - 1 && {
-                  onDown: () => props.onChange(order.toSpliced(index, 2, order[index + 1] ?? entry, entry)),
-                })}
-                {...(entry.agentId !== fixedAgentId && {
-                  onRemove: () => props.onChange(withoutAgent(order, entry.agentId)),
-                })}
-              />
-            }
-          >
-            <AgentHandoffs
-              entry={entry}
-              order={order}
-              positions={positions}
-              name={props.name}
-              disabled={props.disabled}
-              onChange={(next) => props.onChange(order.with(index, next))}
-            />
-          </List.Item>
-        ))}
-      </List.Root>
+      {order.length === 0 ? (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyDescription>Add an agent to set the factory order.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <ItemGroup aria-label="Factory" className="gap-0 rounded-xl border bg-card">
+          {order.map((entry, index) => (
+            <Item
+              key={entry.agentId}
+              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div in the ItemGroup list
+              role="listitem"
+              className="items-start rounded-none border-0 not-last:border-b not-last:border-border"
+            >
+              <ItemMedia>
+                <span className="flex size-6 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <Icon glyph="Bot" />
+                </span>
+              </ItemMedia>
+              <ItemContent className="min-w-0">
+                <ItemTitle>{props.name(entry.agentId)}</ItemTitle>
+                <AgentHandoffs
+                  entry={entry}
+                  order={order}
+                  positions={positions}
+                  name={props.name}
+                  disabled={props.disabled}
+                  onChange={(next) => props.onChange(order.with(index, next))}
+                />
+              </ItemContent>
+              <ItemActions>
+                <OrderActions
+                  name={props.name(entry.agentId)}
+                  disabled={props.disabled}
+                  {...(index > 0 && {
+                    onUp: () => props.onChange(order.toSpliced(index - 1, 2, entry, order[index - 1] ?? entry)),
+                  })}
+                  {...(index < order.length - 1 && {
+                    onDown: () => props.onChange(order.toSpliced(index, 2, order[index + 1] ?? entry, entry)),
+                  })}
+                  {...(entry.agentId !== fixedAgentId && {
+                    onRemove: () => props.onChange(withoutAgent(order, entry.agentId)),
+                  })}
+                />
+              </ItemActions>
+            </Item>
+          ))}
+        </ItemGroup>
+      )}
       <Text purpose="caption" tone="secondary">
         ↺ sends the task back. At the limit, a person decides.
       </Text>
@@ -242,30 +284,36 @@ function OrderActions(props: {
 }) {
   return (
     <div className="flex items-center gap-1">
-      <IconButton
-        label={`Move ${props.name} up`}
-        size="compact"
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="text-muted-foreground"
+        aria-label={`Move ${props.name} up`}
         disabled={props.disabled || !props.onUp}
         onClick={props.onUp}
       >
         <Icon glyph="ArrowUp" />
-      </IconButton>
-      <IconButton
-        label={`Move ${props.name} down`}
-        size="compact"
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="text-muted-foreground"
+        aria-label={`Move ${props.name} down`}
         disabled={props.disabled || !props.onDown}
         onClick={props.onDown}
       >
         <Icon glyph="ArrowDown" />
-      </IconButton>
-      <IconButton
-        label={`Remove ${props.name} from the factory`}
-        size="compact"
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="text-muted-foreground"
+        aria-label={`Remove ${props.name} from the factory`}
         disabled={props.disabled || !props.onRemove}
         onClick={props.onRemove}
       >
         <Icon glyph="X" />
-      </IconButton>
+      </Button>
     </div>
   )
 }
@@ -305,41 +353,43 @@ function AgentHandoffs(props: {
         />
       ))}
       {unlisted.length > 0 ? (
-        <Menu.Root>
-          <Menu.Trigger
+        <DropdownMenu>
+          <DropdownMenuTrigger
             render={
               <Button
-                size="small"
-                appearance="ghost"
-                shape="pill"
+                size="sm"
+                variant="ghost"
+                className="rounded-full"
                 disabled={props.disabled}
-                leadingIcon={<Icon glyph="Plus" />}
                 aria-label={`Add a handoff from ${from}`}
-              >
-                Add
-              </Button>
+              />
             }
-          />
-          <Menu.Popup alignment="start" width="medium">
-            {unlisted.map((other) => (
-              <Menu.Item
-                key={other.agentId}
-                onSelect={() =>
-                  props.onChange(
-                    withHandoff(
-                      entry,
-                      sendsBack(other.agentId)
-                        ? { agentId: other.agentId, max: defaultLoopLimit }
-                        : { agentId: other.agentId },
-                    ),
-                  )
-                }
-              >
-                {props.name(other.agentId)}
-              </Menu.Item>
-            ))}
-          </Menu.Popup>
-        </Menu.Root>
+          >
+            <Icon glyph="Plus" data-icon="inline-start" />
+            Add
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuGroup>
+              {unlisted.map((other) => (
+                <DropdownMenuItem
+                  key={other.agentId}
+                  onClick={() =>
+                    props.onChange(
+                      withHandoff(
+                        entry,
+                        sendsBack(other.agentId)
+                          ? { agentId: other.agentId, max: defaultLoopLimit }
+                          : { agentId: other.agentId },
+                      ),
+                    )
+                  }
+                >
+                  {props.name(other.agentId)}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : null}
     </div>
   )
@@ -364,74 +414,79 @@ function HandoffChip(props: {
     .filter(Boolean)
     .join(" ")
   return (
-    <Menu.Root>
-      <Menu.Trigger
+    <DropdownMenu>
+      <DropdownMenuTrigger
         render={
           <Button
-            size="small"
-            appearance="outline"
-            shape="pill"
+            size="sm"
+            variant="outline"
+            className="rounded-full"
             disabled={props.disabled}
             aria-label={`${label}, handoff from ${props.from}`}
-          >
-            {label}
-          </Button>
+          />
         }
-      />
-      <Menu.Popup alignment="start" width="medium">
+      >
+        {label}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
         {props.direction === "back" || edge.max ? (
-          <Menu.Section label="Send back at most">
-            <Menu.RadioGroup
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Send back at most</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
               value={edge.max ? String(edge.max) : "none"}
-              onValueChange={(value) =>
+              onValueChange={(value: string) =>
                 props.onChange(value === "none" ? Struct.omit(edge, ["max", "else"]) : { ...edge, max: Number(value) })
               }
             >
               {[...new Set([...loopLimits, ...(edge.max ? [String(edge.max)] : [])])]
                 .toSorted((left, right) => Number(left) - Number(right))
                 .map((value) => (
-                  <Menu.RadioItem key={value} value={value}>
+                  <DropdownMenuRadioItem key={value} value={value}>
                     {value === "1" ? "1 time" : `${value} times`}
-                  </Menu.RadioItem>
+                  </DropdownMenuRadioItem>
                 ))}
-              <Menu.RadioItem value="none">No limit</Menu.RadioItem>
-            </Menu.RadioGroup>
-          </Menu.Section>
+              <DropdownMenuRadioItem value="none">No limit</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuGroup>
         ) : null}
         {edge.max ? (
-          <Menu.Section label="At the limit">
-            <Menu.RadioGroup
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>At the limit</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
               value={edge.else ?? "person"}
-              onValueChange={(value) =>
+              onValueChange={(value: string) =>
                 props.onChange(value === "person" ? Struct.omit(edge, ["else"]) : { ...edge, else: value })
               }
             >
-              <Menu.RadioItem value="person">A person decides</Menu.RadioItem>
+              <DropdownMenuRadioItem value="person">A person decides</DropdownMenuRadioItem>
               {props.others.map((other) => (
-                <Menu.RadioItem key={other.agentId} value={other.agentId}>
+                <DropdownMenuRadioItem key={other.agentId} value={other.agentId}>
                   {props.name(other.agentId)} gets the task
-                </Menu.RadioItem>
+                </DropdownMenuRadioItem>
               ))}
-            </Menu.RadioGroup>
-          </Menu.Section>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuGroup>
         ) : null}
-        <Menu.Section label="Session">
-          <Menu.RadioGroup
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Session</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
             value={edge.start === "new" ? "new" : "continue"}
-            onValueChange={(value) =>
+            onValueChange={(value: string) =>
               props.onChange(value === "new" ? { ...edge, start: "new" } : Struct.omit(edge, ["start"]))
             }
           >
-            <Menu.RadioItem value="continue">Continue its session</Menu.RadioItem>
-            <Menu.RadioItem value="new">Start a new session</Menu.RadioItem>
-          </Menu.RadioGroup>
-        </Menu.Section>
-        <Menu.Separator />
-        <Menu.Item tone="danger" onSelect={() => props.onChange(undefined)}>
-          Remove handoff
-        </Menu.Item>
-      </Menu.Popup>
-    </Menu.Root>
+            <DropdownMenuRadioItem value="continue">Continue its session</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="new">Start a new session</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem variant="destructive" onClick={() => props.onChange(undefined)}>
+            Remove handoff
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -442,43 +497,76 @@ function FactoryAdvanced(props: {
   disabled: boolean
   onChange: (change: Change) => void
 }) {
+  const handoffs = [...new Set([...handoffLimits, String(props.maxHandoffs)])]
+    .toSorted((left, right) => Number(left) - Number(right))
+    .map((value) => ({ value, label: value }))
   return (
-    <Disclosure summary="Advanced">
-      <div className="flex flex-col gap-3">
+    <Collapsible className="flex flex-col gap-3">
+      <CollapsibleTrigger
+        render={<Button variant="ghost" size="sm" className="group/advanced self-start text-muted-foreground" />}
+      >
+        Advanced
+        <span className="flex transition-transform duration-150 ease-out group-data-panel-open/advanced:rotate-180 motion-reduce:transition-none">
+          <Icon glyph="ChevronDown" />
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Text purpose="body">Most handoffs before a person decides</Text>
-          <Select.Root
-            label="Most handoffs before a person decides"
-            size="small"
+          <Select
+            items={handoffs}
             disabled={props.disabled}
             value={String(props.maxHandoffs)}
-            onValueChange={(value) => props.onChange({ maxHandoffs: Number(value) })}
-            options={[...new Set([...handoffLimits, String(props.maxHandoffs)])]
-              .toSorted((left, right) => Number(left) - Number(right))
-              .map((value) => ({ value, label: value }))}
-          />
+            onValueChange={(value) => {
+              if (value) props.onChange({ maxHandoffs: Number(value) })
+            }}
+          >
+            <SelectTrigger size="sm" aria-label="Most handoffs before a person decides">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {handoffs.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
         {props.order.map((entry, index) => (
           <div key={entry.agentId} className="flex flex-wrap items-center gap-2">
             <Text purpose="body">Most runs of {props.name(entry.agentId)}</Text>
-            <Select.Root
-              label={`Most runs of ${props.name(entry.agentId)}`}
-              size="small"
+            <Select
+              items={runs}
               disabled={props.disabled}
               value={entry.maxRuns ? String(entry.maxRuns) : "none"}
               onValueChange={(value) =>
                 props.onChange({
                   agents: props.order.with(
                     index,
-                    value === "none" ? Struct.omit(entry, ["maxRuns"]) : { ...entry, maxRuns: Number(value) },
+                    value === "none" || !value ? Struct.omit(entry, ["maxRuns"]) : { ...entry, maxRuns: Number(value) },
                   ),
                 })
               }
-              options={[{ value: "none", label: "No limit" }, ...range(20).map((value) => ({ value, label: value }))]}
-            />
+            >
+              <SelectTrigger size="sm" aria-label={`Most runs of ${props.name(entry.agentId)}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {runs.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
         ))}
-      </div>
-    </Disclosure>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

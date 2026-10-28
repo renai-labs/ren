@@ -1,6 +1,6 @@
 export * as InvitationActions from "./invitation-actions.js"
 
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import type { QueryClient } from "@tanstack/react-query"
 import type { Auth } from "../../lib/auth.js"
 import type { Runtime } from "../../lib/runtime.js"
@@ -28,7 +28,7 @@ export async function openWorkspace(
   const switched = await context.auth.organization.setActive({ organizationId: input.organizationId })
   if (switched.error) {
     const message = switched.error.message ?? "Your invitation was accepted, but the workspace could not open."
-    Toast.manager.add({ type: "error", title: "Couldn’t open workspace", description: message })
+    toast.add({ type: "error", title: "Couldn’t open workspace", description: message })
     return failure("workspace-error", message)
   }
   context.queryClient.clear()
@@ -41,7 +41,7 @@ export async function join(
 ): Promise<Outcome> {
   const accepted = await context.auth.organization.acceptInvitation({ invitationId: input.invitationId })
   if (!accepted.error) {
-    Toast.manager.add({ type: "success", title: "Joined organization" })
+    toast.add({ type: "success", title: "Joined organization" })
     return openWorkspace(context, input)
   }
   if (

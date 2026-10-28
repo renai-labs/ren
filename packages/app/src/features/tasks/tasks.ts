@@ -3,7 +3,7 @@ export * as Tasks from "./tasks.js"
 import type { AgentInfo, LabelSummary, TaskCreateInput, TaskInfo } from "@ren/client"
 import { Pagination } from "@ren/schema/pagination"
 import type { Task } from "@ren/schema/task"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Struct } from "effect"
 import { Auth } from "../../lib/auth.js"
@@ -194,9 +194,9 @@ export function useTaskActions() {
     const failed = targets.filter((_task, index) => results[index]?.status === "rejected")
     const reason = results.find((result) => result.status === "rejected")
     const verb = { status: "Updated", move: "Moved", archive: "Archived" }[operation.kind]
-    if (failed.length === 0) Toast.manager.add({ type: "success", title: `${verb} ${plural(targets.length)}` })
+    if (failed.length === 0) toast.add({ type: "success", title: `${verb} ${plural(targets.length)}` })
     else
-      Toast.manager.add({
+      toast.add({
         type: "error",
         timeout: 0,
         title: `${verb} ${targets.length - failed.length} of ${plural(targets.length)}`,

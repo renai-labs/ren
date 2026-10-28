@@ -36,7 +36,7 @@ export function AcceptInvitation(props: {
         title="We couldn’t open this invitation"
         description="Check the link and try again. If the problem continues, ask the sender for a new invitation."
         action={
-          <Button appearance="primary" width="full" onClick={() => void preview.refetch()}>
+          <Button className="w-full" onClick={() => void preview.refetch()}>
             Try again
           </Button>
         }

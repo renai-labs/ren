@@ -1,11 +1,10 @@
 import type { TaskInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { LoadingMessage } from "@ren/ui/loading-message"
 import { PageShell } from "@ren/ui/page-shell"
-import { StateMessage } from "@ren/ui/state-message"
-import { Select } from "@ren/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
+import { Spinner } from "@ren/ui/spinner"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate, useRouteContext, useSearch } from "@tanstack/react-router"
@@ -93,17 +92,30 @@ function Page(props: {
       actions={
         <Actions disabled={!hasSpaces} onCreate={() => openCreate({})}>
           {hasSpaces && view.layout === "board" ? (
-            <Select.Root
-              label="Board space"
-              placeholder="Choose a space"
-              value={spaceId}
-              size="compact"
-              width="compact"
-              options={catalog.spaces.map((entry) => ({ value: entry.id, label: entry.name }))}
-              onValueChange={(id) =>
-                props.onViewChange({ ...props.view, filters: { ...props.view.filters, space: [id] }, selected: [] })
-              }
-            />
+            <Select
+              items={[
+                { label: "Choose a space", value: null },
+                ...catalog.spaces.map((entry) => ({ label: entry.name, value: entry.id })),
+              ]}
+              value={spaceId || null}
+              onValueChange={(id) => {
+                if (id !== null)
+                  props.onViewChange({ ...props.view, filters: { ...props.view.filters, space: [id] }, selected: [] })
+              }}
+            >
+              <SelectTrigger size="sm" aria-label="Board space" className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {catalog.spaces.map((entry) => (
+                    <SelectItem key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           ) : null}
           {hasSpaces ? <TasksToolbar view={props.view} onChange={props.onViewChange} options={options} /> : null}
         </Actions>
@@ -187,16 +199,16 @@ function Dialogs(props: {
 function Actions(props: { disabled: boolean; onCreate: () => void; children: ReactNode }) {
   return (
     <Toolbar.Root size="small" leading={props.children}>
-      <IconButton
-        label="New task"
-        appearance="primary"
+      <Button
+        size="icon-sm"
+        aria-label="New task"
         disabled={props.disabled}
         onClick={props.onCreate}
         aria-keyshortcuts="C"
         title="New task (C)"
       >
         <Icon glyph="Compose" />
-      </IconButton>
+      </Button>
     </Toolbar.Root>
   )
 }
@@ -226,40 +238,73 @@ function Collection(props: {
   onCreate: () => void
   children: ReactNode
 }) {
-  if (props.state === "loading") return <LoadingMessage placement="section" />
+  if (props.state === "loading")
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia>
+            <Spinner />
+          </EmptyMedia>
+        </EmptyHeader>
+      </Empty>
+    )
   if (props.state === "no-spaces")
     return (
-      <StateMessage
-        state="empty"
-        icon={<Icon glyph="Checklist" size="medium" tone="secondary" />}
-        title="No spaces yet"
-        description="Join or create a space to start organizing tasks."
-      />
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon glyph="Checklist" tone="secondary" />
+          </EmptyMedia>
+          <EmptyTitle>No spaces yet</EmptyTitle>
+          <EmptyDescription>Join or create a space to start organizing tasks.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     )
   if (props.state === "failed")
-    return <StateMessage state="failed" placement="section" title="Couldn’t load tasks." onRetry={props.onRetry} />
+    return (
+      <Empty role="alert">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon glyph="AlertCircle" tone="danger" />
+          </EmptyMedia>
+          <EmptyTitle>Couldn’t load tasks.</EmptyTitle>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button variant="outline" size="sm" onClick={props.onRetry}>
+            Try again
+          </Button>
+        </EmptyContent>
+      </Empty>
+    )
   if (props.state === "ready" || props.view.layout === "board") return props.children
   return (
     <>
       {props.state === "no-results" ? (
-        <StateMessage
-          state="no-results"
-          icon={<Icon glyph="Checklist" size="medium" tone="secondary" />}
-          title="No matching tasks"
-          description="Try a different search or filter."
-        />
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon glyph="Checklist" tone="secondary" />
+            </EmptyMedia>
+            <EmptyTitle>No matching tasks</EmptyTitle>
+            <EmptyDescription>Try a different search or filter.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <StateMessage
-          state="empty"
-          icon={<Icon glyph="Checklist" size="medium" tone="secondary" />}
-          title="No tasks yet"
-          description="Create one to plan work and hand it to an agent."
-          action={
-            <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={props.onCreate}>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon glyph="Checklist" tone="secondary" />
+            </EmptyMedia>
+            <EmptyTitle>No tasks yet</EmptyTitle>
+            <EmptyDescription>Create one to plan work and hand it to an agent.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button size="sm" onClick={props.onCreate}>
+              <Icon glyph="Plus" data-icon="inline-start" />
               New task
             </Button>
-          }
-        />
+          </EmptyContent>
+        </Empty>
       )}
       {props.view.empty ? props.children : null}
     </>

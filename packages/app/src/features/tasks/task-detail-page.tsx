@@ -1,13 +1,28 @@
 import type { TaskInfo } from "@ren/client"
 import { Task } from "@ren/schema/task"
-import { Breadcrumbs } from "@ren/ui/breadcrumbs"
+import { Alert, AlertDescription } from "@ren/ui/alert"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@ren/ui/breadcrumb"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
-import { LoadingMessage } from "@ren/ui/loading-message"
-import { Menu } from "@ren/ui/menu"
-import { Notice } from "@ren/ui/notice"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
+import { Icon } from "@ren/ui/icon"
 import { PageShell } from "@ren/ui/page-shell"
-import { StateMessage } from "@ren/ui/state-message"
+import { Spinner } from "@ren/ui/spinner"
 import { TaskLinkBadge } from "@ren/ui/task-link-badge"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
@@ -49,14 +64,28 @@ export function TaskDetailPage(props: PageProps) {
     return (
       <PageShell.Root title="Task">
         {detail.isError ? (
-          <StateMessage
-            state="failed"
-            placement="section"
-            title="Couldn’t load this task."
-            onRetry={() => void detail.refetch()}
-          />
+          <Empty role="alert">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Icon glyph="AlertCircle" tone="danger" />
+              </EmptyMedia>
+              <EmptyTitle>Couldn’t load this task.</EmptyTitle>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
+                Try again
+              </Button>
+            </EmptyContent>
+          </Empty>
         ) : (
-          <LoadingMessage placement="section" title="Loading task…" />
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia>
+                <Spinner />
+              </EmptyMedia>
+              <EmptyTitle>Loading task…</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         )}
       </PageShell.Root>
     )
@@ -97,9 +126,17 @@ function Detail(props: DetailProps) {
     >
       <article aria-label="Task detail" className="flex min-w-0 flex-col gap-8">
         {props.refreshError ? (
-          <Notice tone="danger">Couldn’t refresh this task. Showing the last loaded version.</Notice>
+          <Alert variant="destructive">
+            <Icon glyph="AlertCircle" />
+            <AlertDescription>Couldn’t refresh this task. Showing the last loaded version.</AlertDescription>
+          </Alert>
         ) : null}
-        {error ? <Notice tone="danger">{Tasks.describe(error)}</Notice> : null}
+        {error ? (
+          <Alert variant="destructive">
+            <Icon glyph="AlertCircle" />
+            <AlertDescription>{Tasks.describe(error)}</AlertDescription>
+          </Alert>
+        ) : null}
         <div className="flex flex-col gap-4">
           <TaskTitleEditor
             value={task.title}
@@ -196,59 +233,78 @@ function DetailHeader(props: {
   return (
     <>
       <div className="min-w-0 flex-1">
-        <Breadcrumbs.Root>
-          <Breadcrumbs.Link render={<Link to="/tasks" />}>Tasks</Breadcrumbs.Link>
-          {task.parent ? (
-            <Breadcrumbs.Link render={<Link to="/tasks/$taskId" params={{ taskId: task.parent.id }} />}>
-              {task.parent.identifier}
-            </Breadcrumbs.Link>
-          ) : null}
-          <Breadcrumbs.Page>{task.identifier}</Breadcrumbs.Page>
-        </Breadcrumbs.Root>
+        <Breadcrumb aria-label="Breadcrumb">
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink render={<Link to="/tasks" />}>Tasks</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            {task.parent ? (
+              <BreadcrumbItem>
+                <BreadcrumbLink render={<Link to="/tasks/$taskId" params={{ taskId: task.parent.id }} />}>
+                  {task.parent.identifier}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+            ) : null}
+            {task.parent ? <BreadcrumbSeparator /> : null}
+            <BreadcrumbItem>
+              <BreadcrumbPage>{task.identifier}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
       {task.canUpdate ? (
         <>
-          <Menu.Root>
-            <Menu.Trigger
+          <DropdownMenu>
+            <DropdownMenuTrigger
               render={
-                <Button disabled={!task.agentId || !TaskView.isActionable(task) || actions.start.isPending}>
-                  {actions.start.isPending ? "Starting agent…" : "Start agent"}
-                </Button>
+                <Button
+                  variant="outline"
+                  disabled={!task.agentId || !TaskView.isActionable(task) || actions.start.isPending}
+                />
               }
-            />
-            <Menu.Popup alignment="end">
-              <Menu.Item onSelect={() => actions.start.mutate({ id: task.id, mode: "continue" })}>
-                Continue session
-              </Menu.Item>
-              <Menu.Item onSelect={() => actions.start.mutate({ id: task.id, mode: "new" })}>
-                Start new session
-              </Menu.Item>
-            </Menu.Popup>
-          </Menu.Root>
-          <Menu.Root>
-            <Menu.Trigger
-              render={
-                <Button appearance="plain" aria-label="Task actions">
-                  Actions
-                </Button>
-              }
-            />
-            <Menu.Popup alignment="end">
-              <Menu.Item onSelect={() => actions.update.mutate({ id: task.id, status: "done" })}>Mark done</Menu.Item>
-              <Menu.Item onSelect={() => actions.update.mutate({ id: task.id, status: "dismissed" })}>
-                Dismiss
-              </Menu.Item>
-              <Menu.Item onSelect={() => actions.assign.mutate({ id: task.id, agentId: null, start: "none" })}>
-                Take over
-              </Menu.Item>
-              <Menu.Item disabled={!TaskView.isActionable(task)} onSelect={props.onRequestReview}>
-                Request human review
-              </Menu.Item>
-              <Menu.Item tone="danger" onSelect={() => setArchiving(true)}>
-                Archive task
-              </Menu.Item>
-            </Menu.Popup>
-          </Menu.Root>
+            >
+              {actions.start.isPending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+              {actions.start.isPending ? "Starting agent…" : "Start agent"}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => actions.start.mutate({ id: task.id, mode: "continue" })}>
+                  Continue session
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => actions.start.mutate({ id: task.id, mode: "new" })}>
+                  Start new session
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" aria-label="Task actions" />}>
+              Actions
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => actions.update.mutate({ id: task.id, status: "done" })}>
+                  Mark done
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => actions.update.mutate({ id: task.id, status: "dismissed" })}>
+                  Dismiss
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => actions.assign.mutate({ id: task.id, agentId: null, start: "none" })}>
+                  Take over
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!TaskView.isActionable(task)} onClick={props.onRequestReview}>
+                  Request human review
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem variant="destructive" onClick={() => setArchiving(true)}>
+                  Archive task
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <ConfirmationDialog
             open={archiving}
             onOpenChange={setArchiving}
@@ -270,7 +326,7 @@ function SessionLink(props: { session: TaskInfo["session"]; onOpen: (id: string)
   if (!session) return null
   return (
     <div>
-      <Button appearance="plain" size="small" onClick={() => props.onOpen(session.id)}>
+      <Button variant="ghost" size="sm" onClick={() => props.onOpen(session.id)}>
         Open agent session
       </Button>
     </div>

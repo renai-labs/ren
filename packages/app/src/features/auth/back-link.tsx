@@ -6,11 +6,13 @@ export function BackLink(props: { onClick?: () => void; render?: ReactElement; c
   return (
     <div className="flex justify-center">
       <Button
-        appearance="plain"
-        leadingIcon={<Icon glyph="ChevronLeft" size="small" />}
+        variant="ghost"
+        className="text-muted-foreground"
+        nativeButton={props.render === undefined}
         render={props.render}
         onClick={props.onClick}
       >
+        <Icon glyph="ChevronLeft" data-icon="inline-start" />
         {props.children ?? "Go back"}
       </Button>
     </div>

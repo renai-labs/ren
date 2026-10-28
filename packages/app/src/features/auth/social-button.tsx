@@ -27,14 +27,13 @@ export function SocialButton(props: { provider: "github" | "slack"; destination:
   const afterAuth = `${platform.appUrl}${CompleteAuth.href({ ...destination, join: true })}`
   return (
     <Button
-      appearance="secondary"
-      size="large"
-      width="full"
-      leadingIcon={<Icon glyph={glyphs[props.provider]} size="small" />}
+      variant="secondary"
+      className="h-10 w-full"
       onClick={() =>
         void auth.signIn.social({ provider: props.provider, callbackURL: afterAuth, newUserCallbackURL: afterAuth })
       }
     >
+      <Icon glyph={glyphs[props.provider]} data-icon="inline-start" />
       Continue with {Channel.titles[props.provider]}
     </Button>
   )

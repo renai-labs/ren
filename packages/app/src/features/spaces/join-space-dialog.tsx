@@ -1,10 +1,10 @@
 import type { SpaceInfo } from "@ren/client"
-import { Avatar } from "@ren/ui/avatar"
+import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Combobox } from "@ren/ui/combobox"
-import { Dialog } from "@ren/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { FormActions } from "@ren/ui/form-actions"
-import { Notice } from "@ren/ui/notice"
-import { Toast } from "@ren/ui/toast"
+import { Icon } from "@ren/ui/icon"
+import { toast } from "@ren/ui/toast"
 import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
@@ -23,7 +23,7 @@ export function JoinSpaceDialog(props: { spaces: ReadonlyArray<SpaceInfo>; userI
       { payload: { spaceId: space.id, userId: props.userId } },
       {
         onSuccess: () => {
-          Toast.manager.add({ type: "success", title: `Joined ${space.name}` })
+          toast.add({ type: "success", title: `Joined ${space.name}` })
           props.onClose()
           void navigate({ to: "/spaces/$spaceId", params: { spaceId: space.id } })
         },
@@ -31,19 +31,18 @@ export function JoinSpaceDialog(props: { spaces: ReadonlyArray<SpaceInfo>; userI
     )
   }
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !join.isPending) props.onClose()
       }}
-      dismissal={join.isPending ? "blocked" : "allowed"}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>Join space</Dialog.Title>
-          <Dialog.Description>Choose a space in your organization to join.</Dialog.Description>
-        </Dialog.Header>
-        <Dialog.Body>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Join space</DialogTitle>
+          <DialogDescription>Choose a space in your organization to join.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
           <Combobox.Inline
             label="Search spaces"
             searchPlaceholder="Search spaces…"
@@ -58,24 +57,31 @@ export function JoinSpaceDialog(props: { spaces: ReadonlyArray<SpaceInfo>; userI
                   value: each.id,
                   label: each.name,
                   description: each.description?.trim() || undefined,
-                  icon: <Avatar.Root name={each.name} glyph="Cube" size="small" shape="square" decorative />,
+                  icon: (
+                    <span className="flex size-5 items-center justify-center rounded-md bg-secondary text-muted-foreground">
+                      <Icon glyph="Cube" />
+                    </span>
+                  ),
                 })),
               },
             ]}
           />
-          <Notice tone="danger" placement="inline">
-            {join.error?.message}
-          </Notice>
-        </Dialog.Body>
-        <Dialog.Footer>
+          {join.error ? (
+            <Alert variant="destructive">
+              <Icon glyph="AlertCircle" />
+              <AlertDescription>{join.error.message}</AlertDescription>
+            </Alert>
+          ) : null}
+        </div>
+        <DialogFooter className="sm:justify-end">
           <FormActions.Root>
             <FormActions.Cancel onClick={props.onClose} disabled={join.isPending} />
             <FormActions.Submit pending={join.isPending} pendingLabel="Joining…" disabled={!space} onClick={submit}>
               Join space
             </FormActions.Submit>
           </FormActions.Root>
-        </Dialog.Footer>
-      </Dialog.Content>
-    </Dialog.Root>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

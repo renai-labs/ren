@@ -1,14 +1,23 @@
+import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { Menu } from "@ren/ui/menu"
-import { Table } from "@ren/ui/table"
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { Members } from "./members.js"
+import { SortableHead, StateRow } from "./table-parts.js"
 
 export function InvitationsTable(props: {
   rows: ReadonlyArray<Members.InvitationRow>
@@ -30,36 +39,45 @@ export function InvitationsTable(props: {
   const query = props.query.trim()
   return (
     <>
-      <Table.Root
-        state={props.state === "ready" && visible.length === 0 ? "empty" : props.state}
-        failureMessage={props.failureMessage}
-        emptyIcon={<Icon glyph="Mail" size="medium" tone="secondary" />}
-        emptyMessage={query === "" ? "No pending invitations." : `Nothing matches “${query}”`}
-        caption="Invitations"
-      >
-        <Table.Header>
-          <Table.SortableHeaderCell direction={direction} onSortChange={setDirection}>
-            Email
-          </Table.SortableHeaderCell>
-          <Table.HeaderCell width="medium">Status</Table.HeaderCell>
-          <Table.HeaderCell width="small">Role</Table.HeaderCell>
-          <Table.RowActionsHeaderCell />
-        </Table.Header>
-        <Table.Body>
-          {visible.map((row) => (
-            <InvitationRow
-              key={row.id}
-              row={row}
-              organizationId={props.organizationId}
-              onChanged={props.onChanged}
-              onRevoke={() => {
-                setRevoking(row)
-                setConfirming(true)
-              }}
-            />
-          ))}
-        </Table.Body>
-      </Table.Root>
+      <div className="rounded-xl border bg-card p-2">
+        <Table className="table-fixed">
+          <TableCaption className="sr-only">Invitations</TableCaption>
+          <TableHeader>
+            <TableRow className="border-0 hover:bg-transparent">
+              <SortableHead direction={direction} onDirectionChange={setDirection}>
+                Email
+              </SortableHead>
+              <TableHead className="w-1/4 px-4 font-normal text-muted-foreground">Status</TableHead>
+              <TableHead className="w-28 px-4 font-normal text-muted-foreground">Role</TableHead>
+              <TableHead className="w-15" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {props.state === "ready" && visible.length > 0 ? (
+              visible.map((row) => (
+                <InvitationRow
+                  key={row.id}
+                  row={row}
+                  organizationId={props.organizationId}
+                  onChanged={props.onChanged}
+                  onRevoke={() => {
+                    setRevoking(row)
+                    setConfirming(true)
+                  }}
+                />
+              ))
+            ) : (
+              <StateRow
+                columns={4}
+                state={props.state}
+                failureMessage={props.failureMessage}
+                emptyMessage={query === "" ? "No pending invitations." : `Nothing matches “${query}”`}
+                emptyGlyph="Mail"
+              />
+            )}
+          </TableBody>
+        </Table>
+      </div>
       <ConfirmationDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -74,8 +92,7 @@ export function InvitationsTable(props: {
           if (result.error !== null) throw new Error(result.error.message ?? "Couldn’t revoke invitation")
         }}
         onConfirmed={() => {
-          if (revoking !== undefined)
-            Toast.manager.add({ type: "success", title: `Invitation to ${revoking.email} revoked` })
+          if (revoking !== undefined) toast.add({ type: "success", title: `Invitation to ${revoking.email} revoked` })
         }}
       />
     </>
@@ -103,46 +120,69 @@ function InvitationRow(props: {
     await props.onChanged()
     setResending(false)
     if (result.error === null) {
-      Toast.manager.add({ type: "success", title: `Invitation resent to ${row.email}` })
+      toast.add({ type: "success", title: `Invitation resent to ${row.email}` })
       return
     }
-    Toast.manager.add({ type: "error", title: "Couldn’t resend invitation", description: result.error.message })
+    toast.add({ type: "error", title: "Couldn’t resend invitation", description: result.error.message })
   }
   return (
-    <Table.Row>
-      <Table.Cell>
+    <TableRow className="border-0">
+      <TableCell className="px-4 py-3">
         <Text element="span" truncation="single-line" leadingIcon={<Icon glyph="Mail" tone="secondary" />}>
           {row.email}
         </Text>
-      </Table.Cell>
-      <Table.Cell>
+      </TableCell>
+      <TableCell className="px-4 py-3">
         <Text element="span" tone={row.isExpired ? "danger" : "primary"} truncation="single-line">
           {row.isExpired ? "Expired " : "Expires "}
           <Time value={row.expiresAt} format="relative" relativeStyle="narrow" />
         </Text>
-      </Table.Cell>
-      <Table.Cell>
+      </TableCell>
+      <TableCell className="px-4 py-3">
         <Text element="span" letterCase="capitalized">
           {row.role}
         </Text>
-      </Table.Cell>
-      <Table.RowActions label="Invitation actions">
-        <Menu.Item
-          icon={<Icon glyph="Link" />}
-          onSelect={() => {
-            void platform.writeClipboardText?.(`${platform.appUrl}/signup?invitationId=${row.id}`)
-            Toast.manager.add({ type: "success", title: "Invite link copied" })
-          }}
-        >
-          Copy invite link
-        </Menu.Item>
-        <Menu.Item icon={<Icon glyph="RefreshCw" />} disabled={resending} onSelect={() => void resend()}>
-          Resend
-        </Menu.Item>
-        <Menu.Item tone="danger" icon={<Icon glyph="Trash2" />} onSelect={props.onRevoke}>
-          Revoke
-        </Menu.Item>
-      </Table.RowActions>
-    </Table.Row>
+      </TableCell>
+      <TableCell className="px-4 py-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="-my-1 flex text-muted-foreground"
+                aria-label="Invitation actions"
+              />
+            }
+          >
+            <Icon glyph="MoreHorizontal" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                onClick={() => {
+                  void platform.writeClipboardText?.(`${platform.appUrl}/signup?invitationId=${row.id}`)
+                  toast.add({ type: "success", title: "Invite link copied" })
+                }}
+              >
+                <Icon glyph="Link" />
+                Copy invite link
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={resending} onClick={() => void resend()}>
+                <Icon glyph="RefreshCw" />
+                Resend
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem variant="destructive" onClick={props.onRevoke}>
+                <Icon glyph="Trash2" />
+                Revoke
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
   )
 }

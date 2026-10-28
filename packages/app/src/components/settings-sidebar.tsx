@@ -1,8 +1,8 @@
 import { ApplicationShell } from "@ren/ui/application-shell"
+import { Empty, EmptyDescription, EmptyHeader } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { KeyboardKey } from "@ren/ui/keyboard-key"
-import { StateMessage } from "@ren/ui/state-message"
-import { TextField } from "@ren/ui/text-field"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
+import { Kbd } from "@ren/ui/kbd"
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router"
 import { useRef, useState } from "react"
 import { Search } from "@ren/util/search"
@@ -44,28 +44,33 @@ export function SettingsSidebar() {
           render={<Link to="/" />}
         />
         <li>
-          <TextField
-            ref={search}
-            appearance="filled"
-            aria-label="Search settings"
-            placeholder="Search settings…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                const first = visiblePersonal[0] ?? visibleOrganization[0]
-                if (first === undefined) return
-                navigation.dismiss()
-                void navigate({ to: first.to })
-              }
-              if (event.key === "Escape") {
-                setQuery("")
-                event.currentTarget.blur()
-              }
-            }}
-            leading={<Icon glyph="Search" />}
-            trailing={<KeyboardKey>/</KeyboardKey>}
-          />
+          <InputGroup className="border-transparent bg-muted">
+            <InputGroupAddon>
+              <Icon glyph="Search" />
+            </InputGroupAddon>
+            <InputGroupInput
+              ref={search}
+              aria-label="Search settings"
+              placeholder="Search settings…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  const first = visiblePersonal[0] ?? visibleOrganization[0]
+                  if (first === undefined) return
+                  navigation.dismiss()
+                  void navigate({ to: first.to })
+                }
+                if (event.key === "Escape") {
+                  setQuery("")
+                  event.currentTarget.blur()
+                }
+              }}
+            />
+            <InputGroupAddon align="inline-end">
+              <Kbd>/</Kbd>
+            </InputGroupAddon>
+          </InputGroup>
         </li>
       </ApplicationShell.NavigationSection>
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overscroll-contain pb-12">
@@ -80,7 +85,11 @@ export function SettingsSidebar() {
           </ApplicationShell.NavigationSection>
         ) : null}
         {needle !== "" && visiblePersonal.length === 0 && visibleOrganization.length === 0 ? (
-          <StateMessage state="no-results" placement="inline" title="No matching settings." />
+          <Empty className="p-2">
+            <EmptyHeader>
+              <EmptyDescription>No matching settings.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : null}
       </div>
     </div>

@@ -1,15 +1,18 @@
 import { Pagination } from "@ren/schema/pagination"
-import { Avatar } from "@ren/ui/avatar"
 import type { SpaceInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
-import { Card } from "@ren/ui/card"
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@ren/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { Menu } from "@ren/ui/menu"
 import { PageShell } from "@ren/ui/page-shell"
 import { SearchField } from "@ren/ui/search-field"
-import { StateMessage } from "@ren/ui/state-message"
-import { Text } from "@ren/ui/text"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
@@ -40,50 +43,57 @@ export function SpacesPage(props: { userId: string }) {
     >
       <section aria-label="Spaces" aria-live="polite">
         {visible.length === 0 ? (
-          <StateMessage
-            state={needle ? "no-results" : "empty"}
-            icon={<Icon glyph="Cube" size="medium" tone="secondary" />}
-            title={needle ? "No matching spaces" : "No spaces yet"}
-            description={needle ? "Try a different search." : "Create one to bring people together."}
-          />
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Icon glyph="Cube" />
+              </EmptyMedia>
+              <EmptyTitle>{needle ? "No matching spaces" : "No spaces yet"}</EmptyTitle>
+              <EmptyDescription>
+                {needle ? "Try a different search." : "Create one to bring people together."}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : null}
         {visible.length > 0 ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {visible.map((space, index) => (
-              <Card.Root
-                key={space.id}
-                interaction="link"
-                density="spacious"
-                render={<Link to="/spaces/$spaceId" params={{ spaceId: space.id }} />}
-                label={`Open ${space.name}`}
-                appearanceOrder={index}
-                media={
-                  <Avatar.Root
-                    name={space.name}
-                    glyph={space.kind === "private" ? "Lock" : "Cube"}
-                    size="extra-large"
-                    shape="square"
-                    decorative
-                  />
-                }
-                title={space.name}
-                description={space.description?.trim() || "No description"}
-                footer={
-                  <Text purpose="caption" numerals="tabular" element="span">
-                    <span className="flex items-center gap-2">
-                      <Icon glyph={space.kind === "private" ? "Lock" : "Users"} />
-                      {space.kind === "private"
-                        ? "Private"
-                        : `${space.memberCount} ${space.memberCount === 1 ? "member" : "members"}`}
-                    </span>
-                  </Text>
-                }
-              />
+            {visible.map((space) => (
+              <SpaceCard key={space.id} space={space} />
             ))}
           </div>
         ) : null}
       </section>
     </PageShell.Root>
+  )
+}
+
+function SpaceCard(props: { space: SpaceInfo }) {
+  const space = props.space
+  return (
+    <Link
+      to="/spaces/$spaceId"
+      params={{ spaceId: space.id }}
+      aria-label={`Open ${space.name}`}
+      className="group/space rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <Card className="h-full gap-4 border shadow-xs ring-0 transition-colors [--card-spacing:--spacing(6)] group-hover/space:bg-muted">
+        <CardHeader>
+          <span className="mb-3 flex size-12 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+            <Icon glyph={space.kind === "private" ? "Lock" : "Cube"} size="extra-large" />
+          </span>
+          <CardTitle className="text-sm/5">{space.name}</CardTitle>
+          <CardDescription className="line-clamp-2 text-xs">
+            {space.description?.trim() || "No description"}
+          </CardDescription>
+        </CardHeader>
+        <CardFooter className="mx-6 mb-6 gap-2 bg-transparent px-0 pt-3 pb-0 text-xs text-muted-foreground tabular-nums">
+          <Icon glyph={space.kind === "private" ? "Lock" : "Users"} />
+          {space.kind === "private"
+            ? "Private"
+            : `${space.memberCount} ${space.memberCount === 1 ? "member" : "members"}`}
+        </CardFooter>
+      </Card>
+    </Link>
   )
 }
 
@@ -94,25 +104,26 @@ function SpaceActions(props: { spaces: ReadonlyArray<SpaceInfo>; userId: string 
   return (
     <>
       {canJoin ? (
-        <Menu.Root>
-          <Menu.Trigger
-            render={
-              <IconButton appearance="primary" size="small" label="Create or join a space">
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button size="icon-sm" aria-label="Create or join a space" />}>
+            <Icon glyph="Plus" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => setCreating(true)}>
                 <Icon glyph="Plus" />
-              </IconButton>
-            }
-          />
-          <Menu.Popup alignment="end" width="small">
-            <Menu.Item icon={<Icon glyph="Plus" />} onSelect={() => setCreating(true)}>
-              Create space
-            </Menu.Item>
-            <Menu.Item icon={<Icon glyph="LogIn" />} onSelect={() => setJoining(true)}>
-              Join space
-            </Menu.Item>
-          </Menu.Popup>
-        </Menu.Root>
+                Create space
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setJoining(true)}>
+                <Icon glyph="LogIn" />
+                Join space
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : (
-        <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setCreating(true)}>
+        <Button size="sm" onClick={() => setCreating(true)}>
+          <Icon glyph="Plus" data-icon="inline-start" />
           New space
         </Button>
       )}

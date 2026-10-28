@@ -1,14 +1,25 @@
 import type { ChannelInstallInfo, ChannelMappingInfo, ChannelPlaceInfo, ChannelTriggerSetting } from "@ren/client"
+import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Dialog } from "@ren/ui/dialog"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@ren/ui/dialog"
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@ren/ui/field"
 import { Icon } from "@ren/ui/icon"
-import { List } from "@ren/ui/list"
-import { LoadingMessage } from "@ren/ui/loading-message"
-import { Notice } from "@ren/ui/notice"
-import { ProgressIndicator } from "@ren/ui/progress-indicator"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@ren/ui/item"
+import { RadioGroup, RadioGroupItem } from "@ren/ui/radio-group"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { useQuery } from "@tanstack/react-query"
-import { useState } from "react"
+import { useId, useState } from "react"
 import type { ReactNode } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { ChannelMappingData } from "./channel-mapping-data.js"
@@ -144,11 +155,22 @@ function CardBody(props: {
   const install = props.install
   if (!useCanConfigure(props.spaceId))
     return (
-      <Notice tone="information" placement="inline">
-        Ask a member of this space to configure this channel.
-      </Notice>
+      <Alert>
+        <Icon glyph="Info" />
+        <AlertDescription>Ask a member of this space to configure this channel.</AlertDescription>
+      </Alert>
     )
-  if (props.loading) return <LoadingMessage placement="inline" title={`Loading ${props.provider.board.label}`} />
+  if (props.loading)
+    return (
+      <Empty className="p-0">
+        <EmptyHeader>
+          <EmptyMedia>
+            <Spinner />
+          </EmptyMedia>
+          <EmptyTitle>Loading {props.provider.board.label}</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    )
   if (!install) return null
   const previous = props.selected?.mapping ?? undefined
   const choose = (placeId: string | null) => {
@@ -236,7 +258,7 @@ function SenderSettings(props: {
         label={slack ? "Fallback sender" : "Session sender"}
         placeholder={slack ? "Fallback sender (optional)" : "Select session sender"}
         clearLabel={slack ? "No fallback sender" : "No session sender"}
-        size="small"
+        size="sm"
         value={sender}
         onChange={(userId) =>
           props.changes.save(targetOf(props.mapping), {
@@ -262,15 +284,18 @@ function SenderSettings(props: {
 
 function SlackChannelNotice() {
   return (
-    <Notice tone="neutral">
-      Ren must be added to a channel before it appears here. Open the channel in Slack and run
-      <code className="mx-1">
-        <Text purpose="code" element="span">
-          /invite @Ren
-        </Text>
-      </code>
-      , then return here.
-    </Notice>
+    <Alert>
+      <Icon glyph="Info" />
+      <AlertDescription>
+        Ren must be added to a channel before it appears here. Open the channel in Slack and run
+        <code className="mx-1">
+          <Text purpose="code" element="span">
+            /invite @Ren
+          </Text>
+        </code>
+        , then return here.
+      </AlertDescription>
+    </Alert>
   )
 }
 
@@ -288,53 +313,56 @@ function ChannelCard(props: {
   const copy = stateCopy[props.state]
   const checking = props.state === "checking"
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <List.Root frame="card">
-        <List.Item
-          density="spacious"
-          leading={props.icon}
-          title={
-            <Text purpose="label" truncation="single-line" element="span">
-              {props.title}
-            </Text>
-          }
-          description={checking ? copy.summary : (props.status ?? copy.summary)}
-          trailing={
-            <>
-              <StateMark title={props.title} state={props.state}>
-                {hasBody ? <Icon glyph="ChevronRight" tone="secondary" /> : null}
-              </StateMark>
-              {props.action}
-            </>
-          }
-          {...(hasBody && { onActivate: () => setOpen(true) })}
-        />
-      </List.Root>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Item variant="outline" className="min-h-14 gap-x-4 rounded-xl bg-card px-4 py-3">
+        <ItemMedia>{props.icon}</ItemMedia>
+        <ItemContent className="min-w-0 gap-0.5">
+          <ItemTitle className="max-w-full">
+            <span className="truncate">{props.title}</span>
+          </ItemTitle>
+          <ItemDescription className="line-clamp-1 text-xs">
+            {checking ? copy.summary : (props.status ?? copy.summary)}
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          <StateMark title={props.title} state={props.state}>
+            {hasBody ? (
+              <DialogTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground"
+                    aria-label={`Configure ${props.title}`}
+                  />
+                }
+              >
+                <Icon glyph="ChevronRight" />
+              </DialogTrigger>
+            ) : null}
+          </StateMark>
+          {props.action}
+        </ItemActions>
+      </Item>
       {hasBody ? (
-        <Dialog.Content>
-          <Dialog.Header>
-            <Dialog.Title>{props.title} integration</Dialog.Title>
-            <Dialog.Description>{props.description}</Dialog.Description>
-          </Dialog.Header>
-          <Dialog.Body>{props.children}</Dialog.Body>
-          <Dialog.Footer>
-            <Dialog.Close
-              render={
-                <Button type="button" appearance="primary">
-                  Done
-                </Button>
-              }
-            />
-          </Dialog.Footer>
-        </Dialog.Content>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{props.title} integration</DialogTitle>
+            <DialogDescription>{props.description}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">{props.children}</div>
+          <DialogFooter className="sm:justify-end">
+            <DialogClose render={<Button type="button" />}>Done</DialogClose>
+          </DialogFooter>
+        </DialogContent>
       ) : null}
-    </Dialog.Root>
+    </Dialog>
   )
 }
 
 function StateMark(props: { title: string; state: ChannelState; children: ReactNode }) {
   const label = `${props.title}: ${stateCopy[props.state].label}`
-  if (props.state === "checking") return <ProgressIndicator label={`Loading ${props.title} channel`} />
+  if (props.state === "checking") return <Spinner aria-label={`Loading ${props.title} channel`} />
   return (
     <span className="flex items-center gap-2" title={label}>
       {props.state === "routed" ? <Icon glyph="CheckCircle2" tone="success" /> : null}
@@ -353,13 +381,14 @@ function ConnectButton(props: { visible: boolean; label: string; pending: boolea
     <Button
       aria-label={label}
       title={label}
-      pending={props.pending}
-      pendingLabel="Opening…"
+      disabled={props.pending}
       onClick={props.onClick}
-      appearance="secondary"
-      size="small"
+      variant="outline"
+      size="xs"
+      className="h-6.5"
     >
-      Connect
+      {props.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+      {props.pending ? "Opening…" : "Connect"}
     </Button>
   )
 }
@@ -371,31 +400,42 @@ function ResourcePicker(props: {
   emptyLabel: string
   onChange: (value: string | null) => void
 }) {
+  const id = useId()
   return (
-    <List.Root frame="divided" height="limited" label="Resource">
-      <List.Item
-        selectionMark="radio"
-        selected={props.value === null}
-        onActivate={() => props.onChange(null)}
-        title={props.clearLabel}
-      />
+    <RadioGroup
+      aria-label="Resource"
+      value={props.value ?? ""}
+      onValueChange={(next: string) => props.onChange(next || null)}
+      className="max-h-72 gap-0 divide-y overflow-y-auto overscroll-contain rounded-lg border"
+    >
+      <Field orientation="horizontal" className="px-3 py-2.5">
+        <RadioGroupItem value="" id={`${id}-none`} />
+        <FieldLabel htmlFor={`${id}-none`} className="font-normal">
+          {props.clearLabel}
+        </FieldLabel>
+      </Field>
       {props.options.length === 0 ? (
         <div className="p-3">
           <Text purpose="caption">{props.emptyLabel}</Text>
         </div>
       ) : (
         props.options.map((option) => (
-          <List.Item
+          <Field
             key={option.value}
-            selectionMark="radio"
-            selected={option.value === props.value}
-            disabled={option.disabled}
-            onActivate={() => props.onChange(option.value)}
-            title={option.label}
-            description={option.detail}
-          />
+            orientation="horizontal"
+            data-disabled={option.disabled || undefined}
+            className="px-3 py-2.5"
+          >
+            <RadioGroupItem value={option.value} id={`${id}-${option.value}`} disabled={option.disabled} />
+            <FieldContent>
+              <FieldLabel htmlFor={`${id}-${option.value}`} className="font-normal">
+                {option.label}
+              </FieldLabel>
+              {option.detail ? <FieldDescription className="text-xs">{option.detail}</FieldDescription> : null}
+            </FieldContent>
+          </Field>
         ))
       )}
-    </List.Root>
+    </RadioGroup>
   )
 }

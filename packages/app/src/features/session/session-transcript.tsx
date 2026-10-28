@@ -10,23 +10,28 @@ import {
 } from "@ren/chat"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
-import { Avatar } from "@ren/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { ConversationShell } from "@ren/ui/conversation-shell"
 import { CopyButton } from "@ren/ui/copy-button"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { List } from "@ren/ui/list"
-import { Separator } from "@ren/ui/separator"
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
 import { Transcript } from "@ren/ui/transcript"
+import { Initials } from "@ren/util/initials"
 import { DateTime } from "effect"
 import { Platform } from "../../platform/platform.js"
 import { ChannelMessageHeader, ChannelReplyMessage } from "./channel-message.js"
 import { ScheduleMessageHeader } from "./schedule-message.js"
 import { ChatView } from "./chat-view.js"
-import { TranscriptError, TranscriptNotice, TranscriptNoticeItem, TranscriptShell } from "./transcript-notice.js"
+import {
+  LabeledSeparator,
+  TranscriptError,
+  TranscriptNotice,
+  TranscriptNoticeItem,
+  TranscriptShell,
+} from "./transcript-notice.js"
 import { FileChanges, TranscriptTool } from "./transcript-tool.js"
 
 export type PendingAction = "queue" | "cancel"
@@ -150,21 +155,21 @@ function Part(props: { shared: Shared; data: RowData; reference: TimelineRow.Par
   if (content?.type === "text") return <Response shared={props.shared} data={props.data} text={content.text} />
   if (content?.type === "reasoning")
     return (
-      <List.Root>
+      <ItemGroup className="gap-1">
         <Reasoning
           content={content}
           streaming={streaming(props.data.message) && !content.time?.completed}
           open={TimelineOpen.defaultOpen(content, props.shared.detail)}
         />
-      </List.Root>
+      </ItemGroup>
     )
   if (content?.type === "tool" && ChannelReply.shown(content))
     return <ChannelReplyMessage tool={content} onOpenSession={props.shared.onOpenSession} />
   if (content?.type === "tool")
     return (
-      <List.Root>
+      <ItemGroup className="gap-1">
         <Tool shared={props.shared} tool={content} />
-      </List.Root>
+      </ItemGroup>
     )
   return null
 }
@@ -239,7 +244,22 @@ function Run(props: { shared: Shared; run: ToolDisplay.Run; entries: ReadonlyArr
     )
   const names = run.tools.flatMap((tool) => ToolDisplay.subtitle(tool) ?? []).join(", ")
   if (run.kind === "skill")
-    return <List.TranscriptItem leading={<Icon glyph="Wrench" />} title="Loaded skills" description={names} />
+    return (
+      <Item
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the transcript list is a div with role="list", so its rows are divs too
+        role="listitem"
+        size="xs"
+        className="items-start px-2 py-1 text-muted-foreground"
+      >
+        <ItemMedia variant="icon" className="h-6">
+          <Icon glyph="Wrench" />
+        </ItemMedia>
+        <ItemContent className="min-w-0 flex-row items-center gap-2">
+          <ItemTitle className="max-w-1/2 shrink-0 truncate font-normal">Loaded skills</ItemTitle>
+          <ItemDescription className="truncate text-xs">{names}</ItemDescription>
+        </ItemContent>
+      </Item>
+    )
   return <ReadRun tools={run.tools} names={names} />
 }
 
@@ -263,7 +283,7 @@ function AssistantPart(props: { shared: Shared; data: RowData; row: TimelineRow.
   const tools = items.filter((item): item is SessionMessage.Tool => item.type === "tool")
   const revealed = group.refs.some((reference) => reference.partID === props.shared.part)
   return (
-    <List.Root>
+    <ItemGroup className="gap-1">
       <Transcript.ToolGroup
         title={groupTitle(group, items)}
         working={props.data.working === true || running(tools)}
@@ -282,7 +302,7 @@ function AssistantPart(props: { shared: Shared; data: RowData; row: TimelineRow.
           ))
         )}
       </Transcript.ToolGroup>
-    </List.Root>
+    </ItemGroup>
   )
 }
 
@@ -294,8 +314,8 @@ function PendingActions(props: { shared: Shared; message: SessionMessage.User; u
   return (
     <div className="flex items-center gap-1">
       <Button
-        appearance="plain"
-        size="small"
+        variant="ghost"
+        size="sm"
         disabled={props.updating}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => act("queue", props.message)}
@@ -303,8 +323,8 @@ function PendingActions(props: { shared: Shared; message: SessionMessage.User; u
         Move to queue
       </Button>
       <Button
-        appearance="plain"
-        size="small"
+        variant="ghost"
+        size="sm"
         disabled={props.updating}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => act("cancel", props.message)}
@@ -329,28 +349,29 @@ function UserMessage(props: { shared: Shared; data: RowData }) {
       {...(props.data.sender && {
         sender: props.data.sender,
         avatar: (
-          <Avatar.Root
-            name={props.data.sender}
-            image={props.data.senderImage}
-            size="medium"
-            tone="inverse"
-            decorative
-          />
+          <Avatar size="sm" aria-hidden>
+            <AvatarImage src={props.data.senderImage} alt="" />
+            <AvatarFallback className="bg-primary text-xs text-primary-foreground">
+              {Initials.of(props.data.sender)}
+            </AvatarFallback>
+          </Avatar>
         ),
       })}
       actions={
         write || revert ? (
           <>
             {revert ? (
-              <IconButton
-                label="Revert to this message"
-                size="extra-small"
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground"
+                aria-label="Revert to this message"
                 disabled={props.shared.reverting}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => revert(message)}
               >
                 <Icon glyph="Restore" />
-              </IconButton>
+              </Button>
             ) : null}
             {write ? <CopyButton value={message.text} onCopy={write} label="Copy message" size="extra-small" /> : null}
           </>
@@ -377,18 +398,18 @@ function Thinking(props: { data: RowData; reference: TimelineRow.PartRef }) {
   const content = Projection.resolveContent(props.data.message, props.reference.partID)
   if (content?.type !== "reasoning") return null
   return (
-    <List.Root>
+    <ItemGroup className="gap-1">
       <Reasoning content={content} streaming />
-    </List.Root>
+    </ItemGroup>
   )
 }
 
 function Shell(props: { message: SessionMessage.Info | undefined }) {
   if (props.message?.type !== "shell") return null
   return (
-    <List.Root>
+    <ItemGroup className="gap-1">
       <TranscriptShell message={props.message} />
-    </List.Root>
+    </ItemGroup>
   )
 }
 
@@ -416,9 +437,9 @@ export function TranscriptRow(props: { shared: Shared; data: RowData; row: Timel
     case "Error":
       return <TranscriptError kind={row.kind} text={row.text} />
     case "TurnDivider":
-      return <Separator label="Interrupted" />
+      return <LabeledSeparator label="Interrupted" />
     case "CompactionQueued":
-      return <Separator label="Session compaction queued" />
+      return <LabeledSeparator label="Session compaction queued" />
     case "TurnGap":
       return null
   }

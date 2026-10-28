@@ -1,5 +1,5 @@
 import { Menu } from "@base-ui/react/menu"
-import { Tabs } from "@ren/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { cn } from "../../lib/utils.js"
 import {
@@ -798,15 +798,22 @@ function FactoryTabs({
   const panel = panelFor(tab, summary, previous)
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <Tabs.Root value={tab} onValueChange={setTab}>
-        <Tabs.List label="Factory breakdown" size="small">
+      <Tabs value={tab} onValueChange={(value: Tab) => setTab(value)} className="min-w-0">
+        <TabsList
+          aria-label="Factory breakdown"
+          className="relative isolate flex max-w-full justify-start gap-1 overflow-x-auto overscroll-contain rounded-none bg-transparent p-0 group-data-horizontal/tabs:h-7"
+        >
           {TABS.map((name) => (
-            <Tabs.Tab key={name} value={name}>
+            <TabsTrigger
+              key={name}
+              value={name}
+              className="h-7 flex-none rounded-control px-3 text-xs font-normal text-text-secondary hover:bg-fill-primary hover:text-text-primary data-active:bg-fill-secondary data-active:font-medium data-active:text-text-primary group-data-[variant=default]/tabs-list:data-active:shadow-none"
+            >
               {name}
-            </Tabs.Tab>
+            </TabsTrigger>
           ))}
-        </Tabs.List>
-      </Tabs.Root>
+        </TabsList>
+      </Tabs>
       <div className="flex min-h-[208px] grow flex-col rounded-xl bg-[rgb(255_255_255/3%)] p-5">
         <div key={tab} className="flex grow f-fade-in flex-col justify-between gap-6">
           <div className="flex items-start justify-between">

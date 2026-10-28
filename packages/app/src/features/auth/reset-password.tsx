@@ -1,6 +1,6 @@
-import { Button } from "@ren/ui/button"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { Form } from "@ren/ui/form"
-import { Notice } from "@ren/ui/notice"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
@@ -8,6 +8,7 @@ import { Auth } from "../../lib/auth.js"
 import { AuthError } from "./auth-error.js"
 import { AuthFlowLayout } from "./auth-flow-layout.js"
 import { BackLink } from "./back-link.js"
+import { FormError } from "./form-error.js"
 import { AuthSchemas } from "./schemas.js"
 
 export function ResetPassword(props: { token?: string | undefined }) {
@@ -18,15 +19,9 @@ export function ResetPassword(props: { token?: string | undefined }) {
       <AuthFlowLayout>
         <div className="flex flex-col gap-4">
           <Text tone="secondary">This reset link has expired or was already used. Request a new one to continue.</Text>
-          <Button
-            appearance="primary"
-            size="large"
-            width="full"
-            nativeButton={false}
-            render={<Link to="/forgot-password" />}
-          >
+          <Link to="/forgot-password" className={buttonVariants({ className: "h-10 w-full" })}>
             Request a new link
-          </Button>
+          </Link>
         </div>
         {backToSignIn}
       </AuthFlowLayout>
@@ -63,7 +58,7 @@ function ResetPasswordForm(props: { token: string; onExpired: () => void }) {
   })
   return (
     <Form.Root form={form}>
-      <Notice tone="danger">{error}</Notice>
+      <FormError>{error}</FormError>
       <form.Subscribe selector={(state) => state.isSubmitting}>
         {(submitting) => (
           <>
@@ -91,15 +86,9 @@ function ResetPasswordForm(props: { token: string; onExpired: () => void }) {
                 />
               )}
             </form.AppField>
-            <Button
-              type="submit"
-              appearance="primary"
-              size="large"
-              width="full"
-              pending={submitting}
-              pendingLabel="Saving…"
-            >
-              Continue
+            <Button type="submit" className="h-10 w-full" disabled={submitting}>
+              {submitting ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+              {submitting ? "Saving…" : "Continue"}
             </Button>
           </>
         )}

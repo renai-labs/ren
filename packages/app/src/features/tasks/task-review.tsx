@@ -1,10 +1,11 @@
 import type { TaskInfo, TaskReviewInput } from "@ren/client"
 import { Task } from "@ren/schema/task"
 import { TaskComment } from "@ren/schema/task-comment"
+import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { Document } from "@ren/ui/document"
 import { Form } from "@ren/ui/form"
-import { Notice } from "@ren/ui/notice"
+import { Icon } from "@ren/ui/icon"
 import { useMutation } from "@tanstack/react-query"
 import { Schema } from "effect"
 import { useState } from "react"
@@ -13,12 +14,15 @@ import { Tasks } from "./tasks.js"
 
 export function TaskReview(props: { task: TaskInfo }) {
   return (
-    <Notice tone="warning" title="Needs review">
-      <div className="flex flex-col gap-4">
+    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Alert renders a div; a warning is a status, not an alert
+    <Alert role="status">
+      <Icon glyph="AlertTriangle" tone="warning" />
+      <AlertTitle>Needs review</AlertTitle>
+      <div className="col-start-2 flex flex-col gap-4 pt-1">
         <Document.Markdown content={props.task.humanReviewReason ?? "Review this task."} />
         {props.task.canUpdate ? <ReviewActions task={props.task} /> : null}
       </div>
-    </Notice>
+    </Alert>
   )
 }
 
@@ -28,8 +32,10 @@ function ReviewActions(props: { task: TaskInfo }) {
     return <ReviewDecision key={decision} task={props.task} decision={decision} onCancel={() => setDecision(null)} />
   return (
     <div className="flex flex-wrap gap-2">
-      <Button onClick={() => setDecision("approved")}>Approve</Button>
-      <Button appearance="outline" onClick={() => setDecision("changes_requested")}>
+      <Button variant="outline" onClick={() => setDecision("approved")}>
+        Approve
+      </Button>
+      <Button variant="outline" onClick={() => setDecision("changes_requested")}>
         Request changes
       </Button>
     </div>
@@ -99,12 +105,17 @@ function ReviewDecisionForm(props: {
           />
         )}
       </form.AppField>
-      {error ? <Notice tone="danger">{error}</Notice> : null}
+      {error ? (
+        <Alert variant="destructive">
+          <Icon glyph="AlertCircle" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <form.SubmitButton pendingLabel="Sending decision…">
           {props.decision === "approved" ? "Approve" : "Request changes"}
         </form.SubmitButton>
-        <Button appearance="plain" onClick={props.onCancel}>
+        <Button variant="ghost" onClick={props.onCancel}>
           Cancel
         </Button>
       </div>

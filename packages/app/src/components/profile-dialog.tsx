@@ -2,12 +2,22 @@ import type { SpaceKind } from "@ren/client"
 import { AppProfile } from "@ren/schema/app-profile"
 import { Pagination } from "@ren/schema/pagination"
 import { Primitive } from "@ren/schema/primitive"
+import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Checkbox } from "@ren/ui/checkbox"
-import { Dialog } from "@ren/ui/dialog"
-import { Field } from "@ren/ui/field"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+  FieldTitle,
+} from "@ren/ui/field"
 import { Form } from "@ren/ui/form"
-import { Notice } from "@ren/ui/notice"
-import { RadioGroup } from "@ren/ui/radio-group"
+import { Icon } from "@ren/ui/icon"
+import { RadioGroupItem } from "@ren/ui/radio-group"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Schema } from "effect"
 import { useState } from "react"
@@ -30,20 +40,18 @@ export function ProfileDialog(props: {
 }) {
   const [profileId, setProfileId] = useState(props.profileId)
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
         if (!open) props.onClose()
       }}
     >
-      <Dialog.Content>
-        {profileId ? (
-          <ConnectAccount profileId={profileId} onClose={props.onClose} />
-        ) : (
-          <CreateProfile appId={props.appId} from={props.from} onCreated={setProfileId} />
-        )}
-      </Dialog.Content>
-    </Dialog.Root>
+      {profileId ? (
+        <ConnectAccount profileId={profileId} onClose={props.onClose} />
+      ) : (
+        <CreateProfile appId={props.appId} from={props.from} onCreated={setProfileId} />
+      )}
+    </Dialog>
   )
 }
 
@@ -77,15 +85,15 @@ function CreateProfile(props: {
     },
   })
   return (
-    <>
-      <Dialog.Header>
-        <Dialog.Title>New profile</Dialog.Title>
-        <Dialog.Description>
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>New profile</DialogTitle>
+        <DialogDescription>
           A profile is one set of accounts for the app. The agent tells profiles apart by their name.
-        </Dialog.Description>
-      </Dialog.Header>
+        </DialogDescription>
+      </DialogHeader>
       <Form.Root form={form} arrangement="contents">
-        <Dialog.Body>
+        <div className="flex flex-col gap-4">
           <form.AppField
             name="name"
             listeners={{ onChange: (event) => form.setFieldValue("slug", Profiles.slugOf(event.value)) }}
@@ -105,8 +113,8 @@ function CreateProfile(props: {
             <form.AppField name="kind">
               {(field) => (
                 <field.RadioGroup label="Who uses it">
-                  <RadioGroup.Item value="shared" label="Shared" description="The spaces you pick use it." />
-                  <RadioGroup.Item value="private" label="Private" description="Only your private space uses it." />
+                  <Choice value="shared" title="Shared" description="The spaces you pick use it." />
+                  <Choice value="private" title="Private" description="Only your private space uses it." />
                 </field.RadioGroup>
               )}
             </form.AppField>
@@ -114,13 +122,12 @@ function CreateProfile(props: {
           <form.Subscribe selector={(state) => state.values.kind}>
             {(kind) =>
               kind === "shared" ? (
-                <Field.Root label="Spaces" {...(noSpace && listed.size === 0 && { error: "Pick at least one space." })}>
-                  <span className="flex flex-col gap-2">
-                    {(spaces.data?.items ?? []).map((space) => (
+                <FieldSet data-invalid={noSpace && listed.size === 0} className="gap-3">
+                  <FieldLegend variant="label">Spaces</FieldLegend>
+                  {(spaces.data?.items ?? []).map((space) => (
+                    <Field key={space.id} orientation="horizontal">
                       <Checkbox
-                        key={space.id}
-                        label={space.name}
-                        labelVisibility="visible"
+                        id={`profile-space-${space.id}`}
                         checked={listed.has(space.id)}
                         onCheckedChange={(checked) =>
                           setListed((current) => {
@@ -131,20 +138,42 @@ function CreateProfile(props: {
                           })
                         }
                       />
-                    ))}
-                  </span>
-                </Field.Root>
+                      <FieldLabel htmlFor={`profile-space-${space.id}`} className="font-normal">
+                        {space.name}
+                      </FieldLabel>
+                    </Field>
+                  ))}
+                  {noSpace && listed.size === 0 ? <FieldError>Pick at least one space.</FieldError> : null}
+                </FieldSet>
               ) : null
             }
           </form.Subscribe>
-          <Notice tone="danger" placement="inline">
-            {create.error?.message}
-          </Notice>
-        </Dialog.Body>
-        <Dialog.Footer>
+          {create.error ? (
+            <Alert variant="destructive">
+              <Icon glyph="AlertCircle" />
+              <AlertDescription>{create.error.message}</AlertDescription>
+            </Alert>
+          ) : null}
+        </div>
+        <DialogFooter className="sm:justify-end">
           <form.SubmitButton pendingLabel="Creating…">Create profile</form.SubmitButton>
-        </Dialog.Footer>
+        </DialogFooter>
       </Form.Root>
-    </>
+    </DialogContent>
+  )
+}
+
+function Choice(props: { value: string; title: string; description: string }) {
+  const id = `profile-kind-${props.value}`
+  return (
+    <FieldLabel htmlFor={id}>
+      <Field orientation="horizontal">
+        <FieldContent>
+          <FieldTitle>{props.title}</FieldTitle>
+          <FieldDescription className="text-xs">{props.description}</FieldDescription>
+        </FieldContent>
+        <RadioGroupItem value={props.value} id={id} />
+      </Field>
+    </FieldLabel>
   )
 }

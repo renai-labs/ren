@@ -1,5 +1,5 @@
 import { Channel } from "@ren/schema/channel"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Platform } from "../platform/platform.js"
 import { Auth } from "./auth.js"
@@ -17,7 +17,7 @@ export function useAccountLink(provider: "github" | "slack", returnTo: string) {
   const accounts = useQuery(Auth.accountsOptions(context.auth))
   const linked = accounts.data?.find((account) => account.providerId === provider)
   const failed = (failure: string) => (error: Error) =>
-    Toast.manager.add({ type: "error", title: failure, description: error.message })
+    toast.add({ type: "error", title: failure, description: error.message })
   const link = useMutation({
     mutationFn: async () => {
       const result = await context.auth.linkSocial({ provider, callbackURL: `${platform.appUrl}${returnTo}` })

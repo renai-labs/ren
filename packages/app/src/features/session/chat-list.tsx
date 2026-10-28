@@ -1,6 +1,6 @@
 import { Session } from "@ren/schema/session"
 import { ApplicationShell } from "@ren/ui/application-shell"
-import { StateMessage } from "@ren/ui/state-message"
+import { Empty, EmptyHeader, EmptyTitle } from "@ren/ui/empty"
 import { Text } from "@ren/ui/text"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useParams } from "@tanstack/react-router"
@@ -20,7 +20,11 @@ export function ChatList() {
   if (chats.isError)
     return (
       <li>
-        <StateMessage state="failed" placement="inline" title="Could not load your chats" />
+        <Empty role="alert" className="p-2">
+          <EmptyHeader>
+            <EmptyTitle className="font-normal text-destructive">Could not load your chats</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       </li>
     )
   if (chats.data.items.length === 0)

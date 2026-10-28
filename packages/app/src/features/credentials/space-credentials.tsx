@@ -1,14 +1,19 @@
 import type { CredentialInfo } from "@ren/client"
 import { Pagination } from "@ren/schema/pagination"
+import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Dialog } from "@ren/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { Menu } from "@ren/ui/menu"
-import { List } from "@ren/ui/list"
-import { Notice } from "@ren/ui/notice"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@ren/ui/item"
 import { SearchField } from "@ren/ui/search-field"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
@@ -47,30 +52,26 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
       <Toolbar.Root>
         <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
         {elsewhere.length > 0 ? (
-          <Menu.Root>
-            <Menu.Trigger
-              render={
-                <IconButton appearance="primary" size="small" label="Add or copy a credential">
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button size="icon-sm" aria-label="Add or copy a credential" />}>
+              <Icon glyph="Plus" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => setCreating(true)}>
                   <Icon glyph="Plus" />
-                </IconButton>
-              }
-            />
-            <Menu.Popup alignment="end" width="small">
-              <Menu.Item icon={<Icon glyph="Plus" />} onSelect={() => setCreating(true)}>
-                Add credential
-              </Menu.Item>
-              <Menu.Item icon={<Icon glyph="Copy" />} onSelect={() => setCopying(true)}>
-                Copy from a space
-              </Menu.Item>
-            </Menu.Popup>
-          </Menu.Root>
+                  Add credential
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCopying(true)}>
+                  <Icon glyph="Copy" />
+                  Copy from a space
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
-          <Button
-            appearance="primary"
-            size="small"
-            leadingIcon={<Icon glyph="Plus" />}
-            onClick={() => setCreating(true)}
-          >
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <Icon glyph="Plus" data-icon="inline-start" />
             Add credential
           </Button>
         )}
@@ -115,50 +116,56 @@ function CopyFromSpaceDialog(props: {
   const context = RouterContext.useRouterContext()
   const copy = useMutation(context.api.credential.copy.mutationOptions())
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !copy.isPending) props.onClose()
       }}
-      dismissal={copy.isPending ? "blocked" : "allowed"}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>Copy from a space</Dialog.Title>
-          <Dialog.Description>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Copy from a space</DialogTitle>
+          <DialogDescription>
             A copy is a separate pasted key. Sign-ins cannot be copied; move them instead.
-          </Dialog.Description>
-        </Dialog.Header>
-        <Dialog.Body>
-          <List.Root label="Credentials in other spaces">
-            {props.candidates.map((candidate) => (
-              <List.Item
-                key={candidate.id}
-                title={candidate.name ?? candidate.label}
-                description={`${candidate.label} · ${Credentials.ownerLabel(candidate.owner, props.spaces, "")}`}
-                trailing={
-                  <Button
-                    appearance="secondary"
-                    size="small"
-                    disabled={copy.isPending}
-                    onClick={() =>
-                      void copy
-                        .mutateAsync({ id: candidate.id, owner: { kind: "space", spaceId: props.spaceId } })
-                        .then(() => Toast.manager.add({ type: "success", title: `${candidate.label} copied` }))
-                        .catch(() => undefined)
-                    }
-                  >
-                    Copy credential
-                  </Button>
-                }
-              />
-            ))}
-          </List.Root>
-          <Notice tone="danger" placement="inline">
-            {copy.error?.message}
-          </Notice>
-        </Dialog.Body>
-      </Dialog.Content>
-    </Dialog.Root>
+          </DialogDescription>
+        </DialogHeader>
+        <ItemGroup aria-label="Credentials in other spaces" className="gap-1">
+          {props.candidates.map((candidate) => (
+            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div in the ItemGroup list
+            <Item key={candidate.id} role="listitem" className="px-0 py-2">
+              <ItemContent className="min-w-0 gap-0.5">
+                <ItemTitle className="max-w-full">
+                  <span className="truncate">{candidate.name ?? candidate.label}</span>
+                </ItemTitle>
+                <ItemDescription className="line-clamp-1 text-xs">
+                  {`${candidate.label} · ${Credentials.ownerLabel(candidate.owner, props.spaces, "")}`}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={copy.isPending}
+                  onClick={() =>
+                    void copy
+                      .mutateAsync({ id: candidate.id, owner: { kind: "space", spaceId: props.spaceId } })
+                      .then(() => toast.add({ type: "success", title: `${candidate.label} copied` }))
+                      .catch(() => undefined)
+                  }
+                >
+                  Copy credential
+                </Button>
+              </ItemActions>
+            </Item>
+          ))}
+        </ItemGroup>
+        {copy.error ? (
+          <Alert variant="destructive">
+            <Icon glyph="AlertCircle" />
+            <AlertDescription>{copy.error.message}</AlertDescription>
+          </Alert>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   )
 }

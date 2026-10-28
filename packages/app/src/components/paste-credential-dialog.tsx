@@ -1,6 +1,6 @@
-import { Dialog } from "@ren/ui/dialog"
+import { Alert, AlertDescription } from "@ren/ui/alert"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { Form } from "@ren/ui/form"
-import { Notice } from "@ren/ui/notice"
 import { Icon } from "@ren/ui/icon"
 import type { Glyph } from "@ren/ui/icon"
 import { useMutation } from "@tanstack/react-query"
@@ -46,24 +46,24 @@ export function PasteCredentialDialog(props: {
     },
   })
   return (
-    <Dialog.Root
+    <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !create.isPending) props.onClose()
       }}
-      dismissal={create.isPending ? "blocked" : "allowed"}
     >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>{props.title}</Dialog.Title>
-          <Dialog.Description>{props.description}</Dialog.Description>
-        </Dialog.Header>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{props.title}</DialogTitle>
+          <DialogDescription>{props.description}</DialogDescription>
+        </DialogHeader>
         <Form.Root form={form} arrangement="contents">
-          <Dialog.Body>
+          <div className="flex flex-col gap-4">
             {props.warning ? (
-              <Notice tone="warning" placement="inline">
-                {props.warning}
-              </Notice>
+              <Alert>
+                <Icon glyph="AlertTriangle" tone="warning" />
+                <AlertDescription>{props.warning}</AlertDescription>
+              </Alert>
             ) : null}
             <form.AppField name="label">
               {(field) => (
@@ -108,15 +108,18 @@ export function PasteCredentialDialog(props: {
                 )}
               </form.AppField>
             ) : null}
-            <Notice tone="danger" placement="inline">
-              {create.error?.message}
-            </Notice>
-          </Dialog.Body>
-          <Dialog.Footer>
+            {create.error ? (
+              <Alert variant="destructive">
+                <Icon glyph="AlertCircle" />
+                <AlertDescription>{create.error.message}</AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
+          <DialogFooter className="sm:justify-end">
             <form.SubmitButton pendingLabel="Saving…">{props.submitLabel}</form.SubmitButton>
-          </Dialog.Footer>
+          </DialogFooter>
         </Form.Root>
-      </Dialog.Content>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   )
 }

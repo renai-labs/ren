@@ -1,12 +1,14 @@
 import type { TaskActor, TaskCommentInfo, TaskEventData, TaskInfo } from "@ren/client"
 import { Channel } from "@ren/schema/channel"
 import { TaskComment } from "@ren/schema/task-comment"
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Disclosure } from "@ren/ui/disclosure"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { Document } from "@ren/ui/document"
-import { LoadingMessage } from "@ren/ui/loading-message"
-import { Notice } from "@ren/ui/notice"
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
+import { Icon } from "@ren/ui/icon"
 import { PageShell } from "@ren/ui/page-shell"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -41,18 +43,26 @@ export function TaskActivity(props: {
   }
   return (
     <PageShell.Section title="Activity">
-      {history.isPending ? <LoadingMessage placement="section" title="Loading activity…" /> : null}
+      {history.isPending ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia>
+              <Spinner />
+            </EmptyMedia>
+            <EmptyTitle>Loading activity…</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      ) : null}
       {history.isError ? (
-        <Notice
-          tone="danger"
-          action={
-            <Button appearance="plain" onClick={() => void history.refetch()}>
+        <Alert variant="destructive" className="has-data-[slot=alert-action]:pr-32">
+          <Icon glyph="AlertCircle" />
+          <AlertDescription>Couldn’t load activity. {Tasks.describe(history.error)}</AlertDescription>
+          <AlertAction>
+            <Button variant="ghost" size="sm" onClick={() => void history.refetch()}>
               Retry activity
             </Button>
-          }
-        >
-          Couldn’t load activity. {Tasks.describe(history.error)}
-        </Notice>
+          </AlertAction>
+        </Alert>
       ) : null}
       <div className="flex flex-col gap-6">
         {TaskHistory.groups(history.data?.items ?? []).map((group) => (
@@ -100,11 +110,27 @@ function ActivityGroup(props: { quiet: boolean; children: ReadonlyArray<ReactNod
   if (!props.quiet || props.children.length <= 3) return props.children
   return (
     <div className="flex flex-col gap-4">
-      <Disclosure summary={`Show ${props.children.length - 3} earlier events`}>
-        {props.children.slice(0, -3)}
-      </Disclosure>
+      <Details summary={`Show ${props.children.length - 3} earlier events`}>{props.children.slice(0, -3)}</Details>
       {props.children.slice(-3)}
     </div>
+  )
+}
+
+function Details(props: { summary: string; children: ReactNode }) {
+  return (
+    <Collapsible className="flex min-w-0 flex-col">
+      <CollapsibleTrigger
+        render={<Button variant="ghost" size="sm" className="group/details -ml-2.5 self-start text-muted-foreground" />}
+      >
+        <span className="flex transition-standard group-data-panel-open/details:rotate-90 motion-reduce:transition-none">
+          <Icon glyph="ChevronRight" size="extra-small" />
+        </span>
+        {props.summary}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-standard data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
+        <div className="flex min-w-0 flex-col gap-3 pt-3">{props.children}</div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -124,7 +150,7 @@ function CommentComposer(props: { taskId: string }) {
     )
   return (
     <div>
-      <Button appearance="outline" onClick={() => setComposing(true)}>
+      <Button variant="outline" onClick={() => setComposing(true)}>
         Add comment
       </Button>
     </div>
@@ -158,9 +184,14 @@ function Event(props: {
       return <AssignmentEvent data={data} agentName={props.agentName} personName={props.personName} />
     case "review_requested":
       return (
-        <Notice tone="warning" title="Requested human review">
-          <Document.Markdown content={data.reason} />
-        </Notice>
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Alert renders a div; a warning is a status, not an alert
+        <Alert role="status">
+          <Icon glyph="AlertTriangle" tone="warning" />
+          <AlertTitle>Requested human review</AlertTitle>
+          <AlertDescription>
+            <Document.Markdown content={data.reason} />
+          </AlertDescription>
+        </Alert>
       )
     case "reviewed":
       return <ReviewEvent data={data} />
@@ -245,7 +276,7 @@ function AssignmentEvent(props: {
 
 function FieldEvent(props: { data: Extract<TaskEventData, { _tag: "field" }> }) {
   return (
-    <Disclosure summary={`Changed ${props.data.field === "dueAt" ? "due date" : props.data.field}.`}>
+    <Details summary={`Changed ${props.data.field === "dueAt" ? "due date" : props.data.field}.`}>
       <Text purpose="caption" tone="secondary">
         Before
       </Text>
@@ -254,7 +285,7 @@ function FieldEvent(props: { data: Extract<TaskEventData, { _tag: "field" }> }) 
         After
       </Text>
       <Document.Markdown content={props.data.to ?? "Empty"} />
-    </Disclosure>
+    </Details>
   )
 }
 
@@ -286,12 +317,12 @@ function Comment(props: { comment: TaskCommentInfo; author: string }) {
       )}
       {props.comment.canUpdate && !editing ? (
         <div className="flex gap-2">
-          <Button appearance="plain" size="small" onClick={() => setEditing(true)}>
+          <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
             Edit comment
           </Button>
           <Button
-            appearance="plain"
-            size="small"
+            variant="ghost"
+            size="sm"
             disabled={archive.isPending}
             onClick={() => archive.mutate({ id: props.comment.id })}
           >
@@ -299,7 +330,12 @@ function Comment(props: { comment: TaskCommentInfo; author: string }) {
           </Button>
         </div>
       ) : null}
-      {archive.error ? <Notice tone="danger">{Tasks.describe(archive.error)}</Notice> : null}
+      {archive.error ? (
+        <Alert variant="destructive">
+          <Icon glyph="AlertCircle" />
+          <AlertDescription>{Tasks.describe(archive.error)}</AlertDescription>
+        </Alert>
+      ) : null}
     </article>
   )
 }

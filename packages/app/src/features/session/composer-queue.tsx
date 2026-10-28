@@ -3,7 +3,7 @@ import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { ConversationShell } from "@ren/ui/conversation-shell"
-import { Toast } from "@ren/ui/toast"
+import { toast } from "@ren/ui/toast"
 import { useState } from "react"
 import { Failure } from "./failure.js"
 
@@ -46,7 +46,7 @@ export function ComposerQueue(props: {
     setReordering(true)
     void reorderInput(reordered(props.queued, from, to))
       .catch((error: unknown) =>
-        Toast.manager.add({
+        toast.add({
           type: "error",
           title: "Could not move the queued message",
           description: error instanceof ChatSession.QueueRefused ? refusals[error.reason] : Failure.describe(error),
@@ -71,13 +71,13 @@ export function ComposerQueue(props: {
           busy={blocked || busy.has(item.id)}
           sendLabel={props.running ? "Send now" : "Send"}
           onSend={() =>
-            track(item.id, () => steerInput(item.id).catch(Failure.toast("Could not send the queued message")))
+            track(item.id, () => steerInput(item.id).catch(Failure.notify("Could not send the queued message")))
           }
           onMove={() => props.onMove(item)}
           onMoveUp={index > 0 ? () => reorder(index, index - 1) : undefined}
           onMoveDown={index < last ? () => reorder(index, index + 1) : undefined}
           onRemove={() =>
-            track(item.id, () => cancelInput(item.id).catch(Failure.toast("Could not remove the queued message")))
+            track(item.id, () => cancelInput(item.id).catch(Failure.notify("Could not remove the queued message")))
           }
         />
       ))}

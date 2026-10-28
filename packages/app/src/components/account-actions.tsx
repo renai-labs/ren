@@ -1,10 +1,17 @@
 import type { AppProfileInfo, AppProfileItem } from "@ren/client"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { IconButton } from "@ren/ui/icon-button"
-import { Menu } from "@ren/ui/menu"
-import { Toast } from "@ren/ui/toast"
+import { Spinner } from "@ren/ui/spinner"
+import { toast } from "@ren/ui/toast"
 import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
@@ -27,7 +34,7 @@ export function useSignIn() {
           if ("redirectUrl" in result) platform.openExternal(result.redirectUrl)
         },
         onError: (error) =>
-          Toast.manager.add({ type: "error", title: `Couldn’t connect ${item.name}`, description: error.message }),
+          toast.add({ type: "error", title: `Couldn’t connect ${item.name}`, description: error.message }),
       },
     )
   }
@@ -53,48 +60,54 @@ export function AccountActions(props: {
   return (
     <>
       {first ? (
-        <Button appearance="secondary" size="small" pending={signIn.pending} onClick={connect}>
+        <Button variant="outline" size="xs" className="h-6.5" disabled={signIn.pending} onClick={connect}>
+          {signIn.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           {missing.length === 1 ? "Connect" : `Connect ${missing.length}`}
         </Button>
       ) : null}
       {connected.length > 0 || pasted || props.onRemove ? (
-        <Menu.Root>
-          <Menu.Trigger
+        <DropdownMenu>
+          <DropdownMenuTrigger
             render={
-              <IconButton label={`${props.profile.name} actions`}>
-                <Icon glyph="MoreHorizontal" />
-              </IconButton>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                aria-label={`${props.profile.name} actions`}
+              />
             }
-          />
-          <Menu.Popup alignment="end" width="small">
-            {connected.map((item) => (
-              <Menu.Item
-                key={item.label}
-                icon={<Icon glyph="RefreshCw" />}
-                onSelect={() => signIn.start(props.profile, item)}
-              >
-                {connected.length === 1 ? "Reconnect" : `Reconnect ${item.name}`}
-              </Menu.Item>
-            ))}
-            {pasted ? (
-              <Menu.Item icon={<Icon glyph="KeyRound" />} onSelect={props.onOpen}>
-                Manage keys
-              </Menu.Item>
-            ) : null}
-            {props.onRemove ? (
-              <>
-                <Menu.Separator />
-                <Menu.Item
-                  tone="danger"
-                  icon={<Icon glyph="Trash2" />}
-                  onSelect={() => (Apps.isLastSpace(props.profile) ? setConfirming(true) : props.onRemove?.())}
-                >
-                  Remove from space
-                </Menu.Item>
-              </>
-            ) : null}
-          </Menu.Popup>
-        </Menu.Root>
+          >
+            <Icon glyph="MoreHorizontal" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuGroup>
+              {connected.map((item) => (
+                <DropdownMenuItem key={item.label} onClick={() => signIn.start(props.profile, item)}>
+                  <Icon glyph="RefreshCw" />
+                  {connected.length === 1 ? "Reconnect" : `Reconnect ${item.name}`}
+                </DropdownMenuItem>
+              ))}
+              {pasted ? (
+                <DropdownMenuItem onClick={props.onOpen}>
+                  <Icon glyph="KeyRound" />
+                  Manage keys
+                </DropdownMenuItem>
+              ) : null}
+              {props.onRemove ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => (Apps.isLastSpace(props.profile) ? setConfirming(true) : props.onRemove?.())}
+                  >
+                    <Icon glyph="Trash2" />
+                    Remove from space
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : null}
       {remove ? (
         <ConfirmationDialog

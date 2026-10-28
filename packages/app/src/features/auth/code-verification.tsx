@@ -1,5 +1,6 @@
 import { Button } from "@ren/ui/button"
-import { CodeField } from "@ren/ui/code-field"
+import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@ren/ui/input-otp"
+import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
 import { useId, useState } from "react"
 import { Countdown } from "../../lib/countdown.js"
@@ -7,6 +8,8 @@ import type { AuthError } from "./auth-error.js"
 
 const codeLength = 6
 const resendCooldownSeconds = 30
+const slotClasses =
+  "*:data-[slot=input-otp-slot]:h-12 *:data-[slot=input-otp-slot]:w-11 *:data-[slot=input-otp-slot]:text-xl"
 
 export function CodeVerification(props: {
   email: string
@@ -53,22 +56,34 @@ export function CodeVerification(props: {
           {props.email}
         </Text>
       </div>
-      <CodeField
-        length={codeLength}
+      <InputOTP
+        maxLength={codeLength}
+        containerClassName="gap-2"
         value={code}
-        onValueChange={(next) => {
+        onChange={(next) => {
           setCode(next)
           setError("")
         }}
-        onValueComplete={(value) => void submit(value)}
-        invalid={error !== ""}
+        onComplete={(value: string) => void submit(value)}
         readOnly={verifying}
         // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this code
         autoFocus
-        slotLabel="Code digit"
+        aria-invalid={error === "" ? undefined : true}
         aria-labelledby={labelId}
         aria-describedby={error === "" ? undefined : errorId}
-      />
+      >
+        <InputOTPGroup className={slotClasses}>
+          <InputOTPSlot index={0} />
+          <InputOTPSlot index={1} />
+          <InputOTPSlot index={2} />
+        </InputOTPGroup>
+        <InputOTPSeparator />
+        <InputOTPGroup className={slotClasses}>
+          <InputOTPSlot index={3} />
+          <InputOTPSlot index={4} />
+          <InputOTPSlot index={5} />
+        </InputOTPGroup>
+      </InputOTP>
       {error === "" ? null : (
         <Text tone="danger" id={errorId} aria-live="polite">
           {error}
@@ -83,7 +98,8 @@ export function CodeVerification(props: {
             Resend in 0:{String(countdown.remaining).padStart(2, "0")}
           </Text>
         ) : (
-          <Button appearance="link" pending={resending} onClick={() => void resend()}>
+          <Button variant="link" className="h-auto p-0" disabled={resending} onClick={() => void resend()}>
+            {resending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
             Resend code
           </Button>
         )}

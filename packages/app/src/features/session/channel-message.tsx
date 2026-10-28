@@ -2,8 +2,9 @@ import { ChannelReply } from "@ren/chat"
 import { Channel } from "@ren/schema/channel"
 import type { ChannelOrigin } from "@ren/schema/channel-origin"
 import type { SessionMessage } from "@ren/schema/session/message"
+import { Button } from "@ren/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { ConversationShell } from "@ren/ui/conversation-shell"
-import { Disclosure } from "@ren/ui/disclosure"
 import { Icon } from "@ren/ui/icon"
 import type { Glyph } from "@ren/ui/icon"
 import { Link } from "@ren/ui/link"
@@ -40,11 +41,25 @@ export function ChannelMessageHeader(props: { origin: ChannelOrigin.Info | undef
         ) : null}
       </span>
       {origin.context ? (
-        <Disclosure summary="Included context">
-          <Text purpose="caption" tone="secondary" element="p" wrapping="preserved">
-            {origin.context}
-          </Text>
-        </Disclosure>
+        <Collapsible className="flex min-w-0 flex-col">
+          <CollapsibleTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="xs"
+                className="-mx-2 self-start text-muted-foreground [&_svg]:transition-transform data-panel-open:[&_svg]:rotate-90"
+              />
+            }
+          >
+            <Icon glyph="ChevronRight" data-icon="inline-start" />
+            Included context
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <Text purpose="caption" tone="secondary" element="p" wrapping="preserved">
+              {origin.context}
+            </Text>
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
     </div>
   )
