@@ -31,11 +31,16 @@ export function TaskSessionCard(props: {
       return chat.session.interrupt({ sessionID: props.sessionId })
     },
     onSuccess: () =>
-      Promise.all([
-        client.invalidateQueries({ queryKey: context.api.session.get.queryKey({ idOrSlug: props.sessionId }) }),
-        client.invalidateQueries({ queryKey: context.api.task.get.queryKey() }),
-        client.invalidateQueries({ queryKey: context.api.task.list.queryKey() }),
-      ]),
+      Promise.all(
+        [
+          context.api.session.get.queryKey({ idOrSlug: props.sessionId }),
+          context.api.task.get.queryKey(),
+          context.api.task.list.queryKey(),
+        ].map((queryKey) =>
+          // ast-grep-ignore: no-manual-invalidation -- stopping goes through the chat client, not a generated mutation
+          client.invalidateQueries({ queryKey }),
+        ),
+      ),
   })
   return (
     <div className="flex flex-col gap-2">

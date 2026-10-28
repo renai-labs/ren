@@ -186,7 +186,10 @@ export function useTaskActions() {
         context.api.task.list.queryKey(),
         context.api.task.get.queryKey(),
         context.api["task-activity"].list.queryKey(),
-      ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      ].map((queryKey) =>
+        // ast-grep-ignore: no-manual-invalidation -- bulk changes call context.client in batches, not a mutation
+        queryClient.invalidateQueries({ queryKey }),
+      ),
     )
     const failed = targets.filter((_task, index) => results[index]?.status === "rejected")
     const reason = results.find((result) => result.status === "rejected")

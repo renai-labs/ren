@@ -1,0 +1,17 @@
+id: no-manual-invalidation
+language: Tsx
+message: >-
+  Generated mutations invalidate their queries in the MutationCache in lib/runtime.ts. When a mutation changes another resource, add its group to `invalidates` there. Only calls that are not generated mutations, such as Better Auth, invalidate by hand, with an ast-grep-ignore that names the call.
+severity: error
+files:
+  - packages/app/src/**
+ignores:
+  - packages/app/src/lib/runtime.ts
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    has:
+      field: property
+      regex: ^(invalidateQueries|refetchQueries|resetQueries)$

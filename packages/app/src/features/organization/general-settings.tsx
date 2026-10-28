@@ -45,10 +45,12 @@ export function GeneralSettings(props: { organizationId: string }) {
                   Toast.manager.add({ type: "error", title: message })
                   throw new Error(message)
                 }
-                await Promise.all([
-                  queryClient.invalidateQueries({ queryKey: options.queryKey }),
-                  queryClient.invalidateQueries({ queryKey: context.api.me.get.queryKey() }),
-                ])
+                await Promise.all(
+                  [options.queryKey, context.api.me.get.queryKey()].map((queryKey) =>
+                    // ast-grep-ignore: no-manual-invalidation -- the organization name changes through Better Auth
+                    queryClient.invalidateQueries({ queryKey }),
+                  ),
+                )
               }}
             />
           </Field.Root>

@@ -149,10 +149,12 @@ function LeaveOrganization(props: { organization: { id: string; name: string } }
         onConfirm={async () => {
           const result = await context.auth.organization.leave({ organizationId: props.organization.id })
           if (result.error !== null) throw new Error(result.error.message ?? "Couldn’t leave the organization")
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: Auth.sessionOptions(context.auth).queryKey }),
-            queryClient.invalidateQueries({ queryKey: context.api.me.get.queryKey() }),
-          ])
+          await Promise.all(
+            [Auth.sessionOptions(context.auth).queryKey, context.api.me.get.queryKey()].map((queryKey) =>
+              // ast-grep-ignore: no-manual-invalidation -- Better Auth changes the user and the session
+              queryClient.invalidateQueries({ queryKey }),
+            ),
+          )
         }}
         onConfirmed={() => Toast.manager.add({ type: "success", title: `You left ${props.organization.name}` })}
       />
@@ -219,10 +221,12 @@ export function Preferences(props: {
                 Toast.manager.add({ type: "error", title: "Couldn’t update profile", description: message })
                 throw new Error(message)
               }
-              await Promise.all([
-                queryClient.invalidateQueries({ queryKey: Auth.sessionOptions(context.auth).queryKey }),
-                queryClient.invalidateQueries({ queryKey: context.api.me.get.queryKey() }),
-              ])
+              await Promise.all(
+                [Auth.sessionOptions(context.auth).queryKey, context.api.me.get.queryKey()].map((queryKey) =>
+                  // ast-grep-ignore: no-manual-invalidation -- Better Auth changes the user and the session
+                  queryClient.invalidateQueries({ queryKey }),
+                ),
+              )
             }}
           />
         </Field.Root>
