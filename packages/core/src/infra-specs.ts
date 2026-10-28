@@ -13,7 +13,12 @@ import type { Actor } from "./actor.js"
 import { Agent } from "./agent.js"
 import { AgentMembership } from "./agent/membership.js"
 import { AppValidation } from "./app/validation.js"
+import { InfraApps } from "./infra-specs/apps.js"
+import { InfraChannels } from "./infra-specs/channels.js"
+import { InfraPlan } from "./infra-specs/plan.js"
 import { InfraPolicy } from "./infra-specs/policy.js"
+import { InfraProfiles } from "./infra-specs/profiles.js"
+import { InfraSchedules } from "./infra-specs/schedules.js"
 import { OrganizationSettings } from "./organization-settings.js"
 import { Primitive } from "./primitive.js"
 import { Space } from "./space.js"
@@ -21,7 +26,7 @@ import { SpaceQueries } from "./space/queries.js"
 import { SpaceSettings } from "./space/settings.js"
 import { SettingsRows } from "./settings/rows.js"
 
-type Failure = Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid
+type Failure = InfraPlan.Failure
 
 export interface Interface {
   readonly pull: (actor: Actor.Info) => Effect.Effect<Infra.Pulled, Primitive.Forbidden>
@@ -57,16 +62,16 @@ interface Live {
   readonly spaces: ReadonlyArray<LiveSpace>
   readonly agents: ReadonlyArray<LiveAgent>
   readonly memberships: ReadonlyArray<{ readonly spaceId: SpaceSchema.ID; readonly agentId: AgentSchema.ID }>
-  readonly apps: ReadonlyArray<{ readonly ownerSpaceId: SpaceSchema.ID | null; readonly slug: string }>
   readonly globals: ReadonlyArray<{ readonly id: AgentSchema.ID; readonly name: string }>
+  readonly apps: InfraApps.Live
+  readonly schedules: InfraSchedules.Live
+  readonly channels: InfraChannels.Live
+  readonly profiles: InfraProfiles.Live
 }
 
-interface Step {
-  readonly change: Infra.Change
-  readonly run: Effect.Effect<unknown, Failure>
-}
+type Step = InfraPlan.Step
 
-const unsupported = ["apps", "schedules", "webhooks", "channels"] as const
+const unsupported = ["webhooks"] as const
 
 const sameSettings = Schema.toEquivalence(Settings.Info)
 
@@ -150,20 +155,11 @@ const resolve = <L>(
   }
 }
 
-const changed = (fields: Record<string, boolean>) => Object.keys(fields).filter((field) => fields[field])
+const changed = InfraPlan.changed
 
-const step = (
-  action: Infra.Change["action"],
-  kind: Infra.Change["kind"],
-  path: string,
-  run: Effect.Effect<unknown, Failure>,
-  more: { readonly fields?: ReadonlyArray<string>; readonly from?: string } = {},
-): Step => ({
-  change: { action, kind, path, fields: more.fields ?? [], ...(more.from && { from: more.from }) },
-  run,
-})
+const step = InfraPlan.step
 
-const byPath = (left: Step, right: Step) => left.change.path.localeCompare(right.change.path)
+const byPath = InfraPlan.byPath
 
 export const layer = Layer.effect(
   Service,
@@ -175,13 +171,19 @@ export const layer = Layer.effect(
     const organizationSettings = yield* OrganizationSettings.Service
     const agents = yield* Agent.Service
     const memberships = yield* AgentMembership.Service
+    const kinds = {
+      apps: yield* InfraApps.make,
+      schedules: yield* InfraSchedules.make,
+      channels: yield* InfraChannels.make,
+      profiles: yield* InfraProfiles.make,
+    }
 
     const authorize = (actor: Actor.Info, action: string) =>
       access.isAllowed({ actor, action, resource: Access.organization })
         ? Effect.void
         : Effect.fail(new Primitive.Forbidden({ message: "Only organization admins can use the org spec." }))
 
-    const load = (actor: Actor.Info) =>
+    const load = (actor: Actor.Info, input?: Infra.PlanInput) =>
       database
         .transaction((transaction) =>
           Effect.gen(function* () {
@@ -247,16 +249,11 @@ export const layer = Layer.effect(
                 ),
               )
               .orderBy(asc(Database.Schema.agent.name))
-            const apps = yield* transaction
-              .select({ ownerSpaceId: Database.Schema.app.owner_space_id, slug: Database.Schema.app.slug })
-              .from(Database.Schema.app)
-              .where(
-                and(
-                  eq(Database.Schema.app.organization_id, actor.organizationId),
-                  isNull(Database.Schema.app.archived_at),
-                ),
-              )
-              .orderBy(asc(Database.Schema.app.slug))
+            const declaredApps = Object.values(input?.spec.spaces ?? {}).flatMap((space) => Object.keys(space.apps))
+            const apps = yield* InfraApps.load(transaction, actor.organizationId, declaredApps)
+            const schedules = yield* InfraSchedules.load(transaction, actor.organizationId)
+            const channels = yield* InfraChannels.load(transaction, actor.organizationId)
+            const profiles = yield* InfraProfiles.load(transaction, actor.organizationId)
             return {
               organization: {
                 slug: organization.slug,
@@ -291,8 +288,11 @@ export const layer = Layer.effect(
                   })),
               ),
               memberships: membershipRows,
-              apps,
               globals,
+              apps,
+              schedules,
+              channels,
+              profiles,
             } satisfies Live
           }),
         )
@@ -649,14 +649,38 @@ export const layer = Layer.effect(
               path: `spaces/${space.slug}`,
               message: "This is the first space of the organization, so it cannot be archived. Declare it.",
             })
-          const apps = live.apps.filter((app) => app.ownerSpaceId === space.id).map((app) => app.slug)
-          if (apps.length > 0)
-            problems.push({
-              path: `spaces/${space.slug}`,
-              message: `This space owns apps ${apps.join(", ")}. Move or archive them in the app first.`,
-            })
           return step("archive", "space", `spaces/${space.slug}`, spaces.archive(actor, space.id))
         })
+
+      const context: InfraPlan.Context = {
+        actor,
+        spaces: spaceMatches.map((match) => ({
+          slug: match.slug,
+          declaration: match.declaration,
+          bindings: input.bindings.spaces[match.slug],
+          liveId: match.live?.id,
+        })),
+        shared: new Set(inScope.shared.map((space) => space.id)),
+        slugOf: (id) => slugOf.get(id) ?? liveById.get(id)?.slug,
+        spaceId,
+        agentId,
+        agentName: (id) => nameOf.get(id) ?? inScope.factoryNames.get(id),
+        touch: (id) => {
+          if (id) touched.push(id)
+        },
+      }
+      const planned = {
+        apps: kinds.apps.diff(context, live.apps),
+        schedules: kinds.schedules.diff(context, live.schedules),
+        channels: kinds.channels.diff(context, live.channels),
+        profiles: kinds.profiles.diff(context, live.profiles),
+      }
+      problems.push(
+        ...planned.apps.problems,
+        ...planned.schedules.problems,
+        ...planned.channels.problems,
+        ...planned.profiles.problems,
+      )
 
       const steps = [
         ...organization,
@@ -664,6 +688,14 @@ export const layer = Layer.effect(
         ...agentSteps.toSorted(byPath),
         ...membershipCreates.toSorted(byPath),
         ...factorySteps.toSorted(byPath),
+        ...planned.apps.steps,
+        ...planned.schedules.steps,
+        ...planned.channels.steps,
+        ...planned.profiles.steps,
+        ...planned.profiles.removals,
+        ...planned.channels.removals,
+        ...planned.schedules.removals,
+        ...planned.apps.removals,
         ...membershipArchives.toSorted(byPath),
         ...agentArchives.toSorted(byPath),
         ...spaceArchives.toSorted(byPath),
@@ -683,8 +715,24 @@ export const layer = Layer.effect(
           path: "deploy.yaml",
           message: `deploy.yaml names “${input.bindings.organization}”, but you are signed in to “${live.organization.slug}”.`,
         })
-      if (Object.keys(input.bindings.spaces).length > 0)
-        problems.push({ path: "deploy.yaml", message: "Infra does not apply the bindings of spaces yet." })
+      const bound = Object.entries(input.bindings.spaces)
+      problems.push(
+        ...bound
+          .filter(([, bindings]) => bindings.timezone)
+          .map(([slug]) => ({
+            path: `deploy.yaml/spaces/${slug}/timezone`,
+            message: "Infra does not apply the timezone of a space yet.",
+          })),
+        ...bound
+          .filter(([, bindings]) => Object.keys(bindings.webhooks).length > 0)
+          .map(([slug]) => ({ path: `deploy.yaml/spaces/${slug}/webhooks`, message: "Infra does not apply webhooks yet." })),
+        ...bound
+          .filter(([slug]) => !(slug in input.spec.spaces))
+          .map(([slug]) => ({
+            path: `deploy.yaml/spaces/${slug}`,
+            message: `deploy.yaml binds space “${slug}”, which the spec does not declare.`,
+          })),
+      )
       problems.push(
         ...declared.flatMap(([slug, declaration]) =>
           unsupported
@@ -708,7 +756,7 @@ export const layer = Layer.effect(
     }
 
     const plan = Effect.fnUntraced(function* (actor: Actor.Info, input: Infra.PlanInput) {
-      const live = yield* load(actor)
+      const live = yield* load(actor, input)
       const planned = diff(actor, live, input)
       return { live, planned, digest: yield* digest(live, input) }
     })
@@ -742,8 +790,20 @@ export const layer = Layer.effect(
           const named = factoryNames(factory, inScope.factoryNames)
           return sameFactory(named, noFactory) ? {} : { factory: named }
         }
+        const pulledNames = (id: AgentSchema.ID) => inScope.factoryNames.get(id)
         return {
-          bindings: { organization: live.organization.slug },
+          bindings: {
+            organization: live.organization.slug,
+            spaces: Object.fromEntries(
+              inScope.shared.flatMap((space) => {
+                const channels = kinds.channels.pullBindings(live.channels, space.id)
+                const profiles = kinds.profiles.pull(live.profiles, space.id)
+                return Object.keys(channels).length + Object.keys(profiles).length > 0
+                  ? [[space.slug, { channels, profiles }]]
+                  : []
+              }),
+            ),
+          },
           spec: {
             org: { settings: live.organization.settings },
             spaces: Object.fromEntries(
@@ -766,6 +826,9 @@ export const layer = Layer.effect(
                         },
                       ]),
                   ),
+                  apps: kinds.apps.pull(live.apps, space.id),
+                  schedules: kinds.schedules.pull(live.schedules, space.id, pulledNames),
+                  channels: kinds.channels.pull(live.channels, space.id, pulledNames),
                   uses: {
                     agents: inScope.memberships
                       .filter((membership) => membership.spaceId === space.id)
