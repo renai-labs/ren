@@ -360,7 +360,7 @@ All 8 rows have `turn: msg_01`, `root_session: ses_4`, `org_P` and `spc_G`. All 
 
 1. Subagent (rows 2 to 4). `ses_5` has no row in Ren until it syncs (§6). Ren keeps it, because no row contradicts it. The root `ses_4` is checked.
 2. Fallback (row 4). `requested_model` is what the request asked for. `served_model` is the deployment that ran (ren-v1 `52d93bb9f`).
-3. Failure (row 3). The error is a row with cost 0, so PostHog can count the 429 rate.
+3. Failure (row 3). The error is a row with cost 0. LiteLLM does not report each failed attempt (§5.1), so the rows show that failures occur, not how many.
 4. Compaction and title (rows 6 and 7). `kind` tells them apart. Their cost counts in the turn that caused them.
 5. An OpenCode retry (`session.retry.scheduled`) is a new gateway request with a new call ID, so it is a new row. A LiteLLM fallback is inside one gateway request, so the `id` carries the deployment ID (§4.5).
 
@@ -368,11 +368,11 @@ Nothing more to build: the build of §4 covers this piece.
 
 ### 5.1 Failure points
 
-| Risk                                                                   | What happens                                                                            | Cost leak? | Status            |
-| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------- | ----------------- |
-| The 429 attempt and the fallback have the same LiteLLM call ID         | Without the deployment ID in `id`, row 4 hits `ON CONFLICT … DO NOTHING` and is dropped | Yes        | Prevented by §4.5 |
-| LiteLLM calls the failure hook once for each request, not each attempt | Row 3 does not exist                                                                    | No         | Not verified      |
-| The brain gives a child session ID that does not exist                 | Kept as a claim under the checked root                                                  | No         | Accepted (§1.3)   |
+| Risk                                                           | What happens                                                                                                                                                                            | Cost leak?                   | Status                                      |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------- |
+| The 429 attempt and the fallback have the same LiteLLM call ID | Without the deployment ID in `id`, row 4 hits `ON CONFLICT … DO NOTHING` and is dropped                                                                                                 | Yes                          | Prevented by §4.5                           |
+| LiteLLM does not report each failed attempt                    | A request that does not stream reports only its first failure. A stream reports a failure for each retry (`num_retries: 3`). A count of failure rows is not a count of failed attempts. | No; failure rows have cost 0 | Verified (ren-inference `proxy/e2e/run.py`) |
+| The brain gives a child session ID that does not exist         | Kept as a claim under the checked root                                                                                                                                                  | No                           | Accepted (§1.3)                             |
 
 Load: one turn gives 8 inserts. Five subagents at once give about 40 inserts in a minute. Not a bottleneck.
 
