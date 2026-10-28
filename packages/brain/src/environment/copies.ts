@@ -37,10 +37,14 @@ export interface Interface {
 
 const isInside = Schema.is(Skill.SourceDirectory)
 
-const copyWith = (client: EnvironmentConnections.Connection["client"], item: Item) => {
+const copyWith = (connection: EnvironmentConnections.Connection, item: Item) => {
+  const client = connection.client
   const copy = item.copy
   if (copy.type === "archive") return client["files.unpack"]({ ...copy.unpack, path: item.path })
-  if (copy.type === "mount") return client["drives.mount"]({ path: item.path, remote: copy.remote })
+  if (copy.type === "mount")
+    return connection.hello.mount
+      ? client["drives.mount"]({ path: item.path, remote: copy.remote })
+      : Effect.fail({ message: "its environment has no rclone or no usable /dev/fuse" })
   return Effect.gen(function* () {
     const exists = yield* client["files.stat"]({ path: item.path }).pipe(
       Effect.as(true),
@@ -76,7 +80,7 @@ export const make = (connections: EnvironmentConnections.Interface, sessionId: S
           return Effect.forEach(
             items.filter((item) => !copied.paths.has(item.path)),
             (item) =>
-              copyWith(connection.client, item).pipe(
+              copyWith(connection, item).pipe(
                 Effect.as(Option.none<Failure<I>>()),
                 Effect.catch((error: { readonly message: string }) =>
                   Effect.succeed(Option.some({ item, message: error.message })),

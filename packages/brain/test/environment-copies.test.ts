@@ -135,7 +135,7 @@ it.live(
     }),
 )
 
-it.live("a mount that fails is tried again at the next turn, not at the next call", () =>
+it.live("a mount on an environment that cannot mount fails at once, and is tried again at the next turn", () =>
   Effect.gen(function* () {
     const session = yield* copiesOf()
     const item: EnvironmentCopies.Item = {
@@ -152,11 +152,11 @@ it.live("a mount that fails is tried again at the next turn, not at the next cal
         },
       },
     }
-    const failed = session.copies.ensure([item]).pipe(Effect.map((failures) => failures.map((each) => each.item)))
-    expect(yield* failed).toEqual([item])
-    expect(yield* failed).toEqual([])
+    const failure = { item, message: "its environment has no rclone or no usable /dev/fuse" }
+    expect(yield* session.copies.ensure([item])).toEqual([failure])
+    expect(yield* session.copies.ensure([item])).toEqual([])
     yield* session.copies.turnStarted
-    expect(yield* failed).toEqual([item])
+    expect(yield* session.copies.ensure([item])).toEqual([failure])
   }),
 )
 

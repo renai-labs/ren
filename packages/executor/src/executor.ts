@@ -67,6 +67,7 @@ export interface Interface {
   readonly unpack: (
     input: EnvironmentApi.UnpackInput,
   ) => Effect.Effect<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError>
+  readonly mount: (input: EnvironmentApi.MountInput) => Effect.Effect<void, EnvironmentApi.MountError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/executor/Executor") {}
