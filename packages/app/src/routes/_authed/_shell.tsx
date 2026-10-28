@@ -1,21 +1,25 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router"
 import { useState } from "react"
-import { AppBoot } from "../../components/app-boot.js"
-import { ApplicationSidebar, ApplicationSidebarBrand } from "../../components/application-sidebar.js"
+import { AppShell } from "../../components/app-shell.js"
+import { AppSidebar } from "../../components/app-sidebar.js"
 import { RouteError } from "../../components/error-page.js"
 import { SettingsSidebar } from "../../components/settings-sidebar.js"
-import { WorkspaceLayout } from "../../components/workspace-layout.js"
 import { WorkspaceSearch } from "../../components/workspace-search.js"
 import { ProfileCard } from "../../features/organization/profile-card.js"
 import { ChatList } from "../../features/session/chat-list.js"
+import { SessionList } from "../../lib/session-list.js"
 import { Keyboard } from "../../platform/keyboard.js"
 
 const settingsPath = /^\/settings(?:\/|$)/
 
 export const Route = createFileRoute("/_authed/_shell")({
   head: () => ({ meta: [{ title: "Ren" }] }),
-  pendingComponent: AppBoot,
+  loader: (options) => {
+    void options.context.queryClient
+      .infiniteQuery(SessionList.sidebarOptions(options.context.client))
+      .catch(() => undefined)
+  },
   errorComponent: (props) => <RouteError error={props.error} />,
   component: Shell,
 })
@@ -32,19 +36,21 @@ function Shell() {
     setSearching((open) => !open)
   })
   return (
-    <WorkspaceLayout
-      header={inSettings ? null : <ApplicationSidebarBrand />}
-      navigation={
+    <AppShell
+      sidebar={
         inSettings ? (
           <SettingsSidebar />
         ) : (
-          <ApplicationSidebar onSearch={() => setSearching(true)} chats={<ChatList />} />
+          <AppSidebar
+            onSearch={() => setSearching(true)}
+            chats={<ChatList />}
+            footer={organization === null ? null : <ProfileCard user={me.user} organization={organization} />}
+          />
         )
       }
-      footer={inSettings || organization === null ? null : <ProfileCard user={me.user} organization={organization} />}
     >
       <Outlet />
       {searching ? <WorkspaceSearch onClose={() => setSearching(false)} /> : null}
-    </WorkspaceLayout>
+    </AppShell>
   )
 }

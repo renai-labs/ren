@@ -1,8 +1,8 @@
-import { ApplicationShell } from "@ren/ui/application-shell"
 import { Avatar, AvatarFallback } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { Combobox } from "@ren/ui/combobox"
 import { Icon } from "@ren/ui/icon"
+import { useSidebar } from "@ren/ui/sidebar"
 import { toast } from "@ren/ui/toast"
 import { Initials } from "@ren/util/initials"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
@@ -20,7 +20,7 @@ export function OrganizationSwitcher(props: {
   const auth = Auth.useClient()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const navigation = ApplicationShell.useNavigation()
+  const sidebar = useSidebar()
   const [open, setOpen] = useState(false)
   const organizations = useQuery({ ...Auth.organizationsOptions(auth), enabled: open })
   const listed = organizations.data ?? []
@@ -38,7 +38,7 @@ export function OrganizationSwitcher(props: {
   }))
 
   const switchTo = async (organizationId: string) => {
-    navigation.dismiss()
+    sidebar.setOpenMobile(false)
     if (organizationId !== props.active.id) {
       const result = await auth.organization.setActive({ organizationId })
       if (result.error !== null) {
@@ -59,7 +59,7 @@ export function OrganizationSwitcher(props: {
       trigger={props.trigger}
       open={open}
       onOpenChange={setOpen}
-      width={navigation.collapsed ? "large" : "trigger"}
+      width={sidebar.state === "collapsed" && !sidebar.isMobile ? "large" : "trigger"}
       label="Organizations"
       searchPlaceholder="Find organization"
       emptyMessage="No organizations"

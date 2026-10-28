@@ -6,7 +6,8 @@
   "type": "module",
   "imports": {
     "#components/*": "./src/components/*.tsx",
-    "#lib/*": "./src/lib/*.ts"
+    "#lib/*": "./src/lib/*.ts",
+    "#hooks/*": "./src/hooks/*.ts"
   },
   "license": "UNLICENSED",
   "exports": {
