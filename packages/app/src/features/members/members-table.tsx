@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
+import { Page } from "@ren/ui/page"
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
 import { Initials } from "@ren/util/initials"
@@ -17,7 +18,7 @@ import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { Members } from "./members.js"
 import { RoleSelect } from "./role-select.js"
-import { SortableHead, StateRow } from "./table-parts.js"
+import { SortableHead } from "./table-parts.js"
 
 export function MembersTable(props: {
   rows: ReadonlyArray<Members.MemberRow>
@@ -39,7 +40,7 @@ export function MembersTable(props: {
   const query = props.query.trim()
   return (
     <>
-      <div className="rounded-xl border bg-card p-2">
+      <Page.TableCard>
         <Table className="table-fixed">
           <TableCaption className="sr-only">Organization members</TableCaption>
           <TableHeader>
@@ -67,16 +68,16 @@ export function MembersTable(props: {
                 />
               ))
             ) : (
-              <StateRow
+              <Page.TableState
                 columns={4}
-                state={props.state}
+                state={props.state === "ready" ? "empty" : props.state}
                 failureMessage={props.failureMessage}
                 emptyMessage={query === "" ? "No members yet." : `Nothing matches “${query}”`}
               />
             )}
           </TableBody>
         </Table>
-      </div>
+      </Page.TableCard>
       <ConfirmationDialog
         open={confirming}
         onOpenChange={setConfirming}

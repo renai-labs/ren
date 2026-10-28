@@ -3,7 +3,7 @@ import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { Spinner } from "@ren/ui/spinner"
 import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -31,11 +31,10 @@ export function ProvidersPage(props: { returnUrl: string }) {
     connect.mutate({ returnUrl: props.returnUrl, ...(connectionId && { connectionId }) })
 
   return (
-    <PageShell.Root
-      layout="settings"
+    <Page.Root
       title="Providers"
-      subtitle="Model providers your agents run on."
-      actions={
+      description="Model providers your agents run on."
+      menu={
         <Button disabled={connect.isPending} onClick={() => startConnect()}>
           {connect.isPending ? (
             <Spinner aria-hidden data-icon="inline-start" />
@@ -130,6 +129,6 @@ export function ProvidersPage(props: { returnUrl: string }) {
         }}
         onConfirmed={() => setRemoving(null)}
       />
-    </PageShell.Root>
+    </Page.Root>
   )
 }

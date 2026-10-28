@@ -1,10 +1,9 @@
 import { Pagination } from "@ren/schema/pagination"
 import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { SearchField } from "@ren/ui/search-field"
 import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
-import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
 import type { ReactNode } from "react"
@@ -35,10 +34,10 @@ export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNo
   const owners = Owners.options(spaceList)
   const state = { pending: "loading", error: "failed", success: visible.length > 0 ? "ready" : "empty" } as const
   return (
-    <PageShell.Root
+    <Page.Root
       title="Credentials"
-      subtitle="The app accounts and credentials your organization’s chats use."
-      navigation={
+      description="The app accounts and credentials your organization’s chats use."
+      leading={
         <Tabs value={props.tab} onValueChange={(next: Tab) => props.onTabChange(next)}>
           <TabsList variant="page" aria-label="Credential kinds">
             <TabsTrigger value="apps">Apps</TabsTrigger>
@@ -49,27 +48,29 @@ export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNo
           </TabsList>
         </Tabs>
       }
-    >
-      {props.tab === "apps" ? props.apps : null}
-      {props.tab === "credentials" ? (
-        <>
-          <Toolbar.Root>
+      actions={
+        props.tab === "credentials" ? (
+          <>
             <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
             <Button size="sm" onClick={() => setCreating(true)}>
               <Icon glyph="Plus" data-icon="inline-start" />
               Add credential
             </Button>
-          </Toolbar.Root>
-          <CredentialsTable
-            rows={visible}
-            state={state[credentials.status]}
-            query={needle.trim()}
-            spaces={names}
-            owners={owners}
-            userId={props.userId}
-            emptyMessage="No credentials"
-          />
-        </>
+          </>
+        ) : undefined
+      }
+    >
+      {props.tab === "apps" ? props.apps : null}
+      {props.tab === "credentials" ? (
+        <CredentialsTable
+          rows={visible}
+          state={state[credentials.status]}
+          query={needle.trim()}
+          spaces={names}
+          owners={owners}
+          userId={props.userId}
+          emptyMessage="No credentials"
+        />
       ) : null}
       {creating ? (
         <PasteCredentialDialog
@@ -81,6 +82,6 @@ export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNo
           onClose={() => setCreating(false)}
         />
       ) : null}
-    </PageShell.Root>
+    </Page.Root>
   )
 }

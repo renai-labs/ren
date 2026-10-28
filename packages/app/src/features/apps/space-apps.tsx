@@ -4,7 +4,7 @@ import { Icon } from "@ren/ui/icon"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Spinner } from "@ren/ui/spinner"
 import { toast } from "@ren/ui/toast"
-import { Toolbar } from "@ren/ui/toolbar"
+import { Page } from "@ren/ui/page"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
@@ -47,12 +47,14 @@ export function SpaceApps(props: {
   const opened = props.appId ? apps.get(props.appId) : undefined
   return (
     <>
-      <Toolbar.Root>
-        <Button size="sm" onClick={() => setAdding(true)}>
-          <Icon glyph="Plus" data-icon="inline-start" />
-          Add app
-        </Button>
-      </Toolbar.Root>
+      <Page.Toolbar
+        actions={
+          <Button size="sm" onClick={() => setAdding(true)}>
+            <Icon glyph="Plus" data-icon="inline-start" />
+            Add app
+          </Button>
+        }
+      />
       <ReachState state={reachedOf(reach)} count={byApp.size} onRetry={() => void reach.refetch()} />
       <AppGrid label="Apps in this space">
         {[...byApp].map(([appId, profiles]) => (

@@ -9,14 +9,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
 import { SearchField } from "@ren/ui/search-field"
-import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
 import { toast } from "@ren/ui/toast"
-import { Toolbar } from "@ren/ui/toolbar"
+import { Page } from "@ren/ui/page"
 import { Initials } from "@ren/util/initials"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
@@ -47,15 +45,19 @@ export function SpaceMembers(props: { spaceId: string; organizationId: string; u
   const state = { pending: "loading", error: "failed", success: visible.length > 0 ? "ready" : "empty" } as const
   return (
     <>
-      <Toolbar.Root>
-        <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search members" />
-        {canAddMember ? (
-          <Button size="sm" onClick={() => setAdding(true)}>
-            <Icon glyph="Plus" data-icon="inline-start" />
-            Add member
-          </Button>
-        ) : null}
-      </Toolbar.Root>
+      <Page.Toolbar
+        actions={
+          <>
+            <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search members" />
+            {canAddMember ? (
+              <Button size="sm" onClick={() => setAdding(true)}>
+                <Icon glyph="Plus" data-icon="inline-start" />
+                Add member
+              </Button>
+            ) : null}
+          </>
+        }
+      />
       <MembersTable
         rows={visible}
         state={state[members.status]}
@@ -118,7 +120,7 @@ function MembersTable(props: {
   onRemove: ((row: Spaces.MemberRow) => void) | undefined
 }) {
   return (
-    <div className="rounded-xl border bg-card p-2 [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3 [&_th]:font-normal [&_th]:text-muted-foreground [&_tr]:border-0">
+    <Page.TableCard>
       <Table className="table-fixed">
         <TableCaption className="sr-only">Space members</TableCaption>
         <TableHeader>
@@ -133,14 +135,12 @@ function MembersTable(props: {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {props.state === "ready" ? null : (
-            <StateRow
-              state={props.state}
-              emptyMessage={
-                props.query ? `Nothing matches “${props.query}”` : "No members yet. Add one to get started."
-              }
-            />
-          )}
+          <Page.TableState
+            state={props.state}
+            columns={props.onRemove ? 3 : 2}
+            failureMessage="Couldn’t load members."
+            emptyMessage={props.query ? `Nothing matches “${props.query}”` : "No members yet. Add one to get started."}
+          />
           {props.rows.map((row) => (
             <TableRow key={row.id}>
               <TableCell>
@@ -156,31 +156,7 @@ function MembersTable(props: {
           ))}
         </TableBody>
       </Table>
-    </div>
-  )
-}
-
-function StateRow(props: { state: "loading" | "failed" | "empty"; emptyMessage: string }) {
-  return (
-    <TableRow className="hover:bg-transparent">
-      <TableCell colSpan={3}>
-        {props.state === "loading" ? <Spinner className="mx-auto" /> : null}
-        {props.state === "failed" ? (
-          <Empty role="alert">
-            <EmptyHeader>
-              <EmptyTitle>Couldn’t load members.</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : null}
-        {props.state === "empty" ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyDescription>{props.emptyMessage}</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : null}
-      </TableCell>
-    </TableRow>
+    </Page.TableCard>
   )
 }
 

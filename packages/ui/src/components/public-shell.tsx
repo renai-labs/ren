@@ -1,28 +1,19 @@
 export * as PublicShell from "./public-shell.js"
 
 import type { ReactNode } from "react"
-import { composeClasses } from "../lib/compose-classes.js"
 import { Text } from "./text.js"
 
 const pageTransition = { viewTransitionName: "page-content" }
 
-export function Centered(props: { frame?: "card" | "none"; children?: ReactNode }) {
+export function Centered(props: { children?: ReactNode }) {
   return (
     <main
       data-slot="public-shell"
       data-layout="centered"
-      className="flex min-h-svh flex-col items-center justify-center gap-8 bg-background-primary px-4 py-12"
+      className="flex min-h-svh flex-col items-center justify-center bg-background p-6"
       style={pageTransition}
     >
-      <div
-        className={composeClasses(
-          "flex w-full max-w-dialog flex-col gap-6",
-          props.frame !== "none" &&
-            "rounded-container border border-border-secondary bg-background-secondary p-6 shadow-raised",
-        )}
-      >
-        {props.children}
-      </div>
+      <div className="flex w-full max-w-80 flex-col gap-8 py-12">{props.children}</div>
     </main>
   )
 }

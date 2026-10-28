@@ -1,9 +1,8 @@
 import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { SearchField } from "@ren/ui/search-field"
 import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
-import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
 import { Auth } from "../../lib/auth.js"
@@ -36,41 +35,44 @@ export function MembersPage(props: {
     onChanged: () => queryClient.invalidateQueries({ queryKey: options.queryKey }),
   } as const
   return (
-    <PageShell.Root title="Members" subtitle="Everyone in your organization.">
-      <Toolbar.Root
-        alignment="split"
-        leading={
-          <Tabs
-            value={props.tab}
-            onValueChange={(next: Members.Tab) => {
-              if (next === props.tab) return
-              setQuery("")
-              props.onTabChange(next)
-            }}
-          >
-            <TabsList variant="page" aria-label="Members">
-              <TabsTrigger value="members">
-                Members
-                <span className="text-muted-foreground tabular-nums">{members.length}</span>
-              </TabsTrigger>
-              <TabsTrigger value="invitations">
-                Invitations
-                <span className="text-muted-foreground tabular-nums">{invitations.length}</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        }
-      >
-        <SearchField.Expandable
-          value={query}
-          onValueChange={setQuery}
-          placeholder={props.tab === "members" ? "Search for a member" : "Search for an invitation"}
-        />
-        <Button size="xs" className="h-6.5" onClick={() => setAdding(true)}>
-          <Icon glyph="Plus" data-icon="inline-start" />
-          Add member
-        </Button>
-      </Toolbar.Root>
+    <Page.Root
+      title="Members"
+      description="Everyone in your organization."
+      leading={
+        <Tabs
+          value={props.tab}
+          onValueChange={(next: Members.Tab) => {
+            if (next === props.tab) return
+            setQuery("")
+            props.onTabChange(next)
+          }}
+        >
+          <TabsList variant="page" aria-label="Members">
+            <TabsTrigger value="members">
+              Members
+              <span className="text-muted-foreground tabular-nums">{members.length}</span>
+            </TabsTrigger>
+            <TabsTrigger value="invitations">
+              Invitations
+              <span className="text-muted-foreground tabular-nums">{invitations.length}</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      }
+      actions={
+        <>
+          <SearchField.Expandable
+            value={query}
+            onValueChange={setQuery}
+            placeholder={props.tab === "members" ? "Search for a member" : "Search for an invitation"}
+          />
+          <Button size="xs" className="h-6.5" onClick={() => setAdding(true)}>
+            <Icon glyph="Plus" data-icon="inline-start" />
+            Add member
+          </Button>
+        </>
+      }
+    >
       <section key={props.tab} aria-live="polite">
         {props.tab === "members" ? (
           <MembersTable
@@ -93,6 +95,6 @@ export function MembersPage(props: {
           onChanged={table.onChanged}
         />
       ) : null}
-    </PageShell.Root>
+    </Page.Root>
   )
 }

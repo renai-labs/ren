@@ -11,9 +11,8 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { SearchField } from "@ren/ui/search-field"
-import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useDeferredValue, useState } from "react"
@@ -31,14 +30,14 @@ export function SpacesPage(props: { userId: string }) {
     Search.matches([space.name, space.description ?? ""], needle),
   )
   return (
-    <PageShell.Root
+    <Page.Root
       title="Spaces"
-      subtitle="Each space gives a team its own credentials, apps and agents."
-      toolbar={
-        <Toolbar.Root>
+      description="Each space gives a team its own credentials, apps and agents."
+      actions={
+        <>
           <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search spaces" />
           <SpaceActions spaces={spaces.data?.items ?? []} userId={props.userId} />
-        </Toolbar.Root>
+        </>
       }
     >
       <section aria-label="Spaces" aria-live="polite">
@@ -63,7 +62,7 @@ export function SpacesPage(props: { userId: string }) {
           </div>
         ) : null}
       </section>
-    </PageShell.Root>
+    </Page.Root>
   )
 }
 

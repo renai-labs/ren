@@ -2,10 +2,9 @@ import type { TaskInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Spinner } from "@ren/ui/spinner"
-import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate, useRouteContext, useSearch } from "@tanstack/react-router"
 import { useDeferredValue, useState } from "react"
@@ -38,7 +37,7 @@ export function TasksPage() {
   if (organization === null) return null
   const saved = TaskSearch.savedFilters(context.me.user.id, organization.id)
   return (
-    <Page
+    <TasksView
       key={organization.id}
       view={TaskView.resolve(search, saved.read(context.platform.storage))}
       userId={context.me.user.id}
@@ -51,7 +50,7 @@ export function TasksPage() {
   )
 }
 
-function Page(props: {
+function TasksView(props: {
   view: TaskView.View
   onViewChange: (view: TaskView.View) => void
   userId: string
@@ -86,8 +85,8 @@ function Page(props: {
     setSelected(new Set(props.view.selected.filter((id) => !done.has(id))))
   }
   return (
-    <PageShell.Root
-      layout={view.layout === "board" ? "board" : "workspace"}
+    <Page.Root
+      width="full"
       title="Tasks"
       actions={
         <Actions disabled={!hasSpaces} onCreate={() => openCreate({})}>
@@ -164,7 +163,7 @@ function Page(props: {
         onClose={() => setDialog(null)}
         onArchiveMany={(targets) => runBulk(targets, { kind: "archive" })}
       />
-    </PageShell.Root>
+    </Page.Root>
   )
 }
 
@@ -198,7 +197,8 @@ function Dialogs(props: {
 
 function Actions(props: { disabled: boolean; onCreate: () => void; children: ReactNode }) {
   return (
-    <Toolbar.Root size="small" leading={props.children}>
+    <>
+      {props.children}
       <Button
         size="icon-sm"
         aria-label="New task"
@@ -209,7 +209,7 @@ function Actions(props: { disabled: boolean; onCreate: () => void; children: Rea
       >
         <Icon glyph="Compose" />
       </Button>
-    </Toolbar.Root>
+    </>
   )
 }
 

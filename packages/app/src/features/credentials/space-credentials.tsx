@@ -14,7 +14,7 @@ import { Icon } from "@ren/ui/icon"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@ren/ui/item"
 import { SearchField } from "@ren/ui/search-field"
 import { toast } from "@ren/ui/toast"
-import { Toolbar } from "@ren/ui/toolbar"
+import { Page } from "@ren/ui/page"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
@@ -47,35 +47,41 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
       !here.some((own) => own.label === item.label),
   )
   const state = { pending: "loading", error: "failed", success: visible.length > 0 ? "ready" : "empty" } as const
+  const add =
+    elsewhere.length > 0 ? (
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button size="icon-sm" aria-label="Add or copy a credential" />}>
+          <Icon glyph="Plus" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={() => setCreating(true)}>
+              <Icon glyph="Plus" />
+              Add credential
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setCopying(true)}>
+              <Icon glyph="Copy" />
+              Copy from a space
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : (
+      <Button size="sm" onClick={() => setCreating(true)}>
+        <Icon glyph="Plus" data-icon="inline-start" />
+        Add credential
+      </Button>
+    )
   return (
     <>
-      <Toolbar.Root>
-        <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
-        {elsewhere.length > 0 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button size="icon-sm" aria-label="Add or copy a credential" />}>
-              <Icon glyph="Plus" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => setCreating(true)}>
-                  <Icon glyph="Plus" />
-                  Add credential
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCopying(true)}>
-                  <Icon glyph="Copy" />
-                  Copy from a space
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <Icon glyph="Plus" data-icon="inline-start" />
-            Add credential
-          </Button>
-        )}
-      </Toolbar.Root>
+      <Page.Toolbar
+        actions={
+          <>
+            <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
+            {add}
+          </>
+        }
+      />
       <CredentialsTable
         rows={visible}
         state={state[all.status]}

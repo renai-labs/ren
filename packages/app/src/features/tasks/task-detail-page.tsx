@@ -21,7 +21,7 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { Spinner } from "@ren/ui/spinner"
 import { TaskLinkBadge } from "@ren/ui/task-link-badge"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -62,7 +62,7 @@ export function TaskDetailPage(props: PageProps) {
   const catalog = Tasks.useCatalog(props.organizationId)
   if (!detail.data)
     return (
-      <PageShell.Root title="Task">
+      <Page.Root title="Task">
         {detail.isError ? (
           <Empty role="alert">
             <EmptyHeader>
@@ -87,7 +87,7 @@ export function TaskDetailPage(props: PageProps) {
             </EmptyHeader>
           </Empty>
         )}
-      </PageShell.Root>
+      </Page.Root>
     )
   return <Detail key={detail.data.id} {...props} task={detail.data} catalog={catalog} refreshError={detail.isError} />
 }
@@ -113,7 +113,7 @@ function Detail(props: DetailProps) {
   const [requesting, setRequesting] = useState(false)
   const error = header.update.error ?? header.assign.error ?? header.start.error
   return (
-    <PageShell.Record
+    <Page.Record
       banner={
         <DetailHeader
           task={task}
@@ -173,7 +173,7 @@ function Detail(props: DetailProps) {
         {task.parentId === null ? <TaskSubtasks task={task} catalog={props.catalog} userId={props.userId} /> : null}
         <TaskActivity task={task} catalog={props.catalog} onOpenSession={props.onOpenSession} />
       </article>
-    </PageShell.Record>
+    </Page.Record>
   )
 }
 
@@ -192,7 +192,7 @@ function Properties(props: {
   }
   return (
     <aside aria-label="Task properties" className="flex flex-col gap-6">
-      <PageShell.Section title="Properties">
+      <Page.Section title="Properties">
         <div className="flex flex-col items-start gap-1">
           <StatusControl {...controls} />
           <PriorityControl {...controls} />
@@ -204,18 +204,18 @@ function Properties(props: {
           <DueDateControl {...controls} />
           {task.subtasks === null ? <ParentControl {...controls} /> : null}
         </div>
-      </PageShell.Section>
-      <PageShell.Section title="Labels">
+      </Page.Section>
+      <Page.Section title="Labels">
         <LabelsControl {...controls} />
-      </PageShell.Section>
+      </Page.Section>
       {task.links.length > 0 ? (
-        <PageShell.Section title="Links">
+        <Page.Section title="Links">
           <div className="flex flex-wrap gap-2">
             {task.links.map((link) => (
               <TaskLinkBadge key={link.id} link={link} />
             ))}
           </div>
-        </PageShell.Section>
+        </Page.Section>
       ) : null}
     </aside>
   )

@@ -18,7 +18,7 @@ import {
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Icon } from "@ren/ui/icon"
 import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from "@ren/ui/item"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Spinner } from "@ren/ui/spinner"
 import { Text } from "@ren/ui/text"
@@ -120,7 +120,7 @@ export function SpaceFactory(props: { spaceId: string }) {
       factory: { maxHandoffs: next.maxHandoffs ?? maxHandoffs, agents: [...(next.agents ?? order)] },
     })
   return (
-    <PageShell.Section>
+    <Page.Section>
       <div className="flex flex-col gap-6">
         {update.isError ? (
           <Alert variant="destructive">
@@ -141,7 +141,7 @@ export function SpaceFactory(props: { spaceId: string }) {
           <FactoryAdvanced order={order} maxHandoffs={maxHandoffs} name={name} disabled={disabled} onChange={save} />
         ) : null}
       </div>
-    </PageShell.Section>
+    </Page.Section>
   )
 }
 

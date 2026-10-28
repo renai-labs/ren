@@ -18,7 +18,7 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
 import { Button, buttonVariants } from "@ren/ui/button"
-import { PageShell } from "@ren/ui/page-shell"
+import { Page } from "@ren/ui/page"
 import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router"
@@ -42,10 +42,8 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
   const isMember = Boolean(space.data.membershipId)
   const userId = authed.me.user.id
   return (
-    <PageShell.Root
-      layout="detail"
-      heading="entity"
-      context={
+    <Page.Root
+      back={
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -64,9 +62,9 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
         </span>
       }
       title={space.data.name}
-      subtitle={space.data.description ?? undefined}
-      actions={space.data.canArchive ? <SpaceMenu space={space.data} /> : undefined}
-      navigation={
+      description={space.data.description ?? undefined}
+      menu={space.data.canArchive ? <SpaceMenu space={space.data} /> : undefined}
+      leading={
         isMember ? (
           <nav aria-label={space.data.name} className="flex flex-wrap items-center gap-1">
             <Link to="/spaces/$spaceId" params={params} activeOptions={{ exact: true }} className={tabLink}>
@@ -122,7 +120,7 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
           ) : null}
         </Alert>
       )}
-    </PageShell.Root>
+    </Page.Root>
   )
 }
 

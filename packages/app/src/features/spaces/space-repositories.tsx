@@ -12,7 +12,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@ren/ui/empty"
 import { Field, FieldError, FieldLabel } from "@ren/ui/field"
 import { FormActions } from "@ren/ui/form-actions"
 import { Icon } from "@ren/ui/icon"
@@ -27,11 +26,10 @@ import {
   PaginationPrevious,
 } from "@ren/ui/pagination"
 import { SearchField } from "@ren/ui/search-field"
-import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
 import { toast } from "@ren/ui/toast"
-import { Toolbar } from "@ren/ui/toolbar"
+import { Page } from "@ren/ui/page"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Schema } from "effect"
 import { Fragment, useDeferredValue, useId, useState } from "react"
@@ -82,22 +80,26 @@ export function SpaceRepositories(props: { spaceId: string }) {
   const status = state[settings.status]
   return (
     <>
-      <Toolbar.Root>
-        <SearchField.Expandable
-          value={query}
-          onValueChange={(next) => {
-            setQuery(next)
-            setPage(1)
-          }}
-          placeholder="Search repositories"
-        />
-        {canUpdate ? (
-          <Button size="sm" onClick={() => setAdding(true)}>
-            <Icon glyph="Plus" data-icon="inline-start" />
-            Add repositories
-          </Button>
-        ) : null}
-      </Toolbar.Root>
+      <Page.Toolbar
+        actions={
+          <>
+            <SearchField.Expandable
+              value={query}
+              onValueChange={(next) => {
+                setQuery(next)
+                setPage(1)
+              }}
+              placeholder="Search repositories"
+            />
+            {canUpdate ? (
+              <Button size="sm" onClick={() => setAdding(true)}>
+                <Icon glyph="Plus" data-icon="inline-start" />
+                Add repositories
+              </Button>
+            ) : null}
+          </>
+        }
+      />
       <Text purpose="body" tone="secondary">
         {Repositories.tabCopy}
       </Text>
@@ -163,43 +165,23 @@ function RepositoriesTable(props: {
   children: ReactNode
 }) {
   return (
-    <div className="rounded-xl border bg-card p-2 [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3 [&_th]:font-normal [&_th]:text-muted-foreground [&_tr]:border-0">
+    <Page.TableCard>
       <Table className="table-fixed">
         <TableCaption className="sr-only">Repositories</TableCaption>
         <TableHeader>
           <TableRow>{props.columns}</TableRow>
         </TableHeader>
         <TableBody>
-          {props.state === "ready" ? null : (
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={3}>
-                <TableState state={props.state} emptyMessage={props.emptyMessage} />
-              </TableCell>
-            </TableRow>
-          )}
+          <Page.TableState
+            state={props.state}
+            columns={3}
+            failureMessage="Couldn’t load the repositories of this space."
+            emptyMessage={props.emptyMessage}
+          />
           {props.children}
         </TableBody>
       </Table>
-    </div>
-  )
-}
-
-function TableState(props: { state: "loading" | "failed" | "empty"; emptyMessage: string }) {
-  if (props.state === "loading") return <Spinner className="mx-auto" />
-  if (props.state === "failed")
-    return (
-      <Empty role="alert">
-        <EmptyHeader>
-          <EmptyTitle>Couldn’t load the repositories of this space.</EmptyTitle>
-        </EmptyHeader>
-      </Empty>
-    )
-  return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyDescription>{props.emptyMessage}</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
+    </Page.TableCard>
   )
 }
 

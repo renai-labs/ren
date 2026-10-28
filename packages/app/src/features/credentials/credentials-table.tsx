@@ -8,10 +8,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@ren/ui/empty"
+import { Page } from "@ren/ui/page"
 import { Icon } from "@ren/ui/icon"
 import type { Owners } from "./owners.js"
-import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
 import { useState } from "react"
@@ -35,7 +34,7 @@ export function CredentialsTable(props: {
   const close = () => setEditing(undefined)
   return (
     <>
-      <div className="rounded-xl border bg-card p-2 [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3 [&_th]:font-normal [&_th]:text-muted-foreground [&_tr]:border-0">
+      <Page.TableCard>
         <Table className="table-fixed">
           <TableCaption className="sr-only">Credentials</TableCaption>
           <TableHeader>
@@ -49,16 +48,12 @@ export function CredentialsTable(props: {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {props.state === "ready" ? null : (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={4}>
-                  <TableState
-                    state={props.state}
-                    emptyMessage={props.query ? `Nothing matches “${props.query}”` : props.emptyMessage}
-                  />
-                </TableCell>
-              </TableRow>
-            )}
+            <Page.TableState
+              state={props.state}
+              columns={4}
+              failureMessage="Couldn’t load credentials."
+              emptyMessage={props.query ? `Nothing matches “${props.query}”` : props.emptyMessage}
+            />
             {props.rows.map((row) => (
               <CredentialRow
                 key={row.id}
@@ -73,7 +68,7 @@ export function CredentialsTable(props: {
             ))}
           </TableBody>
         </Table>
-      </div>
+      </Page.TableCard>
       {editing?.kind === "rotate" ? <RotateCredentialDialog credential={editing.credential} onClose={close} /> : null}
       {editing?.kind === "move" || editing?.kind === "copy" ? (
         <MoveCredentialDialog
@@ -86,25 +81,6 @@ export function CredentialsTable(props: {
       ) : null}
       <DeleteCredentialDialog credential={deleting} open={confirming} onOpenChange={setConfirming} />
     </>
-  )
-}
-
-function TableState(props: { state: "loading" | "failed" | "empty"; emptyMessage: string }) {
-  if (props.state === "loading") return <Spinner className="mx-auto" />
-  if (props.state === "failed")
-    return (
-      <Empty role="alert">
-        <EmptyHeader>
-          <EmptyTitle>Couldn’t load credentials.</EmptyTitle>
-        </EmptyHeader>
-      </Empty>
-    )
-  return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyDescription>{props.emptyMessage}</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
   )
 }
 
