@@ -63,7 +63,7 @@ export function Group(props: { layout: Layout; className?: string; children: Rea
     <InputGroup
       data-layout={props.layout}
       className={cn(
-        "h-auto bg-card shadow-composer transition-shadow focus-within:shadow-composer-focus dark:bg-card",
+        "h-auto bg-card shadow-composer transition-shadow focus-within:shadow-composer-focus has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card",
         props.layout === "stacked" ? "rounded-xl" : "min-h-12 rounded-3xl pl-1",
         props.className,
       )}
