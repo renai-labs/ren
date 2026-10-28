@@ -1,5 +1,4 @@
 import { Pagination } from "@ren/schema/pagination"
-import { Page } from "@ren/ui/page"
 import { createFileRoute } from "@tanstack/react-router"
 import { SpaceCredentials } from "../../../../../features/credentials/space-credentials.js"
 import { Loader } from "../../../../../lib/loader.js"
@@ -14,7 +13,6 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/credential
       context.queryClient.query(context.api.space.list.queryOptions(page)),
     )
   },
-  pendingComponent: () => <Page.Skeletons body="rows" />,
   component: SpaceCredentialsRoute,
 })
 

@@ -8,17 +8,12 @@ import { SettingsSidebar } from "../../components/settings-sidebar.js"
 import { WorkspaceSearch } from "../../components/workspace-search.js"
 import { ProfileCard } from "../../features/organization/profile-card.js"
 import { ChatList } from "../../features/session/chat-list.js"
-import { Loader } from "../../lib/loader.js"
-import { SessionList } from "../../lib/session-list.js"
 import { Keyboard } from "../../platform/keyboard.js"
 
 const settingsPath = /^\/settings(?:\/|$)/
 
 export const Route = createFileRoute("/_authed/_shell")({
   head: () => ({ meta: [{ title: "Ren" }] }),
-  loader: (options) => {
-    Loader.start(options.context.queryClient.infiniteQuery(SessionList.sidebarOptions(options.context.client)))
-  },
   errorComponent: (props) => <RouteError error={props.error} />,
   component: Shell,
 })

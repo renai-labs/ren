@@ -22,12 +22,6 @@ import { RouterContext } from "../../lib/router-context.js"
 import { CreateSpaceDialog } from "./create-space-dialog.js"
 import { JoinSpaceDialog } from "./join-space-dialog.js"
 
-const description = "Each space gives a team its own credentials, apps and agents."
-
-export function SpacesPending() {
-  return <Page.Pending title="Spaces" description={description} toolbar="row" body="cards" />
-}
-
 export function SpacesPage(props: { userId: string }) {
   const context = RouterContext.useRouterContext()
   const spaces = useQuery({
@@ -42,7 +36,7 @@ export function SpacesPage(props: { userId: string }) {
   return (
     <Page.Root
       title="Spaces"
-      description={description}
+      description="Each space gives a team its own credentials, apps and agents."
       actions={
         <>
           <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search spaces" />

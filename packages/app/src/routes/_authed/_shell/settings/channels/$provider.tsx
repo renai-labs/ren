@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authed/_shell/settings/channels/$provide
       Loader.start(context.queryClient.query(list))
       return
     }
-    // ast-grep-ignore: no-awaiting-loader -- ?connect=true installs the provider unless it is installed already, so it needs the installs first
+    // ast-grep-ignore: require-loader-start -- ?connect=true installs the provider unless it is installed already, so it needs the installs first
     const installs = await context.queryClient.query(list)
     if (installs.items.some((install) => install.provider === options.params.provider)) return
     const started = await context.client["channel-connect"]["channel-install"]

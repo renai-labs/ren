@@ -1,7 +1,7 @@
 import type { ScheduleInfo } from "@ren/client"
 import { createFileRoute } from "@tanstack/react-router"
 import { RouteError } from "../../../../../components/error-page.js"
-import { ScheduleDetailPage, SchedulePending } from "../../../../../features/schedules/schedule-detail-page.js"
+import { ScheduleDetailPage } from "../../../../../features/schedules/schedule-detail-page.js"
 import { Loader } from "../../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/schedules/$scheduleId/")({
@@ -10,7 +10,6 @@ export const Route = createFileRoute("/_authed/_shell/schedules/$scheduleId/")({
     Loader.start(options.context.queryClient.query(schedule))
     return options.context.queryClient.getQueryData<ScheduleInfo>(schedule.queryKey)
   },
-  pendingComponent: SchedulePending,
   head: (options) => ({ meta: [{ title: `${options.loaderData?.name ?? "Schedule"} · Ren` }] }),
   errorComponent: (props) => <RouteError error={props.error} />,
   component: ScheduleRoute,

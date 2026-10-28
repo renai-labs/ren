@@ -1,4 +1,3 @@
-import { Page } from "@ren/ui/page"
 import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { SpaceApps } from "../../../../../features/apps/space-apps.js"
@@ -14,7 +13,6 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/apps")({
       ),
     )
   },
-  pendingComponent: () => <Page.Skeletons body="rows" />,
   component: SpaceAppsRoute,
 })
 

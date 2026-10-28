@@ -23,10 +23,6 @@ import { ScheduleActions } from "../../components/schedule-actions.js"
 import { ScheduleWhen } from "../../components/schedule-when.js"
 import { Schedules } from "../../components/schedules.js"
 
-export function SchedulePending() {
-  return <Page.Pending description={<Skeleton className="h-4 w-48" />} />
-}
-
 // oxlint-disable-next-line ren/no-comments -- schedules S24: the message, the agent, the owner, `when`, and the runs of 30 days.
 export function ScheduleDetailPage(props: { scheduleId: string; onArchived: () => void }) {
   const context = RouterContext.useRouterContext()
@@ -52,7 +48,7 @@ export function ScheduleDetailPage(props: { scheduleId: string; onArchived: () =
         </Empty>
       </Page.Root>
     ) : (
-      <SchedulePending />
+      <Page.Pending description={<Skeleton className="h-4 w-48" />} />
     )
   return <Detail schedule={detail.data} onArchived={props.onArchived} />
 }

@@ -1,5 +1,4 @@
 import { Pagination } from "@ren/schema/pagination"
-import { Page } from "@ren/ui/page"
 import { createFileRoute } from "@tanstack/react-router"
 import { SpaceMembers } from "../../../../../features/spaces/space-members.js"
 import { Auth } from "../../../../../lib/auth.js"
@@ -21,7 +20,6 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/members")(
       ...(organization ? [context.queryClient.query(Auth.organizationOptions(context.auth, organization.id))] : []),
     )
   },
-  pendingComponent: () => <Page.Skeletons body="rows" />,
   component: SpaceMembersRoute,
 })
 

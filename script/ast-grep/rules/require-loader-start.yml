@@ -1,7 +1,7 @@
-id: no-awaiting-loader
+id: require-loader-start
 language: Tsx
 message: >-
-  An app page's loader starts its fetches and returns: wrap them in `Loader.start(...)` from lib/loader.ts, read them in the component with `useQuery`, and draw the skeleton while the query is pending. Awaiting holds the navigation on the previous page. A loader that must read the data first, to redirect or to act on it, says why in an ast-grep-ignore.
+  Every query an app route's loader fetches goes through `Loader.start(...)` from lib/loader.ts, which starts it without awaiting it. Read it in the component with `useQuery` and draw the skeleton while it is pending; awaiting it holds the navigation on the previous page. A loader that must read the data first, to redirect or to act on it, awaits it and says why in an ast-grep-ignore.
 severity: error
 files:
   - packages/app/src/routes/_authed/**
@@ -14,10 +14,15 @@ rule:
       field: property
       regex: ^(query|infiniteQuery|fetchQuery|ensureQueryData|prefetchQuery|prefetchInfiniteQuery)$
   inside:
-    kind: pair
-    has:
-      field: key
-      regex: ^loader$
+    any:
+      - kind: pair
+        has:
+          field: key
+          regex: ^loader$
+      - kind: method_definition
+        has:
+          field: name
+          regex: ^loader$
     stopBy: end
   not:
     inside:
