@@ -1,22 +1,22 @@
 import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
-import { loadHighlighter } from "../lib/highlighter.js"
-
-type Highlighter = NonNullable<Awaited<ReturnType<typeof loadHighlighter>>>
+import type { GrammarState } from "shiki/core"
+import { type Highlighter, loadHighlighter, readyHighlighter } from "../lib/highlighter.js"
 
 type Highlighted = {
   readonly highlighter: Highlighter | null
   readonly text: string
   readonly lines: ReadonlyArray<ReactNode>
-  readonly state?: Parameters<Highlighter["highlight"]>[1]
+  readonly state?: GrammarState | undefined
 }
 
 export function useHighlightedCode(value: string, language: string) {
   const code = value.endsWith("\n") ? value.slice(0, -1) : value
   const [loaded, setLoaded] = useState<{ language: string; highlighter: Highlighter | null }>()
-  const highlighter = loaded?.language === language ? loaded.highlighter : null
+  const highlighter = loaded?.language === language ? loaded.highlighter : (readyHighlighter(language) ?? null)
 
   useEffect(() => {
+    if (readyHighlighter(language) !== undefined) return
     const run = { cancelled: false }
     loadHighlighter(language)
       .then((next) => {
