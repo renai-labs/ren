@@ -254,7 +254,6 @@ export type AuthSignInProvider = "google" | "github" | "slack"
 
 export type ChannelTarget =
   | { kind: "slack"; channelId: string }
-  | { kind: "linear"; projectId: string }
   | { kind: "github"; repository: string }
   | { kind: "telegram"; chatId: string; topicId?: string }
 
@@ -665,13 +664,6 @@ export type InfraPulledSchedule = {
 export type ChannelDeclaration =
   | {
       kind: "slack"
-      purpose: string
-      agent?: AgentName
-      fallback?: boolean
-      triggers?: { [x: ChannelTriggerID]: { prompt?: string } }
-    }
-  | {
-      kind: "linear"
       purpose: string
       agent?: AgentName
       fallback?: boolean
@@ -6894,13 +6886,6 @@ export type InfraPlanInput = {
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
                 }
-              | {
-                  readonly kind: "linear"
-                  readonly purpose: string
-                  readonly agent?: string
-                  readonly fallback?: boolean
-                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
-                }
               | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
               | {
                   readonly kind: "github"
@@ -6948,7 +6933,6 @@ export type InfraPlanInput = {
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
-              | { readonly kind: "linear"; readonly projectId: string }
               | { readonly kind: "github"; readonly repository: string }
               | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
           }
@@ -7222,13 +7206,6 @@ export type InfraPlanInput = {
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
                 }
-              | {
-                  readonly kind: "linear"
-                  readonly purpose: string
-                  readonly agent?: string
-                  readonly fallback?: boolean
-                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
-                }
               | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
               | {
                   readonly kind: "github"
@@ -7276,7 +7253,6 @@ export type InfraPlanInput = {
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
-              | { readonly kind: "linear"; readonly projectId: string }
               | { readonly kind: "github"; readonly repository: string }
               | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
           }
@@ -7555,13 +7531,6 @@ export type InfraApplyInput = {
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
                 }
-              | {
-                  readonly kind: "linear"
-                  readonly purpose: string
-                  readonly agent?: string
-                  readonly fallback?: boolean
-                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
-                }
               | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
               | {
                   readonly kind: "github"
@@ -7609,7 +7578,6 @@ export type InfraApplyInput = {
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
-              | { readonly kind: "linear"; readonly projectId: string }
               | { readonly kind: "github"; readonly repository: string }
               | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
           }
@@ -7884,13 +7852,6 @@ export type InfraApplyInput = {
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
                 }
-              | {
-                  readonly kind: "linear"
-                  readonly purpose: string
-                  readonly agent?: string
-                  readonly fallback?: boolean
-                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
-                }
               | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
               | {
                   readonly kind: "github"
@@ -7938,7 +7899,6 @@ export type InfraApplyInput = {
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
-              | { readonly kind: "linear"; readonly projectId: string }
               | { readonly kind: "github"; readonly repository: string }
               | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
           }
@@ -8213,13 +8173,6 @@ export type InfraApplyInput = {
                   readonly fallback?: boolean
                   readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
                 }
-              | {
-                  readonly kind: "linear"
-                  readonly purpose: string
-                  readonly agent?: string
-                  readonly fallback?: boolean
-                  readonly triggers?: { readonly [x: string]: { readonly prompt?: string } }
-                }
               | { readonly kind: "email"; readonly purpose: string; readonly agent?: string }
               | {
                   readonly kind: "github"
@@ -8267,7 +8220,6 @@ export type InfraApplyInput = {
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
-              | { readonly kind: "linear"; readonly projectId: string }
               | { readonly kind: "github"; readonly repository: string }
               | { readonly kind: "telegram"; readonly chatId: string; readonly topicId?: string }
           }

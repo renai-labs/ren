@@ -136,7 +136,6 @@ const mapped = {
 
 export const Declaration = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("slack"), ...mapped }),
-  Schema.Struct({ kind: Schema.Literal("linear"), ...mapped }),
   Schema.Struct({ kind: Schema.Literal("email"), ...fields }),
   Schema.Struct({ kind: Schema.Literal("github"), ...mapped }),
   Schema.Struct({
@@ -150,7 +149,6 @@ export type Declaration = typeof Declaration.Type
 
 export const Target = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("slack"), channelId: Schema.NonEmptyString }),
-  Schema.Struct({ kind: Schema.Literal("linear"), projectId: Schema.NonEmptyString }),
   Schema.Struct({ kind: Schema.Literal("github"), repository: Schema.NonEmptyString }),
   Schema.Struct({
     kind: Schema.Literal("telegram"),

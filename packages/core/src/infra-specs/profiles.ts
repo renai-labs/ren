@@ -153,7 +153,7 @@ export const make = Effect.gen(function* () {
       if (added.has(candidate.profile.id) || candidate.profile.spaces.some((space) => !gone.has(space))) return true
       problems.push({
         path: candidate.target,
-        message: `No other space lists profile ${candidate.profile.slug} of ${candidate.profile.appSlug}, so removing it would delete the profile and its credentials. Delete it in the app instead, or keep it listed.`,
+        message: `No other space lists profile ${candidate.profile.slug} of ${candidate.profile.appSlug}, so removing it would delete the profile and its credentials. Infra never deletes a profile: keep it listed, or delete it in the app.`,
       })
       return false
     })
@@ -179,7 +179,7 @@ export const make = Effect.gen(function* () {
             "archive",
             "profile",
             removal.target,
-            profiles.access(context.actor, removal.profile.id, { remove: [removal.liveId] }),
+            profiles.unlist(context.actor, removal.profile.id, [removal.liveId]),
           )
         })
         .toSorted(InfraPlan.byPath),
