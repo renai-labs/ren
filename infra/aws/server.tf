@@ -156,7 +156,7 @@ resource "aws_ecs_task_definition" "server" {
         EGRESS_PORT    = "4443"
         DRIVE_BUCKET   = aws_s3_bucket.drives.id
         DRIVE_REGION   = var.region
-        DRIVE_ROLE_ARN = aws_iam_role.drive_reader.arn
+        DRIVE_ROLE_ARN = aws_iam_role.drive_access.arn
       }) : { name = key, value = value }
     ]
     secrets = [

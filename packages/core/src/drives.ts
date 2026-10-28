@@ -76,9 +76,9 @@ export const label = "DRIVE"
 
 export const placeholder = Credential.placeholder(label)
 
-const descriptions: Record<Drive.Kind, string> = {
-  space: "The files that the people of this space upload to its drive in Ren. Read-only.",
-  org: "The files that the people of the organization upload to its drive in Ren, for every space. Read-only.",
+const kinds: Record<Drive.Kind, { readonly access: Drive.Access; readonly description: string }> = {
+  space: { access: "write", description: "The files of this space’s drive in Ren." },
+  org: { access: "read", description: "The files of the organization’s drive in Ren. Read-only." },
 }
 
 export const prefixOf = (owner: {
@@ -273,7 +273,7 @@ export const layer = Layer.effect(
           mounts: (["space", "org"] as const).map((kind) => ({
             kind,
             alias: `drive:${kind}`,
-            description: descriptions[kind],
+            description: kinds[kind].description,
             remote: {
               type: "s3",
               bucket,
@@ -285,7 +285,7 @@ export const layer = Layer.effect(
               ...(Option.isSome(config.endpoint) && { endpoint: config.endpoint.value }),
               placeholder,
             },
-            access: "read",
+            access: kinds[kind].access,
           })),
         }
       },
@@ -314,6 +314,11 @@ export const layer = Layer.effect(
                     Effect: "Allow",
                     Action: ["s3:GetObject"],
                     Resource: prefixes.map((each) => `arn:aws:s3:::${bucket}/${each}*`),
+                  },
+                  {
+                    Effect: "Allow",
+                    Action: ["s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"],
+                    Resource: [`arn:aws:s3:::${bucket}/${prefixOf(owner)}*`],
                   },
                 ],
               }),

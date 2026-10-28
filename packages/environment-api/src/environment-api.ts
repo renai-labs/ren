@@ -207,10 +207,10 @@ export class MountError extends Schema.TaggedError<MountError>()("MountError", {
 export interface MountInput extends Schema.Schema.Type<typeof MountInput> {}
 export const MountInput = Schema.Struct({
   path: Schema.String.annotate({
-    description:
-      "The folder that shows the drive, read-only. A healthy mount of the same remote there answers at once; a dead one is mounted again",
+    description: "The folder that shows the drive. A healthy mount of the same remote and access is kept.",
   }),
   remote: Drive.Remote,
+  access: Drive.Access,
 }).annotate({ identifier: "Executor.MountInput" })
 
 export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundError>()("ProcessNotFoundError", {

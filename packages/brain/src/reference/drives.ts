@@ -16,8 +16,8 @@ export const chat = (input: {
   readonly changed: Effect.Effect<void>
 }): References.Source => ({
   root,
-  note: "A drive holds files that people upload in Ren. It is read-only here, and a file uploaded during the chat appears in it within seconds.",
-  readOnly: "is in a read-only drive. To change a file, copy it into the chat’s folder.",
+  note: "A drive holds files that people upload in Ren. A file uploaded during the chat appears in it within seconds.",
+  readOnly: "is in a read-only drive.",
   prepared: () => {
     const drives = input.drives()
     if (!drives) return []
@@ -34,7 +34,7 @@ export const chat = (input: {
       alias: mount.alias,
       description: mount.description,
       path: mount.kind,
-      copy: { type: "mount", remote: mount.remote },
+      copy: { type: "mount", remote: mount.remote, access: mount.access },
     }))
   },
   refresh: input.changed,

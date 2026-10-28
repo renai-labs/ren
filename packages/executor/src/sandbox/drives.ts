@@ -8,24 +8,29 @@ import { access, mkdir, readdir } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 
-const logs = join(tmpdir(), "ren-drives")
+const state = join(tmpdir(), "ren-drives")
 
 const unescaped = (field: string) =>
   field.replaceAll(/\\([0-7]{3})/gu, (_escape, octal: string) => String.fromCharCode(Number.parseInt(octal, 8)))
 
-const sourceAt = (path: string) =>
+const mountAt = (path: string) =>
   Effect.promise(() =>
     Bun.file("/proc/mounts")
       .text()
       .catch(() => ""),
   ).pipe(
     Effect.map((text) =>
-      Option.fromNullishOr(
-        text
-          .split("\n")
-          .map((line) => line.split(" ").map(unescaped))
-          .find((fields) => fields.at(1) === path)
-          ?.at(0),
+      Option.map(
+        Option.fromNullishOr(
+          text
+            .split("\n")
+            .map((line) => line.split(" ").map(unescaped))
+            .find((fields) => fields.at(1) === path),
+        ),
+        (fields) => ({
+          source: fields.at(0),
+          access: fields.at(3)?.split(",").includes("ro") ? "read" : "write",
+        }),
       ),
     ),
   )
@@ -93,10 +98,15 @@ export const make = (workspace: string) => {
   const mount = Effect.fn("Executor.mount")(function* (path: string, input: EnvironmentApi.MountInput) {
     const remote = input.remote
     const source = `:s3:${remote.bucket}/${remote.prefix}`
-    const log = join(logs, `${Bun.hash(path).toString(36)}.log`)
+    const name = Bun.hash(path).toString(36)
+    const log = join(state, `${name}.log`)
     const failed = (message: string) => new EnvironmentApi.MountError({ path: input.path, message })
-    const found = yield* sourceAt(path)
-    if (Option.contains(found, source) && (yield* isServed(source, path))) return
+    const found = yield* mountAt(path)
+    if (
+      Option.exists(found, (mounted) => mounted.source === source && mounted.access === input.access) &&
+      (yield* isServed(source, path))
+    )
+      return
     if (Option.isSome(found))
       yield* Effect.promise(
         () =>
@@ -108,7 +118,7 @@ export const make = (workspace: string) => {
     yield* Effect.tryPromise({
       try: async () => {
         await mkdir(path, { recursive: true })
-        await mkdir(logs, { recursive: true })
+        await mkdir(state, { recursive: true })
         await Bun.write(log, "")
       },
       catch: (cause) => failed(cause instanceof Error ? cause.message : String(cause)),
@@ -121,11 +131,21 @@ export const make = (workspace: string) => {
         path,
         "--devname",
         source,
-        "--read-only",
-        "--vfs-cache-mode",
-        "minimal",
+        ...(input.access === "write"
+          ? [
+              "--vfs-cache-mode",
+              "writes",
+              "--cache-dir",
+              join(state, `${name}.cache`),
+              "--vfs-write-back",
+              "5s",
+              "--vfs-cache-max-size",
+              "1G",
+            ]
+          : ["--read-only", "--vfs-cache-mode", "minimal"]),
         "--dir-cache-time",
         "10s",
+        "--s3-no-check-bucket",
         "--s3-provider",
         remote.endpoint ? "Minio" : "AWS",
         "--s3-region",
@@ -142,11 +162,10 @@ export const make = (workspace: string) => {
     )
     yield* started(child).pipe(Effect.mapError(failed))
     child.unref()
-    const mounted = yield* sourceAt(path).pipe(
-      Effect.flatMap((now) =>
-        Option.contains(now, source) || typeof child.exitCode === "number"
-          ? Effect.succeed(Option.contains(now, source))
-          : Effect.fail("waiting"),
+    const mounted = yield* mountAt(path).pipe(
+      Effect.map(Option.exists((now) => now.source === source)),
+      Effect.flatMap((isMounted) =>
+        isMounted || typeof child.exitCode === "number" ? Effect.succeed(isMounted) : Effect.fail("waiting"),
       ),
       Effect.retry({ schedule: Schedule.spaced("100 millis"), times: 100 }),
       Effect.orElseSucceed(() => false),

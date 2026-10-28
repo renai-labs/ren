@@ -62,8 +62,14 @@ export const make = Effect.fnUntraced(function* (input: {
   yield* input.context.permission.hook("evaluate", (event) =>
     Effect.sync(() => {
       if (event.effect === "deny") return
+      const writable = ready()
+        .filter((each) => each.prepared.copy.type === "mount" && each.prepared.copy.access === "write")
+        .map((each) => `${each.path}/`)
       const insideOf = (source: References.Source) =>
-        event.resources.filter((resource) => resource.startsWith(`${shared}/${source.root}/`))
+        event.resources.filter(
+          (resource) =>
+            resource.startsWith(`${shared}/${source.root}/`) && !writable.some((root) => resource.startsWith(root)),
+        )
       const written = writes.has(event.action) ? sources.find((source) => insideOf(source).length > 0) : undefined
       if (written) {
         event.effect = "deny"
