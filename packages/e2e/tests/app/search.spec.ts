@@ -4,7 +4,7 @@ import { appURL, createUser, uniqueEmail } from "../lib/servers.js"
 test("searches actions and settings from the sidebar and the keyboard", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("search") })
   await page.goto("/app/")
-  await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
+  await expect(page.getByRole("combobox", { name: /Switch organization/ })).toContainText("Ada Lovelace")
 
   await page.keyboard.press("ControlOrMeta+k")
   const dialog = page.getByRole("dialog", { name: "Search" })

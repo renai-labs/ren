@@ -37,7 +37,7 @@ test("an invited person signs up and joins the organization", async ({ page, req
 
   await expect(page.getByText("Joined organization")).toBeVisible()
   await expect(page).toHaveURL(`${appURL}/`)
-  await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
+  await expect(page.getByRole("combobox", { name: /Switch organization/ })).toContainText("Ada Lovelace")
   expect(await organizationName(page.request)).toBe(invitation.organization)
 
   await page.goto(`/app/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
@@ -57,7 +57,7 @@ test("a signed-in person declines an invitation", async ({ page, request }) => {
   await expect(page.getByText("Invited by Grace Hopper")).toBeVisible()
   await page.getByRole("button", { name: "No thanks, continue to Ren" }).click()
   await expect(page).toHaveURL(`${appURL}/`)
-  await expect(page.getByRole("heading", { name: "Welcome, Alan Turing" })).toBeVisible()
+  await expect(page.getByRole("combobox", { name: /Switch organization/ })).toContainText("Alan Turing")
 })
 
 test("an invitation for another address offers to switch accounts", async ({ page, request }) => {
