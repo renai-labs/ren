@@ -54,7 +54,7 @@ jobs:
         run: |
           bun run lint
           bun typecheck
-          REN_SLOW=1 bun run test
+          bun run test
 
       - name: Build
         working-directory: packages/cli
