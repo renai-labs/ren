@@ -50,6 +50,7 @@ export async function join(
   ) {
     return failure("mismatch", "")
   }
+  // ast-grep-ignore: no-manual-invalidation -- accepting an invitation goes through Better Auth
   await context.queryClient.invalidateQueries({ queryKey: context.api.invitation.preview.queryKey() })
   return failure("error", accepted.error.message ?? "The invitation could not be accepted.")
 }

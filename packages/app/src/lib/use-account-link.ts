@@ -30,6 +30,7 @@ export function useAccountLink(provider: "github" | "slack", returnTo: string) {
       if (!linked) return
       const result = await context.auth.unlinkAccount({ accountId: linked.id })
       if (result.error) throw new Error(result.error.message ?? "Try again.")
+      // ast-grep-ignore: no-manual-invalidation -- unlinking an account goes through Better Auth
       await queryClient.invalidateQueries({ queryKey: Auth.accountsOptions(context.auth).queryKey })
     },
     onError: failed(`Couldn’t disconnect ${title}`),

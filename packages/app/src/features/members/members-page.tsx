@@ -32,6 +32,7 @@ export function MembersPage(props: {
     query: needle,
     state: ({ pending: "loading", error: "failed", success: "ready" } as const)[organization.status],
     organizationId: props.organizationId,
+    // ast-grep-ignore: no-manual-invalidation -- members and invitations change through Better Auth
     onChanged: () => queryClient.invalidateQueries({ queryKey: options.queryKey }),
   } as const
   return (
