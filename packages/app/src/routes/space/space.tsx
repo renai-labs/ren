@@ -9,7 +9,7 @@ import { RowMenu } from "@/components/ren/row-menu"
 import { api, errorMessage } from "@/lib/api"
 import { useSpace } from "@/routes/space/use-space"
 
-const tabs = ["overview", "members", "apps", "repositories", "credentials", "schedules", "factory"] as const
+const tabs = ["overview", "members", "apps", "repositories", "channels", "credentials", "schedules", "factory"] as const
 
 type Tab = (typeof tabs)[number]
 
@@ -20,6 +20,7 @@ const tabPaths = {
   members: "/spaces/$spaceId/members",
   apps: "/spaces/$spaceId/apps",
   repositories: "/spaces/$spaceId/repositories",
+  channels: "/spaces/$spaceId/channels",
   credentials: "/spaces/$spaceId/credentials",
   schedules: "/spaces/$spaceId/schedules",
   factory: "/spaces/$spaceId/factory",
@@ -108,6 +109,7 @@ export function SpaceLayout() {
           </PageTabsTrigger>
           <PageTabsTrigger value="apps">Apps</PageTabsTrigger>
           <PageTabsTrigger value="repositories">Repositories</PageTabsTrigger>
+          <PageTabsTrigger value="channels">Channels</PageTabsTrigger>
           <PageTabsTrigger value="credentials">Keys</PageTabsTrigger>
           <PageTabsTrigger value="schedules">Scheduled</PageTabsTrigger>
           <PageTabsTrigger value="factory">Factory</PageTabsTrigger>

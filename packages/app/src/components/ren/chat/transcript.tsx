@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { useAtomValue } from "@effect/atom-react"
 import {
+  ChannelReply,
   ChatState,
   Family,
   PatchFiles,
@@ -13,6 +14,7 @@ import {
 } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Link } from "@tanstack/react-router"
+import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { Shell } from "@ren/schema/shell"
@@ -74,6 +76,7 @@ import { Markdown } from "@/components/ren/chat/markdown"
 import { EmptyState } from "@/components/ren/empty-state"
 import { ImageLightbox } from "@/components/ren/image-lightbox"
 import { withAppMentions } from "@/components/ren/app-mention"
+import { ChannelMark } from "@/components/ren/channel-mark"
 import { useCatalog } from "@/hooks/use-catalog"
 import { formatRun, localTimeZone } from "@/lib/schedules"
 
@@ -124,6 +127,7 @@ type Block =
       readonly text: string
       readonly streaming: boolean
     }
+  | { readonly kind: "reply"; readonly key: string; readonly tool: SessionMessage.Tool }
   | { readonly kind: "row"; readonly key: string; readonly row: TimelineRow.Row }
 
 const streaming = (message: SessionMessage.Info | undefined) => message?.type === "assistant" && !message.time.completed
@@ -176,6 +180,10 @@ function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap<string
           text: content.text,
           streaming: streaming(message),
         })
+        return blocks
+      }
+      if (content?.type === "tool" && ChannelReply.shown(content)) {
+        blocks.push({ kind: "reply", key: TimelineRow.key(row), tool: content })
         return blocks
       }
     }
@@ -376,6 +384,7 @@ function UserMessage(props: {
             </MarkerContent>
           </Marker>
         ) : null}
+        {props.message.channel ? <ChannelOrigin origin={props.message.channel} /> : null}
         {props.editing ? (
           <EditPrompt text={props.message.text} onCancel={props.onCancel} onSave={props.onSave} />
         ) : (
@@ -408,6 +417,61 @@ function UserMessage(props: {
             <CopyButton text={props.message.text} />
           </MessageFooter>
         )}
+      </MessageContent>
+    </Message>
+  )
+}
+
+function ChannelOrigin(props: { origin: NonNullable<SessionMessage.User["channel"]> }) {
+  const origin = props.origin
+  const title = Channel.titles[origin.provider]
+  const sender = !origin.handle
+    ? origin.sender
+    : origin.handle === origin.sender
+      ? `@${origin.handle}`
+      : `${origin.sender} (@${origin.handle})`
+  return (
+    <Marker className="justify-end text-xs">
+      <MarkerIcon>
+        <ChannelMark provider={origin.provider} className="size-4" />
+      </MarkerIcon>
+      <MarkerContent>
+        {origin.trigger
+          ? `Started on ${title} by “${origin.trigger}” in ${origin.place}, for ${sender}`
+          : `Sent from ${title} by ${sender} in ${origin.place}`}
+        {origin.threadUrl ? (
+          <>
+            {" · "}
+            <a href={origin.threadUrl} target="_blank" rel="noreferrer">
+              Open on {title}
+            </a>
+          </>
+        ) : null}
+      </MarkerContent>
+    </Marker>
+  )
+}
+
+function ChannelReplyMessage(props: { tool: SessionMessage.Tool }) {
+  const reply = ChannelReply.of(props.tool)
+  return (
+    <Message>
+      <MessageContent>
+        <Marker className="text-xs">
+          {reply.sent ? (
+            <MarkerIcon>
+              <ChannelMark provider={reply.sent.provider} className="size-4" />
+            </MarkerIcon>
+          ) : null}
+          <MarkerContent>
+            {reply.sent ? `Sent on ${Channel.titles[reply.sent.provider]}` : "Sending to the thread…"}
+          </MarkerContent>
+        </Marker>
+        <Bubble variant="ghost">
+          <BubbleContent className="text-base leading-[1.7]">
+            <Markdown className="text-base leading-[1.7]">{reply.text}</Markdown>
+          </BubbleContent>
+        </Bubble>
       </MessageContent>
     </Message>
   )
@@ -935,6 +999,12 @@ export function Transcript(props: TranscriptProps) {
                   </MessageScrollerItem>
                 )
               }
+              if (block.kind === "reply")
+                return (
+                  <MessageScrollerItem key={block.key} messageId={block.key}>
+                    <ChannelReplyMessage tool={block.tool} />
+                  </MessageScrollerItem>
+                )
               return (
                 <MessageScrollerItem key={block.key} messageId={block.key}>
                   <SystemRow row={block.row} context={context} />

@@ -2,7 +2,7 @@ import { useState } from "react"
 import type { ReferenceInfo } from "@ren/client"
 import { Reference } from "@ren/schema/reference"
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query"
-import { getRouteApi } from "@tanstack/react-router"
+import { getRouteApi, Link } from "@tanstack/react-router"
 import { IconBrandGithub, IconGitBranch, IconPlus } from "@tabler/icons-react"
 import { Schema } from "effect"
 import { toast } from "sonner"
@@ -271,7 +271,7 @@ function AddRepositoriesDialog(props: {
               <Button
                 variant="outline"
                 nativeButton={false}
-                render={<a href={`${import.meta.env.BASE_URL}settings/channels/github`} aria-label="Connect GitHub" />}
+                render={<Link to="/settings/channels/$provider" params={{ provider: "github" }} />}
               >
                 <IconBrandGithub data-icon="inline-start" />
                 Connect GitHub

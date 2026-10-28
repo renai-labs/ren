@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton"
 import { TableCell, TableRow } from "@/components/ui/table"
-import { Fragment, type ComponentProps, type ComponentType, type ReactNode } from "react"
+import { Fragment, type ComponentProps, type ComponentType, type ReactElement, type ReactNode } from "react"
 import { IconChevronDown } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -193,12 +193,13 @@ export function Rows(props: { children: ReactNode[] }) {
 export function Row(props: {
   title: string
   badge?: ReactNode | undefined
-  description?: string | undefined
+  description?: ReactNode | undefined
   media?: ReactNode | undefined
+  render?: ReactElement | undefined
   children?: ReactNode | undefined
 }) {
   return (
-    <Item className="min-h-14 gap-x-6 gap-y-2 px-4 py-3">
+    <Item render={props.render} className="min-h-14 gap-x-6 gap-y-2 px-4 py-3">
       {props.media ? <ItemMedia>{props.media}</ItemMedia> : null}
       <ItemContent>
         <ItemTitle className="leading-5">

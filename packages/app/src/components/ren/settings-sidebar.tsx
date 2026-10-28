@@ -3,6 +3,7 @@ import { Link, useLocation } from "@tanstack/react-router"
 import {
   IconAdjustmentsHorizontal,
   IconArrowLeft,
+  IconAt,
   IconBuilding,
   IconKey,
   IconSearch,
@@ -43,6 +44,7 @@ export const settingsSections = [
       { id: "general", to: "/settings/general", label: "General", icon: IconBuilding },
       { id: "members", to: "/settings/members", label: "Members", icon: IconUsers },
       { id: "providers", to: "/settings/providers", label: "Providers", icon: IconServer },
+      { id: "channels", to: "/settings/channels", label: "Mentions", icon: IconAt },
     ],
   },
 ] as const

@@ -4,7 +4,7 @@ Ren's web app: stock shadcn components (style `base-nova`, Base UI) with Ren's d
 
 ## Rules
 
-- Match ren-v2's backend (`packages/schema`). An organization has spaces; chats (sessions) and tasks belong to a space. There are no projects or teams. Pages: chats, Spaces (overview, members, apps, repositories, keys, scheduled, factory), Tasks (list and detail), Scheduled, Marketplace, settings (Personal: Preferences, Credentials with its Apps and Keys tabs; Organization: General, Members, Providers). The UI calls loose credentials "Keys"; the API names stay as they are.
+- Match ren-v2's backend (`packages/schema`). An organization has spaces; chats (sessions) and tasks belong to a space. There are no projects or teams. Pages: chats, Spaces (overview, members, apps, repositories, channels, keys, scheduled, factory), Tasks (list and detail), Scheduled, Marketplace, settings (Personal: Preferences, Credentials with its Apps and Keys tabs; Organization: General, Members, Providers, Mentions with a page per channel provider). The UI calls loose credentials "Keys"; the API names stay as they are.
 - All data comes from the API. No mock data, no mock mode, no MSW.
 - Data layer (see the plan for the reasons):
   - Server data: TanStack Query with the generated `api` options from `@ren/client/react` (`src/lib/api.ts`). Compose at the call site; don't wrap a single query or mutation in a hook. Invalidation is global (`MutationCache`, keyed by the mutation key; `meta.invalidates` for other resources).

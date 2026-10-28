@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query"
+import { Channel } from "@ren/schema/channel"
 import {
   createRootRouteWithContext,
   createRoute,
@@ -6,6 +7,7 @@ import {
   defaultParseSearch,
   defaultStringifySearch,
   lazyRouteComponent,
+  notFound,
   Outlet,
   redirect,
 } from "@tanstack/react-router"
@@ -17,7 +19,8 @@ import { RouteError, RouteNotFound } from "@/components/ren/route-error"
 import { ThemeSync } from "@/components/ren/theme-sync"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { api, pageSize, pickerPageSize, queryClient } from "@/lib/api"
+import { api, client, errorMessage, pageSize, pickerPageSize, queryClient } from "@/lib/api"
+import { Channels } from "@/lib/channels"
 import { auth, authKeys, authorizationQuery, canAdministerOptions, sessionOptions } from "@/lib/auth"
 import { joinInvitation } from "@/lib/invitation"
 import { currentPage } from "@/lib/pagination"
@@ -318,6 +321,19 @@ const spaceRepositoriesRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/space/space-repositories"), "SpaceRepositoriesTab"),
 })
 
+const spaceChannelsRoute = createRoute({
+  getParentRoute: () => spaceRoute,
+  path: "channels",
+  validateSearch: PageSearch,
+  loader: ({ params }) => {
+    void queryClient
+      .query(api["channel-mapping"].list.queryOptions({ ...Channels.all, spaceId: params.spaceId }))
+      .catch(ignore)
+    void queryClient.query(Channels.installsOptions()).catch(ignore)
+  },
+  component: lazyRouteComponent(() => import("@/routes/space/space-channels"), "SpaceChannelsTab"),
+})
+
 const spaceSchedulesRoute = createRoute({
   getParentRoute: () => spaceRoute,
   path: "schedules",
@@ -466,6 +482,59 @@ const providersRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/settings/providers"), "ProvidersPage"),
 })
 
+const channelsRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "channels",
+  staticData: { title: "Mentions" },
+  loader: () => {
+    void queryClient.query(Channels.installsOptions()).catch(ignore)
+    void queryClient.query(api["channel-connect"]["channel-provider"].list.queryOptions()).catch(ignore)
+  },
+  component: lazyRouteComponent(() => import("@/routes/settings/channels"), "ChannelsSettingsPage"),
+})
+
+const channelProviderRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "channels/$provider",
+  staticData: { title: "Mentions" },
+  params: {
+    parse: (params) => {
+      if (!Schema.is(Channel.Provider)(params.provider)) throw notFound()
+      return { provider: params.provider }
+    },
+  },
+  validateSearch: Schema.toStandardSchemaV1(
+    Schema.Struct({
+      installed: Schema.optional(Schema.String),
+      error: Schema.optional(Schema.String),
+      connect: Schema.optional(Schema.Boolean),
+    }),
+  ),
+  loaderDeps: ({ search }) => ({ connect: search.connect === true }),
+  loader: async ({ params, deps }) => {
+    void queryClient.query(api["channel-connect"]["channel-provider"].list.queryOptions()).catch(ignore)
+    void queryClient.query(api.space.list.queryOptions({ page: 1, pageSize: pickerPageSize })).catch(ignore)
+    if (!deps.connect) {
+      void queryClient.query(Channels.installsOptions()).catch(ignore)
+      return
+    }
+    const installs = await queryClient.query(Channels.installsOptions())
+    if (installs.items.some((install) => install.provider === params.provider)) return
+    const started = await client["channel-connect"]["channel-install"]
+      .start({ provider: params.provider })
+      .catch((error: unknown) => {
+        throw redirect({
+          to: "/settings/channels/$provider",
+          params,
+          search: { error: errorMessage(error) },
+          replace: true,
+        })
+      })
+    window.location.assign(started.redirectUrl)
+  },
+  component: lazyRouteComponent(() => import("@/routes/settings/channel-provider"), "ChannelProviderPage"),
+})
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   signupRoute,
@@ -487,6 +556,7 @@ const routeTree = rootRoute.addChildren([
         spaceFactoryRoute,
         spaceAppsRoute,
         spaceRepositoriesRoute,
+        spaceChannelsRoute,
         spaceSchedulesRoute,
       ]),
       tasksRoute,
@@ -501,6 +571,8 @@ const routeTree = rootRoute.addChildren([
       generalRoute,
       membersRoute,
       providersRoute,
+      channelsRoute,
+      channelProviderRoute,
     ]),
   ]),
 ])
