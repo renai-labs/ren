@@ -40,7 +40,6 @@ export interface Interface {
   readonly catalog: (organizationId: Auth.OrganizationID) => Effect.Effect<Models.Catalog, Unavailable>
   // oxlint-disable-next-line ren/no-comments -- Changes when the model list or a key in it changes, so a cache of grants knows to ask again (H4).
   readonly revision: Effect.Effect<string>
-  // oxlint-disable-next-line ren/no-comments -- The key names the brain, its organization and its space, so a usage event carries them from the key (usage spec §4.3).
   readonly grant: (
     brainId: Brain.ID,
     organizationId: Auth.OrganizationID,

@@ -22,7 +22,6 @@ export const meters: Record<Type, ReadonlyArray<Quantity>> = {
   "model.call": Quantity.literals,
 }
 
-// oxlint-disable-next-line ren/no-comments -- Why a harness made a model request. Each harness maps its own kinds to these.
 export const Kind = Schema.Literals(["primary", "compaction", "title", "generate"]).annotate({
   identifier: "Usage.Kind",
 })
@@ -31,7 +30,6 @@ export type Kind = typeof Kind.Type
 export const Payer = Schema.Literals(["ren", "customer"]).annotate({ identifier: "Usage.Payer" })
 export type Payer = typeof Payer.Type
 
-// oxlint-disable-next-line ren/no-comments -- The headers that a brain adds to each request to a Ren model. They are claims that Ren checks after it stores the event (usage spec §4.3). They have no x-ren- prefix, because the egress removes x-ren-* headers.
 export const headers = {
   rootSession: "ren-root-session",
   session: "ren-session",
@@ -43,7 +41,6 @@ export const headers = {
 
 const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 
-// oxlint-disable-next-line ren/no-comments -- A claim from the brain, stored as sent. It is a plain string so that a wrong claim never refuses the batch (§1.3).
 const Claim = Schema.optionalKey(Schema.String)
 
 export interface Failure extends Schema.Schema.Type<typeof Failure> {}

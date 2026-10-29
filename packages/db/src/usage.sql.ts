@@ -4,7 +4,6 @@ import type { Space } from "@ren/schema/space"
 import type { Usage } from "@ren/schema/usage"
 import { bigint, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
 
-// oxlint-disable-next-line ren/no-comments -- One row for each cost, as the producer sent it. Rows are only inserted, never updated or deleted (usage spec §4.3). The claims (root_session to variant) are what the brain sent; Ren does not check them yet. No foreign keys: the row outlives the session, brain and space that it names.
 export const usage_event = pgTable(
   "usage_event",
   {
