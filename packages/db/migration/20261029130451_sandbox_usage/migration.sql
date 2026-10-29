@@ -1,0 +1,1 @@
+CREATE INDEX "usage_event_source_time_idx" ON "usage_event" ("source","time");

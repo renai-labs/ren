@@ -4,9 +4,11 @@ import { FakeRen, TestSettings, TestToken } from "@ren/cell/testing"
 import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
 import { SandboxProvider } from "@ren/core/sandbox-provider"
 const hostTokenHeader = "ren-host-token"
+import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { Duration, Effect, Layer, ManagedRuntime, Option, Redacted, Schema, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Platform } from "../lib/platform.js"
@@ -59,6 +61,8 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
       service.create({
         brainId: brain,
         generation: 1,
+        organizationId: Auth.OrganizationID.create(),
+        spaceId: Space.ID.create(),
         env: {
           REN_URL: renTunnel,
           REN_BRAIN_ID: brain,

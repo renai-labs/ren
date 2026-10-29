@@ -49,11 +49,9 @@ export const ModelCall = Schema.Struct({
   stop_reason: Schema.optionalKey(Schema.String),
 }).annotate({ identifier: "Usage.ModelCall" })
 
-export interface Event extends Schema.Schema.Type<typeof Event> {}
-export const Event = Schema.Struct({
+const fields = {
   source: Schema.NonEmptyString,
   id: Schema.NonEmptyString,
-  type: Schema.Literal("model.call"),
   time: Schema.DateTimeUtc,
   workload: Schema.String.annotate({ description: "`brain:<id>` or `hand:<id>`, then `:<generation>` when known." }),
   organization: Auth.OrganizationID.annotate({ description: "From the workload’s key. Ren stores it as sent." }),
@@ -68,12 +66,36 @@ export const Event = Schema.Struct({
   provider: Schema.String,
   cost_micro_usd: Schema.optionalKey(Count),
   error: Schema.optionalKey(Failure),
+}
+
+export interface ModelCallEvent extends Schema.Schema.Type<typeof ModelCallEvent> {}
+export const ModelCallEvent = Schema.Struct({
+  ...fields,
+  type: Schema.Literal("model.call"),
   data: ModelCall,
-}).annotate({ identifier: "Usage.Event" })
+}).annotate({ identifier: "Usage.ModelCallEvent" })
+
+export interface SandboxCompute extends Schema.Schema.Type<typeof SandboxCompute> {}
+export const SandboxCompute = Schema.Struct({
+  sandbox_id: Schema.NonEmptyString,
+  duration_ms: Count,
+  vcpu_ms: Count.annotate({ description: "vCPUs × milliseconds." }),
+  memory_mib_ms: Count.annotate({ description: "MiB of memory × milliseconds." }),
+  end: Schema.String.annotate({ description: "Why the run ended, as the provider gives it, for example `paused`." }),
+}).annotate({ identifier: "Usage.SandboxCompute" })
+
+export interface SandboxComputeEvent extends Schema.Schema.Type<typeof SandboxComputeEvent> {}
+export const SandboxComputeEvent = Schema.Struct({
+  ...fields,
+  type: Schema.Literal("sandbox.compute"),
+  data: SandboxCompute,
+}).annotate({ identifier: "Usage.SandboxComputeEvent" })
+
+export type Event = ModelCallEvent | SandboxComputeEvent
 
 export interface Batch extends Schema.Schema.Type<typeof Batch> {}
 export const Batch = Schema.Struct({
-  events: Schema.Array(Event).check(Schema.isMinLength(1), Schema.isMaxLength(500)),
+  events: Schema.Array(ModelCallEvent).check(Schema.isMinLength(1), Schema.isMaxLength(500)),
 }).annotate({ identifier: "Usage.Batch" })
 
 export interface Recorded extends Schema.Schema.Type<typeof Recorded> {}

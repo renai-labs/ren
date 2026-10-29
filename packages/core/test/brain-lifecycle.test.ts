@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { Database } from "@ren/db/database"
+import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { Effect, Option, Schedule } from "effect"
 import { Brains } from "../src/brains.js"
@@ -22,7 +24,14 @@ describe("brain runs", () => {
     const current = await runs.ren()
     const created = await current.runPromise(
       SandboxProvider.Service.use((provider) =>
-        provider.create({ brainId: Brain.ID.create(), generation: 1, env: {}, proxy: Option.none() }),
+        provider.create({
+          brainId: Brain.ID.create(),
+          generation: 1,
+          organizationId: Auth.OrganizationID.create(),
+          spaceId: Space.ID.create(),
+          env: {},
+          proxy: Option.none(),
+        }),
       ),
     )
     const pid = BrainRuns.pidOf(created.binding)

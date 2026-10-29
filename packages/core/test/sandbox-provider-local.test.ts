@@ -1,5 +1,7 @@
 import { expect } from "bun:test"
+import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { Space } from "@ren/schema/space"
 import { Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -29,7 +31,14 @@ it.live("a brain whose owner process dies is killed with its whole process group
     const pids = yield* Effect.gen(function* () {
       const provider = yield* SandboxProvider.Service
       const create = (generation: number) =>
-        provider.create({ brainId: Brain.ID.create(), generation, env: {}, proxy: Option.none() })
+        provider.create({
+          brainId: Brain.ID.create(),
+          generation,
+          organizationId: Auth.OrganizationID.create(),
+          spaceId: Space.ID.create(),
+          env: {},
+          proxy: Option.none(),
+        })
       const running = yield* create(1)
       const paused = yield* create(2)
       yield* provider.keepAlive(paused.binding, Duration.zero)

@@ -164,6 +164,8 @@ export const layer = Layer.effect(
         .create({
           brainId: row.id,
           generation: row.generation,
+          organizationId: row.organization_id,
+          spaceId: row.space_id,
           // oxlint-disable-next-line ren/no-comments -- Behind an egress, the brain calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49).
           env: { ...(yield* env(row)), ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },
           proxy,
