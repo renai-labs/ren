@@ -18,13 +18,13 @@ fi
 (
   export PORT="${EXECUTOR_PORT:-4100}" EXECUTOR_HOST=127.0.0.1 EXECUTOR_WORKSPACE="$home/workspace"
   while true; do
-    bun /opt/ren/packages/executor/src/main.ts >>"$home/.ren/executor.log" 2>&1 || true
+    bun /opt/ren/packages/executor/src/main.ts >>"$home/.ren/executor.log" 2>&1 || echo "$?" >"$home/.ren/executor.exit"
     sleep 1
   done
 ) &
 export REN_HOME="$home" PORT="${BRAIN_PORT:-4800}"
 cd "$home/workspace"
 while true; do
-  bun /opt/ren/packages/cell/src/bun.ts >>"$home/.ren/brain.log" 2>&1 || true
+  bun /opt/ren/packages/cell/src/bun.ts >>"$home/.ren/brain.log" 2>&1 || echo "$?" >"$home/.ren/brain.exit"
   sleep 1
 done
