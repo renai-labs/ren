@@ -20,7 +20,6 @@ const seen: Array<Seen> = []
 
 const newest = Date.parse("2026-10-29T12:00:00Z")
 
-// oxlint-disable-next-line ren/no-comments -- 250 runs of one brain, one minute apart, newest first, as E2B lists them.
 const runs = Array.from({ length: 250 }, (_, index) => ({
   id: `event-${index}`,
   type: "sandbox.lifecycle.paused",

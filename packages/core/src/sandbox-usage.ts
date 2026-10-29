@@ -17,7 +17,6 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Sa
 
 const every = Duration.minutes(5)
 
-// oxlint-disable-next-line ren/no-comments -- A span can reach the provider's list a little after it ends, so a sweep reads again from 10 minutes before the newest stored span. Usage ignores a repeat.
 const overlap = Duration.minutes(10)
 
 const SweepRun = DurableRunner.make("SandboxUsage", {
@@ -27,7 +26,6 @@ const SweepRun = DurableRunner.make("SandboxUsage", {
 
 const events = Database.Schema.usage_event
 
-// oxlint-disable-next-line ren/no-comments -- Each span in which a sandbox ran becomes one sandbox.compute event. The sweep keeps no state: the newest stored span says where to read from.
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
