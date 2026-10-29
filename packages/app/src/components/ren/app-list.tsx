@@ -4,6 +4,8 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle }
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AppIcon } from "@/components/ren/app-icon"
 import { gaps } from "@/lib/apps"
+import { plural } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import type { AppProfileInfo } from "@ren/client"
 import { useSpaces } from "@/hooks/use-spaces"
 import type { CatalogApp } from "@/lib/apps"
@@ -22,25 +24,44 @@ function AttentionDot() {
   )
 }
 
+export function AppSection(props: { title: string; count?: number | undefined; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium">
+        {props.title}
+        {props.count === undefined ? null : <span className="ml-1.5 text-muted-foreground">{props.count}</span>}
+      </h2>
+      <AppGrid label={props.title}>{props.children}</AppGrid>
+    </section>
+  )
+}
+
 export function AppGrid(props: { label: string; children: ReactNode }) {
   return (
     <div
-      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a grid of Item cards; Item renders a div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a grid of Item rows; Item renders a div
       role="list"
       aria-label={props.label}
-      className="grid grid-cols-1 gap-3 md:grid-cols-2"
+      className="-mx-2 grid grid-cols-1 gap-x-6 gap-y-0.5 md:grid-cols-2"
     >
       {props.children}
     </div>
   )
 }
 
+export const appContents = (app: Pick<App, "mcps" | "skills">) => {
+  const skills = Object.keys(app.skills).length
+  const mcps = Object.keys(app.mcps).length
+  return [skills ? plural(skills, "skill") : "", mcps ? plural(mcps, "MCP") : ""].filter(Boolean).join(", ")
+}
+
+const tones = { muted: "text-muted-foreground", success: "text-chart-2", attention: "text-chart-3" }
+
 export function AppRow(props: {
   name: string
   icon?: string | null
   caption: string
-  status?: string | undefined
-  attention?: boolean
+  tone?: keyof typeof tones | undefined
   onOpen?: () => void
   action?: ReactNode
 }) {
@@ -48,30 +69,29 @@ export function AppRow(props: {
     <Item
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div inside the list grid
       role="listitem"
-      variant="outline"
-      className="relative flex-nowrap gap-3 rounded-xl bg-card p-3 shadow-soft has-[[data-slot=app-open]:hover]:bg-muted/50"
+      className="relative flex-nowrap gap-3 p-2 has-[[data-slot=app-open]:hover]:bg-muted"
     >
-      <ItemMedia className="self-start">
+      <ItemMedia>
         <AppIcon name={props.name} icon={props.icon} size="lg" />
       </ItemMedia>
       <ItemContent className="min-w-0 gap-0.5">
-        <ItemTitle className="max-w-full">
+        <ItemTitle className="max-w-full font-normal">
           {props.onOpen ? (
             <button
               type="button"
               data-slot="app-open"
               onClick={props.onOpen}
-              className="truncate text-left outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
+              className="truncate text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
             >
               {props.name}
             </button>
           ) : (
             <span className="truncate">{props.name}</span>
           )}
-          {props.attention ? <AttentionDot /> : null}
         </ItemTitle>
-        <ItemDescription className="line-clamp-2 min-h-8 text-xs/4">{props.caption}</ItemDescription>
-        {props.status ? <span className="mt-1 truncate text-xs text-muted-foreground">{props.status}</span> : null}
+        <ItemDescription className={cn("line-clamp-1 text-xs", props.tone ? tones[props.tone] : tones.muted)}>
+          {props.caption}
+        </ItemDescription>
       </ItemContent>
       {props.action ? <ItemActions className="relative">{props.action}</ItemActions> : null}
     </Item>

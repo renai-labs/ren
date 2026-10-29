@@ -3,18 +3,17 @@ import { EmptyState } from "@/components/ren/empty-state"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
-import { Tabs } from "@/components/ui/tabs"
 import { AddToSpace, type Added } from "@/components/ren/add-to-space"
-import { AccountList, AppGrid, AppRow, AppSheet } from "@/components/ren/app-list"
+import { AccountList, AppRow, AppSection, AppSheet, appContents } from "@/components/ren/app-list"
 import { ToolbarSearch } from "@/components/ren/toolbar-search"
-import { Page, PageTabsList, PageTabsTrigger, SkeletonRows } from "@/components/ren/page"
+import { Page, SkeletonRows } from "@/components/ren/page"
 import { ProfileDialog, type ProfileTarget } from "@/components/ren/profile-dialog"
 import { ListPagination } from "@/components/ren/list-pagination"
 import { useCatalog } from "@/hooks/use-catalog"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import { useSpaces } from "@/hooks/use-spaces"
 import { api, pageSize } from "@/lib/api"
-import { audience, connectLabel, fromRegistry, needsAttention, summary } from "@/lib/apps"
+import { audience, connectLabel, fromRegistry, needsAttention, summary, type CatalogApp } from "@/lib/apps"
 import { currentPage } from "@/lib/pagination"
 
 const route = getRouteApi("/_authed/_shell/marketplace")
@@ -24,11 +23,9 @@ const matches = (app: { name: string; description: string }, query: string) =>
 
 function useMarketplacePage() {
   const search = route.useSearch()
-  const navigate = route.useNavigate()
   const page = currentPage(search)
   const catalog = useCatalog()
   const spaces = useSpaces()
-  const [view, setView] = useState("browse")
   const [query, setQuery] = useState("")
   const needle = useDebouncedValue(query.trim(), 250)
   const registry = useQuery({
@@ -37,19 +34,15 @@ function useMarketplacePage() {
   })
   const browse = (registry.data?.items ?? []).map(fromRegistry)
   const inUse = catalog.apps.filter((app) => catalog.profilesOf(app.id).length > 0)
+  const used = new Set(inUse.map((app) => app.id))
   return {
     page,
-    total: view === "browse" ? (registry.data?.total ?? 0) : 0,
-    loading: view === "browse" ? registry.isPending : catalog.loading,
-    view,
-    setView: (next: string) => {
-      setView(next)
-      void navigate({ search: {} })
-    },
+    total: registry.data?.total ?? 0,
+    loading: registry.isPending || catalog.loading,
     query,
     setQuery,
-    inUse,
-    rows: view === "browse" ? browse : inUse.filter((app) => matches(app, query)),
+    inUse: inUse.filter((app) => matches(app, query)),
+    rows: browse.filter((app) => !used.has(app.id)),
     appOf: (appId: string) => browse.find((app) => app.id === appId) ?? catalog.appOf(appId),
     profilesOf: catalog.profilesOf,
     members: (spaceId: string) => spaces.space(spaceId)?.memberCount ?? 1,
@@ -58,7 +51,6 @@ function useMarketplacePage() {
 
 export function MarketplacePage() {
   const page = useMarketplacePage()
-  const view = page.view
   const query = page.query
   const [opened, setOpened] = useState<string>()
   const [profile, setProfile] = useState<ProfileTarget>()
@@ -76,45 +68,43 @@ export function MarketplacePage() {
         members: page.members(added.space.id),
       },
     })
+  const row = (each: CatalogApp) => {
+    const profiles = profilesOf(each.id)
+    const status = profiles.length > 0 ? summary(profiles) : undefined
+    return (
+      <AppRow
+        key={each.id}
+        name={each.name}
+        icon={each.icon}
+        caption={status ?? (appContents(each) || each.description)}
+        tone={status === undefined ? "muted" : needsAttention(profiles) ? "attention" : "success"}
+        onOpen={() => setOpened(each.id)}
+        action={<AddToSpace app={each} onAdded={added} />}
+      />
+    )
+  }
   return (
     <Page
       title="Marketplace"
       description="Apps give Ren new tools. Add one to a space and every chat there can use it."
-      leading={
-        <Tabs value={view} onValueChange={(value: string) => page.setView(value)}>
-          <PageTabsList>
-            <PageTabsTrigger value="browse">Browse</PageTabsTrigger>
-            <PageTabsTrigger value="in-use" count={inUse.length}>
-              In use
-            </PageTabsTrigger>
-          </PageTabsList>
-        </Tabs>
-      }
       actions={<ToolbarSearch label="Search apps" value={query} onChange={page.setQuery} />}
       footer={<ListPagination page={page.page} pageSize={pageSize} total={page.total} noun="app" />}
     >
       {page.loading ? (
         <SkeletonRows count={6} />
-      ) : rows.length === 0 ? (
-        <EmptyState>{query ? `Nothing matches “${query.trim()}”` : "No apps in use"}</EmptyState>
       ) : (
-        <AppGrid label="Apps">
-          {rows.map((each) => {
-            const profiles = profilesOf(each.id)
-            return (
-              <AppRow
-                key={each.id}
-                name={each.name}
-                icon={each.icon}
-                caption={each.description}
-                status={profiles.length > 0 ? summary(profiles) : undefined}
-                attention={needsAttention(profiles)}
-                onOpen={() => setOpened(each.id)}
-                action={<AddToSpace app={each} onAdded={added} />}
-              />
-            )
-          })}
-        </AppGrid>
+        <div className="flex flex-col gap-10">
+          {inUse.length > 0 ? (
+            <AppSection title="In use" count={inUse.length}>
+              {inUse.map(row)}
+            </AppSection>
+          ) : null}
+          {rows.length > 0 ? (
+            <AppSection title="All apps">{rows.map(row)}</AppSection>
+          ) : inUse.length === 0 ? (
+            <EmptyState>{query ? `Nothing matches “${query.trim()}”` : "No apps yet"}</EmptyState>
+          ) : null}
+        </div>
       )}
       <AppSheet
         app={app}

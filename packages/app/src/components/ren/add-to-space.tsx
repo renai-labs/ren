@@ -2,7 +2,7 @@ import { useState } from "react"
 import type { AppProfileInfo } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { IconCheck, IconChevronDown, IconCube } from "@tabler/icons-react"
+import { IconCheck, IconChevronDown, IconCube, IconPlus } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -83,14 +83,21 @@ export function AddToSpace(props: { app: App; primary?: boolean; onAdded: Added 
         <DropdownMenuTrigger
           render={
             <Button
-              variant={props.primary ? "default" : "outline"}
-              size={props.primary ? "default" : "sm"}
+              variant={props.primary ? "default" : "ghost"}
+              size={props.primary ? "default" : "icon"}
+              className={props.primary ? undefined : "text-muted-foreground"}
               aria-label={`Add ${props.app.name} to a space`}
             />
           }
         >
-          {props.primary ? "Add to space" : "Add"}
-          <IconChevronDown className={props.primary ? undefined : "text-muted-foreground"} />
+          {props.primary ? (
+            <>
+              Add to space
+              <IconChevronDown />
+            </>
+          ) : (
+            <IconPlus />
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuGroup>
@@ -126,8 +133,14 @@ export function AddHere(props: { app: App; space: Target; onAdded: Added }) {
   const addition = useAddition(props.app, props.onAdded)
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => addition.add(props.space)}>
-        Add
+      <Button
+        variant="ghost"
+        size="icon"
+        className="text-muted-foreground"
+        aria-label={`Add ${props.app.name} to ${props.space.name}`}
+        onClick={() => addition.add(props.space)}
+      >
+        <IconPlus />
       </Button>
       {addition.dialog}
     </>

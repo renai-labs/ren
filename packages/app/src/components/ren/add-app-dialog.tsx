@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { AddHere, type Added } from "@/components/ren/add-to-space"
-import { AppGrid, AppRow } from "@/components/ren/app-list"
+import { AppRow, AppSection, appContents } from "@/components/ren/app-list"
 import { useCatalog } from "@/hooks/use-catalog"
 
 const matches = (app: { name: string; description: string }, query: string) =>
@@ -29,7 +29,9 @@ export function AddAppDialog(props: {
   const setOpen = props.onOpenChange ?? setOwnOpen
   const [query, setQuery] = useState("")
   const catalog = useCatalog()
-  const rows = catalog.apps.filter((app) => !props.added.has(app.id) && matches(app, query))
+  const found = catalog.apps.filter((app) => matches(app, query))
+  const installed = found.filter((app) => props.added.has(app.id))
+  const rows = found.filter((app) => !props.added.has(app.id))
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {props.open === undefined ? (
@@ -54,23 +56,33 @@ export function AddAppDialog(props: {
             onChange={(event) => setQuery(event.target.value)}
           />
         </InputGroup>
-        <div className="-mx-1 h-[min(28rem,60vh)] overflow-y-auto overscroll-contain px-1 pb-1">
-          {rows.length === 0 ? (
+        <div className="-mx-1 flex h-[min(28rem,60vh)] flex-col gap-8 overflow-y-auto overscroll-contain px-3 pt-2 pb-1">
+          {found.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
-              {catalog.loading
-                ? "Loading apps…"
-                : query
-                  ? `Nothing matches “${query.trim()}”`
-                  : `${props.space.name} has every app`}
+              {catalog.loading ? "Loading apps…" : `Nothing matches “${query.trim()}”`}
             </p>
-          ) : (
-            <AppGrid label="Apps">
+          ) : null}
+          {installed.length > 0 ? (
+            <AppSection title={`In ${props.space.name}`} count={installed.length}>
+              {installed.map((app) => (
+                <AppRow
+                  key={app.id}
+                  name={app.name}
+                  icon={app.icon}
+                  caption={`Added to ${props.space.name}`}
+                  tone="success"
+                />
+              ))}
+            </AppSection>
+          ) : null}
+          {rows.length > 0 ? (
+            <AppSection title="All apps">
               {rows.map((app) => (
                 <AppRow
                   key={app.id}
                   name={app.name}
                   icon={app.icon}
-                  caption={app.description}
+                  caption={appContents(app) || app.description}
                   action={
                     <AddHere
                       app={app}
@@ -83,8 +95,8 @@ export function AddAppDialog(props: {
                   }
                 />
               ))}
-            </AppGrid>
-          )}
+            </AppSection>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
