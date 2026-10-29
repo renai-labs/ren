@@ -1,15 +1,19 @@
 export * as Analytics from "./analytics.js"
 
 export interface Interface {
-  readonly identify: (
-    user: { readonly id: string; readonly email: string; readonly name: string },
-    organization: { readonly id: string; readonly name: string } | null,
-  ) => void
+  readonly identify: (user: { readonly id: string; readonly email: string; readonly name: string }) => void
   readonly reset: () => void
+  readonly capture: (event: string, properties: Readonly<Record<string, string>>) => void
   readonly captureException: (error: unknown) => void
 }
 
-export function make(options: { readonly key: string; readonly apiHost: string; readonly uiHost?: string }): Interface {
+export function make(options: {
+  readonly key: string
+  readonly apiHost: string
+  readonly uiHost?: string
+  readonly serverHost: string
+  readonly autocaptureUrls: ReadonlyArray<RegExp>
+}): Interface {
   const posthog = new Promise((resolve) =>
     typeof requestIdleCallback === "function"
       ? requestIdleCallback(resolve, { timeout: 2000 })
@@ -22,6 +26,8 @@ export function make(options: { readonly key: string; readonly apiHost: string; 
         ...(options.uiHost && { ui_host: options.uiHost }),
         defaults: "2026-08-30",
         capture_exceptions: true,
+        autocapture: { url_allowlist: [...options.autocaptureUrls] },
+        tracing_headers: [options.serverHost],
       })
       return loaded.default
     })
@@ -29,14 +35,9 @@ export function make(options: { readonly key: string; readonly apiHost: string; 
   const run = (call: (client: NonNullable<Awaited<typeof posthog>>) => void) =>
     void posthog.then((client) => client && call(client))
   return {
-    identify: (user, organization) =>
-      run((client) => {
-        client.identify(user.id, { email: user.email, name: user.name })
-        if (organization === null) client.resetGroups()
-        else if (client.getGroups()["organization"] !== organization.id)
-          client.group("organization", organization.id, { name: organization.name })
-      }),
+    identify: (user) => run((client) => client.identify(user.id, { email: user.email, name: user.name })),
     reset: () => run((client) => client.reset()),
+    capture: (event, properties) => run((client) => void client.capture(event, properties)),
     captureException: (error) => run((client) => void client.captureException(error)),
   }
 }
