@@ -1,0 +1,2 @@
+CREATE INDEX "task_event_done_idx" ON "task_event" ("organization_id","created_at") WHERE "kind" = 'status' and "data" ->> 'to' = 'done';--> statement-breakpoint
+CREATE INDEX "usage_event_space_time_idx" ON "usage_event" ("space","time");
