@@ -63,7 +63,6 @@ import {
 import { FilterMenu, passes, type FilterProperty, type Filters } from "@/components/ren/filter-menu"
 import { ConfirmDialog } from "@/components/ren/confirm-dialog"
 import { CreateOrganizationDialog } from "@/components/ren/create-organization-dialog"
-import { Logomark } from "@/components/ren/logomark"
 import { PersonAvatar } from "@/components/ren/person-avatar"
 import { useMe } from "@/hooks/use-me"
 import { useNow } from "@/hooks/use-now"
@@ -248,7 +247,6 @@ export function AppSidebar() {
     <Sidebar variant="inset">
       <SidebarHeader className="p-0">
         <div className="mb-2 flex h-7 items-center gap-2 pl-2">
-          <Logomark className="h-4 w-3.5 text-foreground" />
           <span className="flex-1 font-medium text-foreground">Ren</span>
           <SidebarTrigger />
         </div>
