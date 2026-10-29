@@ -8,8 +8,8 @@ import { createServer } from "node:net"
 import { join } from "node:path"
 import { SandboxProvider } from "../sandbox-provider.js"
 
-const loop = (entry: string, log: string) =>
-  `while true; do bun ${JSON.stringify(entry)} >>${JSON.stringify(log)} 2>&1; sleep 1; done`
+const loop = (entry: string, file: string) =>
+  `while true; do bun ${JSON.stringify(entry)} >>${JSON.stringify(`${file}.log`)} 2>&1 || echo "$?" >${JSON.stringify(`${file}.exit`)}; sleep 1; done`
 
 const Binding = Schema.Struct({
   pid: Schema.Int,
@@ -116,7 +116,7 @@ export const layer = (options: {
             "sh",
             [
               "-c",
-              `(export PORT=${handPort}; ${loop(options.executor, join(state, "executor.log"))}) & ${loop(options.entry, join(state, "brain.log"))}`,
+              `(export PORT=${handPort}; ${loop(options.executor, join(state, "executor"))}) & ${loop(options.entry, join(state, "brain"))}`,
             ],
             {
               detached: true,

@@ -15,6 +15,7 @@ import { Cell } from "./cell.js"
 import { Chat } from "./chat.js"
 import { ChatSettings } from "./chat-settings.js"
 import { Restore } from "./restore.js"
+import { SandboxHealth } from "./sandbox-health.js"
 import { Entry } from "./entry.js"
 import { Env } from "./env.js"
 import { Fence } from "./fence.js"
@@ -140,6 +141,8 @@ const boot = Effect.gen(function* () {
       ),
     )
     .pipe(Scope.provide(scope))
+  const health = yield* SandboxHealth.make({ state, memoryEvents: "/sys/fs/cgroup/memory.events" })
+  yield* scheduler.job("health", health.pipe(Effect.as(interval))).pipe(Scope.provide(scope))
   const activity = yield* Cell.Activity
   // oxlint-disable-next-line ren/no-comments -- Until the first pull reaches Ren, the brain tries every second: Ren makes it ready only after one (M1).
   yield* scheduler
