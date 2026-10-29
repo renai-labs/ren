@@ -1,7 +1,22 @@
 import { Database } from "bun:sqlite"
 import { Global } from "@opencode/util/global"
 import type { OpenCodeSync } from "@ren/brain/opencode-sync"
-import { Deferred, Duration, Effect, Exit, Layer, ManagedRuntime, Option, Ref, Schema, Scope, Stream } from "effect"
+import { Observability } from "@ren/schema/observability"
+import { Session } from "@ren/schema/session"
+import {
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  ManagedRuntime,
+  Metric,
+  Option,
+  Ref,
+  Schema,
+  Scope,
+  Stream,
+} from "effect"
 import { mkdirSync } from "node:fs"
 import { rm } from "node:fs/promises"
 import { join } from "node:path"
@@ -19,6 +34,7 @@ import { SandboxHealth } from "./sandbox-health.js"
 import { Entry } from "./entry.js"
 import { Env } from "./env.js"
 import { Fence } from "./fence.js"
+import { FirstToken } from "./first-token.js"
 import { Harness } from "./harness/harness.js"
 import { HarnessStorage } from "./harness-storage.js"
 import { OpenCodeHarness } from "./harness/opencode/harness.js"
@@ -178,6 +194,18 @@ const boot = Effect.gen(function* () {
     Stream.debounce("1 second"),
     Stream.runForEach(() => scheduler.trigger("sync")),
     Effect.catchCause((cause) => Effect.logWarning("The event watch for sync stopped", cause)),
+    Effect.forkIn(scope),
+  )
+  yield* opened.chat.events.pipe(
+    FirstToken.durations({
+      isMain: (sessionID) =>
+        opened.chat.get(Session.ID.make(sessionID)).pipe(
+          Effect.map((info) => !info.parentID),
+          Effect.orElseSucceed(() => false),
+        ),
+    }),
+    Stream.runForEach((duration) => Metric.update(Observability.Metrics.turnFirstToken, duration)),
+    Effect.catchCause((cause) => Effect.logWarning("The first-token timing stopped", cause)),
     Effect.forkIn(scope),
   )
   yield* Deferred.await(fence.retired).pipe(

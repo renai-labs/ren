@@ -79,6 +79,7 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
   const exported: Array<
     | { readonly signal: "traces"; readonly hostToken: string; readonly batch: Telemetry.Traces }
     | { readonly signal: "logs"; readonly hostToken: string; readonly batch: Telemetry.Logs }
+    | { readonly signal: "metrics"; readonly hostToken: string; readonly batch: Telemetry.Metrics }
   > = []
   const pulls: Array<PullRequest> = []
   const held: Array<() => void> = []
@@ -287,6 +288,11 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
         .handle("telemetry.logs", (request) =>
           Effect.sync(() => {
             exported.push({ signal: "logs", hostToken: presented.token, batch: request.payload })
+          }),
+        )
+        .handle("telemetry.metrics", (request) =>
+          Effect.sync(() => {
+            exported.push({ signal: "metrics", hostToken: presented.token, batch: request.payload })
           }),
         ),
     ),

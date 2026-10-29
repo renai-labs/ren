@@ -18,5 +18,10 @@ export const HostTelemetryHandler = HttpApiBuilder.group(TelemetryApi, "telemetr
           yield* relay.logs(yield* CurrentHost, request.payload)
         }),
       )
+      .handle("telemetry.metrics", (request) =>
+        Effect.gen(function* () {
+          yield* relay.metrics(yield* CurrentHost, request.payload)
+        }),
+      )
   }),
 )

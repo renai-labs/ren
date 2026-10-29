@@ -1,6 +1,6 @@
 export * as Observability from "./observability.js"
 
-import { Effect, Layer, type LogLevel, Option, Tracer } from "effect"
+import { Effect, Layer, type LogLevel, Metric, Option, Tracer } from "effect"
 
 export interface Operation {
   readonly span: string
@@ -40,7 +40,15 @@ export const Trace = {
     "session.start",
     "Starting a chat on its brain: a new chat, or a chat that the brain lost and restores.",
   ),
-  brainRun: operation("brain.run", "A brain's sandbox reaching ready: create, resume, wake, boot or replace."),
+  brainRun: operation(
+    "brain.run",
+    "A brain's sandbox reaching ready: create, resume, wake, boot or replace. A run that started its brain names the kind in ren.brain.start_kind: new, resume or replace.",
+  ),
+  chatHistory: operation("chat.history", "A brain answering the first page of a chat's history."),
+  chatRestore: operation(
+    "chat.restore",
+    "A brain restoring a chat that its sandbox does not have from Ren, before it answers the chat's first request.",
+  ),
   environmentAssign: operation(
     "environment.assign",
     "Giving a session an environment at its first tool call, provisioning one when none has room.",
@@ -51,6 +59,16 @@ export const Trace = {
     "channel.event",
     "A GitHub or Slack event, from Ren receiving it to the task or turn it starts.",
   ),
+} as const
+
+export const Metrics = {
+  turnFirstToken: Metric.timer("ren.turn.first_token", {
+    description:
+      "A main chat’s turn, from its start to its first text, reasoning or tool call, as OpenCode timed them. A subagent’s turn is not timed.",
+    boundaries: [
+      100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10_000, 15_000, 20_000, 30_000, 60_000,
+    ],
+  }),
 } as const
 
 export const layer = (minimum: LogLevel.LogLevel) =>

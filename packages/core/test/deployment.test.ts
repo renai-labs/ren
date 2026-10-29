@@ -14,10 +14,14 @@ const project = { POSTHOG_PROJECT_KEY: "phc_test", POSTHOG_HOST: "https://eu.i.p
 const it = testEffect(Layer.empty)
 
 describe("Deployment.telemetry", () => {
-  it.effect("sends traces and logs to PostHog when PostHog is configured", () =>
+  it.effect("sends traces, logs and metrics to PostHog when PostHog is configured", () =>
     Effect.gen(function* () {
       const configured = yield* telemetry(project)
-      expect([configured.traces, configured.logs]).toEqual([posthog("traces"), posthog("logs")])
+      expect([configured.traces, configured.logs, configured.metrics]).toEqual([
+        posthog("traces"),
+        posthog("logs"),
+        posthog("metrics"),
+      ])
     }),
   )
 
@@ -48,7 +52,11 @@ describe("Deployment.telemetry", () => {
   it.effect("sends nothing without configuration", () =>
     Effect.gen(function* () {
       const configured = yield* telemetry({})
-      expect([configured.traces, configured.logs]).toEqual([Option.none(), Option.none()])
+      expect([configured.traces, configured.logs, configured.metrics]).toEqual([
+        Option.none(),
+        Option.none(),
+        Option.none(),
+      ])
     }),
   )
 })

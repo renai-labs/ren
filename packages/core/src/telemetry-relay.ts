@@ -15,6 +15,7 @@ type Resource = Telemetry.Traces["resourceSpans"][number]["resource"]
 export interface Interface {
   readonly traces: (host: Host, batch: Telemetry.Traces) => Effect.Effect<void>
   readonly logs: (host: Host, batch: Telemetry.Logs) => Effect.Effect<void>
+  readonly metrics: (host: Host, batch: Telemetry.Metrics) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/TelemetryRelay") {}
@@ -33,7 +34,10 @@ export const layer = Layer.effect(
     const telemetry = yield* Deployment.telemetry
     const posthog = yield* PostHog.Service
 
-    const exporter = (target: Option.Option<Telemetry.Target>, key: "resourceSpans" | "resourceLogs") =>
+    const exporter = (
+      target: Option.Option<Telemetry.Target>,
+      key: "resourceSpans" | "resourceLogs" | "resourceMetrics",
+    ) =>
       Option.match(target, {
         onNone: () => Effect.succeed<(item: unknown) => void>(() => {}),
         onSome: (found) =>
@@ -52,6 +56,7 @@ export const layer = Layer.effect(
 
     const pushSpans = yield* exporter(telemetry.traces, "resourceSpans")
     const pushLogs = yield* exporter(telemetry.logs, "resourceLogs")
+    const pushMetrics = yield* exporter(telemetry.metrics, "resourceMetrics")
 
     const stamp = (host: Host, resource: Resource): Resource => {
       const name = resource.attributes.find((attribute) => attribute.key === "service.name")?.value.stringValue
@@ -114,6 +119,18 @@ export const layer = Layer.effect(
               $process_person_profile: false,
               ...(found.log.traceId && { $trace_id: found.log.traceId, $span_id: found.log.spanId }),
             })
+        }
+      }),
+      metrics: Effect.fn("TelemetryRelay.metrics")(function* (host, batch) {
+        for (const resourceMetrics of batch.resourceMetrics) {
+          const resource = stamp(host, resourceMetrics.resource)
+          pushMetrics({
+            ...resourceMetrics,
+            resource: {
+              ...resource,
+              attributes: resource.attributes.filter((attribute) => !attribute.key.startsWith("ren.")),
+            },
+          })
         }
       }),
     })
