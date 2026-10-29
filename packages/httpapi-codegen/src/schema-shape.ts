@@ -7,7 +7,6 @@ import { Errors } from "./errors.js"
 import type { Types } from "./types.js"
 
 export const resolveHttpApiEncoding = SchemaAST.resolveAt<HttpApiSchema.Encoding>("~httpApiEncoding")
-export const resolveHttpApiStatus = SchemaAST.resolveAt<number>("httpApiStatus")
 
 type SseSchema = Extract<HttpApiSchema.StreamSchema, { readonly _tag: "StreamSse" }>
 
