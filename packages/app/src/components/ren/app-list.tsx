@@ -2,8 +2,10 @@ import type { ReactNode } from "react"
 import { IconBolt, IconRosetteDiscountCheckFilled, IconUser, IconUsers } from "@tabler/icons-react"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/ui/avatar"
 import { AppIcon } from "@/components/ren/app-icon"
 import { gaps } from "@/lib/apps"
+import { plural } from "@/lib/format"
 import type { AppProfileInfo } from "@ren/client"
 import { useSpaces } from "@/hooks/use-spaces"
 import type { CatalogApp } from "@/lib/apps"
@@ -83,6 +85,43 @@ export function AppRow(props: {
         <ItemDescription className="line-clamp-1">{props.caption}</ItemDescription>
       </ItemContent>
       {props.action ? <ItemActions className="relative">{props.action}</ItemActions> : null}
+    </Item>
+  )
+}
+
+export function SeeAllRow(props: {
+  apps: ReadonlyArray<{ id: string; name: string; icon?: string | null }>
+  onOpen: () => void
+}) {
+  return (
+    <Item
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div inside the list grid
+      role="listitem"
+      className="relative flex-nowrap gap-3 p-2 has-[[data-slot=app-open]:hover]:bg-muted"
+    >
+      <ItemMedia>
+        <AvatarGroup className="-space-x-3 *:data-[slot=avatar]:ring-background">
+          {props.apps.slice(0, 3).map((app) => (
+            <Avatar key={app.id} size="lg">
+              {app.icon ? <AvatarImage src={app.icon} alt="" /> : null}
+              <AvatarFallback>{app.name.charAt(0)}</AvatarFallback>
+            </Avatar>
+          ))}
+        </AvatarGroup>
+      </ItemMedia>
+      <ItemContent className="min-w-0 gap-0.5">
+        <ItemTitle className="font-normal">
+          <button
+            type="button"
+            data-slot="app-open"
+            onClick={props.onOpen}
+            className="text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
+          >
+            See all
+          </button>
+        </ItemTitle>
+        <ItemDescription>{plural(props.apps.length, "more app")}</ItemDescription>
+      </ItemContent>
     </Item>
   )
 }

@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { AddToSpace, type Added } from "@/components/ren/add-to-space"
-import { AccountList, AppRow, AppSection, AppSheet } from "@/components/ren/app-list"
+import { AccountList, AppRow, AppSection, AppSheet, SeeAllRow } from "@/components/ren/app-list"
 import { ToolbarSearch } from "@/components/ren/toolbar-search"
 import { Page, SkeletonRows } from "@/components/ren/page"
 import { ProfileDialog, type ProfileTarget } from "@/components/ren/profile-dialog"
@@ -54,6 +54,7 @@ export function MarketplacePage() {
   const query = page.query
   const [opened, setOpened] = useState<string>()
   const [profile, setProfile] = useState<ProfileTarget>()
+  const [allInstalled, setAllInstalled] = useState(false)
   const inUse = page.inUse
   const rows = page.rows
   const profilesOf = page.profilesOf
@@ -93,8 +94,15 @@ export function MarketplacePage() {
       ) : (
         <div className="flex flex-col gap-10">
           {inUse.length > 0 ? (
-            <AppSection title="In use" count={inUse.length}>
-              {inUse.map(row)}
+            <AppSection title="Installed" count={inUse.length}>
+              {allInstalled || inUse.length <= 5 ? (
+                inUse.map(row)
+              ) : (
+                <>
+                  {inUse.slice(0, 5).map(row)}
+                  <SeeAllRow apps={inUse.slice(5)} onOpen={() => setAllInstalled(true)} />
+                </>
+              )}
             </AppSection>
           ) : null}
           {rows.length > 0 ? (
