@@ -7,7 +7,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
-import { type Duration, Effect, Layer, ManagedRuntime, Schedule, Schema } from "effect"
+import { type Duration, Effect, Layer, ManagedRuntime, Schedule, Schema, Tracer } from "effect"
 import type { HttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { mkdtemp, rm } from "node:fs/promises"
@@ -51,6 +51,7 @@ export const make = async () => {
       readonly config?: Record<string, string>
       readonly sandbox?: Layer.Layer<SandboxProvider.Service, unknown, HttpClient.HttpClient>
       readonly keepBrains?: boolean
+      readonly tracer?: Tracer.Tracer
     } = {},
   ) =>
     ManagedRuntime.make(
@@ -68,6 +69,7 @@ export const make = async () => {
         Layer.provide(
           Layer.succeedContext(await database.runPromise(Effect.context<Database.Service | SqlClient.SqlClient>())),
         ),
+        Layer.provide(options.tracer ? Layer.succeed(Tracer.Tracer, options.tracer) : Layer.empty),
       ),
     )
 

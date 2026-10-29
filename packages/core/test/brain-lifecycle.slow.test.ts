@@ -4,7 +4,7 @@ import { inArray } from "drizzle-orm"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
-import { DateTime, Duration, Effect, Option, Schedule, type Schema } from "effect"
+import { DateTime, Duration, Effect, Option, Schedule, type Schema, Tracer } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -215,6 +215,24 @@ describe("brain runs", () => {
   })
 
   test("an access after the app could not reach its brain asks the provider: a gone sandbox is replaced, a paused one wakes without a replace, a running one stays ready", async () => {
+    const spans: Array<Tracer.NativeSpan> = []
+    const counts = () =>
+      ["new", "resume", "replace"].map(
+        (kind) =>
+          spans.filter((span) => span.name === "brain.run" && span.attributes.get("ren.brain.start_kind") === kind)
+            .length,
+      )
+    // oxlint-disable-next-line ren/no-comments -- A run names its kind just after it writes ready, so the count can lag the row by a moment.
+    const starts = (expected: ReadonlyArray<number>) =>
+      Effect.runPromise(
+        Effect.sync(counts).pipe(
+          Effect.repeat({
+            until: (found) => found.join() === expected.join(),
+            schedule: Schedule.spaced("50 millis"),
+          }),
+          Effect.timeoutOrElse({ duration: "10 seconds", orElse: () => Effect.sync(counts) }),
+        ),
+      )
     const chats = await Promise.all([runs.seeded(), runs.seeded(), runs.seeded()])
     await runs.database.runPromise(
       Effect.gen(function* () {
@@ -230,7 +248,16 @@ describe("brain runs", () => {
           )
       }),
     )
-    const runtime = await runs.ren({ lostEvery: "1 hour" })
+    const runtime = await runs.ren({
+      lostEvery: "1 hour",
+      tracer: Tracer.make({
+        span: (options) => {
+          const span = new Tracer.NativeSpan(options)
+          spans.push(span)
+          return span
+        },
+      }),
+    })
     await runtime.runPromise(
       BrainLifecycle.Service.use((lifecycle) => Effect.forEach(chats, (chat) => lifecycle.ensure(chat.brainId))),
     )
@@ -238,6 +265,7 @@ describe("brain runs", () => {
     const gone = chats[0]
     const asleep = chats[1]
     const running = chats[2]
+    const started = await starts([3, 0, 0])
     process.kill(-BrainRuns.pidOf((await runs.row(gone.brainId)).binding), "SIGKILL")
     await runtime.runPromise(pause((await runs.row(asleep.brainId)).binding))
     const answers = await runtime.runPromise(
@@ -257,7 +285,10 @@ describe("brain runs", () => {
       "ready",
     ])
     const woke = await runs.reaches(asleep.brainId, "ready")
+    await runs.reaches(gone.brainId, "ready")
     expect([woke.generation, (await runs.row(running.brainId)).generation]).toEqual([1, 1])
+    expect(started).toEqual([3, 0, 0])
+    expect(await starts([3, 1, 1])).toEqual([3, 1, 1])
     await runtime.dispose()
   })
 

@@ -24,6 +24,18 @@ const TelemetryGroup = HttpApiGroup.make("telemetry")
       }),
     ),
   )
+  .add(
+    HttpApiEndpoint.post("telemetry.metrics", "/host/telemetry/v1/metrics", {
+      payload: Telemetry.Metrics,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "telemetry.metrics",
+        summary: "Export metrics",
+        description:
+          "An OTLP/JSON metric export, with delta temporality. Ren removes the `ren.*` attributes of each resource, so that every brain adds to one series.",
+      }),
+    ),
+  )
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "telemetry" }))
 
@@ -33,6 +45,6 @@ export const TelemetryApi = HttpApi.make("telemetry")
     OpenApi.annotations({
       title: "Ren Telemetry API",
       version: "0.0.0",
-      description: `Internal API a brain sends its traces and critical logs to, so that its sandbox holds no telemetry key. Ren refuses a body larger than ${maxBodyBytes} bytes.`,
+      description: `Internal API a brain sends its traces, critical logs and metrics to, so that its sandbox holds no telemetry key. Ren refuses a body larger than ${maxBodyBytes} bytes.`,
     }),
   )

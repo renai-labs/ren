@@ -2,6 +2,7 @@ export * as OpenCodeSync from "./opencode-sync.js"
 
 import { Session } from "@ren/schema/session"
 import { Sync } from "@ren/schema/sync"
+import { Observability } from "@ren/schema/observability"
 import { Clock, Duration, Effect, Metric, Option, Predicate, Record, Schema, Semaphore } from "effect"
 
 export type Binding = string | number | null
@@ -354,42 +355,46 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
         Effect.gen(function* () {
           const restoring = yield* options.restoring
           if (!restoring.has(input.sessionId) && (yield* input.exists(input.sessionId))) return
-          const group = yield* remote
-            .restore(input.sessionId)
-            .pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
-          const root = group.find((chat) => !chat.parentId)?.id ?? input.sessionId
-          yield* options.mark(root, { isRestoring: true })
-          yield* Effect.forEach(
-            group,
-            (chat) =>
-              Effect.gen(function* () {
-                if (yield* input.exists(chat.id)) return
-                if (chat.parentId && !(yield* input.exists(chat.parentId))) {
-                  yield* Effect.logError("A session cannot be restored: its parent is missing").pipe(
-                    Effect.annotateLogs({ "ren.session.id": chat.id, "ren.session.parent_id": chat.parentId }),
-                  )
-                  return
-                }
-                if (!chat.session) {
-                  if (chat.start)
-                    yield* input.start({ ...chat.start, ...(chat.directory && { directory: chat.directory }) })
-                  return
-                }
-                const messages: Array<Sync.OpenCodeMessageRow> = []
-                let cursor: Sync.Cursor | null = null
-                do {
-                  const page: Page = yield* remote
-                    .messages(chat.id, cursor, batchRows)
-                    .pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
-                  messages.push(...page.messages)
-                  cursor = page.next
-                } while (cursor)
-                yield* input.import({ chat, session: chat.session, messages })
-              }),
-            { discard: true },
-          )
-          yield* options.mark(root, { isRestoring: false })
-          if (root !== input.sessionId) yield* options.mark(input.sessionId, { isRestoring: false })
+          yield* Effect.gen(function* () {
+            const group = yield* remote
+              .restore(input.sessionId)
+              .pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
+            const root = group.find((chat) => !chat.parentId)?.id ?? input.sessionId
+            yield* options.mark(root, { isRestoring: true })
+            yield* Effect.forEach(
+              group,
+              (chat) =>
+                Effect.gen(function* () {
+                  if (yield* input.exists(chat.id)) return
+                  if (chat.parentId && !(yield* input.exists(chat.parentId))) {
+                    yield* Effect.logError("A session cannot be restored: its parent is missing").pipe(
+                      Effect.annotateLogs({ "ren.session.id": chat.id, "ren.session.parent_id": chat.parentId }),
+                    )
+                    return
+                  }
+                  if (!chat.session) {
+                    if (chat.start)
+                      yield* input.start({ ...chat.start, ...(chat.directory && { directory: chat.directory }) })
+                    return
+                  }
+                  const messages: Array<Sync.OpenCodeMessageRow> = []
+                  let cursor: Sync.Cursor | null = null
+                  do {
+                    const page: Page = yield* remote
+                      .messages(chat.id, cursor, batchRows)
+                      .pipe(
+                        Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })),
+                      )
+                    messages.push(...page.messages)
+                    cursor = page.next
+                  } while (cursor)
+                  yield* input.import({ chat, session: chat.session, messages })
+                }),
+              { discard: true },
+            )
+            yield* options.mark(root, { isRestoring: false })
+            if (root !== input.sessionId) yield* options.mark(input.sessionId, { isRestoring: false })
+          }).pipe(Observability.Trace.chatRestore, Effect.annotateSpans("ren.session.id", input.sessionId))
         }),
       ),
   }

@@ -71,6 +71,12 @@ type Row = typeof Database.Schema.brain.$inferSelect
 
 const brains = Database.Schema.brain
 
+const startKinds: Readonly<Partial<Record<Brain.Phase, string>>> = {
+  creating: "new",
+  booting: "new",
+  replacing: "replace",
+}
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -86,6 +92,7 @@ export const layer = Layer.effect(
     const signals = [
       ...(Option.isSome(telemetry.traces) ? ["traces"] : []),
       ...(Option.isSome(telemetry.logs) ? ["logs"] : []),
+      ...(Option.isSome(telemetry.metrics) ? ["metrics"] : []),
     ].join(",")
 
     const read = (brainId: Brain.ID) =>
@@ -513,7 +520,17 @@ export const layer = Layer.effect(
 
     const run = (brainId: Brain.ID) =>
       Effect.gen(function* () {
-        while (!(yield* step(brainId))) yield* Effect.yieldNow
+        const first = yield* read(brainId)
+        let worked = false
+        while (!(yield* step(brainId))) {
+          worked = true
+          yield* Effect.yieldNow
+        }
+        if (worked)
+          yield* Effect.annotateCurrentSpan(
+            "ren.brain.start_kind",
+            startKinds[first.phase] ?? (first.binding ? "resume" : "new"),
+          )
       }).pipe(
         Effect.catchTag("SandboxProvider.Failed", (error) =>
           read(brainId).pipe(

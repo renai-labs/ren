@@ -29,7 +29,7 @@ const headers = (value: string) =>
       }),
   )
 
-const target = (signal: "traces" | "logs") =>
+const target = (signal: "traces" | "logs" | "metrics") =>
   Effect.gen(function* () {
     const name = signal.toUpperCase()
     const exporter = yield* Config.Literals(["otlp", "none"], `OTEL_${name}_EXPORTER`).pipe(Config.withDefault("otlp"))
@@ -46,4 +46,9 @@ const target = (signal: "traces" | "logs") =>
     }))
   })
 
-export const telemetry = Effect.all({ resource, traces: target("traces"), logs: target("logs") })
+export const telemetry = Effect.all({
+  resource,
+  traces: target("traces"),
+  logs: target("logs"),
+  metrics: target("metrics"),
+})

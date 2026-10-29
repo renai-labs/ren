@@ -29,6 +29,6 @@ export const Vars = Schema.Struct({
   }),
   REN_BRAIN_VERSION: Schema.optional(Schema.String),
   REN_TELEMETRY: Schema.optional(Schema.String).annotate({
-    description: "The signals that Ren’s relay accepts from this brain, comma-separated: traces, logs or both.",
+    description: "The signals that Ren’s relay accepts from this brain, comma-separated: traces, logs and metrics.",
   }),
 })

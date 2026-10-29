@@ -2,7 +2,7 @@ export * as Telemetry from "./telemetry.js"
 
 import { Cause, Effect, ErrorReporter, Formatter, Layer, Logger, LogLevel, Option, Schema, Tracer } from "effect"
 import { HttpClient } from "effect/http"
-import { OtlpExporter, OtlpLogger, OtlpSerialization, OtlpTracer } from "effect/observability"
+import { OtlpExporter, OtlpLogger, OtlpMetrics, OtlpSerialization, OtlpTracer } from "effect/observability"
 
 export interface Target {
   readonly url: string
@@ -55,6 +55,9 @@ export const Logs = open({
   ),
 })
 export type Logs = typeof Logs.Type
+
+export const Metrics = open({ resourceMetrics: Schema.Array(open({ resource: OtlpResourceSchema })) })
+export type Metrics = typeof Metrics.Type
 
 const parameters = "\nparams: "
 
@@ -122,6 +125,7 @@ export const layer = (options: {
   readonly resource: Resource
   readonly traces: Option.Option<Target>
   readonly logs: Option.Option<Target>
+  readonly metrics: Option.Option<Target>
   readonly reportErrors?: boolean
   readonly continueTraces?: boolean
 }) =>
@@ -179,6 +183,13 @@ export const layer = (options: {
             ),
           ],
           { mergeWithExisting: true },
+        ),
+    }),
+    Option.match(options.metrics, {
+      onNone: () => Layer.empty,
+      onSome: (target) =>
+        Layer.effectDiscard(
+          OtlpMetrics.make({ ...target, resource: options.resource, temporality: "delta", exportInterval: "1 minute" }),
         ),
     }),
     options.reportErrors ? reportToLogs : Layer.empty,

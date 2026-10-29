@@ -14,7 +14,7 @@ export const layer = Layer.unwrap(
     const cell = yield* Cell.Info
     const url = cell.vars.REN_URL
     const signals = (cell.vars.REN_TELEMETRY ?? "").split(",")
-    const target = (signal: "traces" | "logs") =>
+    const target = (signal: "traces" | "logs" | "metrics") =>
       url && signals.includes(signal)
         ? Option.some<Telemetry.Target>({ url: `${url}/host/telemetry/v1/${signal}`, headers: {} })
         : Option.none<Telemetry.Target>()
@@ -23,6 +23,7 @@ export const layer = Layer.unwrap(
         resource: { serviceName: "ren-brain", serviceVersion: cell.version, attributes: {} },
         traces: target("traces"),
         logs: target("logs"),
+        metrics: target("metrics"),
         reportErrors: true,
         continueTraces: true,
       }),

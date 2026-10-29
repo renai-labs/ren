@@ -301,7 +301,14 @@ const handlers = Layer.mergeAll(
                 ...(request.query.limit ? { limit: request.query.limit } : {}),
                 ...(request.query.cursor ? { cursor: request.query.cursor } : {}),
               })
-              .pipe(notFound, rejected),
+              .pipe(notFound, rejected, (messages) =>
+                request.query.cursor
+                  ? messages
+                  : messages.pipe(
+                      Observability.Trace.chatHistory,
+                      Effect.annotateSpans("ren.session.id", request.params.sessionID),
+                    ),
+              ),
           ),
         )
         .handle("session.message", (request) =>

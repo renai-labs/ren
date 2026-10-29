@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { Cause, Effect, ErrorReporter, Logger, Option, Schema, Tracer } from "effect"
+import { Cause, Duration, Effect, ErrorReporter, Logger, Metric, Option, Schema, Tracer } from "effect"
 import { FetchHttpClient } from "effect/http"
+import { OtlpExporter } from "effect/observability"
 import { Telemetry } from "../src/telemetry.js"
 
 const Attributes = Schema.Array(
@@ -35,7 +36,28 @@ const Traces = Schema.fromJsonString(
   }),
 )
 
-const bodies: Record<string, Array<string>> = { traces: [], logs: [] }
+const Metrics = Schema.fromJsonString(
+  Schema.Struct({
+    resourceMetrics: Schema.Array(
+      Schema.Struct({
+        scopeMetrics: Schema.Array(
+          Schema.Struct({
+            metrics: Schema.Array(
+              Schema.Struct({
+                name: Schema.String,
+                histogram: Schema.optional(
+                  Schema.Struct({ dataPoints: Schema.Array(Schema.Struct({ count: Schema.Number })) }),
+                ),
+              }),
+            ),
+          }),
+        ),
+      }),
+    ),
+  }),
+)
+
+const bodies: Record<string, Array<string>> = { traces: [], logs: [], metrics: [] }
 
 const receiver = Bun.serve({
   port: 0,
@@ -79,11 +101,17 @@ const resource = {
   attributes: { "deployment.environment.name": "test" },
 }
 
-const telemetry = Telemetry.layer({ resource, traces: target("traces"), logs: target("logs") })
+const telemetry = Telemetry.layer({
+  resource,
+  traces: target("traces"),
+  logs: target("logs"),
+  metrics: target("metrics"),
+})
 
-const run = <A, E>(effect: Effect.Effect<A, E>, layer = telemetry) => {
+const run = <A, E>(effect: Effect.Effect<A, E, OtlpExporter.Flusher>, layer = telemetry) => {
   bodies["traces"] = []
   bodies["logs"] = []
+  bodies["metrics"] = []
   return effect.pipe(Effect.provide(layer), Effect.provide(FetchHttpClient.layer), Effect.runPromise)
 }
 
@@ -105,6 +133,30 @@ describe("Telemetry.layer", () => {
     expect(spans()[0]?.name).toBe("Test.request")
     expect(spans()[0]?.attributes["url.full"]).toBe("https://ren.test/reset")
     expect(spans()[0]?.attributes).not.toHaveProperty("url.query")
+  })
+
+  test("exports each metric's change since its last export, so that processes reporting one series add up", async () => {
+    const timer = Metric.timer("ren.test.duration")
+    await run(
+      Effect.gen(function* () {
+        const flusher = yield* OtlpExporter.Flusher
+        yield* Metric.update(timer, Duration.millis(10))
+        yield* flusher.flush
+        yield* Metric.update(timer, Duration.millis(20))
+        yield* Metric.update(timer, Duration.millis(30))
+      }),
+    )
+
+    const counts = (bodies["metrics"] ?? []).flatMap((body) =>
+      Schema.decodeUnknownSync(Metrics)(body).resourceMetrics.flatMap((resource) =>
+        resource.scopeMetrics.flatMap((scope) =>
+          scope.metrics
+            .filter((metric) => metric.name === "ren.test.duration")
+            .flatMap((metric) => metric.histogram?.dataPoints.map((point) => point.count) ?? []),
+        ),
+      ),
+    )
+    expect(counts).toEqual([1, 2])
   })
 
   test("leaves the parameters of a failed query out of an exported log", async () => {
@@ -152,7 +204,13 @@ describe("Telemetry.layer", () => {
 
     await run(
       program,
-      Telemetry.layer({ resource, traces: target("traces"), logs: Option.none(), continueTraces: true }),
+      Telemetry.layer({
+        resource,
+        traces: target("traces"),
+        logs: Option.none(),
+        metrics: Option.none(),
+        continueTraces: true,
+      }),
     )
     expect(
       spans()
@@ -170,7 +228,13 @@ describe("Telemetry.layer", () => {
         yield* Effect.fail(ignored).pipe(Effect.withErrorReporting, Effect.ignore)
         yield* Effect.logError("A sync failed", Cause.fail(new Error("upstream answered 502")))
       }).pipe(Effect.annotateLogs({ "ren.session.id": "ses_test" })),
-      Telemetry.layer({ resource, traces: Option.none(), logs: target("logs"), reportErrors: true }),
+      Telemetry.layer({
+        resource,
+        traces: Option.none(),
+        logs: target("logs"),
+        metrics: Option.none(),
+        reportErrors: true,
+      }),
     )
 
     const exceptions = logs().filter((log) => log.attributes["exception.type"] !== undefined)
@@ -192,6 +256,7 @@ describe("Telemetry.layer", () => {
           resource,
           traces: Option.some({ url: `http://127.0.0.1:${receiver.port}/refuse/v1/traces`, headers: {} }),
           logs: Option.none(),
+          metrics: Option.none(),
         }),
       ),
       Effect.provide(FetchHttpClient.layer),

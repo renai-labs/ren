@@ -21,7 +21,7 @@ const Batch = Schema.fromJsonString(
   }),
 )
 
-const exported: Record<string, Array<unknown>> = { traces: [], logs: [] }
+const exported: Record<string, Array<unknown>> = { traces: [], logs: [], metrics: [] }
 const exceptions: Array<(typeof Batch.Type)["batch"][number]> = []
 
 const receiver = Bun.serve({
@@ -32,7 +32,7 @@ const receiver = Bun.serve({
     const text = new TextDecoder().decode(
       request.headers.get("content-encoding") === "gzip" ? Bun.gunzipSync(body) : body,
     )
-    if (path === "/v1/traces" || path === "/v1/logs")
+    if (path === "/v1/traces" || path === "/v1/logs" || path === "/v1/metrics")
       exported[path.slice(4)]?.push(Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(text))
     else exceptions.push(...Schema.decodeUnknownSync(Batch)(text).batch)
     return Response.json({ status: 1 })
@@ -47,6 +47,7 @@ const relay = TelemetryRelay.layer.pipe(
       ConfigProvider.fromUnknown({
         OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: `http://127.0.0.1:${receiver.port}/v1/traces`,
         OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: `http://127.0.0.1:${receiver.port}/v1/logs`,
+        OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: `http://127.0.0.1:${receiver.port}/v1/metrics`,
         POSTHOG_PROJECT_KEY: "phc_test",
         POSTHOG_HOST: `http://127.0.0.1:${receiver.port}`,
         REN_DEPLOYMENT: "test",
@@ -200,6 +201,35 @@ describe("TelemetryRelay", () => {
         "ren.organization.id": host.organizationId,
         "service.name": "ren-brain",
       })
+    }),
+  )
+
+  it.live("forwards a brain's metrics with no tenant IDs, so that all brains add up in one series", () =>
+    Effect.gen(function* () {
+      exported["metrics"] = []
+      const metric = { name: "ren.turn.first_token", histogram: { aggregationTemporality: 1, dataPoints: [] } }
+      const batch: Telemetry.Metrics = {
+        resourceMetrics: [{ resource: forged, scopeMetrics: [{ scope: { name: "ren-brain" }, metrics: [metric] }] }],
+      }
+      yield* Effect.gen(function* () {
+        const telemetry = yield* TelemetryRelay.Service
+        yield* telemetry.metrics(host, batch)
+      }).pipe(Effect.provide(relay))
+
+      const forwarded = Schema.decodeUnknownSync(
+        Schema.Struct({
+          resourceMetrics: Schema.Array(
+            Schema.Struct({ resource: Schema.Struct({ attributes: Schema.Unknown }), scopeMetrics: Schema.Unknown }),
+          ),
+        }),
+      )(exported["metrics"]?.[0]).resourceMetrics
+      expect(forwarded).toHaveLength(1)
+      expect(attributesOf(forwarded[0]?.resource.attributes)).toEqual({
+        "service.name": "ren-brain",
+        "service.version": "brain-1",
+        "deployment.environment.name": "test",
+      })
+      expect(forwarded[0]?.scopeMetrics).toEqual([{ scope: { name: "ren-brain" }, metrics: [metric] }])
     }),
   )
 })

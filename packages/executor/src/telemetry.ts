@@ -50,6 +50,7 @@ export const layer = Layer.unwrap(
           },
           traces: Option.some({ url: `${memory}/traces`, headers: {} }),
           logs: Option.some({ url: `${memory}/logs`, headers: {} }),
+          metrics: Option.none(),
           reportErrors: true,
           continueTraces: true,
         }).pipe(Layer.provide(Layer.succeed(HttpClient.HttpClient, keep))),
