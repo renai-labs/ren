@@ -3,14 +3,14 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import {
   IconArrowsDiagonal,
   IconArrowsDiagonalMinimize2,
-  IconBrowser,
-  IconClipboardList,
-  IconCode,
   IconDeviceDesktop,
   IconFileDiff,
+  IconFiles,
   IconLayoutSidebarRightCollapse,
   IconPlus,
   IconTerminal2,
+  IconTimeline,
+  IconWorld,
   IconX,
   type Icon,
 } from "@tabler/icons-react"
@@ -26,10 +26,10 @@ type Kind = "computer" | "browser" | "files" | "changes" | "progress" | "termina
 
 const kinds: ReadonlyArray<{ kind: Kind; label: string; description: string; icon: Icon; many?: boolean }> = [
   { kind: "computer", label: "Computer", description: "Watch and control Ren’s computer", icon: IconDeviceDesktop },
-  { kind: "browser", label: "Browser", description: "See the pages Ren opens", icon: IconBrowser },
-  { kind: "files", label: "Files", description: "Browse files in this workspace", icon: IconCode },
+  { kind: "browser", label: "Browser", description: "See the pages Ren opens", icon: IconWorld },
+  { kind: "files", label: "Files", description: "Browse files in this workspace", icon: IconFiles },
   { kind: "changes", label: "Changes", description: "See Ren’s file edits", icon: IconFileDiff },
-  { kind: "progress", label: "Progress", description: "Understand Ren’s history and actions", icon: IconClipboardList },
+  { kind: "progress", label: "Progress", description: "Understand Ren’s history and actions", icon: IconTimeline },
   {
     kind: "terminal",
     label: "Terminal",
@@ -68,12 +68,13 @@ function AddMenu(props: { onPick: (kind: Kind) => void }) {
                 <CommandItem
                   key={each.kind}
                   value={each.label}
+                  className="data-selected:*:[svg]:text-muted-foreground"
                   onSelect={() => {
                     setOpen(false)
                     props.onPick(each.kind)
                   }}
                 >
-                  <each.icon />
+                  <each.icon className="text-muted-foreground" />
                   {each.label}
                 </CommandItem>
               ))}
@@ -151,12 +152,12 @@ export function WorkspacePanel(props: {
         <div className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2">
           <TabsList className="h-8 min-w-0 shrink scrollbar-none justify-start gap-0.5 overflow-x-auto overscroll-contain bg-transparent p-0">
             {tabs.map((tab) => {
-              const TabIcon = byKind.get(tab.kind)?.icon ?? IconCode
+              const TabIcon = byKind.get(tab.kind)?.icon ?? IconFiles
               return (
                 <span key={tab.id} className="group/tab relative flex shrink-0">
                   <TabsTrigger
                     value={tab.id}
-                    className="h-8 flex-none gap-1.5 pr-7 pl-2.5 font-normal text-muted-foreground data-active:bg-secondary data-active:text-foreground data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-secondary"
+                    className="h-8 flex-none gap-1.5 pr-7 pl-2.5 font-normal text-muted-foreground data-active:bg-secondary data-active:text-foreground data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-secondary [&_svg]:text-muted-foreground"
                   >
                     <TabIcon />
                     {tab.label}

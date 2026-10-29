@@ -5,8 +5,7 @@ import {
   IconDeviceDesktop,
   IconHandFinger,
   IconRefresh,
-  IconBrowser,
-  IconFolder,
+  IconFiles,
   IconTerminal2,
   IconWorld,
 } from "@tabler/icons-react"
@@ -93,7 +92,7 @@ export function BrowserTab() {
       </div>
       <div className="min-h-0 flex-1">
         <Waiting
-          icon={<IconBrowser />}
+          icon={<IconWorld />}
           title="Browser"
           description="The pages Ren opens in the environment’s browser stream here."
         />
@@ -125,7 +124,7 @@ export function FilesTab() {
   return (
     <div className="min-h-0 flex-1">
       <Waiting
-        icon={<IconFolder />}
+        icon={<IconFiles />}
         title="Files"
         description="Browse the environment’s workspace here once it’s connected."
       />

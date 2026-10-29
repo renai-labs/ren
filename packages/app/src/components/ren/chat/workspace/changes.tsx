@@ -65,7 +65,7 @@ function Tree(props: {
   return (
     <FileTree
       model={tree.model}
-      className="h-full [--trees-accent:var(--muted-foreground)] [--trees-bg:transparent] [--trees-fg-muted:var(--muted-foreground)] [--trees-fg:var(--foreground)]"
+      className="h-full [--trees-accent:var(--muted-foreground)] [--trees-bg:transparent] [--trees-fg-muted:var(--muted-foreground)] [--trees-fg:var(--foreground)] [--trees-file-icon-color:var(--muted-foreground)]"
     />
   )
 }
