@@ -31,4 +31,7 @@ COPY packages/server/docker/start.sh /usr/local/bin/ren-server
 WORKDIR /repo/packages/server
 EXPOSE 4100 4443
 
+ARG REN_VERSION=development
+ENV REN_VERSION=$REN_VERSION
+
 ENTRYPOINT ["/usr/local/bin/ren-server"]

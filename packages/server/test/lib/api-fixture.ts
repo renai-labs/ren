@@ -6,7 +6,7 @@ import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { getCookies } from "better-auth/cookies"
 import { makeSignature } from "better-auth/crypto"
-import { Clock, Context, Effect, Layer } from "effect"
+import { Clock, Context, Effect, type ErrorReporter, Layer } from "effect"
 import { call, config, makeApp } from "./app.js"
 
 export interface Interface {
@@ -15,16 +15,19 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/server/test/ApiFixture") {}
 
-export const layer = Layer.effect(
-  Service,
-  Effect.gen(function* () {
-    const context = yield* Effect.context<Layer.Success<typeof Testing.layer>>()
-    return yield* Effect.acquireRelease(
-      Effect.sync(() => makeApp(undefined, { database: Layer.succeedContext(context) })),
-      (app) => Effect.promise(() => app.dispose()),
-    )
-  }),
-).pipe(Layer.provideMerge(Testing.layer))
+export const layerWith = (options: { readonly reporter?: ErrorReporter.ErrorReporter }) =>
+  Layer.effect(
+    Service,
+    Effect.gen(function* () {
+      const context = yield* Effect.context<Layer.Success<typeof Testing.layer>>()
+      return yield* Effect.acquireRelease(
+        Effect.sync(() => makeApp(undefined, { ...options, database: Layer.succeedContext(context) })),
+        (app) => Effect.promise(() => app.dispose()),
+      )
+    }),
+  ).pipe(Layer.provideMerge(Testing.layer))
+
+export const layer = layerWith({})
 
 export const owner = Effect.fn("ApiFixture.owner")(function* () {
   const api = yield* Service

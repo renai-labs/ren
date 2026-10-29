@@ -152,7 +152,7 @@ jobs:
           registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$REGION.amazonaws.com"
           aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
           image="$registry/$DEPLOY-server:$GITHUB_SHA"
-          docker build --platform linux/amd64 -f packages/server/Dockerfile -t "$image" .
+          docker build --platform linux/amd64 --build-arg REN_VERSION="$GITHUB_SHA" -f packages/server/Dockerfile -t "$image" .
           docker push "$image"
           echo "image=$image" >>"$GITHUB_OUTPUT"
 
