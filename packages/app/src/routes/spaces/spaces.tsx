@@ -1,22 +1,7 @@
 import { useState } from "react"
 import type { SpaceInfo } from "@ren/client"
-import { useQuery } from "@tanstack/react-query"
-import { Link } from "@tanstack/react-router"
-import {
-  IconArrowRight,
-  IconCube,
-  IconEye,
-  IconLock,
-  IconLogin2,
-  IconMessage,
-  IconPlus,
-  IconUser,
-  IconUsers,
-} from "@tabler/icons-react"
-import { AvatarGroup } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
+import { IconCube, IconEye, IconLogin2, IconPlus } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogClose,
@@ -41,14 +26,12 @@ import { FilterMenu, passes, type Filters } from "@/components/ren/filter-menu"
 import { ExpandableSearch } from "@/components/ren/expandable-search"
 import { Page, SkeletonCards } from "@/components/ren/page"
 import { ListPagination } from "@/components/ren/list-pagination"
-import { PersonAvatar } from "@/components/ren/person-avatar"
 import { Spinner } from "@/components/ui/spinner"
-import { api, pageSize } from "@/lib/api"
+import { pageSize } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { useSpacesPage } from "@/routes/spaces/use-spaces-page"
 import { formText } from "@/lib/format"
-import { SpaceCardPrototype, SpaceCardSwitcher } from "@/routes/spaces/space-card"
-import { useSpaceCard } from "@/stores/ui"
+import { SpaceCard } from "@/routes/spaces/space-card"
 
 const isPrivate = (space: SpaceInfo) => space.kind === "private"
 
@@ -57,7 +40,6 @@ export function SpacesPage() {
   const [filters, setFilters] = useState<Filters>({})
   const [query, setQuery] = useState("")
   const needle = query.trim().toLowerCase()
-  const look = useSpaceCard()
   return (
     <Page
       title="Spaces"
@@ -134,85 +116,11 @@ export function SpacesPage() {
               visibility: [isPrivate(space) ? "private" : "shared"],
             }),
           )
-          .map((space) =>
-            look === "current" ? (
-              <SpaceCard key={space.id} space={space} />
-            ) : (
-              <SpaceCardPrototype key={space.id} space={space} look={look} />
-            ),
-          )}
+          .map((space) => (
+            <SpaceCard key={space.id} space={space} />
+          ))}
       </div>
-      <SpaceCardSwitcher />
     </Page>
-  )
-}
-
-function SpaceCard(props: { space: SpaceInfo }) {
-  const space = props.space
-  const personal = isPrivate(space)
-  const chats = useQuery(api.session.list.queryOptions({ spaceId: space.id, page: 1, pageSize: 1 }))
-  const people = useQuery({
-    ...api["space-member"].list.queryOptions({ spaceId: space.id, status: "active", page: 1, pageSize: 4 }),
-    enabled: !personal && space.membershipId !== null,
-  })
-  const members = (people.data?.items ?? []).flatMap((member) => (member.status === "active" ? [member.name] : []))
-  const memberCount = space.memberCount
-  const chatCount = chats.data?.total ?? 0
-  const shown = memberCount > 4 ? members.slice(0, 3) : members
-  return (
-    <Card className="relative gap-4 border shadow-soft ring-0 transition-colors [--card-spacing:--spacing(6)] hover:bg-muted active:scale-99">
-      <CardHeader>
-        <div className="mb-3 flex size-12 items-center justify-center rounded-lg bg-secondary">
-          {personal ? (
-            <IconLock className="size-8 text-muted-foreground" strokeWidth={1.75} />
-          ) : (
-            <IconCube className="size-8 text-muted-foreground" strokeWidth={1.75} />
-          )}
-        </div>
-        <CardTitle className="text-sm/5">
-          <Link to="/spaces/$spaceId" params={{ spaceId: space.id }} className="after:absolute after:inset-0">
-            {space.name}
-          </Link>
-        </CardTitle>
-        <CardDescription className="line-clamp-2 text-xs">{space.description || "No description"}</CardDescription>
-        <CardAction className="flex items-center gap-2">
-          {personal ? (
-            <Badge variant="secondary">
-              <IconLock />
-              Private
-            </Badge>
-          ) : null}
-          <IconArrowRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover/card:opacity-100" />
-        </CardAction>
-      </CardHeader>
-      <CardFooter className="mx-6 mb-6 gap-6 bg-transparent px-0 pt-3 pb-0 text-xs text-muted-foreground">
-        <span className="flex items-center gap-2">
-          {personal ? (
-            <IconUser className="size-4" />
-          ) : members.length === 0 ? (
-            <IconUsers className="size-4" />
-          ) : (
-            <AvatarGroup className="gap-1 space-x-0 *:data-[slot=avatar]:ring-card">
-              {shown.map((name) => (
-                <PersonAvatar key={name} name={name} className="bg-secondary text-[10px] font-medium text-foreground" />
-              ))}
-              {memberCount > shown.length ? (
-                <PersonAvatar
-                  name={`+${memberCount - shown.length}`}
-                  initials={`+${memberCount - shown.length}`}
-                  className="text-[10px]"
-                />
-              ) : null}
-            </AvatarGroup>
-          )}
-          {personal ? "Just you" : memberCount === 1 ? "1 member" : `${memberCount} members`}
-        </span>
-        <span className="flex items-center gap-2 tabular-nums">
-          <IconMessage className="size-4" />
-          {chatCount === 1 ? "1 chat" : `${chatCount} chats`}
-        </span>
-      </CardFooter>
-    </Card>
   )
 }
 

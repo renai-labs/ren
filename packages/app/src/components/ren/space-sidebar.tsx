@@ -74,9 +74,9 @@ export function SpaceSidebar(props: { spaceId: string }) {
         </div>
         <SidebarMenu className="gap-px">
           <SidebarMenuItem>
-            <SidebarMenuButton className={sidebarRow} render={<Link to="/" />}>
+            <SidebarMenuButton className={sidebarRow} render={<Link to="/spaces" />}>
               <IconArrowLeft />
-              <span>Back to app</span>
+              <span>All spaces</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
