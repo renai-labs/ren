@@ -274,6 +274,10 @@ export function useChat(
         toast.error("Could not send your message", { description: `${errorMessage(error)} Your draft has been kept.` })
       })
     },
+    resend: (text: string) =>
+      void prompt({ id: SessionMessage.ID.create(), text, delivery: "steer", ...(model && { model }) }).catch(
+        (error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) }),
+      ),
     stop: () =>
       void interrupt().catch((error: unknown) =>
         toast.error("Could not stop Ren", { description: errorMessage(error) }),

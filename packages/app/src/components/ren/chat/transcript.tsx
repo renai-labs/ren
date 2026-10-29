@@ -1,3 +1,4 @@
+import { DateTime } from "effect"
 import { useState, type ReactNode } from "react"
 import { useAtomValue } from "@effect/atom-react"
 import {
@@ -19,7 +20,6 @@ import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { Shell } from "@ren/schema/shell"
 import {
-  IconAlertTriangle,
   IconClipboardText,
   IconFile,
   IconBrain,
@@ -28,7 +28,6 @@ import {
   IconCopy,
   IconInfoCircle,
   IconPencil,
-  IconRefresh,
 } from "@tabler/icons-react"
 import { AsyncResult } from "effect/reactivity"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -68,6 +67,7 @@ import {
 } from "@/components/ui/trace"
 import { Markdown } from "@/components/ren/chat/markdown"
 import { toolIcons } from "@/components/ren/chat/tool-icons"
+import { TurnProblem, TurnRetrying, providerLabel, type ProblemHandlers } from "@/components/ren/chat/turn-problem"
 import { EmptyState } from "@/components/ren/empty-state"
 import { ImageLightbox } from "@/components/ren/image-lightbox"
 import { withAppMentions } from "@/components/ren/app-mention"
@@ -98,6 +98,11 @@ export interface TranscriptProps {
   readonly expanded?: boolean | undefined
   readonly modelNames?: ReadonlyMap<string, string> | undefined
   readonly empty?: string | undefined
+  readonly admin?: boolean | undefined
+  readonly onTryAgain?: ((text: string) => void) | undefined
+  readonly onContinue?: (() => void) | undefined
+  readonly onChangeModel?: (() => void) | undefined
+  readonly onStop?: (() => void) | undefined
 }
 
 type Step =
@@ -777,33 +782,34 @@ function Steps(props: {
 function SystemRow(props: { row: TimelineRow.Row; context: Context }) {
   const row = props.row
   if (row._tag === "Error") {
-    const title = TimelineText.errorTitle(row.kind)
-    const parts = TimelineText.errorParts(row.text)
+    const assistants = props.context.turns.get(row.userMessageID) ?? []
+    const last = assistants.at(-1)
     return (
-      <Marker className="items-start text-destructive">
-        <MarkerIcon>
-          <IconAlertTriangle />
-        </MarkerIcon>
-        <MarkerContent className="whitespace-pre-wrap">
-          {title ?? (parts.head || "Ren hit an error. Send your message again to retry.")}
-          {title ? null : parts.body.trim() ? `\n${parts.body.trim()}` : null}
-        </MarkerContent>
-      </Marker>
+      <TurnProblem
+        kind={row.kind}
+        text={row.text}
+        provider={providerLabel(last?.model.providerID ?? "the model provider")}
+        model={last ? (props.context.modelNames.get(last.model.id) ?? last.model.id) : "This model"}
+        midTurn={assistants.some((message) => message.content.some((content) => content.type === "tool"))}
+        admin={props.context.admin}
+        handlers={props.context.handlers(row.userMessageID)}
+      />
     )
   }
   if (row._tag === "Retry") {
     if (props.context.activeMessageID !== row.userMessageID) return null
-    const retry = TimelineText.retryStatus(props.context.turns.get(row.userMessageID) ?? [])
-    if (!retry) return null
+    const last = (props.context.turns.get(row.userMessageID) ?? []).at(-1)
+    const retry = last?.retry
+    if (!last || !retry) return null
     return (
-      <Marker>
-        <MarkerIcon>
-          <IconRefresh />
-        </MarkerIcon>
-        <MarkerContent>
-          Retrying (attempt {retry.attempt}) · {retry.message}
-        </MarkerContent>
-      </Marker>
+      <TurnRetrying
+        kind={retry.error.type}
+        text={retry.error.message}
+        provider={providerLabel(last.model.providerID)}
+        at={DateTime.toEpochMillis(retry.at)}
+        attempt={retry.attempt}
+        handlers={props.context.handlers(row.userMessageID)}
+      />
     )
   }
   if (row._tag === "TurnDivider")
@@ -865,6 +871,8 @@ function LoadEarlier(props: { onVisible: () => void }) {
 }
 
 interface Context {
+  readonly admin: boolean
+  readonly handlers: (userMessageID: string) => ProblemHandlers
   readonly modelNames: ReadonlyMap<string, string>
   readonly byId: ReadonlyMap<string, SessionMessage.Info>
   readonly turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
@@ -876,6 +884,18 @@ export function Transcript(props: TranscriptProps) {
   const byId: ReadonlyMap<string, SessionMessage.Info> = new Map(props.messages.map((message) => [message.id, message]))
   const turns = Projection.assistantMessagesByParent(props.messages)
   const context: Context = {
+    admin: props.admin ?? false,
+    handlers: (userMessageID) => {
+      const user = byId.get(userMessageID)
+      const text = user?.type === "user" ? user.text : undefined
+      const tryAgain = props.onTryAgain
+      return {
+        onTryAgain: tryAgain && text ? () => tryAgain(text) : undefined,
+        onContinue: props.onContinue,
+        onChangeModel: props.onChangeModel,
+        onStop: props.onStop,
+      }
+    },
     modelNames: props.modelNames ?? new Map(),
     byId,
     turns,

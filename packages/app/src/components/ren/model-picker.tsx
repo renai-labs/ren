@@ -51,6 +51,8 @@ export function ModelPicker(props: {
   loading?: boolean | undefined
   disabled?: boolean | undefined
   onChange: (model: SessionModel.Ref) => void
+  open?: boolean | undefined
+  onOpenChange?: ((open: boolean) => void) | undefined
 }) {
   const [query, setQuery] = useState("")
   const providers = [...new Set(props.models.map((model) => model.providerID))]
@@ -62,7 +64,10 @@ export function ModelPicker(props: {
   if (props.loading) return <Skeleton className="ml-auto h-7 w-44 rounded-md" />
   if (!current) return null
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      {...(props.open !== undefined && { open: props.open })}
+      {...(props.onOpenChange && { onOpenChange: props.onOpenChange })}
+    >
       <DropdownMenuTrigger
         disabled={props.disabled}
         render={<InputGroupButton size="sm" className="ml-auto pr-1.5 font-normal text-muted-foreground" />}

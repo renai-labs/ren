@@ -13,6 +13,7 @@ import { Transcript } from "@/components/ren/chat/transcript"
 import { PromptInput } from "@/components/ren/chat/prompt-input"
 import { ModelPicker } from "@/components/ren/model-picker"
 import { RowMenu } from "@/components/ren/row-menu"
+import { useCanAdminister } from "@/hooks/use-organization"
 import { cn } from "@/lib/utils"
 import { useChat, useChatPage } from "@/routes/chat/use-chat-page"
 
@@ -20,6 +21,8 @@ type Page = ReturnType<typeof useChat>
 
 function ChatThread(props: { page: Page }) {
   const page = props.page
+  const admin = useCanAdminister()
+  const [picking, setPicking] = useState(false)
   return (
     <>
       <Transcript
@@ -40,6 +43,11 @@ function ChatThread(props: { page: Page }) {
         onEdit={page.canRevert && !page.child && !page.reverting ? page.edit : undefined}
         expanded={page.expanded}
         modelNames={page.modelNames}
+        admin={admin}
+        onTryAgain={page.child ? undefined : page.resend}
+        onContinue={page.child ? undefined : () => page.resend("Continue.")}
+        onChangeModel={page.child || !page.canChooseModel ? undefined : () => setPicking(true)}
+        onStop={page.stop}
         empty={page.child ? "This subagent hasn’t posted anything. It may have stopped before it started." : undefined}
       />
       <div className="px-6 pb-4">
@@ -85,6 +93,8 @@ function ChatThread(props: { page: Page }) {
                     value={page.model}
                     loading={page.modelsLoading}
                     onChange={page.chooseModel}
+                    open={picking}
+                    onOpenChange={setPicking}
                   />
                 ) : null
               }
