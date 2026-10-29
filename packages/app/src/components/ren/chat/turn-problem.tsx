@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link } from "@tanstack/react-router"
-import { IconAlertCircle, IconChevronRight } from "@tabler/icons-react"
+import { IconAlertCircle, IconArrowUpRight, IconChevronRight } from "@tabler/icons-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -135,24 +135,20 @@ const labels: Record<ProblemAction, string> = {
 }
 
 function ActionButton(props: { action: ProblemAction; primary: boolean; handlers: ProblemHandlers }) {
-  const variant = props.primary ? "secondary" : "ghost"
+  const variant = props.primary ? "default" : "ghost"
   const className = props.primary ? undefined : "text-muted-foreground"
   if (props.action === "providers")
     return (
-      <Button
-        variant={variant}
-        size="sm"
-        className={className}
-        nativeButton={false}
-        render={<Link to="/settings/providers" />}
-      >
+      <Button variant={variant} className={className} nativeButton={false} render={<Link to="/settings/providers" />}>
         {labels.providers}
+        <IconArrowUpRight data-icon="inline-end" />
       </Button>
     )
   if (props.action === "new")
     return (
-      <Button variant={variant} size="sm" className={className} nativeButton={false} render={<Link to="/" />}>
+      <Button variant={variant} className={className} nativeButton={false} render={<Link to="/" />}>
         {labels.new}
+        <IconArrowUpRight data-icon="inline-end" />
       </Button>
     )
   const handler = {
@@ -163,7 +159,7 @@ function ActionButton(props: { action: ProblemAction; primary: boolean; handlers
   }[props.action]
   if (!handler) return null
   return (
-    <Button variant={variant} size="sm" className={className} onClick={handler}>
+    <Button variant={variant} className={className} onClick={handler}>
       {labels[props.action]}
     </Button>
   )
@@ -190,14 +186,12 @@ function Shell(props: {
       <AlertDescription>{props.fix}</AlertDescription>
       {props.actions.length > 0 || props.details ? (
         <Collapsible className="col-start-2 flex flex-col">
-          <div className="-ml-2.5 flex flex-wrap items-center gap-1 pt-2">
+          <div className="flex flex-wrap items-center gap-1 pt-3">
             {props.actions.map((action, index) => (
               <ActionButton key={action} action={action} primary={index === 0} handlers={props.handlers} />
             ))}
             {props.details ? (
-              <CollapsibleTrigger
-                render={<Button variant="ghost" size="sm" className="group/details text-muted-foreground" />}
-              >
+              <CollapsibleTrigger render={<Button variant="ghost" className="group/details text-muted-foreground" />}>
                 Details
                 <IconChevronRight
                   data-icon="inline-end"
