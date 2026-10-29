@@ -352,7 +352,7 @@ export const layer = Layer.effect(
         .pipe(Effect.orDie)
     })
 
-    yield* provider.lost.pipe(Stream.runForEach(lose), Effect.forkScoped)
+    yield* provider.lost.pipe(Stream.runForEach(lose), Effect.withErrorReporting, Effect.forkScoped)
 
     // oxlint-disable-next-line ren/no-comments -- At boot, Ren reaches each running brain once, so its server token carries Ren's current address (E119). Asleep brains learn it at their wake.
     yield* Effect.gen(function* () {
@@ -377,7 +377,7 @@ export const layer = Layer.effect(
           }),
         { concurrency: 8, discard: true },
       )
-    }).pipe(Effect.forkScoped)
+    }).pipe(Effect.withErrorReporting, Effect.forkScoped)
 
     const check = Effect.fn("BrainLifecycle.check")(function* (brainId: Brain.ID) {
       const row = yield* read(brainId)
@@ -477,6 +477,7 @@ export const layer = Layer.effect(
     }).pipe(
       Effect.repeat(Schedule.spaced("1 hour")),
       Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+      Effect.withErrorReporting,
       Effect.forkScoped,
     )
 

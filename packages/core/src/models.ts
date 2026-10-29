@@ -97,7 +97,12 @@ export const layerLiteLLM = Layer.effect(
         Effect.logWarning("LiteLLM's model list could not be read; Ren keeps its last list", error),
       ),
     )
-    yield* load.pipe(Effect.ignore, Effect.repeat(Schedule.spaced(refreshEvery)), Effect.forkScoped)
+    yield* load.pipe(
+      Effect.ignore,
+      Effect.repeat(Schedule.spaced(refreshEvery)),
+      Effect.withErrorReporting,
+      Effect.forkScoped,
+    )
     const catalog = Effect.gen(function* () {
       const found = yield* Ref.get(current)
       if (Option.isSome(found)) return found.value

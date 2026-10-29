@@ -82,7 +82,12 @@ export const layer = Layer.effect(
       yield* Effect.sleep(every)
       const slot = Math.floor((yield* Clock.currentTimeMillis) / Duration.toMillis(every))
       yield* DurableRunner.ensure(SweepRun, { slot: String(slot) })
-    }).pipe(Effect.forever, Effect.provideService(WorkflowEngine.WorkflowEngine, engine), Effect.forkScoped)
+    }).pipe(
+      Effect.forever,
+      Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+      Effect.withErrorReporting,
+      Effect.forkScoped,
+    )
 
     return Service.of({ sweep })
   }),

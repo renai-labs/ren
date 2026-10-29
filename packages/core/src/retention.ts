@@ -72,6 +72,7 @@ export const layer = Layer.effect(
     }).pipe(
       Effect.repeat(Schedule.spaced("1 hour")),
       Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+      Effect.withErrorReporting,
       Effect.forkScoped,
     )
 

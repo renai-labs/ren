@@ -62,6 +62,6 @@ export const make = Effect.fnUntraced(function* (input: {
     Effect.withSpan("OpenCodeModels.read"),
   )
   const refresh = reading.withPermit(read)
-  yield* refresh.pipe(Effect.repeat(Schedule.spaced(interval)), Effect.forkScoped)
+  yield* refresh.pipe(Effect.repeat(Schedule.spaced(interval)), Effect.withErrorReporting, Effect.forkScoped)
   return { refresh }
 })

@@ -13,7 +13,7 @@ import { type AuthenticatedSession } from "@ren/protocol/middleware/authenticati
 import { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/util/environment"
 import { verifyJwsAccessToken } from "better-auth/oauth2"
-import { Config, Context, Effect, FiberSet, Layer, Option, Redacted, Schema } from "effect"
+import { Cause, Config, Context, Effect, FiberSet, Layer, Option, Redacted, Schema } from "effect"
 import { BetterAuth } from "./better-auth.js"
 
 interface Interface {
@@ -124,6 +124,8 @@ export const layer = Layer.effect(
       sendEmail: (email) => {
         run(mailer.send(email).pipe(Effect.ignoreCause({ log: "Error", message: "Failed to send email" })))
       },
+      logFailure: (message, error, userId) =>
+        runPromise(Effect.logError(message, Cause.die(error)).pipe(Effect.annotateLogs({ posthogDistinctId: userId }))),
       signupGuard: {
         checkEmailSignUp: (email) => runPromise(signupGuard.checkEmailSignUp(email)),
         checkAccountCreation: (email) => runPromise(signupGuard.checkAccountCreation(email)),

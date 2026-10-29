@@ -1,4 +1,4 @@
-import { describe, expect, spyOn } from "bun:test"
+import { describe, expect } from "bun:test"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { SlackApp } from "@ren/core/slack-app"
@@ -118,10 +118,8 @@ describe("Auth", () => {
       const sql = yield* SqlClient.SqlClient
       yield* sql`alter table organization add constraint reject_bell_labs check (slug not like 'bell-labs%')`
 
-      const log = spyOn(console, "log")
       const response = yield* register("dennis@mail.bell-labs.co.uk")
-      const logged = log.mock.calls.flat().join(" ")
-      log.mockRestore()
+      const logged = (yield* TestConsole.logLines).join(" ")
       yield* sql`alter table organization drop constraint reject_bell_labs`
       expect(response.status).toBe(200)
       const session = yield* get("/get-session", sessionCookie(response))
@@ -382,6 +380,7 @@ describe("Auth", () => {
           fetchClientMetadataResource: () => Promise.resolve(new Response(null, { status: 404 })),
           requireEmailVerification: true,
           sendEmail: () => {},
+          logFailure: () => Promise.resolve(),
           signupGuard: {
             checkEmailSignUp: (email) => Effect.runPromise(guard.checkEmailSignUp(email)),
             checkAccountCreation: (email) => Effect.runPromise(guard.checkAccountCreation(email)),

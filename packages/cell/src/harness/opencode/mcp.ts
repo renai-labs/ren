@@ -315,7 +315,7 @@ export const make = Effect.fnUntraced(function* (input: {
       .holdUntil(
         ready([]).pipe(Effect.andThen(watchIfDown), Effect.ensuring(Ref.update(pending, (count) => count - 1))),
       )
-      .pipe(Effect.forkScoped({ startImmediately: true }))
+      .pipe(Effect.withErrorReporting, Effect.forkScoped({ startImmediately: true }))
   }
   // oxlint-disable-next-line ren/no-comments -- A turn calls Ren MCP as its sender: when the sender changes, the prompt waits for the ren server's new headers, so no step runs as the previous sender. Other changes reload in the background (HR19).
   yield* input.context.session.hook("prompt", (event) =>
@@ -350,6 +350,7 @@ export const make = Effect.fnUntraced(function* (input: {
       yield* reload(before.value).pipe(
         Effect.andThen(watchIfDown),
         Effect.ensuring(Ref.update(pending, (count) => count - 1)),
+        Effect.withErrorReporting,
         Effect.forkIn(scope),
       )
     }),

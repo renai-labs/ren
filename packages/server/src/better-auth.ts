@@ -15,7 +15,7 @@ import type { BetterAuthPlugin } from "better-auth"
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
 import { bearer, emailOTP, jwt, organization } from "better-auth/plugins"
 import { genericOAuth } from "better-auth/plugins/generic-oauth"
-import { Effect, Option, Schema } from "effect"
+import { Option, Schema } from "effect"
 import { AuthEmail } from "./auth-email.js"
 import { DefaultOrganization } from "./default-organization.js"
 import { OrganizationAccess } from "./organization-access.js"
@@ -43,6 +43,7 @@ export interface Input {
   readonly mcpResource: string
   readonly fetchClientMetadataResource: ClientMetadataResourceFetch
   readonly sendEmail: (email: Mailer.Email) => void
+  readonly logFailure: (message: string, error: unknown, userId: string) => Promise<void>
   readonly signupGuard: {
     readonly checkEmailSignUp: (email: string) => Promise<Option.Option<SignupGuard.Rejection>>
     readonly checkAccountCreation: (email: string) => Promise<Option.Option<SignupGuard.Rejection>>
@@ -134,21 +135,18 @@ const emailCodes = (input: Input) =>
     },
   })
 
-const logFailure = (message: string, error: unknown, userId: string) =>
-  Effect.runPromise(Effect.logError(message, error).pipe(Effect.annotateLogs({ userId })))
-
 const provisionOrganization =
   (input: Input) =>
   async <Session extends { userId: string; activeOrganizationId?: string | null | undefined }>(session: Session) => {
     if (session.activeOrganizationId) return { data: session }
     const organization = await DefaultOrganization.provision(input.database, session.userId).catch((error: unknown) =>
-      logFailure("Default organization provisioning failed", error, session.userId),
+      input.logFailure("Default organization provisioning failed", error, session.userId),
     )
     if (!organization) return { data: session }
     if (organization.user) {
       await input.provisioning
         .createInitialMemberships(organization.id, organization.user)
-        .catch((error: unknown) => logFailure("Space provisioning failed", error, session.userId))
+        .catch((error: unknown) => input.logFailure("Space provisioning failed", error, session.userId))
     }
     return { data: { ...session, activeOrganizationId: organization.id } }
   }

@@ -134,7 +134,8 @@ export const make = Effect.fnUntraced(function* (
           yield* input.changed
         }),
       )
-      const refresh = Effect.asVoid(Effect.forkIn(lookUp, yield* Effect.scope))
+      const scope = yield* Effect.scope
+      const refresh = lookUp.pipe(Effect.withErrorReporting, Effect.forkIn(scope), Effect.asVoid)
       yield* refresh
       return {
         root,

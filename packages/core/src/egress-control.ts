@@ -63,6 +63,7 @@ export const layerHttp = Layer.effect(
                 send.pipe(
                   Effect.retry({ schedule: Schedule.exponential(Duration.millis(200)), times: 8 }),
                   Effect.catch((error) => Effect.logWarning(`Egress ${url} did not take an invalidate`, error)),
+                  Effect.withErrorReporting,
                   Effect.forkIn(scope),
                   Effect.asVoid,
                 ),

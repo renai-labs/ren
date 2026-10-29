@@ -499,6 +499,7 @@ export const layer = Layer.effect(
     yield* DurableRunner.register(ScheduleRuns.FireRun, (payload) =>
       fire(payload.runId).pipe(
         Effect.orDie,
+        Effect.withErrorReporting,
         Effect.catchCause((cause) =>
           now.pipe(
             Effect.flatMap(() => fail(payload.runId, Cause.pretty(cause))),
@@ -525,7 +526,12 @@ export const layer = Layer.effect(
         ),
     )
 
-    yield* tick.pipe(Effect.andThen(Effect.sleep(tickEvery)), Effect.forever, Effect.forkScoped)
+    yield* tick.pipe(
+      Effect.andThen(Effect.sleep(tickEvery)),
+      Effect.forever,
+      Effect.withErrorReporting,
+      Effect.forkScoped,
+    )
 
     const list = Effect.fn("Schedules.list")(function* (actor: Actor.Info, input: Schedule.ListInput) {
       const search = input.search?.trim()

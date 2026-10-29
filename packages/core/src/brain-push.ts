@@ -48,6 +48,7 @@ export const layer = Layer.effectDiscard(
     ).pipe(
       Effect.tapError((error) => Effect.logWarning(`The ${channel} listener stopped; it listens again`, error)),
       Effect.retry(Schedule.spaced(Duration.seconds(1))),
+      Effect.withErrorReporting,
       Effect.forkScoped,
     )
   }),
