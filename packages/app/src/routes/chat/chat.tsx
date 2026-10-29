@@ -102,7 +102,7 @@ export function ChatPage() {
   const [panel, setPanel] = useState(false)
   const [maximized, setMaximized] = useState(false)
   return (
-    <div className="flex min-h-0 flex-1 [--panel-width:clamp(22rem,34vw,34rem)]">
+    <div className="flex min-h-0 flex-1 [--panel-width:clamp(24rem,40vw,40rem)]">
       <div className={panel && maximized ? "hidden" : "flex min-w-0 flex-1 flex-col"}>
         <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2 group-has-[[data-slot=sidebar][data-state=collapsed]]/sidebar-wrapper:pl-11 max-md:pl-11">
           {page.child ? (
