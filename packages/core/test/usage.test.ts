@@ -12,13 +12,7 @@ import { Seed } from "./lib/seed.js"
 
 const it = testEffect(Usage.layer.pipe(Layer.provideMerge(Testing.layer)))
 
-const chat = Effect.fnUntraced(function* () {
-  const owner = yield* Seed.owner()
-  const brainId = Brain.ID.create()
-  const root = yield* Seed.session({ ...owner, brainId })
-  const agentId = yield* Seed.agent(owner, "analyst", { isSubagent: false })
-  return { ...owner, brainId, root, agentId }
-})
+const owner = Effect.map(Seed.owner(), (found) => ({ ...found, brainId: Brain.ID.create() }))
 
 const event = Effect.fnUntraced(function* (
   found: {
@@ -58,7 +52,7 @@ const stored = Effect.flatMap(Database.Service, (database) =>
 it.live("stores what the producer sent, claims included, and a batch sent two times once", () =>
   Effect.gen(function* () {
     const usage = yield* Usage.Service
-    const found = yield* chat()
+    const found = yield* owner
     const batch = [
       yield* event(found, {
         id: "call-1:sonnet",
@@ -92,7 +86,7 @@ it.live("Postgres refuses an update of a stored event", () =>
   Effect.gen(function* () {
     const usage = yield* Usage.Service
     const database = yield* Database.Service
-    const found = yield* chat()
+    const found = yield* owner
     yield* usage.record([yield* event(found, { id: "call-1" })])
     const update = yield* database.db
       .update(Database.Schema.usage_event)
