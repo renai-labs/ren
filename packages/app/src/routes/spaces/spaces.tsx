@@ -47,6 +47,8 @@ import { api, pageSize } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { useSpacesPage } from "@/routes/spaces/use-spaces-page"
 import { formText } from "@/lib/format"
+import { SpaceCardPrototype, SpaceCardSwitcher } from "@/routes/spaces/space-card"
+import { useSpaceCard } from "@/stores/ui"
 
 const isPrivate = (space: SpaceInfo) => space.kind === "private"
 
@@ -55,6 +57,7 @@ export function SpacesPage() {
   const [filters, setFilters] = useState<Filters>({})
   const [query, setQuery] = useState("")
   const needle = query.trim().toLowerCase()
+  const look = useSpaceCard()
   return (
     <Page
       title="Spaces"
@@ -131,10 +134,15 @@ export function SpacesPage() {
               visibility: [isPrivate(space) ? "private" : "shared"],
             }),
           )
-          .map((space) => (
-            <SpaceCard key={space.id} space={space} />
-          ))}
+          .map((space) =>
+            look === "current" ? (
+              <SpaceCard key={space.id} space={space} />
+            ) : (
+              <SpaceCardPrototype key={space.id} space={space} look={look} />
+            ),
+          )}
       </div>
+      <SpaceCardSwitcher />
     </Page>
   )
 }
