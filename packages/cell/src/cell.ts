@@ -240,12 +240,15 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
     Info,
     Effect.gen(function* () {
       if (!name) return yield* Effect.die(new Error("A brain cell has no name, so no brain id"))
+      const vars = yield* Schema.decodeUnknownEffect(Env.Vars)(env).pipe(Effect.orDie)
+      if (vars.REN_TELEMETRY)
+        yield* Effect.logWarning("REN_TELEMETRY is set, but a brain in a Durable Object does not export telemetry yet")
       return {
         storage,
         brainId: yield* Schema.decodeUnknownEffect(Brain.ID)(name).pipe(Effect.orDie),
         generation: 1,
         version: manifest.version,
-        vars: yield* Schema.decodeUnknownEffect(Env.Vars)(env).pipe(Effect.orDie),
+        vars,
       }
     }),
   )

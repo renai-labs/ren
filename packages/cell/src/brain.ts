@@ -187,6 +187,9 @@ export const layer = Layer.effect(
       HttpApiBuilder.layer(BrainApi).pipe(Layer.provide(handlers), Layer.provide(HttpServer.layerServices)),
     )
     const context = yield* Effect.context<Services>()
-    return Cell.BrainRoutes.of({ owns, fetch: HttpEffect.toWebHandler(app.pipe(Effect.provide(context))) })
+    return Cell.BrainRoutes.of({
+      owns,
+      fetch: HttpEffect.toWebHandlerWith<Services, HttpServerRequest.HttpServerRequest | Scope.Scope>(context)(app),
+    })
   }),
 )

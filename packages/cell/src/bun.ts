@@ -5,8 +5,10 @@ import { Deferred, Duration, Effect, Exit, Layer, ManagedRuntime, Option, Ref, S
 import { mkdirSync } from "node:fs"
 import { rm } from "node:fs/promises"
 import { join } from "node:path"
+import { OtlpExporter } from "effect/observability"
 import manifest from "../package.json"
 import { Brain } from "./brain.js"
+import { BrainTelemetry } from "./brain-telemetry.js"
 import { BrainKeys } from "./brain-keys.js"
 import { BrainStorage } from "./brain-storage.js"
 import { Cell } from "./cell.js"
@@ -108,6 +110,7 @@ const runtime = ManagedRuntime.make(
     ),
     Layer.provideMerge(Sync.layerWith(reader, vars.REN_URL)),
     Layer.provideMerge(Layer.mergeAll(ChatSettings.layer, BrainKeys.layer)),
+    Layer.provideMerge(BrainTelemetry.layer),
     Layer.provideMerge(base),
   ),
 )
@@ -230,6 +233,8 @@ process.on("SIGTERM", () => {
           Effect.orElseSucceed(() => false),
         )
         if (drained) yield* HarnessStorage.flushed(OpenCodeHarness.version)
+        const flusher = yield* OtlpExporter.Flusher
+        yield* flusher.flush.pipe(Effect.timeout("3 seconds"), Effect.ignore)
       }),
     )
     .finally(() => {

@@ -28,6 +28,8 @@ import type { Signature } from "@ren/schema/signature"
 import { Space } from "@ren/schema/space"
 import type { Sync } from "@ren/schema/sync"
 import { SyncApi } from "@ren/host-api/sync-api"
+import { TelemetryApi } from "@ren/host-api/telemetry-api"
+import type { Telemetry } from "@ren/util/telemetry"
 import { Effect, Layer, Option, Redacted } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
@@ -74,6 +76,10 @@ export const hostToken = (
 export const start = (options: { readonly hostname?: string; readonly port?: number } = {}) => {
   const answers = new Map<Session.ID, () => Answer | Promise<Answer>>()
   const calls: Array<Call> = []
+  const exported: Array<
+    | { readonly signal: "traces"; readonly hostToken: string; readonly batch: Telemetry.Traces }
+    | { readonly signal: "logs"; readonly hostToken: string; readonly batch: Telemetry.Logs }
+  > = []
   const pulls: Array<PullRequest> = []
   const held: Array<() => void> = []
   const state = {
@@ -270,6 +276,21 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
         ),
     ),
   )
+  const telemetry = HttpApiBuilder.group(TelemetryApi, "telemetry", (group) =>
+    Effect.succeed(
+      group
+        .handle("telemetry.traces", (request) =>
+          Effect.sync(() => {
+            exported.push({ signal: "traces", hostToken: presented.token, batch: request.payload })
+          }),
+        )
+        .handle("telemetry.logs", (request) =>
+          Effect.sync(() => {
+            exported.push({ signal: "logs", hostToken: presented.token, batch: request.payload })
+          }),
+        ),
+    ),
+  )
   const authentication = Layer.succeed(
     HostAuthentication,
     HostAuthentication.of({
@@ -298,6 +319,7 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
     Layer.mergeAll(
       HttpApiBuilder.layer(RenHostApi).pipe(Layer.provide(handlers)),
       HttpApiBuilder.layer(SyncApi).pipe(Layer.provide(sync)),
+      HttpApiBuilder.layer(TelemetryApi).pipe(Layer.provide(telemetry)),
     ).pipe(Layer.provide(authentication), Layer.provide(HttpServer.layerServices)),
     { disableLogger: true },
   )
@@ -311,6 +333,7 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
     url: `http://127.0.0.1:${server.port ?? 0}`,
     calls,
     pulls,
+    exported,
     synced: (sessionId: Session.ID) => synced.sessions.get(sessionId),
     answer: (sessionId: Session.ID, answer: () => Answer | Promise<Answer>) => {
       answers.set(sessionId, answer)
