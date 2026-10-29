@@ -1,12 +1,27 @@
 name: cli release
+run-name: "cli release ${{ inputs.version || inputs.bump }}"
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: Release version (e.g. 0.1.0)
+      bump:
+        description: Part of the latest release's version to bump
         required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+      version:
+        description: Exact version instead of a bump (e.g. 1.2.3)
+        required: false
         type: string
+      minimum:
+        description: Older versions must upgrade to this release before they call Ren
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: cli-release
@@ -16,8 +31,46 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  version:
     if: github.repository == 'renai-labs/ren'
+    runs-on: ubuntu-latest
+    environment: v2-prod
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      BUMP: ${{ inputs.bump }}
+      VERSION: ${{ inputs.version }}
+      REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://v2.useren.ai' }}
+    steps:
+      - name: Choose version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$VERSION" ]; then
+            next="$VERSION"
+          else
+            status=$(curl -sS -o latest.txt -w '%{http_code}' "$REN2_HOST_URL/ren2/latest.txt")
+            case "$status" in
+              200) latest=$(tr -d '[:space:]' < latest.txt) ;;
+              403 | 404) latest=0.0.0 ;;
+              *) echo "latest.txt answered $status" >&2; exit 1 ;;
+            esac
+            [[ "$latest" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || { echo "latest.txt holds $latest" >&2; exit 1; }
+            major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[3]}
+            case "$BUMP" in
+              major) next="$((major + 1)).0.0" ;;
+              minor) next="$major.$((minor + 1)).0" ;;
+              *) next="$major.$minor.$((patch + 1))" ;;
+            esac
+          fi
+          [[ "$next" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo 'Use a stable version: X.Y.Z' >&2; exit 1; }
+          echo "Releasing ren2 v$next"
+          echo "version=$next" >>"$GITHUB_OUTPUT"
+
+  build:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -34,7 +87,7 @@ jobs:
     environment: v2-prod
     timeout-minutes: 20
     env:
-      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
       RELEASE_TARGET: ${{ matrix.target }}
       REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://v2.useren.ai' }}
     steps:
@@ -43,11 +96,6 @@ jobs:
 
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
-
-      - name: Validate version
-        shell: bash
-        run: |
-          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo 'Use a stable version: X.Y.Z' >&2; exit 1; }
 
       - name: Check CLI
         working-directory: packages/cli
@@ -74,7 +122,7 @@ jobs:
           retention-days: 7
 
   publish:
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
     environment: v2-prod
     timeout-minutes: 20
@@ -82,7 +130,8 @@ jobs:
       contents: read
       id-token: write
     env:
-      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_VERSION: ${{ needs.version.outputs.version }}
+      MINIMUM: ${{ inputs.minimum }}
       DEPLOY: ${{ vars.DEPLOY_NAME }}
       DISTRIBUTION: ${{ vars.APP_DISTRIBUTION_ID }}
       REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://v2.useren.ai' }}
@@ -116,5 +165,8 @@ jobs:
             aws s3 cp dist/oauth-client.json "s3://$bucket/ren2/oauth-client.json" --content-type application/json --cache-control 'public, max-age=3600' --only-show-errors
           fi
           printf '%s\n' "$RELEASE_VERSION" | aws s3 cp - "s3://$bucket/ren2/latest.txt" --content-type text/plain --cache-control no-cache --only-show-errors
-          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths /ren2/install.sh /ren2/latest.txt /ren2/oauth-client.json --query Invalidation.Status --output text
+          if [ "$MINIMUM" = true ]; then
+            printf '%s\n' "$RELEASE_VERSION" | aws s3 cp - "s3://$bucket/ren2/minimum.txt" --content-type text/plain --cache-control no-cache --only-show-errors
+          fi
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths /ren2/install.sh /ren2/latest.txt /ren2/minimum.txt /ren2/oauth-client.json --query Invalidation.Status --output text
           printf 'Install: curl -fsSL %s/ren2/install.sh | bash\n' "$REN2_HOST_URL"
