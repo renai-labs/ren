@@ -9,7 +9,6 @@ import {
   IconApps,
   IconArrowUp,
   IconGitBranch,
-  IconAt,
   IconClipboardText,
   IconPaperclip,
   IconLoader2,
@@ -85,7 +84,7 @@ function AddMenu(props: {
             <Kbd className="ml-auto">/</Kbd>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => props.onInsert("@")}>
-            <IconAt />
+            <IconApps />
             Apps
             <Kbd className="ml-auto">@</Kbd>
           </DropdownMenuItem>
