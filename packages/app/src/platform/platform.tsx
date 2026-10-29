@@ -2,6 +2,7 @@ export * as Platform from "./platform.js"
 
 import { createContext, use } from "react"
 import type { ReactNode } from "react"
+import type { Analytics } from "./analytics.js"
 
 export interface Storage {
   readonly get: (key: string) => string | undefined
@@ -28,6 +29,7 @@ interface Base {
   readonly writeClipboardText?: (text: string) => Promise<void>
   readonly readClipboardImage?: () => Promise<File | undefined>
   readonly onLifecycle?: (listener: (event: "foreground" | "online") => void) => () => void
+  readonly analytics?: Analytics.Interface
 }
 
 export type Info =

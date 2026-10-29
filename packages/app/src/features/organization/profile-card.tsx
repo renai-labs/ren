@@ -26,6 +26,7 @@ export function ProfileCard(props: {
   organization: { id: string; name: string }
 }) {
   const auth = Auth.useClient()
+  const platform = Platform.usePlatform()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [loggingOut, setLoggingOut] = useState(false)
@@ -67,6 +68,7 @@ export function ProfileCard(props: {
         confirmLabel="Log out"
         onConfirm={async () => {
           await auth.signOut()
+          platform.analytics?.reset()
           queryClient.clear()
           await import("../../lib/chat.js").then((loaded) => loaded.Chat.forget())
           await navigate({ to: "/login" })

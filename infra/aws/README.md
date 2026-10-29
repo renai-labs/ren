@@ -6,6 +6,7 @@ The `cli-release.yml` workflow publishes CLI binaries and the installer under `/
 
 ```
 browser ──HTTPS──▶ CloudFront ──▶ S3 (site, /; app, /app/)
+browser ──HTTPS <posthog_proxy.name>.<domain>──▶ PostHog's managed reverse proxy ──▶ PostHog
 browser ──HTTPS api.<domain>──▶ load balancer ──▶ ECS service server :4100
 browser ──HTTPS POST (form the server signed)──▶ S3 (drives)
 server ──E2B API──▶ sandbox (brain + hand) ──every connection, egress.<domain>:1080──▶ egress (EC2) ──▶ internet
@@ -45,7 +46,7 @@ terraform plan -out=plan && terraform apply plan
 | --------------- | ------------------------------------------------------------------------------------------------------ |
 | `<name>/server` | Each key in `server_secret_keys`. PEM values (`EGRESS_*`, `NODE_EXTRA_CA_CERTS`) become files at start |
 | `<name>/egress` | `ca_cert`, `cert`, `key` (mTLS with the server), `mitm_ca_cert`, `mitm_ca_key` (the sandbox CA)        |
-| `<name>/deploy` | `E2B_API_KEY`, for the template build                                                                  |
+| `<name>/deploy` | `E2B_API_KEY`, for the template build; `POSTHOG_CLI_API_KEY`, for the app's source maps (optional)     |
 
 The mTLS certificates: one CA signs a server certificate for `server.<name>.internal` and an egress certificate for `egress.<name>.internal`, both with `serverAuth` and `clientAuth`. The sandbox CA is separate. `repos/iron-proxy/script/certificates.ts` shows the commands.
 
@@ -53,14 +54,18 @@ The mTLS certificates: one CA signs a server certificate for `server.<name>.inte
 
 The deploy workflow runs in the environment that `github_environment` names:
 
-| Kind     | Name                  | Value                                                |
-| -------- | --------------------- | ---------------------------------------------------- |
-| Secret   | `AWS_DEPLOY_ROLE_ARN` | output `deploy_role_arn`                             |
-| Variable | `AWS_REGION`          | `region`                                             |
-| Variable | `DEPLOY_NAME`         | `name`                                               |
-| Variable | `APP_DISTRIBUTION_ID` | output `app_distribution_id`                         |
-| Variable | `EGRESS_INSTANCE_ID`  | output `egress_instance_id`                          |
-| Variable | `REN_API_URL`         | `https://api.<domain>`                               |
-| Variable | `REN2_HOST_URL`       | CLI release origin, currently `https://v2.useren.ai` |
-| Variable | `E2B_TEMPLATE_NAME`   | the brain template's name                            |
-| Variable | `E2B_OWNER`           | the owner tag, the same as `E2B_OWNER` of the server |
+| Kind     | Name                  | Value                                                                                         |
+| -------- | --------------------- | --------------------------------------------------------------------------------------------- |
+| Secret   | `AWS_DEPLOY_ROLE_ARN` | output `deploy_role_arn`                                                                      |
+| Variable | `AWS_REGION`          | `region`                                                                                      |
+| Variable | `DEPLOY_NAME`         | `name`                                                                                        |
+| Variable | `APP_DISTRIBUTION_ID` | output `app_distribution_id`                                                                  |
+| Variable | `EGRESS_INSTANCE_ID`  | output `egress_instance_id`                                                                   |
+| Variable | `REN_API_URL`         | `https://api.<domain>`                                                                        |
+| Variable | `REN2_HOST_URL`       | CLI release origin, currently `https://v2.useren.ai`                                          |
+| Variable | `E2B_TEMPLATE_NAME`   | the brain template's name                                                                     |
+| Variable | `E2B_OWNER`           | the owner tag, the same as `E2B_OWNER` of the server                                          |
+| Variable | `POSTHOG_PROJECT_KEY` | the PostHog project's `phc_` token, which is public; unset, the site and the app send nothing |
+| Variable | `POSTHOG_API_HOST`    | `https://<posthog_proxy.name>.<domain>`                                                       |
+| Variable | `POSTHOG_UI_HOST`     | `https://us.posthog.com`, or `https://eu.posthog.com`                                         |
+| Variable | `POSTHOG_PROJECT_ID`  | the PostHog project's ID, for the source map upload                                           |

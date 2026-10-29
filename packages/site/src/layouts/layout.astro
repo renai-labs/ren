@@ -1,5 +1,6 @@
 ---
 import "../styles/globals.css"
+import Analytics from "../components/analytics.astro"
 import { Footer } from "../components/layout/footer.js"
 import { Navbar } from "../components/layout/navbar.js"
 
@@ -33,6 +34,7 @@ const ogImage = `${site}/og-image.png`
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" href="/ren_logo_dark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <Analytics />
     <script
       type="application/ld+json"
       set:html={JSON.stringify({

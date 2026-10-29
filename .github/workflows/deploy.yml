@@ -196,6 +196,9 @@ jobs:
         env:
           VITE_REN_API_URL: ${{ vars.REN_API_URL }}
           VITE_REN_VERSION: ${{ github.sha }}
+          VITE_POSTHOG_KEY: ${{ vars.POSTHOG_PROJECT_KEY }}
+          VITE_POSTHOG_HOST: ${{ vars.POSTHOG_API_HOST }}
+          VITE_POSTHOG_UI_HOST: ${{ vars.POSTHOG_UI_HOST }}
         run: bun run --cwd packages/app build
 
       - name: Configure AWS credentials
@@ -204,6 +207,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           mask-aws-account-id: true
+
+      - name: Upload source maps
+        env:
+          DEPLOY: ${{ vars.DEPLOY_NAME }}
+          POSTHOG_CLI_HOST: ${{ vars.POSTHOG_UI_HOST || 'https://us.posthog.com' }}
+          POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          POSTHOG_CLI_API_KEY=$(aws secretsmanager get-secret-value --secret-id "$DEPLOY/deploy" --query SecretString --output text | jq -r '.POSTHOG_CLI_API_KEY // ""')
+          if [ -n "$POSTHOG_CLI_API_KEY" ]; then
+            echo "::add-mask::$POSTHOG_CLI_API_KEY"
+            export POSTHOG_CLI_API_KEY
+            bunx @posthog/cli@0.18.12 sourcemap inject --directory packages/app/dist/assets --release-name ren-app --release-version "$GITHUB_SHA" \
+              && bunx @posthog/cli@0.18.12 sourcemap upload --directory packages/app/dist/assets --release-name ren-app --release-version "$GITHUB_SHA" \
+              || echo "::warning::Source maps did not reach PostHog"
+          fi
+          find packages/app/dist -name '*.map' -delete
 
       # Hashed files first and kept a year; then the index, never cached, so it never points at a
       # file that is not there yet.
@@ -233,6 +253,10 @@ jobs:
         uses: ./.github/actions/setup-bun
 
       - name: Build the site
+        env:
+          PUBLIC_POSTHOG_KEY: ${{ vars.POSTHOG_PROJECT_KEY }}
+          PUBLIC_POSTHOG_HOST: ${{ vars.POSTHOG_API_HOST }}
+          PUBLIC_POSTHOG_UI_HOST: ${{ vars.POSTHOG_UI_HOST }}
         run: bun run --cwd packages/site build
 
       - name: Configure AWS credentials

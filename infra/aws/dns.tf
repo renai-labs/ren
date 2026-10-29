@@ -85,6 +85,16 @@ resource "aws_route53_record" "app" {
   }
 }
 
+resource "aws_route53_record" "posthog_proxy" {
+  count = var.posthog_proxy == null ? 0 : 1
+
+  zone_id = aws_route53_zone.this.zone_id
+  name    = "${var.posthog_proxy.name}.${var.domain}"
+  type    = "CNAME"
+  ttl     = 300
+  records = [var.posthog_proxy.target]
+}
+
 # Names only the VPC resolves: the server's egress hook, and each egress copy's control address.
 resource "aws_service_discovery_private_dns_namespace" "this" {
   name = "${var.name}.internal"

@@ -1,4 +1,5 @@
 import { Option, Result, Schema } from "effect"
+import { Analytics } from "./analytics.js"
 import { DraftStore } from "./draft-store.js"
 import type { Platform } from "./platform.js"
 
@@ -12,7 +13,16 @@ const decodeShared = Schema.decodeUnknownOption(
 
 export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
   const channel = typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel("ren-drafts")
+  const posthogKey = import.meta.env.VITE_POSTHOG_KEY
+  const posthogUiHost = import.meta.env.VITE_POSTHOG_UI_HOST
   return {
+    ...(posthogKey && {
+      analytics: Analytics.make({
+        key: posthogKey,
+        apiHost: import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com",
+        ...(posthogUiHost && { uiHost: posthogUiHost }),
+      }),
+    }),
     platform: "web",
     version: import.meta.env.VITE_REN_VERSION ?? "dev",
     serverUrl: import.meta.env.VITE_REN_API_URL ?? window.location.origin,

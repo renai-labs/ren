@@ -1,0 +1,16 @@
+<script>
+  const key = import.meta.env.PUBLIC_POSTHOG_KEY
+  const uiHost = import.meta.env.PUBLIC_POSTHOG_UI_HOST
+  if (key) {
+    const load = () =>
+      void import("posthog-js").then((loaded) =>
+        loaded.default.init(key, {
+          api_host: import.meta.env.PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
+          ...(uiHost && { ui_host: uiHost }),
+          defaults: "2026-08-30",
+        }),
+      )
+    if (typeof requestIdleCallback === "function") requestIdleCallback(load, { timeout: 2000 })
+    else setTimeout(load, 0)
+  }
+</script>
