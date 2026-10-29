@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
-import { Cause, ConfigProvider, Effect, Layer, Schema } from "effect"
+import { Cause, ConfigProvider, Effect, Layer, Schema, Tracer } from "effect"
+import { HttpRouter } from "effect/http"
 import { ErrorTracking } from "../src/error-tracking.js"
 import { PostHog } from "../src/posthog.js"
 import { testEffect } from "./lib/effect.js"
@@ -89,12 +90,65 @@ describe("ErrorTracking", () => {
           Effect.provide(reporting),
         )
 
+        const exception = (value: string) =>
+          expect.objectContaining({
+            properties: expect.objectContaining({ $exception_list: [expect.objectContaining({ value })] }),
+          })
         expect(received).toHaveLength(2)
-        expect(received).toMatchObject([
-          { properties: { $exception_list: [{ value: "the run stopped" }] } },
-          { properties: { $exception_list: [{ value: "the loop failed" }] } },
-        ])
+        expect(received).toEqual(expect.arrayContaining([exception("the run stopped"), exception("the loop failed")]))
       }),
+  )
+
+  it.live("names the HTTP route and path of the request that failed, though its span is not exported", () =>
+    Effect.gen(function* () {
+      received.length = 0
+      const app = HttpRouter.toWebHandler(
+        HttpRouter.add(
+          "GET",
+          "/sessions/:id",
+          Effect.die(new Error("the handler failed")).pipe(Effect.withErrorReporting),
+        ).pipe(Layer.provideMerge(reporting)),
+        { disableLogger: true },
+      )
+      yield* Effect.promise(() => app.handler(new Request("http://localhost/sessions/ses_test?cursor=secret")))
+      yield* Effect.promise(() => app.dispose())
+
+      expect(received).toHaveLength(1)
+      expect(received[0]?.properties).toMatchObject({ "http.route": "/sessions/:id", "url.path": "/sessions/ses_test" })
+    }),
+  )
+
+  it.live("leaves out the trace of a failure whose trace is not exported", () =>
+    Effect.gen(function* () {
+      received.length = 0
+      yield* Effect.die(new Error("an untraced failure")).pipe(
+        Effect.withErrorReporting,
+        Effect.withSpan("Test.untraced"),
+        Effect.provideService(Tracer.CurrentTraceLevel, "Debug"),
+        Effect.provideService(Tracer.MinimumTraceLevel, "Info"),
+        Effect.exit,
+        Effect.provide(reporting),
+      )
+
+      expect(received).toHaveLength(1)
+      expect(received[0]?.properties).not.toHaveProperty("$trace_id")
+    }),
+  )
+
+  it.live("leaves the parameters of a failed query out of the exception", () =>
+    Effect.gen(function* () {
+      received.length = 0
+      yield* Effect.die(new Error("Failed query: insert into message values ($1)\nparams: a private message")).pipe(
+        Effect.withErrorReporting,
+        Effect.exit,
+        Effect.provide(reporting),
+      )
+
+      expect(received).toHaveLength(1)
+      expect(received[0]?.properties).toMatchObject({
+        $exception_list: [{ value: "Failed query: insert into message values ($1)" }],
+      })
+    }),
   )
 
   it.live("names the server and makes no person profile when no user caused the failure", () =>
