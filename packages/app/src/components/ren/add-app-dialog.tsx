@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactElement, type ReactNode } from "react"
 import { IconPlus, IconSearch } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -21,6 +21,7 @@ export function AddAppDialog(props: {
   space: { id: string; name: string }
   added: ReadonlySet<string>
   onAdded: Added
+  trigger?: { render: ReactElement; children: ReactNode } | undefined
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -28,9 +29,15 @@ export function AddAppDialog(props: {
   const rows = catalog.apps.filter((app) => !props.added.has(app.id) && matches(app, query))
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button />}>
-        <IconPlus />
-        Add app
+      <DialogTrigger render={props.trigger?.render ?? <Button />}>
+        {props.trigger ? (
+          props.trigger.children
+        ) : (
+          <>
+            <IconPlus />
+            Add app
+          </>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-5xl">
         <DialogHeader>

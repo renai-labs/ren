@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils"
 import type { Suggest } from "@/routes/chat/use-composer-suggestions"
 import { toast } from "sonner"
 import { useQuery } from "@tanstack/react-query"
-import { Link } from "@tanstack/react-router"
 import {
   IconApps,
   IconArrowUp,
@@ -47,7 +46,9 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { ProfileDialog, type ProfileTarget } from "@/components/ren/profile-dialog"
+import { AddAppDialog } from "@/components/ren/add-app-dialog"
 import { useCatalog } from "@/hooks/use-catalog"
+import { useSpaces } from "@/hooks/use-spaces"
 import { api } from "@/lib/api"
 import { gaps } from "@/lib/apps"
 
@@ -90,6 +91,7 @@ function AddMenu(props: { onInsert: (text: string) => void; onAttach: () => void
 
 function AppsStrip(props: { spaceId: string }) {
   const catalog = useCatalog()
+  const spaceName = useSpaces().spaceName
   const [connecting, setConnecting] = useState<ProfileTarget>()
   const reach = useQuery({
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId }),
@@ -106,15 +108,23 @@ function AppsStrip(props: { spaceId: string }) {
   if (reach.isPending) return null
   if (profiles.length === 0)
     return (
-      <InputGroupButton
-        size="sm"
-        className="-ml-1 font-normal text-muted-foreground"
-        nativeButton={false}
-        render={<Link to="/spaces/$spaceId/apps" params={{ spaceId: props.spaceId }} />}
-      >
-        <IconApps />
-        Add apps
-      </InputGroupButton>
+      <>
+        <AddAppDialog
+          space={{ id: props.spaceId, name: spaceName(props.spaceId) }}
+          added={new Set()}
+          onAdded={(added) => setConnecting({ appId: added.app.id, profileId: added.profileId })}
+          trigger={{
+            render: <InputGroupButton size="sm" className="-ml-1 font-normal text-muted-foreground" />,
+            children: (
+              <>
+                <IconApps />
+                Add apps
+              </>
+            ),
+          }}
+        />
+        {connecting ? <ProfileDialog {...connecting} onClose={() => setConnecting(undefined)} /> : null}
+      </>
     )
   const apps = [...new Map(profiles.map((profile) => [profile.app, profile.icon] as const))]
   const shown = apps.slice(0, 3)
