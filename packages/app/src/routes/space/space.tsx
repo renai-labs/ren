@@ -7,35 +7,23 @@ import { Tabs } from "@/components/ui/tabs"
 import { Page, PageTabsList, PageTabsTrigger } from "@/components/ren/page"
 import { RowMenu } from "@/components/ren/row-menu"
 import { api, errorMessage } from "@/lib/api"
+import { spaceSectionOf, spaceSections, type SpaceSection } from "@/components/ren/space-sidebar"
 import { useSpace } from "@/routes/space/use-space"
-
-const tabs = ["overview", "members", "apps", "repositories", "channels", "credentials", "schedules", "factory"] as const
-
-type Tab = (typeof tabs)[number]
-
-const isTab = (value: string): value is Tab => tabs.some((tab) => tab === value)
-
-const tabPaths = {
-  overview: "/spaces/$spaceId",
-  members: "/spaces/$spaceId/members",
-  apps: "/spaces/$spaceId/apps",
-  repositories: "/spaces/$spaceId/repositories",
-  channels: "/spaces/$spaceId/channels",
-  credentials: "/spaces/$spaceId/credentials",
-  schedules: "/spaces/$spaceId/schedules",
-  factory: "/spaces/$spaceId/factory",
-} as const
+import { useSpaceNav } from "@/stores/ui"
 
 function useSpaceLayout() {
   const space = useSpace()
   const navigate = useNavigate()
   const path = useLocation({ select: (location) => location.pathname })
   const archive = useMutation(api.space.archive.mutationOptions())
-  const last = path.split("/").at(-1) ?? ""
   return {
     space,
-    tab: isTab(last) ? last : "overview",
-    openTab: (tab: Tab) => void navigate({ to: tabPaths[tab], params: { spaceId: space.id } }),
+    tab: spaceSectionOf(path),
+    inSidebar: useSpaceNav() === "sidebar",
+    openTab: (tab: SpaceSection) => {
+      const section = spaceSections.find((each) => each.value === tab)
+      if (section) void navigate({ to: section.to, params: { spaceId: space.id } })
+    },
     archive: () =>
       archive.mutateAsync(
         { id: space.id },
@@ -80,7 +68,7 @@ export function SpaceLayout() {
     <Page
       title={space.name}
       description={space.description ?? undefined}
-      back={back}
+      back={page.inSidebar ? undefined : back}
       media={media(space.kind)}
       menu={
         space.canArchive ? (
@@ -101,23 +89,26 @@ export function SpaceLayout() {
         ) : undefined
       }
     >
-      <Tabs value={page.tab} onValueChange={(value: Tab) => page.openTab(value)}>
-        <PageTabsList>
-          <PageTabsTrigger value="overview">Overview</PageTabsTrigger>
-          <PageTabsTrigger value="members" count={space.memberCount}>
-            Members
-          </PageTabsTrigger>
-          <PageTabsTrigger value="apps">Apps</PageTabsTrigger>
-          <PageTabsTrigger value="repositories">Repositories</PageTabsTrigger>
-          <PageTabsTrigger value="channels">Channels</PageTabsTrigger>
-          <PageTabsTrigger value="credentials">Keys</PageTabsTrigger>
-          <PageTabsTrigger value="schedules">Scheduled</PageTabsTrigger>
-          <PageTabsTrigger value="factory">Factory</PageTabsTrigger>
-        </PageTabsList>
-        <div className="pt-4">
-          <Outlet />
-        </div>
-      </Tabs>
+      {page.inSidebar ? (
+        <Outlet />
+      ) : (
+        <Tabs value={page.tab} onValueChange={(value: SpaceSection) => page.openTab(value)}>
+          <PageTabsList>
+            {spaceSections.map((section) => (
+              <PageTabsTrigger
+                key={section.value}
+                value={section.value}
+                count={section.value === "members" ? space.memberCount : undefined}
+              >
+                {section.label}
+              </PageTabsTrigger>
+            ))}
+          </PageTabsList>
+          <div className="pt-4">
+            <Outlet />
+          </div>
+        </Tabs>
+      )}
     </Page>
   )
 }

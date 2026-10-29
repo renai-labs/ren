@@ -1,15 +1,16 @@
 import { RegistryContext } from "@effect/atom-react"
 import { ChatReact } from "@ren/chat/react"
-import { Outlet } from "@tanstack/react-router"
+import { Outlet, useLocation } from "@tanstack/react-router"
 import { useEffect } from "react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/ren/app-sidebar"
 import { NewTaskDialog, useNewTaskShortcut } from "@/components/ren/new-task-dialog"
 import { SearchDialog } from "@/components/ren/search-dialog"
 import { SettingsSidebar } from "@/components/ren/settings-sidebar"
+import { SpaceNavSwitcher, SpaceSidebar } from "@/components/ren/space-sidebar"
 import { useMe } from "@/hooks/use-me"
 import { chatFor } from "@/lib/chat"
-import { toggleSearch } from "@/stores/ui"
+import { toggleSearch, useSpaceNav } from "@/stores/ui"
 
 const insetClass = "h-svh overflow-hidden md:h-[calc(100svh-1rem)] md:shadow-none md:inset-ring md:inset-ring-border"
 
@@ -30,11 +31,13 @@ export function AppShell() {
   const chat = chatFor(me.user.id)
   useSearchShortcut()
   useNewTaskShortcut()
+  const spaceId = useLocation({ select: (location) => /^\/spaces\/([^/]+)/u.exec(location.pathname)?.[1] })
+  const spaceSidebar = useSpaceNav() === "sidebar" && spaceId !== undefined
   return (
     <RegistryContext value={chat.registry}>
       <ChatReact.Provider atoms={chat.atoms}>
         <SidebarProvider>
-          <AppSidebar />
+          {spaceSidebar ? <SpaceSidebar spaceId={spaceId} /> : <AppSidebar />}
           <SidebarInset className={insetClass}>
             <div
               data-slot="page-scroll"
@@ -45,6 +48,7 @@ export function AppShell() {
           </SidebarInset>
           <SearchDialog />
           <NewTaskDialog />
+          <SpaceNavSwitcher />
         </SidebarProvider>
       </ChatReact.Provider>
     </RegistryContext>

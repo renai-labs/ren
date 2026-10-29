@@ -9,6 +9,7 @@ import {
   IconBook,
   IconCalendar,
   IconChecklist,
+  IconChevronRight,
   IconChevronUp,
   IconClock,
   IconCube,
@@ -16,6 +17,7 @@ import {
   IconHelpCircle,
   IconActivity,
   IconLayoutGrid,
+  IconLock,
   IconMessage,
   IconLogout,
   IconPlus,
@@ -24,6 +26,7 @@ import {
 } from "@tabler/icons-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,10 +50,14 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { FilterMenu, passes, type FilterProperty, type Filters } from "@/components/ren/filter-menu"
@@ -66,7 +73,7 @@ import { resetSession } from "@/lib/chat"
 import { initials } from "@/lib/format"
 import { docsUrl, founderCallUrl } from "@/lib/links"
 import { sessionTitle, sidebarSessionsOptions } from "@/lib/sessions"
-import { openSearch } from "@/stores/ui"
+import { openSearch, useSpaceNav } from "@/stores/ui"
 
 const pages = [
   { to: "/spaces", label: "Spaces", icon: IconCube },
@@ -137,6 +144,45 @@ function ChatStatus(props: { sessionId: string; busy: boolean }) {
   )
 }
 
+const spaceRow =
+  "h-7.5 font-medium [&>svg]:size-4 [&>svg]:text-sidebar-foreground/70 data-active:[&>svg]:text-sidebar-accent-foreground"
+
+function SpacesTree(props: { path: string }) {
+  const spaces = useSpaces().spaces
+  const [open, setOpen] = useState(true)
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} render={<SidebarMenuItem />}>
+      <SidebarMenuButton className={sidebarRow} isActive={props.path === "/spaces"} render={<Link to="/spaces" />}>
+        <IconCube />
+        <span>Spaces</span>
+      </SidebarMenuButton>
+      <SidebarMenuAction
+        render={<CollapsibleTrigger />}
+        aria-label={open ? "Collapse spaces" : "Expand spaces"}
+        className="peer-data-[size=default]/menu-button:top-1.25 aria-expanded:[&>svg]:rotate-90"
+      >
+        <IconChevronRight className="transition-transform duration-150 ease-out" />
+      </SidebarMenuAction>
+      <CollapsibleContent>
+        <SidebarMenuSub className="mr-0 gap-px pr-0">
+          {spaces.map((space) => (
+            <SidebarMenuSubItem key={space.id}>
+              <SidebarMenuSubButton
+                className={spaceRow}
+                isActive={props.path.startsWith(`/spaces/${space.id}`)}
+                render={<Link to="/spaces/$spaceId" params={{ spaceId: space.id }} />}
+              >
+                {space.kind === "private" ? <IconLock /> : <IconCube />}
+                <span>{space.name}</span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+          ))}
+        </SidebarMenuSub>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 function LoadMore(props: { onVisible: () => void }) {
   return (
     <li
@@ -167,6 +213,7 @@ export function AppSidebar() {
   const [filters, setFilters] = useState<Filters>({})
   const updated = (["today", "week", "month"] as const).find((key) => key === filters.updated?.at(0))
   const now = useNow()
+  const spaceTree = useSpaceNav() === "sidebar"
   const chats = allChats.filter(
     (chat) =>
       passes(
@@ -226,18 +273,22 @@ export function AppSidebar() {
                   <Kbd className="border">{shortcut}</Kbd>
                 </SidebarMenuBadge>
               </SidebarMenuItem>
-              {pages.map((page) => (
-                <SidebarMenuItem key={page.to}>
-                  <SidebarMenuButton
-                    className={sidebarRow}
-                    isActive={path.startsWith(page.to)}
-                    render={<Link to={page.to} />}
-                  >
-                    <page.icon />
-                    <span>{page.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {pages.map((page) =>
+                spaceTree && page.to === "/spaces" ? (
+                  <SpacesTree key={page.to} path={path} />
+                ) : (
+                  <SidebarMenuItem key={page.to}>
+                    <SidebarMenuButton
+                      className={sidebarRow}
+                      isActive={path.startsWith(page.to)}
+                      render={<Link to={page.to} />}
+                    >
+                      <page.icon />
+                      <span>{page.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ),
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
