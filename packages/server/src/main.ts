@@ -28,6 +28,7 @@ import { PersonCredentials } from "@ren/core/person-credentials"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
+import { Deployment } from "@ren/core/deployment"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { ErrorTracking } from "@ren/core/error-tracking"
@@ -51,7 +52,9 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Postgres } from "@ren/db/postgres"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
-import { Config, Effect, Layer, Option } from "effect"
+import { Observability } from "@ren/schema/observability"
+import { Telemetry } from "@ren/util/telemetry"
+import { Config, Effect, Layer, Option, References } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -126,6 +129,16 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(Layer.mergeAll(envelope, Access.layer, OAuthFetch.layerPublic)),
 )
 
+const observability = Layer.mergeAll(
+  Layer.unwrap(Effect.map(Deployment.telemetry, Telemetry.layer)).pipe(Layer.provide(FetchHttpClient.layer)),
+  Layer.unwrap(
+    Effect.map(Config.LogLevel("LOG_LEVEL").pipe(Config.withDefault("Info")), (level) =>
+      Layer.succeed(References.MinimumLogLevel, level),
+    ),
+  ),
+  Layer.unwrap(Effect.map(Config.LogLevel("TRACE_LEVEL").pipe(Config.withDefault("Info")), Observability.layer)),
+)
+
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([
     Layer.mergeAll(
@@ -155,6 +168,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       idleTimeout: Config.succeed(10),
     }),
   ),
+  Layer.provide(observability),
   Layer.launch,
   BunRuntime.runMain,
 )
