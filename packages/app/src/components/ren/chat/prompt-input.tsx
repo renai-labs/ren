@@ -28,8 +28,7 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@/components/ui/attachment"
-import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarBadge, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar"
 import { Kbd } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
@@ -109,7 +108,10 @@ function AppsStrip(props: { spaceId: string }) {
     gaps: gaps(profile),
   }))
   if (reach.isPending) return null
-  const apps = [...new Map(profiles.map((profile) => [profile.app, profile.icon] as const))]
+  const pending = new Set(profiles.filter((profile) => profile.gaps.length > 0).map((profile) => profile.app))
+  const apps = [...new Map(profiles.map((profile) => [profile.app, profile.icon] as const))].toSorted(
+    ([a], [b]) => Number(pending.has(b)) - Number(pending.has(a)),
+  )
   const shown = apps.slice(0, 3)
   const missing = profiles.filter((profile) => profile.gaps.length > 0).length
   const dialogs = (
@@ -151,6 +153,7 @@ function AppsStrip(props: { spaceId: string }) {
               <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
                 <AvatarImage src={icon} alt="" />
                 <AvatarFallback className="bg-secondary">{app.charAt(0)}</AvatarFallback>
+                {pending.has(app) ? <AvatarBadge className="-right-0.5 -bottom-0.5 bg-chart-3 ring-card" /> : null}
               </Avatar>
             ))}
             {apps.length > shown.length ? (
@@ -159,7 +162,6 @@ function AppsStrip(props: { spaceId: string }) {
               </AvatarGroupCount>
             ) : null}
           </AvatarGroup>
-          {missing ? <Badge className="bg-chart-3 text-primary-foreground">{missing}</Badge> : null}
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
           <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
