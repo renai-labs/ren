@@ -114,6 +114,7 @@ export function ScheduleGrid(props: { list: Schedules }) {
                     <TableCell>
                       <span className="relative flex items-center gap-2">
                         <Switch
+                          className="data-checked:bg-ring *:data-checked:bg-white!"
                           checked={active}
                           disabled={schedule.status === "ended"}
                           onCheckedChange={() => list.toggle(schedule)}
