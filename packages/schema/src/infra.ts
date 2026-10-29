@@ -262,9 +262,26 @@ export const Kind = Schema.Literals([
 })
 export type Kind = typeof Kind.Type
 
+export interface Value extends Schema.Schema.Type<typeof Value> {}
+export const Value = Schema.Struct({
+  field: Schema.String.annotate({ description: "The field, with dots for nested fields: settings.instructions." }),
+  ren: Schema.optionalKey(Schema.String.annotate({ description: "The value in Ren. Without it, Ren has none." })),
+  folder: Schema.optionalKey(
+    Schema.String.annotate({ description: "The value in the folder. Without it, the folder has none." }),
+  ),
+}).annotate({ identifier: "Infra.Value", description: "A field that differs between Ren and the folder, as text." })
+
 export interface Change extends Schema.Schema.Type<typeof Change> {}
 export const Change = Schema.Struct({
-  action: Schema.Literals(["create", "update", "archive"]),
+  action: Schema.Literals(["create", "update", "archive"]).annotate({
+    description: "What apply does to make Ren match the folder.",
+  }),
+  status: Schema.optionalKey(
+    Schema.Literals(["conflict", "changed", "new"]).annotate({
+      description:
+        "Without it, apply runs the change. conflict: changed in the folder and in Ren since the lock; apply runs it only with force. changed: changed in Ren only. new: in Ren and not in the lock. Apply skips changed and new, and pull writes them.",
+    }),
+  ),
   kind: Kind,
   path: Schema.String.annotate({
     description:
@@ -272,6 +289,7 @@ export const Change = Schema.Struct({
   }),
   from: Schema.optionalKey(Schema.String.annotate({ description: "The path before a rename or a move." })),
   fields: Schema.Array(Schema.String).annotate({ description: "The fields that an update changes." }),
+  values: Schema.optionalKey(Schema.Array(Value)),
 }).annotate({ identifier: "Infra.Change" })
 
 export interface Problem extends Schema.Schema.Type<typeof Problem> {}
@@ -279,23 +297,52 @@ export const Problem = Schema.Struct({ path: Schema.String, message: Schema.Stri
   identifier: "Infra.Problem",
 })
 
+export interface Lock extends Schema.Schema.Type<typeof Lock> {}
+export const Lock = Schema.Struct({
+  organization: Bindings.fields.organization,
+  resources: Schema.Record(Schema.String, Schema.String).annotate({
+    description: "For each resource path, the version that the folder last saw.",
+  }),
+}).annotate({
+  identifier: "Infra.Lock",
+  description: "The ren.lock file. Pull and apply write it; plan, apply and pull read it.",
+})
+
 export interface PlanInput extends Schema.Schema.Type<typeof PlanInput> {}
-export const PlanInput = Schema.Struct({ spec: Spec, bindings: Bindings }).annotate({ identifier: "Infra.PlanInput" })
+export const PlanInput = Schema.Struct({
+  spec: Spec,
+  bindings: Bindings,
+  lock: Schema.optional(Lock.annotate({ description: "Without it, the folder has not pulled yet." })),
+}).annotate({ identifier: "Infra.PlanInput" })
 
 export interface Plan extends Schema.Schema.Type<typeof Plan> {}
 export const Plan = Schema.Struct({
   changes: Schema.Array(Change),
   problems: Schema.Array(Problem).annotate({ description: "A plan with problems cannot be applied." }),
   digest: Schema.String.annotate({ description: "Apply refuses the plan when the digest has changed." }),
+  lock: Lock.annotate({ description: "The lock with the version of each resource that the folder and Ren agree on." }),
 }).annotate({ identifier: "Infra.Plan" })
 
 export interface ApplyInput extends Schema.Schema.Type<typeof ApplyInput> {}
-export const ApplyInput = Schema.Struct({ ...PlanInput.fields, digest: Schema.String }).annotate({
+export const ApplyInput = Schema.Struct({
+  ...PlanInput.fields,
+  digest: Schema.String,
+  force: Schema.optional(Schema.Boolean.annotate({ description: "Apply the folder over each conflict." })),
+}).annotate({
   identifier: "Infra.ApplyInput",
 })
 
 export interface Applied extends Schema.Schema.Type<typeof Applied> {}
-export const Applied = Schema.Struct({ changes: Schema.Array(Change) }).annotate({ identifier: "Infra.Applied" })
+export const Applied = Schema.Struct({ changes: Schema.Array(Change), lock: Lock }).annotate({
+  identifier: "Infra.Applied",
+})
+
+export interface PullInput extends Schema.Schema.Type<typeof PullInput> {}
+export const PullInput = Schema.Struct({
+  spec: Schema.optional(Spec.annotate({ description: "Without it, the folder is empty." })),
+  bindings: Schema.optional(Bindings),
+  lock: Schema.optional(Lock),
+}).annotate({ identifier: "Infra.PullInput" })
 
 export interface PulledApp extends Schema.Schema.Type<typeof PulledApp> {}
 export const PulledApp = Schema.Struct({
@@ -338,6 +385,14 @@ export const Pulled = Schema.Struct({
   spec: Schema.Struct({
     org: OrganizationSettings.UpdateInput,
     spaces: Schema.Record(Primitive.Slug, PulledSpace),
+  }),
+  lock: Lock.annotate({ description: "The lock for the folder once pull writes it." }),
+  write: Schema.Array(Schema.String).annotate({ description: "The resources that changed only in Ren: write them." }),
+  remove: Schema.Array(Schema.String).annotate({
+    description: "The resources that Ren archived and the folder did not change: remove them.",
+  }),
+  conflicts: Schema.Array(Change).annotate({
+    description: "The resources that changed in the folder and in Ren. With any, pull writes nothing.",
   }),
 }).annotate({
   identifier: "Infra.Pulled",

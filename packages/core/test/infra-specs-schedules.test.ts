@@ -38,7 +38,10 @@ describe("InfraSpecs schedules", () => {
         home: {
           name: "Home",
           agents: { reporter: {} },
-          schedules: { report: daily({ agent: "reporter" }), digest: daily({ name: "Digest", cron: "0  8 * * 1" }) },
+          schedules: {
+            report: daily({ name: "report", agent: "reporter" }),
+            digest: daily({ name: "Digest", cron: "0  8 * * 1" }),
+          },
         },
       })
 
@@ -52,7 +55,8 @@ describe("InfraSpecs schedules", () => {
         ],
         problems: [],
       })
-      yield* infra.apply(o.admin, { ...first, digest: created.digest })
+      const applied = yield* infra.apply(o.admin, { ...first, digest: created.digest })
+      expect(applied.lock).toEqual((yield* infra.pull(o.admin, {})).lock)
       const reporter = yield* agents.get(o.admin, "reporter")
       const after = yield* listed(o.admin, o.home.id)
       expect(after.get("report")).toMatchObject({
@@ -71,15 +75,16 @@ describe("InfraSpecs schedules", () => {
           schedules: { report: daily({ message: "Post the weekly report.", cron: "0 9 * * 1", enabled: false }) },
         },
       })
-      const updated = yield* infra.plan(o.admin, second)
+      const locked = yield* InfraFixture.current(o.admin, second)
+      const updated = yield* infra.plan(o.admin, locked)
 
-      expect(updated.changes).toEqual([
+      expect(InfraFixture.withoutValues(updated.changes)).toEqual([
         InfraFixture.change("update", "schedule", "spaces/home/schedules/report", {
           fields: ["agent", "when", "message", "enabled"],
         }),
         InfraFixture.change("archive", "schedule", "spaces/home/schedules/digest"),
       ])
-      yield* infra.apply(o.admin, { ...second, digest: updated.digest })
+      yield* infra.apply(o.admin, { ...locked, digest: updated.digest })
       const paused = yield* listed(o.admin, o.home.id)
       expect([...paused.keys()]).toEqual(["report"])
       expect(paused.get("report")).toMatchObject({
@@ -93,14 +98,15 @@ describe("InfraSpecs schedules", () => {
       const third = input({
         home: { name: "Home", agents: { reporter: {} }, schedules: { report: daily({ agent: "reporter" }) } },
       })
-      const resumed = yield* infra.plan(o.admin, third)
+      const relocked = yield* InfraFixture.current(o.admin, third)
+      const resumed = yield* infra.plan(o.admin, relocked)
 
-      expect(resumed.changes).toEqual([
+      expect(InfraFixture.withoutValues(resumed.changes)).toEqual([
         InfraFixture.change("update", "schedule", "spaces/home/schedules/report", {
           fields: ["agent", "when", "message", "enabled"],
         }),
       ])
-      yield* infra.apply(o.admin, { ...third, digest: resumed.digest })
+      yield* infra.apply(o.admin, { ...relocked, digest: resumed.digest })
       expect((yield* listed(o.admin, o.home.id)).get("report")).toMatchObject({
         agentId: reporter.id,
         status: "active",
@@ -140,7 +146,7 @@ describe("InfraSpecs schedules", () => {
         }),
       )
 
-      const pulled = yield* infra.pull(o.admin)
+      const pulled = yield* infra.pull(o.admin, {})
 
       expect(pulled.spec.spaces["home"]?.schedules).toEqual({
         digest: { ...daily(), enabled: false },
@@ -158,10 +164,13 @@ describe("InfraSpecs schedules", () => {
       })
       expect((yield* listed(o.admin, o.home.id)).get("reminder")).toMatchObject({ status: "active" })
 
-      const taken = yield* infra.plan(o.admin, {
-        bindings: o.bindings,
-        spec: InfraFixture.spec({ home: { name: "Home", schedules: { reminder: daily() } } }),
-      })
+      const taken = yield* infra.plan(
+        o.admin,
+        yield* InfraFixture.current(o.admin, {
+          bindings: o.bindings,
+          spec: InfraFixture.spec({ home: { name: "Home", schedules: { reminder: daily() } } }),
+        }),
+      )
 
       expect(taken.problems).toEqual([
         {

@@ -37,6 +37,16 @@ const untilOf = (declaration: Schedule.Declaration) =>
 
 const key = (spaceId: Space.ID, slug: string) => `${spaceId}/${slug}`
 
+export const canonical = (slug: string, declaration: Schedule.Declaration) => ({
+  name: declaration.name ?? slug,
+  ...(declaration.agent && { agent: declaration.agent }),
+  cron: normalize(declaration.cron),
+  timeZone: declaration.timeZone,
+  until: untilOf(declaration),
+  message: declaration.message,
+  enabled: declaration.enabled,
+})
+
 const whenOf = (declaration: Schedule.Declaration) => ({
   cron: declaration.cron,
   timeZone: declaration.timeZone,
@@ -118,7 +128,8 @@ export const make = Effect.gen(function* () {
     const writes = declared.flatMap((entry): Array<InfraPlan.Step> => {
       const target = path(entry.space, entry.slug)
       const declaration = entry.schedule
-      const name = declaration.name ?? entry.slug
+      const wanted = canonical(entry.slug, declaration)
+      const name = wanted.name
       const current = entry.liveId ? byKey.get(key(entry.liveId, entry.slug)) : undefined
       if (!current) {
         context.touch(entry.liveId)
@@ -143,14 +154,11 @@ export const make = Effect.gen(function* () {
       }
       const agent = current.agentId ? (context.agentName(current.agentId) ?? current.agentId) : undefined
       const fields = InfraPlan.changed({
-        name: current.name !== name,
-        agent: agent !== declaration.agent,
-        when:
-          current.cron !== normalize(declaration.cron) ||
-          current.timeZone !== declaration.timeZone ||
-          current.until !== untilOf(declaration),
-        message: current.message !== declaration.message,
-        enabled: current.enabled !== declaration.enabled,
+        name: current.name !== wanted.name,
+        agent: agent !== wanted.agent,
+        when: current.cron !== wanted.cron || current.timeZone !== wanted.timeZone || current.until !== wanted.until,
+        message: current.message !== wanted.message,
+        enabled: current.enabled !== wanted.enabled,
       })
       if (fields.length === 0) return []
       context.touch(current.spaceId)

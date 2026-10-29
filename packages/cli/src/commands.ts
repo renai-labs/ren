@@ -6,11 +6,23 @@ export const folder = {
   folder: Argument.String("folder").pipe(Argument.withDescription("Spec folder"), Argument.withDefault(".ren")),
 }
 
+export const planOptions = {
+  ...folder,
+  force: Flag.Boolean("force").pipe(
+    Flag.withDescription("Show each conflict as the value that apply --force overwrites"),
+    Flag.withDefault(false),
+  ),
+}
+
 export const applyOptions = {
   ...folder,
   plan: Flag.String("plan").pipe(Flag.withDescription("Plan digest (required noninteractively)"), Flag.optional),
   allowArchive: Flag.Boolean("allow-archive").pipe(
     Flag.withDescription("Allow archives noninteractively"),
+    Flag.withDefault(false),
+  ),
+  force: Flag.Boolean("force").pipe(
+    Flag.withDescription("Apply the folder over each resource that also changed in Ren"),
     Flag.withDefault(false),
   ),
 }
@@ -34,6 +46,6 @@ export const upgrade = Command.make("upgrade", upgradeOptions).pipe(Command.with
 export const health = Command.make("health").pipe(Command.withDescription("Check server health"))
 export const infra = Command.make("infra").pipe(Command.withDescription("Manage infrastructure"))
 export const validate = Command.make("validate", folder).pipe(Command.withDescription("Validate a local spec"))
-export const plan = Command.make("plan", folder).pipe(Command.withDescription("Preview changes"))
+export const plan = Command.make("plan", planOptions).pipe(Command.withDescription("Preview changes"))
 export const apply = Command.make("apply", applyOptions).pipe(Command.withDescription("Apply changes"))
 export const pull = Command.make("pull", folder).pipe(Command.withDescription("Pull org settings, spaces and agents"))

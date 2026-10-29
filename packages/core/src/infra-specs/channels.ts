@@ -45,6 +45,25 @@ const bindingPath = (space: string, slug: string) => `deploy.yaml/spaces/${space
 const placeKey = (installId: ChannelInstall.ID, provider: Provider, place: string) =>
   `${installId}/${provider === "github" ? place.toLowerCase() : place}`
 
+export const canonical = (
+  declaration: Channel.Declaration,
+  target: Channel.Target | undefined,
+  options: { readonly fallback: boolean | undefined },
+) => {
+  const kept = declaration.fallback ?? options.fallback
+  return {
+    kind: declaration.kind,
+    ...(declaration.agent && { agent: declaration.agent }),
+    ...(typeof kept === "boolean" && { fallback: kept }),
+    triggers: Object.fromEntries(
+      Object.entries(declaration.triggers ?? {}).map(([id, trigger]) => [id, trigger.prompt ?? null]),
+    ),
+    ...(target && {
+      target: target.kind === "github" ? { kind: target.kind, repository: target.repository.toLowerCase() } : target,
+    }),
+  }
+}
+
 const sorted = (triggers: ReadonlyArray<Channel.TriggerSetting>) =>
   triggers
     .toSorted((left, right) => left.id.localeCompare(right.id))
@@ -157,7 +176,10 @@ export const make = Effect.gen(function* () {
     return page(1)
   }
 
-  const diff = (context: InfraPlan.Context, live: Live): InfraPlan.Planned => {
+  const diff = (
+    context: InfraPlan.Context,
+    live: Live,
+  ): InfraPlan.Planned & { readonly aliases: ReadonlyMap<ChannelMapping.ID, string> } => {
     const problems: Array<Infra.Problem> = []
     const installs = new Map(live.installs.map((install) => [install.provider, install]))
     const pulled = new Map(named(live).map((entry) => [entry.mapping.id, entry.slug]))
@@ -295,13 +317,19 @@ export const make = Effect.gen(function* () {
         )
       })
 
-    return { steps: writes.toSorted(InfraPlan.byPath), removals: removals.toSorted(InfraPlan.byPath), problems }
+    return {
+      steps: writes.toSorted(InfraPlan.byPath),
+      removals: removals.toSorted(InfraPlan.byPath),
+      problems,
+      aliases: new Map(resolved.flatMap((entry) => (entry.current ? [[entry.current.id, entry.slug] as const] : []))),
+    }
   }
 
   const pull = (
     live: Live,
     spaceId: Space.ID,
     name: (id: Agent.ID) => string | undefined,
+    aliases: ReadonlyMap<ChannelMapping.ID, string>,
   ): Record<string, Channel.Declaration> => {
     return Object.fromEntries(
       named(live)
@@ -310,7 +338,7 @@ export const make = Effect.gen(function* () {
           const mapping = entry.mapping
           const agent = mapping.agentId ? name(mapping.agentId) : undefined
           return [
-            entry.slug,
+            aliases.get(mapping.id) ?? entry.slug,
             {
               kind: mapping.provider,
               purpose: `${Channel.titles[mapping.provider]} ${mapping.placeName}`,
@@ -327,12 +355,16 @@ export const make = Effect.gen(function* () {
     )
   }
 
-  const pullBindings = (live: Live, spaceId: Space.ID): Record<string, Channel.Target> => {
+  const pullBindings = (
+    live: Live,
+    spaceId: Space.ID,
+    aliases: ReadonlyMap<ChannelMapping.ID, string>,
+  ): Record<string, Channel.Target> => {
     return Object.fromEntries(
       named(live)
         .filter((entry) => entry.mapping.spaceId === spaceId)
         .map((entry): [string, Channel.Target] => [
-          entry.slug,
+          aliases.get(entry.mapping.id) ?? entry.slug,
           entry.mapping.provider === "github"
             ? { kind: "github", repository: entry.mapping.placeName }
             : { kind: "slack", channelId: entry.mapping.place },

@@ -1562,15 +1562,25 @@ const adaptGroupSignIn = (raw: RawClient["sign-in"]) => ({
   "sign-in-provider": { list: EndpointSignInSignInProviderList(raw) },
 })
 
-const EndpointInfraPull = (raw: RawClient["infra"]) => () => raw["infra.pull"]({}).pipe(Effect.mapError(mapClientError))
+type InfraPullRequest = Parameters<RawClient["infra"]["infra.pull"]>[0]
+type InfraPullInput = {
+  readonly spec?: InfraPullRequest["payload"]["spec"]
+  readonly bindings?: InfraPullRequest["payload"]["bindings"]
+  readonly lock?: InfraPullRequest["payload"]["lock"]
+}
+const EndpointInfraPull = (raw: RawClient["infra"]) => (input?: InfraPullInput) =>
+  raw["infra.pull"]({ payload: { spec: input?.["spec"], bindings: input?.["bindings"], lock: input?.["lock"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
 
 type InfraPlanRequest = Parameters<RawClient["infra"]["infra.plan"]>[0]
 type InfraPlanInput = {
   readonly spec: InfraPlanRequest["payload"]["spec"]
   readonly bindings: InfraPlanRequest["payload"]["bindings"]
+  readonly lock?: InfraPlanRequest["payload"]["lock"]
 }
 const EndpointInfraPlan = (raw: RawClient["infra"]) => (input: InfraPlanInput) =>
-  raw["infra.plan"]({ payload: { spec: input["spec"], bindings: input["bindings"] } }).pipe(
+  raw["infra.plan"]({ payload: { spec: input["spec"], bindings: input["bindings"], lock: input["lock"] } }).pipe(
     Effect.mapError(mapClientError),
   )
 
@@ -1578,12 +1588,20 @@ type InfraApplyRequest = Parameters<RawClient["infra"]["infra.apply"]>[0]
 type InfraApplyInput = {
   readonly spec: InfraApplyRequest["payload"]["spec"]
   readonly bindings: InfraApplyRequest["payload"]["bindings"]
+  readonly lock?: InfraApplyRequest["payload"]["lock"]
   readonly digest: InfraApplyRequest["payload"]["digest"]
+  readonly force?: InfraApplyRequest["payload"]["force"]
 }
 const EndpointInfraApply = (raw: RawClient["infra"]) => (input: InfraApplyInput) =>
-  raw["infra.apply"]({ payload: { spec: input["spec"], bindings: input["bindings"], digest: input["digest"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+  raw["infra.apply"]({
+    payload: {
+      spec: input["spec"],
+      bindings: input["bindings"],
+      lock: input["lock"],
+      digest: input["digest"],
+      force: input["force"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
 
 const adaptGroupInfra = (raw: RawClient["infra"]) => ({
   pull: EndpointInfraPull(raw),

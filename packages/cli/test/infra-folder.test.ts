@@ -211,6 +211,20 @@ describe("InfraFolder.write", () => {
         },
       },
     },
+    lock: { organization: "acme", resources: {} },
+    write: [
+      "deploy.yaml/spaces/engineering/profiles/github/acme",
+      "org",
+      "spaces/engineering",
+      "spaces/engineering/agents/build",
+      "spaces/engineering/apps/tools",
+      "spaces/engineering/channels/ren",
+      "spaces/engineering/schedules/nightly",
+      "spaces/home",
+      "spaces/home/uses/agents/build",
+    ],
+    remove: [],
+    conflicts: [],
   }
 
   test("writes a folder that reads back as the same spec", async () => {
@@ -258,7 +272,7 @@ describe("InfraFolder.write", () => {
     expect(result.problems).toEqual([])
   })
 
-  test("removes the spaces, agents and instructions that are gone, and keeps every other file", async () => {
+  test("removes the spaces, agents and instructions that pull removes, and keeps every other file", async () => {
     const root = await folder({
       "spaces/old/space.yaml": "name: Old\n",
       "spaces/engineering/agents/lint/agent.yaml": "{}\n",
@@ -267,7 +281,7 @@ describe("InfraFolder.write", () => {
       "README.md": "Ours.\n",
     })
 
-    await InfraFolder.write(root, pulled)
+    await InfraFolder.write(root, { ...pulled, remove: ["spaces/engineering/agents/lint", "spaces/old"] })
 
     const files = (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: root }))).toSorted()
     expect(files).toEqual([
@@ -287,5 +301,32 @@ describe("InfraFolder.write", () => {
       "spaces/engineering/space.yaml",
       "spaces/home/space.yaml",
     ])
+  })
+  test("writes only the resources that pull returns, and keeps the edits and keys of the others", async () => {
+    const root = await folder({
+      "spaces/engineering/space.yaml": "name: Mine\nrenamedFrom: [eng]\n",
+      "spaces/engineering/agents/build/agent.yaml": "description: Mine.\n",
+      "spaces/engineering/schedules.yaml":
+        "local:\n  cron: '0 1 * * *'\n  timeZone: UTC\n  message: Ours.\nnightly:\n  cron: '0 2 * * *'\n  timeZone: UTC\n  message: Old.\n",
+      "spaces/home/space.yaml": "name: Home\nuses:\n  agents: [review]\n",
+      "deploy.yaml": "organization: acme\nspaces:\n  engineering:\n    timezone: UTC\n",
+    })
+
+    await InfraFolder.write(root, {
+      ...pulled,
+      write: ["spaces/engineering/schedules/nightly", "spaces/home/uses/agents/build"],
+      remove: ["spaces/home/uses/agents/review"],
+    })
+
+    const text = (file: string) => Bun.file(join(root, file)).text()
+    expect(await text("spaces/engineering/space.yaml")).toBe("name: Mine\nrenamedFrom: [eng]\n")
+    expect(await text("spaces/engineering/agents/build/agent.yaml")).toBe("description: Mine.\n")
+    expect(Bun.YAML.parse(await text("spaces/engineering/schedules.yaml"))).toEqual({
+      local: { cron: "0 1 * * *", timeZone: "UTC", message: "Ours." },
+      nightly: pulled.spec.spaces.engineering.schedules.nightly,
+    })
+    expect(Bun.YAML.parse(await text("spaces/home/space.yaml"))).toEqual({ name: "Home", uses: { agents: ["build"] } })
+    expect(await text("deploy.yaml")).toBe("organization: acme\nspaces:\n  engineering:\n    timezone: UTC\n")
+    expect(await Bun.file(join(root, "org.yaml")).exists()).toBe(false)
   })
 })
