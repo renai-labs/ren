@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "5d9a60b3-8dfb-4993-b891-cfc5de6d3ddf",
+  "id": "ce31d05e-c315-4cbe-95e7-fb7240ed8807",
   "prevIds": [
     "7eca07fd-9eb9-4cbc-9a27-e99a40685217"
   ],
@@ -344,19 +344,7 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "usage_attribution",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
       "name": "usage_event",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "usage_pending",
       "entityType": "tables",
       "schema": "public"
     },
@@ -7972,149 +7960,6 @@
       "name": "source",
       "entityType": "columns",
       "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "space",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "root_session",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "session",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "turn",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "member",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "agent",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "kind",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 1,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "problems",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "timestamp",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "reconciled_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source",
-      "entityType": "columns",
-      "schema": "public",
       "table": "usage_event"
     },
     {
@@ -8506,32 +8351,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "usage_event"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "source",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_pending"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage_pending"
     },
     {
       "nameExplicit": true,
@@ -10959,27 +10778,6 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "session",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "usage_attribution_session_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
           "value": "organization",
           "isExpression": false,
           "asc": true,
@@ -13192,32 +12990,10 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "usage_attribution_pkey",
-      "entityType": "pks",
-      "schema": "public",
-      "table": "usage_attribution"
-    },
-    {
-      "columns": [
-        "source",
-        "id"
-      ],
-      "nameExplicit": false,
       "name": "usage_event_pkey",
       "entityType": "pks",
       "schema": "public",
       "table": "usage_event"
-    },
-    {
-      "columns": [
-        "source",
-        "id"
-      ],
-      "nameExplicit": false,
-      "name": "usage_pending_pkey",
-      "entityType": "pks",
-      "schema": "public",
-      "table": "usage_pending"
     },
     {
       "columns": [

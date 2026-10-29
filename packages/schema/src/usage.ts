@@ -43,7 +43,7 @@ export const headers = {
 
 const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 
-// oxlint-disable-next-line ren/no-comments -- A claim from the brain, stored as sent. It is a plain string so that a wrong claim never refuses the batch; reconciliation removes it later (§1.3).
+// oxlint-disable-next-line ren/no-comments -- A claim from the brain, stored as sent. It is a plain string so that a wrong claim never refuses the batch (§1.3).
 const Claim = Schema.optionalKey(Schema.String)
 
 export interface Failure extends Schema.Schema.Type<typeof Failure> {}

@@ -9,7 +9,6 @@ import { Signature } from "@ren/schema/signature"
 import { and, eq, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { WorkflowEngine } from "effect/workflow"
-import { Billing } from "./billing.js"
 import { BrainClient } from "./brain-client.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Environments } from "./environments.js"
@@ -79,7 +78,6 @@ export const layer = Layer.effect(
     const engine = yield* WorkflowEngine.WorkflowEngine
     const environments = yield* Environments.Service
     const egress = yield* SandboxEgress.Service
-    const billing = yield* Billing.Service
     const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(Config.withDefault(timing.wake))
     const bootWithin = yield* Config.Duration("BRAIN_BOOT_TIMEOUT").pipe(Config.withDefault(timing.boot))
 
@@ -159,14 +157,6 @@ export const layer = Layer.effect(
     const behindEgress = egress.enabled && provider.canEgress
 
     const create = Effect.fnUntraced(function* (row: Row) {
-      // oxlint-disable-next-line ren/no-comments -- A refused organization gets no sandbox. The brain stays creating, not failed, so its next access checks again (usage spec §3.2).
-      const allowed = yield* billing.check(row.organization_id).pipe(
-        Effect.as(true),
-        Effect.catchTag("Billing.Refused", (refused) =>
-          Effect.logWarning(`Brain ${row.id} not created: ${refused.reason}`).pipe(Effect.as(false)),
-        ),
-      )
-      if (!allowed) return true
       const proxy = behindEgress
         ? yield* egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id })
         : Option.none<SandboxProvider.Proxy>()

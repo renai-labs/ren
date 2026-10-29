@@ -1,18 +1,3 @@
-CREATE TABLE "usage_attribution" (
-	"source" text,
-	"id" text,
-	"space" text,
-	"root_session" text,
-	"session" text,
-	"turn" text,
-	"member" text,
-	"agent" text,
-	"kind" text,
-	"problems" text[] NOT NULL,
-	"reconciled_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "usage_attribution_pkey" PRIMARY KEY("source","id")
-);
---> statement-breakpoint
 CREATE TABLE "usage_event" (
 	"source" text,
 	"id" text,
@@ -48,16 +33,18 @@ CREATE TABLE "usage_event" (
 	CONSTRAINT "usage_event_pkey" PRIMARY KEY("source","id")
 );
 --> statement-breakpoint
-CREATE TABLE "usage_pending" (
-	"source" text,
-	"id" text,
-	CONSTRAINT "usage_pending_pkey" PRIMARY KEY("source","id")
-);
---> statement-breakpoint
 ALTER TABLE "registered_key" ADD COLUMN "secret_hash" text;--> statement-breakpoint
 ALTER TABLE "registered_key" ADD COLUMN "producer" text;--> statement-breakpoint
 ALTER TABLE "registered_key" ALTER COLUMN "public_key" DROP NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "registered_key_secret_hash_uidx" ON "registered_key" ("secret_hash");--> statement-breakpoint
-CREATE INDEX "usage_attribution_session_idx" ON "usage_attribution" ("session");--> statement-breakpoint
 CREATE INDEX "usage_event_organization_time_idx" ON "usage_event" ("organization","time");--> statement-breakpoint
-ALTER TABLE "registered_key" ADD CONSTRAINT "registered_key_secret_check" CHECK (("public_key" is null) = ("secret_hash" is not null));
+ALTER TABLE "registered_key" ADD CONSTRAINT "registered_key_secret_check" CHECK (("public_key" is null) = ("secret_hash" is not null));--> statement-breakpoint
+-- usage_event is only inserted: Postgres refuses an update or a delete of a row (usage spec §4.3).
+CREATE FUNCTION usage_event_append_only() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'usage_event is append only: % refused', TG_OP;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER usage_event_append_only BEFORE UPDATE OR DELETE ON usage_event
+  FOR EACH ROW EXECUTE FUNCTION usage_event_append_only();
