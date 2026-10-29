@@ -173,7 +173,8 @@
             "minLength": 1
           },
           "type": {
-            "$ref": "#/components/schemas/Usage.Type"
+            "type": "string",
+            "enum": ["model.call"]
           },
           "time": {
             "type": "string"
@@ -206,22 +207,52 @@
           "agent": {
             "type": "string"
           },
-          "kind": {
-            "type": "string"
-          },
-          "requested_model": {
-            "type": "string"
-          },
-          "variant": {
-            "type": "string"
-          },
           "payer": {
             "$ref": "#/components/schemas/Usage.Payer"
           },
           "provider": {
             "type": "string"
           },
+          "cost_micro_usd": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "error": {
+            "$ref": "#/components/schemas/Usage.Failure"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Usage.ModelCall"
+          }
+        },
+        "required": ["source", "id", "type", "time", "workload", "organization", "payer", "provider", "data"],
+        "additionalProperties": false
+      },
+      "Usage.Failure": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["message"],
+        "additionalProperties": false
+      },
+      "Usage.ModelCall": {
+        "type": "object",
+        "properties": {
+          "requested_model": {
+            "type": "string"
+          },
           "served_model": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "variant": {
             "type": "string"
           },
           "input_tokens": {
@@ -248,10 +279,6 @@
             "type": "integer",
             "minimum": 0
           },
-          "cost_micro_usd": {
-            "type": "integer",
-            "minimum": 0
-          },
           "latency_ms": {
             "type": "integer",
             "minimum": 0
@@ -262,36 +289,9 @@
           },
           "stop_reason": {
             "type": "string"
-          },
-          "error": {
-            "$ref": "#/components/schemas/Usage.Failure"
           }
         },
-        "required": [
-          "source",
-          "id",
-          "type",
-          "time",
-          "workload",
-          "organization",
-          "requested_model",
-          "payer",
-          "provider",
-          "served_model"
-        ],
-        "additionalProperties": false
-      },
-      "Usage.Failure": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": ["message"],
+        "required": ["requested_model", "served_model"],
         "additionalProperties": false
       },
       "Usage.Payer": {
@@ -308,14 +308,6 @@
         },
         "required": ["inserted"],
         "additionalProperties": false
-      },
-      "Usage.Type": {
-        "anyOf": [
-          {
-            "type": "string",
-            "enum": ["model.call"]
-          }
-        ]
       }
     },
     "securitySchemes": {

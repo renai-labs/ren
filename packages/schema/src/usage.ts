@@ -5,9 +5,6 @@ import { Auth } from "./auth.js"
 import { Brain } from "./brain.js"
 import { Space } from "./space.js"
 
-export const Type = Schema.Literals(["model.call"]).annotate({ identifier: "Usage.Type" })
-export type Type = typeof Type.Type
-
 export const Kind = Schema.Literals(["primary", "compaction", "title", "generate"]).annotate({
   identifier: "Usage.Kind",
 })
@@ -35,11 +32,28 @@ export const Failure = Schema.Struct({
   message: Schema.String,
 }).annotate({ identifier: "Usage.Failure" })
 
+export interface ModelCall extends Schema.Schema.Type<typeof ModelCall> {}
+export const ModelCall = Schema.Struct({
+  requested_model: Schema.String,
+  served_model: Schema.String,
+  kind: Claim,
+  variant: Claim,
+  input_tokens: Schema.optionalKey(Count),
+  output_tokens: Schema.optionalKey(Count),
+  reasoning_tokens: Schema.optionalKey(Count),
+  cache_read_tokens: Schema.optionalKey(Count),
+  cache_write_tokens: Schema.optionalKey(Count),
+  cache_write_1h_tokens: Schema.optionalKey(Count),
+  latency_ms: Schema.optionalKey(Count),
+  time_to_first_token_ms: Schema.optionalKey(Count),
+  stop_reason: Schema.optionalKey(Schema.String),
+}).annotate({ identifier: "Usage.ModelCall" })
+
 export interface Event extends Schema.Schema.Type<typeof Event> {}
 export const Event = Schema.Struct({
   source: Schema.NonEmptyString,
   id: Schema.NonEmptyString,
-  type: Type,
+  type: Schema.Literal("model.call"),
   time: Schema.DateTimeUtc,
   workload: Schema.String.annotate({ description: "`brain:<id>` or `hand:<id>`, then `:<generation>` when known." }),
   organization: Auth.OrganizationID.annotate({ description: "From the workload’s key. Ren stores it as sent." }),
@@ -50,23 +64,11 @@ export const Event = Schema.Struct({
   turn: Claim,
   member: Claim,
   agent: Claim,
-  kind: Claim,
-  requested_model: Schema.String,
-  variant: Claim,
   payer: Payer,
   provider: Schema.String,
-  served_model: Schema.String,
-  input_tokens: Schema.optionalKey(Count),
-  output_tokens: Schema.optionalKey(Count),
-  reasoning_tokens: Schema.optionalKey(Count),
-  cache_read_tokens: Schema.optionalKey(Count),
-  cache_write_tokens: Schema.optionalKey(Count),
-  cache_write_1h_tokens: Schema.optionalKey(Count),
   cost_micro_usd: Schema.optionalKey(Count),
-  latency_ms: Schema.optionalKey(Count),
-  time_to_first_token_ms: Schema.optionalKey(Count),
-  stop_reason: Schema.optionalKey(Schema.String),
   error: Schema.optionalKey(Failure),
+  data: ModelCall,
 }).annotate({ identifier: "Usage.Event" })
 
 export interface Batch extends Schema.Schema.Type<typeof Batch> {}
