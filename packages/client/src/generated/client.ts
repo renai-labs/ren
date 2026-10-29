@@ -245,6 +245,8 @@ import type {
   InfraPlanOutput,
   InfraApplyInput,
   InfraApplyOutput,
+  InsightsQueryInput,
+  InsightsQueryOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -2058,6 +2060,33 @@ export function make(options: ClientOptions) {
             body: { spec: input["spec"], bindings: input["bindings"], digest: input["digest"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    insights: {
+      query: (input: InsightsQueryInput, requestOptions?: RequestOptions) =>
+        request<InsightsQueryOutput>(
+          {
+            method: "GET",
+            path: `/insights`,
+            query: {
+              spaceId: input["spaceId"],
+              from: input["from"],
+              to: input["to"],
+              timezone: input["timezone"],
+              groupBy: input["groupBy"],
+              userId: input["userId"],
+              agent: input["agent"],
+              model: input["model"],
+              payer: input["payer"],
+              kind: input["kind"],
+              orderBy: input["orderBy"],
+              limit: input["limit"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,

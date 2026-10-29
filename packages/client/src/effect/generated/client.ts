@@ -1591,6 +1591,41 @@ const adaptGroupInfra = (raw: RawClient["infra"]) => ({
   apply: EndpointInfraApply(raw),
 })
 
+type InsightsQueryRequest = Parameters<RawClient["insights"]["insights.query"]>[0]
+type InsightsQueryInput = {
+  readonly spaceId: InsightsQueryRequest["query"]["spaceId"]
+  readonly from: InsightsQueryRequest["query"]["from"]
+  readonly to: InsightsQueryRequest["query"]["to"]
+  readonly timezone: InsightsQueryRequest["query"]["timezone"]
+  readonly groupBy: InsightsQueryRequest["query"]["groupBy"]
+  readonly userId?: InsightsQueryRequest["query"]["userId"]
+  readonly agent?: InsightsQueryRequest["query"]["agent"]
+  readonly model?: InsightsQueryRequest["query"]["model"]
+  readonly payer?: InsightsQueryRequest["query"]["payer"]
+  readonly kind?: InsightsQueryRequest["query"]["kind"]
+  readonly orderBy: InsightsQueryRequest["query"]["orderBy"]
+  readonly limit: InsightsQueryRequest["query"]["limit"]
+}
+const EndpointInsightsQuery = (raw: RawClient["insights"]) => (input: InsightsQueryInput) =>
+  raw["insights.query"]({
+    query: {
+      spaceId: input["spaceId"],
+      from: input["from"],
+      to: input["to"],
+      timezone: input["timezone"],
+      groupBy: input["groupBy"],
+      userId: input["userId"],
+      agent: input["agent"],
+      model: input["model"],
+      payer: input["payer"],
+      kind: input["kind"],
+      orderBy: input["orderBy"],
+      limit: input["limit"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupInsights = (raw: RawClient["insights"]) => ({ query: EndpointInsightsQuery(raw) })
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -1629,6 +1664,7 @@ const adaptClient = (raw: RawClient) => ({
   repository: adaptGroupRepository(raw["repository"]),
   "sign-in": adaptGroupSignIn(raw["sign-in"]),
   infra: adaptGroupInfra(raw["infra"]),
+  insights: adaptGroupInsights(raw["insights"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

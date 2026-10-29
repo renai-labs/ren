@@ -271,6 +271,10 @@ export type InfraKind = "organization" | "space" | "agent" | "membership" | "app
 
 export type InfraProblem = { path: string; message: string }
 
+export type InsightsTokens = { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }
+
+export type InsightsCost = { ren: number; customer: number; unpricedCalls: number }
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -697,6 +701,19 @@ export type InfraChange = {
   fields: Array<string>
 }
 
+export type InsightsRow = {
+  key: string | null
+  label: string | null
+  sessions: number
+  calls: number
+  errors: number
+  tokens: InsightsTokens
+  cost: InsightsCost
+  tasksDone: number | null
+  prsMerged: number | null
+  prsLinked: number | null
+}
+
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
 export type AppListingInfo = {
@@ -915,6 +932,8 @@ export type InfraFactoryDeclaration = {
 export type InfraPlan = { changes: Array<InfraChange>; problems: Array<InfraProblem>; digest: string }
 
 export type InfraApplied = { changes: Array<InfraChange> }
+
+export type InsightsResult = { rows: Array<InsightsRow> }
 
 export type FactoryInfo = { maxHandoffs?: number; agents: Array<FactoryEntry> }
 
@@ -8232,3 +8251,176 @@ export type InfraApplyInput = {
 }
 
 export type InfraApplyOutput = InfraApplied
+
+export type InsightsQueryInput = {
+  readonly spaceId: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["spaceId"]
+  readonly from: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["from"]
+  readonly to: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["to"]
+  readonly timezone: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["timezone"]
+  readonly groupBy: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["groupBy"]
+  readonly userId?: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["userId"]
+  readonly agent?: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["agent"]
+  readonly model?: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["model"]
+  readonly payer?: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["payer"]
+  readonly kind?: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["kind"]
+  readonly orderBy: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["orderBy"]
+  readonly limit: {
+    readonly spaceId: string
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["limit"]
+}
+
+export type InsightsQueryOutput = InsightsResult

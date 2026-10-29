@@ -18,6 +18,7 @@ import { Channels } from "@ren/core/channels"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { InfraSpecs } from "@ren/core/infra-specs"
+import { Insights } from "@ren/core/insights"
 import { Invitation } from "@ren/core/invitation"
 import { Label } from "@ren/core/label"
 import { Memory } from "@ren/core/memory"
@@ -62,6 +63,7 @@ import { OAuthApps } from "@ren/core/oauth-apps"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
 import { HealthHandler } from "./handlers/api/health.js"
 import { InfraHandler } from "./handlers/api/infra.js"
+import { InsightsHandler } from "./handlers/api/insights.js"
 import { InvitationHandler } from "./handlers/api/invitation.js"
 import { LabelHandler } from "./handlers/api/label.js"
 import { MeHandler } from "./handlers/api/me.js"
@@ -175,6 +177,7 @@ export const layer = Layer.mergeAll(
         RepositoryHandler,
         SignInHandler,
         InfraHandler,
+        InsightsHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer, Compression]),
       Layer.provide([
@@ -185,6 +188,7 @@ export const layer = Layer.mergeAll(
         EnvironmentTemplates.layer,
         SpaceEnvironmentTemplate.layer,
         Memory.layer,
+        Insights.layer.pipe(Layer.provide(Space.layer)),
         settingsAndAgents,
         InfraSpecs.layer.pipe(
           Layer.provide([

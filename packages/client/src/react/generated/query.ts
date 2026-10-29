@@ -120,6 +120,7 @@ import type {
   ChannelConnectChannelPlaceListInput,
   InfraPlanInput,
   InfraApplyInput,
+  InsightsQueryInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -1297,6 +1298,17 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["infra", "apply"] as const,
             mutationFn: (input: InfraApplyInput) => client["infra"]["apply"](input),
+          }),
+      },
+    },
+    insights: {
+      query: {
+        queryKey: (input?: InsightsQueryInput) =>
+          input === undefined ? (["insights", "query"] as const) : (["insights", "query", input] as const),
+        queryOptions: (input: InsightsQueryInput) =>
+          queryOptions({
+            queryKey: ["insights", "query", input] as const,
+            queryFn: (context) => client["insights"]["query"](input, { signal: context.signal }),
           }),
       },
     },
