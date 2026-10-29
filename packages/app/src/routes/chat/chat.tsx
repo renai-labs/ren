@@ -198,7 +198,7 @@ export function ChatPage() {
               {page.childTitle ?? "Subagent"}
             </Button>
           ) : (
-            <Breadcrumb className="mr-auto flex h-8 items-center rounded-lg border px-3">
+            <Breadcrumb className="mr-auto flex h-8 items-center rounded-lg border bg-sidebar px-3">
               <BreadcrumbList>
                 <BreadcrumbItem>
                   {page.spaceId ? (
