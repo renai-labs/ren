@@ -28,7 +28,9 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@/components/ui/attachment"
-import { Avatar, AvatarBadge, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Kbd } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
@@ -148,20 +150,41 @@ function AppsStrip(props: { spaceId: string }) {
             />
           }
         >
-          <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
-            {shown.map(([app, icon]) => (
-              <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
-                <AvatarImage src={icon} alt="" />
-                <AvatarFallback className="bg-secondary">{app.charAt(0)}</AvatarFallback>
-                {pending.has(app) ? <AvatarBadge className="-right-0.5 -bottom-0.5 bg-chart-3 ring-card" /> : null}
-              </Avatar>
-            ))}
-            {apps.length > shown.length ? (
-              <AvatarGroupCount className="size-5 text-[10px] group-has-data-[size=sm]/avatar-group:size-5">
-                +{apps.length - shown.length}
-              </AvatarGroupCount>
+          <span className="relative flex">
+            <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
+              {shown.map(([app, icon]) => (
+                <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
+                  <AvatarImage src={icon} alt="" />
+                  <AvatarFallback className="bg-secondary">{app.charAt(0)}</AvatarFallback>
+                </Avatar>
+              ))}
+              {apps.length > shown.length ? (
+                <AvatarGroupCount className="size-5 text-[10px] group-has-data-[size=sm]/avatar-group:size-5">
+                  +{apps.length - shown.length}
+                </AvatarGroupCount>
+              ) : null}
+            </AvatarGroup>
+            {missing ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Badge className="absolute -top-1.5 -right-1.5 h-4 min-w-4 rounded-full bg-chart-3 px-1 text-[10px] text-primary-foreground tabular-nums ring-2 ring-card" />
+                  }
+                >
+                  {missing}
+                </TooltipTrigger>
+                <TooltipContent side="top" className="flex flex-col items-start gap-0.5">
+                  {profiles
+                    .filter((profile) => profile.gaps.length > 0)
+                    .map((profile) => (
+                      <span key={profile.id}>
+                        {profile.app} · {profile.name}: {profile.gaps.join(", ")} not connected
+                      </span>
+                    ))}
+                </TooltipContent>
+              </Tooltip>
             ) : null}
-          </AvatarGroup>
+          </span>
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
           <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
