@@ -71,11 +71,6 @@ export function WorkingIn(props: {
                 <DropdownMenuRadioItem key={space.id} value={space.id} closeOnClick>
                   <IconCube />
                   <span className="min-w-0 flex-1 truncate">{space.name}</span>
-                  {isPersonal(space) ? null : (
-                    <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-                      {space.memberCount} members
-                    </span>
-                  )}
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuGroup>
