@@ -1,15 +1,6 @@
 import { useState } from "react"
 import { useAtomRefresh } from "@effect/atom-react"
-import {
-  ChatState,
-  Composer,
-  Family,
-  PatchFiles,
-  SessionTasks,
-  Working,
-  type ChatSession,
-  type TimelineRow,
-} from "@ren/chat"
+import { ChatState, Composer, Family, SessionTasks, Working, type ChatSession, type TimelineRow } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -156,29 +147,6 @@ const bootStatusOf = (
 ): PromptInputBoot | undefined =>
   connection === "reconnecting" ? { _tag: "Reconnecting" } : boot && boot._tag !== "Ready" ? boot : undefined
 
-const workspacePrefix = /^.*\/workspace\/[^/]+\//u
-const linkPattern = /https?:\/\/[^\s)>\]]+/gu
-
-function artifactsOf(messages: ReadonlyArray<SessionMessage.Info>) {
-  const texts = messages.flatMap((message) =>
-    message.type === "user"
-      ? [message.text]
-      : message.type === "assistant"
-        ? message.content.flatMap((content) => (content.type === "text" ? [content.text] : []))
-        : [],
-  )
-  const files = messages.flatMap((message) =>
-    message.type === "assistant"
-      ? message.content.flatMap((content) =>
-          content.type === "tool" && PatchFiles.isFileChange(content) && content.state.status === "completed"
-            ? PatchFiles.patchFiles(PatchFiles.toolFiles(content)).map((file) => file.path.replace(workspacePrefix, ""))
-            : [],
-        )
-      : [],
-  )
-  return { links: [...new Set(texts.flatMap((text) => text.match(linkPattern) ?? []))], files: [...new Set(files)] }
-}
-
 export function useChat(
   sessionId: string,
   options: {
@@ -247,16 +215,15 @@ export function useChat(
   })
   const name = me.user.name || me.user.email
   const bootStatus = bootStatusOf(connection, boot)
-  const artifacts = artifactsOf(view.messages)
   return {
     root,
     child,
     title,
-    files: artifacts.files,
     spaceId: stored.data?.spaceId,
+    createdAt: stored.data?.createdAt,
+    createdBy: stored.data ? members.find((member) => member.id === stored.data.createdBy) : undefined,
     spaceName,
     viewer: { id: me.user.id, name, image: me.user.image ?? undefined },
-    links: artifacts.links,
     expanded,
     bootStatus,
     blocked: Boolean(view.permission ?? view.form),
