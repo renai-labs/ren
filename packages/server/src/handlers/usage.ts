@@ -1,19 +1,21 @@
+import { timingSafeEqual } from "node:crypto"
 import { Usage } from "@ren/core/usage"
-import { ForbiddenError, UnauthorizedError, UnavailableError } from "@ren/protocol/errors"
-import { CurrentProducer, UsageAuthentication, UsageIngestApi } from "@ren/protocol/usage-ingest"
-import { Effect, Layer, Option } from "effect"
+import { UnauthorizedError, UnavailableError } from "@ren/protocol/errors"
+import { UsageAuthentication, UsageIngestApi } from "@ren/protocol/usage-ingest"
+import { Config, Effect, Layer, Option, Redacted } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
+
+const digest = (key: Redacted.Redacted) => new Bun.CryptoHasher("sha256").update(Redacted.value(key)).digest()
 
 export const UsageAuthenticationLayer = Layer.effect(
   UsageAuthentication,
   Effect.gen(function* () {
-    const usage = yield* Usage.Service
+    const key = yield* Config.option(Config.Redacted("USAGE_INGEST_KEY"))
     return UsageAuthentication.of({
-      bearer: Effect.fn("UsageAuthentication.bearer")(function* (httpEffect, options) {
-        const producer = yield* usage.authenticate(options.credential)
-        if (Option.isNone(producer)) return yield* new UnauthorizedError({ message: "Unknown usage key." })
-        return yield* httpEffect.pipe(Effect.provideService(CurrentProducer, producer.value))
-      }),
+      bearer: (httpEffect, options) =>
+        Option.exists(key, (expected) => timingSafeEqual(digest(options.credential), digest(expected)))
+          ? httpEffect
+          : Effect.fail(new UnauthorizedError({ message: "Unknown usage key." })),
     })
   }),
 )
@@ -22,16 +24,13 @@ export const UsageHandler = HttpApiBuilder.group(UsageIngestApi, "usage", (handl
   Effect.gen(function* () {
     const usage = yield* Usage.Service
     return handlers.handle("usage.record", (request) =>
-      Effect.gen(function* () {
-        const producer = yield* CurrentProducer
-        return yield* usage.record(producer, request.payload.events).pipe(
-          Effect.catchTags({
-            "Usage.Forbidden": (error) => Effect.fail(new ForbiddenError({ message: error.message })),
-            "Usage.Unavailable": (error) =>
-              Effect.fail(new UnavailableError({ message: error.message, retryAfterMs: 5000 })),
-          }),
-        )
-      }),
+      usage
+        .record(request.payload.events)
+        .pipe(
+          Effect.catchTag("Usage.Unavailable", (error) =>
+            Effect.fail(new UnavailableError({ message: error.message, retryAfterMs: 5000 })),
+          ),
+        ),
     )
   }),
 )

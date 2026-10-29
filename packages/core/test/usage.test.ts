@@ -68,8 +68,8 @@ it.live("stores what the producer sent, claims included, and a batch sent two ti
         kind: "summary",
       }),
     ]
-    expect(yield* usage.record("ren-inference", batch)).toEqual({ inserted: 1 })
-    expect(yield* usage.record("ren-inference", batch)).toEqual({ inserted: 0 })
+    expect(yield* usage.record(batch)).toEqual({ inserted: 1 })
+    expect(yield* usage.record(batch)).toEqual({ inserted: 0 })
     expect(yield* stored).toMatchObject([
       {
         id: "call-1:sonnet",
@@ -93,7 +93,7 @@ it.live("Postgres refuses an update of a stored event", () =>
     const usage = yield* Usage.Service
     const database = yield* Database.Service
     const found = yield* chat()
-    yield* usage.record("ren-inference", [yield* event(found, { id: "call-1" })])
+    yield* usage.record([yield* event(found, { id: "call-1" })])
     const update = yield* database.db
       .update(Database.Schema.usage_event)
       .set({ cost_micro_usd: 0 })

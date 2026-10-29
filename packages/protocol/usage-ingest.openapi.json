@@ -47,16 +47,6 @@
               }
             }
           },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
           "503": {
             "description": "UnavailableError",
             "content": {
@@ -68,7 +58,7 @@
             }
           }
         },
-        "description": "Store a batch of 1 to 500 usage events. Ren answers after the insert commits. A repeat of `(source, id)` is ignored, so `inserted` counts only new rows. 400: an event is not valid, and Ren stores no event of the batch; do not send it again. 403: an event’s `source` is not the producer of the key. 503: send the same batch again later.",
+        "description": "Store a batch of 1 to 500 usage events. Ren answers after the insert commits. A repeat of `(source, id)` is ignored, so `inserted` counts only new rows. 400: an event is not valid, and Ren stores no event of the batch; do not send it again. 503: send the same batch again later.",
         "summary": "Record usage events",
         "requestBody": {
           "content": {
@@ -94,20 +84,6 @@
         "type": "string",
         "pattern": "^brn_",
         "description": "From the workload’s key. Ren stores it as sent."
-      },
-      "ForbiddenErrorEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": ["ForbiddenError"]
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": ["_tag", "message"],
-        "additionalProperties": false
       },
       "InvalidRequestErrorEncoded": {
         "type": "object",
@@ -344,7 +320,7 @@
     },
     "securitySchemes": {
       "bearer": {
-        "description": "A usage key. It names the producer that may send events.",
+        "description": "The usage ingest key.",
         "type": "http",
         "scheme": "Bearer"
       }
