@@ -34,6 +34,11 @@
       "dependsOn": ["transit"],
       "env": ["VITE_*"],
       "outputs": ["dist/**"]
+    },
+    "@ren/site#build": {
+      "dependsOn": ["transit"],
+      "env": ["PUBLIC_*"],
+      "outputs": ["dist/**"]
     }
   }
 }

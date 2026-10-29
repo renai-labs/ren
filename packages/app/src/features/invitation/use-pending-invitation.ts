@@ -54,6 +54,7 @@ export function usePendingInvitation(props: PendingInvitationProps) {
         setFailure({ kind: "mismatch", id: props.id, message: result.error.message ?? "Could not sign out." })
         return
       }
+      context.platform.analytics?.reset()
       context.queryClient.clear()
       await import("../../lib/chat.js").then((loaded) => loaded.Chat.forget())
       await navigate({ to: "/login", search: { invitationId: props.id, redirect: props.redirect } })

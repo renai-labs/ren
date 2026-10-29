@@ -1,6 +1,7 @@
 ---
 import { ClientRouter } from "astro:transitions"
 import "../styles/docs.css"
+import Analytics from "../components/analytics.astro"
 
 interface Props {
   title: string
@@ -52,6 +53,7 @@ const canonical = `${site}${Astro.url.pathname}`
         document.addEventListener("astro:after-swap", apply)
       })()
     </script>
+    <Analytics />
     <ClientRouter fallback="none" />
   </head>
   <body class="flex min-h-dvh flex-col">

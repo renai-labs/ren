@@ -1,8 +1,8 @@
 export * as Runtime from "./runtime.js"
 
-import { Ren } from "@ren/client"
+import { ClientError, Ren } from "@ren/client"
 import { RenQuery } from "@ren/client/react"
-import { MutationCache, QueryClient } from "@tanstack/react-query"
+import { hashKey, MutationCache, QueryClient } from "@tanstack/react-query"
 import { Page } from "@ren/ui/page"
 import { createRouter } from "@tanstack/react-router"
 import { routeTree } from "../route-tree.gen.js"
@@ -49,10 +49,25 @@ export function make(platform: Platform.Info) {
   })
   queryClient.setQueryDefaults(api.me.get.queryKey(), { staleTime: Number.POSITIVE_INFINITY })
   queryClient.setQueryDefaults(api.chat.models.queryKey(), { staleTime: 10 * 60_000 })
+  const analytics = platform.analytics
+  if (analytics !== undefined) {
+    const me = api.me.get.queryOptions().queryKey
+    const meHash = hashKey(me)
+    queryClient.getQueryCache().subscribe((event) => {
+      if (event.type !== "updated" || event.action.type !== "success" || event.query.queryHash !== meHash) return
+      const data = queryClient.getQueryData(me)
+      if (data !== undefined) analytics.identify(data.user, data.organization)
+    })
+  }
   const context: Context = { platform, queryClient, api, client, auth: Auth.createClient(platform) }
   const router = createRouter({
     routeTree,
     context,
+    defaultOnCatch: (error) => {
+      if (error instanceof ClientError && (error.reason === "Transport" || error.reason === "UnexpectedStatus")) return
+      if (error instanceof Error && "_tag" in error && error.name === error._tag) return
+      analytics?.captureException(error)
+    },
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
     defaultPendingMs: 200,

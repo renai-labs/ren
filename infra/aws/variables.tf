@@ -103,3 +103,12 @@ variable "egress_drain" {
   default     = "30s"
   description = "How long a stopping egress keeps open tunnels. With one copy, new tunnels wait this long during a deploy."
 }
+
+variable "posthog_proxy" {
+  type = object({
+    name   = string
+    target = string
+  })
+  default     = null
+  description = "PostHog's managed reverse proxy: the name under `domain` (a neutral word, not analytics or posthog) and the CNAME target PostHog shows for it. Unset, the browser sends to PostHog directly."
+}

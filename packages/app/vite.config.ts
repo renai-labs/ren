@@ -34,6 +34,7 @@ const preloadFonts: Plugin = {
 export default defineConfig((env) => ({
   base,
   plugins: [tanstackRouter(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), preloadFonts],
+  build: { sourcemap: "hidden" },
   define:
     env.command === "serve"
       ? {

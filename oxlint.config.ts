@@ -193,7 +193,7 @@ const browserPatterns = [
   },
   {
     regex:
-      "^(posthog-js|@sentry/.*|mermaid|shiki|recharts|@mdxeditor/.*|pdfjs-dist|react-pdf|monaco-editor|@monaco-editor/.*|katex)$",
+      "^(@sentry/.*|mermaid|shiki|recharts|@mdxeditor/.*|pdfjs-dist|react-pdf|monaco-editor|@monaco-editor/.*|katex)$",
     message: "Heavy or third-party module: load it with lazy() or import() at the point of use, never statically.",
   },
   { regex: "^xlsx$", message: "Unmaintained on npm with known advisories." },
