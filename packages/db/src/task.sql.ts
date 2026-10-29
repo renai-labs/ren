@@ -244,7 +244,12 @@ export const task_event = pgTable(
       .references(() => agent_session.id, { onDelete: "set null" }),
     created_at: timestamp().defaultNow().notNull(),
   },
-  (table) => [index("task_event_task_id_created_at_id_idx").on(table.task_id, table.created_at, table.id)],
+  (table) => [
+    index("task_event_task_id_created_at_id_idx").on(table.task_id, table.created_at, table.id),
+    index("task_event_done_idx")
+      .on(table.organization_id, table.created_at)
+      .where(sql`${table.kind} = 'status' and ${table.data} ->> 'to' = 'done'`),
+  ],
 )
 
 export const task_session = pgTable(
