@@ -14,6 +14,7 @@ import { Transcript } from "@/components/ren/chat/transcript"
 import { PromptInput } from "@/components/ren/chat/prompt-input"
 import { ModelPicker } from "@/components/ren/model-picker"
 import { RowMenu } from "@/components/ren/row-menu"
+import { cn } from "@/lib/utils"
 import { useChat, useChatPage } from "@/routes/chat/use-chat-page"
 
 type Page = ReturnType<typeof useChat>
@@ -101,7 +102,7 @@ export function ChatPage() {
   const [panel, setPanel] = useState(false)
   const [maximized, setMaximized] = useState(false)
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1 [--panel-width:clamp(22rem,34vw,34rem)]">
       <div className={panel && maximized ? "hidden" : "flex min-w-0 flex-1 flex-col"}>
         <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2 group-has-[[data-slot=sidebar][data-state=collapsed]]/sidebar-wrapper:pl-11 max-md:pl-11">
           {page.child ? (
@@ -172,17 +173,25 @@ export function ChatPage() {
           <ChatThread page={page} />
         )}
       </div>
-      {panel ? (
-        <WorkspacePanel
-          messages={page.messages}
-          maximized={maximized}
-          onMaximize={setMaximized}
-          onClose={() => {
-            setPanel(false)
-            setMaximized(false)
-          }}
-        />
-      ) : null}
+      <div
+        inert={!panel}
+        className={cn(
+          "shrink-0 overflow-hidden transition-[width] duration-200 ease-linear motion-reduce:transition-none",
+          panel ? (maximized ? "flex-1" : "w-(--panel-width)") : "w-0",
+        )}
+      >
+        <div className={cn("h-full", maximized ? "w-full" : "w-(--panel-width)")}>
+          <WorkspacePanel
+            messages={page.messages}
+            maximized={maximized}
+            onMaximize={setMaximized}
+            onClose={() => {
+              setPanel(false)
+              setMaximized(false)
+            }}
+          />
+        </div>
+      </div>
     </div>
   )
 }

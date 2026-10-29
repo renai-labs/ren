@@ -356,7 +356,7 @@ function UserMessage(props: {
   const parts = splitPasted(props.message.text)
   const apps = useCatalog().apps
   return (
-    <Message align="end" className={props.editing ? "-mr-13.5 w-full" : "-mr-13.5 w-auto"}>
+    <Message align="end" className={props.editing ? "w-full @min-[52rem]:-mr-13.5" : "w-auto @min-[52rem]:-mr-13.5"}>
       <MessageAvatar className="ml-3.5">
         <Avatar size="sm">
           {props.person.image ? <AvatarImage src={props.person.image} alt="" /> : null}
@@ -894,7 +894,7 @@ export function Transcript(props: TranscriptProps) {
   }
   return (
     <MessageScrollerProvider autoScroll>
-      <MessageScroller className="flex-1">
+      <MessageScroller className="@container flex-1">
         <MessageScrollerViewport
           preserveScrollOnPrepend
           className="scrollbar-gutter-both! outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)]"
@@ -925,7 +925,12 @@ export function Transcript(props: TranscriptProps) {
                     : props.viewer
                 const edit = props.onEdit
                 return (
-                  <MessageScrollerItem key={block.key} messageId={block.key} scrollAnchor className="-mr-13.5 pr-13.5">
+                  <MessageScrollerItem
+                    key={block.key}
+                    messageId={block.key}
+                    scrollAnchor
+                    className="@min-[52rem]:-mr-13.5 @min-[52rem]:pr-13.5"
+                  >
                     <UserMessage
                       message={message}
                       person={person}

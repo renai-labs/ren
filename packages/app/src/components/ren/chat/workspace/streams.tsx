@@ -6,6 +6,7 @@ import {
   IconHandFinger,
   IconRefresh,
   IconBrowser,
+  IconFolder,
   IconTerminal2,
   IconWorld,
 } from "@tabler/icons-react"
@@ -116,6 +117,18 @@ export function TerminalTab() {
         <span className="text-chart-1">~</span>
         <span className="text-muted-foreground">$</span>
       </span>
+    </div>
+  )
+}
+
+export function FilesTab() {
+  return (
+    <div className="min-h-0 flex-1">
+      <Waiting
+        icon={<IconFolder />}
+        title="Files"
+        description="Browse the environment’s workspace here once it’s connected."
+      />
     </div>
   )
 }
