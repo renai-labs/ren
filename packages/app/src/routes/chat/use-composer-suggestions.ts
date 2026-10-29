@@ -103,7 +103,7 @@ function useSuggestions(input: {
   }
   const suggest: Suggest = {
     open: trigger !== undefined && items.length > 0,
-    label: trigger?.kind === "command" ? "Commands" : "Connectors",
+    label: trigger?.kind === "command" ? "Commands" : "Apps",
     items,
     active: current,
     onCursor: (text, cursor) => {
