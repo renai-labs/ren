@@ -6,12 +6,14 @@ import { Encoding } from "./encoding.js"
 import { Errors } from "./errors.js"
 import type { Types } from "./types.js"
 
-export const resolveHttpApiStatus = SchemaAST.resolveAt<number>("httpApiStatus")
 export const resolveHttpApiEncoding = SchemaAST.resolveAt<HttpApiSchema.Encoding>("~httpApiEncoding")
+export const resolveHttpApiStatus = SchemaAST.resolveAt<number>("httpApiStatus")
 
 type SseSchema = Extract<HttpApiSchema.StreamSchema, { readonly _tag: "StreamSse" }>
 
-export function isStreamSchema(schema: Schema.Top): schema is HttpApiSchema.StreamSchema {
+type StreamSchema = Extract<HttpApiSchema.StreamSchema, { readonly _tag: "StreamSse" | "StreamUint8Array" }>
+
+export function isStreamSchema(schema: Schema.Top): schema is StreamSchema {
   return "_tag" in schema && (schema._tag === "StreamSse" || schema._tag === "StreamUint8Array")
 }
 
