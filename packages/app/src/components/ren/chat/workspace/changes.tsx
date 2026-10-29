@@ -65,7 +65,7 @@ function Tree(props: {
   return (
     <FileTree
       model={tree.model}
-      className="h-full [--trees-accent:var(--ring)] [--trees-bg:transparent] [--trees-fg-muted:var(--muted-foreground)] [--trees-fg:var(--foreground)]"
+      className="h-full [--trees-accent:var(--muted-foreground)] [--trees-bg:transparent] [--trees-fg-muted:var(--muted-foreground)] [--trees-fg:var(--foreground)]"
     />
   )
 }
@@ -79,7 +79,7 @@ export function ChangesTab(props: { messages: ReadonlyArray<SessionMessage.Info>
     return (
       <Empty className="flex-1">
         <EmptyHeader>
-          <EmptyMedia variant="icon">
+          <EmptyMedia className="text-muted-foreground [&_svg]:size-6">
             <IconFileDiff />
           </EmptyMedia>
           <EmptyTitle>No changes yet</EmptyTitle>
@@ -101,14 +101,14 @@ export function ChangesTab(props: { messages: ReadonlyArray<SessionMessage.Info>
           <Tree changes={changes} selected={selected?.path} onSelect={setChosen} />
         </div>
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-1">
         {selected?.patches.map((each, index) => (
           <PatchDiff
             key={each.patch}
             patch={each.patch}
-            className="overflow-hidden rounded-lg border"
+            className="bg-transparent!"
             renderCustomHeader={() => (
-              <span className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground tabular-nums">
+              <span className="flex items-center gap-2 py-2 text-xs text-muted-foreground tabular-nums">
                 {selected.patches.length > 1 ? `Change ${index + 1}` : selected.path}
                 <span className="text-chart-2">+{each.additions}</span>
                 <span className="text-chart-4">−{each.deletions}</span>
@@ -120,6 +120,8 @@ export function ChangesTab(props: { messages: ReadonlyArray<SessionMessage.Info>
               diffStyle: "unified",
               overflow: "wrap",
               lineDiffType: "word",
+              unsafeCSS:
+                "* { --diffs-bg: var(--background) !important; } [data-diffs-header] { background: transparent !important; padding-inline: 0 !important; }",
             }}
           />
         ))}

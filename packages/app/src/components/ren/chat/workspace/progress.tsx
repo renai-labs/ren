@@ -1,19 +1,8 @@
 import { useEffect, useRef, useState, type ComponentType } from "react"
 import { ToolDisplay } from "@ren/chat"
 import type { SessionMessage } from "@ren/schema/session/message"
-import {
-  IconCode,
-  IconFileText,
-  IconFilter2,
-  IconGhost,
-  IconMessage,
-  IconPencil,
-  IconPlayerPlay,
-  IconSearch,
-  IconSparkles,
-  IconTool,
-  IconWorld,
-} from "@tabler/icons-react"
+import { IconFilter2, IconMessage, IconMessageChatbot, IconPlayerPlay, IconSearch, IconTool } from "@tabler/icons-react"
+import { toolIcons } from "@/components/ren/chat/tool-icons"
 import { DateTime } from "effect"
 import { Button } from "@/components/ui/button"
 import {
@@ -42,14 +31,14 @@ interface Entry {
 
 const kinds: ReadonlyArray<{ value: Kind; label: string; icon: ComponentType<{ className?: string }> }> = [
   { value: "user", label: "Your messages", icon: IconMessage },
-  { value: "message", label: "Ren messages", icon: IconSparkles },
-  { value: "command", label: "Commands", icon: IconCode },
-  { value: "edit", label: "Edits", icon: IconPencil },
-  { value: "file", label: "Reads", icon: IconFileText },
-  { value: "search", label: "Searches", icon: IconSearch },
-  { value: "web", label: "Web", icon: IconWorld },
-  { value: "agent", label: "Subagents", icon: IconGhost },
-  { value: "tool", label: "Tools", icon: IconTool },
+  { value: "message", label: "Ren messages", icon: IconMessageChatbot },
+  { value: "command", label: "Commands", icon: toolIcons.command },
+  { value: "edit", label: "Edits", icon: toolIcons.edit },
+  { value: "file", label: "Reads", icon: toolIcons.file },
+  { value: "search", label: "Searches", icon: toolIcons.search },
+  { value: "web", label: "Web", icon: toolIcons.web },
+  { value: "agent", label: "Subagents", icon: toolIcons.agent },
+  { value: "tool", label: "App tools", icon: toolIcons.tool },
 ]
 
 const icons = new Map(kinds.map((each) => [each.value, each.icon]))
@@ -165,7 +154,7 @@ function FilterMenu<A extends string>(props: {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="outline" className={cn(props.value.length > 0 && "text-foreground")}>
+          <Button variant="ghost" className={cn("text-muted-foreground", props.value.length > 0 && "text-foreground")}>
             <IconFilter2 data-icon="inline-start" />
             {props.label}
             {props.value.length > 0 ? <span className="tabular-nums">{props.value.length}</span> : null}
@@ -218,7 +207,7 @@ export function ProgressTab(props: { messages: ReadonlyArray<SessionMessage.Info
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
       <div className="flex items-center gap-2">
-        <InputGroup className="flex-1">
+        <InputGroup className="flex-1 border-transparent bg-muted/60 shadow-none dark:bg-muted/60">
           <InputGroupAddon>
             <IconSearch />
           </InputGroupAddon>
@@ -232,9 +221,9 @@ export function ProgressTab(props: { messages: ReadonlyArray<SessionMessage.Info
         <FilterMenu label="Type" options={kinds} value={types} onChange={setTypes} />
         <FilterMenu label="Status" options={statuses} value={states} onChange={setStates} />
         <Button
-          variant="outline"
+          variant="ghost"
           aria-pressed={live}
-          className="aria-pressed:bg-secondary aria-pressed:text-foreground"
+          className="text-muted-foreground aria-pressed:text-foreground [&[aria-pressed=true]_svg]:text-chart-2"
           onClick={() => setLive((current) => !current)}
         >
           <IconPlayerPlay data-icon="inline-start" />
@@ -244,8 +233,8 @@ export function ProgressTab(props: { messages: ReadonlyArray<SessionMessage.Info
       {count === 0 ? (
         <Empty className="flex-1">
           <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconSparkles />
+            <EmptyMedia className="text-muted-foreground [&_svg]:size-6">
+              <IconMessageChatbot />
             </EmptyMedia>
             <EmptyTitle>{props.messages.length === 0 ? "Nothing yet" : "No matching steps"}</EmptyTitle>
             <EmptyDescription>

@@ -5,10 +5,10 @@ import {
   IconDeviceDesktop,
   IconHandFinger,
   IconRefresh,
+  IconBrowser,
   IconTerminal2,
   IconWorld,
 } from "@tabler/icons-react"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
@@ -18,7 +18,7 @@ function Waiting(props: { icon: ReactNode; title: string; description: string })
   return (
     <Empty className="h-full border-0">
       <EmptyHeader>
-        <EmptyMedia variant="icon">{props.icon}</EmptyMedia>
+        <EmptyMedia className="text-muted-foreground [&_svg]:size-6">{props.icon}</EmptyMedia>
         <EmptyTitle>{props.title}</EmptyTitle>
         <EmptyDescription>{props.description}</EmptyDescription>
       </EmptyHeader>
@@ -37,10 +37,10 @@ function Playback(props: { label: string }) {
         <Button variant="ghost" size="icon" aria-label="Step forward" disabled className="text-muted-foreground">
           <IconArrowRight />
         </Button>
-        <Badge variant="secondary" className="gap-1.5 font-normal text-muted-foreground">
+        <span className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
           <span className="size-1.5 rounded-full bg-muted-foreground/60" />
           Offline
-        </Badge>
+        </span>
         <Button
           variant="ghost"
           size="icon"
@@ -58,14 +58,12 @@ function Playback(props: { label: string }) {
 export function ComputerTab() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-1 items-center justify-center p-3">
-        <div className="aspect-video w-full max-w-full overflow-hidden rounded-lg border bg-muted/40">
-          <Waiting
-            icon={<IconDeviceDesktop />}
-            title="Computer"
-            description="The environment’s desktop streams here once it’s connected."
-          />
-        </div>
+      <div className="min-h-0 flex-1">
+        <Waiting
+          icon={<IconDeviceDesktop />}
+          title="Computer"
+          description="The environment’s desktop streams here once it’s connected."
+        />
       </div>
       <Playback label="Computer" />
     </div>
@@ -75,7 +73,7 @@ export function ComputerTab() {
 export function BrowserTab() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-1 border-b px-3 py-2">
+      <div className="flex shrink-0 items-center gap-1 px-3 pb-2">
         <Button variant="ghost" size="icon" aria-label="Back" disabled className="text-muted-foreground">
           <IconArrowLeft />
         </Button>
@@ -85,7 +83,7 @@ export function BrowserTab() {
         <Button variant="ghost" size="icon" aria-label="Reload" disabled className="text-muted-foreground">
           <IconRefresh />
         </Button>
-        <InputGroup className="flex-1">
+        <InputGroup className="flex-1 border-transparent bg-muted/60 shadow-none dark:bg-muted/60">
           <InputGroupAddon>
             <IconWorld />
           </InputGroupAddon>
@@ -94,7 +92,7 @@ export function BrowserTab() {
       </div>
       <div className="min-h-0 flex-1">
         <Waiting
-          icon={<IconWorld />}
+          icon={<IconBrowser />}
           title="Browser"
           description="The pages Ren opens in the environment’s browser stream here."
         />
@@ -106,22 +104,18 @@ export function BrowserTab() {
 
 export function TerminalTab() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col p-3">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-sidebar font-mono text-xs">
-        <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2 text-muted-foreground">
-          <IconTerminal2 className="size-3.5" />
-          /bin/bash
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col gap-1 p-3 leading-5">
-          <span className="text-muted-foreground"># The environment’s terminal streams here once it’s connected.</span>
-          <span>
-            <span className="text-chart-2">ren@environment</span>
-            <span className="text-muted-foreground">:</span>
-            <span className="text-chart-1">~</span>
-            <span className="text-muted-foreground">$</span>
-          </span>
-        </div>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-1 px-4 py-1 font-mono text-xs/5">
+      <span className="flex items-center gap-2 pb-2 text-muted-foreground">
+        <IconTerminal2 className="size-3.5" />
+        /bin/bash
+      </span>
+      <span className="text-muted-foreground"># The environment’s terminal streams here once it’s connected.</span>
+      <span>
+        <span className="text-chart-2">ren@environment</span>
+        <span className="text-muted-foreground">:</span>
+        <span className="text-chart-1">~</span>
+        <span className="text-muted-foreground">$</span>
+      </span>
     </div>
   )
 }

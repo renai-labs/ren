@@ -25,16 +25,10 @@ import {
   IconBrain,
   IconChevronRight,
   IconClock,
-  IconCode,
   IconCopy,
-  IconFileText,
-  IconGhost,
   IconInfoCircle,
   IconPencil,
   IconRefresh,
-  IconSearch,
-  IconTool,
-  IconWorld,
 } from "@tabler/icons-react"
 import { AsyncResult } from "effect/reactivity"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -73,6 +67,7 @@ import {
   TraceTitle,
 } from "@/components/ui/trace"
 import { Markdown } from "@/components/ren/chat/markdown"
+import { toolIcons } from "@/components/ren/chat/tool-icons"
 import { EmptyState } from "@/components/ren/empty-state"
 import { ImageLightbox } from "@/components/ren/image-lightbox"
 import { withAppMentions } from "@/components/ren/app-mention"
@@ -477,16 +472,6 @@ function ChannelReplyMessage(props: { tool: SessionMessage.Tool }) {
   )
 }
 
-const toolIcons: Record<ToolDisplay.Kind, typeof IconCode> = {
-  command: IconCode,
-  file: IconFileText,
-  edit: IconPencil,
-  search: IconSearch,
-  web: IconWorld,
-  agent: IconGhost,
-  tool: IconTool,
-}
-
 function Output(props: { text: string; failed?: boolean | undefined }) {
   return (
     <CodeBlock size="sm" variant={props.failed ? "destructive" : "default"}>
@@ -594,7 +579,7 @@ function LiveShell(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; she
   const failed = !running && ToolDisplay.status(props.tool) === "failed"
   return (
     <StepRow
-      icon={<IconCode />}
+      icon={<toolIcons.command />}
       verb={ToolDisplay.label(props.tool)}
       subject={ToolDisplay.subtitle(props.tool)}
       running={running}
@@ -617,7 +602,7 @@ function SubagentStep(props: {
   const error = failed ? (ToolDisplay.error(props.tool) ?? ToolDisplay.output(props.tool)) : undefined
   const line = (trailing: boolean) => (
     <TraceLine status={running ? "running" : failed ? "error" : undefined}>
-      <TraceIcon>{running ? <Spinner /> : <IconGhost />}</TraceIcon>
+      <TraceIcon>{running ? <Spinner /> : <toolIcons.agent />}</TraceIcon>
       <TraceTitle className="shrink-0">
         {card.needsInput ? "Needs your input" : failed ? "Failed to delegate" : running ? "Delegating" : "Delegated"}
       </TraceTitle>
@@ -714,7 +699,7 @@ function StepItem(props: { step: Step; view: ChatAtoms.View; onOpenChild: (id: S
     const error = TimelineText.shellError(message)
     return (
       <StepRow
-        icon={<IconCode />}
+        icon={<toolIcons.command />}
         verb={message.status === "running" ? "Running" : "Ran"}
         subject={message.command}
         running={message.status === "running"}

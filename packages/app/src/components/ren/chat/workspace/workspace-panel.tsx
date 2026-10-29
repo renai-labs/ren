@@ -2,13 +2,13 @@ import { useState } from "react"
 import type { SessionMessage } from "@ren/schema/session/message"
 import {
   IconArrowsDiagonal,
+  IconBrowser,
   IconArrowsDiagonalMinimize2,
   IconClipboardList,
   IconDeviceDesktop,
   IconFileDiff,
   IconLayoutSidebarRightCollapse,
   IconTerminal2,
-  IconWorld,
 } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -21,7 +21,7 @@ const tabs = [
   { value: "changes", label: "Changes", icon: IconFileDiff },
   { value: "computer", label: "Computer", icon: IconDeviceDesktop },
   { value: "progress", label: "Progress", icon: IconClipboardList },
-  { value: "browser", label: "Browser", icon: IconWorld },
+  { value: "browser", label: "Browser", icon: IconBrowser },
   { value: "terminal", label: "Terminal", icon: IconTerminal2 },
 ] as const
 
