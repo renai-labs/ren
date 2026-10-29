@@ -32,15 +32,18 @@ export const AuthenticationLayer = Layer.effect(
       if (Option.isNone(token)) return yield* unauthorized
       return token.value
     })
-    const provideSession = <A, E, R>(httpEffect: Effect.Effect<A, E, R>, session: AuthenticatedSession) =>
-      httpEffect.pipe(
+    const provideSession = <A, E, R>(httpEffect: Effect.Effect<A, E, R>, session: AuthenticatedSession) => {
+      const caller = {
+        posthogDistinctId: session.user.id,
+        ...(session.session.activeOrganizationId && { "ren.organization.id": session.session.activeOrganizationId }),
+      }
+      return httpEffect.pipe(
         Effect.provideService(CurrentUser, session.user),
         Effect.provideService(CurrentSession, session),
-        Effect.annotateLogs({
-          posthogDistinctId: session.user.id,
-          ...(session.session.activeOrganizationId && { "ren.organization.id": session.session.activeOrganizationId }),
-        }),
+        Effect.annotateLogs(caller),
+        Effect.annotateSpans(caller),
       )
+    }
     return Authentication.of({
       bearer: Effect.fn("Authentication.bearer")(function* (httpEffect, options) {
         const caller = yield* dispatched

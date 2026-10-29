@@ -373,6 +373,12 @@ export const layer = Layer.effect(
             ),
           ),
           Observability.Trace.sessionStart,
+          Effect.annotateSpans({
+            "ren.session.id": payload.input.sessionId,
+            "ren.organization.id": payload.placement.organizationId,
+            "ren.space.id": payload.placement.spaceId,
+            "ren.brain.id": payload.placement.brainId,
+          }),
         ),
       ),
     )
@@ -409,6 +415,7 @@ export const layer = Layer.effect(
         member: { readonly userId: Auth.UserID; readonly memberId: typeof Auth.MemberID.Type; readonly name?: string },
         options: { readonly unreachable?: boolean } = {},
       ) {
+        yield* Effect.annotateCurrentSpan("ren.session.id", sessionId)
         const session = yield* brainOf(sessionId)
         // oxlint-disable-next-line ren/no-comments -- The app could not reach the brain's URL: the host checks the sandbox before Ren answers (E123).
         if (options.unreachable) yield* brainHost.unavailable(session.brainId)
@@ -591,13 +598,15 @@ export const hostAuthentication = Layer.effect(
     return HostAuthentication.of({
       bearer: Effect.fn("Brains.hostAuthentication")(function* (httpEffect, options) {
         const host = yield* brain.authenticateHost(options.credential)
+        const caller = {
+          "ren.brain.id": host.brainId,
+          "ren.organization.id": host.organizationId,
+          "ren.space.id": host.spaceId,
+        }
         return yield* httpEffect.pipe(
           Effect.provideService(CurrentHost, host),
-          Effect.annotateLogs({
-            "ren.brain.id": host.brainId,
-            "ren.organization.id": host.organizationId,
-            "ren.space.id": host.spaceId,
-          }),
+          Effect.annotateLogs(caller),
+          Effect.annotateSpans(caller),
         )
       }),
     })

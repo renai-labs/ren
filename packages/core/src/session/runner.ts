@@ -116,6 +116,7 @@ export const layer = Layer.effect(
         yield* brain.start(input, { ...owner, brainId })
       }),
       send: Effect.fn("SessionRunner.send")(function* (input: Session.SendInput) {
+        yield* Effect.annotateCurrentSpan("ren.session.id", input.sessionId)
         const row = (yield* database.transaction((transaction) =>
           transaction
             .select({

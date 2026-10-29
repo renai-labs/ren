@@ -393,6 +393,7 @@ export const layer = Layer.effect(
         `channel:${payload.event.provider}:${payload.event.install}:${payload.event.eventId}`,
         run(payload).pipe(
           Observability.Trace.channelEvent,
+          Effect.annotateSpans("ren.session.id", payload.sessionId),
           Effect.catchTags({
             "ChannelRoute.Refused": (error) =>
               payload.event.trigger

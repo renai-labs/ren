@@ -528,7 +528,10 @@ export const layer = Layer.effect(
       )
 
     yield* DurableRunner.register(BrainRun, (payload) =>
-      DurableRunner.supervise(`brain:${payload.brainId}`, run(payload.brainId).pipe(Observability.Trace.brainRun)).pipe(
+      DurableRunner.supervise(
+        `brain:${payload.brainId}`,
+        run(payload.brainId).pipe(Observability.Trace.brainRun, Effect.annotateSpans("ren.brain.id", payload.brainId)),
+      ).pipe(
         Effect.andThen(
           database.db
             .update(brains)
