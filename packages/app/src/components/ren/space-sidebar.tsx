@@ -116,23 +116,25 @@ export function SpaceSidebar(props: { spaceId: string }) {
         <SidebarGroup className="px-0">
           <SidebarGroupContent>
             <SidebarMenu className="gap-px">
-              {spaceSections.map((each) => (
-                <SidebarMenuItem key={each.value}>
-                  <SidebarMenuButton
-                    className={sidebarRow}
-                    isActive={current === each.value}
-                    render={<Link to={each.to} params={{ spaceId: props.spaceId }} />}
-                  >
-                    <each.icon />
-                    <span>{each.label}</span>
-                  </SidebarMenuButton>
-                  {each.value === "members" ? (
-                    <SidebarMenuBadge className="peer-data-[size=default]/menu-button:top-1.5">
-                      {space.memberCount}
-                    </SidebarMenuBadge>
-                  ) : null}
-                </SidebarMenuItem>
-              ))}
+              {spaceSections
+                .filter((each) => each.value !== "members" || space.kind !== "private")
+                .map((each) => (
+                  <SidebarMenuItem key={each.value}>
+                    <SidebarMenuButton
+                      className={sidebarRow}
+                      isActive={current === each.value}
+                      render={<Link to={each.to} params={{ spaceId: props.spaceId }} />}
+                    >
+                      <each.icon />
+                      <span>{each.label}</span>
+                    </SidebarMenuButton>
+                    {each.value === "members" ? (
+                      <SidebarMenuBadge className="peer-data-[size=default]/menu-button:top-1.5">
+                        {space.memberCount}
+                      </SidebarMenuBadge>
+                    ) : null}
+                  </SidebarMenuItem>
+                ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
