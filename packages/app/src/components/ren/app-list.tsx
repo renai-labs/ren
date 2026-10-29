@@ -4,8 +4,6 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle }
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AppIcon } from "@/components/ren/app-icon"
 import { gaps } from "@/lib/apps"
-import { plural } from "@/lib/format"
-import { cn } from "@/lib/utils"
 import type { AppProfileInfo } from "@ren/client"
 import { useSpaces } from "@/hooks/use-spaces"
 import type { CatalogApp } from "@/lib/apps"
@@ -49,19 +47,11 @@ export function AppGrid(props: { label: string; children: ReactNode }) {
   )
 }
 
-export const appContents = (app: Pick<App, "mcps" | "skills">) => {
-  const skills = Object.keys(app.skills).length
-  const mcps = Object.keys(app.mcps).length
-  return [skills ? plural(skills, "skill") : "", mcps ? plural(mcps, "MCP") : ""].filter(Boolean).join(", ")
-}
-
-const tones = { muted: "text-muted-foreground", success: "text-chart-2", attention: "text-chart-3" }
-
 export function AppRow(props: {
   name: string
   icon?: string | null
   caption: string
-  tone?: keyof typeof tones | undefined
+  attention?: boolean | undefined
   onOpen?: () => void
   action?: ReactNode
 }) {
@@ -88,10 +78,9 @@ export function AppRow(props: {
           ) : (
             <span className="truncate">{props.name}</span>
           )}
+          {props.attention ? <AttentionDot /> : null}
         </ItemTitle>
-        <ItemDescription className={cn("line-clamp-1 text-xs", props.tone ? tones[props.tone] : tones.muted)}>
-          {props.caption}
-        </ItemDescription>
+        <ItemDescription className="line-clamp-1">{props.caption}</ItemDescription>
       </ItemContent>
       {props.action ? <ItemActions className="relative">{props.action}</ItemActions> : null}
     </Item>

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { AddHere, type Added } from "@/components/ren/add-to-space"
-import { AppRow, AppSection, appContents } from "@/components/ren/app-list"
+import { AppRow, AppSection } from "@/components/ren/app-list"
 import { useCatalog } from "@/hooks/use-catalog"
 
 const matches = (app: { name: string; description: string }, query: string) =>
@@ -65,13 +65,7 @@ export function AddAppDialog(props: {
           {installed.length > 0 ? (
             <AppSection title={`In ${props.space.name}`} count={installed.length}>
               {installed.map((app) => (
-                <AppRow
-                  key={app.id}
-                  name={app.name}
-                  icon={app.icon}
-                  caption={`Added to ${props.space.name}`}
-                  tone="success"
-                />
+                <AppRow key={app.id} name={app.name} icon={app.icon} caption={app.description} />
               ))}
             </AppSection>
           ) : null}
@@ -82,7 +76,7 @@ export function AddAppDialog(props: {
                   key={app.id}
                   name={app.name}
                   icon={app.icon}
-                  caption={appContents(app) || app.description}
+                  caption={app.description}
                   action={
                     <AddHere
                       app={app}

@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { AddToSpace, type Added } from "@/components/ren/add-to-space"
-import { AccountList, AppRow, AppSection, AppSheet, appContents } from "@/components/ren/app-list"
+import { AccountList, AppRow, AppSection, AppSheet } from "@/components/ren/app-list"
 import { ToolbarSearch } from "@/components/ren/toolbar-search"
 import { Page, SkeletonRows } from "@/components/ren/page"
 import { ProfileDialog, type ProfileTarget } from "@/components/ren/profile-dialog"
@@ -13,7 +13,7 @@ import { useCatalog } from "@/hooks/use-catalog"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import { useSpaces } from "@/hooks/use-spaces"
 import { api, pageSize } from "@/lib/api"
-import { audience, connectLabel, fromRegistry, needsAttention, summary, type CatalogApp } from "@/lib/apps"
+import { audience, connectLabel, fromRegistry, needsAttention, type CatalogApp } from "@/lib/apps"
 import { currentPage } from "@/lib/pagination"
 
 const route = getRouteApi("/_authed/_shell/marketplace")
@@ -69,15 +69,13 @@ export function MarketplacePage() {
       },
     })
   const row = (each: CatalogApp) => {
-    const profiles = profilesOf(each.id)
-    const status = profiles.length > 0 ? summary(profiles) : undefined
     return (
       <AppRow
         key={each.id}
         name={each.name}
         icon={each.icon}
-        caption={status ?? (appContents(each) || each.description)}
-        tone={status === undefined ? "muted" : needsAttention(profiles) ? "attention" : "success"}
+        caption={each.description}
+        attention={needsAttention(profilesOf(each.id))}
         onOpen={() => setOpened(each.id)}
         action={<AddToSpace app={each} onAdded={added} />}
       />
