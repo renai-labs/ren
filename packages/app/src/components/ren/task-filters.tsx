@@ -173,9 +173,7 @@ export function DisplayOptions(props: { value: TaskDisplay; onChange?: ((value: 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        render={
-          <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Display options" />
-        }
+        render={<Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Display options" />}
       >
         <IconAdjustmentsHorizontal />
       </PopoverTrigger>
@@ -231,9 +229,9 @@ export function DisplayOptions(props: { value: TaskDisplay; onChange?: ((value: 
               <Button
                 key={property.value}
                 variant={shown ? "secondary" : "outline"}
-                size="xs"
+                size="sm"
                 aria-pressed={shown}
-                className={`h-6.5 rounded-full ${shown ? "border-0" : ""}`}
+                className={`rounded-full ${shown ? "border-0" : ""}`}
                 onClick={() =>
                   set({
                     properties: shown

@@ -9,7 +9,7 @@ export function ExpandableSearch(props: { label: string; value: string; onChange
     return (
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="icon"
         className="text-muted-foreground"
         aria-label={props.label}
         onClick={() => setOpen(true)}
@@ -19,7 +19,7 @@ export function ExpandableSearch(props: { label: string; value: string; onChange
     )
   }
   return (
-    <InputGroup className="h-7 w-52 border-0 bg-muted inset-ring inset-ring-transparent transition-colors hover:bg-secondary has-[[data-slot=input-group-control]:focus-visible]:inset-ring-ring dark:bg-muted">
+    <InputGroup className="h-8 w-52 border-0 bg-muted inset-ring inset-ring-transparent transition-colors hover:bg-secondary has-[[data-slot=input-group-control]:focus-visible]:inset-ring-ring dark:bg-muted">
       <InputGroupAddon className="pl-3">
         <IconSearch />
       </InputGroupAddon>

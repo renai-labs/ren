@@ -140,7 +140,7 @@ export function ProvidersPage() {
           <EmptyState
             action={
               isAdmin && !page.unavailable ? (
-                <Button variant="outline" size="sm" onClick={() => connect(tab)}>
+                <Button variant="outline" onClick={() => connect(tab)}>
                   <IconPlus />
                   Connect {product}
                 </Button>
@@ -260,7 +260,7 @@ function SubscriptionCard(props: {
       {connection.canManage ? (
         <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
           {connection.canReconnect ? (
-            <Button variant="secondary" size="xs" className="h-6.5" onClick={props.onReconnect}>
+            <Button variant="secondary" size="sm" onClick={props.onReconnect}>
               Reconnect
             </Button>
           ) : null}

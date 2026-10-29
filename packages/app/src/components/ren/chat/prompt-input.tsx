@@ -144,8 +144,7 @@ function AppsStrip(props: { spaceId: string }) {
             {profile.gaps.length ? (
               <Button
                 variant="secondary"
-                size="xs"
-                className="h-6.5"
+                size="sm"
                 onClick={() => setConnecting({ appId: profile.appId, profileId: profile.id })}
               >
                 Connect
@@ -168,7 +167,7 @@ function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void
         <span className="truncate text-destructive">
           {props.boot.reason.split("\n").at(0)?.trim() || "The sandbox failed to start."}
         </span>
-        <Button variant="link" size="xs" className="pointer-events-auto h-auto px-0" onClick={props.onRetry}>
+        <Button variant="link" size="sm" className="pointer-events-auto h-auto px-0" onClick={props.onRetry}>
           Retry
         </Button>
       </span>

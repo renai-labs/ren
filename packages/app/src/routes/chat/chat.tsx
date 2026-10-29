@@ -139,7 +139,7 @@ function ChatThread(props: { page: Page }) {
               <IconRestore />
               <AlertDescription>Later messages are undone. Sending a message discards them.</AlertDescription>
               <AlertAction>
-                <Button size="xs" variant="outline" onClick={page.restore}>
+                <Button size="sm" variant="outline" onClick={page.restore}>
                   Restore messages
                 </Button>
               </AlertAction>
@@ -193,12 +193,7 @@ export function ChatPage() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2">
           {page.child ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mr-auto text-muted-foreground"
-              onClick={() => page.openChild(undefined)}
-            >
+            <Button variant="ghost" className="mr-auto text-muted-foreground" onClick={() => page.openChild(undefined)}>
               <IconArrowLeft />
               {page.childTitle ?? "Subagent"}
             </Button>
@@ -223,7 +218,7 @@ export function ChatPage() {
           )}
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             aria-label="Artifacts"
             aria-pressed={artifacts}
             className="text-muted-foreground aria-pressed:bg-secondary aria-pressed:text-foreground"
@@ -233,7 +228,7 @@ export function ChatPage() {
           </Button>
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             aria-label="Share replay link"
             className="text-muted-foreground"
             onClick={() =>
@@ -249,7 +244,7 @@ export function ChatPage() {
         {page.failed ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             Ren couldn’t open this chat.
-            <Button size="sm" variant="outline" disabled={page.retrying} onClick={page.retry}>
+            <Button variant="outline" disabled={page.retrying} onClick={page.retry}>
               Try again
             </Button>
           </div>

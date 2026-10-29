@@ -82,9 +82,7 @@ export function TaskPage() {
         <span className="font-mono text-xs text-muted-foreground">{task.identifier}</span>
         <span className="truncate font-medium">{task.title}</span>
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button size="sm" className="ml-auto" aria-label={`Start a session for ${task.title}`} />}
-          >
+          <DropdownMenuTrigger render={<Button className="ml-auto" aria-label={`Start a session for ${task.title}`} />}>
             <IconPlayerPlay />
             Start
           </DropdownMenuTrigger>
@@ -150,12 +148,10 @@ export function TaskPage() {
                   <span className="text-sm text-muted-foreground">{task.humanReviewReason}</span>
                 ) : null}
               </div>
-              <Button variant="ghost" size="sm" onClick={() => page.decide("changes_requested")}>
+              <Button variant="ghost" onClick={() => page.decide("changes_requested")}>
                 Request changes
               </Button>
-              <Button size="sm" onClick={() => page.decide("approved")}>
-                Approve
-              </Button>
+              <Button onClick={() => page.decide("approved")}>Approve</Button>
             </div>
           ) : null}
           <Textarea
@@ -229,7 +225,6 @@ export function TaskPage() {
                 className="min-h-12 resize-none border-0 p-0 focus-visible:ring-0"
               />
               <Button
-                size="sm"
                 className="self-end"
                 disabled={page.commenting || !page.comment.trim()}
                 onClick={page.sendComment}
@@ -375,8 +370,8 @@ export function TaskPage() {
                 <Separator />
                 <Button
                   variant="ghost"
-                  size="xs"
-                  className="h-6.5 self-start"
+                  size="sm"
+                  className="self-start"
                   onClick={() => set({ dueAt: new Date().toISOString() })}
                 >
                   Today
@@ -394,7 +389,7 @@ export function TaskPage() {
                   render={
                     <Button
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon-sm"
                       className="text-muted-foreground"
                       aria-label={`Labels for ${task.title}`}
                     />

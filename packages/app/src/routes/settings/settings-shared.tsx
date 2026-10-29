@@ -81,7 +81,7 @@ export function PasswordDialog() {
   const [revoke, setRevoke] = useState(true)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="xs" className="h-6.5" />}>Change</DialogTrigger>
+      <DialogTrigger render={<Button variant="outline" size="sm" />}>Change</DialogTrigger>
       <DialogContent>
         <form
           className="contents"

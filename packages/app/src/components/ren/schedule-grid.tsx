@@ -43,7 +43,7 @@ export function ScheduleToolbar(props: { list: Schedules }) {
         value={list.filters}
         onChange={list.setFilters}
       />
-      <Button size="sm" onClick={list.create}>
+      <Button onClick={list.create}>
         <IconPlus data-icon="inline-start" />
         Create schedule
       </Button>

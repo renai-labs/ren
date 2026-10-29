@@ -81,7 +81,7 @@ export function SpacesPage() {
             onChange={setFilters}
           />
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button size="sm" />}>
+            <DropdownMenuTrigger render={<Button />}>
               <IconPlus data-icon="inline-start" />
               New space
             </DropdownMenuTrigger>

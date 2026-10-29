@@ -382,8 +382,8 @@ function DateField(props: {
               <Separator />
               <Button
                 variant="ghost"
-                size="xs"
-                className="h-6.5 self-start"
+                size="sm"
+                className="self-start"
                 onClick={() => {
                   props.onChange("")
                   setOpen(false)

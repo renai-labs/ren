@@ -94,8 +94,8 @@ export function ChannelProviderPage() {
       back={
         <Button
           variant="ghost"
-          size="xs"
-          className="h-6.5 text-muted-foreground"
+          size="sm"
+          className="text-muted-foreground"
           nativeButton={false}
           render={<Link to="/settings/channels" />}
         >
@@ -110,7 +110,7 @@ export function ChannelProviderPage() {
       }
       menu={
         install?.canUpdate ? (
-          <Button variant="outline" size="xs" className="h-6.5" onClick={() => page.setResetting(true)}>
+          <Button variant="outline" size="sm" onClick={() => page.setResetting(true)}>
             <IconPlugOff data-icon="inline-start" />
             Reset mappings
           </Button>
@@ -250,7 +250,7 @@ function MappingBoard(props: {
                   <ItemActions className="gap-0">
                     <Button
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon-sm"
                       className="text-muted-foreground"
                       aria-label={`${name} settings`}
                       disabled={busy}
@@ -260,7 +260,7 @@ function MappingBoard(props: {
                     </Button>
                     <Button
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon-sm"
                       className="text-muted-foreground"
                       aria-label={`Unlink ${name}`}
                       disabled={busy}

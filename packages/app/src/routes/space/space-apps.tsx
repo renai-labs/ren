@@ -92,7 +92,7 @@ export function SpaceAppsTab() {
             <AccountList
               title="Accounts"
               actions={
-                <Button size="xs" className="h-6.5" onClick={() => page.setProfile({ appId: app.id, from: page.from })}>
+                <Button size="sm" onClick={() => page.setProfile({ appId: app.id, from: page.from })}>
                   <IconPlus />
                   New
                 </Button>
@@ -114,7 +114,7 @@ export function SpaceAppsTab() {
               profiles={page.elsewhere}
               caption={(each) => source(each, space.id)}
               action={(each) => (
-                <Button variant="outline" size="xs" className="h-6.5" onClick={() => void page.addHere(each.id)}>
+                <Button variant="outline" size="sm" onClick={() => void page.addHere(each.id)}>
                   Use here
                 </Button>
               )}

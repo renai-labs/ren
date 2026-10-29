@@ -107,7 +107,7 @@ export function SpaceCredentialsTab() {
         <ToolbarSearch label="Search keys" value={page.query} onChange={page.setQuery} />
         {page.elsewhere.length > 0 ? (
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button size="xs" className="h-6.5" />}>
+            <DropdownMenuTrigger render={<Button />}>
               <IconPlus />
               Add key
               <IconChevronDown />
@@ -126,7 +126,7 @@ export function SpaceCredentialsTab() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <Button size="xs" className="h-6.5" onClick={() => page.setAdding(true)}>
+          <Button onClick={() => page.setAdding(true)}>
             <IconPlus />
             Add key
           </Button>
@@ -173,12 +173,7 @@ export function SpaceCredentialsTab() {
                   .filter(Boolean)
                   .join(" · ")}
               >
-                <Button
-                  variant="outline"
-                  size="xs"
-                  className="h-6.5"
-                  onClick={() => page.copy(credential.id, credential.label)}
-                >
+                <Button variant="outline" size="sm" onClick={() => page.copy(credential.id, credential.label)}>
                   Copy key
                 </Button>
               </Row>

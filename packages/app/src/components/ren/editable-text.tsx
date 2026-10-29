@@ -28,7 +28,7 @@ export function EditableText(props: {
         </span>
         <Button
           variant="ghost"
-          size="icon-xs"
+          size="icon-sm"
           className="shrink-0 text-muted-foreground"
           aria-label={`Edit ${props.label}`}
           onClick={() => setDraft(props.value)}

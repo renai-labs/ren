@@ -170,7 +170,7 @@ function InviteDialog(props: {
   const [pending, setPending] = useState(false)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="xs" className="h-6.5" />}>
+      <DialogTrigger render={<Button />}>
         <IconPlus />
         Add member
       </DialogTrigger>
@@ -268,7 +268,7 @@ export function MembersSettingsPage() {
           ) : (
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               className="text-muted-foreground"
               aria-label="Search members"
               onClick={() => page.setSearching(true)}

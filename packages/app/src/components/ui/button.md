@@ -6,6 +6,7 @@ Generated with `shadcn add button` (style `base-nova`, Base UI).
 
 - It transitions only colors, shadow and scale (150ms, ease-out) instead of `transition-all`, and presses to 97% scale instead of moving down 1px (`emil-design-eng`).
 - The `default` size has 12px side padding instead of 10px, as Ren's buttons do.
+- Ren uses two sizes. `sm` is 26px tall with 12px text and 14px icons (stock 28px, 12.8px text); `icon-sm` is a 26px square (stock 28px). `default` (32px) and `icon` (32px square) are stock. `xs`, `icon-xs`, `lg` and `icon-lg` are removed.
 
 Props, parts and names are still shadcn's.
 

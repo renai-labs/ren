@@ -6,7 +6,6 @@ import {
   IconChevronDown,
   IconCube,
   IconArchive,
-  IconEdit,
   IconLink,
   IconX,
   IconPlus,
@@ -187,8 +186,9 @@ export function TasksPage() {
             noun="task"
           />
           <DisplayOptions value={display} />
-          <NewTaskDialog trigger={<Button size="icon-sm" aria-label="New task" />}>
-            <IconEdit />
+          <NewTaskDialog trigger={<Button />}>
+            <IconPlus data-icon="inline-start" />
+            New task
           </NewTaskDialog>
         </>
       }
@@ -198,7 +198,7 @@ export function TasksPage() {
       ) : groups.length === 0 && visible.length < roots.length ? (
         <EmptyState
           action={
-            <Button variant="outline" size="sm" onClick={page.clearFilters}>
+            <Button variant="outline" onClick={page.clearFilters}>
               Clear filters
             </Button>
           }
@@ -206,7 +206,7 @@ export function TasksPage() {
           No tasks match these filters
         </EmptyState>
       ) : groups.length === 0 ? (
-        <EmptyState action={<NewTaskDialog trigger={<Button variant="outline" size="sm" />}>New task</NewTaskDialog>}>
+        <EmptyState action={<NewTaskDialog trigger={<Button variant="outline" />}>New task</NewTaskDialog>}>
           No tasks yet
         </EmptyState>
       ) : (
@@ -218,7 +218,7 @@ export function TasksPage() {
                   render={
                     <Button
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon-sm"
                       className="text-muted-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-muted aria-expanded:hover:text-foreground [&_svg]:-rotate-90 aria-expanded:[&_svg]:rotate-0"
                       aria-label={`Toggle ${group.label}`}
                     />
@@ -234,7 +234,7 @@ export function TasksPage() {
                   trigger={
                     <Button
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon-sm"
                       className="ml-auto text-muted-foreground"
                       aria-label={`New task in ${group.label}`}
                     />
@@ -323,9 +323,7 @@ function SelectionBar(props: {
         </button>
       </span>
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="h-7" />}>
-          Change status
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>Change status</DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-48">
           {Object.entries(statuses).map(([value, status]) => (
             <DropdownMenuItem key={value} onClick={() => props.onStatus(value)}>
@@ -336,7 +334,7 @@ function SelectionBar(props: {
         </DropdownMenuContent>
       </DropdownMenu>
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="h-7" />}>Move</DropdownMenuTrigger>
+        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>Move</DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-64">
           {props.agents.map((agent) => (
             <DropdownMenuItem key={agent.id} onClick={() => props.onMove(agent.id)}>
@@ -351,7 +349,7 @@ function SelectionBar(props: {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Button variant="ghost" size="sm" className="h-7" onClick={props.onArchive}>
+      <Button variant="ghost" size="sm" onClick={props.onArchive}>
         <IconArchive />
         Archive
       </Button>

@@ -53,8 +53,8 @@ function useSpaceLayout() {
 const back = (
   <Button
     variant="ghost"
-    size="xs"
-    className="h-6.5 text-muted-foreground"
+    size="sm"
+    className="text-muted-foreground"
     nativeButton={false}
     render={<Link to="/spaces" />}
   >

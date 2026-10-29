@@ -5,6 +5,7 @@ Generated with `shadcn add code-block` (style `base-nova`, Base UI).
 ## Changes to the component
 
 - With `wrap`, the code grid's column is `minmax(0, 1fr)` (and `auto minmax(0, 1fr)` with line numbers). Stock sizes the column to the longest unbreakable word, so a long URL in tool output pushed past the block's edge and was cut off. Props, parts and names are shadcn's.
+- `CodeBlockCopyButton` defaults to Button size `icon-sm` (26px) instead of `icon-xs`, which Ren's Button no longer has.
 
 ## What looks different, and why
 

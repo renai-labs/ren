@@ -79,7 +79,7 @@ export function CredentialsSettingsPage() {
         page.tab === "keys" ? (
           <>
             <ToolbarSearch label="Search keys" value={page.query} onChange={page.setQuery} />
-            <Button size="xs" className="h-6.5" onClick={() => page.setAdding(true)}>
+            <Button onClick={() => page.setAdding(true)}>
               <IconPlus />
               Add key
             </Button>
@@ -140,7 +140,7 @@ function OrgApps() {
           <AccountList
             title="Accounts"
             actions={
-              <Button size="xs" className="h-6.5" onClick={() => setProfile({ appId: app.id })}>
+              <Button size="sm" onClick={() => setProfile({ appId: app.id })}>
                 <IconPlus />
                 New
               </Button>

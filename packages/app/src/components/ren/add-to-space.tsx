@@ -84,8 +84,7 @@ export function AddToSpace(props: { app: App; primary?: boolean; onAdded: Added 
           render={
             <Button
               variant={props.primary ? "default" : "outline"}
-              size={props.primary ? "default" : "xs"}
-              className={props.primary ? undefined : "h-6.5"}
+              size={props.primary ? "default" : "sm"}
               aria-label={`Add ${props.app.name} to a space`}
             />
           }
@@ -127,7 +126,7 @@ export function AddHere(props: { app: App; space: Target; onAdded: Added }) {
   const addition = useAddition(props.app, props.onAdded)
   return (
     <>
-      <Button variant="outline" size="xs" className="h-6.5" onClick={() => addition.add(props.space)}>
+      <Button variant="outline" size="sm" onClick={() => addition.add(props.space)}>
         Add
       </Button>
       {addition.dialog}
@@ -161,13 +160,13 @@ function ChooseProfile(props: {
           {[
             ...props.shared.map((profile) => (
               <Row key={profile.id} title={profile.name} description={reach(profile)}>
-                <Button variant="outline" size="xs" className="h-6.5" onClick={() => props.onUse(profile)}>
+                <Button variant="outline" size="sm" onClick={() => props.onUse(profile)}>
                   Use
                 </Button>
               </Row>
             )),
             <Row key="new" title={`New account for ${props.space.name}`} description="Only this space uses it.">
-              <Button size="xs" className="h-6.5" onClick={props.onCreate}>
+              <Button size="sm" onClick={props.onCreate}>
                 Create
               </Button>
             </Row>,

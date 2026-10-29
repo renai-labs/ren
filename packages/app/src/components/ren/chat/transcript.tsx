@@ -639,7 +639,7 @@ function SubagentStep(props: {
         <TraceCollapsibleContent className="flex flex-col items-start gap-2">
           <Output text={error} failed />
           {child ? (
-            <Button variant="link" size="xs" className="px-0" onClick={() => props.onOpenChild(child)}>
+            <Button variant="link" size="sm" className="px-0" onClick={() => props.onOpenChild(child)}>
               Open subagent
             </Button>
           ) : null}

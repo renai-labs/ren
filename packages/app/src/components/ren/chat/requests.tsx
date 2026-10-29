@@ -60,7 +60,7 @@ function Source(props: {
         <span className="truncate">{props.title} needs your input</span>
         <Button
           variant="ghost"
-          size="xs"
+          size="sm"
           className="ml-auto"
           onClick={() => props.onOpen(Session.ID.make(props.sessionID))}
         >

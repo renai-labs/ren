@@ -3,7 +3,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 
 export function ToolbarSearch(props: { label: string; value: string; onChange: (value: string) => void }) {
   return (
-    <InputGroup className="h-6.5 w-56">
+    <InputGroup className="h-8 w-56">
       <InputGroupAddon>
         <IconSearch />
       </InputGroupAddon>

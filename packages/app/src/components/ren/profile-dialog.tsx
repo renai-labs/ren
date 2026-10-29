@@ -260,8 +260,8 @@ function ConnectAccount(props: {
         </div>
         <Button
           variant="ghost"
-          size="xs"
-          className="h-6.5 text-muted-foreground"
+          size="sm"
+          className="text-muted-foreground"
           onClick={() => setEditing((current) => !current)}
         >
           {editing ? "Back" : "Edit"}
@@ -342,7 +342,7 @@ function SignInRow(props: { item: AppProfileItem; waiting: boolean; onSignIn: ()
         description={`Waiting for ${props.item.name}…`}
         media={<Spinner className="text-muted-foreground" />}
       >
-        <Button variant="ghost" size="xs" className="h-6.5 text-muted-foreground" onClick={props.onSignIn}>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onSignIn}>
           Open again
         </Button>
       </Row>
@@ -355,7 +355,7 @@ function SignInRow(props: { item: AppProfileItem; waiting: boolean; onSignIn: ()
       media={ok ? <IconCheck className="size-4 text-chart-2" /> : undefined}
     >
       {props.item.status === "unavailable" ? null : (
-        <Button variant={ok ? "outline" : "default"} size="xs" className="h-6.5" onClick={props.onSignIn}>
+        <Button variant={ok ? "outline" : "default"} size="sm" onClick={props.onSignIn}>
           {ok ? "Reconnect" : `Sign in with ${props.item.name}`}
         </Button>
       )}
@@ -380,7 +380,7 @@ function KeyRow(props: { profileId: string; app: App; item: AppProfileItem }) {
   if (props.item.status === "ok" && !replacing)
     return (
       <Row title={props.item.name} description="Saved" media={<IconCheck className="size-4 text-chart-2" />}>
-        <Button variant="outline" size="xs" className="h-6.5" onClick={() => setReplacing(true)}>
+        <Button variant="outline" size="sm" onClick={() => setReplacing(true)}>
           Replace
         </Button>
       </Row>

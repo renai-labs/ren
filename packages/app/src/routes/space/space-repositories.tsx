@@ -94,7 +94,7 @@ export function SpaceRepositoriesTab() {
       <div className="flex items-center justify-end gap-1">
         <ExpandableSearch label="Search repositories" value={page.query} onChange={page.setQuery} />
         {page.canUpdate ? (
-          <Button size="sm" onClick={() => page.open("add")}>
+          <Button onClick={() => page.open("add")}>
             <IconPlus data-icon="inline-start" />
             Add repositories
           </Button>

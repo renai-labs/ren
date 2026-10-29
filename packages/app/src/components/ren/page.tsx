@@ -111,8 +111,8 @@ export function PageScope(props: {
         render={
           <Button
             variant="ghost"
-            size="xs"
-            className="h-6.5 text-muted-foreground"
+            size="sm"
+            className="text-muted-foreground"
             aria-label={`${props.label}: ${current.label}`}
           />
         }

@@ -53,7 +53,7 @@ export function FilterMenu(props: {
         render={
           <Button
             variant="ghost"
-            size="icon-sm"
+            size={sidebar ? "icon-sm" : "icon"}
             className={
               sidebar
                 ? "relative size-5 rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg:not([class*='size-'])]:size-4"
@@ -202,7 +202,7 @@ export function FilterChips(props: {
           </div>
         )
       })}
-      <Button variant="ghost" size="xs" className="h-6.5 text-muted-foreground" onClick={() => props.onChange({})}>
+      <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => props.onChange({})}>
         Clear
       </Button>
     </div>

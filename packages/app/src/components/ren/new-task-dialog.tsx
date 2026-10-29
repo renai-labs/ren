@@ -62,9 +62,9 @@ function Chip(props: {
         render={
           <Button
             variant="outline"
-            size="xs"
+            size="sm"
             aria-label={props.label}
-            className={`h-7 rounded-full px-3 ${props.muted ? "" : "text-foreground"}`}
+            className={`rounded-full px-3 ${props.muted ? "" : "text-foreground"}`}
           />
         }
       >
@@ -182,8 +182,8 @@ export function NewTaskDialog(props: {
               render={
                 <Button
                   variant="outline"
-                  size="xs"
-                  className="h-7 rounded-full px-3 font-normal text-foreground"
+                  size="sm"
+                  className="rounded-full px-3 font-normal text-foreground"
                   aria-label={`Space: ${spaceName(spaceId)}`}
                 />
               }
@@ -299,9 +299,9 @@ export function NewTaskDialog(props: {
                 render={
                   <Button
                     variant="outline"
-                    size="xs"
+                    size="sm"
                     aria-label="Labels"
-                    className={`h-7 rounded-full px-3 ${draft.labels.length === 0 ? "" : "text-foreground"}`}
+                    className={`rounded-full px-3 ${draft.labels.length === 0 ? "" : "text-foreground"}`}
                   />
                 }
               >

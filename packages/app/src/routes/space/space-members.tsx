@@ -151,7 +151,7 @@ function AddSpaceMemberDialog(props: {
   const candidate = props.candidates.find((each) => each.value === selected)
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogTrigger render={<Button size="xs" className="h-6.5" />}>
+      <DialogTrigger render={<Button />}>
         <IconPlus />
         Add member
       </DialogTrigger>

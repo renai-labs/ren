@@ -4,7 +4,7 @@ Generated with `shadcn add attachment` (style `base-nova`, Base UI).
 
 ## Changes to the component
 
-None. The code in `attachment.tsx` is exactly what the shadcn CLI generated. Its props, parts and names are shadcn's.
+- `AttachmentAction` defaults to Button size `icon-sm` (26px) instead of `icon-xs`, which Ren's Button no longer has. Props, parts and names are shadcn's.
 
 ## What looks different, and why
 

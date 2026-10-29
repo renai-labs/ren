@@ -77,7 +77,7 @@ export function SpaceChannelsTab() {
     <div className="flex flex-col gap-4">
       {page.canLink ? (
         <div className="flex items-center justify-end gap-1">
-          <Button size="sm" onClick={() => page.open(true)}>
+          <Button onClick={() => page.open(true)}>
             <IconPlus data-icon="inline-start" />
             Add channel
           </Button>

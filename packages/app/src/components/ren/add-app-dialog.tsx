@@ -28,7 +28,7 @@ export function AddAppDialog(props: {
   const rows = catalog.apps.filter((app) => !props.added.has(app.id) && matches(app, query))
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="xs" className="h-6.5" />}>
+      <DialogTrigger render={<Button />}>
         <IconPlus />
         Add app
       </DialogTrigger>

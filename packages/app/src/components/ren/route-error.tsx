@@ -33,11 +33,11 @@ function ErrorState(props: {
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center">
           {props.onRetry ? (
-            <Button variant="outline" size="sm" onClick={props.onRetry}>
+            <Button variant="outline" onClick={props.onRetry}>
               Try again
             </Button>
           ) : null}
-          <Button size="sm" nativeButton={false} render={<Link to="/" />}>
+          <Button nativeButton={false} render={<Link to="/" />}>
             Go home
           </Button>
         </EmptyContent>

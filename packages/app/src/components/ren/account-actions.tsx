@@ -41,8 +41,7 @@ export function AccountActions(props: {
       {first ? (
         <Button
           variant="outline"
-          size="xs"
-          className="h-6.5"
+          size="sm"
           disabled={signIn.pending}
           onClick={() => (missing.length === 1 && signsIn(first) ? startSignIn(first) : props.onOpen())}
         >
@@ -135,14 +134,7 @@ export function AccountAccess(props: { profile: AppProfile }) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={
-            <Button
-              variant="outline"
-              size="xs"
-              className="h-6.5"
-              aria-label={`Spaces that use ${props.profile.name}`}
-            />
-          }
+          render={<Button variant="outline" size="sm" aria-label={`Spaces that use ${props.profile.name}`} />}
         >
           Spaces
           <IconChevronDown className="text-muted-foreground" />
