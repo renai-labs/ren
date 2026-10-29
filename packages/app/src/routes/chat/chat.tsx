@@ -191,7 +191,7 @@ export function ChatPage() {
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2">
+        <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2 group-has-[[data-slot=sidebar][data-state=collapsed]]/sidebar-wrapper:pl-11 max-md:pl-11">
           {page.child ? (
             <Button variant="ghost" className="mr-auto text-muted-foreground" onClick={() => page.openChild(undefined)}>
               <IconArrowLeft />

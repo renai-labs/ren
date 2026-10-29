@@ -2,15 +2,15 @@ import { RegistryContext } from "@effect/atom-react"
 import { ChatReact } from "@ren/chat/react"
 import { Outlet, useLocation } from "@tanstack/react-router"
 import { useEffect } from "react"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/ren/app-sidebar"
 import { NewTaskDialog, useNewTaskShortcut } from "@/components/ren/new-task-dialog"
 import { SearchDialog } from "@/components/ren/search-dialog"
 import { SettingsSidebar } from "@/components/ren/settings-sidebar"
-import { SpaceNavSwitcher, SpaceSidebar } from "@/components/ren/space-sidebar"
+import { SpaceSidebar } from "@/components/ren/space-sidebar"
 import { useMe } from "@/hooks/use-me"
 import { chatFor } from "@/lib/chat"
-import { toggleSearch, useSpaceNav } from "@/stores/ui"
+import { toggleSearch } from "@/stores/ui"
 
 const insetClass = "h-svh overflow-hidden md:h-[calc(100svh-1rem)] md:shadow-none md:inset-ring md:inset-ring-border"
 
@@ -26,19 +26,25 @@ function useSearchShortcut() {
   }, [])
 }
 
+function SidebarOpen() {
+  const sidebar = useSidebar()
+  if (!sidebar.isMobile && sidebar.state === "expanded") return null
+  return <SidebarTrigger className="absolute top-2 left-2 z-20 text-muted-foreground" />
+}
+
 export function AppShell() {
   const me = useMe()
   const chat = chatFor(me.user.id)
   useSearchShortcut()
   useNewTaskShortcut()
   const spaceId = useLocation({ select: (location) => /^\/spaces\/([^/]+)/u.exec(location.pathname)?.[1] })
-  const spaceSidebar = useSpaceNav() === "sidebar" && spaceId !== undefined
   return (
     <RegistryContext value={chat.registry}>
       <ChatReact.Provider atoms={chat.atoms}>
         <SidebarProvider>
-          {spaceSidebar ? <SpaceSidebar spaceId={spaceId} /> : <AppSidebar />}
+          {spaceId === undefined ? <AppSidebar /> : <SpaceSidebar spaceId={spaceId} />}
           <SidebarInset className={insetClass}>
+            <SidebarOpen />
             <div
               data-slot="page-scroll"
               className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
@@ -48,7 +54,6 @@ export function AppShell() {
           </SidebarInset>
           <SearchDialog />
           <NewTaskDialog />
-          <SpaceNavSwitcher />
         </SidebarProvider>
       </ChatReact.Provider>
     </RegistryContext>
@@ -61,6 +66,7 @@ export function SettingsShell() {
     <SidebarProvider>
       <SettingsSidebar />
       <SidebarInset className={insetClass}>
+        <SidebarOpen />
         <div
           data-slot="page-scroll"
           className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"

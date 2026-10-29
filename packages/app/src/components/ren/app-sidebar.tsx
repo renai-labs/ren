@@ -73,7 +73,7 @@ import { resetSession } from "@/lib/chat"
 import { initials } from "@/lib/format"
 import { docsUrl, founderCallUrl } from "@/lib/links"
 import { sessionTitle, sidebarSessionsOptions } from "@/lib/sessions"
-import { openSearch, useSpaceNav } from "@/stores/ui"
+import { openSearch } from "@/stores/ui"
 
 const pages = [
   { to: "/spaces", label: "Spaces", icon: IconCube },
@@ -213,7 +213,6 @@ export function AppSidebar() {
   const [filters, setFilters] = useState<Filters>({})
   const updated = (["today", "week", "month"] as const).find((key) => key === filters.updated?.at(0))
   const now = useNow()
-  const spaceTree = useSpaceNav() === "sidebar"
   const chats = allChats.filter(
     (chat) =>
       passes(
@@ -274,7 +273,7 @@ export function AppSidebar() {
                 </SidebarMenuBadge>
               </SidebarMenuItem>
               {pages.map((page) =>
-                spaceTree && page.to === "/spaces" ? (
+                page.to === "/spaces" ? (
                   <SpacesTree key={page.to} path={path} />
                 ) : (
                   <SidebarMenuItem key={page.to}>

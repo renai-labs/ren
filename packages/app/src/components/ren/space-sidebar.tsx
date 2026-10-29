@@ -35,13 +35,11 @@ import {
   SidebarMenuItem,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { sidebarRow } from "@/components/ren/app-sidebar"
 import { useSpaces } from "@/hooks/use-spaces"
 import { api } from "@/lib/api"
-import { chooseSpaceNav, useSpaceNav } from "@/stores/ui"
 
-export const spaceSections = [
+const spaceSections = [
   { value: "overview", label: "Overview", icon: IconLayoutDashboard, to: "/spaces/$spaceId" },
   { value: "members", label: "Members", icon: IconUsers, to: "/spaces/$spaceId/members" },
   { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
@@ -52,9 +50,9 @@ export const spaceSections = [
   { value: "factory", label: "Factory", icon: IconBuildingFactory2, to: "/spaces/$spaceId/factory" },
 ] as const
 
-export type SpaceSection = (typeof spaceSections)[number]["value"]
+type SpaceSection = (typeof spaceSections)[number]["value"]
 
-export const spaceSectionOf = (path: string): SpaceSection =>
+const spaceSectionOf = (path: string): SpaceSection =>
   spaceSections.find((section) => section.value === path.split("/").at(3))?.value ?? "overview"
 
 function SpaceIcon(props: { kind: string; className?: string | undefined }) {
@@ -140,32 +138,5 @@ export function SpaceSidebar(props: { spaceId: string }) {
         </SidebarGroup>
       </SidebarContent>
     </Sidebar>
-  )
-}
-
-const isSpaceNav = (value: unknown) => value === "tabs" || value === "sidebar"
-
-export function SpaceNavSwitcher() {
-  const nav = useSpaceNav()
-  const onSpaces = useLocation({ select: (location) => location.pathname.startsWith("/spaces") })
-  if (!onSpaces) return null
-  return (
-    <Tabs
-      value={nav}
-      onValueChange={(value) => {
-        if (isSpaceNav(value)) chooseSpaceNav(value)
-      }}
-      className="fixed top-2.5 left-1/2 z-50 -translate-x-1/2 max-md:hidden"
-    >
-      <TabsList className="shadow-overlay">
-        <span className="px-2 text-xs">Space nav</span>
-        <TabsTrigger value="tabs" className="px-2.5 text-xs">
-          Tabs
-        </TabsTrigger>
-        <TabsTrigger value="sidebar" className="px-2.5 text-xs">
-          Sidebar
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
   )
 }

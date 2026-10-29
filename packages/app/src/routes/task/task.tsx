@@ -74,7 +74,7 @@ export function TaskPage() {
   const assignee = page.assignee
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="mx-8 flex h-11.5 shrink-0 items-center gap-2 border-b text-sm">
+      <header className="mx-8 flex h-11.5 shrink-0 items-center gap-2 border-b text-sm group-has-[[data-slot=sidebar][data-state=collapsed]]/sidebar-wrapper:pl-6 max-md:pl-6">
         <Link to="/tasks" className="font-medium">
           Tasks
         </Link>
