@@ -1,13 +1,21 @@
 import type { ScheduleInfo } from "@ren/client"
-import { IconActivity, IconClock, IconCube, IconPlus, IconTrash } from "@tabler/icons-react"
+import {
+  IconActivity,
+  IconClock,
+  IconCube,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconPlus,
+  IconRepeat,
+  IconTrash,
+} from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Switch } from "@/components/ui/switch"
 import { ConfirmDialog } from "@/components/ren/confirm-dialog"
 import { EmptyState } from "@/components/ren/empty-state"
 import { ExpandableSearch } from "@/components/ren/expandable-search"
 import { FilterMenu, type FilterProperty } from "@/components/ren/filter-menu"
-import { SkeletonCards } from "@/components/ren/page"
+import { SkeletonRows } from "@/components/ren/page"
+import { RowMenu } from "@/components/ren/row-menu"
 import { ScheduleSheet } from "@/components/ren/schedule-sheet"
 import type { Schedules } from "@/hooks/use-schedules"
 import { describe, statusOf } from "@/lib/schedules"
@@ -51,12 +59,19 @@ export function ScheduleToolbar(props: { list: Schedules }) {
   )
 }
 
+const sections = [
+  { status: "active", title: "Active" },
+  { status: "paused", title: "Paused" },
+  { status: "ended", title: "Ended" },
+] as const
+
 export function ScheduleGrid(props: { list: Schedules }) {
   const list = props.list
-  const empty = list.schedules?.length === 0
+  const schedules = list.schedules
+  const empty = schedules?.length === 0
   return (
     <>
-      {list.schedules ? null : <SkeletonCards columns={3} />}
+      {schedules ? null : <SkeletonRows count={4} />}
       {empty ? (
         list.filtered ? (
           <EmptyState title="No matching schedules">Try a different search or filter.</EmptyState>
@@ -64,25 +79,31 @@ export function ScheduleGrid(props: { list: Schedules }) {
           <EmptyState title="No schedules yet">Create one to run a prompt on a recurring cadence.</EmptyState>
         )
       ) : null}
-      <div
-        className={cn(
-          "mt-4 grid gap-4 transition-opacity sm:grid-cols-2 lg:grid-cols-3",
-          list.stale && "opacity-60",
-          (!list.schedules || empty) && "hidden",
-        )}
-      >
-        {(list.schedules ?? []).map((schedule) => (
-          <ScheduleCard
-            key={schedule.id}
-            schedule={schedule}
-            details={[list.spaceName(schedule.spaceId), describe(schedule.when, list.zone)].filter(Boolean).join(" · ")}
-            status={statusOf(schedule, list.now)}
-            active={list.isActive(schedule)}
-            onOpen={() => list.edit(schedule)}
-            onToggle={() => list.toggle(schedule)}
-            onDelete={() => list.setDeleting(schedule)}
-          />
-        ))}
+      <div className={cn("flex flex-col gap-10 transition-opacity", list.stale && "opacity-60")}>
+        {sections.map((section) => {
+          const rows = (schedules ?? []).filter((schedule) => schedule.status === section.status)
+          if (rows.length === 0) return null
+          return (
+            <section key={section.status} aria-label={section.title} className="flex flex-col">
+              <h2 className="border-b pb-3 text-sm font-medium">{section.title}</h2>
+              <ul className="flex flex-col divide-y">
+                {rows.map((schedule) => (
+                  <ScheduleRow
+                    key={schedule.id}
+                    schedule={schedule}
+                    space={list.spaceId ? undefined : list.spaceName(schedule.spaceId)}
+                    cadence={describe(schedule.when, list.zone)}
+                    status={statusOf(schedule, list.now)}
+                    active={list.isActive(schedule)}
+                    onOpen={() => list.edit(schedule)}
+                    onToggle={() => list.toggle(schedule)}
+                    onDelete={() => list.setDeleting(schedule)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )
+        })}
       </div>
       <ScheduleSheet
         open={list.sheet.open}
@@ -109,9 +130,10 @@ export function ScheduleGrid(props: { list: Schedules }) {
   )
 }
 
-function ScheduleCard(props: {
+function ScheduleRow(props: {
   schedule: ScheduleInfo
-  details: string
+  space: string | undefined
+  cadence: string
   status: string
   active: boolean
   onOpen: () => void
@@ -119,44 +141,46 @@ function ScheduleCard(props: {
   onDelete: () => void
 }) {
   const schedule = props.schedule
+  const ended = schedule.status === "ended"
   return (
-    <Card className="relative gap-4 border shadow-soft ring-0 transition-colors [--card-spacing:--spacing(6)] hover:bg-muted active:scale-99">
-      <CardHeader>
-        <div className="mb-3 flex size-12 items-center justify-center rounded-lg bg-secondary">
-          <IconClock className="size-8 text-muted-foreground" strokeWidth={1.75} />
-        </div>
-        <CardTitle className="col-span-2 min-w-0 text-sm/5">
-          <button
-            type="button"
-            onClick={props.onOpen}
-            aria-label={`Edit schedule: ${schedule.name}`}
-            className="block w-full truncate text-left outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
-          >
-            {schedule.message}
-          </button>
-        </CardTitle>
-        <CardDescription className="col-span-2 line-clamp-2 min-h-8 min-w-0 text-xs">{props.details}</CardDescription>
-        <CardAction className="relative row-span-1 flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground"
-            aria-label="Delete schedule"
-            onClick={props.onDelete}
-          >
-            <IconTrash />
-          </Button>
-          <Switch
-            checked={props.active}
-            disabled={schedule.status === "ended"}
-            onCheckedChange={props.onToggle}
-            aria-label={props.active ? "Pause schedule" : "Resume schedule"}
-          />
-        </CardAction>
-      </CardHeader>
-      <CardFooter className="mx-6 mb-6 bg-transparent px-0 pt-3 pb-0 text-xs text-muted-foreground tabular-nums">
-        {props.status}
-      </CardFooter>
-    </Card>
+    <li className="group/row relative flex h-12 items-center gap-3 px-1 transition-colors duration-150 ease-out hover:bg-muted/40">
+      <IconClock className="size-4 shrink-0 text-muted-foreground" />
+      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+        <button
+          type="button"
+          onClick={props.onOpen}
+          title={props.status}
+          className={cn(
+            "truncate text-left text-sm outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50",
+            !props.active && "text-muted-foreground",
+          )}
+        >
+          {schedule.name || schedule.message}
+        </button>
+        {props.space ? <span className="shrink-0 truncate text-xs text-muted-foreground">{props.space}</span> : null}
+      </span>
+      <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        {props.active ? <IconRepeat className="size-3.5" /> : null}
+        {props.active ? props.cadence : props.status}
+      </span>
+      <span className="relative w-7 shrink-0 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 focus-within:opacity-100 has-aria-expanded:opacity-100">
+        <RowMenu
+          label={`${schedule.name} actions`}
+          className="flex text-muted-foreground"
+          items={[
+            ...(ended
+              ? []
+              : [
+                  {
+                    label: props.active ? "Pause" : "Resume",
+                    icon: props.active ? <IconPlayerPause /> : <IconPlayerPlay />,
+                    onSelect: props.onToggle,
+                  },
+                ]),
+            { label: "Delete", icon: <IconTrash />, onSelect: props.onDelete },
+          ]}
+        />
+      </span>
+    </li>
   )
 }
