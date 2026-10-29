@@ -160,7 +160,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide([AuthDatabase.layer, Database.layer]),
-  Layer.provide(ErrorTracking.layer.pipe(Layer.provide(PostHog.layerConfig))),
+  Layer.provide(ErrorTracking.layer.pipe(Layer.provideMerge(PostHog.layerConfig))),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
   Layer.provide(
     BunHttpServer.layerConfig({

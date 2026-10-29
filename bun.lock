@@ -284,6 +284,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@ren/schema": "workspace:*",
+        "@ren/util": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {

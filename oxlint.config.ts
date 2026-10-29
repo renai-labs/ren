@@ -39,8 +39,8 @@ const packageBoundaries = [
   },
   {
     files: ["packages/host-api/**"],
-    regex: "^@ren/(?!schema(/|$))",
-    message: "The Host API depends only on schema. It holds BrainApi and RenHostApi.",
+    regex: "^@ren/(?!schema(/|$)|util(/|$))",
+    message: "The Host API depends only on schema and util. It holds BrainApi, RenHostApi, SyncApi and TelemetryApi.",
   },
   {
     files: ["packages/environment-api/**"],

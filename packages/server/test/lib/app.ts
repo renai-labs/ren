@@ -34,6 +34,7 @@ import { Routes } from "../../src/routes.js"
 import { Signer } from "@ren/core/signer"
 import { SlackApp } from "@ren/core/slack-app"
 import { EgressControl } from "@ren/core/egress-control"
+import { PostHog } from "@ren/core/posthog"
 import { Access } from "@ren/core/access"
 import { Credentials } from "@ren/core/credentials"
 import { Envelope } from "@ren/core/envelope"
@@ -130,6 +131,7 @@ export const services = Layer.mergeAll(
   Layer.provideMerge(Drives.layer),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
+  Layer.provideMerge(PostHog.layerNone),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide(BunServices.layer),
 )
