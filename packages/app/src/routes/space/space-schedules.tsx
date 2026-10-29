@@ -16,12 +16,12 @@ export function SpaceSchedulesTab() {
       void navigate({ search: (previous) => ({ ...previous, ...update }), replace: navigation?.replace ?? false }),
   })
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-end gap-1">
         <ScheduleToolbar list={page} />
       </div>
       <ScheduleGrid list={page} />
-      <div className="mt-4 flex items-center justify-between gap-4 empty:hidden">
+      <div className="flex items-center justify-between gap-4 empty:hidden">
         <ListPagination page={page.page} pageSize={pageSize} total={page.total} noun="schedule" />
       </div>
     </div>

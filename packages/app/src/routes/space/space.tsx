@@ -1,17 +1,36 @@
 import { useMutation } from "@tanstack/react-query"
-import { Outlet, useNavigate } from "@tanstack/react-router"
+import { Outlet, useLocation, useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { Page } from "@/components/ren/page"
 import { RowMenu } from "@/components/ren/row-menu"
 import { api, errorMessage } from "@/lib/api"
 import { useSpace } from "@/routes/space/use-space"
 
+const sections: Readonly<Record<string, { title: string; description: (space: string) => string }>> = {
+  overview: { title: "Overview", description: (space) => `The name and description of ${space}.` },
+  members: { title: "Members", description: (space) => `People who can use ${space}.` },
+  apps: { title: "Apps", description: (space) => `Apps every chat in ${space} can use.` },
+  repositories: {
+    title: "Repositories",
+    description: (space) => `Repositories Ren can read in ${space}. To change code, ask Ren to clone one.`,
+  },
+  channels: {
+    title: "Mentions",
+    description: (space) => `Channels where people can mention @Ren to work in ${space}.`,
+  },
+  credentials: { title: "Keys", description: (space) => `Keys every chat in ${space} can use.` },
+  schedules: { title: "Scheduled", description: (space) => `Work that starts in ${space} on a schedule.` },
+  factory: { title: "Factory", description: (space) => `Agents that work on tasks in ${space}.` },
+}
+
 function useSpaceLayout() {
   const space = useSpace()
   const navigate = useNavigate()
   const archive = useMutation(api.space.archive.mutationOptions())
+  const tab = useLocation({ select: (location) => location.pathname.split("/").at(3) ?? "overview" })
   return {
     space,
+    section: sections[tab] ?? sections.overview,
     archive: () =>
       archive.mutateAsync(
         { id: space.id },
@@ -31,8 +50,8 @@ export function SpaceLayout() {
   const space = page.space
   return (
     <Page
-      title={space.name}
-      description={space.description ?? undefined}
+      title={page.section?.title ?? space.name}
+      description={page.section?.description(space.name)}
       menu={
         space.canArchive ? (
           <RowMenu

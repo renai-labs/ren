@@ -100,7 +100,6 @@ export function SpaceRepositoriesTab() {
           </Button>
         ) : null}
       </div>
-      <p className="text-sm text-muted-foreground">{Repositories.tabCopy}</p>
       <TableCard>
         <Table className="table-fixed">
           <TableHeader>

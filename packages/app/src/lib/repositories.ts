@@ -5,8 +5,6 @@ import type { ReferenceInfo } from "@ren/client"
 // oxlint-disable-next-line ren/no-comments -- R28: a reference is a read-only copy, so the copy never promises changes.
 export const copy = "Ren reads a copy of these repositories."
 
-export const tabCopy = "Ren reads a copy of these repositories. To change code, ask Ren to clone the repository."
-
 export interface Parsed {
   readonly repository: string
   readonly name: string
