@@ -1,15 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton"
 import { TableCell, TableRow } from "@/components/ui/table"
-import { Fragment, type ComponentProps, type ComponentType, type ReactElement, type ReactNode } from "react"
-import { IconChevronDown } from "@tabler/icons-react"
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Fragment, type ComponentProps, type ReactElement, type ReactNode } from "react"
 import {
   Item,
   ItemActions,
@@ -27,7 +18,6 @@ export function Page(props: {
   title: string
   description?: string | undefined
   back?: ReactNode | undefined
-  scope?: ReactNode | undefined
   media?: ReactNode | undefined
   menu?: ReactNode | undefined
   aside?: ReactNode | undefined
@@ -53,13 +43,6 @@ export function Page(props: {
           : "mx-auto flex w-full max-w-200 flex-col gap-6 px-6 pt-22 pb-12"
       }
     >
-      {props.scope ? (
-        <div className="absolute inset-x-0 top-0 flex justify-center">
-          <div className="relative rounded-b-2xl bg-sidebar px-4 pt-1 pb-2 before:absolute before:top-0 before:-left-4 before:size-4 before:bg-[radial-gradient(circle_at_0_100%,transparent_15.5px,var(--sidebar)_16px)] after:absolute after:top-0 after:-right-4 after:size-4 after:bg-[radial-gradient(circle_at_100%_100%,transparent_15.5px,var(--sidebar)_16px)]">
-            {props.scope}
-          </div>
-        </div>
-      ) : null}
       {props.back ? <div className="flex">{props.back}</div> : null}
       {props.media ? (
         <header className="flex items-start justify-between gap-4">
@@ -90,48 +73,6 @@ export function Page(props: {
       <div className="flex flex-col gap-8">{props.children}</div>
       {props.footer ? <div className="flex min-h-8 items-center justify-between gap-4">{props.footer}</div> : null}
     </div>
-  )
-}
-
-export function PageScope(props: {
-  label: string
-  value: string
-  options: {
-    value: string
-    label: string
-    icon: ComponentType<{ className?: string }>
-  }[]
-  onChange: (value: string) => void
-}) {
-  const current = props.options.find((option) => option.value === props.value) ?? props.options.at(0)
-  if (!current) return null
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            aria-label={`${props.label}: ${current.label}`}
-          />
-        }
-      >
-        <current.icon className="size-4" />
-        {current.label}
-        <IconChevronDown className="size-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" className="w-56">
-        <DropdownMenuRadioGroup value={props.value} onValueChange={props.onChange}>
-          {props.options.map((option) => (
-            <DropdownMenuRadioItem key={option.value} value={option.value}>
-              <option.icon />
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }
 

@@ -1,7 +1,7 @@
 import { useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
-import { IconBuilding, IconCube, IconPlus, IconSearch, IconShield } from "@tabler/icons-react"
+import { IconPlus, IconSearch, IconShield } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,14 +22,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { FilterMenu, passes, type Filters } from "@/components/ren/filter-menu"
 import { ListPagination } from "@/components/ren/list-pagination"
 import { MembersTable } from "@/components/ren/members-table"
-import { Page, PageScope, PageTabsList, PageTabsTrigger, TableCard, TableEmpty } from "@/components/ren/page"
+import { Page, PageTabsList, PageTabsTrigger, TableCard, TableEmpty } from "@/components/ren/page"
 import { RowMenu } from "@/components/ren/row-menu"
 import { ToolbarSearch } from "@/components/ren/toolbar-search"
 import { useMe } from "@/hooks/use-me"
 import { useMembers } from "@/hooks/use-members"
 import { useCanAdminister, useOrganization } from "@/hooks/use-organization"
-import { useSpaces } from "@/hooks/use-spaces"
-import { api, pageSize, pickerPageSize } from "@/lib/api"
+import { pageSize } from "@/lib/api"
 import { organizationOptions } from "@/lib/auth"
 import { auth } from "@/lib/auth"
 import { formatDate, isRole, roleLabel, type Role } from "@/lib/format"
@@ -47,25 +46,15 @@ function useMembersPage() {
   const queryClient = useQueryClient()
   const organization = useOrganization()
   const members = useMembers().members
-  const spaces = useSpaces()
   const canAdminister = useCanAdminister()
   const tab = search.tab ?? "members"
   const page = currentPage(search)
-  const [scope, setScope] = useState("org")
   const [filters, setFilters] = useState<Filters>({})
   const [searching, setSearching] = useState(false)
   const [query, setQuery] = useState("")
-  const inSpace = useQuery({
-    ...api["space-member"].list.queryOptions({ spaceId: scope, status: "active", page: 1, pageSize: pickerPageSize }),
-    enabled: scope !== "org",
-  })
-  const spaceUsers = new Set(
-    (inSpace.data?.items ?? []).flatMap((member) => (member.status === "active" ? [member.userId] : [])),
-  )
   const needle = query.trim().toLowerCase()
   const rows = members
     .filter((member) => passes(filters, { role: [member.role] }))
-    .filter((member) => scope === "org" || spaceUsers.has(member.id))
     .filter((member) => !needle || `${member.name} ${member.email}`.toLowerCase().includes(needle))
     .map((member) => ({
       id: member.id,
@@ -87,16 +76,6 @@ function useMembersPage() {
     page,
     total: tab === "members" ? rows.length : invitations.length,
     openTab: (next: string) => void navigate({ search: { tab: next === "invitations" ? "invitations" : "members" } }),
-    scope,
-    setScope: (next: string) => {
-      setScope(next)
-      void navigate({ search: (previous) => ({ ...previous, page: undefined }) })
-    },
-    scopes: [
-      { value: "org", label: me.organization.name, icon: IconBuilding },
-      ...spaces.spaces.map((space) => ({ value: space.id, label: space.name, icon: IconCube })),
-    ],
-    scopeName: spaces.spaceName(scope),
     filters,
     setFilters,
     searching,
@@ -247,8 +226,7 @@ export function MembersSettingsPage() {
   return (
     <Page
       title="Members"
-      description={page.scope === "org" ? "Everyone in your organization." : `Everyone in ${page.scopeName}.`}
-      scope={<PageScope label="Scope" value={page.scope} options={page.scopes} onChange={page.setScope} />}
+      description="Everyone in your organization."
       leading={
         <Tabs value={page.tab} onValueChange={(value: string) => page.openTab(value)}>
           <PageTabsList>
