@@ -1,27 +1,19 @@
 import type { ScheduleInfo } from "@ren/client"
-import {
-  IconActivity,
-  IconClock,
-  IconCube,
-  IconPlayerPause,
-  IconPlayerPlay,
-  IconPlus,
-  IconRepeat,
-  IconTrash,
-} from "@tabler/icons-react"
+import { IconActivity, IconClock, IconCube, IconPlus, IconTrash } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ConfirmDialog } from "@/components/ren/confirm-dialog"
 import { EmptyState } from "@/components/ren/empty-state"
 import { ExpandableSearch } from "@/components/ren/expandable-search"
 import { FilterMenu, type FilterProperty } from "@/components/ren/filter-menu"
-import { SkeletonRows } from "@/components/ren/page"
+import { SkeletonRows, TableCard } from "@/components/ren/page"
 import { RowMenu } from "@/components/ren/row-menu"
-import { Base44Look, DevinLook, ZapierLook } from "@/components/ren/schedule-looks"
 import { ScheduleSheet } from "@/components/ren/schedule-sheet"
 import type { Schedules } from "@/hooks/use-schedules"
+import { formatRelative } from "@/lib/format"
 import { describe, statusOf } from "@/lib/schedules"
 import { cn } from "@/lib/utils"
-import { useScheduleLook } from "@/stores/ui"
 
 export function ScheduleToolbar(props: { list: Schedules }) {
   const list = props.list
@@ -61,17 +53,16 @@ export function ScheduleToolbar(props: { list: Schedules }) {
   )
 }
 
-const sections = [
-  { status: "active", title: "Active" },
-  { status: "paused", title: "Paused" },
-  { status: "ended", title: "Ended" },
-] as const
+const nextRun = (schedule: ScheduleInfo, now: number) =>
+  schedule.status === "active" && schedule.nextRunAt ? formatRelative(schedule.nextRunAt, now) : "—"
+
+const stateLabel = (schedule: ScheduleInfo, now: number) =>
+  schedule.status === "active" ? "On" : schedule.status === "ended" ? "Ended" : statusOf(schedule, now)
 
 export function ScheduleGrid(props: { list: Schedules }) {
   const list = props.list
   const schedules = list.schedules
   const empty = schedules?.length === 0
-  const look = useScheduleLook()
   return (
     <>
       {schedules ? null : <SkeletonRows count={4} />}
@@ -82,45 +73,73 @@ export function ScheduleGrid(props: { list: Schedules }) {
           <EmptyState title="No schedules yet">Create one to run a prompt on a recurring cadence.</EmptyState>
         )
       ) : null}
-      {schedules && !empty && look !== "chatgpt" ? (
-        <div className={cn("transition-opacity", list.stale && "opacity-60")}>
-          {look === "zapier" ? <ZapierLook list={list} schedules={schedules} /> : null}
-          {look === "base44" ? <Base44Look list={list} schedules={schedules} /> : null}
-          {look === "devin" ? <DevinLook list={list} schedules={schedules} /> : null}
-        </div>
+      {schedules && !empty ? (
+        <TableCard className={cn("transition-opacity", list.stale && "opacity-60")}>
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Name</TableHead>
+                <TableHead>Frequency</TableHead>
+                <TableHead>Next run</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {schedules.map((schedule) => {
+                const active = list.isActive(schedule)
+                const space = list.spaceId ? undefined : list.spaceName(schedule.spaceId)
+                return (
+                  <TableRow key={schedule.id} className="relative">
+                    <TableCell className="max-w-72">
+                      <span className="flex min-w-0 items-start gap-2.5">
+                        <IconClock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                        <span className="flex min-w-0 flex-col">
+                          <button
+                            type="button"
+                            onClick={() => list.edit(schedule)}
+                            className={cn(
+                              "truncate text-left outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50",
+                              !active && "text-muted-foreground",
+                            )}
+                          >
+                            {schedule.name || schedule.message}
+                          </button>
+                          {space ? <span className="truncate text-xs text-muted-foreground">{space}</span> : null}
+                        </span>
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{describe(schedule.when, list.zone)}</TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">{nextRun(schedule, list.now)}</TableCell>
+                    <TableCell>
+                      <span className="relative flex items-center gap-2">
+                        <Switch
+                          checked={active}
+                          disabled={schedule.status === "ended"}
+                          onCheckedChange={() => list.toggle(schedule)}
+                          aria-label={active ? `Turn off ${schedule.name}` : `Turn on ${schedule.name}`}
+                        />
+                        <span className={cn("text-xs", active ? "text-foreground" : "text-muted-foreground")}>
+                          {stateLabel(schedule, list.now)}
+                        </span>
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="relative flex justify-end">
+                        <RowMenu
+                          label={`${schedule.name} actions`}
+                          className="flex text-muted-foreground"
+                          items={[{ label: "Delete", icon: <IconTrash />, onSelect: () => list.setDeleting(schedule) }]}
+                        />
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </TableCard>
       ) : null}
-      <div
-        className={cn(
-          "flex flex-col gap-10 transition-opacity",
-          list.stale && "opacity-60",
-          look !== "chatgpt" && "hidden",
-        )}
-      >
-        {sections.map((section) => {
-          const rows = (schedules ?? []).filter((schedule) => schedule.status === section.status)
-          if (rows.length === 0) return null
-          return (
-            <section key={section.status} aria-label={section.title} className="flex flex-col">
-              <h2 className="border-b pb-3 text-sm font-medium">{section.title}</h2>
-              <ul className="flex flex-col divide-y">
-                {rows.map((schedule) => (
-                  <ScheduleRow
-                    key={schedule.id}
-                    schedule={schedule}
-                    space={list.spaceId ? undefined : list.spaceName(schedule.spaceId)}
-                    cadence={describe(schedule.when, list.zone)}
-                    status={statusOf(schedule, list.now)}
-                    active={list.isActive(schedule)}
-                    onOpen={() => list.edit(schedule)}
-                    onToggle={() => list.toggle(schedule)}
-                    onDelete={() => list.setDeleting(schedule)}
-                  />
-                ))}
-              </ul>
-            </section>
-          )
-        })}
-      </div>
       <ScheduleSheet
         open={list.sheet.open}
         version={list.sheet.key}
@@ -143,60 +162,5 @@ export function ScheduleGrid(props: { list: Schedules }) {
         />
       ) : null}
     </>
-  )
-}
-
-function ScheduleRow(props: {
-  schedule: ScheduleInfo
-  space: string | undefined
-  cadence: string
-  status: string
-  active: boolean
-  onOpen: () => void
-  onToggle: () => void
-  onDelete: () => void
-}) {
-  const schedule = props.schedule
-  const ended = schedule.status === "ended"
-  return (
-    <li className="group/row relative flex h-12 items-center gap-3 px-1 transition-colors duration-150 ease-out hover:bg-muted/40">
-      <IconClock className="size-4 shrink-0 text-muted-foreground" />
-      <span className="flex min-w-0 flex-1 items-baseline gap-2">
-        <button
-          type="button"
-          onClick={props.onOpen}
-          title={props.status}
-          className={cn(
-            "truncate text-left text-sm outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50",
-            !props.active && "text-muted-foreground",
-          )}
-        >
-          {schedule.name || schedule.message}
-        </button>
-        {props.space ? <span className="shrink-0 truncate text-xs text-muted-foreground">{props.space}</span> : null}
-      </span>
-      <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-        {props.active ? <IconRepeat className="size-3.5" /> : null}
-        {props.active ? props.cadence : props.status}
-      </span>
-      <span className="relative w-7 shrink-0 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 focus-within:opacity-100 has-aria-expanded:opacity-100">
-        <RowMenu
-          label={`${schedule.name} actions`}
-          className="flex text-muted-foreground"
-          items={[
-            ...(ended
-              ? []
-              : [
-                  {
-                    label: props.active ? "Pause" : "Resume",
-                    icon: props.active ? <IconPlayerPause /> : <IconPlayerPlay />,
-                    onSelect: props.onToggle,
-                  },
-                ]),
-            { label: "Delete", icon: <IconTrash />, onSelect: props.onDelete },
-          ]}
-        />
-      </span>
-    </li>
   )
 }

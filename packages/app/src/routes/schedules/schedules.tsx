@@ -1,7 +1,6 @@
 import { ListPagination } from "@/components/ren/list-pagination"
 import { Page } from "@/components/ren/page"
 import { ScheduleGrid, ScheduleToolbar } from "@/components/ren/schedule-grid"
-import { ScheduleLookSwitcher } from "@/components/ren/schedule-looks"
 import { pageSize } from "@/lib/api"
 import { useSchedulesPage } from "@/routes/schedules/use-schedules-page"
 
@@ -15,7 +14,6 @@ export function SchedulesPage() {
       footer={<ListPagination page={page.page} pageSize={pageSize} total={page.total} noun="schedule" />}
     >
       <ScheduleGrid list={page} />
-      <ScheduleLookSwitcher />
     </Page>
   )
 }
