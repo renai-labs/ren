@@ -78,7 +78,7 @@ it.live("stores what the producer sent, claims included, and a batch sent two ti
         space: found.spaceId,
         root_session: "not a session",
         member: Models.personPlaceholder(found.memberId),
-        agent_name: "analyst",
+        agent: "analyst",
         kind: "summary",
         input_tokens: 2140,
         reasoning_tokens: 0,

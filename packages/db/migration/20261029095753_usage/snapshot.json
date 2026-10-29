@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "ce31d05e-c315-4cbe-95e7-fb7240ed8807",
+  "id": "3685adaa-948d-48c3-80c4-3c86f7d364ae",
   "prevIds": [
     "7eca07fd-9eb9-4cbc-9a27-e99a40685217"
   ],
@@ -5096,38 +5096,12 @@
     {
       "type": "text",
       "typeSchema": null,
-      "notNull": false,
+      "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
       "name": "public_key",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registered_key"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "secret_hash",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registered_key"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "producer",
       "entityType": "columns",
       "schema": "public",
       "table": "registered_key"
@@ -8113,7 +8087,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "agent_name",
+      "name": "agent",
       "entityType": "columns",
       "schema": "public",
       "table": "usage_event"
@@ -9748,27 +9722,6 @@
       "method": "btree",
       "concurrently": false,
       "name": "registered_key_public_key_uidx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "registered_key"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "secret_hash",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "registered_key_secret_hash_uidx",
       "entityType": "indexes",
       "schema": "public",
       "table": "registered_key"
@@ -13624,13 +13577,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "credential_caller"
-    },
-    {
-      "value": "(\"public_key\" is null) = (\"secret_hash\" is not null)",
-      "name": "registered_key_secret_check",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "registered_key"
     },
     {
       "value": "char_length(\"name\") between 1 and 256",

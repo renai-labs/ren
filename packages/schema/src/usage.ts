@@ -8,20 +8,6 @@ import { Space } from "./space.js"
 export const Type = Schema.Literals(["model.call"]).annotate({ identifier: "Usage.Type" })
 export type Type = typeof Type.Type
 
-export const Quantity = Schema.Literals([
-  "input_tokens",
-  "output_tokens",
-  "reasoning_tokens",
-  "cache_read_tokens",
-  "cache_write_tokens",
-  "cache_write_1h_tokens",
-]).annotate({ identifier: "Usage.Quantity" })
-export type Quantity = typeof Quantity.Type
-
-export const meters: Record<Type, ReadonlyArray<Quantity>> = {
-  "model.call": Quantity.literals,
-}
-
 export const Kind = Schema.Literals(["primary", "compaction", "title", "generate"]).annotate({
   identifier: "Usage.Kind",
 })
@@ -76,7 +62,7 @@ export const Event = Schema.Struct({
   cache_read_tokens: Schema.optionalKey(Count),
   cache_write_tokens: Schema.optionalKey(Count),
   cache_write_1h_tokens: Schema.optionalKey(Count),
-  cost_micro_usd: Schema.optionalKey(Schema.NullOr(Count)),
+  cost_micro_usd: Schema.optionalKey(Count),
   latency_ms: Schema.optionalKey(Count),
   time_to_first_token_ms: Schema.optionalKey(Count),
   stop_reason: Schema.optionalKey(Schema.String),

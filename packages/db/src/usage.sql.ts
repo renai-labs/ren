@@ -19,7 +19,7 @@ export const usage_event = pgTable(
     session: text(),
     turn: text(),
     member: text(),
-    agent_name: text(),
+    agent: text(),
     kind: text(),
     requested_model: text().notNull(),
     variant: text(),

@@ -11,7 +11,7 @@ CREATE TABLE "usage_event" (
 	"session" text,
 	"turn" text,
 	"member" text,
-	"agent_name" text,
+	"agent" text,
 	"kind" text,
 	"requested_model" text NOT NULL,
 	"variant" text,
@@ -33,12 +33,7 @@ CREATE TABLE "usage_event" (
 	CONSTRAINT "usage_event_pkey" PRIMARY KEY("source","id")
 );
 --> statement-breakpoint
-ALTER TABLE "registered_key" ADD COLUMN "secret_hash" text;--> statement-breakpoint
-ALTER TABLE "registered_key" ADD COLUMN "producer" text;--> statement-breakpoint
-ALTER TABLE "registered_key" ALTER COLUMN "public_key" DROP NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "registered_key_secret_hash_uidx" ON "registered_key" ("secret_hash");--> statement-breakpoint
 CREATE INDEX "usage_event_organization_time_idx" ON "usage_event" ("organization","time");--> statement-breakpoint
-ALTER TABLE "registered_key" ADD CONSTRAINT "registered_key_secret_check" CHECK (("public_key" is null) = ("secret_hash" is not null));--> statement-breakpoint
 CREATE FUNCTION usage_event_append_only() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION 'usage_event is append only: % refused', TG_OP;
