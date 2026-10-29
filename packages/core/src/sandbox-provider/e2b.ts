@@ -49,36 +49,31 @@ const Listed = Schema.Array(
 
 const Detail = Schema.Struct({ state: Schema.optional(Schema.String) })
 
-// oxlint-disable-next-line ren/no-comments -- E2B closes each run of a sandbox with one paused or killed event that measures it. A kill of a paused sandbox sends no event: its pause closed the run.
+const runTypes = ["sandbox.lifecycle.paused", "sandbox.lifecycle.killed"] as const
+
+// oxlint-disable-next-line ren/no-comments -- E2B closes each run of a sandbox with one paused or killed event. A kill of a paused sandbox sends no event: its pause closed the run.
 const Runs = Schema.Array(
   Schema.Struct({
     id: Schema.String,
-    type: Schema.String,
+    type: Schema.Literals(runTypes),
     timestamp: Schema.DateTimeUtcFromString,
     sandboxId: Schema.String,
-    eventData: Schema.optional(
-      Schema.NullOr(
-        Schema.Struct({
-          sandbox_metadata: Schema.optional(Schema.Record(Schema.String, Schema.String)),
-          execution: Schema.optional(
-            Schema.Struct({ execution_time: Schema.Int, vcpu_count: Schema.Int, memory_mb: Schema.Int }),
-          ),
-          kill_reason: Schema.optional(Schema.String),
-        }),
-      ),
-    ),
+    eventData: Schema.Unknown,
   }),
 )
 type Run = (typeof Runs.Type)[number]
 
-const Tags = Schema.Struct({
-  brain: Brain.ID,
-  generation: Schema.NumberFromString,
-  organization: Auth.OrganizationID,
-  space: Space.ID,
+// oxlint-disable-next-line ren/no-comments -- A run of a brain's sandbox: the tags Ren set at create, and E2B's measure of the run.
+const Measured = Schema.Struct({
+  sandbox_metadata: Schema.Struct({
+    owner: Schema.String,
+    brain: Brain.ID,
+    generation: Schema.NumberFromString,
+    organization: Auth.OrganizationID,
+    space: Space.ID,
+  }),
+  execution: Schema.Struct({ execution_time: Schema.Int, vcpu_count: Schema.Int, memory_mb: Schema.Int }),
 })
-
-const runTypes = ["sandbox.lifecycle.paused", "sandbox.lifecycle.killed"]
 
 const pageSize = 100
 
@@ -150,7 +145,7 @@ export const layer = Layer.effect(
         ),
         Effect.map((sandboxes) => sandboxes.filter((sandbox) => sandbox.metadata?.owner === owner)),
       )
-    const runs = (offset: number) =>
+    const page = (offset: number) =>
       send(
         "events",
         HttpClientRequest.get("/events/sandboxes").pipe(
@@ -161,18 +156,6 @@ export const layer = Layer.effect(
         Effect.flatMap((text) =>
           Schema.decodeUnknownEffect(Schema.fromJsonString(Runs))(text).pipe(Effect.mapError(failed("events"))),
         ),
-      )
-    const before = (since: Option.Option<DateTime.Utc>) => (run: Run) =>
-      Option.exists(since, (time) => DateTime.isLessThan(run.timestamp, time))
-    // oxlint-disable-next-line ren/no-comments -- Newest first: a run that ends while Ren reads moves the older ones down one place, so a page can repeat a run but never skips one.
-    const measured = (
-      since: Option.Option<DateTime.Utc>,
-      offset: number,
-    ): Effect.Effect<ReadonlyArray<Run>, SandboxProvider.Failed> =>
-      Effect.flatMap(runs(offset), (page) =>
-        page.length < pageSize || page.some(before(since))
-          ? Effect.succeed(page)
-          : Effect.map(measured(since, offset + pageSize), (rest) => [...page, ...rest]),
       )
     const upload = Effect.fnUntraced(function* (
       binding: Binding,
@@ -310,45 +293,39 @@ export const layer = Layer.effect(
         return detail.state === "paused" ? ("paused" as const) : ("running" as const)
       }),
       metered: Effect.fn("E2BSandbox.metered")(function* (since) {
-        const found = [...new Map((yield* measured(since, 0)).map((run) => [run.id, run])).values()]
-        const mine = found.filter(
-          (run) =>
-            !before(since)(run) &&
-            run.eventData?.sandbox_metadata?.owner === owner &&
-            Boolean(run.eventData.sandbox_metadata.brain) &&
-            Boolean(run.eventData.execution),
-        )
-        const tagged = mine.flatMap((run) => {
-          const data = run.eventData
-          const tags = Schema.decodeUnknownOption(Tags)(data?.sandbox_metadata)
-          if (Option.isNone(tags) || !data?.execution) return []
-          const execution = data.execution
+        const older = (run: Run) => Option.exists(since, (time) => DateTime.isLessThan(run.timestamp, time))
+        // oxlint-disable-next-line ren/no-comments -- Newest first: a run that ends while Ren reads moves the older ones down one place, so a page can repeat a run but never skips one. Usage ignores the repeat.
+        const runsFrom = (offset: number): Effect.Effect<ReadonlyArray<Run>, SandboxProvider.Failed> =>
+          Effect.flatMap(page(offset), (runs) =>
+            runs.length < pageSize || runs.some(older)
+              ? Effect.succeed(runs)
+              : Effect.map(runsFrom(offset + pageSize), (rest) => [...runs, ...rest]),
+          )
+        return (yield* runsFrom(0)).flatMap((run) => {
+          const measured = Schema.decodeUnknownOption(Measured)(run.eventData)
+          if (older(run) || Option.isNone(measured) || measured.value.sandbox_metadata.owner !== owner) return []
+          const tags = measured.value.sandbox_metadata
+          const execution = measured.value.execution
           const vcpuMs = execution.vcpu_count * execution.execution_time
           const memoryMibMs = execution.memory_mb * execution.execution_time
           return [
             {
               id: run.id,
               sandboxId: run.sandboxId,
-              brainId: tags.value.brain,
-              generation: tags.value.generation,
-              organizationId: tags.value.organization,
-              spaceId: tags.value.space,
+              brainId: tags.brain,
+              generation: tags.generation,
+              organizationId: tags.organization,
+              spaceId: tags.space,
               endedAt: run.timestamp,
               durationMs: execution.execution_time,
               vcpuMs,
               memoryMibMs,
-              end: run.type === "sandbox.lifecycle.killed" ? `killed:${data.kill_reason ?? "unknown"}` : "paused",
               costMicroUsd: Math.round(
                 (vcpuMs / 1000) * config.vcpuSecond + (memoryMibMs / 1024 / 1000) * config.gibSecond,
               ),
             },
           ]
         })
-        if (tagged.length < mine.length)
-          yield* Effect.logWarning(
-            `${mine.length - tagged.length} E2B runs of brains have no organization or space tag; Ren does not record them`,
-          )
-        return tagged
       }),
       lost: Stream.empty,
       hand: () => Effect.succeed({ url: `http://127.0.0.1:${EnvironmentApi.port}`, workspace: "/home/user/workspace" }),

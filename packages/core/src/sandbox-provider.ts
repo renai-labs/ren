@@ -44,7 +44,6 @@ export interface Metered {
   readonly durationMs: number
   readonly vcpuMs: number
   readonly memoryMibMs: number
-  readonly end: string
   readonly costMicroUsd: number
 }
 

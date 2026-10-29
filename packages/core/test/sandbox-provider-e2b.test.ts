@@ -193,20 +193,16 @@ describe("E2BSandbox metering", () => {
   it.live("reads E2B's run events page by page, newest first, and stops at the page that reaches since", () =>
     Effect.gen(function* () {
       const provider = yield* SandboxProvider.Service
-      const pages = () => seen.filter((request) => request.path === "/events/sandboxes").map((request) => request.query)
+      const reads = () => seen.filter((request) => request.path === "/events/sandboxes").map((request) => request.query)
       seen.length = 0
       expect(yield* provider.metered(Option.none())).toHaveLength(250)
-      expect(pages().map((params) => params.get("offset"))).toEqual(["0", "100", "200"])
-      expect(pages()[0]?.getAll("types")).toEqual(["sandbox.lifecycle.paused", "sandbox.lifecycle.killed"])
+      expect(reads().map((query) => query.get("offset"))).toEqual(["0", "100", "200"])
+      expect(reads()[0]?.getAll("types")).toEqual(["sandbox.lifecycle.paused", "sandbox.lifecycle.killed"])
 
       seen.length = 0
-      const since = DateTime.makeUnsafe(newest - 150 * 60_000)
-      const metered = yield* provider.metered(Option.some(since))
-      expect(metered).toHaveLength(151)
-      expect(Option.map(Option.fromNullishOr(metered.at(-1)), (last) => DateTime.toEpochMillis(last.endedAt))).toEqual(
-        Option.some(DateTime.toEpochMillis(since)),
-      )
-      expect(pages().map((params) => params.get("offset"))).toEqual(["0", "100"])
+      const metered = yield* provider.metered(Option.some(DateTime.makeUnsafe(newest - 150 * 60_000)))
+      expect(metered.map((span) => span.id)).toEqual(runs.slice(0, 151).map((run) => run.id))
+      expect(reads().map((query) => query.get("offset"))).toEqual(["0", "100"])
     }),
   )
 })

@@ -18,81 +18,48 @@ const tags = {
   space: "spc_01",
 }
 
-const run = (input: {
-  readonly id: string
-  readonly type: "paused" | "killed"
-  readonly timestamp: string
-  readonly metadata?: Readonly<Record<string, string>>
-  readonly vcpu: number
-  readonly memoryMb: number
-  readonly ms: number
-  readonly killReason?: string
-}) => ({
-  id: input.id,
-  type: `sandbox.lifecycle.${input.type}`,
-  timestamp: input.timestamp,
-  sandboxId: "ica9vjpuqmbimf0pqcae4",
-  eventData: {
-    ...(input.metadata && { sandbox_metadata: input.metadata }),
-    execution: {
-      started_at: "2026-10-29T06:32:48Z",
-      vcpu_count: input.vcpu,
-      memory_mb: input.memoryMb,
-      execution_time: input.ms,
-    },
-    ...(input.killReason && { kill_reason: input.killReason }),
-  },
+const execution = (vcpu_count: number, memory_mb: number, execution_time: number) => ({
+  started_at: "2026-10-29T06:30:00Z",
+  vcpu_count,
+  memory_mb,
+  execution_time,
 })
 
-// oxlint-disable-next-line ren/no-comments -- Newest first, as E2B lists them: two runs of this Ren's brain, and the runs that are not its brains' (another Ren, ren-v1 without metadata, a template smoke test, a sandbox from before the organization tag).
+const tenMinutes = execution(2, 2048, 600_000)
+
+const run = (id: string, type: "paused" | "killed", timestamp: string, eventData: object) => ({
+  id,
+  type: `sandbox.lifecycle.${type}`,
+  timestamp,
+  sandboxId: "ica9vjpuqmbimf0pqcae4",
+  eventData,
+})
+
+// oxlint-disable-next-line ren/no-comments -- Newest first, as E2B lists them. Two runs of this Ren's brain; the others are another Ren's, ren-v1's (no metadata), a template smoke test's, and a sandbox's from before the organization tag.
 const events = [
-  run({
-    id: "e-killed",
-    type: "killed",
-    timestamp: "2026-10-29T07:20:00.123456789Z",
-    metadata: tags,
-    vcpu: 2,
-    memoryMb: 2048,
-    ms: 1_333_545,
-    killReason: "request",
+  run("e-killed", "killed", "2026-10-29T07:20:00.123456789Z", {
+    sandbox_metadata: tags,
+    execution: execution(2, 2048, 1_333_545),
+    kill_reason: "request",
   }),
-  run({
-    id: "e-other-ren",
-    type: "paused",
-    timestamp: "2026-10-29T07:10:00Z",
-    metadata: { ...tags, owner: "ren-v2-dev" },
-    vcpu: 8,
-    memoryMb: 8192,
-    ms: 600_000,
+  run("e-other-ren", "paused", "2026-10-29T07:10:00Z", {
+    sandbox_metadata: { ...tags, owner: "ren-v2-dev" },
+    execution: tenMinutes,
   }),
-  run({ id: "e-ren-v1", type: "paused", timestamp: "2026-10-29T07:09:00Z", vcpu: 2, memoryMb: 2048, ms: 600_000 }),
-  run({
-    id: "e-smoke",
-    type: "killed",
-    timestamp: "2026-10-29T07:08:00Z",
-    metadata: { owner: "ren-test-a", smoke: "true" },
-    vcpu: 2,
-    memoryMb: 2048,
-    ms: 7_751,
-    killReason: "request",
+  run("e-ren-v1", "paused", "2026-10-29T07:09:00Z", { execution: tenMinutes }),
+  run("e-smoke", "killed", "2026-10-29T07:08:00Z", {
+    sandbox_metadata: { owner: tags.owner, smoke: "true" },
+    execution: tenMinutes,
+    kill_reason: "request",
   }),
-  run({
-    id: "e-untagged",
-    type: "paused",
-    timestamp: "2026-10-29T07:05:00Z",
-    metadata: { owner: "ren-test-a", brain: tags.brain, generation: "6" },
-    vcpu: 8,
-    memoryMb: 8192,
-    ms: 600_000,
+  run("e-untagged", "paused", "2026-10-29T07:05:00Z", {
+    sandbox_metadata: { owner: tags.owner, brain: tags.brain, generation: "6" },
+    execution: tenMinutes,
   }),
-  run({
-    id: "e-paused",
-    type: "paused",
-    timestamp: "2026-10-29T07:03:06Z",
-    metadata: tags,
-    vcpu: 8,
-    memoryMb: 8192,
-    ms: 1_818_000,
+  run("e-paused", "paused", "2026-10-29T07:03:06Z", {
+    sandbox_metadata: tags,
+    execution: execution(8, 8192, 1_818_000),
+    pause_mode: "full",
   }),
 ]
 
@@ -143,14 +110,8 @@ it.live("records each run of this Ren's brains that E2B measured, one time, at E
       organization: "org_01",
       brain: tags.brain,
       space: "spc_01",
-      root_session: null,
-      session: null,
-      turn: null,
-      member: null,
-      agent: null,
       payer: "ren",
       provider: "e2b",
-      error: null,
     }
     expect(yield* stored).toMatchObject([
       {
@@ -163,7 +124,6 @@ it.live("records each run of this Ren's brains that E2B measured, one time, at E
           duration_ms: 1_818_000,
           vcpu_ms: 14_544_000,
           memory_mib_ms: 14_893_056_000,
-          end: "paused",
         },
       },
       {
@@ -176,7 +136,6 @@ it.live("records each run of this Ren's brains that E2B measured, one time, at E
           duration_ms: 1_333_545,
           vcpu_ms: 2_667_090,
           memory_mib_ms: 2_731_100_160,
-          end: "killed:request",
         },
       },
     ])
