@@ -10564,6 +10564,212 @@
           "required": true
         }
       }
+    },
+    "/insights": {
+      "get": {
+        "tags": ["insights"],
+        "operationId": "insights.query",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Insights.TimeZone"
+            },
+            "required": false
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Insights.GroupBy"
+            },
+            "required": false
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Auth.UserID"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Usage of these people, and tasks that they own."
+            },
+            "required": false
+          },
+          {
+            "name": "agent",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Usage of these agent names, and tasks assigned to these agents."
+            },
+            "required": false
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Usage of these served models. Task numbers do not change."
+            },
+            "required": false
+          },
+          {
+            "name": "payer",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Usage.Payer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Task numbers do not change."
+            },
+            "required": false
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Usage.Kind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Task numbers do not change."
+            },
+            "required": false
+          },
+          {
+            "name": "orderBy",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Insights.OrderBy"
+            },
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Insights.Result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Insights.Result"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return what a space spent and finished in a range, as one row for the whole range or one row for each bucket, member, agent, model or provider.",
+        "summary": "Query insights"
+      }
     }
   },
   "components": {
@@ -14789,6 +14995,268 @@
             }
           }
         },
+        "additionalProperties": false
+      },
+      "Insights.Cost": {
+        "type": "object",
+        "properties": {
+          "ren": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "customer": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "unpricedCalls": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          }
+        },
+        "required": ["ren", "customer", "unpricedCalls"],
+        "additionalProperties": false
+      },
+      "Insights.GroupBy": {
+        "type": "string",
+        "enum": ["none", "hour", "day", "week", "member", "agent", "model", "provider"]
+      },
+      "Insights.OrderBy": {
+        "type": "string",
+        "enum": ["cost", "tokens", "calls", "sessions", "tasksDone"]
+      },
+      "Insights.Result": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Insights.Row"
+            }
+          }
+        },
+        "required": ["rows"],
+        "additionalProperties": false
+      },
+      "Insights.Row": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The bucket start (ISO, UTC), user ID, agent name, served model or provider. Null for the whole range and for usage that names no one."
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The user’s name, for a member row."
+          },
+          "sessions": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "calls": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/Insights.Tokens"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/Insights.Cost"
+          },
+          "tasksDone": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tasks done now, at their latest move to done. Null for model and provider rows."
+          },
+          "prsMerged": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for model and provider rows."
+          },
+          "prsLinked": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for model and provider rows."
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "sessions",
+          "calls",
+          "errors",
+          "tokens",
+          "cost",
+          "tasksDone",
+          "prsMerged",
+          "prsLinked"
+        ],
+        "additionalProperties": false
+      },
+      "Insights.TimeZone": {
+        "type": "string"
+      },
+      "Insights.Tokens": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "cacheRead": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "cacheWrite": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          }
+        },
+        "required": ["input", "output", "reasoning", "cacheRead", "cacheWrite"],
         "additionalProperties": false
       },
       "InvalidRequestErrorEncoded": {
@@ -20311,6 +20779,14 @@
         "required": ["_tag", "message", "retryAfterMs"],
         "additionalProperties": false
       },
+      "Usage.Kind": {
+        "type": "string",
+        "enum": ["primary", "compaction", "title", "generate"]
+      },
+      "Usage.Payer": {
+        "type": "string",
+        "enum": ["ren", "customer"]
+      },
       "Webhook.Declaration": {
         "type": "object",
         "properties": {
@@ -20491,6 +20967,9 @@
     },
     {
       "name": "infra"
+    },
+    {
+      "name": "insights"
     }
   ]
 }
