@@ -161,6 +161,10 @@ export const layer = Layer.effect(
     })
 
     const assign = Effect.fn("Environments.assign")(function* (subject: Subject) {
+      yield* Effect.annotateCurrentSpan({
+        "ren.session.id": subject.sessionId,
+        "ren.organization.id": subject.organizationId,
+      })
       return yield* database.transaction((transaction) =>
         Effect.gen(function* () {
           const sessionRows = yield* transaction

@@ -326,7 +326,12 @@ const handlers = Layer.mergeAll(
               yield* hotReload.pull
               yield* harness.chat.prompt(request.params.sessionID, { ...request.payload, sender: yield* sender })
               return { id: request.payload.id }
-            }).pipe(notFound, conflict, Observability.Trace.chatPrompt),
+            }).pipe(
+              notFound,
+              conflict,
+              Observability.Trace.chatPrompt,
+              Effect.annotateSpans("ren.session.id", request.params.sessionID),
+            ),
           ),
         )
         .handle("session.compact", (request) =>
