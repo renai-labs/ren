@@ -6,7 +6,6 @@ import { Alert, AlertAction, AlertDescription } from "@/components/ui/alert"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ChatProperties } from "@/components/ren/chat/chat-properties"
 import { Queue } from "@/components/ren/chat/queue"
 import { WorkspacePanel } from "@/components/ren/chat/workspace/workspace-panel"
 import { ChatRequests } from "@/components/ren/chat/requests"
@@ -129,14 +128,6 @@ export function ChatPage() {
               </BreadcrumbList>
             </Breadcrumb>
           )}
-          <ChatProperties
-            sessionId={page.root}
-            spaceId={page.spaceId}
-            spaceName={page.spaceName}
-            createdBy={page.createdBy}
-            createdAt={page.createdAt}
-            model={page.model ? (page.modelNames.get(page.model.id) ?? page.model.id) : undefined}
-          />
           <RowMenu
             label="Chat actions"
             className="flex text-muted-foreground"

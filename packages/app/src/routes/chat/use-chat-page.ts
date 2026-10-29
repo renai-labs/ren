@@ -220,8 +220,6 @@ export function useChat(
     child,
     title,
     spaceId: stored.data?.spaceId,
-    createdAt: stored.data?.createdAt,
-    createdBy: stored.data ? members.find((member) => member.id === stored.data.createdBy) : undefined,
     spaceName,
     viewer: { id: me.user.id, name, image: me.user.image ?? undefined },
     expanded,
