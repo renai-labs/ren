@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/u
 import { AppIcon } from "@/components/ren/app-icon"
 import { gaps } from "@/lib/apps"
 import { plural } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import type { AppProfileInfo } from "@ren/client"
 import { useSpaces } from "@/hooks/use-spaces"
 import type { CatalogApp } from "@/lib/apps"
@@ -54,6 +55,7 @@ export function AppRow(props: {
   icon?: string | null
   caption: string
   attention?: boolean | undefined
+  compact?: boolean | undefined
   onOpen?: () => void
   action?: ReactNode
 }) {
@@ -61,13 +63,20 @@ export function AppRow(props: {
     <Item
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div inside the list grid
       role="listitem"
-      className="relative flex-nowrap gap-3 p-2 has-[[data-slot=app-open]:hover]:bg-muted"
+      className={cn(
+        "relative flex-nowrap gap-3 has-[[data-slot=app-open]:hover]:bg-muted",
+        props.compact ? "px-2 py-2.5" : "p-2",
+      )}
     >
       <ItemMedia>
-        <AppIcon name={props.name} icon={props.icon} size="lg" />
+        {props.compact ? (
+          <AppIcon name={props.name} icon={props.icon} className="size-9 rounded-lg border" />
+        ) : (
+          <AppIcon name={props.name} icon={props.icon} size="lg" />
+        )}
       </ItemMedia>
       <ItemContent className="min-w-0 gap-0.5">
-        <ItemTitle className="max-w-full font-normal">
+        <ItemTitle className={cn("max-w-full", props.compact ? "font-medium" : "font-normal")}>
           {props.onOpen ? (
             <button
               type="button"
@@ -82,7 +91,7 @@ export function AppRow(props: {
           )}
           {props.attention ? <AttentionDot /> : null}
         </ItemTitle>
-        <ItemDescription className="line-clamp-1">{props.caption}</ItemDescription>
+        <ItemDescription className={cn("line-clamp-1", props.compact && "text-xs")}>{props.caption}</ItemDescription>
       </ItemContent>
       {props.action ? <ItemActions className="relative">{props.action}</ItemActions> : null}
     </Item>
