@@ -4,10 +4,11 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "@/lib/utils"
 import type { Suggest } from "@/routes/chat/use-composer-suggestions"
 import { toast } from "sonner"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import {
   IconApps,
   IconArrowUp,
+  IconGitBranch,
   IconAt,
   IconClipboardText,
   IconPaperclip,
@@ -47,12 +48,17 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } fro
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { ProfileDialog, type ProfileTarget } from "@/components/ren/profile-dialog"
 import { AddAppDialog } from "@/components/ren/add-app-dialog"
+import { AddRepositoriesDialog } from "@/routes/space/space-repositories"
 import { useCatalog } from "@/hooks/use-catalog"
 import { useSpaces } from "@/hooks/use-spaces"
 import { api } from "@/lib/api"
 import { gaps } from "@/lib/apps"
 
-function AddMenu(props: { onInsert: (text: string) => void; onAttach: () => void }) {
+function AddMenu(props: {
+  onInsert: (text: string) => void
+  onAttach: () => void
+  onRepositories?: (() => void) | undefined
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -70,22 +76,52 @@ function AddMenu(props: { onInsert: (text: string) => void; onAttach: () => void
       <DropdownMenuContent side="top" align="start" className="w-52">
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={props.onAttach}>
-            <IconPaperclip className="text-foreground" />
+            <IconPaperclip />
             Attach files
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => props.onInsert("/")}>
-            <IconTerminal2 className="text-foreground" />
+            <IconTerminal2 />
             Commands
             <Kbd className="ml-auto">/</Kbd>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => props.onInsert("@")}>
-            <IconAt className="text-foreground" />
+            <IconAt />
             Apps
             <Kbd className="ml-auto">@</Kbd>
           </DropdownMenuItem>
+          {props.onRepositories ? (
+            <DropdownMenuItem onClick={props.onRepositories}>
+              <IconGitBranch />
+              Repositories
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function RepositoriesDialog(props: { spaceId: string; onClose: () => void }) {
+  const settings = useQuery(api["space-settings"].get.queryOptions({ idOrSlug: props.spaceId }))
+  const update = useMutation(api["space-settings"].update.mutationOptions())
+  const current = settings.data?.settings
+  if (!current) return null
+  const references = current.references ?? []
+  return (
+    <AddRepositoriesDialog
+      existing={references}
+      saving={update.isPending}
+      error={update.error}
+      onAdd={(added) =>
+        update
+          .mutateAsync({ id: props.spaceId, settings: { ...current, references: [...references, ...added] } })
+          .then(() => {
+            toast.success(added.length > 1 ? `${added.length} repositories added` : "Repository added")
+            props.onClose()
+          })
+      }
+      onClose={props.onClose}
+    />
   )
 }
 
@@ -378,6 +414,7 @@ export function PromptInput(props: {
   suggest?: Suggest | undefined
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
+  const [repositories, setRepositories] = useState(false)
   const attachments = useAttachments()
   const picker = useRef<HTMLInputElement>(null)
   const draft = props.value
@@ -455,6 +492,9 @@ export function PromptInput(props: {
           onRemove={(id) => change(Composer.removePasted(draft, id))}
         />
       ) : null}
+      {repositories && props.spaceId ? (
+        <RepositoriesDialog spaceId={props.spaceId} onClose={() => setRepositories(false)} />
+      ) : null}
       <InputGroup className="rounded-xl bg-card shadow-soft dark:bg-card">
         {status ? (
           <span className="pointer-events-none absolute top-4 left-4 flex">
@@ -520,7 +560,11 @@ export function PromptInput(props: {
           className={textareaClass({ home, marked: marks.length > 0 })}
         />
         <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
-          <AddMenu onInsert={insert} onAttach={() => picker.current?.click()} />
+          <AddMenu
+            onInsert={insert}
+            onAttach={() => picker.current?.click()}
+            onRepositories={props.spaceId ? () => setRepositories(true) : undefined}
+          />
           {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
           {props.model}
           {send}

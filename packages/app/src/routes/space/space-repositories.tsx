@@ -182,7 +182,7 @@ export function SpaceRepositoriesTab() {
   )
 }
 
-function AddRepositoriesDialog(props: {
+export function AddRepositoriesDialog(props: {
   existing: ReadonlyArray<ReferenceInfo>
   saving: boolean
   error: Error | null
