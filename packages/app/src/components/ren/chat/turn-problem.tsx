@@ -139,14 +139,20 @@ function ActionButton(props: { action: ProblemAction; primary: boolean; handlers
   const className = props.primary ? undefined : "text-muted-foreground"
   if (props.action === "providers")
     return (
-      <Button variant={variant} className={className} nativeButton={false} render={<Link to="/settings/providers" />}>
+      <Button
+        variant={variant}
+        size="sm"
+        className={className}
+        nativeButton={false}
+        render={<Link to="/settings/providers" />}
+      >
         {labels.providers}
         <IconArrowUpRight data-icon="inline-end" />
       </Button>
     )
   if (props.action === "new")
     return (
-      <Button variant={variant} className={className} nativeButton={false} render={<Link to="/" />}>
+      <Button variant={variant} size="sm" className={className} nativeButton={false} render={<Link to="/" />}>
         {labels.new}
         <IconArrowUpRight data-icon="inline-end" />
       </Button>
@@ -159,7 +165,7 @@ function ActionButton(props: { action: ProblemAction; primary: boolean; handlers
   }[props.action]
   if (!handler) return null
   return (
-    <Button variant={variant} className={className} onClick={handler}>
+    <Button variant={variant} size="sm" className={className} onClick={handler}>
       {labels[props.action]}
     </Button>
   )
@@ -191,7 +197,9 @@ function Shell(props: {
               <ActionButton key={action} action={action} primary={index === 0} handlers={props.handlers} />
             ))}
             {props.details ? (
-              <CollapsibleTrigger render={<Button variant="ghost" className="group/details text-muted-foreground" />}>
+              <CollapsibleTrigger
+                render={<Button variant="ghost" size="sm" className="group/details text-muted-foreground" />}
+              >
                 Details
                 <IconChevronRight
                   data-icon="inline-end"
