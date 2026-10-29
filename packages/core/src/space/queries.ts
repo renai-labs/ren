@@ -79,7 +79,7 @@ export const archiveOwned = Effect.fnUntraced(function* (transaction: Database.T
 
 // oxlint-disable-next-line ren/no-comments -- Whether a person may send a turn in a space (access §13).
 export const actsIn = Effect.fnUntraced(function* (
-  transaction: Pick<Database.Transaction, "select">,
+  transaction: Database.Transaction,
   access: Access.Interface,
   organizationId: Auth.OrganizationID,
   spaceId: Space.ID,

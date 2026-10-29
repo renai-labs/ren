@@ -22,7 +22,6 @@ import { TaskFactory } from "./task/factory.js"
 import { TaskQueries } from "./task/queries.js"
 import { TaskStart } from "./task/start.js"
 import { TaskTrail } from "./task/trail.js"
-import { Billing } from "./billing.js"
 
 export interface HandOff {
   readonly task: Task.Info
@@ -226,9 +225,6 @@ export const layer = Layer.effect(
     const read = (actor: Actor.Info, id: Task.ID) =>
       database.transaction((transaction) => reread(transaction, actor, id))
 
-    const refused = (error: Billing.Refused) =>
-      Effect.fail(new Primitive.Forbidden({ message: Billing.messages[error.reason] }))
-
     const launch = Effect.fnUntraced(function* (
       actor: Actor.Info,
       id: Task.ID,
@@ -261,7 +257,7 @@ export const layer = Layer.effect(
       yield* planned.plan.sessionId
         ? runner
             .send({ ...message, sessionId, delivery: "queue" })
-            .pipe(Effect.catchTags({ "SessionRunner.NotFound": Effect.die, "Billing.Refused": refused }))
+            .pipe(Effect.catchTag("SessionRunner.NotFound", Effect.die))
         : runner
             .create(
               { organizationId: planned.task.organization_id, spaceId: planned.task.space_id, createdBy: actor.userId },
@@ -273,7 +269,6 @@ export const layer = Layer.effect(
                 "SessionRunner.AlreadyExists": Effect.die,
                 "SessionRunner.NotFound": () =>
                   Effect.fail(new Primitive.Conflict({ message: "The task’s agent is no longer available." })),
-                "Billing.Refused": refused,
               }),
             )
       return yield* database.transaction((transaction) =>

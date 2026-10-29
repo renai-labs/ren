@@ -12,8 +12,6 @@ import { McpProvider } from "@ren/core/mcp-provider"
 import { ProviderConnect } from "@ren/core/mcp-provider/connect"
 import { AppProfiles } from "@ren/core/app/profiles"
 import { Envelope } from "@ren/core/envelope"
-import { Billing } from "@ren/core/billing"
-import { Usage } from "@ren/core/usage"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { BrainPush } from "@ren/core/brain-push"
@@ -129,7 +127,6 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provideMerge(host), Layer.provide(CredentialEnv.layer)),
       Retention.layer,
       RenInferenceRemoval.layer,
-      Usage.layerReconcile.pipe(Layer.provide(Usage.layer)),
     ),
     Layer.mergeAll(ChannelNotice.layer, ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer))).pipe(
       Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider]))),
@@ -140,7 +137,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   ]),
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
-  Layer.provide([BrainClient.layer, Settings.layer, Billing.layerNone]),
+  Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([models, Environments.layer, GitHubApp.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),

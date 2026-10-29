@@ -13,7 +13,6 @@ import { WorkflowEngine } from "effect/workflow"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
-import { Billing } from "./billing.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Primitive } from "./primitive.js"
 import { SchedulePolicy } from "./schedule/policy.js"
@@ -488,8 +487,6 @@ export const layer = Layer.effect(
             Effect.succeed(Option.some<Outcome>({ status: "failed", error: "The brain is unavailable." })),
           BrainRejectedError: (error) =>
             Effect.succeed(Option.some<Outcome>({ status: "failed", error: error.message })),
-          "Billing.Refused": (refused) =>
-            Effect.succeed(Option.some<Outcome>({ status: "failed", error: Billing.messages[refused.reason] })),
           "Primitive.Forbidden": () =>
             Effect.succeed(Option.some<Outcome>({ status: "skipped", reason: "owner_left" })),
         }),

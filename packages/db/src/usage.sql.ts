@@ -1,12 +1,10 @@
-import type { Agent } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
-import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import type { Usage } from "@ren/schema/usage"
 import { bigint, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
 
-// oxlint-disable-next-line ren/no-comments -- One row for each cost, as the producer sent it. Rows are only inserted, never updated or deleted (usage spec §4.3). The claims (root_session to variant) are what the brain sent; usage_attribution holds what Ren checked. No foreign keys: the row outlives the session, brain and space that it names.
+// oxlint-disable-next-line ren/no-comments -- One row for each cost, as the producer sent it. Rows are only inserted, never updated or deleted (usage spec §4.3). The claims (root_session to variant) are what the brain sent; Ren does not check them yet. No foreign keys: the row outlives the session, brain and space that it names.
 export const usage_event = pgTable(
   "usage_event",
   {
@@ -45,37 +43,5 @@ export const usage_event = pgTable(
   (table) => [
     primaryKey({ columns: [table.source, table.id] }),
     index("usage_event_organization_time_idx").on(table.organization, table.time),
-  ],
-)
-
-// oxlint-disable-next-line ren/no-comments -- The events that reconciliation has not checked yet. Ingest adds one row for each new event; reconciliation removes it when it writes the event's usage_attribution row.
-export const usage_pending = pgTable(
-  "usage_pending",
-  {
-    source: text().notNull(),
-    id: text().notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.source, table.id] })],
-)
-
-// oxlint-disable-next-line ren/no-comments -- What Ren checked for each event: the claims that agree with the brain's own rows, null where they do not, and the problems it found. One row for each event, only inserted (usage spec §4.3).
-export const usage_attribution = pgTable(
-  "usage_attribution",
-  {
-    source: text().notNull(),
-    id: text().notNull(),
-    space: text().$type<Space.ID>(),
-    root_session: text().$type<Session.ID>(),
-    session: text().$type<Session.ID>(),
-    turn: text(),
-    member: text().$type<typeof Auth.MemberID.Type>(),
-    agent: text().$type<Agent.ID>(),
-    kind: text().$type<Usage.Kind>(),
-    problems: text().array().notNull(),
-    reconciled_at: timestamp().defaultNow().notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.source, table.id] }),
-    index("usage_attribution_session_idx").on(table.session),
   ],
 )
