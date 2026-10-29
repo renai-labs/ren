@@ -5,7 +5,9 @@ import { cn } from "@/lib/utils"
 import type { Suggest } from "@/routes/chat/use-composer-suggestions"
 import { toast } from "sonner"
 import { useQuery } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import {
+  IconApps,
   IconArrowUp,
   IconAt,
   IconClipboardText,
@@ -27,7 +29,7 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@/components/ui/attachment"
-import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Kbd } from "@/components/ui/kbd"
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
@@ -101,8 +103,21 @@ function AppsStrip(props: { spaceId: string }) {
     icon: catalog.appOf(profile.appId)?.icon ?? undefined,
     gaps: gaps(profile),
   }))
-  if (profiles.length === 0) return null
+  if (reach.isPending) return null
+  if (profiles.length === 0)
+    return (
+      <InputGroupButton
+        size="sm"
+        className="-ml-1 text-muted-foreground"
+        nativeButton={false}
+        render={<Link to="/spaces/$spaceId/apps" params={{ spaceId: props.spaceId }} />}
+      >
+        <IconApps />
+        Add apps
+      </InputGroupButton>
+    )
   const apps = [...new Map(profiles.map((profile) => [profile.app, profile.icon] as const))]
+  const shown = apps.slice(0, 3)
   const missing = profiles.filter((profile) => profile.gaps.length > 0).length
   return (
     <Popover>
@@ -115,13 +130,18 @@ function AppsStrip(props: { spaceId: string }) {
           />
         }
       >
-        <AvatarGroup className="-space-x-1 *:data-[slot=avatar]:ring-card">
-          {apps.map(([app, icon]) => (
+        <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
+          {shown.map(([app, icon]) => (
             <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
               <AvatarImage src={icon} alt="" />
               <AvatarFallback className="bg-secondary">{app.charAt(0)}</AvatarFallback>
             </Avatar>
           ))}
+          {apps.length > shown.length ? (
+            <AvatarGroupCount className="size-5 text-[10px] group-has-data-[size=sm]/avatar-group:size-5">
+              +{apps.length - shown.length}
+            </AvatarGroupCount>
+          ) : null}
         </AvatarGroup>
         {missing ? <Badge className="bg-chart-3 text-primary-foreground">{missing}</Badge> : null}
       </PopoverTrigger>
@@ -309,11 +329,10 @@ function SendButton(props: { blank: boolean; stop: boolean; sending: boolean; bo
   )
 }
 
-const textareaClass = (layout: { stacked: boolean; home: boolean; marked: boolean }) =>
+const textareaClass = (layout: { home: boolean; marked: boolean }) =>
   cn(
-    layout.stacked
-      ? cn("px-4 pt-4 leading-relaxed", layout.home ? "min-h-24" : "max-h-60 min-h-16")
-      : "min-h-0 px-2 py-3 leading-relaxed",
+    "px-4 pt-4 leading-relaxed",
+    layout.home ? "min-h-24" : "max-h-60 min-h-16",
     layout.marked && "text-transparent caret-foreground",
   )
 
@@ -339,7 +358,6 @@ export function PromptInput(props: {
   const text = draft.text
   const blank = Composer.isBlank(draft)
   const change = (next: Composer.Draft) => props.onChange(next)
-  const [grown, setGrown] = useState(false)
   const submit = () => {
     if (props.sending || booting) return
     if (attachments.files.length > 0) {
@@ -350,11 +368,9 @@ export function PromptInput(props: {
       if (props.running) props.onStop?.()
       return
     }
-    setGrown(false)
     props.onSubmit()
   }
   const home = props.placement === "home"
-  const stacked = home || grown || text.includes("\n") || draft.pasted.length > 0
   const status = props.boot && (blank || booting) ? props.boot : undefined
   const stop = props.running && blank && props.onStop
   const send = (
@@ -412,25 +428,8 @@ export function PromptInput(props: {
           onRemove={(id) => change(Composer.removePasted(draft, id))}
         />
       ) : null}
-      <InputGroup
-        className={
-          stacked
-            ? "rounded-xl bg-card shadow-soft dark:bg-card"
-            : "h-12.25 rounded-full bg-card pl-1 shadow-soft dark:bg-card"
-        }
-      >
-        {stacked ? null : (
-          <InputGroupAddon>
-            <AddMenu placement={props.placement} onInsert={insert} onAttach={() => picker.current?.click()} />
-            {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
-            {status ? (
-              <span className="ml-2">
-                <PromptInputStatus boot={status} onRetry={props.onRetry} />
-              </span>
-            ) : null}
-          </InputGroupAddon>
-        )}
-        {stacked && status ? (
+      <InputGroup className="rounded-xl bg-card shadow-soft dark:bg-card">
+        {status ? (
           <span className="pointer-events-none absolute top-4 left-4 flex">
             <PromptInputStatus boot={status} onRetry={props.onRetry} />
           </span>
@@ -440,8 +439,6 @@ export function PromptInput(props: {
           value={text}
           onChange={(event) => {
             const next = event.target.value
-            if (!next) setGrown(false)
-            else if (!stacked && event.target.scrollHeight > 60) setGrown(true)
             change(Composer.withText(draft, next))
             props.suggest?.onCursor(next, event.target.selectionStart)
           }}
@@ -493,21 +490,14 @@ export function PromptInput(props: {
           // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer is the page’s one input, as in Ren
           autoFocus
           rows={1}
-          className={textareaClass({ stacked, home, marked: marks.length > 0 })}
+          className={textareaClass({ home, marked: marks.length > 0 })}
         />
-        {stacked ? (
-          <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
-            <AddMenu placement={props.placement} onInsert={insert} onAttach={() => picker.current?.click()} />
-            {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
-            {props.model}
-            {send}
-          </InputGroupAddon>
-        ) : (
-          <InputGroupAddon align="inline-end" className="min-w-76 justify-end">
-            {props.model}
-            {send}
-          </InputGroupAddon>
-        )}
+        <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
+          <AddMenu placement={props.placement} onInsert={insert} onAttach={() => picker.current?.click()} />
+          {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
+          {props.model}
+          {send}
+        </InputGroupAddon>
       </InputGroup>
     </div>
   )
