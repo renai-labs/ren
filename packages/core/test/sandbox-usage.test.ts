@@ -35,7 +35,6 @@ const run = (id: string, type: "paused" | "killed", timestamp: string, eventData
   eventData,
 })
 
-// oxlint-disable-next-line ren/no-comments -- Newest first, as E2B lists them. Two runs of this Ren's brain; the others are another Ren's, ren-v1's (no metadata), a template smoke test's, and a sandbox's from before the organization tag.
 const events = [
   run("e-killed", "killed", "2026-10-29T07:20:00.123456789Z", {
     sandbox_metadata: tags,

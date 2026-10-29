@@ -51,7 +51,6 @@ const Detail = Schema.Struct({ state: Schema.optional(Schema.String) })
 
 const runTypes = ["sandbox.lifecycle.paused", "sandbox.lifecycle.killed"] as const
 
-// oxlint-disable-next-line ren/no-comments -- E2B closes each run of a sandbox with one paused or killed event. A kill of a paused sandbox sends no event: its pause closed the run.
 const Runs = Schema.Array(
   Schema.Struct({
     id: Schema.String,
@@ -63,7 +62,6 @@ const Runs = Schema.Array(
 )
 type Run = (typeof Runs.Type)[number]
 
-// oxlint-disable-next-line ren/no-comments -- A run of a brain's sandbox: the tags Ren set at create, and E2B's measure of the run.
 const Measured = Schema.Struct({
   sandbox_metadata: Schema.Struct({
     owner: Schema.String,
@@ -294,7 +292,6 @@ export const layer = Layer.effect(
       }),
       metered: Effect.fn("E2BSandbox.metered")(function* (since) {
         const older = (run: Run) => Option.exists(since, (time) => DateTime.isLessThan(run.timestamp, time))
-        // oxlint-disable-next-line ren/no-comments -- Newest first: a run that ends while Ren reads moves the older ones down one place, so a page can repeat a run but never skips one. Usage ignores the repeat.
         const runsFrom = (offset: number): Effect.Effect<ReadonlyArray<Run>, SandboxProvider.Failed> =>
           Effect.flatMap(page(offset), (runs) =>
             runs.length < pageSize || runs.some(older)

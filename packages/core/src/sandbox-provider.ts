@@ -32,7 +32,6 @@ export interface Lost {
   readonly generation: number
 }
 
-// oxlint-disable-next-line ren/no-comments -- One span in which a sandbox of this Ren ran, as the platform measured it, and its cost at the provider's rates. A span does not change after the provider gives it.
 export interface Metered {
   readonly id: string
   readonly sandboxId: string
@@ -85,7 +84,6 @@ export interface Interface {
   readonly hand: (binding: Schema.Json) => Effect.Effect<Hand, Failed>
   readonly lost: Stream.Stream<Lost>
   readonly list: Effect.Effect<ReadonlyArray<Listed>, Failed>
-  // oxlint-disable-next-line ren/no-comments -- The spans that ended at `since` or later; with no `since`, as far back as the platform keeps them. Only spans of this Ren's brains.
   readonly metered: (since: Option.Option<DateTime.Utc>) => Effect.Effect<ReadonlyArray<Metered>, Failed>
 }
 
