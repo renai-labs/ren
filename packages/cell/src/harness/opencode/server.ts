@@ -219,7 +219,6 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       Effect.map(Option.flatten),
       Effect.orElseSucceed(() => Option.none<OpenCodeChat.Speaker>()),
     )
-  // oxlint-disable-next-line ren/no-comments -- The turn is the newest user message of the root chat, with or without a sender.
   const lastTurn = (sessionId: string) =>
     userMessages(sessionId).pipe(
       Stream.runHead,

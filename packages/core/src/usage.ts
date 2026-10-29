@@ -56,7 +56,6 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         return Option.fromNullishOr(rows.at(0)?.producer)
       }),
-      // oxlint-disable-next-line ren/no-comments -- Ren stores what the producer sent and checks only that the key's producer is the events' source.
       record: Effect.fn("Usage.record")(
         function* (producer: string, batch: ReadonlyArray<Usage.Event>) {
           const foreign = batch.find((event) => event.source !== producer)

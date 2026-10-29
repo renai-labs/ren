@@ -13,7 +13,6 @@ export interface Input {
   readonly variant?: string | undefined
 }
 
-// oxlint-disable-next-line ren/no-comments -- The headers that every harness adds to a request to a Ren model, for the gateway's usage event (usage spec §4.3). Ren checks them.
 export const headers = (input: Input): Record<string, string> => ({
   [Usage.headers.rootSession]: input.rootSession,
   [Usage.headers.session]: input.session,

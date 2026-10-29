@@ -12,7 +12,6 @@ if (violations.length > 0) {
   process.exit(1)
 }
 
-// oxlint-disable-next-line ren/no-comments -- usage-ingest.openapi.json is the contract that producers outside Ren (ren-inference) copy and test their events against (usage spec §4.3).
 const documents = [
   { target: fileURLToPath(new URL("../openapi.json", import.meta.url)), spec: OpenApi.fromApi(ClientApi) },
   {

@@ -39,7 +39,6 @@ ALTER TABLE "registered_key" ALTER COLUMN "public_key" DROP NOT NULL;--> stateme
 CREATE UNIQUE INDEX "registered_key_secret_hash_uidx" ON "registered_key" ("secret_hash");--> statement-breakpoint
 CREATE INDEX "usage_event_organization_time_idx" ON "usage_event" ("organization","time");--> statement-breakpoint
 ALTER TABLE "registered_key" ADD CONSTRAINT "registered_key_secret_check" CHECK (("public_key" is null) = ("secret_hash" is not null));--> statement-breakpoint
--- usage_event is only inserted: Postgres refuses an update or a delete of a row (usage spec §4.3).
 CREATE FUNCTION usage_event_append_only() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION 'usage_event is append only: % refused', TG_OP;
