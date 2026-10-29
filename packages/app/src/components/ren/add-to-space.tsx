@@ -89,7 +89,7 @@ export function AddToSpace(props: { app: App; primary?: boolean; onAdded: Added 
             />
           }
         >
-          Add to space
+          {props.primary ? "Add to space" : "Add"}
           <IconChevronDown className={props.primary ? undefined : "text-muted-foreground"} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">

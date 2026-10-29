@@ -40,7 +40,7 @@ export function AddAppDialog(props: {
       ) : null}
       <DialogContent className="sm:max-w-5xl">
         <DialogHeader>
-          <DialogTitle>Add an app to {props.space.name}</DialogTitle>
+          <DialogTitle>Add apps to {props.space.name}</DialogTitle>
           <DialogDescription>Every chat in the space can use it once its account is connected.</DialogDescription>
         </DialogHeader>
         <InputGroup>
@@ -54,7 +54,7 @@ export function AddAppDialog(props: {
             onChange={(event) => setQuery(event.target.value)}
           />
         </InputGroup>
-        <div className="-mx-2 h-[min(28rem,60vh)] overflow-y-auto overscroll-contain">
+        <div className="-mx-1 h-[min(28rem,60vh)] overflow-y-auto overscroll-contain px-1 pb-1">
           {rows.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
               {catalog.loading

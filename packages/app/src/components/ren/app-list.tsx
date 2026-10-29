@@ -25,10 +25,10 @@ function AttentionDot() {
 export function AppGrid(props: { label: string; children: ReactNode }) {
   return (
     <div
-      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a grid of Item rows; Item renders a div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a grid of Item cards; Item renders a div
       role="list"
       aria-label={props.label}
-      className="grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-2"
+      className="grid grid-cols-1 gap-3 md:grid-cols-2"
     >
       {props.children}
     </div>
@@ -39,6 +39,7 @@ export function AppRow(props: {
   name: string
   icon?: string | null
   caption: string
+  status?: string | undefined
   attention?: boolean
   onOpen?: () => void
   action?: ReactNode
@@ -47,9 +48,10 @@ export function AppRow(props: {
     <Item
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div inside the list grid
       role="listitem"
-      className="relative gap-3 p-2 has-[[data-slot=app-open]:hover]:bg-muted"
+      variant="outline"
+      className="relative flex-nowrap gap-3 rounded-xl bg-card p-3 shadow-soft has-[[data-slot=app-open]:hover]:bg-muted/50"
     >
-      <ItemMedia>
+      <ItemMedia className="self-start">
         <AppIcon name={props.name} icon={props.icon} size="lg" />
       </ItemMedia>
       <ItemContent className="min-w-0 gap-0.5">
@@ -59,7 +61,7 @@ export function AppRow(props: {
               type="button"
               data-slot="app-open"
               onClick={props.onOpen}
-              className="truncate text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
+              className="truncate text-left outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
             >
               {props.name}
             </button>
@@ -68,7 +70,8 @@ export function AppRow(props: {
           )}
           {props.attention ? <AttentionDot /> : null}
         </ItemTitle>
-        <ItemDescription className="line-clamp-1 text-xs">{props.caption}</ItemDescription>
+        <ItemDescription className="line-clamp-2 min-h-8 text-xs/4">{props.caption}</ItemDescription>
+        {props.status ? <span className="mt-1 truncate text-xs text-muted-foreground">{props.status}</span> : null}
       </ItemContent>
       {props.action ? <ItemActions className="relative">{props.action}</ItemActions> : null}
     </Item>

@@ -79,7 +79,7 @@ export function MarketplacePage() {
   return (
     <Page
       title="Marketplace"
-      description="Add an app to a space, then connect its accounts. Every chat in the space can use it."
+      description="Apps give Ren new tools. Add one to a space and every chat there can use it."
       leading={
         <Tabs value={view} onValueChange={(value: string) => page.setView(value)}>
           <PageTabsList>
@@ -106,7 +106,8 @@ export function MarketplacePage() {
                 key={each.id}
                 name={each.name}
                 icon={each.icon}
-                caption={profiles.length > 0 ? summary(profiles) : each.description}
+                caption={each.description}
+                status={profiles.length > 0 ? summary(profiles) : undefined}
                 attention={needsAttention(profiles)}
                 onOpen={() => setOpened(each.id)}
                 action={<AddToSpace app={each} onAdded={added} />}
