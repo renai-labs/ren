@@ -134,11 +134,13 @@ export function AddHere(props: { app: App; space: Target; onAdded: Added }) {
   return (
     <>
       <Button
-        variant="outline"
+        variant="ghost"
+        size="icon"
+        className="text-muted-foreground"
         aria-label={`Add ${props.app.name} to ${props.space.name}`}
         onClick={() => addition.add(props.space)}
       >
-        Add
+        <IconPlus />
       </Button>
       {addition.dialog}
     </>
