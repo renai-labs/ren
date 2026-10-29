@@ -1,12 +1,23 @@
+import { useState } from "react"
 import type { SpaceInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { IconCube, IconLock, IconMessage } from "@tabler/icons-react"
+import { IconArchive, IconCube, IconDots, IconLock, IconMessage } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { RowMenu } from "@/components/ren/row-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { ConfirmDialog } from "@/components/ren/confirm-dialog"
 import { useCatalog } from "@/hooks/use-catalog"
+import { useCanAdminister } from "@/hooks/use-organization"
 import { api, errorMessage } from "@/lib/api"
 import { initials, plural } from "@/lib/format"
 
@@ -42,6 +53,8 @@ export function SpaceCard(props: { space: SpaceInfo }) {
   })
   const catalog = useCatalog()
   const archive = useMutation(api.space.archive.mutationOptions())
+  const [archiving, setArchiving] = useState(false)
+  const admin = useCanAdminister()
   const apps = [...new Set((reach.data?.profiles ?? []).map((profile) => profile.appId))].map((appId) => ({
     id: appId,
     name: catalog.appOf(appId)?.name ?? appId,
@@ -69,33 +82,66 @@ export function SpaceCard(props: { space: SpaceInfo }) {
           <IconMessage />
           {plural(chats.data?.total ?? 0, "chat")}
         </span>
-        {space.canArchive ? (
-          <span className="relative -mt-1 -mr-1">
-            <RowMenu
-              label={`${space.name} actions`}
-              className="flex text-muted-foreground"
-              items={[
+        <span className="relative -mt-1 -mr-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground"
+                  aria-label={`${space.name} actions`}
+                />
+              }
+            >
+              <IconDots />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuGroup>
+                {space.canArchive ? (
+                  <DropdownMenuItem variant="destructive" onClick={() => setArchiving(true)}>
+                    <IconArchive />
+                    Archive space
+                  </DropdownMenuItem>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger render={<div />}>
+                      <DropdownMenuItem disabled>
+                        <IconArchive />
+                        Archive space
+                      </DropdownMenuItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      {space.kind === "private"
+                        ? "Your personal space can’t be archived."
+                        : admin
+                          ? "This is the default space. It can’t be archived."
+                          : "Only admins can archive this space."}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <ConfirmDialog
+            open={archiving}
+            onOpenChange={setArchiving}
+            confirmation={{
+              title: `Archive “${space.name}”?`,
+              description: "Its members lose access. Only the API can bring it back.",
+              action: "Archive",
+            }}
+            onConfirm={() =>
+              archive.mutateAsync(
+                { id: space.id },
                 {
-                  label: "Archive space",
-                  onSelect: () =>
-                    archive.mutateAsync(
-                      { id: space.id },
-                      {
-                        onSuccess: () => toast.success(`${space.name} archived`),
-                        onError: (error) =>
-                          toast.error("Could not archive the space", { description: errorMessage(error) }),
-                      },
-                    ),
-                  confirm: {
-                    title: `Archive “${space.name}”?`,
-                    description: "Its members lose access. Only the API can bring it back.",
-                    action: "Archive",
-                  },
+                  onSuccess: () => toast.success(`${space.name} archived`),
+                  onError: (error) => toast.error("Could not archive the space", { description: errorMessage(error) }),
                 },
-              ]}
-            />
-          </span>
-        ) : null}
+              )
+            }
+          />
+        </span>
       </div>
       <div className="flex h-5 items-center gap-4 text-xs text-muted-foreground tabular-nums">
         {space.kind === "private" ? null : (
