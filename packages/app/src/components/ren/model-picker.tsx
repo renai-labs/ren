@@ -209,11 +209,9 @@ function ClassicLook(props: {
                     onClick={() =>
                       picker.pick(each.model, effortsOf(each.model).includes(each.effort) ? each.effort : undefined)
                     }
-                    className="items-start py-2"
+                    className="items-center gap-2.5 py-2"
                   >
-                    <span className="flex h-5 shrink-0 items-center">
-                      <ProviderIcon provider={each.model.providerID} />
-                    </span>
+                    <ProviderIcon provider={each.model.providerID} />
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="flex h-5 min-w-0 items-center gap-1.5">
                         <span className="font-medium">{each.label}</span>
