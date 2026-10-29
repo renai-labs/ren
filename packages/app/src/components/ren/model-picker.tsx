@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useState } from "react"
 import { IconChevronDown } from "@tabler/icons-react"
 import type { SessionModel } from "@ren/schema/session/model"
 import {
@@ -71,6 +71,7 @@ const newest = (models: ReadonlyArray<Choice>, pattern: RegExp) =>
 interface Featured {
   readonly label: string
   readonly hint: string
+  readonly effort: string
   readonly model: Choice
 }
 
@@ -79,16 +80,19 @@ const featuredOf = (models: ReadonlyArray<Choice>): ReadonlyArray<Featured> =>
     {
       label: "Recommended",
       hint: "Best balance of speed and quality",
-      model: newest(models, /sonnet/iu) ?? newest(models, /gpt.*sol/iu),
+      effort: "medium",
+      model: newest(models, /gpt.*sol/iu) ?? newest(models, /sonnet/iu),
     },
     {
       label: "Smartest",
       hint: "Most capable for hard problems",
+      effort: "xhigh",
       model: newest(models, /opus/iu) ?? newest(models, /gpt.*astra/iu),
     },
     {
       label: "Fastest",
       hint: "Quick answers for simple work",
+      effort: "low",
       model: newest(models, /haiku/iu) ?? newest(models, /gpt.*luna/iu),
     },
   ].flatMap((each) => (each.model ? [{ ...each, model: each.model }] : []))
@@ -98,7 +102,6 @@ interface Picker {
   readonly current: Choice
   readonly variant: string | undefined
   readonly featured: ReadonlyArray<Featured>
-  readonly rest: ReadonlyArray<Choice>
   readonly providers: ReadonlyArray<string>
   readonly isCurrent: (model: Choice) => boolean
   readonly pick: (model: Choice, variant?: string) => void
@@ -114,13 +117,11 @@ const usePicker = (
   if (!current) return undefined
   const variant = value?.variant ?? current.variants.at(0)?.id
   const featured = featuredOf(models)
-  const featuredKeys = new Set(featured.map((each) => modelKey(each.model)))
   return {
     models,
     current,
     variant,
     featured,
-    rest: models.filter((model) => !featuredKeys.has(modelKey(model))),
     providers: [...new Set(models.map((model) => model.providerID))],
     isCurrent: (model) => modelKey(model) === key,
     pick: (model, next) => {
@@ -161,21 +162,17 @@ function ClassicLook(props: {
   const picker = props.picker
   const [query, setQuery] = useState("")
   const match = (model: Choice) => model.name.toLowerCase().includes(query.trim().toLowerCase())
-  const row = (model: Choice, content?: ReactNode) =>
+  const row = (model: Choice) =>
     model.variants.length === 0 ? (
-      <DropdownMenuItem
-        key={modelKey(model)}
-        onClick={() => picker.pick(model)}
-        className={content ? "items-start py-2" : undefined}
-      >
+      <DropdownMenuItem key={modelKey(model)} onClick={() => picker.pick(model)}>
         <ProviderIcon provider={model.providerID} />
-        {content ?? model.name}
+        {model.name}
       </DropdownMenuItem>
     ) : (
       <DropdownMenuSub key={modelKey(model)}>
-        <DropdownMenuSubTrigger className={content ? "items-start py-2" : undefined}>
+        <DropdownMenuSubTrigger>
           <ProviderIcon provider={model.providerID} />
-          {content ?? model.name}
+          {model.name}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
           <DropdownMenuRadioGroup
@@ -206,22 +203,30 @@ function ClassicLook(props: {
             <DropdownMenuGroup>
               {picker.featured
                 .filter((each) => match(each.model))
-                .map((each) =>
-                  row(
-                    each.model,
+                .map((each) => (
+                  <DropdownMenuItem
+                    key={each.label}
+                    onClick={() =>
+                      picker.pick(each.model, effortsOf(each.model).includes(each.effort) ? each.effort : undefined)
+                    }
+                    className="items-start py-2"
+                  >
+                    <span className="flex h-5 shrink-0 items-center">
+                      <ProviderIcon provider={each.model.providerID} />
+                    </span>
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="flex h-5 min-w-0 items-center gap-1.5">
                         <span className="font-medium">{each.label}</span>
                         <span className="truncate text-muted-foreground">{each.model.name}</span>
                       </span>
                       <span className="text-xs text-muted-foreground">{each.hint}</span>
-                    </span>,
-                  ),
-                )}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
             </DropdownMenuGroup>
           ) : null}
           {picker.providers.map((provider) => {
-            const models = picker.rest.filter((model) => model.providerID === provider && match(model))
+            const models = picker.models.filter((model) => model.providerID === provider && match(model))
             if (models.length === 0) return null
             return (
               <DropdownMenuGroup key={provider}>
