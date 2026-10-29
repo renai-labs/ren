@@ -254,12 +254,13 @@ it.live("refuses a negative cursor in the schema, and keeps serving", () =>
   }),
 )
 
-it.live("answers a body that is not NDJSON or that is cut off with a status 500, and keeps serving", () =>
+it.live("answers a body that is not NDJSON with a defect, drops a cut-off body, and keeps serving", () =>
   Effect.gen(function* () {
     const bearer = `Bearer ${yield* TestServer.token()}`
     const garbage = yield* TestServer.post("this is not json\n", bearer)
     const cut = yield* TestServer.post(TestServer.rpc("executor.hello", null).slice(0, 30), bearer)
-    expect([garbage.status, cut.status]).toEqual([500, 500])
+    expect(garbage.body).toContain("NdjsonDecodeError")
+    expect(cut.body).toBe("")
     expect((yield* TestServer.post(TestServer.rpc("executor.hello", null), bearer)).status).toBe(200)
   }),
 )
