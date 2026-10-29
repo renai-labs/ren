@@ -61,8 +61,8 @@ const packageBoundaries = [
   },
   {
     files: ["packages/executor/**"],
-    regex: "^@ren/(?!schema(/|$)|environment-api(/|$))",
-    message: "The executor runs on an environment's machine. It depends only on schema and the Environment API.",
+    regex: "^@ren/(?!schema(/|$)|environment-api(/|$)|util(/|$))",
+    message: "The executor runs on an environment's machine. It depends only on schema, util and the Environment API.",
   },
   {
     files: ["packages/opencode-transcript/**"],

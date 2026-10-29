@@ -32,6 +32,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { EnvironmentConnections } from "../src/environment/connections.js"
 import { EnvironmentAccess } from "../src/environment/access.js"
+import { EnvironmentTelemetry } from "../src/environment/telemetry.js"
 import { EnvironmentSpawner } from "../src/environment/session/spawner.js"
 import { Probe } from "./lib/probe.js"
 
@@ -74,10 +75,11 @@ const accessAt = (
 const environmentsWith = (
   access: Layer.Layer<EnvironmentAccess.Service>,
   http: Layer.Layer<HttpClient.HttpClient> = FetchHttpClient.layer,
+  telemetry: Layer.Layer<never> | Layer.Layer<EnvironmentTelemetry.Service> = Layer.empty,
 ) =>
-  Layer.build(EnvironmentConnections.layer.pipe(Layer.provide(access), Layer.provide(http))).pipe(
-    Effect.map((context) => Context.get(context, EnvironmentConnections.Service)),
-  )
+  Layer.build(
+    EnvironmentConnections.layer.pipe(Layer.provide(access), Layer.provide(http), Layer.provide(telemetry)),
+  ).pipe(Effect.map((context) => Context.get(context, EnvironmentConnections.Service)))
 
 const opening = (open: EnvironmentAccess.Interface["open"]) =>
   Layer.succeed(EnvironmentAccess.Service, EnvironmentAccess.Service.of({ open, release: () => Effect.void }))
@@ -799,5 +801,35 @@ it.effect("a call at the second a token expires works with a new token, with no 
     expect(yield* Ref.get(opens)).toBe(2)
     expect((yield* Ref.get(link.requests)).filter((request) => request.rpc === "executor.hello")).toHaveLength(2)
     expect(yield* connect(environments)).toBe(connection)
+  }),
+)
+
+it.live("hands what its executor kept to the host's EnvironmentTelemetry when it connects", () =>
+  Effect.gen(function* () {
+    const url = yield* TestEnvironment.url
+    const access = yield* accessAt(url)
+    const caller = yield* EnvironmentClient.make({
+      url: new URL(url),
+      token: Effect.succeed(Redacted.value(access.token)),
+    }).pipe(
+      Effect.flatMap((client) => client["executor.hello"]()),
+      Effect.andThen(Effect.currentSpan),
+      Effect.withSpan("Brain.call"),
+      Effect.provide(FetchHttpClient.layer),
+    )
+    const forwarded = yield* Deferred.make<EnvironmentApi.Drained>()
+    const environments = yield* environmentsWith(
+      TestAccess.fixed(new Map([[sessionId, access]])),
+      FetchHttpClient.layer,
+      Layer.succeed(
+        EnvironmentTelemetry.Service,
+        EnvironmentTelemetry.Service.of({
+          forward: (drained) => Deferred.succeed(forwarded, drained).pipe(Effect.asVoid),
+        }),
+      ),
+    )
+    yield* connect(environments)
+
+    expect((yield* Deferred.await(forwarded)).traces.join("")).toContain(caller.traceId)
   }),
 )

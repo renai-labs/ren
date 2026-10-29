@@ -48,7 +48,20 @@ export const Hello = Schema.Struct({
   mount: Schema.optionalKey(
     Schema.Boolean.annotate({ description: "Whether this machine has rclone and a usable /dev/fuse." }),
   ),
+  telemetry: Schema.optionalKey(
+    Schema.Boolean.annotate({ description: "Whether the executor keeps its telemetry for telemetry.drain." }),
+  ),
 }).annotate({ identifier: "Executor.Hello" })
+
+export interface Drained extends Schema.Schema.Type<typeof Drained> {}
+export const Drained = Schema.Struct({
+  traces: Schema.Array(Schema.String),
+  logs: Schema.Array(Schema.String),
+}).annotate({
+  identifier: "Executor.Drained",
+  description:
+    "The OTLP/JSON batches that the executor exported since the last drain, oldest first. The executor holds no telemetry key: the brain that drains them sends them to Ren.",
+})
 
 export interface SpawnInput extends Schema.Schema.Type<typeof SpawnInput> {}
 export const SpawnInput = Schema.Struct({
@@ -281,4 +294,5 @@ export const Rpcs = RpcGroup.make(
   Rpc.make("files.mkdir", { payload: Path, error: FileSystemError }),
   Rpc.make("files.unpack", { payload: UnpackInput, error: Schema.Union([ArchiveError, FileSystemError]) }),
   Rpc.make("drives.mount", { payload: MountInput, error: MountError }),
+  Rpc.make("telemetry.drain", { success: Drained }),
 ).middleware(Authentication)
