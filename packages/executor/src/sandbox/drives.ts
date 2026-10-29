@@ -1,38 +1,65 @@
 export * as SandboxDrives from "./drives.js"
 
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import { Duration, Effect, Exit, Option, Schedule, Semaphore } from "effect"
+import { Duration, Effect, Exit, Option, Schedule, Schema, Semaphore } from "effect"
 import { type ChildProcess, spawn } from "node:child_process"
 import { constants } from "node:fs"
-import { access, mkdir, readdir } from "node:fs/promises"
+import { access, mkdir, readdir, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { join, relative, resolve } from "node:path"
 
 const state = join(tmpdir(), "ren-drives")
 
 const unescaped = (field: string) =>
   field.replaceAll(/\\([0-7]{3})/gu, (_escape, octal: string) => String.fromCharCode(Number.parseInt(octal, 8)))
 
+const mounts = Effect.promise(() =>
+  Bun.file("/proc/mounts")
+    .text()
+    .catch(() => ""),
+).pipe(
+  Effect.map((text) =>
+    text
+      .split("\n")
+      .map((line) => line.split(" ").map(unescaped))
+      .map((fields) => ({
+        source: fields.at(0) ?? "",
+        path: fields.at(1) ?? "",
+        access: fields.at(3)?.split(",").includes("ro") ? "read" : "write",
+      })),
+  ),
+)
+
 const mountAt = (path: string) =>
-  Effect.promise(() =>
-    Bun.file("/proc/mounts")
-      .text()
-      .catch(() => ""),
-  ).pipe(
-    Effect.map((text) =>
-      Option.map(
-        Option.fromNullishOr(
-          text
-            .split("\n")
-            .map((line) => line.split(" ").map(unescaped))
-            .find((fields) => fields.at(1) === path),
-        ),
-        (fields) => ({
-          source: fields.at(0),
-          access: fields.at(3)?.split(",").includes("ro") ? "read" : "write",
-        }),
+  Effect.map(mounts, (all) => Option.fromNullishOr(all.find((mounted) => mounted.path === path)))
+
+const nameOf = (path: string) => Bun.hash(path).toString(36)
+
+const RefreshAnswer = Schema.Struct({ result: Schema.Record(Schema.String, Schema.String) })
+
+// oxlint-disable-next-line ren/no-comments -- rclone refreshes only a folder that it has listed before, and answers "file does not exist" for any other. The deepest folder it knows is refreshed; every folder under it is new to rclone, so rclone lists it from the drive when it is first read.
+const refreshed = (socket: string, dir: string) =>
+  Effect.tryPromise({
+    try: async () => {
+      const response = await fetch("http://rclone/vfs/refresh", {
+        method: "POST",
+        unix: socket,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(dir ? { dir } : {}),
+        signal: AbortSignal.timeout(10_000),
+      })
+      const text = await response.text()
+      if (!response.ok) throw new Error(`rclone answered ${response.status}: ${text.slice(0, 300)}`)
+      return text
+    },
+    catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+  }).pipe(
+    Effect.flatMap((text) =>
+      Schema.decodeUnknownEffect(Schema.fromJsonString(RefreshAnswer))(text).pipe(
+        Effect.mapError(() => `rclone answered ${text.slice(0, 300)}`),
       ),
     ),
+    Effect.map((answer) => Object.values(answer.result).at(0) ?? ""),
   )
 
 const isServed = (source: string, path: string) =>
@@ -98,8 +125,9 @@ export const make = (workspace: string) => {
   const mount = Effect.fn("Executor.mount")(function* (path: string, input: EnvironmentApi.MountInput) {
     const remote = input.remote
     const source = `:s3:${remote.bucket}/${remote.prefix}`
-    const name = Bun.hash(path).toString(36)
+    const name = nameOf(path)
     const log = join(state, `${name}.log`)
+    const socket = join(state, `${name}.sock`)
     const failed = (message: string) => new EnvironmentApi.MountError({ path: input.path, message })
     const found = yield* mountAt(path)
     if (
@@ -120,6 +148,7 @@ export const make = (workspace: string) => {
         await mkdir(path, { recursive: true })
         await mkdir(state, { recursive: true })
         await Bun.write(log, "")
+        await rm(socket, { force: true })
       },
       catch: (cause) => failed(cause instanceof Error ? cause.message : String(cause)),
     })
@@ -137,8 +166,9 @@ export const make = (workspace: string) => {
               "writes",
               "--cache-dir",
               join(state, `${name}.cache`),
+              // oxlint-disable-next-line ren/no-comments -- A file uploads when it is closed. E2B stops a sandbox with no signal, so a file that waits for its upload is lost (measured: a 5 s wait lost a write made 1 s before the stop).
               "--vfs-write-back",
-              "5s",
+              "0s",
               "--vfs-cache-max-size",
               "1G",
             ]
@@ -157,6 +187,10 @@ export const make = (workspace: string) => {
         remote.placeholder,
         "--log-file",
         log,
+        "--rc",
+        "--rc-addr",
+        `unix://${socket}`,
+        "--rc-no-auth",
       ],
       { detached: true, stdio: "ignore" },
     )
@@ -186,10 +220,35 @@ export const make = (workspace: string) => {
         ),
       )
   })
-  return (input: EnvironmentApi.MountInput) => {
+  const refresh = Effect.fn("Executor.refresh")(function* (input: EnvironmentApi.RefreshInput) {
     const path = resolve(workspace, input.path)
-    const lock = locks.get(path) ?? Semaphore.makeUnsafe(1)
-    locks.set(path, lock)
-    return lock.withPermits(1)(mount(path, input))
+    const failed = (message: string) => new EnvironmentApi.MountError({ path: input.path, message })
+    const drive = (yield* mounts)
+      .filter(
+        (mounted) =>
+          mounted.source.startsWith(":s3:") && (path === mounted.path || path.startsWith(`${mounted.path}/`)),
+      )
+      .reduce<{ readonly path: string } | undefined>(
+        (deepest, mounted) => (deepest && deepest.path.length >= mounted.path.length ? deepest : mounted),
+        undefined,
+      )
+    if (!drive) return yield* failed("it is not on a mounted drive")
+    const parts = relative(drive.path, path).split("/").filter(Boolean)
+    const socket = join(state, `${nameOf(drive.path)}.sock`)
+    for (const dir of [...parts.map((_, index) => parts.slice(0, parts.length - index).join("/")), ""]) {
+      const answer = yield* refreshed(socket, dir).pipe(Effect.mapError(failed))
+      if (answer === "OK") return
+      if (answer !== "file does not exist") return yield* failed(answer)
+    }
+    return yield* failed("rclone does not know the root of the drive")
+  })
+  return {
+    mount: (input: EnvironmentApi.MountInput) => {
+      const path = resolve(workspace, input.path)
+      const lock = locks.get(path) ?? Semaphore.makeUnsafe(1)
+      locks.set(path, lock)
+      return lock.withPermits(1)(mount(path, input))
+    },
+    refresh,
   }
 }
