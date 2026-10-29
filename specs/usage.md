@@ -52,9 +52,9 @@ Each fact has one owner. Another system gets only what its job needs, from the o
 ### 1.3 Identity
 
 1. Each key that Ren issues to a workload names one workload: `brain:<id>:<generation>` or `hand:<environment id>:<generation>` (`schema/src/workload.ts:21`). The model key names the brain and the organization's team (`../ren-inference` `packages/api/src/server/routes/v1.ts:106`).
-2. A producer sends only `workload`. Ren stamps `organization`, `space` and `brain` with `Credentials.scopeOf` (`core/src/credentials.ts:236`), the same function that the egress uses (`core/src/egress.ts:159`). It reads only the ID.
+2. A producer sends `organization`, `brain` and `space` from the workload's key, and `workload`. Ren stores them as sent: it does no lookup when it stores an event. Reconciliation (`Usage.reconcile`) checks them against Ren's rows later.
 3. Brains and hands are hostile. They never write usage. A trusted part that the workload must pass through to spend money records the cost: the model gateway, later the integration gateway.
-4. The headers are claims from the brain. Ren checks `root_session`, `session`, `member` and `agent` against the workload, and keeps `turn`, `kind`, `variant` and `agent_name` as sent (§4.3). A space brain serves many sessions and many people, so it can give a wrong session or person in its own space. It cannot move a cost to another organization or space.
+4. The headers are claims from the brain. Ren stores them as sent. Reconciliation checks `root_session`, `session`, `member` and `agent` against the event's brain and space, and writes what agrees to `usage_attribution` (§4.8). A space brain serves many sessions and many people, so it can give a wrong session or person in its own space. It cannot move a cost to another organization or space: those come from the key.
 5. Each paid service accepts a short-lived key from Ren, scoped to one workload. The egress is one way to attach that key without the workload seeing it. A host that cannot use the egress (a Durable Object cell) sends the key itself, and the identity is the same.
 
 ## 2. The example chat
@@ -142,7 +142,7 @@ Step 1 of turn `msg_01`: the Analyst agent thinks, then asks for a tool.
 
  ┌────────────────────────┐                                  ┌────────────────────────┐                                  ┌────────────────────────┐
  │                        │                                  │                        │                                  │                        │
- │  LiteLLM logger        │  POST /usage/v1/events           │  Ren server            │  scopeOf, checks claims          │  usage_event           │
+ │  LiteLLM logger        │  POST /usage/v1/events           │  Ren server            │  stores as sent                  │  usage_event           │
  │  after the stream ends │  usage key, 1 event              │  Usage.record          │  INSERT … ON CONFLICT            │                        │
  │                        │  ─────────────────────────────>  │                        │  ─────────────────────────────>  │                        │
  │                        │  200 inserted: 1                 │                        │  commit                          │                        │
@@ -156,7 +156,7 @@ Step 1 of turn `msg_01`: the Analyst agent thinks, then asks for a tool.
 2. The egress finds the workload from the proxy login: `brain:brn_7:3` (it asks Ren once for each connection). Ren's answer, kept 30 s, puts the real brain key in place of `ren:MODELS` and checks the member placeholder against `spc_G`.
 3. LiteLLM finds `brn_7` and team `org_P` from the key, chooses a deployment and streams the answer back. The stream ends at 10:04:12 with `stop_reason: tool_use`.
 4. LiteLLM's success hook (`dodo_logger.py`) sends one event: `workload: brain:brn_7`, the claims from the headers, the tokens, `cost_micro_usd: 31400`, `latency_ms: 11200`, `time_to_first_token_ms: 900`, `stop_reason: tool_use`.
-5. Ren checks the usage key (producer `ren-inference`, the same as `source`), stamps `org_P` and `spc_G` with `scopeOf`, keeps the root session (on `brn_7`, no parent), keeps `mem_A` (a member of `spc_G`), turns `analyst` into `agt_7`, inserts one row, commits and answers 200.
+5. Ren checks the usage key (producer `ren-inference`, the same as `source`), stores the event as sent with `org_P`, `brn_7` and `spc_G` from the model key, commits and answers 200. Within 30 s, reconciliation keeps the root session (on `brn_7`, no parent), keeps `mem_A` (a member of `spc_G`) and turns `analyst` into `agt_7` in `usage_attribution` (§4.8).
 
 ### 4.2 Unit
 
@@ -172,7 +172,7 @@ The event is the contract. Producers in other repositories code against it, so i
 The trust column says who gives the value:
 
 - **Proven:** Ren's key or the gateway gives it. The brain cannot change it.
-- **Checked:** the brain claims it in a header, and Ren keeps it only when it matches a proven value.
+- **Checked:** the brain claims it in a header. Ren stores it as sent; reconciliation keeps it in `usage_attribution` only when it agrees with Ren's rows.
 - **Claimed:** the brain claims it, and Ren cannot check it.
 
 | Field                                    | Given by                    | Trust   | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -181,7 +181,7 @@ The trust column says who gives the value:
 | `type`                                   | Gateway                     | Proven  | `model.call` (§4.6).                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `time`                                   | Gateway                     | Proven  | The end of the response. At most 30 days in the past and 5 minutes in the future.                                                                                                                                                                                                                                                                                                                                                                   |
 | `workload`                               | Gateway, from the model key | Proven  | `brain:<id>` or `hand:<id>`, then `:<generation>` when known (§1.3). Only a producer inside Ren with no workload (email, later) gives `organization` instead.                                                                                                                                                                                                                                                                                       |
-| `organization`, `space`, `brain`         | Ren                         | Proven  | `Credentials.scopeOf(workload)` (§1.3).                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `organization`, `brain`, `space`         | Gateway, from the model key | Proven  | The key names them: `organization` is the key's team, `brain` and `space` are in its metadata. Reconciliation flags an `organization` that is not the brain's, and takes the space from the brain.                                                                                                                                                                                                                                                  |
 | `root_session`                           | Header `ren-root-session`   | Checked | Ren keeps it when that session is on `brain` and has no parent. Else Ren removes `root_session`, `session`, `turn` and `agent`.                                                                                                                                                                                                                                                                                                                     |
 | `session`                                | Header `ren-session`        | Checked | The session of the call: the root, or a subagent's child session. Ren keeps it when it is the root, or when its row names `root_session` as its root. A child session that has not synced yet has no row: Ren keeps it.                                                                                                                                                                                                                             |
 | `turn`                                   | Header `ren-turn`           | Claimed | The ID of the newest user message of the root session.                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -203,7 +203,7 @@ The trust column says who gives the value:
 Rules:
 
 1. Ren stores the result of the settings waterfall (Ren, organization, space, agent), not the layer that gave it: `agent`, `requested_model` and `variant` are the values that the call used.
-2. Ren stamps `agent` and `root_session` on the row when it stores it. A child session's row has no agent (`core/src/session-sync.ts:141`), and a session can be deleted, so a join later cannot give them.
+2. Reconciliation writes the checked `agent`, `root_session` and `session` to `usage_attribution`. A child session's row has no agent (`core/src/session-sync.ts:141`), and a session can be deleted, so a join later cannot give them.
 3. The user, the agent's name and the chat's origin (app, schedule, channel, task) come by join. They are not on the row.
 
 ### 4.4 Example payload
@@ -258,7 +258,7 @@ What Ren stores after it resolves the event:
 
 | Field                                | Stored value                                      | How Ren got it                                      |
 | ------------------------------------ | ------------------------------------------------- | --------------------------------------------------- |
-| `organization`, `space`, `brain`     | `org_01M280`, `spc_01J9ZT`, `brn_01JA2X`          | `scopeOf("brain:brn_01JA2X")`                       |
+| `organization`, `space`, `brain`     | `org_01M280`, `spc_01J9ZT`, `brn_01JA2X`          | From the model key, as sent                         |
 | `root_session`                       | `ses_01JB4R`                                      | Kept: on `brn_01JA2X`, no parent                    |
 | `session`                            | `ses_01JB7K`                                      | Kept: not synced yet, so no row to contradict it    |
 | `turn`                               | `msg_01JB7F`                                      | As sent                                             |
@@ -287,31 +287,46 @@ What Ren stores after it resolves the event:
 
 ### 4.7 Ingest route
 
-| Item  | Value                                                                                                                                                                             |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Route | `POST /usage/v1/events`, in a new `UsageIngestApi` group in `@ren/protocol`                                                                                                       |
-| Auth  | A bearer key: a `RegisteredKey` of kind `usage`. Ren keeps the SHA-256 hash of the secret and the producer that the key names. `core/script/usage-key.ts <producer>` makes one.   |
-| Body  | `{ events: Array<Usage.Event> }`, 1 to 500 events                                                                                                                                 |
-| 200   | `{ inserted: number }`. Each event is stored now or was stored before.                                                                                                            |
-| 400   | An event is not valid: an unknown type, a quantity that its type does not allow, a `time` out of range, or a `workload` that Ren does not know. Ren stores no event of the batch. |
-| 403   | The `source` of an event is not the producer of the key.                                                                                                                          |
-| 503   | The store is not available. The producer sends the same batch again with backoff.                                                                                                 |
+| Item  | Value                                                                                                                                                                           |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Route | `POST /usage/v1/events`, in a new `UsageIngestApi` group in `@ren/protocol`                                                                                                     |
+| Auth  | A bearer key: a `RegisteredKey` of kind `usage`. Ren keeps the SHA-256 hash of the secret and the producer that the key names. `core/script/usage-key.ts <producer>` makes one. |
+| Body  | `{ events: Array<Usage.Event> }`, 1 to 500 events                                                                                                                               |
+| 200   | `{ inserted: number }`. Each event is stored now or was stored before.                                                                                                          |
+| 400   | An event does not match the contract: an unknown type, a missing field or a field that the contract does not have. Ren stores no event of the batch.                            |
+| 403   | The `source` of an event is not the producer of the key.                                                                                                                        |
+| 503   | The store is not available. The producer sends the same batch again with backoff.                                                                                               |
 
 Ren answers 200 only after the insert commits.
 
 A producer outside Ren keeps each event until Ren answers 200:
 
 1. On 503, a network error or a timeout, it sends the same batch again with exponential backoff, at most 60 s between tries, with no limit on the number of tries.
-2. It keeps unsent events in a bounded buffer (for example 100,000 events). When the buffer is full, it drops the oldest event, writes a log, adds 1 to a counter and raises an alert. The daily reconciliation (§8) shows the gap.
+2. It keeps unsent events in a bounded buffer (for example 100,000 events). When the buffer is full, it drops the oldest event, writes a log, adds 1 to a counter and raises an alert. The daily check against provider bills (§8) shows the gap.
 3. On 400 it does not retry. It writes the batch to its log and raises an alert, because a 400 is a bug in the producer.
 4. On shutdown it tries to send the buffer before it stops.
 
-### 4.8 Not built
+### 4.8 Reconciliation
+
+Ren stores each event as the producer sent it and checks the claims later. `usage_event` is append only: a trigger refuses an update or a delete.
+
+| Table               | Written by                  | Holds                                                                                               |
+| ------------------- | --------------------------- | --------------------------------------------------------------------------------------------------- |
+| `usage_event`       | Ingest                      | The event as sent. Money, organization and brain are right from the insert.                         |
+| `usage_pending`     | Ingest, then reconciliation | The events not checked yet. Ingest adds a row in the same transaction; reconciliation removes it.   |
+| `usage_attribution` | Reconciliation              | One row for each event: the claims that agree with Ren's rows, null for the others, and `problems`. |
+
+1. Each Ren server runs `Usage.layerReconcile`. It takes up to 500 pending events (`FOR UPDATE SKIP LOCKED`), checks them, inserts their `usage_attribution` rows and removes them from `usage_pending` in one transaction. After a full batch it runs again at once; else it waits 30 s.
+2. The checks: the brain is in the event's organization (else `organization_mismatch`, and no claim is kept); the space is the brain's (a different space from the key is `space_mismatch`); the root session is on the brain and has no parent; the session is the root, one of its children, or a child that has not synced yet; the member acts in the space; the agent name is an agent that the space can use; the kind is a `Usage.Kind`.
+3. A brain that Ren does not know (deleted) keeps the space from the key and gets `unknown_brain`. A `time` more than 30 days before or 5 minutes after `received_at` gets `time_out_of_range`. Ren logs each problem as an error.
+4. Readers that need the checked claims (pages, PostHog) join `usage_attribution`. Billing needs only `usage_event`.
+
+### 4.9 Not built
 
 1. An automated end-to-end case in `packages/e2e/chaos/cases/`. The harness starts its own Ren server, so it needs its own LiteLLM container whose logger sends to that server.
 2. The logger's buffer is in memory (O4).
 
-### 4.9 Failure points
+### 4.10 Failure points
 
 | What fails                                 | What happens                                                                                                             | Cost leak?                                       |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
@@ -321,7 +336,7 @@ A producer outside Ren keeps each event until Ren answers 200:
 | Ren is down; the egress has a kept answer  | The egress serves for at most 15 min, so the call runs. The logger keeps the event in its buffer (§4.7).                 | Yes, when the buffer fills or LiteLLM stops (O4) |
 | Ren answers 400                            | The batch is refused; the logger logs it and raises an alert                                                             | Yes, until the producer bug is fixed             |
 | The brain disconnects during the stream    | ren-v1 made LiteLLM read the answer to the end, so the full cost is logged (`59057dac8`). Not verified in ren-inference. | Yes, if that fix is not there                    |
-| The brain claims a wrong session or person | Ren removes the claim. The cost stays on the organization and space.                                                     | No                                               |
+| The brain claims a wrong session or person | Reconciliation removes the claim. The cost stays on the organization and space of the key.                               | No                                               |
 
 Load: one insert for each call. At the target that is 0.4 a second on average and 27 a second at worst, against about 1,000 inserts a second. Not a bottleneck.
 
@@ -437,7 +452,7 @@ transcript  (turn)     ──── loop B ────►  1 × $ai_trace  +  7
 
 ### 7.1 Loop A: `usage_event` → `$ai_generation`
 
-1. Each Ren server runs the loop. It claims up to 500 rows `WHERE posthog_sent_at IS NULL` with `FOR UPDATE SKIP LOCKED` (as `core/src/schedule-trigger.ts:39`), sends them to PostHog's batch endpoint, sets `posthog_sent_at` and commits.
+1. Each Ren server runs the loop. It claims up to 500 rows of `usage_posthog_pending` whose events have a `usage_attribution` row, with `FOR UPDATE SKIP LOCKED` (as `core/src/schedule-trigger.ts:39`), sends them to PostHog's batch endpoint, removes them from `usage_posthog_pending` and commits.
 2. When the claim had 500 rows, the loop runs again at once; with fewer, it waits 60 s. A failed send waits with `Schedule.exponential` and keeps the rows unsent.
 3. It runs only when Ren has a PostHog key. Without a key the column stays null.
 
@@ -514,20 +529,20 @@ $ai_trace  msg_01    succeeded · 130 s · $0.181 (sum of the generations)
 
 | #   | Work                                                                                                                                                                                                                                                                                    | Package                    |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| P1  | Column `posthog_sent_at`, a partial index `WHERE posthog_sent_at IS NULL`, and loop A with the mapping of §7.1                                                                                                                                                                          | `@ren/db`, `@ren/core`     |
+| P1  | The table `usage_posthog_pending`, filled by ingest in the same transaction as the event (as `usage_pending`, §4.8), and loop A with the mapping of §7.1. Loop A reads the checked claims from `usage_attribution`, so it sends only reconciled events. `usage_event` is not updated.   | `@ren/db`, `@ren/core`     |
 | P2  | Loop B with the mapping of §7.2, after O9 is decided                                                                                                                                                                                                                                    | `@ren/core`                |
 | P3  | Link a model call to its step: when OpenCode's `model.request` hook gives the assistant message ID, the brain sends it in a `ren-message` header and the event gets an optional `message` field. Then a `$ai_generation` has its step's tool spans as siblings, not only its turn (O8). | `@ren/cell`, `@ren/schema` |
 | P4  | Evals run in Ren and read the transcript from Postgres, because PostHog gets no content. They send only a score to PostHog.                                                                                                                                                             | Later                      |
 
 ### 7.5 Failure points
 
-| What fails                                                    | What happens                                                      | Data lost?                     |
-| ------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------ |
-| PostHog is down                                               | Rows stay unsent; the loop sends the backlog when PostHog is back | No                             |
-| Ren stops after the send and before it sets `posthog_sent_at` | The same `uuid` goes again; PostHog removes the repeat later      | No; a repeat shows for a while |
-| `mem_A` is deleted between two tries                          | `distinct_id` changes, so PostHog keeps both                      | One repeat (rare)              |
-| The transcript is late or lost (§6)                           | `$ai_trace` and `$ai_span` are late or missing (O9)               | Analytics only                 |
-| No PostHog key (self-host)                                    | No loops; the column stays null                                   | Nothing is sent, as designed   |
+| What fails                                                      | What happens                                                      | Data lost?                     |
+| --------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------ |
+| PostHog is down                                                 | Rows stay unsent; the loop sends the backlog when PostHog is back | No                             |
+| Ren stops after the send and before it removes the pending rows | The same `uuid` goes again; PostHog removes the repeat later      | No; a repeat shows for a while |
+| `mem_A` is deleted between two tries                            | `distinct_id` changes, so PostHog keeps both                      | One repeat (rare)              |
+| The transcript is late or lost (§6)                             | `$ai_trace` and `$ai_span` are late or missing (O9)               | Analytics only                 |
+| No PostHog key (self-host)                                      | No loops; the column stays null                                   | Nothing is sent, as designed   |
 
 Load: not the database; one claim sends 500 rows. The cost is PostHog's price: about 1.1M generations a month at the target, plus about 8 spans for each turn. `$ai_*` events are priced as AI Observability events. The price is not checked.
 
@@ -539,7 +554,7 @@ Status: later. It needs the closed billing service (O1). Ren keeps only provider
  ┌──────────────────────────────┐                                        ┌──────────────────────────────┐                                        ┌──────────────────────────────┐
  │                              │                                        │                              │                                        │                              │
  │  usage_event                 │  billing loop, SKIP LOCKED             │  billing service             │  meter event per row                   │  Dodo                        │
- │  8 rows, provider cost       │  billing_sent_at IS NULL               │  (closed)                    │  event_id = source:id                  │  meter: Sum of micros        │
+ │  8 rows, provider cost       │  usage_billing_pending                 │  (closed)                    │  event_id = source:id                  │  meter: Sum of micros        │
  │                              │  ───────────────────────────────────>  │  price = cost + markup       │  ───────────────────────────────────>  │                              │
  │                              │  POST /billing/v1/events               │                              │  webhook credit.* back                 │                              │
  │                              │  200 after it stores them              │                              │                                        │                              │
@@ -557,7 +572,7 @@ Status: later. It needs the closed billing service (O1). Ren keeps only provider
 
 ### 8.1 Steps
 
-1. The billing loop claims the rows of turn `msg_01` (and all other rows `WHERE billing_sent_at IS NULL`) and sends `POST /billing/v1/events`. When the billing service answers 200, Ren sets `billing_sent_at` and commits.
+1. The billing loop claims the rows of turn `msg_01` (and all other rows of `usage_billing_pending`) and sends `POST /billing/v1/events`. When the billing service answers 200, Ren removes them from `usage_billing_pending` and commits.
 2. The billing service gives each row a price. Example only: the real markup is closed and not decided.
 
    | Rows                         | Provider cost         | Price (example: +20%)         |
@@ -569,18 +584,18 @@ Status: later. It needs the closed billing service (O1). Ren keeps only provider
 3. The billing service sends Dodo one meter event for each row, with `event_id` = `<source>:<id>` and `cost_micros` = the price. Dodo ignores a repeat of `event_id`. The meter adds up the micros.
 4. Dodo lowers the credit balance one minute or more later and sends `credit.*` webhooks. The billing service refreshes its copy of the balance.
 5. The credit check of the next turn (§3) gets: the Dodo balance minus the price of the events that the billing service has not yet sent to Dodo.
-6. Each day, a closed job compares the `usage_event` total of each provider with the provider's bill and alerts on a gap. Example: Anthropic $1,204.10 in `usage_event`, $1,231.40 on the bill, a gap of 2.2%. A gap shows events that were lost on the way (§4.9, §5.1).
+6. Each day, a closed job compares the `usage_event` total of each provider with the provider's bill and alerts on a gap. Example: Anthropic $1,204.10 in `usage_event`, $1,231.40 on the bill, a gap of 2.2%. A gap shows events that were lost on the way (§4.10, §5.1).
 
 ### 8.2 Build
 
-| #   | Work                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Where                   |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| M1  | Billing delivery: a column `billing_sent_at` and a partial index `WHERE billing_sent_at IS NULL`. `Billing.layerRenCloud` runs a loop in each Ren server: it claims 500 rows `FOR UPDATE SKIP LOCKED`, sends `POST /billing/v1/events`, sets `billing_sent_at`, and commits. When the claim had 500 rows, the loop runs again at once; with fewer, it waits 60 s. A failed send waits with `Schedule.exponential` and keeps the rows unsent. `layerNone` has no loop. | `@ren/core`, `@ren/db`  |
-| M2  | The billing service ignores a repeat of `(source, id)`. It answers 200 only after it has stored the events, so a crash after 200 loses nothing.                                                                                                                                                                                                                                                                                                                       | Closed                  |
-| M3  | `check` over HTTP: `POST /billing/v1/check`, with the cache and the 10-minute rule of §3.2 item 5. The billing service subtracts the price of the events that it has not sent to Dodo from the Dodo balance.                                                                                                                                                                                                                                                          | `@ren/core`, closed     |
-| M4  | Daily reconciliation: a closed job compares each day's `usage_event` totals with each provider's bill (model providers, treg, E2B) and alerts on a gap. It finds drops that the producers did not see.                                                                                                                                                                                                                                                                | Closed                  |
-| M5  | Usage page: reads `usage_event` with `GROUP BY` on `(organization, time)`. A session includes its child sessions through `agent_session.root_id`. Money: `layerNone` shows `cost_micro_usd`; `layerRenCloud` gets the charged amounts from the billing service. Ren stores no price.                                                                                                                                                                                  | `@ren/app`, `@ren/core` |
-| M6  | Usage of a private space, after the usage page: [`runtime/private-spaces/README.md`](runtime/private-spaces/README.md) item 1.                                                                                                                                                                                                                                                                                                                                        | `@ren/app`              |
+| #   | Work                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Where                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| M1  | Billing delivery: the table `usage_billing_pending`, filled by ingest in the same transaction as the event. `Billing.layerRenCloud` runs a loop in each Ren server: it claims 500 rows `FOR UPDATE SKIP LOCKED`, sends `POST /billing/v1/events`, removes them from `usage_billing_pending`, and commits. When the claim had 500 rows, the loop runs again at once; with fewer, it waits 60 s. A failed send waits with `Schedule.exponential` and keeps the rows unsent. `layerNone` has no loop. | `@ren/core`, `@ren/db`  |
+| M2  | The billing service ignores a repeat of `(source, id)`. It answers 200 only after it has stored the events, so a crash after 200 loses nothing.                                                                                                                                                                                                                                                                                                                                                    | Closed                  |
+| M3  | `check` over HTTP: `POST /billing/v1/check`, with the cache and the 10-minute rule of §3.2 item 5. The billing service subtracts the price of the events that it has not sent to Dodo from the Dodo balance.                                                                                                                                                                                                                                                                                       | `@ren/core`, closed     |
+| M4  | Daily check against provider bills: a closed job compares each day's `usage_event` totals with each provider's bill (model providers, treg, E2B) and alerts on a gap. It finds drops that the producers did not see.                                                                                                                                                                                                                                                                               | Closed                  |
+| M5  | Usage page: reads `usage_event` with `GROUP BY` on `(organization, time)`. A session includes its child sessions through `agent_session.root_id`. Money: `layerNone` shows `cost_micro_usd`; `layerRenCloud` gets the charged amounts from the billing service. Ren stores no price.                                                                                                                                                                                                               | `@ren/app`, `@ren/core` |
+| M6  | Usage of a private space, after the usage page: [`runtime/private-spaces/README.md`](runtime/private-spaces/README.md) item 1.                                                                                                                                                                                                                                                                                                                                                                     | `@ren/app`              |
 
 ### 8.3 Failure points
 
@@ -591,7 +606,7 @@ Status: later. It needs the closed billing service (O1). Ren keeps only provider
 | Dodo is down                                                 | The billing service keeps the events and tries again (closed design)                                                                                    | No, if it stores first                                  |
 | Dodo's balance is late                                       | A burst of turns can spend too much. "Minus the price not yet sent" covers Ren's side; Dodo's overage limit (about one expensive turn) covers the rest. | Small, limited                                          |
 | A long turn runs out of credit during the turn               | Ren checks only at the start of a turn and of a sandbox. The turn ends and spends too much.                                                             | Yes, one turn. The check for each request is later (§9) |
-| From the first build until billing delivery                  | Dodo receives no usage (§4.8, ren-inference change 5)                                                                                                   | Yes, if Ren Cloud bills v2 today                        |
+| From the first build until billing delivery                  | Dodo receives no usage from the gateway (renai-labs/inference#9)                                                                                        | Yes, if Ren Cloud bills v2 today                        |
 | Dodo's rate limit or batch size                              | Not checked. ren-v1 `4337003f4` hit Dodo's rate limit when it read the ledger.                                                                          | Late, not lost, if the billing service tries again      |
 
 Load: Dodo's API, not Ren. At the target that is 1.1M meter events a month, 0.4 a second. Dodo's ingest limits are not checked. If they are low, the billing service can send one total for each organization and hour instead of one event for each row (a closed decision).
