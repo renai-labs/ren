@@ -97,6 +97,7 @@
       "jose": "6.2.12",
       "motion": "14.6.0",
       "oxfmt": "0.74.0",
+      "posthog-node": "5.57.2",
       "react": "19.3.0",
       "react-dom": "19.3.0",
       "react-day-picker": "10.0.2",

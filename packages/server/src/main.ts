@@ -30,10 +30,12 @@ import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
+import { ErrorTracking } from "@ren/core/error-tracking"
 import { Docker } from "@ren/core/environment-provider/docker"
 import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
+import { PostHog } from "@ren/core/posthog"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Retention } from "@ren/core/retention"
@@ -145,6 +147,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide([AuthDatabase.layer, Database.layer]),
+  Layer.provide(ErrorTracking.layer.pipe(Layer.provide(PostHog.layerConfig))),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
   Layer.provide(
     BunHttpServer.layerConfig({

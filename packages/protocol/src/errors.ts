@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { ErrorReporter, Schema } from "effect"
 
 export class InvalidRequestError extends Schema.TaggedError<InvalidRequestError>()(
   "InvalidRequestError",
@@ -7,19 +7,25 @@ export class InvalidRequestError extends Schema.TaggedError<InvalidRequestError>
     field: Schema.optional(Schema.String),
   },
   { httpApiStatus: 400 },
-) {}
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()(
   "UnauthorizedError",
   { message: Schema.String },
   { httpApiStatus: 401 },
-) {}
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class ForbiddenError extends Schema.TaggedError<ForbiddenError>()(
   "ForbiddenError",
   { message: Schema.String },
   { httpApiStatus: 403 },
-) {}
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class NotFoundError extends Schema.TaggedError<NotFoundError>()(
   "NotFoundError",
@@ -28,7 +34,9 @@ export class NotFoundError extends Schema.TaggedError<NotFoundError>()(
     resource: Schema.optional(Schema.String),
   },
   { httpApiStatus: 404 },
-) {}
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class ConflictError extends Schema.TaggedError<ConflictError>()(
   "ConflictError",
@@ -37,13 +45,17 @@ export class ConflictError extends Schema.TaggedError<ConflictError>()(
     resource: Schema.optional(Schema.String),
   },
   { httpApiStatus: 409 },
-) {}
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class TooLargeError extends Schema.TaggedError<TooLargeError>()(
   "TooLargeError",
   { message: Schema.String },
   { httpApiStatus: 413 },
-) {}
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class UnavailableError extends Schema.TaggedError<UnavailableError>()(
   "UnavailableError",
@@ -52,7 +64,9 @@ export class UnavailableError extends Schema.TaggedError<UnavailableError>()(
     retryAfterMs: Schema.Int.annotate({ description: "Ask again after this many milliseconds." }),
   },
   { httpApiStatus: 503 },
-) {}
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class UnknownError extends Schema.TaggedError<UnknownError>()(
   "UnknownError",
@@ -61,4 +75,6 @@ export class UnknownError extends Schema.TaggedError<UnknownError>()(
     ref: Schema.optional(Schema.String),
   },
   { httpApiStatus: 500 },
-) {}
+) {
+  override readonly [ErrorReporter.severity] = "Error"
+}
