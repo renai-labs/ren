@@ -2,7 +2,7 @@ import { expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { asc } from "drizzle-orm"
-import { ConfigProvider, Effect, Layer, Option } from "effect"
+import { ConfigProvider, Effect, Fiber, Latch, Layer, Option } from "effect"
 import { HttpClient, HttpClientResponse, UrlParams } from "effect/http"
 import { DurableRunner } from "../src/durable-runner.js"
 import { SandboxUsage } from "../src/sandbox-usage.js"
@@ -62,15 +62,21 @@ const events = [
   }),
 ]
 
+const asked = Latch.makeUnsafe(false)
+const answer = Latch.makeUnsafe(true)
+
 const e2b = Layer.succeed(
   HttpClient.HttpClient,
-  HttpClient.make((request) => {
-    const first =
-      new URL(request.url).pathname === "/events/sandboxes" &&
-      Option.contains(UrlParams.getFirst(request.urlParams, "offset"), "0")
-    const page = first ? events : []
-    return Effect.succeed(HttpClientResponse.fromWeb(request, Response.json(page)))
-  }),
+  HttpClient.make((request) =>
+    Effect.gen(function* () {
+      yield* asked.open
+      yield* answer.await
+      const first =
+        new URL(request.url).pathname === "/events/sandboxes" &&
+        Option.contains(UrlParams.getFirst(request.urlParams, "offset"), "0")
+      return HttpClientResponse.fromWeb(request, Response.json(first ? events : []))
+    }),
+  ),
 )
 
 const it = testEffect(
@@ -138,5 +144,20 @@ it.live("records each run of this Ren's brains that E2B measured, one time, at E
         },
       },
     ])
+  }),
+)
+
+it.live("a sweep that starts while another reads E2B does nothing", () =>
+  Effect.gen(function* () {
+    const usage = yield* SandboxUsage.Service
+    yield* answer.close
+    yield* asked.close
+    const reading = yield* Effect.forkChild(usage.sweep)
+    yield* asked.await
+    yield* asked.close
+    yield* usage.sweep
+    yield* answer.open
+    yield* Fiber.join(reading)
+    expect(yield* stored).toHaveLength(2)
   }),
 )
