@@ -28,7 +28,7 @@ import { BrainToken } from "@ren/host-api/brain-token"
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
-import { Clock, ConfigProvider, Effect, ErrorReporter, Layer, Logger, Schema } from "effect"
+import { Clock, ConfigProvider, Effect, Layer, Logger, Schema } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { Routes } from "../../src/routes.js"
 import { Signer } from "@ren/core/signer"
@@ -141,12 +141,12 @@ export const makeApp = (
     readonly config?: Readonly<Record<string, string>>
     readonly logs?: Array<string>
     readonly database?: typeof Testing.layer
-    readonly reporter?: ErrorReporter.ErrorReporter
+    readonly observability?: Layer.Layer<never>
   },
 ) =>
   HttpRouter.toWebHandler(
     routes.pipe(
-      Layer.provide(options?.reporter ? ErrorReporter.layer([options.reporter]) : Layer.empty),
+      Layer.provide(options?.observability ?? Layer.empty),
       Layer.provide(services),
       Layer.provide(options?.database ?? Testing.layer),
       Layer.provide([FetchHttpClient.layer, BunServices.layer]),

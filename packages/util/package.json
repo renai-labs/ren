@@ -10,6 +10,7 @@
   },
   "scripts": {
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
+    "test": "bun test --only-failures",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {

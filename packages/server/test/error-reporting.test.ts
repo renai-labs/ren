@@ -7,7 +7,9 @@ import { ApiFixture } from "@ren/server/testing/api"
 const reported: Array<string> = []
 
 const it = testEffect(
-  ApiFixture.layerWith({ reporter: ErrorReporter.make((report) => reported.push(report.error.message)) }),
+  ApiFixture.layerWith({
+    observability: ErrorReporter.layer([ErrorReporter.make((report) => reported.push(report.error.message))]),
+  }),
 )
 
 describe("error reporting", () => {

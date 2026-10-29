@@ -6,7 +6,7 @@ import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { getCookies } from "better-auth/cookies"
 import { makeSignature } from "better-auth/crypto"
-import { Clock, Context, Effect, type ErrorReporter, Layer } from "effect"
+import { Clock, Context, Effect, Layer } from "effect"
 import { call, config, makeApp } from "./app.js"
 
 export interface Interface {
@@ -15,7 +15,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/server/test/ApiFixture") {}
 
-export const layerWith = (options: { readonly reporter?: ErrorReporter.ErrorReporter }) =>
+export const layerWith = (options: { readonly observability?: Layer.Layer<never> }) =>
   Layer.effect(
     Service,
     Effect.gen(function* () {
