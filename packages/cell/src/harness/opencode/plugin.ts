@@ -255,10 +255,11 @@ export const make = (
   directoryOf: (sessionId: string) => string,
   sources: GitSources.Interface,
   ren: Option.Option<OpenCodeMcp.Ren>,
-  members: {
+  rootChat: {
     readonly egress: boolean
-    readonly lastSpeaker: (sessionId: string) => Effect.Effect<Option.Option<OpenCodeChat.Speaker>>
-    readonly lastTurn: (sessionId: string) => Effect.Effect<Option.Option<string>>
+    readonly lastUserMessage: (
+      sessionId: string,
+    ) => Effect.Effect<{ readonly id: string; readonly speaker: OpenCodeChat.Speaker | undefined } | undefined>
   },
 ) =>
   Plugin.define({
@@ -544,21 +545,15 @@ export const make = (
             delete event.headers[Models.personHeader]
             if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
             const root = yield* rootOf(event.sessionID)
-            const memberId =
-              event.kind === "title"
-                ? Option.none<string>()
-                : Option.flatMap(yield* members.lastSpeaker(root), (speaker) =>
-                    Option.fromUndefinedOr(speaker.memberID),
-                  )
+            const turn = yield* rootChat.lastUserMessage(root)
+            const memberId = event.kind === "title" ? undefined : turn?.speaker?.memberID
             Object.assign(
               event.headers,
               UsageClaims.headers({
                 rootSession: root,
                 session: event.sessionID,
-                turn: Option.getOrUndefined(yield* members.lastTurn(root)),
-                member: Option.getOrUndefined(
-                  Option.map(memberId, (id) => (members.egress ? Models.personPlaceholder(id) : id)),
-                ),
+                turn: turn?.id,
+                member: memberId && (rootChat.egress ? Models.personPlaceholder(memberId) : memberId),
                 agent: event.agent,
                 kind: event.kind,
                 variant: event.model.variant,
