@@ -1,0 +1,41 @@
+id: require-fork-error-handling
+language: Tsx
+message: A forked fiber that fails leaves no trace. Before the fork, in the same pipe, report its failures with Effect.withErrorReporting, or handle its cause with Effect.catchCause, Effect.onError or Effect.onExit.
+severity: error
+files:
+  - packages/core/src/**
+  - packages/server/src/**
+  - packages/cell/src/**
+  - packages/brain/src/**
+  - packages/executor/src/**
+rule:
+  any:
+    - all:
+        - any:
+            - pattern: Effect.fork
+            - pattern: Effect.forkChild
+            - pattern: Effect.forkChild($$$)
+            - pattern: Effect.forkScoped
+            - pattern: Effect.forkScoped($$$)
+            - pattern: Effect.forkDaemon
+            - pattern: Effect.forkDaemon($$$)
+            - pattern: Effect.forkIn($$$)
+        - inside:
+            kind: arguments
+            inside:
+              pattern: $SELF.pipe($$$)
+        - not:
+            follows:
+              stopBy: end
+              any:
+                - pattern: Effect.withErrorReporting
+                - pattern: Effect.catchCause($$$)
+                - pattern: Effect.onError($$$)
+                - pattern: Effect.onExit($$$)
+    - all:
+        - pattern: Effect.forkIn($EFFECT, $SCOPE)
+        - not:
+            inside:
+              kind: arguments
+              inside:
+                pattern: $SELF.pipe($$$)

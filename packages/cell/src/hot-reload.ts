@@ -171,7 +171,7 @@ export const layer = Layer.effect(
       const start = yield* Ref.modify(state, (found) =>
         found.running ? [false, { running: true, again: true }] : [true, { running: true, again: false }],
       )
-      if (start) yield* drain.pipe(Effect.forkIn(scope))
+      if (start) yield* drain.pipe(Effect.withErrorReporting, Effect.forkIn(scope))
     }).pipe(Effect.withSpan("HotReload.push"))
 
     return Service.of({

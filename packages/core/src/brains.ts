@@ -589,7 +589,14 @@ export const hostAuthentication = Layer.effect(
     return HostAuthentication.of({
       bearer: Effect.fn("Brains.hostAuthentication")(function* (httpEffect, options) {
         const host = yield* brain.authenticateHost(options.credential)
-        return yield* httpEffect.pipe(Effect.provideService(CurrentHost, host))
+        return yield* httpEffect.pipe(
+          Effect.provideService(CurrentHost, host),
+          Effect.annotateLogs({
+            "ren.brain.id": host.brainId,
+            "ren.organization.id": host.organizationId,
+            "ren.space.id": host.spaceId,
+          }),
+        )
       }),
     })
   }),

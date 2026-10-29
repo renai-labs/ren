@@ -131,7 +131,7 @@ export const layer = Layer.effect(
           : now - entry.seenAtMs >= Duration.toMillis(EnvironmentApi.orphanAfter),
       )
       yield* Effect.forEach(orphans, release, { discard: true })
-    }).pipe(Effect.repeat(Schedule.spaced(sweepEvery)), Effect.forkIn(scope))
+    }).pipe(Effect.repeat(Schedule.spaced(sweepEvery)), Effect.withErrorReporting, Effect.forkIn(scope))
 
     const spawn = Effect.fn("Executor.spawn")(function* (brain: Brain.ID, input: EnvironmentApi.SpawnInput) {
       const entryScope = yield* Scope.fork(scope)
@@ -260,6 +260,7 @@ export const layer = Layer.effect(
         })
         .pipe(
           Effect.catch((error) => Effect.logWarning(`Executor.kill ${id} failed: ${error.message}`)),
+          Effect.withErrorReporting,
           Effect.forkIn(entry.scope, { startImmediately: true }),
         )
     })

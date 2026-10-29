@@ -575,6 +575,7 @@ export const make = (
             if (!sessionID || !turns.running.delete(sessionID)) return Effect.void
             return Effect.forEach(turns.ended, (each) => each(sessionID), { discard: true })
           }),
+          Effect.withErrorReporting,
           Effect.forkScoped,
         )
         const applying = yield* Semaphore.make(1)

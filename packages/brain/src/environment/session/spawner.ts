@@ -120,6 +120,7 @@ export const make = (
         Effect.ignore,
         Effect.repeat(Schedule.spaced(EnvironmentApi.pingEvery)),
         Effect.raceFirst(Deferred.await(exitReported)),
+        Effect.withErrorReporting,
         Effect.forkScoped,
       )
       const position = yield* Ref.make(0)
@@ -207,6 +208,7 @@ export const make = (
           Stream.runForEach((bytes) => writeStdin(bytes, { end: false })),
           Effect.andThen(shouldEndStdin ? writeStdin(new Uint8Array(), { end: true }) : Effect.void),
           Effect.ignore,
+          Effect.withErrorReporting,
           Effect.forkScoped,
         )
       return ChildProcessSpawner.makeHandle({

@@ -290,6 +290,7 @@ export const layer = Layer.effect(
     }).pipe(
       Effect.repeat(Schedule.spaced(every)),
       Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+      Effect.withErrorReporting,
       Effect.forkScoped,
     )
 

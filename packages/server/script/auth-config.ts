@@ -14,6 +14,7 @@ export const auth = BetterAuth.make({
   fetchClientMetadataResource: () => Promise.reject(new Error("generate-auth-schema does not fetch")),
   requireEmailVerification: true,
   sendEmail: () => {},
+  logFailure: () => Promise.resolve(),
   signupGuard: {
     checkEmailSignUp: () => Promise.resolve(Option.none()),
     checkAccountCreation: () => Promise.resolve(Option.none()),
