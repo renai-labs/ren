@@ -51,7 +51,7 @@ import { useCatalog } from "@/hooks/use-catalog"
 import { api } from "@/lib/api"
 import { gaps } from "@/lib/apps"
 
-function AddMenu(props: { placement: "home" | "chat"; onInsert: (text: string) => void; onAttach: () => void }) {
+function AddMenu(props: { onInsert: (text: string) => void; onAttach: () => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -59,7 +59,7 @@ function AddMenu(props: { placement: "home" | "chat"; onInsert: (text: string) =
           <InputGroupButton
             variant="outline"
             size="icon-sm"
-            className={`rounded-full text-foreground data-popup-open:bg-secondary [&_svg]:transition-transform data-popup-open:[&_svg]:rotate-45 ${props.placement === "home" ? "size-10" : ""}`}
+            className="rounded-full text-muted-foreground hover:text-foreground data-popup-open:bg-secondary data-popup-open:text-foreground [&_svg]:transition-transform data-popup-open:[&_svg]:rotate-45"
             aria-label="Add to this chat"
           />
         }
@@ -108,7 +108,7 @@ function AppsStrip(props: { spaceId: string }) {
     return (
       <InputGroupButton
         size="sm"
-        className="-ml-1 text-muted-foreground"
+        className="-ml-1 font-normal text-muted-foreground"
         nativeButton={false}
         render={<Link to="/spaces/$spaceId/apps" params={{ spaceId: props.spaceId }} />}
       >
@@ -125,7 +125,7 @@ function AppsStrip(props: { spaceId: string }) {
         render={
           <InputGroupButton
             size="sm"
-            className="-ml-1"
+            className="-ml-1 font-normal"
             aria-label={`Apps: ${apps.map(([app]) => app).join(", ")}${missing ? `, ${missing} not connected` : ""}`}
           />
         }
@@ -493,7 +493,7 @@ export function PromptInput(props: {
           className={textareaClass({ home, marked: marks.length > 0 })}
         />
         <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
-          <AddMenu placement={props.placement} onInsert={insert} onAttach={() => picker.current?.click()} />
+          <AddMenu onInsert={insert} onAttach={() => picker.current?.click()} />
           {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
           {props.model}
           {send}
