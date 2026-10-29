@@ -91,7 +91,12 @@ HttpRouter.serve(Routes.layer).pipe(
   Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
-  Layer.provide(BunHttpServer.layerConfig({ port: Config.Port("PORT").pipe(Config.withDefault(4000)) })),
+  Layer.provide(
+    BunHttpServer.layerConfig({
+      port: Config.Port("PORT").pipe(Config.withDefault(4000)),
+      idleTimeout: Config.succeed(10),
+    }),
+  ),
   Layer.launch,
   BunRuntime.runMain,
 )

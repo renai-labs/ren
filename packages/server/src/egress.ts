@@ -41,6 +41,7 @@ export const serve = Layer.unwrap(
       Layer.provide(
         BunHttpServer.layer({
           port: config.port.value,
+          idleTimeout: 10,
           tls: {
             cert: Bun.file(config.cert),
             key: Bun.file(config.key),

@@ -146,7 +146,12 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
-  Layer.provide(BunHttpServer.layerConfig({ port: Config.Port("PORT").pipe(Config.withDefault(4000)) })),
+  Layer.provide(
+    BunHttpServer.layerConfig({
+      port: Config.Port("PORT").pipe(Config.withDefault(4000)),
+      idleTimeout: Config.succeed(10),
+    }),
+  ),
   Layer.launch,
   BunRuntime.runMain,
 )

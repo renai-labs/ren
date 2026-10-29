@@ -10,6 +10,8 @@ import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effe
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import { Executor } from "./executor.js"
 
+export const idleTimeoutSeconds = 10
+
 const bearerPrefix = "bearer "
 
 const unauthorized = new EnvironmentApi.UnauthorizedError({ message: "Authentication required" })
