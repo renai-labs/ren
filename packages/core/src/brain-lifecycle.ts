@@ -1,5 +1,6 @@
 export * as BrainLifecycle from "./brain-lifecycle.js"
 
+import { Observability } from "@ren/schema/observability"
 import { Database } from "@ren/db/database"
 import type { State as BrainState } from "@ren/host-api/brain-api"
 import type { PullSession } from "@ren/host-api/ren-host-api"
@@ -520,7 +521,7 @@ export const layer = Layer.effect(
       )
 
     yield* DurableRunner.register(BrainRun, (payload) =>
-      DurableRunner.supervise(`brain:${payload.brainId}`, run(payload.brainId)).pipe(
+      DurableRunner.supervise(`brain:${payload.brainId}`, run(payload.brainId).pipe(Observability.Trace.brainRun)).pipe(
         Effect.andThen(
           database.db
             .update(brains)
@@ -585,7 +586,7 @@ export const layer = Layer.effect(
           if (result._tag === "Ready") return Option.some(result.target)
           if (result._tag === "Failed") return yield* new Unavailable({ message: result.reason })
           return Option.none<BrainClient.Target>()
-        })
+        }).pipe(Effect.withTracerEnabled(false))
         return yield* wait.pipe(
           Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced(timing.poll) }),
           Effect.flatMap((found) =>

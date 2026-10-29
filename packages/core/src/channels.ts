@@ -1,5 +1,6 @@
 export * as Channels from "./channels.js"
 
+import { Observability } from "@ren/schema/observability"
 import { Database } from "@ren/db/database"
 import type { Agent } from "@ren/schema/agent"
 import { Channel } from "@ren/schema/channel"
@@ -391,6 +392,7 @@ export const layer = Layer.effect(
       DurableRunner.supervise(
         `channel:${payload.event.provider}:${payload.event.install}:${payload.event.eventId}`,
         run(payload).pipe(
+          Observability.Trace.channelEvent,
           Effect.catchTags({
             "ChannelRoute.Refused": (error) =>
               payload.event.trigger

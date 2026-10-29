@@ -1,5 +1,6 @@
 export * as ProviderConnect from "./connect.js"
 
+import { Observability } from "@ren/schema/observability"
 import { Database } from "@ren/db/database"
 import type { AppProfile } from "@ren/schema/app-profile"
 import type { Auth } from "@ren/schema/auth"
@@ -108,7 +109,7 @@ export const layer = Layer.effect(
           })
           .pipe(Effect.orDie)
         return { redirectUrl: link.redirectUrl, expiresAt: DateTime.fromDateUnsafe(expiresAt) }
-      }),
+      }, Observability.Trace.connectorConnect),
 
       abandon,
 
@@ -178,7 +179,7 @@ export const layer = Layer.effect(
         }).pipe(Effect.catchTag("McpProvider.Failed", (error) => Effect.succeed(Result.fail(error.message))))
         if (Result.isFailure(finished)) yield* abandon(taken)
         return finished
-      }),
+      }, Observability.Trace.connectorCallback),
     })
   }),
 )

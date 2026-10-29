@@ -1,0 +1,17 @@
+id: require-trace-catalog
+language: Tsx
+message: Trace an operation with Observability.trace and a name from packages/schema/src/observability.ts, so that file lists everything Ren traces.
+severity: error
+files:
+  - packages/*/src/**
+ignores:
+  - packages/schema/src/observability.ts
+rule:
+  any:
+    - pattern: Tracer.CurrentTraceLevel
+    - pattern: Tracer.MinimumTraceLevel
+    - all:
+        - kind: pair
+        - has:
+            field: key
+            regex: "^sampled$"
