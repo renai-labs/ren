@@ -281,7 +281,7 @@ export const layer = Layer.effect(
       kill,
       ...SandboxFiles.make(workspace),
       unpack: SandboxArchive.unpack(workspace),
-      mount: SandboxDrives.make(workspace),
+      ...SandboxDrives.make(workspace),
     })
   }),
 )

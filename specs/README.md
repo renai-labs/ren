@@ -30,3 +30,4 @@ Generated clients follow the protocol `HttpApi`.
 | [runtime/channels/README.md](runtime/channels/README.md)             | Linear, Slack task card and onboarding, GitHub live checks                                    |
 | [runtime/credentials/README.md](runtime/credentials/README.md)       | `oauth-session.complete`, KMS, traffic the egress cannot inject                               |
 | [runtime/private-spaces/README.md](runtime/private-spaces/README.md) | Usage totals, files spec alignment                                                            |
+| [runtime/files/README.md](runtime/files/README.md)                   | Chat uploads and outputs on drives, cards, viewer, Files panel, mount fixes                   |
