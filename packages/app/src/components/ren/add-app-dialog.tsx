@@ -3,10 +3,8 @@ import { IconPlus, IconSearch } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -31,7 +29,7 @@ export function AddAppDialog(props: {
   const setOpen = props.onOpenChange ?? setOwnOpen
   const [query, setQuery] = useState("")
   const catalog = useCatalog()
-  const found = catalog.apps.filter((app) => matches(app, query))
+  const found = catalog.apps.filter((app) => !props.added.has(app.id) && matches(app, query))
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {props.open === undefined ? (
@@ -40,7 +38,7 @@ export function AddAppDialog(props: {
           Add app
         </DialogTrigger>
       ) : null}
-      <DialogContent className="flex h-[min(35rem,calc(100dvh-4rem))] flex-col gap-0 p-0 sm:max-w-140">
+      <DialogContent className="flex max-h-[min(35rem,calc(100dvh-4rem))] flex-col gap-0 p-0 sm:max-w-140">
         <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle className="text-base">Add apps to {props.space.name}</DialogTitle>
           <DialogDescription>Pick the apps this space can use. You can add more later.</DialogDescription>
@@ -62,11 +60,15 @@ export function AddAppDialog(props: {
           // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a list of Item rows; Item renders a div
           role="list"
           aria-label="Apps"
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-2"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-4"
         >
           {found.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
-              {catalog.loading ? "Loading apps…" : `Nothing matches “${query.trim()}”`}
+              {catalog.loading
+                ? "Loading apps…"
+                : query
+                  ? `Nothing matches “${query.trim()}”`
+                  : `${props.space.name} has every app`}
             </p>
           ) : null}
           {found.map((app) => (
@@ -77,25 +79,18 @@ export function AddAppDialog(props: {
               icon={app.icon}
               caption={app.description}
               action={
-                props.added.has(app.id) ? (
-                  <span className="px-3 text-sm text-muted-foreground">Added</span>
-                ) : (
-                  <AddHere
-                    app={app}
-                    space={props.space}
-                    onAdded={(added) => {
-                      setOpen(false)
-                      props.onAdded(added)
-                    }}
-                  />
-                )
+                <AddHere
+                  app={app}
+                  space={props.space}
+                  onAdded={(added) => {
+                    setOpen(false)
+                    props.onAdded(added)
+                  }}
+                />
               }
             />
           ))}
         </div>
-        <DialogFooter className="m-0 bg-muted/50 px-6 sm:justify-end">
-          <DialogClose render={<Button variant="outline" />}>Done</DialogClose>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
