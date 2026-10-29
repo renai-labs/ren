@@ -109,15 +109,8 @@
             "name": "joined",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "enum": ["true", "false"]
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string",
+              "enum": ["true", "false"]
             },
             "required": false
           },
@@ -126,7 +119,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -135,7 +128,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -530,14 +523,7 @@
             "name": "status",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/SpaceMember.Status"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/SpaceMember.Status"
             },
             "required": false
           },
@@ -546,7 +532,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -555,7 +541,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -779,7 +765,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -788,7 +774,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -1233,7 +1219,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -1242,7 +1228,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -1797,14 +1783,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID_1"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID_1"
             },
             "required": false
           },
@@ -1812,15 +1791,8 @@
             "name": "prefix",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "description": "Only the files whose path starts with it, such as `people/`."
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string",
+              "description": "Only the files whose path starts with it, such as `people/`."
             },
             "required": false
           }
@@ -1891,14 +1863,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID_1"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID_1"
             },
             "required": false
           },
@@ -2109,14 +2074,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID_1"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID_1"
             },
             "required": false
           },
@@ -2185,14 +2143,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID_2"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID_2"
             },
             "required": false
           },
@@ -2200,14 +2151,8 @@
             "name": "folder",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Drive.PathEncoded"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string",
+              "minLength": 1
             },
             "required": false
           },
@@ -2215,15 +2160,8 @@
             "name": "cursor",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "description": "The `cursor` of the previous page, to list the next one."
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string",
+              "description": "The `cursor` of the previous page, to list the next one."
             },
             "required": false
           }
@@ -2400,14 +2338,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID_2"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID_2"
             },
             "required": false
           },
@@ -2491,14 +2422,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID_2"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID_2"
             },
             "required": false
           },
@@ -2580,9 +2504,6 @@
               "anyOf": [
                 {
                   "$ref": "#/components/schemas/Space.ID"
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Only agents that this space owns or shares, and the global agents, which are in every space."
@@ -2593,15 +2514,8 @@
             "name": "isSubagent",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "enum": ["true", "false"]
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string",
+              "enum": ["true", "false"]
             },
             "required": false
           },
@@ -2610,7 +2524,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -2619,7 +2533,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -3094,14 +3008,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID"
             },
             "required": false
           },
@@ -3110,7 +3017,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -3119,7 +3026,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -3594,14 +3501,7 @@
             "name": "appId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/App.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/App.ID"
             },
             "required": false
           },
@@ -3609,14 +3509,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID_3"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID_3"
             },
             "required": false
           },
@@ -3625,7 +3518,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -3634,7 +3527,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -4411,15 +4304,8 @@
             "name": "query",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "description": "Match the slug, name or description, ignoring case."
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string",
+              "description": "Match the slug, name or description, ignoring case."
             },
             "required": false
           },
@@ -4427,14 +4313,7 @@
             "name": "category",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Primitive.Slug_3"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Primitive.Slug_3"
             },
             "required": false
           },
@@ -4443,7 +4322,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -4452,7 +4331,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -4578,14 +4457,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID"
             },
             "required": false
           },
@@ -4593,14 +4465,7 @@
             "name": "agentId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Agent.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Agent.ID"
             },
             "required": false
           },
@@ -4609,7 +4474,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -4618,7 +4483,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -4841,14 +4706,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID"
             },
             "required": false
           },
@@ -4857,7 +4715,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -4866,7 +4724,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -5165,16 +5023,9 @@
             "name": "unreachable",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "enum": ["true", "false"],
-                  "description": "`true` when the client could not reach the brain at the last URL; Ren checks the sandbox first."
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string",
+              "enum": ["true", "false"],
+              "description": "`true` when the client could not reach the brain at the last URL; Ren checks the sandbox first."
             },
             "required": false
           }
@@ -5250,14 +5101,7 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string"
             },
             "required": false
           },
@@ -5265,14 +5109,7 @@
             "name": "cursor",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string"
             },
             "required": false
           }
@@ -5576,14 +5413,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID"
             },
             "required": false
           },
@@ -5594,9 +5424,6 @@
               "anyOf": [
                 {
                   "$ref": "#/components/schemas/Task.Status"
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Only this status. Wins over `includeDone`."
@@ -5611,9 +5438,6 @@
                 {
                   "type": "string",
                   "enum": ["true", "false"]
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Include `done` and `dismissed` tasks. Without it, a list has only the actionable tasks."
@@ -5624,14 +5448,7 @@
             "name": "priority",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Task.Priority"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Task.Priority"
             },
             "required": false
           },
@@ -5639,14 +5456,7 @@
             "name": "agentId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Agent.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Agent.ID"
             },
             "required": false
           },
@@ -5654,14 +5464,7 @@
             "name": "ownerId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Auth.UserID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Auth.UserID"
             },
             "required": false
           },
@@ -5671,10 +5474,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Label.NameEncoded"
-                },
-                {
-                  "type": "null"
+                  "type": "string"
                 }
               ],
               "description": "A label name, in any case."
@@ -5685,15 +5485,8 @@
             "name": "humanReview",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "enum": ["true", "false"]
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string",
+              "enum": ["true", "false"]
             },
             "required": false
           },
@@ -5704,9 +5497,6 @@
               "anyOf": [
                 {
                   "$ref": "#/components/schemas/TaskLink.Url"
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Only tasks that link this URL. A pull request, Linear issue or Slack thread matches however its URL is written."
@@ -5719,18 +5509,11 @@
             "schema": {
               "anyOf": [
                 {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/Task.ID"
-                    },
-                    {
-                      "type": "string",
-                      "enum": ["none"]
-                    }
-                  ]
+                  "$ref": "#/components/schemas/Task.ID"
                 },
                 {
-                  "type": "null"
+                  "type": "string",
+                  "enum": ["none"]
                 }
               ],
               "description": "A task ID: only its subtasks, oldest first. `none`: only tasks that are not subtasks."
@@ -5742,7 +5525,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -5751,7 +5534,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -6684,7 +6467,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -6693,7 +6476,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -6754,9 +6537,6 @@
               "anyOf": [
                 {
                   "$ref": "#/components/schemas/Space.ID"
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Only the system labels, the org labels and the labels of this space. Without it, the labels of every space you are in."
@@ -6768,7 +6548,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -6777,7 +6557,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -7099,9 +6879,6 @@
               "anyOf": [
                 {
                   "$ref": "#/components/schemas/Space.ID"
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Without it, the schedules of every space you are in."
@@ -7112,14 +6889,7 @@
             "name": "status",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Schedule.Status"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Schedule.Status"
             },
             "required": false
           },
@@ -7130,9 +6900,6 @@
               "anyOf": [
                 {
                   "type": "string"
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Part of the name or the message."
@@ -7144,7 +6911,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -7153,7 +6920,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -7813,7 +7580,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -7822,7 +7589,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -7880,14 +7647,7 @@
             "name": "owner",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Credential.OwnerKind"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Credential.OwnerKind"
             },
             "required": false
           },
@@ -7895,14 +7655,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID"
             },
             "required": false
           },
@@ -7910,14 +7663,7 @@
             "name": "type",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Credential.Type"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Credential.Type"
             },
             "required": false
           },
@@ -7925,14 +7671,7 @@
             "name": "search",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string"
             },
             "required": false
           },
@@ -7941,7 +7680,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -7950,7 +7689,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -8788,7 +8527,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -8797,7 +8536,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -9533,7 +9272,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -9542,7 +9281,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -9786,14 +9525,7 @@
             "name": "installId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/ChannelInstall.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/ChannelInstall.ID"
             },
             "required": false
           },
@@ -9801,14 +9533,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/components/schemas/Space.ID"
             },
             "required": false
           },
@@ -9817,7 +9542,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -9826,7 +9551,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -10206,7 +9931,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           },
@@ -10215,7 +9940,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -10620,9 +10345,6 @@
                   "items": {
                     "$ref": "#/components/schemas/Auth.UserID"
                   }
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Usage of these people, and tasks that they own."
@@ -10639,9 +10361,6 @@
                   "items": {
                     "type": "string"
                   }
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Usage of these agent names, and tasks assigned to these agents."
@@ -10658,9 +10377,6 @@
                   "items": {
                     "type": "string"
                   }
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Usage of these served models. Task numbers do not change."
@@ -10674,9 +10390,6 @@
               "anyOf": [
                 {
                   "$ref": "#/components/schemas/Usage.Payer"
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Task numbers do not change."
@@ -10690,9 +10403,6 @@
               "anyOf": [
                 {
                   "$ref": "#/components/schemas/Usage.Kind"
-                },
-                {
-                  "type": "null"
                 }
               ],
               "description": "Task numbers do not change."
@@ -10712,7 +10422,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
             },
             "required": false
           }
@@ -10933,13 +10643,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -10971,14 +10687,10 @@
           "description": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "type": "string"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -11057,13 +10769,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -11111,7 +10829,9 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Declaration"
@@ -11120,7 +10840,9 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Declaration"
@@ -11225,7 +10947,9 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Info"
@@ -11234,7 +10958,9 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Info"
@@ -11248,6 +10974,8 @@
           },
           "revision": {
             "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
             "description": "Counts the edits of the definition."
           },
           "createdAt": {
@@ -11328,13 +11056,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -11372,7 +11106,9 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Declaration"
@@ -11381,7 +11117,9 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Declaration"
@@ -11420,14 +11158,10 @@
           "icon": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/Primitive.HttpsUrl"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -11436,6 +11170,8 @@
           },
           "expectedRevision": {
             "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
             "description": "The revision the edit starts from. Another edit gives 409."
           }
         },
@@ -11446,7 +11182,9 @@
       "AppListing.Categories": {
         "type": "object",
         "propertyNames": {
-          "$ref": "#/components/schemas/Primitive.Slug_1"
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
         },
         "additionalProperties": {
           "type": "array",
@@ -11662,6 +11400,8 @@
           },
           "hiddenSpaces": {
             "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
             "description": "The count of listed spaces that the caller cannot see."
           },
           "canAccess": {
@@ -11891,13 +11631,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -11942,14 +11688,9 @@
       },
       "AppProfile.Slug": {
         "type": "string",
-        "maxLength": 64,
+        "maxLength": 32,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        "allOf": [
-          {
-            "maxLength": 32,
-            "description": "Fixed at create. It names the profile’s servers (`<mcp>__<slug>`) and labels (`<KEY>__<SLUG>`)."
-          }
-        ]
+        "description": "Fixed at create. It names the profile’s servers (`<mcp>__<slug>`) and labels (`<KEY>__<SLUG>`)."
       },
       "AppProfile.SpaceRef": {
         "type": "object",
@@ -12032,7 +11773,9 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Info"
@@ -12041,7 +11784,9 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Summary"
@@ -12054,7 +11799,9 @@
             }
           },
           "revision": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["id", "slug", "name", "description", "icon", "listing", "mcps", "skills", "revision"],
@@ -12070,13 +11817,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -12117,14 +11870,10 @@
           "logo": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "type": "string"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -12174,14 +11923,10 @@
           "image": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "type": "string"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -12228,7 +11973,9 @@
               "triggers": {
                 "type": "object",
                 "propertyNames": {
-                  "$ref": "#/components/schemas/Channel.TriggerID"
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "A provider’s event that starts a turn with no mention of Ren, such as GitHub’s pull_request_ready."
                 },
                 "additionalProperties": {
                   "type": "object",
@@ -12267,7 +12014,9 @@
               "triggers": {
                 "type": "object",
                 "propertyNames": {
-                  "$ref": "#/components/schemas/Channel.TriggerID"
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "A provider’s event that starts a turn with no mention of Ren, such as GitHub’s pull_request_ready."
                 },
                 "additionalProperties": {
                   "type": "object",
@@ -12451,13 +12200,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -12716,13 +12471,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -12813,13 +12574,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -12864,12 +12631,9 @@
       },
       "Credential.AppEnvName": {
         "type": "string",
-        "maxLength": 128,
+        "maxLength": 94,
         "pattern": "^[A-Z_][A-Z0-9_]*$",
         "allOf": [
-          {
-            "maxLength": 94
-          },
           {
             "pattern": "^(?!.*__)",
             "description": "An env key of an app. Each profile gets it with its own suffix: `<KEY>__<PROFILE>`."
@@ -13450,13 +13214,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -13662,17 +13432,13 @@
           "name": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
-                    "minLength": 1,
-                    "maxLength": 256
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -13748,7 +13514,26 @@
               "fields": {
                 "type": "object",
                 "propertyNames": {
-                  "$ref": "#/components/schemas/Credential.FieldName"
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^[a-z][A-Za-z0-9_]*$",
+                  "allOf": [
+                    {
+                      "pattern": "^(?!token$)"
+                    },
+                    {
+                      "pattern": "^(?!accessToken$)"
+                    },
+                    {
+                      "pattern": "^(?!username$)"
+                    },
+                    {
+                      "pattern": "^(?!password$)"
+                    },
+                    {
+                      "pattern": "^(?!basic$)"
+                    }
+                  ]
                 },
                 "additionalProperties": {
                   "type": "string",
@@ -13837,7 +13622,9 @@
             "description": "The file’s path inside its drive."
           },
           "size": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "modifiedAt": {
             "type": "string"
@@ -13916,6 +13703,7 @@
           "size": {
             "type": "integer",
             "minimum": 0,
+            "maximum": 9007199254740991,
             "description": "The file’s size in bytes. The upload must send exactly this many."
           }
         },
@@ -14037,7 +13825,9 @@
           },
           "config": {},
           "sessionsPerEnvironment": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "createdAt": {
             "type": "string"
@@ -14080,13 +13870,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -14111,14 +13907,10 @@
           "description": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "type": "string"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -14342,7 +14134,9 @@
           "spaces": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Infra.SpaceBindings"
@@ -14511,7 +14305,9 @@
               "spaces": {
                 "type": "object",
                 "propertyNames": {
-                  "$ref": "#/components/schemas/Primitive.Slug_1"
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                 },
                 "additionalProperties": {
                   "$ref": "#/components/schemas/Infra.PulledBindings"
@@ -14530,7 +14326,9 @@
               "spaces": {
                 "type": "object",
                 "propertyNames": {
-                  "$ref": "#/components/schemas/Primitive.Slug_1"
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                 },
                 "additionalProperties": {
                   "$ref": "#/components/schemas/Infra.PulledSpace"
@@ -14567,7 +14365,9 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Info"
@@ -14576,7 +14376,9 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Info"
@@ -14605,7 +14407,9 @@
           "channels": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Channel.Target"
@@ -14614,7 +14418,9 @@
           "profiles": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "type": "array",
@@ -14687,7 +14493,9 @@
           "agents": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Agent.Name"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Agent.Declaration"
@@ -14696,7 +14504,9 @@
           "apps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Infra.PulledApp"
@@ -14705,7 +14515,9 @@
           "schedules": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Infra.PulledSchedule"
@@ -14714,7 +14526,9 @@
           "channels": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Channel.Declaration"
@@ -14736,7 +14550,9 @@
           "channels": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Channel.Target"
@@ -14745,7 +14561,9 @@
           "profiles": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "type": "array",
@@ -14757,7 +14575,9 @@
           "webhooks": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "type": "object",
@@ -14798,7 +14618,9 @@
           "agents": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Agent.Name"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "type": "object",
@@ -14826,7 +14648,9 @@
           "apps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "type": "object",
@@ -14856,7 +14680,9 @@
                 "skills": {
                   "type": "object",
                   "propertyNames": {
-                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                    "type": "string",
+                    "maxLength": 64,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                   },
                   "additionalProperties": {
                     "$ref": "#/components/schemas/Skill.Declaration"
@@ -14865,7 +14691,9 @@
                 "mcps": {
                   "type": "object",
                   "propertyNames": {
-                    "$ref": "#/components/schemas/Primitive.Slug_1"
+                    "type": "string",
+                    "maxLength": 64,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                   },
                   "additionalProperties": {
                     "$ref": "#/components/schemas/Mcp.Declaration"
@@ -14892,7 +14720,9 @@
           "schedules": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Schedule.Declaration"
@@ -14901,7 +14731,9 @@
           "webhooks": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Webhook.Declaration"
@@ -14910,7 +14742,9 @@
           "channels": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Channel.Declaration"
@@ -14975,7 +14809,9 @@
           "spaces": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Infra.SpaceDeclaration"
@@ -15125,15 +14961,11 @@
           "tasksDone": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity", "-Infinity", "NaN"]
-                  }
-                ]
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
               },
               {
                 "type": "null"
@@ -15144,15 +14976,11 @@
           "prsMerged": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity", "-Infinity", "NaN"]
-                  }
-                ]
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
               },
               {
                 "type": "null"
@@ -15163,15 +14991,11 @@
           "prsLinked": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity", "-Infinity", "NaN"]
-                  }
-                ]
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
               },
               {
                 "type": "null"
@@ -15377,14 +15201,10 @@
           "color": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/Label.ColorEncoded"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/components/schemas/Label.ColorEncoded"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -15472,9 +15292,6 @@
         ],
         "additionalProperties": false
       },
-      "Label.NameEncoded": {
-        "type": "string"
-      },
       "Label.Page": {
         "type": "object",
         "properties": {
@@ -15485,13 +15302,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -15539,14 +15362,10 @@
           "color": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/Label.ColorEncoded"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/components/schemas/Label.ColorEncoded"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -15745,7 +15564,9 @@
                   "env": {
                     "type": "object",
                     "propertyNames": {
-                      "$ref": "#/components/schemas/Credential.EnvName"
+                      "type": "string",
+                      "maxLength": 128,
+                      "pattern": "^[A-Z_][A-Z0-9_]*$"
                     },
                     "additionalProperties": {
                       "type": "string"
@@ -15891,14 +15712,17 @@
         "properties": {
           "startup": {
             "type": "integer",
+            "maximum": 9007199254740991,
             "exclusiveMinimum": 0
           },
           "catalog": {
             "type": "integer",
+            "maximum": 9007199254740991,
             "exclusiveMinimum": 0
           },
           "execution": {
             "type": "integer",
+            "maximum": 9007199254740991,
             "exclusiveMinimum": 0
           }
         },
@@ -15949,7 +15773,9 @@
               "env": {
                 "type": "object",
                 "propertyNames": {
-                  "$ref": "#/components/schemas/Credential.EnvName"
+                  "type": "string",
+                  "maxLength": 128,
+                  "pattern": "^[A-Z_][A-Z0-9_]*$"
                 },
                 "additionalProperties": {
                   "type": "string"
@@ -16324,13 +16150,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -16759,15 +16591,11 @@
           "percent": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity", "-Infinity", "NaN"]
-                  }
-                ]
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
               },
               {
                 "type": "null"
@@ -17023,13 +16851,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -17154,14 +16988,10 @@
           "agentId": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/Agent.ID"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -17314,13 +17144,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -17535,13 +17371,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -17693,7 +17535,9 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -17723,13 +17567,19 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               },
               "streamed": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               },
               "completed": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -17812,7 +17662,9 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -17859,7 +17711,9 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -17900,7 +17754,9 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -18009,7 +17865,9 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -18090,7 +17948,9 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -18149,10 +18009,14 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               },
               "completed": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -18166,10 +18030,14 @@
         "type": "object",
         "properties": {
           "attempt": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "at": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "error": {
             "$ref": "#/components/schemas/SessionError.Info"
@@ -18198,10 +18066,14 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               },
               "completed": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -18246,10 +18118,14 @@
             "type": "string"
           },
           "cursor": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "size": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "truncated": {
             "type": "boolean"
@@ -18268,7 +18144,9 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -18320,7 +18198,9 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -18371,7 +18251,9 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -18457,13 +18339,19 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               },
               "ran": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               },
               "completed": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -18635,7 +18523,9 @@
             "type": "object",
             "properties": {
               "created": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
               }
             },
             "required": ["created"],
@@ -19034,7 +18924,9 @@
             "$ref": "#/components/schemas/Brain.Scope"
           },
           "memberCount": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "membershipId": {
             "anyOf": [
@@ -19124,13 +19016,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -19165,14 +19063,10 @@
           "description": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "type": "string"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -19248,13 +19142,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -19371,13 +19271,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -19514,14 +19420,10 @@
           "agentId": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/Agent.ID"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -19532,14 +19434,10 @@
           "ownerId": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/Auth.UserID"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -19751,7 +19649,9 @@
             "description": "Null when the task has no live subtasks."
           },
           "number": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "identifier": {
             "type": "string"
@@ -19912,13 +19812,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -20031,10 +19937,14 @@
         "type": "object",
         "properties": {
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "done": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["total", "done"],
@@ -20060,14 +19970,10 @@
           "description": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "type": "string"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -20087,14 +19993,10 @@
           "priority": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/Task.Priority"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/components/schemas/Task.Priority"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -20119,14 +20021,10 @@
           "dueAt": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "type": "string"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -20171,14 +20069,10 @@
           "parentId": {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/Task.ID"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/components/schemas/Task.ID"
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"
@@ -20238,13 +20132,19 @@
             }
           },
           "page": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "pageSize": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           },
           "total": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": ["items", "page", "pageSize", "total"],
@@ -20773,6 +20673,8 @@
           },
           "retryAfterMs": {
             "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
             "description": "Ask again after this many milliseconds."
           }
         },
