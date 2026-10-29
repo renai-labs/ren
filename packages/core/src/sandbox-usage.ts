@@ -3,7 +3,7 @@ export * as SandboxUsage from "./sandbox-usage.js"
 import { Database } from "@ren/db/database"
 import { Workload } from "@ren/schema/workload"
 import { desc, eq } from "drizzle-orm"
-import { Array, Clock, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
+import { Array, Clock, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Semaphore } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { DurableRunner } from "./durable-runner.js"
 import { SandboxProvider } from "./sandbox-provider.js"
@@ -33,6 +33,7 @@ export const layer = Layer.effect(
     const provider = yield* SandboxProvider.Service
     const usage = yield* Usage.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
+    const sweeping = yield* Semaphore.make(1)
 
     const sweep = Effect.gen(function* () {
       const newest = yield* database.db
@@ -72,7 +73,7 @@ export const layer = Layer.effect(
           ),
         { discard: true },
       )
-    }).pipe(Effect.withSpan("SandboxUsage.sweep"))
+    }).pipe(sweeping.withPermitsIfAvailable(1), Effect.asVoid, Effect.withSpan("SandboxUsage.sweep"))
 
     yield* DurableRunner.register(SweepRun, (payload) =>
       DurableRunner.supervise(`sandbox-usage:${payload.slot}`, sweep),
