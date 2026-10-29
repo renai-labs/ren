@@ -245,16 +245,10 @@ export const registered_key = pgTable(
   {
     id: text().$type<RegisteredKey.ID>().primaryKey(),
     kind: text().$type<RegisteredKey.Kind>().notNull(),
-    public_key: text(),
-    secret_hash: text(),
-    producer: text(),
+    public_key: text().notNull(),
     organization_ids: text().$type<Auth.OrganizationID>().array(),
     revoked_at: timestamp(),
     created_at: timestamp().defaultNow().notNull(),
   },
-  (table) => [
-    uniqueIndex("registered_key_public_key_uidx").on(table.public_key),
-    uniqueIndex("registered_key_secret_hash_uidx").on(table.secret_hash),
-    check("registered_key_secret_check", sql`(${table.public_key} is null) = (${table.secret_hash} is not null)`),
-  ],
+  (table) => [uniqueIndex("registered_key_public_key_uidx").on(table.public_key)],
 )

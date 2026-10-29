@@ -1,13 +1,11 @@
 export * as Usage from "./usage.js"
 
+import { timingSafeEqual } from "node:crypto"
 import { Database } from "@ren/db/database"
-import { RegisteredKey } from "@ren/schema/registered-key"
 import { Usage } from "@ren/schema/usage"
-import { Random } from "@ren/util/random"
-import { and, eq, isNull } from "drizzle-orm"
-import { Context, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Config, Context, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect"
 
-export { Batch, Event, Recorded, headers, meters } from "@ren/schema/usage"
+export { Batch, Event, Recorded, headers } from "@ren/schema/usage"
 
 export class Forbidden extends Schema.TaggedError<Forbidden>()("Usage.Forbidden", { message: Schema.String }) {}
 
@@ -25,37 +23,27 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Usage") {}
 
-const keys = Database.Schema.registered_key
 const events = Database.Schema.usage_event
 
-const hash = (secret: string) => new Bun.CryptoHasher("sha256").update(secret).digest("hex")
-
-export const issueKey = Effect.fn("Usage.issueKey")(function* (producer: string) {
-  const database = yield* Database.Service
-  const secret = `ren_usage_${Random.token(32)}`
-  const id = RegisteredKey.ID.create()
-  yield* database.db
-    .insert(keys)
-    .values({ id, kind: "usage", producer, secret_hash: hash(secret) })
-    .pipe(Effect.orDie)
-  return { id, secret: Redacted.make(secret) }
-})
+const digest = (value: string) => new Bun.CryptoHasher("sha256").update(value).digest()
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
+    const key = yield* Config.option(Config.Redacted("USAGE_INGEST_KEY"))
     const unavailable = () => new Unavailable({ message: "The usage store is not available." })
 
     return Service.of({
-      authenticate: Effect.fn("Usage.authenticate")(function* (key: Redacted.Redacted) {
-        const rows = yield* database.db
-          .select({ producer: keys.producer })
-          .from(keys)
-          .where(and(eq(keys.kind, "usage"), eq(keys.secret_hash, hash(Redacted.value(key))), isNull(keys.revoked_at)))
-          .pipe(Effect.orDie)
-        return Option.fromNullishOr(rows.at(0)?.producer)
-      }),
+      authenticate: (given) =>
+        Effect.succeed(
+          key.pipe(
+            Option.filter((expected) =>
+              timingSafeEqual(digest(Redacted.value(given)), digest(Redacted.value(expected))),
+            ),
+            Option.as("ren-inference"),
+          ),
+        ),
       record: Effect.fn("Usage.record")(
         function* (producer: string, batch: ReadonlyArray<Usage.Event>) {
           const foreign = batch.find((event) => event.source !== producer)
@@ -79,7 +67,7 @@ export const layer = Layer.effect(
                     session: event.session,
                     turn: event.turn,
                     member: event.member,
-                    agent_name: event.agent,
+                    agent: event.agent,
                     kind: event.kind,
                     requested_model: event.requested_model,
                     variant: event.variant,
@@ -92,7 +80,7 @@ export const layer = Layer.effect(
                     cache_read_tokens: event.cache_read_tokens,
                     cache_write_tokens: event.cache_write_tokens,
                     cache_write_1h_tokens: event.cache_write_1h_tokens,
-                    cost_micro_usd: event.cost_micro_usd ?? null,
+                    cost_micro_usd: event.cost_micro_usd,
                     latency_ms: event.latency_ms,
                     time_to_first_token_ms: event.time_to_first_token_ms,
                     stop_reason: event.stop_reason,

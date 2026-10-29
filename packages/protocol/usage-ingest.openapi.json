@@ -88,12 +88,12 @@
       "Auth.OrganizationID": {
         "type": "string",
         "pattern": "^org_",
-        "description": "From the workload's key. Ren stores it as sent."
+        "description": "From the workload’s key. Ren stores it as sent."
       },
       "Brain.ID": {
         "type": "string",
         "pattern": "^brn_",
-        "description": "From the workload's key. Ren stores it as sent."
+        "description": "From the workload’s key. Ren stores it as sent."
       },
       "ForbiddenErrorEncoded": {
         "type": "object",
@@ -136,7 +136,7 @@
       "Space.ID": {
         "type": "string",
         "pattern": "^spc_",
-        "description": "From the workload's key. Ren checks it later."
+        "description": "From the workload’s key. Ren checks it later."
       },
       "UnauthorizedErrorEncoded": {
         "type": "object",
@@ -273,15 +273,8 @@
             "minimum": 0
           },
           "cost_micro_usd": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "integer",
+            "minimum": 0
           },
           "latency_ms": {
             "type": "integer",
