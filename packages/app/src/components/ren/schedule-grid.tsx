@@ -16,10 +16,12 @@ import { ExpandableSearch } from "@/components/ren/expandable-search"
 import { FilterMenu, type FilterProperty } from "@/components/ren/filter-menu"
 import { SkeletonRows } from "@/components/ren/page"
 import { RowMenu } from "@/components/ren/row-menu"
+import { Base44Look, DevinLook, ZapierLook } from "@/components/ren/schedule-looks"
 import { ScheduleSheet } from "@/components/ren/schedule-sheet"
 import type { Schedules } from "@/hooks/use-schedules"
 import { describe, statusOf } from "@/lib/schedules"
 import { cn } from "@/lib/utils"
+import { useScheduleLook } from "@/stores/ui"
 
 export function ScheduleToolbar(props: { list: Schedules }) {
   const list = props.list
@@ -69,6 +71,7 @@ export function ScheduleGrid(props: { list: Schedules }) {
   const list = props.list
   const schedules = list.schedules
   const empty = schedules?.length === 0
+  const look = useScheduleLook()
   return (
     <>
       {schedules ? null : <SkeletonRows count={4} />}
@@ -79,7 +82,20 @@ export function ScheduleGrid(props: { list: Schedules }) {
           <EmptyState title="No schedules yet">Create one to run a prompt on a recurring cadence.</EmptyState>
         )
       ) : null}
-      <div className={cn("flex flex-col gap-10 transition-opacity", list.stale && "opacity-60")}>
+      {schedules && !empty && look !== "chatgpt" ? (
+        <div className={cn("transition-opacity", list.stale && "opacity-60")}>
+          {look === "zapier" ? <ZapierLook list={list} schedules={schedules} /> : null}
+          {look === "base44" ? <Base44Look list={list} schedules={schedules} /> : null}
+          {look === "devin" ? <DevinLook list={list} schedules={schedules} /> : null}
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "flex flex-col gap-10 transition-opacity",
+          list.stale && "opacity-60",
+          look !== "chatgpt" && "hidden",
+        )}
+      >
         {sections.map((section) => {
           const rows = (schedules ?? []).filter((schedule) => schedule.status === section.status)
           if (rows.length === 0) return null
