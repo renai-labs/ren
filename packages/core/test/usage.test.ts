@@ -30,13 +30,16 @@ const event = Effect.fnUntraced(function* (
     organization: found.organizationId,
     brain: found.brainId,
     space: found.spaceId,
-    requested_model: "claude-sonnet-4-5",
     payer: "ren",
     provider: "anthropic",
-    served_model: "anthropic/claude-sonnet-4-5",
-    input_tokens: 2140,
-    output_tokens: 512,
     cost_micro_usd: 31400,
+    data: {
+      requested_model: "claude-sonnet-4-5",
+      served_model: "anthropic/claude-sonnet-4-5",
+      kind: "primary",
+      input_tokens: 2140,
+      output_tokens: 512,
+    },
     ...fields,
   } satisfies Usage.Event
 })
@@ -59,7 +62,6 @@ it.live("stores what the producer sent, claims included, and a batch sent two ti
         root_session: "not a session",
         member: Models.personPlaceholder(found.memberId),
         agent: "analyst",
-        kind: "summary",
       }),
     ]
     expect(yield* usage.record(batch)).toEqual({ inserted: 1 })
@@ -73,10 +75,14 @@ it.live("stores what the producer sent, claims included, and a batch sent two ti
         root_session: "not a session",
         member: Models.personPlaceholder(found.memberId),
         agent: "analyst",
-        kind: "summary",
-        input_tokens: 2140,
-        reasoning_tokens: 0,
         cost_micro_usd: 31400,
+        data: {
+          requested_model: "claude-sonnet-4-5",
+          served_model: "anthropic/claude-sonnet-4-5",
+          kind: "primary",
+          input_tokens: 2140,
+          output_tokens: 512,
+        },
       },
     ])
   }),
