@@ -1,4 +1,4 @@
-import { Fragment, useState, useSyncExternalStore } from "react"
+import { useState, useSyncExternalStore } from "react"
 import { useQuery, useSuspenseInfiniteQuery } from "@tanstack/react-query"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import { ChatReact } from "@ren/chat/react"
@@ -63,10 +63,10 @@ import { useNow } from "@/hooks/use-now"
 import { useSpaces } from "@/hooks/use-spaces"
 import { auth, organizationsOptions } from "@/lib/auth"
 import { resetSession } from "@/lib/chat"
-import { formatRelative, initials } from "@/lib/format"
+import { initials } from "@/lib/format"
 import { docsUrl, founderCallUrl } from "@/lib/links"
 import { sessionTitle, sidebarSessionsOptions } from "@/lib/sessions"
-import { openSearch, useSidebarLook, type SidebarLook } from "@/stores/ui"
+import { openSearch } from "@/stores/ui"
 
 const pages = [
   { to: "/spaces", label: "Spaces", icon: IconCube },
@@ -113,73 +113,8 @@ const chatProperties = (spaces: ReadonlyArray<{ id: string; name: string }>): Fi
 
 const shortcut = /Mac|iPhone|iPad/u.test(navigator.userAgent) ? "⌘K" : "Ctrl+K"
 
-interface Look {
-  readonly menu: string
-  readonly nav: string
-  readonly label: string
-  readonly chat: string
-  readonly skeleton: string
-  readonly chatIcon: boolean
-  readonly avatar: "default" | "sm"
-  readonly name: string
-  readonly org: string
-}
-
-const looks: Record<SidebarLook, Look> = {
-  classic: {
-    menu: "gap-1",
-    nav: "h-9",
-    label: "text-sm text-sidebar-foreground",
-    chat: "h-9",
-    skeleton: "h-9",
-    chatIcon: true,
-    avatar: "default",
-    name: "",
-    org: "text-xs",
-  },
-  notion: {
-    menu: "gap-px",
-    nav: "h-7.5 font-medium [&_svg]:size-4.5 [&_svg]:text-sidebar-foreground/70",
-    label: "font-medium text-muted-foreground/70",
-    chat: "h-7.5 font-medium [&_svg]:size-4.5 [&_svg]:text-sidebar-foreground/70",
-    skeleton: "h-7.5",
-    chatIcon: true,
-    avatar: "default",
-    name: "",
-    org: "text-xs text-muted-foreground/70",
-  },
-  devin: {
-    menu: "gap-px",
-    nav: "h-7.5 text-[13px] tracking-[-0.005em] text-foreground/90",
-    label: "text-[13px] font-medium text-foreground/90",
-    chat: "h-auto py-1.5",
-    skeleton: "h-11",
-    chatIcon: false,
-    avatar: "default",
-    name: "text-[13px]",
-    org: "text-xs text-foreground/50",
-  },
-  cursor: {
-    menu: "gap-0",
-    nav: "h-7 text-xs text-foreground/85 [&_svg]:size-3.5 [&_svg]:text-foreground/60",
-    label: "text-xs font-medium text-foreground/50",
-    chat: "h-7 text-xs text-foreground/80",
-    skeleton: "h-7",
-    chatIcon: false,
-    avatar: "sm",
-    name: "text-xs",
-    org: "text-[11px] text-foreground/50",
-  },
-}
-
-const dayGroup = (updatedAt: string, now: number) => {
-  const today = new Date(now).setHours(0, 0, 0, 0)
-  const days = Math.ceil((today - Date.parse(updatedAt)) / 86_400_000)
-  if (days <= 0) return "Today"
-  if (days === 1) return "Yesterday"
-  if (days < 7) return "This week"
-  return days < 30 ? "This month" : "Older"
-}
+const row =
+  "h-7.5 font-medium [&_svg]:size-4.5 [&_svg]:text-sidebar-foreground/70 data-active:[&_svg]:text-sidebar-accent-foreground"
 
 function useChatAttention(sessionId: string) {
   const atoms = ChatReact.useAtoms()
@@ -189,63 +124,16 @@ function useChatAttention(sessionId: string) {
   )
 }
 
-function ChatStatus(props: { sessionId: string; busy: boolean; className?: string | undefined }) {
+function ChatStatus(props: { sessionId: string; busy: boolean }) {
   const attention = useChatAttention(props.sessionId) ?? (props.busy ? "running" : "idle")
   if (attention === "idle") return null
   return (
-    <SidebarMenuBadge className={props.className ?? "peer-data-[size=default]/menu-button:top-2"}>
+    <SidebarMenuBadge className="peer-data-[size=default]/menu-button:top-2">
       <span
         className={attention === "asking" ? "size-2 rounded-full bg-chart-3" : "size-2 rounded-full bg-chart-2"}
         aria-label={attention === "asking" ? "Needs your input" : "Working"}
       />
     </SidebarMenuBadge>
-  )
-}
-
-interface SidebarChat {
-  readonly id: string
-  readonly title: string | null
-  readonly status: string
-  readonly spaceId: string
-  readonly updatedAt: string
-}
-
-function ChatItem(props: {
-  chat: SidebarChat
-  look: SidebarLook
-  active: boolean
-  space?: string | undefined
-  now: number
-}) {
-  const look = looks[props.look]
-  const chat = props.chat
-  const busy = chat.status === "busy"
-  const meta = [props.space, busy ? "Working" : formatRelative(chat.updatedAt, props.now)].filter(Boolean).join(" · ")
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        className={cn(look.chat, "group-has-data-[sidebar=menu-badge]/menu-item:pr-7")}
-        isActive={props.active}
-        render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
-      >
-        {look.chatIcon ? <IconMessage /> : null}
-        {props.look === "devin" ? (
-          <span className="flex min-w-0 flex-col">
-            <span className="truncate text-[13px] tracking-[-0.005em] text-foreground/90">
-              {sessionTitle(chat.title)}
-            </span>
-            <span className="truncate text-xs text-foreground/50">{meta}</span>
-          </span>
-        ) : (
-          <span>{sessionTitle(chat.title)}</span>
-        )}
-      </SidebarMenuButton>
-      <ChatStatus
-        sessionId={chat.id}
-        busy={busy}
-        className={props.look === "devin" ? "top-1/2 -translate-y-1/2" : undefined}
-      />
-    </SidebarMenuItem>
   )
 }
 
@@ -279,9 +167,6 @@ export function AppSidebar() {
   const [filters, setFilters] = useState<Filters>({})
   const updated = (["today", "week", "month"] as const).find((key) => key === filters.updated?.at(0))
   const now = useNow()
-  const lookName = useSidebarLook()
-  const look = looks[lookName]
-  const spaceName = new Map(spaces.map((space) => [space.id, space.name]))
   const chats = allChats.filter(
     (chat) =>
       passes(
@@ -325,15 +210,15 @@ export function AppSidebar() {
       <SidebarContent className="overflow-hidden">
         <SidebarGroup className="shrink-0 px-0">
           <SidebarGroupContent>
-            <SidebarMenu className={look.menu}>
+            <SidebarMenu className="gap-px">
               <SidebarMenuItem>
-                <SidebarMenuButton className={look.nav} isActive={path === "/"} render={<Link to="/" />}>
+                <SidebarMenuButton className={row} isActive={path === "/"} render={<Link to="/" />}>
                   <IconEdit />
                   <span>New chat</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton className={look.nav} onClick={openSearch}>
+                <SidebarMenuButton className={row} onClick={openSearch}>
                   <IconSearch />
                   <span>Search</span>
                 </SidebarMenuButton>
@@ -343,11 +228,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               {pages.map((page) => (
                 <SidebarMenuItem key={page.to}>
-                  <SidebarMenuButton
-                    className={look.nav}
-                    isActive={path.startsWith(page.to)}
-                    render={<Link to={page.to} />}
-                  >
+                  <SidebarMenuButton className={row} isActive={path.startsWith(page.to)} render={<Link to={page.to} />}>
                     <page.icon />
                     <span>{page.label}</span>
                   </SidebarMenuButton>
@@ -357,7 +238,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup className="min-h-0 flex-1 px-0 pb-0">
-          <SidebarGroupLabel className={cn("shrink-0", look.label)}>Chats</SidebarGroupLabel>
+          <SidebarGroupLabel className="shrink-0 font-medium text-muted-foreground/70">Chats</SidebarGroupLabel>
           <div className="absolute top-3.5 right-9 flex group-data-[collapsible=icon]:hidden">
             <FilterMenu
               label="Filter chats"
@@ -371,32 +252,25 @@ export function AppSidebar() {
             <IconPlus />
           </SidebarGroupAction>
           <SidebarGroupContent className="min-h-0 flex-1 scroll-fade-b scrollbar-thin overflow-y-auto overscroll-contain pb-2">
-            <SidebarMenu className={look.menu}>
+            <SidebarMenu className="gap-px">
               {chats.length === 0 ? (
                 <li className="flex p-2 text-sm text-sidebar-foreground">
                   {allChats.length === 0 ? "No chats" : "No chats match these filters"}
                 </li>
               ) : null}
-              {chats.map((chat, index) => {
-                const group = dayGroup(chat.updatedAt, now)
-                const previous = chats[index - 1]
-                const heading =
-                  lookName === "cursor" && (!previous || dayGroup(previous.updatedAt, now) !== group) ? group : null
-                return (
-                  <Fragment key={chat.id}>
-                    {heading ? (
-                      <li className="px-2 pt-3 pb-1 text-[11px] text-foreground/40 first:pt-1">{heading}</li>
-                    ) : null}
-                    <ChatItem
-                      chat={chat}
-                      look={lookName}
-                      active={path === `/sessions/${chat.id}`}
-                      space={spaceName.get(chat.spaceId)}
-                      now={now}
-                    />
-                  </Fragment>
-                )
-              })}
+              {chats.map((chat) => (
+                <SidebarMenuItem key={chat.id}>
+                  <SidebarMenuButton
+                    className={cn(row, "group-has-data-[sidebar=menu-badge]/menu-item:pr-7")}
+                    isActive={path === `/sessions/${chat.id}`}
+                    render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
+                  >
+                    <IconMessage />
+                    <span>{sessionTitle(chat.title)}</span>
+                  </SidebarMenuButton>
+                  <ChatStatus sessionId={chat.id} busy={chat.status === "busy"} />
+                </SidebarMenuItem>
+              ))}
               {chatPages.hasNextPage ? (
                 <LoadMore
                   onVisible={() => {
@@ -407,7 +281,7 @@ export function AppSidebar() {
               {chatPages.isFetchingNextPage
                 ? Array.from({ length: 3 }, (_, index) => (
                     <SidebarMenuItem key={`loading-${index}`}>
-                      <SidebarMenuSkeleton className={look.skeleton} showIcon={look.chatIcon} />
+                      <SidebarMenuSkeleton className="h-7.5" showIcon />
                     </SidebarMenuItem>
                   ))
                 : null}
@@ -428,13 +302,13 @@ export function AppSidebar() {
                   />
                 }
               >
-                <Avatar size={look.avatar}>
+                <Avatar>
                   {me.user.image ? <AvatarImage src={me.user.image} alt="" /> : null}
                   <AvatarFallback>{initials(userName)}</AvatarFallback>
                 </Avatar>
                 <span className="flex min-w-0 flex-1 flex-col text-start leading-tight">
-                  <span className={cn("truncate font-medium text-foreground", look.name)}>{userName}</span>
-                  <span className={cn("truncate", look.org)}>{me.organization.name}</span>
+                  <span className="truncate font-medium text-foreground">{userName}</span>
+                  <span className="truncate text-xs text-muted-foreground/70">{me.organization.name}</span>
                 </span>
                 <IconChevronUp />
               </DropdownMenuTrigger>
