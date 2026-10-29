@@ -2,7 +2,13 @@ import { afterEach, expect, setDefaultTimeout, test } from "bun:test"
 import { hostTokenHeader } from "@ren/host-api/brain-api"
 import { Brain } from "@ren/schema/brain"
 import { BrainToken } from "@ren/host-api/brain-token"
-import { Effect, Option, Schema } from "effect"
+import { EnvironmentTelemetry } from "@ren/brain/environment/telemetry"
+import { Effect, Layer, Option, Schema } from "effect"
+import { BrainTelemetry } from "../src/brain-telemetry.js"
+import { Cell } from "../src/cell.js"
+import { Env } from "../src/env.js"
+import { HostToken } from "../src/host-token.js"
+import { RenAddress } from "../src/ren-address.js"
 import { BunBrain } from "./lib/bun-brain.js"
 import { FakeRen } from "./lib/ren.js"
 import { Shared } from "./lib/shared.js"
@@ -68,4 +74,42 @@ test("a brain continues Ren's sampled trace, traces nothing else, and sends its 
     ),
   ).toEqual(new Set([traceId]))
   expect(resources[0]?.resource.attributes).toContainEqual({ key: "service.name", value: { stringValue: "ren-brain" } })
+})
+
+test("forwards an environment's drained batches to Ren with the host token, only for the signals that Ren accepts", async () => {
+  const ren = FakeRen.start()
+  cleanup.push(ren.stop)
+  const brain = Brain.ID.create()
+  const hostToken = await FakeRen.hostToken(brain)
+  const resource = { attributes: [{ key: "service.name", value: { stringValue: "ren-executor" } }] }
+  const batch = { resourceSpans: [{ resource, scopeSpans: [] }] }
+  const traces = JSON.stringify(batch)
+  const logs = JSON.stringify({ resourceLogs: [{ resource, scopeLogs: [] }] })
+  const info = Cell.Info.of({
+    storage: { getAlarm: () => Promise.resolve(null), setAlarm: () => Promise.resolve() },
+    brainId: brain,
+    generation: 1,
+    version: "test",
+    vars: Schema.decodeUnknownSync(Env.Vars)({ ...TestToken.vars, REN_URL: ren.url, REN_TELEMETRY: "traces" }),
+  })
+  await Effect.gen(function* () {
+    const telemetry = yield* EnvironmentTelemetry.Service
+    yield* telemetry.forward({ traces: [traces], logs: [logs] })
+  }).pipe(
+    Effect.provide(BrainTelemetry.layer),
+    Effect.provide(
+      Layer.mergeAll(
+        Layer.succeed(Cell.Info, info),
+        Layer.succeed(
+          HostToken.Service,
+          HostToken.Service.of({ current: Effect.succeed(Option.some(hostToken)), isValid: Effect.succeed(true) }),
+        ),
+        RenAddress.layerFixed(ren.url),
+      ),
+    ),
+    Effect.runPromise,
+  )
+
+  expect(ren.exported.map((entry) => [entry.signal, entry.hostToken])).toEqual([["traces", hostToken]])
+  expect(ren.exported.at(0)?.batch).toEqual(batch)
 })

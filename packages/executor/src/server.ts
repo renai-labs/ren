@@ -9,6 +9,7 @@ import { Config, Effect, Layer, Option, Schema, Stream } from "effect"
 import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import { Executor } from "./executor.js"
+import { ExecutorTelemetry } from "./telemetry.js"
 
 export const idleTimeoutSeconds = 10
 
@@ -67,6 +68,7 @@ const rpcAuthentication = Layer.effect(
 const operations = EnvironmentApi.Rpcs.toLayer(
   Effect.gen(function* () {
     const executor = yield* Executor.Service
+    const telemetry = yield* ExecutorTelemetry.Service
     return EnvironmentApi.Rpcs.of({
       "executor.hello": () => Effect.succeed(executor.hello),
       "process.spawn": (input) =>
@@ -96,6 +98,7 @@ const operations = EnvironmentApi.Rpcs.toLayer(
       "files.mkdir": (input) => executor.mkdir(input.path),
       "files.unpack": (input) => executor.unpack(input),
       "drives.mount": (input) => executor.mount(input),
+      "telemetry.drain": () => telemetry.drain,
     })
   }),
 )
