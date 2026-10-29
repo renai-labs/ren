@@ -56,6 +56,16 @@ export function problemOf(input: {
       fix: "Start a new chat, or select a model with a larger context.",
       actions: ["new", "model"],
     }
+  if (/usage limit|weekly limit|plan limit/iu.test(text)) {
+    const reset = resetPhrase(text)
+    return {
+      title: `Your ${provider} account reached its usage limit.`,
+      fix: `${reset ? `The limit resets ${reset}.` : "The limit resets later."} Select a model from a different provider to continue now.`,
+      actions: ["model", "try"],
+    }
+  }
+  if (/model_not_found|does not exist|no such model|model not found/iu.test(text))
+    return { title: `${input.model} is not available.`, fix: "Select a different model.", actions: ["model"] }
   if (/temporarily unavailable|not available now/iu.test(text))
     return {
       title: `Your ${provider} account is not available now.`,
@@ -77,21 +87,12 @@ export function problemOf(input: {
         fix: "This is a problem on Ren’s side. Select a model from a different provider.",
         actions: ["model"],
       }
-    case "provider.rate-limit": {
-      if (/usage limit|weekly|limit reached for your|plan limit/iu.test(text)) {
-        const reset = resetPhrase(text)
-        return {
-          title: `Your ${provider} account reached its usage limit.`,
-          fix: `${reset ? `The limit resets ${reset}.` : "The limit resets later."} Select a model from a different provider to continue now.`,
-          actions: ["model", "try"],
-        }
-      }
+    case "provider.rate-limit":
       return {
         title: `${provider} has too many requests now.`,
         fix: "Wait one minute. Then try again, or select a model from a different provider.",
         actions: ["try", "model"],
       }
-    }
     case "provider.auth":
       return input.admin
         ? {
