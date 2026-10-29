@@ -86,9 +86,7 @@ export function SpaceSidebar(props: { spaceId: string }) {
                   <SidebarMenuButton size="lg" className="h-10" aria-label={`Switch space (current: ${space.name})`} />
                 }
               >
-                <span className="flex size-6 items-center justify-center rounded-md bg-sidebar-accent">
-                  <SpaceIcon kind={space.kind} className="size-3.5 text-sidebar-accent-foreground" />
-                </span>
+                <SpaceIcon kind={space.kind} className="size-4.5 text-sidebar-foreground/70" />
                 <span className="flex-1 truncate font-medium text-sidebar-accent-foreground">{space.name}</span>
                 <IconSelector className="text-sidebar-foreground/70" />
               </DropdownMenuTrigger>

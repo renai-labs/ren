@@ -27,15 +27,12 @@ function useSpaceLayout() {
   }
 }
 
-const media = (kind: string) => (
-  <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-secondary">
-    {kind === "private" ? (
-      <IconLock className="size-8 text-muted-foreground" />
-    ) : (
-      <IconCube className="size-8 text-muted-foreground" />
-    )}
-  </span>
-)
+const media = (kind: string) =>
+  kind === "private" ? (
+    <IconLock className="size-8 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+  ) : (
+    <IconCube className="size-8 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+  )
 
 export function SpaceLayout() {
   const page = useSpaceLayout()

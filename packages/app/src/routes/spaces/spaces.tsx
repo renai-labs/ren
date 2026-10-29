@@ -213,9 +213,7 @@ function JoinSpaceDialog(props: {
                     onSelect={() => setSelected(space.id)}
                     className="items-start py-1"
                   >
-                    <span className="mt-0.5 flex size-5 items-center justify-center rounded-md bg-secondary">
-                      <IconCube className="size-4 text-muted-foreground" strokeWidth={1.75} />
-                    </span>
+                    <IconCube className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
                     <span className="flex min-w-0 flex-col">
                       {space.name}
                       {space.description ? (
