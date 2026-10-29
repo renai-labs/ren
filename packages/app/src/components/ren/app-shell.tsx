@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/ren/app-sidebar"
 import { NewTaskDialog, useNewTaskShortcut } from "@/components/ren/new-task-dialog"
 import { SearchDialog } from "@/components/ren/search-dialog"
 import { SettingsSidebar } from "@/components/ren/settings-sidebar"
+import { SidebarLookSwitcher } from "@/components/ren/sidebar-look-switcher"
 import { useMe } from "@/hooks/use-me"
 import { chatFor } from "@/lib/chat"
 import { toggleSearch } from "@/stores/ui"
@@ -45,6 +46,7 @@ export function AppShell() {
           </SidebarInset>
           <SearchDialog />
           <NewTaskDialog />
+          <SidebarLookSwitcher />
         </SidebarProvider>
       </ChatReact.Provider>
     </RegistryContext>
