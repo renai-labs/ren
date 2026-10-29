@@ -3,6 +3,7 @@ export * as Models from "./models.js"
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Models } from "@ren/schema/models"
+import type { Space } from "@ren/schema/space"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import {
   Config,
@@ -39,7 +40,12 @@ export interface Interface {
   readonly catalog: (organizationId: Auth.OrganizationID) => Effect.Effect<Models.Catalog, Unavailable>
   // oxlint-disable-next-line ren/no-comments -- Changes when the model list or a key in it changes, so a cache of grants knows to ask again (H4).
   readonly revision: Effect.Effect<string>
-  readonly grant: (brainId: Brain.ID, organizationId: Auth.OrganizationID) => Effect.Effect<Models.Access, Unavailable>
+  // oxlint-disable-next-line ren/no-comments -- The key names the brain, its organization and its space, so a usage event carries them from the key (usage spec §4.3).
+  readonly grant: (
+    brainId: Brain.ID,
+    organizationId: Auth.OrganizationID,
+    spaceId: Space.ID,
+  ) => Effect.Effect<Models.Access, Unavailable>
   // oxlint-disable-next-line ren/no-comments -- HR16: the root URL where a brain reads the model list (LiteLLM's /model/info). None: brains get no models.
   readonly inference: Effect.Effect<Option.Option<{ readonly baseUrl: string }>>
 }
@@ -140,10 +146,10 @@ export const layerRenInference = Layer.effect(
     return Service.of({
       catalog,
       revision: Ref.get(revision),
-      grant: Effect.fn("Models.grant")(function* (brainId, organizationId) {
+      grant: Effect.fn("Models.grant")(function* (brainId, organizationId, spaceId) {
         const found = yield* catalog(organizationId)
         const apiKey = yield* inference
-          .grant(brainId, organizationId)
+          .grant(brainId, organizationId, spaceId)
           .pipe(Effect.mapError((cause) => new Unavailable({ cause })))
         return Models.Access.make({
           endpoints: found.endpoints.map((endpoint) => Struct.assign(endpoint, { baseUrl: apiUrl(brainRoot), apiKey })),

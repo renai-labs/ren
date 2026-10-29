@@ -85,6 +85,16 @@
   },
   "components": {
     "schemas": {
+      "Auth.OrganizationID": {
+        "type": "string",
+        "pattern": "^org_",
+        "description": "From the workload's key. Ren stores it as sent."
+      },
+      "Brain.ID": {
+        "type": "string",
+        "pattern": "^brn_",
+        "description": "From the workload's key. Ren stores it as sent."
+      },
       "ForbiddenErrorEncoded": {
         "type": "object",
         "properties": {
@@ -122,6 +132,11 @@
         },
         "required": ["_tag", "message"],
         "additionalProperties": false
+      },
+      "Space.ID": {
+        "type": "string",
+        "pattern": "^spc_",
+        "description": "From the workload's key. Ren checks it later."
       },
       "UnauthorizedErrorEncoded": {
         "type": "object",
@@ -190,6 +205,15 @@
           "workload": {
             "type": "string",
             "description": "`brain:<id>` or `hand:<id>`, then `:<generation>` when known."
+          },
+          "organization": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "brain": {
+            "$ref": "#/components/schemas/Brain.ID"
+          },
+          "space": {
+            "$ref": "#/components/schemas/Space.ID"
           },
           "root_session": {
             "type": "string"
@@ -280,6 +304,7 @@
           "type",
           "time",
           "workload",
+          "organization",
           "requested_model",
           "payer",
           "provider",

@@ -2,11 +2,12 @@ import { expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
+import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { asc } from "drizzle-orm"
+import { Space } from "@ren/schema/space"
+import { asc, eq } from "drizzle-orm"
 import { DateTime, Duration, Effect, Layer } from "effect"
 import { Access } from "../src/access.js"
-import { Models } from "@ren/schema/models"
 import { Usage } from "../src/usage.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
@@ -21,11 +22,22 @@ const chat = Effect.fnUntraced(function* () {
   return { ...owner, brainId, root, agentId }
 })
 
-const event = Effect.fnUntraced(function* (fields: Partial<Usage.Event> & Pick<Usage.Event, "id" | "workload">) {
+const event = Effect.fnUntraced(function* (
+  found: {
+    readonly organizationId: Usage.Event["organization"]
+    readonly brainId: Brain.ID
+    readonly spaceId: Space.ID
+  },
+  fields: Partial<Usage.Event> & Pick<Usage.Event, "id">,
+) {
   return {
     source: "ren-inference",
     type: "model.call",
     time: yield* DateTime.now,
+    workload: `brain:${found.brainId}`,
+    organization: found.organizationId,
+    brain: found.brainId,
+    space: found.spaceId,
     requested_model: "claude-sonnet-4-5",
     payer: "ren",
     provider: "anthropic",
@@ -37,7 +49,7 @@ const event = Effect.fnUntraced(function* (fields: Partial<Usage.Event> & Pick<U
   } satisfies Usage.Event
 })
 
-const rows = Effect.flatMap(Database.Service, (database) =>
+const stored = Effect.flatMap(Database.Service, (database) =>
   database.db
     .select()
     .from(Database.Schema.usage_event)
@@ -45,136 +57,133 @@ const rows = Effect.flatMap(Database.Service, (database) =>
     .pipe(Effect.orDie),
 )
 
-it.live(
-  "stamps the scope of the workload, keeps the claims that match it, and stores a batch sent two times once",
-  () =>
-    Effect.gen(function* () {
-      const usage = yield* Usage.Service
-      const found = yield* chat()
-      const child = Session.ID.create()
-      const claims = {
-        workload: `brain:${found.brainId}`,
+const attributed = Effect.flatMap(Database.Service, (database) =>
+  database.db
+    .select()
+    .from(Database.Schema.usage_attribution)
+    .orderBy(asc(Database.Schema.usage_attribution.id))
+    .pipe(Effect.orDie),
+)
+
+it.live("stores what the producer sent, claims included, and a batch sent two times once", () =>
+  Effect.gen(function* () {
+    const usage = yield* Usage.Service
+    const found = yield* chat()
+    const batch = [
+      yield* event(found, {
+        id: "call-1:sonnet",
+        root_session: "not a session",
+        member: Models.personPlaceholder(found.memberId),
+        agent: "analyst",
+        kind: "summary",
+      }),
+    ]
+    expect(yield* usage.record("ren-inference", batch)).toEqual({ inserted: 1 })
+    expect(yield* usage.record("ren-inference", batch)).toEqual({ inserted: 0 })
+    expect(yield* stored).toMatchObject([
+      {
+        id: "call-1:sonnet",
+        organization: found.organizationId,
+        brain: found.brainId,
+        space: found.spaceId,
+        root_session: "not a session",
+        member: Models.personPlaceholder(found.memberId),
+        agent_name: "analyst",
+        kind: "summary",
+        input_tokens: 2140,
+        reasoning_tokens: 0,
+        cost_micro_usd: 31400,
+      },
+    ])
+  }),
+)
+
+it.live("reconciliation keeps the claims that agree with the brain's rows", () =>
+  Effect.gen(function* () {
+    const usage = yield* Usage.Service
+    const found = yield* chat()
+    const child = Session.ID.create()
+    const claims = { root_session: found.root, turn: "msg_01", member: Models.personPlaceholder(found.memberId) }
+    yield* usage.record("ren-inference", [
+      yield* event(found, { id: "call-1", ...claims, session: found.root, agent: "analyst", kind: "primary" }),
+      yield* event(found, { id: "call-2", ...claims, session: child, agent: "explore", kind: "primary" }),
+    ])
+    expect(yield* usage.reconcile).toBe(2)
+    expect(yield* usage.reconcile).toBe(0)
+    expect(yield* attributed).toMatchObject([
+      {
+        id: "call-1",
+        space: found.spaceId,
         root_session: found.root,
+        session: found.root,
         turn: "msg_01",
         member: found.memberId,
-      }
-      const batch = [
-        yield* event({ id: "call-1:sonnet", ...claims, session: found.root, agent: "analyst", kind: "primary" }),
-        yield* event({ id: "call-2:haiku", ...claims, session: child, agent: "explore", variant: "high" }),
-      ]
-      expect(yield* usage.record("ren-inference", batch)).toEqual({ inserted: 2 })
-      expect(yield* usage.record("ren-inference", batch)).toEqual({ inserted: 0 })
-      expect(yield* rows).toMatchObject([
-        {
-          id: "call-1:sonnet",
-          organization: found.organizationId,
-          space: found.spaceId,
-          brain: found.brainId,
-          root_session: found.root,
-          session: found.root,
-          turn: "msg_01",
-          member: found.memberId,
-          agent: found.agentId,
-          agent_name: null,
-          kind: "primary",
-          input_tokens: 2140,
-          reasoning_tokens: 0,
-          cost_micro_usd: 31400,
-        },
-        { id: "call-2:haiku", session: child, agent: null, agent_name: "explore", variant: "high" },
-      ])
-    }),
-)
-
-it.live("a member named by its placeholder, as when no egress replaced it, is checked the same way", () =>
-  Effect.gen(function* () {
-    const usage = yield* Usage.Service
-    const found = yield* chat()
-    yield* usage.record("ren-inference", [
-      yield* event({
-        id: "call-1",
-        workload: `brain:${found.brainId}`,
-        member: Models.personPlaceholder(found.memberId),
-      }),
+        agent: found.agentId,
+        kind: "primary",
+        problems: [],
+      },
+      { id: "call-2", session: child, member: found.memberId, agent: null, problems: [] },
     ])
-    expect(yield* rows).toMatchObject([{ member: found.memberId }])
   }),
 )
 
-it.live("a batch with one event that is not valid stores no row", () =>
-  Effect.gen(function* () {
-    const usage = yield* Usage.Service
-    const found = yield* chat()
-    const workload = `brain:${found.brainId}`
-    const old = DateTime.subtractDuration(yield* DateTime.now, Duration.days(31))
-    const error = yield* usage
-      .record("ren-inference", [
-        yield* event({ id: "new", workload }),
-        yield* event({ id: "old", workload, time: old }),
-      ])
-      .pipe(Effect.flip)
-    expect(error).toMatchObject({ _tag: "Usage.Invalid", message: "old: time is out of range" })
-    expect(yield* rows).toEqual([])
-  }),
-)
-
-it.live(
-  "claims about another brain or another organization, and a kind that Ren does not know, are removed; the cost stays on the workload's scope",
-  () =>
-    Effect.gen(function* () {
-      const usage = yield* Usage.Service
-      const found = yield* chat()
-      const other = yield* chat()
-      yield* usage.record("ren-inference", [
-        yield* event({
-          id: "call-1",
-          workload: `brain:${found.brainId}:3`,
-          root_session: other.root,
-          session: other.root,
-          turn: "msg_01",
-          member: other.memberId,
-          agent: "analyst",
-          kind: "summary",
-        }),
-      ])
-      expect(yield* rows).toMatchObject([
-        {
-          organization: found.organizationId,
-          space: found.spaceId,
-          root_session: null,
-          session: null,
-          turn: null,
-          member: null,
-          agent: null,
-          agent_name: "analyst",
-          kind: null,
-        },
-      ])
-    }),
-)
-
-it.live("an agent name that the space cannot use keeps only agent_name", () =>
+it.live("reconciliation sets claims about another brain, organization or space to null", () =>
   Effect.gen(function* () {
     const usage = yield* Usage.Service
     const found = yield* chat()
     const other = yield* chat()
-    yield* Seed.agent(other, "researcher", { isSubagent: true })
+    yield* Seed.agent(other, "researcher", { isSubagent: false })
     yield* usage.record("ren-inference", [
-      yield* event({ id: "call-1", workload: `brain:${found.brainId}`, root_session: found.root, agent: "researcher" }),
+      yield* event(found, {
+        id: "call-1",
+        root_session: other.root,
+        session: other.root,
+        turn: "msg_01",
+        member: other.memberId,
+        agent: "analyst",
+      }),
+      yield* event(found, { id: "call-2", root_session: found.root, agent: "researcher" }),
     ])
-    expect(yield* rows).toMatchObject([{ root_session: found.root, agent: null, agent_name: "researcher" }])
+    yield* usage.reconcile
+    expect(yield* attributed).toMatchObject([
+      { id: "call-1", space: found.spaceId, root_session: null, session: null, turn: null, member: null, agent: null },
+      { id: "call-2", root_session: found.root, agent: null },
+    ])
   }),
 )
 
-it.live("a hand's event gets the organization and space of its environment's brain", () =>
+it.live("reconciliation flags an organization that is not the brain's, a deleted brain and a time out of range", () =>
   Effect.gen(function* () {
     const usage = yield* Usage.Service
     const found = yield* chat()
+    const other = yield* chat()
+    const gone = { ...found, brainId: Brain.ID.create() }
     yield* usage.record("ren-inference", [
-      yield* event({ id: "call-1", workload: `hand:env_${found.brainId.slice(4)}:1` }),
+      yield* event({ ...found, organizationId: other.organizationId }, { id: "call-1", root_session: found.root }),
+      yield* event(gone, { id: "call-2" }),
+      yield* event(found, { id: "call-3", time: DateTime.subtractDuration(yield* DateTime.now, Duration.days(31)) }),
     ])
-    expect(yield* rows).toMatchObject([
-      { organization: found.organizationId, space: found.spaceId, brain: found.brainId },
+    yield* usage.reconcile
+    expect(yield* attributed).toMatchObject([
+      { id: "call-1", space: null, root_session: null, problems: ["organization_mismatch"] },
+      { id: "call-2", space: found.spaceId, problems: ["unknown_brain"] },
+      { id: "call-3", space: found.spaceId, problems: ["time_out_of_range"] },
     ])
+  }),
+)
+
+it.live("Postgres refuses an update of a stored event", () =>
+  Effect.gen(function* () {
+    const usage = yield* Usage.Service
+    const database = yield* Database.Service
+    const found = yield* chat()
+    yield* usage.record("ren-inference", [yield* event(found, { id: "call-1" })])
+    const update = yield* database.db
+      .update(Database.Schema.usage_event)
+      .set({ cost_micro_usd: 0 })
+      .where(eq(Database.Schema.usage_event.id, "call-1"))
+      .pipe(Effect.flip)
+    expect(String(update.cause)).toContain("usage_event is append only")
+    expect(yield* stored).toMatchObject([{ cost_micro_usd: 31400 }])
   }),
 )

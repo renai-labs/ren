@@ -5,6 +5,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Models } from "@ren/schema/models"
 import { RenInference } from "@ren/schema/ren-inference"
+import type { Space } from "@ren/schema/space"
 import { and, eq } from "drizzle-orm"
 import { Clock, Config, Context, Effect, Layer, Option, Schema, Struct } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
@@ -34,7 +35,11 @@ export interface Interface {
   ) => Effect.Effect<RenInference.Connection, Failure>
   readonly remove: (actor: Actor.Info, id: string) => Effect.Effect<void, Failure>
   readonly catalog: (organizationId: Auth.OrganizationID) => Effect.Effect<Models.Catalog, Unavailable>
-  readonly grant: (brainId: Brain.ID, organizationId: Auth.OrganizationID) => Effect.Effect<Models.ApiKey, Unavailable>
+  readonly grant: (
+    brainId: Brain.ID,
+    organizationId: Auth.OrganizationID,
+    spaceId: Space.ID,
+  ) => Effect.Effect<Models.ApiKey, Unavailable>
   readonly removeMember: (
     organizationId: Auth.OrganizationID,
     memberId: typeof Auth.MemberID.Type,
@@ -202,8 +207,10 @@ export const layer = Layer.effect(
           ),
         )
       }),
-      grant: Effect.fn("RenInference.grant")(function* (brainId, organizationId) {
-        return yield* onlyUnavailable(call({ org: organizationId }, "POST", "/v1/keys", Models.ApiKey, { brainId }))
+      grant: Effect.fn("RenInference.grant")(function* (brainId, organizationId, spaceId) {
+        return yield* onlyUnavailable(
+          call({ org: organizationId }, "POST", "/v1/keys", Models.ApiKey, { brainId, spaceId }),
+        )
       }),
       removeMember,
     })
