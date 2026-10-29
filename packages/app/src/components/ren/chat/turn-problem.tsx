@@ -64,6 +64,22 @@ export function problemOf(input: {
       actions: ["model", "try"],
     }
   }
+  if (
+    /not supported when using .* account|not included in your plan|your plan does not|not available on your plan/iu.test(
+      text,
+    )
+  )
+    return {
+      title: `Your ${provider} plan does not include ${input.model}.`,
+      fix: `Select a different model, or upgrade your ${provider} plan.`,
+      actions: ["model"],
+    }
+  if (/do not have access to it|does not have access to (the )?model/iu.test(text))
+    return {
+      title: `Your ${provider} account cannot use ${input.model}.`,
+      fix: "Select a different model.",
+      actions: ["model"],
+    }
   if (/model_not_found|does not exist|no such model|model not found/iu.test(text))
     return { title: `${input.model} is not available.`, fix: "Select a different model.", actions: ["model"] }
   if (/temporarily unavailable|not available now/iu.test(text))
