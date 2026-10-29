@@ -17,8 +17,6 @@ export type FollowUp = "steer" | "queue"
 
 export type Theme = "system" | "light" | "dark"
 
-export type ModelPickerLook = "classic" | "gumloop" | "plane" | "split" | "cursor"
-
 interface Ui {
   readonly taskDisplay: TaskDisplay
   readonly chatDetail: ChatDetail
@@ -29,7 +27,6 @@ interface Ui {
   readonly newTask: { readonly spaceId?: string } | null
   readonly searchOpen: boolean
   readonly theme: Theme
-  readonly modelPickerLook: ModelPickerLook
 }
 
 const initial: Ui = {
@@ -49,7 +46,6 @@ const initial: Ui = {
   newTask: null,
   searchOpen: false,
   theme: "dark",
-  modelPickerLook: "classic",
 }
 
 const useUi = create<Ui>()(
@@ -65,7 +61,6 @@ const useUi = create<Ui>()(
       model: state.model,
       homeSpaceId: state.homeSpaceId,
       theme: state.theme,
-      modelPickerLook: state.modelPickerLook,
     }),
   }),
 )
@@ -80,7 +75,6 @@ export const useHomeSpaceId = () => useUi((state) => state.homeSpaceId)
 export const useNewTask = () => useUi((state) => state.newTask)
 export const useSearchOpen = () => useUi((state) => state.searchOpen)
 export const useTheme = () => useUi((state) => state.theme)
-export const useModelPickerLook = () => useUi((state) => state.modelPickerLook)
 
 export const changeTaskDisplay = (taskDisplay: TaskDisplay) => useUi.setState({ taskDisplay })
 
@@ -90,7 +84,6 @@ export const chooseNotify = (notify: boolean) => useUi.setState({ notify })
 export const chooseModel = (model: SessionModel.Ref | null) => useUi.setState({ model })
 export const chooseHomeSpace = (homeSpaceId: string) => useUi.setState({ homeSpaceId })
 export const chooseTheme = (theme: Theme) => useUi.setState({ theme })
-export const chooseModelPickerLook = (modelPickerLook: ModelPickerLook) => useUi.setState({ modelPickerLook })
 
 export const openNewTask = (spaceId?: string) => useUi.setState({ newTask: spaceId ? { spaceId } : {} })
 export const closeNewTask = () => useUi.setState({ newTask: null })
