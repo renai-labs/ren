@@ -1,57 +1,39 @@
-import type { ReactNode } from "react"
 import type { SpaceInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { IconClock, IconCube, IconLock, IconMessage } from "@tabler/icons-react"
+import { IconCube, IconLock, IconMessage } from "@tabler/icons-react"
 import { toast } from "sonner"
-import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
 import { RowMenu } from "@/components/ren/row-menu"
 import { useCatalog } from "@/hooks/use-catalog"
-import { useNow } from "@/hooks/use-now"
 import { api, errorMessage } from "@/lib/api"
-import { formatRelative, initials, plural } from "@/lib/format"
-
-function Fact(props: { icon: ReactNode; children: ReactNode }) {
-  return (
-    <span className="flex items-center gap-1.5 [&_svg]:size-3.5">
-      {props.icon}
-      {props.children}
-    </span>
-  )
-}
+import { initials, plural } from "@/lib/format"
 
 function Stack(props: {
+  label: string
   items: ReadonlyArray<{ id: string; name: string; image?: string | null | undefined }>
   total: number
-  label?: string | undefined
 }) {
   const shown = props.items.slice(0, 3)
+  if (shown.length === 0) return null
   return (
-    <span className="flex items-center gap-1.5">
-      {shown.length > 0 ? (
-        <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
-          {shown.map((item) => (
-            <Avatar key={item.id} size="sm" className="data-[size=sm]:size-5">
-              {item.image ? <AvatarImage src={item.image} alt="" /> : null}
-              <AvatarFallback className="bg-secondary text-[10px]">{initials(item.name)}</AvatarFallback>
-            </Avatar>
-          ))}
-          {props.total > shown.length ? (
-            <AvatarGroupCount className="size-5 text-[10px] group-has-data-[size=sm]/avatar-group:size-5">
-              +{props.total - shown.length}
-            </AvatarGroupCount>
-          ) : null}
-        </AvatarGroup>
-      ) : null}
-      {props.label}
+    <span className="flex items-center gap-1.5" aria-label={props.label}>
+      <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card">
+        {shown.map((item) => (
+          <Avatar key={item.id} size="sm" className="data-[size=sm]:size-5">
+            {item.image ? <AvatarImage src={item.image} alt="" /> : null}
+            <AvatarFallback className="bg-secondary text-[10px]">{initials(item.name)}</AvatarFallback>
+          </Avatar>
+        ))}
+      </AvatarGroup>
+      {props.total > shown.length ? <span>+{props.total - shown.length} more</span> : null}
     </span>
   )
 }
 
 export function SpaceCard(props: { space: SpaceInfo }) {
   const space = props.space
-  const now = useNow()
   const chats = useQuery(api.session.list.queryOptions({ spaceId: space.id, page: 1, pageSize: 1 }))
   const reach = useQuery({ ...api["app-profile-reach"].space.profiles.queryOptions({ id: space.id }), retry: false })
   const people = useQuery({
@@ -60,7 +42,6 @@ export function SpaceCard(props: { space: SpaceInfo }) {
   })
   const catalog = useCatalog()
   const archive = useMutation(api.space.archive.mutationOptions())
-  const latest = chats.data?.items.at(0)
   const apps = [...new Set((reach.data?.profiles ?? []).map((profile) => profile.appId))].map((appId) => ({
     id: appId,
     name: catalog.appOf(appId)?.name ?? appId,
@@ -84,6 +65,10 @@ export function SpaceCard(props: { space: SpaceInfo }) {
           </Link>
           <span className="line-clamp-2 text-sm text-muted-foreground">{space.description || "No description"}</span>
         </div>
+        <span className="flex h-6 shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums [&_svg]:size-3.5">
+          <IconMessage />
+          {plural(chats.data?.total ?? 0, "chat")}
+        </span>
         {space.canArchive ? (
           <span className="relative -mt-1 -mr-1">
             <RowMenu
@@ -112,15 +97,11 @@ export function SpaceCard(props: { space: SpaceInfo }) {
           </span>
         ) : null}
       </div>
-      <div className="flex flex-col gap-2.5 text-xs text-muted-foreground tabular-nums">
-        <div className="flex items-center gap-4">
-          <Fact icon={<IconMessage />}>{plural(chats.data?.total ?? 0, "chat")}</Fact>
-          <Fact icon={<IconClock />}>{latest ? formatRelative(latest.updatedAt, now) : "Not used yet"}</Fact>
-        </div>
-        <div className="flex h-5 items-center gap-4">
-          {space.kind === "private" ? null : <Stack items={members} total={space.memberCount} />}
-          <Stack items={apps} total={apps.length} label={apps.length === 0 ? "No apps" : plural(apps.length, "app")} />
-        </div>
+      <div className="flex h-5 items-center gap-4 text-xs text-muted-foreground tabular-nums">
+        {space.kind === "private" ? null : (
+          <Stack label={plural(space.memberCount, "member")} items={members} total={space.memberCount} />
+        )}
+        <Stack label={plural(apps.length, "app")} items={apps} total={apps.length} />
       </div>
     </Card>
   )
