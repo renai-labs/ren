@@ -67,6 +67,7 @@ export const layer = Layer.unwrap(
               return ErrorReporter.make((report) => {
                 const annotations = report.fiber.getRef(References.CurrentLogAnnotations)
                 const user = annotations["user.id"]
+                const replay = annotations["sessionId"]
                 const span = Context.getOrUndefined(report.fiber.context, Tracer.ParentSpan)
                 const request = Context.getOrUndefined(report.fiber.context, HttpServerRequest.HttpServerRequest)
                 const route = Context.getOrUndefined(report.fiber.context, HttpRouter.RouteContext)
@@ -80,6 +81,7 @@ export const layer = Layer.unwrap(
                     ...(request && { "url.path": new URL(request.originalUrl, "http://localhost").pathname }),
                     ...resource,
                     $exception_level: levels[report.severity],
+                    ...(typeof replay === "string" && { $session_id: replay }),
                     ...(span?.sampled && { $trace_id: span.traceId, $span_id: span.spanId }),
                     ...(typeof user !== "string" && { $process_person_profile: false }),
                   },

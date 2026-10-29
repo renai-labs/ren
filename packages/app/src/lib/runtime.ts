@@ -9,6 +9,7 @@ import { routeTree } from "../route-tree.gen.js"
 import type { Platform } from "../platform/platform.js"
 import { Auth } from "./auth.js"
 import { OAuthSearch } from "./oauth-search.js"
+import { ProductEvents } from "./product-events.js"
 
 export interface Context {
   readonly platform: Platform.Info
@@ -16,6 +17,7 @@ export interface Context {
   readonly api: ReturnType<typeof RenQuery.make>
   readonly client: ReturnType<typeof Ren.make>
   readonly auth: Auth.Client
+  readonly productEvents: ReturnType<typeof ProductEvents.make>
 }
 
 const invalidates: Readonly<Record<string, ReadonlyArray<string>>> = {
@@ -56,10 +58,17 @@ export function make(platform: Platform.Info) {
     queryClient.getQueryCache().subscribe((event) => {
       if (event.type !== "updated" || event.action.type !== "success" || event.query.queryHash !== meHash) return
       const data = queryClient.getQueryData(me)
-      if (data !== undefined) analytics.identify(data.user, data.organization)
+      if (data !== undefined) analytics.identify(data.user)
     })
   }
-  const context: Context = { platform, queryClient, api, client, auth: Auth.createClient(platform) }
+  const context: Context = {
+    platform,
+    queryClient,
+    api,
+    client,
+    auth: Auth.createClient(platform),
+    productEvents: ProductEvents.make(platform),
+  }
   const router = createRouter({
     routeTree,
     context,

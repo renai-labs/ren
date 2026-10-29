@@ -19,6 +19,8 @@ const unauthorized = new UnauthorizedError({ message: "Sign in to continue." })
 
 const dispatched = Effect.serviceOption(McpCaller)
 
+const replaySession = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
+
 export const AuthenticationLayer = Layer.effect(
   Authentication,
   Effect.gen(function* () {
@@ -32,18 +34,23 @@ export const AuthenticationLayer = Layer.effect(
       if (Option.isNone(token)) return yield* unauthorized
       return token.value
     })
-    const provideSession = <A, E, R>(httpEffect: Effect.Effect<A, E, R>, session: AuthenticatedSession) => {
+    const provideSession = Effect.fnUntraced(function* <A, E, R>(
+      httpEffect: Effect.Effect<A, E, R>,
+      session: AuthenticatedSession,
+    ) {
+      const replay = (yield* HttpServerRequest.HttpServerRequest).headers["x-posthog-session-id"]
       const caller = {
         "user.id": session.user.id,
         ...(session.session.activeOrganizationId && { "ren.organization.id": session.session.activeOrganizationId }),
+        ...(replay && replaySession.test(replay) && { sessionId: replay }),
       }
-      return httpEffect.pipe(
+      return yield* httpEffect.pipe(
         Effect.provideService(CurrentUser, session.user),
         Effect.provideService(CurrentSession, session),
         Effect.annotateLogs(caller),
         Effect.annotateSpans(caller),
       )
-    }
+    })
     return Authentication.of({
       bearer: Effect.fn("Authentication.bearer")(function* (httpEffect, options) {
         const caller = yield* dispatched

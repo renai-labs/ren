@@ -1,4 +1,5 @@
 import { Option, Result, Schema } from "effect"
+import { ProductEvents } from "../lib/product-events.js"
 import { Analytics } from "./analytics.js"
 import { DraftStore } from "./draft-store.js"
 import type { Platform } from "./platform.js"
@@ -15,17 +16,20 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
   const channel = typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel("ren-drafts")
   const posthogKey = import.meta.env.VITE_POSTHOG_KEY
   const posthogUiHost = import.meta.env.VITE_POSTHOG_UI_HOST
+  const serverUrl = import.meta.env.VITE_REN_API_URL ?? window.location.origin
   return {
     ...(posthogKey && {
       analytics: Analytics.make({
         key: posthogKey,
         apiHost: import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com",
         ...(posthogUiHost && { uiHost: posthogUiHost }),
+        serverHost: new URL(serverUrl).hostname,
+        autocaptureUrls: ProductEvents.autocaptureUrls,
       }),
     }),
     platform: "web",
     version: import.meta.env.VITE_REN_VERSION ?? "dev",
-    serverUrl: import.meta.env.VITE_REN_API_URL ?? window.location.origin,
+    serverUrl,
     appUrl: new URL(import.meta.env.BASE_URL, window.location.origin).href.replace(/\/$/, ""),
     authorizationQuery: new URLSearchParams(window.location.search).has("sig")
       ? window.location.search.slice(1)

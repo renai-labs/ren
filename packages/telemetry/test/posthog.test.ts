@@ -55,7 +55,7 @@ const reporting = PostHog.layer.pipe(
 )
 
 describe("PostHog.layer", () => {
-  test("sends a defect to PostHog with the caller, the level, the trace and the release", () =>
+  test("sends a defect to PostHog with the caller, the replay, the level, the trace and the release", () =>
     Effect.gen(function* () {
       received.length = 0
       const span = yield* Effect.gen(function* () {
@@ -63,7 +63,11 @@ describe("PostHog.layer", () => {
         return yield* Effect.currentSpan
       }).pipe(
         Effect.withSpan("Test.request"),
-        Effect.annotateLogs({ "user.id": "usr_test", "ren.organization.id": "org_test" }),
+        Effect.annotateLogs({
+          "user.id": "usr_test",
+          sessionId: "01a18979-847a-7000-8000-000000000000",
+          "ren.organization.id": "org_test",
+        }),
         Effect.provide(reporting),
       )
 
@@ -72,6 +76,7 @@ describe("PostHog.layer", () => {
       expect(received[0]?.distinct_id).toBe("usr_test")
       expect(received[0]?.properties).toMatchObject({
         $exception_level: "error",
+        $session_id: "01a18979-847a-7000-8000-000000000000",
         $trace_id: span.traceId,
         $span_id: span.spanId,
         "ren.organization.id": "org_test",
