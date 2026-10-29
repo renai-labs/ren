@@ -259,7 +259,11 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
   yield* Deferred.await(loaded)
-  const resuming = runtime.runFork(Context.get(services, SessionRestart.Service).resumeSuspendedSessions)
+  const resuming = runtime.runFork(
+    Context.get(services, SessionRestart.Service).resumeSuspendedSessions.pipe(
+      Effect.catchCause((cause) => Effect.logError("Resuming the suspended sessions failed", cause)),
+    ),
+  )
   yield* Effect.addFinalizer(() => Fiber.interrupt(resuming))
   return {
     fetch,

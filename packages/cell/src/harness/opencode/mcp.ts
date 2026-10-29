@@ -287,7 +287,9 @@ export const make = Effect.fnUntraced(function* (input: {
   // oxlint-disable-next-line ren/no-comments -- One timed retry runs at a time; a reconnect from a prompt meanwhile waits for it, then finds nothing down.
   const watch = FiberHandle.run(
     retries,
-    retrying({ down: Effect.map(down, (failed) => failed.length > 0), retry: reconnect }),
+    retrying({ down: Effect.map(down, (failed) => failed.length > 0), retry: reconnect }).pipe(
+      Effect.withErrorReporting,
+    ),
     {
       onlyIfMissing: true,
     },
