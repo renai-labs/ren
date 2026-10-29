@@ -31,6 +31,7 @@ import {
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Kbd } from "@/components/ui/kbd"
+import { Separator } from "@/components/ui/separator"
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { AttachmentChips, DropOverlay, useAttachments } from "@/components/ren/chat/attachments"
 import { MentionOverlay } from "@/components/ren/chat/mention-overlay"
@@ -93,6 +94,8 @@ function AppsStrip(props: { spaceId: string }) {
   const catalog = useCatalog()
   const spaceName = useSpaces().spaceName
   const [connecting, setConnecting] = useState<ProfileTarget>()
+  const [open, setOpen] = useState(false)
+  const [adding, setAdding] = useState(false)
   const reach = useQuery({
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId }),
     retry: false,
@@ -106,85 +109,101 @@ function AppsStrip(props: { spaceId: string }) {
     gaps: gaps(profile),
   }))
   if (reach.isPending) return null
-  if (profiles.length === 0)
-    return (
-      <>
-        <AddAppDialog
-          space={{ id: props.spaceId, name: spaceName(props.spaceId) }}
-          added={new Set()}
-          onAdded={(added) => setConnecting({ appId: added.app.id, profileId: added.profileId })}
-          trigger={{
-            render: <InputGroupButton size="sm" className="-ml-1 font-normal text-muted-foreground" />,
-            children: (
-              <>
-                <IconApps />
-                Add apps
-              </>
-            ),
-          }}
-        />
-        {connecting ? <ProfileDialog {...connecting} onClose={() => setConnecting(undefined)} /> : null}
-      </>
-    )
   const apps = [...new Map(profiles.map((profile) => [profile.app, profile.icon] as const))]
   const shown = apps.slice(0, 3)
   const missing = profiles.filter((profile) => profile.gaps.length > 0).length
-  return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <InputGroupButton
-            size="sm"
-            className="-ml-1 font-normal"
-            aria-label={`Apps: ${apps.map(([app]) => app).join(", ")}${missing ? `, ${missing} not connected` : ""}`}
-          />
-        }
-      >
-        <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
-          {shown.map(([app, icon]) => (
-            <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
-              <AvatarImage src={icon} alt="" />
-              <AvatarFallback className="bg-secondary">{app.charAt(0)}</AvatarFallback>
-            </Avatar>
-          ))}
-          {apps.length > shown.length ? (
-            <AvatarGroupCount className="size-5 text-[10px] group-has-data-[size=sm]/avatar-group:size-5">
-              +{apps.length - shown.length}
-            </AvatarGroupCount>
-          ) : null}
-        </AvatarGroup>
-        {missing ? <Badge className="bg-chart-3 text-primary-foreground">{missing}</Badge> : null}
-      </PopoverTrigger>
-      <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
-        <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
-        {profiles.map((profile) => (
-          <div key={profile.id} className="flex items-center gap-3 rounded-sm p-2">
-            <Avatar size="sm" className="data-[size=sm]:size-5">
-              <AvatarImage src={profile.icon} alt="" />
-              <AvatarFallback className="bg-secondary">{profile.app.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm">
-                {profile.app} · {profile.name}
-              </span>
-              <span className="truncate text-xs text-muted-foreground">
-                {profile.gaps.length ? profile.gaps.join(", ") : "Connected"}
-              </span>
-            </div>
-            {profile.gaps.length ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setConnecting({ appId: profile.appId, profileId: profile.id })}
-              >
-                Connect
-              </Button>
-            ) : null}
-          </div>
-        ))}
-      </PopoverContent>
+  const dialogs = (
+    <>
+      <AddAppDialog
+        space={{ id: props.spaceId, name: spaceName(props.spaceId) }}
+        added={new Set(profiles.map((profile) => profile.appId))}
+        onAdded={(added) => setConnecting({ appId: added.app.id, profileId: added.profileId })}
+        open={adding}
+        onOpenChange={setAdding}
+      />
       {connecting ? <ProfileDialog {...connecting} onClose={() => setConnecting(undefined)} /> : null}
-    </Popover>
+    </>
+  )
+  if (profiles.length === 0)
+    return (
+      <>
+        <InputGroupButton size="sm" className="-ml-1 font-normal text-muted-foreground" onClick={() => setAdding(true)}>
+          <IconApps />
+          Add apps
+        </InputGroupButton>
+        {dialogs}
+      </>
+    )
+  return (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          render={
+            <InputGroupButton
+              size="sm"
+              className="-ml-1 font-normal"
+              aria-label={`Apps: ${apps.map(([app]) => app).join(", ")}${missing ? `, ${missing} not connected` : ""}`}
+            />
+          }
+        >
+          <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
+            {shown.map(([app, icon]) => (
+              <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
+                <AvatarImage src={icon} alt="" />
+                <AvatarFallback className="bg-secondary">{app.charAt(0)}</AvatarFallback>
+              </Avatar>
+            ))}
+            {apps.length > shown.length ? (
+              <AvatarGroupCount className="size-5 text-[10px] group-has-data-[size=sm]/avatar-group:size-5">
+                +{apps.length - shown.length}
+              </AvatarGroupCount>
+            ) : null}
+          </AvatarGroup>
+          {missing ? <Badge className="bg-chart-3 text-primary-foreground">{missing}</Badge> : null}
+        </PopoverTrigger>
+        <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
+          <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
+          {profiles.map((profile) => (
+            <div key={profile.id} className="flex items-center gap-3 rounded-sm p-2">
+              <Avatar size="sm" className="data-[size=sm]:size-5">
+                <AvatarImage src={profile.icon} alt="" />
+                <AvatarFallback className="bg-secondary">{profile.app.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm">
+                  {profile.app} · {profile.name}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {profile.gaps.length ? profile.gaps.join(", ") : "Connected"}
+                </span>
+              </div>
+              {profile.gaps.length ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setConnecting({ appId: profile.appId, profileId: profile.id })}
+                >
+                  Connect
+                </Button>
+              ) : null}
+            </div>
+          ))}
+          <Separator className="my-1" />
+          <Button
+            variant="ghost"
+            className="justify-start gap-3 px-2 font-normal text-muted-foreground"
+            onClick={() => {
+              setOpen(false)
+              setAdding(true)
+            }}
+          >
+            <IconPlus />
+            Add more apps
+          </Button>
+        </PopoverContent>
+      </Popover>
+      {dialogs}
+    </>
   )
 }
 
