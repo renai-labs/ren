@@ -3,7 +3,7 @@ export * as SandboxUsage from "./sandbox-usage.js"
 import { Database } from "@ren/db/database"
 import { Workload } from "@ren/schema/workload"
 import { desc, eq } from "drizzle-orm"
-import { Array, Clock, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Semaphore } from "effect"
+import { Array, Clock, Context, DateTime, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { DurableRunner } from "./durable-runner.js"
 import { SandboxProvider } from "./sandbox-provider.js"
@@ -79,13 +79,10 @@ export const layer = Layer.effect(
       DurableRunner.supervise(`sandbox-usage:${payload.slot}`, sweep),
     )
     yield* Effect.gen(function* () {
+      yield* Effect.sleep(every)
       const slot = Math.floor((yield* Clock.currentTimeMillis) / Duration.toMillis(every))
       yield* DurableRunner.ensure(SweepRun, { slot: String(slot) })
-    }).pipe(
-      Effect.repeat(Schedule.spaced(every)),
-      Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-      Effect.forkScoped,
-    )
+    }).pipe(Effect.forever, Effect.provideService(WorkflowEngine.WorkflowEngine, engine), Effect.forkScoped)
 
     return Service.of({ sweep })
   }),

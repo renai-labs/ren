@@ -62,6 +62,8 @@ const events = [
   }),
 ]
 
+const listed = [...events]
+
 const asked = Latch.makeUnsafe(false)
 const answer = Latch.makeUnsafe(true)
 
@@ -74,7 +76,7 @@ const e2b = Layer.succeed(
       const first =
         new URL(request.url).pathname === "/events/sandboxes" &&
         Option.contains(UrlParams.getFirst(request.urlParams, "offset"), "0")
-      return HttpClientResponse.fromWeb(request, Response.json(first ? events : []))
+      return HttpClientResponse.fromWeb(request, Response.json(first ? listed : []))
     }),
   ),
 )
@@ -152,6 +154,21 @@ it.live("records each run of this Ren's brains that E2B measured, one time, at t
       },
     ])
   }),
+)
+
+it.live(
+  "the next sweep reads again from 10 minutes before the newest stored run, so a run that E2B lists late is recorded",
+  () =>
+    Effect.gen(function* () {
+      const usage = yield* SandboxUsage.Service
+      yield* usage.sweep
+      listed.push(
+        run("e-late", "paused", "2026-10-29T07:12:00Z", { sandbox_metadata: tags, execution: tenMinutes }),
+        run("e-too-late", "paused", "2026-10-29T07:05:00Z", { sandbox_metadata: tags, execution: tenMinutes }),
+      )
+      yield* usage.sweep
+      expect((yield* stored).map((row) => row.id)).toEqual(["e-paused", "e-late", "e-killed"])
+    }).pipe(Effect.ensuring(Effect.sync(() => listed.splice(events.length)))),
 )
 
 it.live("a sweep that starts while another reads E2B does nothing", () =>
