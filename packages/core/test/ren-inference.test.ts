@@ -66,7 +66,7 @@ const it = testEffect(
 
 describe("Models.layerRenInference", () => {
   it.live(
-    "builds the grant from the service's /model/info and key; the key names the brain and the organization only",
+    "builds the grant from the service's /model/info and key; the key names the brain, its organization and its space",
     () =>
       Effect.gen(function* () {
         const models = yield* Models.Service
@@ -76,7 +76,7 @@ describe("Models.layerRenInference", () => {
         replies.set("/v1/keys", () => Response.json({ key: "key-brain", expiresAt }))
         seen.length = 0
 
-        const granted = yield* models.grant(brainId, owner.organizationId)
+        const granted = yield* models.grant(brainId, owner.organizationId, owner.spaceId)
 
         expect(granted.endpoints.map((endpoint) => [endpoint.id, endpoint.baseUrl])).toEqual([
           ["stub", "http://inference.brains.invalid/v1"],
@@ -86,7 +86,7 @@ describe("Models.layerRenInference", () => {
         expect(granted.endpoints[0]?.apiKey.expiresAt?.epochMilliseconds).toBe(Date.parse(expiresAt))
         expect(seen.map((each) => [each.path, each.body, Struct.omit(each.claims, ["kid", "exp"])])).toEqual([
           ["/model/info", null, { org: owner.organizationId }],
-          ["/v1/keys", { brainId }, { org: owner.organizationId }],
+          ["/v1/keys", { brainId, spaceId: owner.spaceId }, { org: owner.organizationId }],
         ])
       }),
   )
@@ -98,10 +98,14 @@ describe("Models.layerRenInference", () => {
       const brainId = Brain.ofSession(yield* Seed.session(owner))
 
       replies.set("/v1/keys", () => Response.json({ expiresAt: new Date().toISOString() }))
-      expect((yield* Effect.flip(models.grant(brainId, owner.organizationId)))._tag).toBe("Models.Unavailable")
+      expect((yield* Effect.flip(models.grant(brainId, owner.organizationId, owner.spaceId)))._tag).toBe(
+        "Models.Unavailable",
+      )
 
       replies.set("/v1/keys", () => new Response("down", { status: 503 }))
-      expect((yield* Effect.flip(models.grant(brainId, owner.organizationId)))._tag).toBe("Models.Unavailable")
+      expect((yield* Effect.flip(models.grant(brainId, owner.organizationId, owner.spaceId)))._tag).toBe(
+        "Models.Unavailable",
+      )
     }),
   )
 })

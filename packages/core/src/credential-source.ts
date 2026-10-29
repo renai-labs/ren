@@ -161,12 +161,22 @@ export const layerMinted = Layer.effect(
     const renHost = new URL(brains.renUrl).hostname
 
     const Key = Schema.fromJsonString(
-      Schema.Struct({ workload: Workload.Info, organizationId: Schema.String, revision: Schema.String }),
+      Schema.Struct({
+        workload: Workload.Info,
+        organizationId: Schema.String,
+        spaceId: Schema.NullOr(Space.ID),
+        revision: Schema.String,
+      }),
     )
     const encodeKey = Schema.encodeSync(Key)
     const decodeKey = Schema.decodeSync(Key)
     const keyOf = (scope: Credentials.Scope, revision = "") =>
-      encodeKey({ workload: scope.workload, organizationId: scope.organizationId, revision })
+      encodeKey({
+        workload: scope.workload,
+        organizationId: scope.organizationId,
+        spaceId: Option.getOrNull(scope.spaceId),
+        revision,
+      })
 
     const hostTokens = yield* Cache.makeWith(
       (key: string) =>
@@ -197,9 +207,9 @@ export const layerMinted = Layer.effect(
         Effect.gen(function* () {
           const found = decodeKey(key)
           const access =
-            found.workload.kind === "brain"
+            found.workload.kind === "brain" && found.spaceId
               ? yield* grants
-                  .grant(found.workload.id, Auth.OrganizationID.make(found.organizationId))
+                  .grant(found.workload.id, Auth.OrganizationID.make(found.organizationId), found.spaceId)
                   .pipe(Effect.retry({ schedule: Schedule.exponential(Duration.millis(500)), times: 3 }))
               : { endpoints: [] }
           return { access, mintedAt: yield* Clock.currentTimeMillis }

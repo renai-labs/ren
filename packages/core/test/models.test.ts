@@ -2,6 +2,7 @@ import { describe, expect } from "bun:test"
 import { Shared } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { Space } from "@ren/schema/space"
 import { ConfigProvider, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Models } from "../src/models.js"
@@ -34,7 +35,7 @@ describe("Models.layerLiteLLM (HR28)", () => {
         Models.fromLiteLLM(Schema.decodeUnknownSync(Models.LiteLLMModelInfo)(served)),
       )
       expect(stub.modelInfo.reads.at(-1)).toBe("Bearer sk-ren")
-      const granted = yield* models.grant(Brain.ID.create(), organizationId)
+      const granted = yield* models.grant(Brain.ID.create(), organizationId, Space.ID.create())
       const now = yield* DateTime.now
       expect(granted.endpoints.map((endpoint) => [endpoint.id, endpoint.baseUrl])).toEqual([
         ["anthropic", "http://litellm.brains.invalid/v1"],

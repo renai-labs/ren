@@ -1,6 +1,9 @@
 export * as Usage from "./usage.js"
 
 import { Schema } from "effect"
+import { Auth } from "./auth.js"
+import { Brain } from "./brain.js"
+import { Space } from "./space.js"
 
 export const Type = Schema.Literals(["model.call"]).annotate({ identifier: "Usage.Type" })
 export type Type = typeof Type.Type
@@ -28,7 +31,7 @@ export type Kind = typeof Kind.Type
 export const Payer = Schema.Literals(["ren", "customer"]).annotate({ identifier: "Usage.Payer" })
 export type Payer = typeof Payer.Type
 
-// oxlint-disable-next-line ren/no-comments -- The headers that a brain adds to each request to a Ren model. They are claims that Ren checks when it stores the event (§4.3). They have no x-ren- prefix, because the egress removes x-ren-* headers.
+// oxlint-disable-next-line ren/no-comments -- The headers that a brain adds to each request to a Ren model. They are claims that Ren checks after it stores the event (usage spec §4.3). They have no x-ren- prefix, because the egress removes x-ren-* headers.
 export const headers = {
   rootSession: "ren-root-session",
   session: "ren-session",
@@ -40,7 +43,7 @@ export const headers = {
 
 const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 
-// oxlint-disable-next-line ren/no-comments -- A claim from the brain. It is a plain string so that a wrong claim never refuses the batch: Ren removes it instead (§1.3).
+// oxlint-disable-next-line ren/no-comments -- A claim from the brain, stored as sent. It is a plain string so that a wrong claim never refuses the batch; reconciliation removes it later (§1.3).
 const Claim = Schema.optionalKey(Schema.String)
 
 export interface Failure extends Schema.Schema.Type<typeof Failure> {}
@@ -56,6 +59,9 @@ export const Event = Schema.Struct({
   type: Type,
   time: Schema.DateTimeUtc,
   workload: Schema.String.annotate({ description: "`brain:<id>` or `hand:<id>`, then `:<generation>` when known." }),
+  organization: Auth.OrganizationID.annotate({ description: "From the workload’s key. Ren stores it as sent." }),
+  brain: Schema.optionalKey(Brain.ID).annotate({ description: "From the workload’s key. Ren stores it as sent." }),
+  space: Schema.optionalKey(Space.ID).annotate({ description: "From the workload’s key. Ren checks it later." }),
   root_session: Claim,
   session: Claim,
   turn: Claim,

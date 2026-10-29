@@ -51,7 +51,6 @@ export const lookupOrder: ReadonlyArray<OwnerKind> = ["workload", "profile", "pe
 // oxlint-disable-next-line ren/no-comments -- The scope of a workload (README §6.4 rule 2, A37).
 export interface Scope {
   readonly organizationId: Auth.OrganizationID
-  readonly brainId: Brain.ID
   readonly workload: Workload.Info
   readonly spaceId: Option.Option<Space.ID>
   readonly person: Option.Option<Auth.UserID>
@@ -247,7 +246,6 @@ export const scopeOf = Effect.fnUntraced(function* (
   if (!found) return Option.none<Scope>()
   return Option.some({
     organizationId: found.brain.organization_id,
-    brainId,
     workload,
     spaceId: Option.some(found.brain.space_id),
     person:

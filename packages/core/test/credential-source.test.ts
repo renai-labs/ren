@@ -4,6 +4,7 @@ import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
+import { Space } from "@ren/schema/space"
 import {
   ConfigProvider,
   DateTime,
@@ -91,9 +92,8 @@ const it = testEffect(
 
 const scope: Credentials.Scope = {
   organizationId: Auth.OrganizationID.make("org_01"),
-  brainId: Brain.ID.make("brn_01"),
   workload: { kind: "brain", id: Brain.ID.make("brn_01"), generation: 1 },
-  spaceId: Option.none(),
+  spaceId: Option.some(Space.ID.make("spc_01")),
   person: Option.none(),
 }
 

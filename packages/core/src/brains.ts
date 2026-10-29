@@ -544,7 +544,7 @@ export const layer = Layer.effect(
         } satisfies PullReply
       }),
       refreshModels: Effect.fn("Brains.refreshModels")(function* (host: CurrentHost["Service"]) {
-        const access = yield* models.grant(host.brainId, host.organizationId).pipe(
+        const access = yield* models.grant(host.brainId, host.organizationId, host.spaceId).pipe(
           Effect.tapError((error) => Effect.logWarning("Model access refresh failed", error)),
           Effect.mapError(() => new ModelsUnavailableError({ message: "Model access is unavailable" })),
         )
