@@ -1,6 +1,6 @@
 export * as Telemetry from "./telemetry.js"
 
-import { Cause, Effect, ErrorReporter, Layer, Logger, LogLevel, Option, Schema, Tracer } from "effect"
+import { Cause, Effect, ErrorReporter, Formatter, Layer, Logger, LogLevel, Option, Schema, Tracer } from "effect"
 import { HttpClient } from "effect/http"
 import { OtlpExporter, OtlpLogger, OtlpSerialization, OtlpTracer } from "effect/observability"
 
@@ -44,6 +44,7 @@ export const Logs = open({
             open({
               attributes: Schema.Array(KeyValue),
               severityText: Schema.optionalKey(Schema.String),
+              body: Schema.optionalKey(KeyValue.fields.value),
               traceId: Schema.optionalKey(Schema.String),
               spanId: Schema.optionalKey(Schema.String),
             }),
@@ -66,11 +67,24 @@ export const withoutQueryParameters = <A>(error: A): A | Error => {
   })
 }
 
+export const errorLog = (message: string, severity: LogLevel.Severity) =>
+  Object.assign(new Error(message), { name: "ErrorLog", stack: "", [ErrorReporter.severity]: severity })
+
 export const reportErrorLogs = Logger.make((log) => {
   if (!LogLevel.isGreaterThanOrEqualTo(log.logLevel, "Error")) return
   const timestamp = BigInt(log.date.getTime()) * 1_000_000n
+  const cause = log.cause.reasons.some((reason) => reason._tag !== "Interrupt")
+    ? log.cause
+    : Cause.die(
+        errorLog(
+          (Array.isArray(log.message) ? log.message : [log.message])
+            .map((part) => (typeof part === "string" ? part : Formatter.format(part)))
+            .join(" "),
+          log.logLevel === "Fatal" ? "Fatal" : "Error",
+        ),
+      )
   for (const reporter of log.fiber.getRef(ErrorReporter.CurrentErrorReporters))
-    reporter.report({ cause: log.cause, fiber: log.fiber, timestamp })
+    reporter.report({ cause, fiber: log.fiber, timestamp })
 })
 
 const reportToLogs = ErrorReporter.layer(

@@ -99,6 +99,32 @@ describe("ErrorTracking", () => {
       }),
   )
 
+  it.live("reports an error log without a cause as an ErrorLog with no stack, so its message alone groups it", () =>
+    Effect.gen(function* () {
+      received.length = 0
+      const errorLog = (value: string) =>
+        expect.objectContaining({ type: "ErrorLog", value, stacktrace: { type: "raw", frames: [] } })
+      yield* Effect.all([
+        Effect.logError("The brain rejected a start").pipe(Effect.annotateLogs({ "ren.session.id": "ses_a" })),
+        Effect.logError("The brain rejected a start").pipe(Effect.annotateLogs({ "ren.session.id": "ses_b" })),
+        Effect.logFatal("Ren cannot start"),
+        Effect.logWarning("A retry"),
+      ]).pipe(Effect.provide(reporting))
+
+      expect(
+        received.map((event) => [
+          event.properties["$exception_list"],
+          event.properties["$exception_level"],
+          event.properties["ren.session.id"],
+        ]),
+      ).toEqual([
+        [[errorLog("The brain rejected a start")], "error", "ses_a"],
+        [[errorLog("The brain rejected a start")], "error", "ses_b"],
+        [[errorLog("Ren cannot start")], "fatal", undefined],
+      ])
+    }),
+  )
+
   it.live("names the HTTP route and path of the request that failed, though its span is not exported", () =>
     Effect.gen(function* () {
       received.length = 0

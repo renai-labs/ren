@@ -239,9 +239,9 @@ export const layer = Layer.effect(
               const failures = yield* release(row, { failed: true })
               yield* Effect.logWarning(`Credential ${row.label} could not refresh; Ren tries again`, error)
               if (failures === alertAfter)
-                yield* Effect.logError(
-                  `alert: credential ${row.label} failed to refresh ${alertAfter} times in a row`,
-                ).pipe(Effect.annotateLogs({ alert: "credential_refresh", credential: row.id }))
+                yield* Effect.logError(`A credential failed to refresh ${alertAfter} times in a row`).pipe(
+                  Effect.annotateLogs({ "ren.credential.id": row.id, "ren.credential.label": row.label }),
+                )
             }),
           ),
         )

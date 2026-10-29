@@ -11,7 +11,7 @@ import { Seed } from "@ren/core/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import type { Session as RenSession } from "@ren/schema/session"
-import { Clock, Deferred, Duration, Effect, Fiber, Layer, Logger, Metric, Schema } from "effect"
+import { Clock, Deferred, Duration, Effect, Fiber, Layer, Logger, Metric, References, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { TestClock } from "effect/testing"
 import { mkdtemp, rm } from "node:fs/promises"
@@ -84,9 +84,16 @@ const nth = (count: number, match: (request: Proxy.Request) => boolean) => {
 
 const logs = () => {
   const messages: Array<string> = []
+  const annotations: Array<Readonly<Record<string, unknown>>> = []
   return {
     messages,
-    layer: Logger.layer([Logger.make((options) => void messages.push([options.message].flat().map(String).join(" ")))]),
+    annotations,
+    layer: Logger.layer([
+      Logger.make((options) => {
+        messages.push([options.message].flat().map(String).join(" "))
+        annotations.push(options.fiber.getRef(References.CurrentLogAnnotations))
+      }),
+    ]),
   }
 }
 
@@ -435,7 +442,7 @@ describe("OpenCodeSync", () => {
         const captured = logs()
         expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: true })
         expect((yield* Metric.value(OpenCodeSync.oversizedRows)).count).toBe(before.count + 1)
-        expect(captured.messages.filter((message) => message.includes(large.id))).toHaveLength(1)
+        expect(captured.annotations.filter((annotation) => annotation["ren.message.id"] === large.id)).toHaveLength(1)
         expect((yield* SyncTest.remote(host.brain.id)).sessions.map((session) => session.id)).toEqual([host.brain.id])
         host.proxy.clear()
         expect(yield* sync.step()).toEqual({ drained: true })

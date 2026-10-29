@@ -201,8 +201,8 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
       if (envelopeBytes + size > Sync.maxBodyBytes) {
         yield* Metric.update(oversizedRows, 1)
         yield* Effect.logError(
-          `Message ${message.id} is ${size} bytes as JSON, more than the ${Sync.maxBodyBytes} bytes that Ren accepts. The session cannot sync until it changes.`,
-        )
+          `A message is more than the ${Sync.maxBodyBytes} bytes as JSON that Ren accepts. Its session cannot sync until it changes.`,
+        ).pipe(Effect.annotateLogs({ "ren.message.id": message.id, bytes: size }))
         return Option.none()
       }
       if (rows.length >= batchRows || (rows.length > 0 && bytes + 1 + size > batchBytes)) {
@@ -334,7 +334,7 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
               Effect.as("failed" as const),
             ),
           ),
-          Effect.annotateLogs({ sessionId: session.id }),
+          Effect.annotateLogs({ "ren.session.id": session.id }),
         )
         if (outcome === "committed") lastPass.set(session.id, now)
         return outcome
@@ -365,7 +365,9 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
               Effect.gen(function* () {
                 if (yield* input.exists(chat.id)) return
                 if (chat.parentId && !(yield* input.exists(chat.parentId))) {
-                  yield* Effect.logError(`Cannot restore session ${chat.id}: parent ${chat.parentId} is missing`)
+                  yield* Effect.logError("A session cannot be restored: its parent is missing").pipe(
+                    Effect.annotateLogs({ "ren.session.id": chat.id, "ren.session.parent_id": chat.parentId }),
+                  )
                   return
                 }
                 if (!chat.session) {

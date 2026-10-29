@@ -165,7 +165,7 @@ describe("Composio cleanup (test 22, K27)", () => {
   const logger = Logger.layer(
     [
       Logger.make((options) => {
-        logs.push(String(options.message))
+        logs.push(`${options.logLevel}: ${String(options.message)}`)
         for (const check of waiting.splice(0)) check()
       }),
     ],
@@ -215,7 +215,7 @@ describe("Composio cleanup (test 22, K27)", () => {
       expect(tries() - before).toBeGreaterThan(0)
       expect(failures).toBeGreaterThan(5)
       expect(failures).toBeLessThan(40)
-      expect(logs.some((message) => message.includes("alert") && message.includes("24 hours"))).toBe(true)
+      expect(logs).toContain("Error: A provider's cleanup stopped after 24 hours")
     }).pipe(Effect.provide(logger)),
   )
 })
