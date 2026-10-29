@@ -731,7 +731,9 @@ it.effect("a reader that stops reading holds a command back only until it stalls
       Effect.forkScoped,
     )
     yield* Deferred.await(reached)
-    const exit = yield* Stream.runLast(Stream.unwrap(executor.output(brain, spawned.id, 10_000_000))).pipe(
+    const exit = yield* Stream.unwrap(executor.output(brain, spawned.id, 10_000_000)).pipe(
+      Stream.filter((event) => event.type !== "ping"),
+      Stream.runLast,
       Effect.forkScoped,
     )
     const exited = yield* executor
@@ -1152,7 +1154,9 @@ it.effect("holds a command back for a stalled reader at 14 seconds, and runs on 
       Effect.forkScoped,
     )
     yield* Deferred.await(reached)
-    const exit = yield* Stream.runLast(Stream.unwrap(executor.output(brain, spawned.id, 10_000_000))).pipe(
+    const exit = yield* Stream.unwrap(executor.output(brain, spawned.id, 10_000_000)).pipe(
+      Stream.filter((event) => event.type !== "ping"),
+      Stream.runLast,
       Effect.forkScoped,
     )
     yield* TestClock.adjust(Duration.seconds(14))
