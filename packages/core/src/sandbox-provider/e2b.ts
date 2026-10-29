@@ -91,8 +91,8 @@ export const layer = Layer.effect(
       port: Config.Int("BRAIN_PORT").pipe(Config.withDefault(4800)),
       maxRunning: Config.Int("SANDBOX_MAX_RUNNING").pipe(Config.withDefault(10)),
       owner: Config.String("E2B_OWNER").pipe(Config.withDefault(defaultOwner)),
-      vcpuSecond: Config.Number("E2B_VCPU_SECOND_MICRO_USD").pipe(Config.withDefault(14)),
-      gibSecond: Config.Number("E2B_GIB_SECOND_MICRO_USD").pipe(Config.withDefault(4.5)),
+      vcpuSecond: Config.Number("E2B_VCPU_SECOND_MICRO_USD"),
+      gibSecond: Config.Number("E2B_GIB_SECOND_MICRO_USD"),
     })
     const owner = config.owner
     const http = yield* HttpClient.HttpClient

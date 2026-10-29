@@ -86,7 +86,14 @@ const it = testEffect(
       E2BSandbox.layer.pipe(
         Layer.provide(e2b),
         Layer.provide(
-          ConfigProvider.layer(ConfigProvider.fromUnknown({ E2B_API_KEY: "e2b_test", E2B_OWNER: "ren-test-a" })),
+          ConfigProvider.layer(
+            ConfigProvider.fromUnknown({
+              E2B_API_KEY: "e2b_test",
+              E2B_OWNER: "ren-test-a",
+              E2B_VCPU_SECOND_MICRO_USD: "14",
+              E2B_GIB_SECOND_MICRO_USD: "4.5",
+            }),
+          ),
         ),
       ),
     ),
@@ -103,7 +110,7 @@ const stored = Effect.flatMap(Database.Service, (database) =>
     .pipe(Effect.orDie),
 )
 
-it.live("records each run of this Ren's brains that E2B measured, one time, at E2B's published rates", () =>
+it.live("records each run of this Ren's brains that E2B measured, one time, at the rates in its config", () =>
   Effect.gen(function* () {
     const usage = yield* SandboxUsage.Service
     yield* usage.sweep

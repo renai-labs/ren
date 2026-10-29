@@ -75,7 +75,12 @@ describe.skipIf(!process.env.E2B_API_KEY)("an E2B brain", () => {
     const found = await runs.seeded()
     const current = await runs.ren({
       sandbox: E2BSandbox.layer,
-      config: { E2B_API_KEY: process.env.E2B_API_KEY ?? "", E2B_TEMPLATE: "ren-brain-dev:0000000000000000" },
+      config: {
+        E2B_API_KEY: process.env.E2B_API_KEY ?? "",
+        E2B_TEMPLATE: "ren-brain-dev:0000000000000000",
+        E2B_VCPU_SECOND_MICRO_USD: "14",
+        E2B_GIB_SECOND_MICRO_USD: "4.5",
+      },
     })
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
     await runs.reaches(found.brainId, "failed")
