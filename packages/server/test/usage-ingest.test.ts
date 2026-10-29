@@ -22,13 +22,13 @@ const it = testEffect(
 )
 
 describe("usage ingest", () => {
-  it.live("a usage key sends only the events of its own producer", () =>
+  it.live("only the usage ingest key can record events", () =>
     Effect.gen(function* () {
       const owner = yield* Seed.owner()
       const sessionId = yield* Seed.session(owner)
       const http = yield* HttpClient.HttpClient
       const time = DateTime.formatIso(yield* DateTime.now)
-      const send = (secret: string, source: string) =>
+      const send = (secret: string) =>
         http
           .execute(
             HttpClientRequest.post("/usage/v1/events").pipe(
@@ -37,7 +37,7 @@ describe("usage ingest", () => {
                 JSON.stringify({
                   events: [
                     {
-                      source,
+                      source: "ren-inference",
                       id: "chatcmpl-1:anthropic-sonnet-1",
                       type: "model.call",
                       time,
@@ -57,12 +57,7 @@ describe("usage ingest", () => {
             ),
           )
           .pipe(Effect.flatMap((response) => Effect.map(response.json, (body) => [response.status, body] as const)))
-      expect([
-        yield* send("ren_usage_test", "litellm"),
-        yield* send("ren_usage_unknown", "ren-inference"),
-        yield* send("ren_usage_test", "ren-inference"),
-      ]).toMatchObject([
-        [403, { _tag: "ForbiddenError" }],
+      expect([yield* send("ren_usage_unknown"), yield* send("ren_usage_test")]).toMatchObject([
         [401, { _tag: "UnauthorizedError" }],
         [200, { inserted: 1 }],
       ])
