@@ -94,10 +94,16 @@ const input = (organization: string, spaces: Record<string, unknown>, bound: Rec
 
 const apply = Effect.fnUntraced(function* (actor: Actor.Info, planned: Infra.PlanInput) {
   const infra = yield* InfraSpecs.Service
-  const plan = yield* infra.plan(actor, planned)
+  const input = planned.lock ? planned : yield* InfraFixture.current(actor, planned)
+  const plan = yield* infra.plan(actor, input)
   expect(plan.problems).toEqual([])
-  yield* infra.apply(actor, { spec: planned.spec, bindings: planned.bindings, digest: plan.digest })
-  return plan
+  const applied = yield* infra.apply(actor, {
+    spec: input.spec,
+    bindings: input.bindings,
+    lock: input.lock,
+    digest: plan.digest,
+  })
+  return { changes: InfraFixture.withoutValues(plan.changes), lock: applied.lock }
 })
 
 const mappings = Effect.fnUntraced(function* (actor: Actor.Info) {
@@ -144,7 +150,8 @@ describe("InfraSpecs channels", () => {
       ])
       expect(yield* infra.plan(o.admin, first)).toMatchObject({ changes: [], problems: [] })
 
-      const pulled = yield* infra.pull(o.admin)
+      const pulled = yield* infra.pull(o.admin, {})
+      expect(plan.lock.resources["spaces/home/channels/web"]).toBeDefined()
       expect(pulled.spec.spaces["home"]?.channels).toEqual({
         "acme-web": {
           kind: "github",
@@ -173,7 +180,7 @@ describe("InfraSpecs channels", () => {
       yield* install(o.organizationId, "github")
       const bound = { kind: "github", repository: "acme/web" }
       const channel = { kind: "github", purpose: "Web", agent: "triage", triggers: { pull_request_ready: {} } }
-      yield* apply(
+      const created = yield* apply(
         o.admin,
         input(
           o.bindings.organization,
@@ -182,9 +189,9 @@ describe("InfraSpecs channels", () => {
         ),
       )
 
-      const updated = yield* apply(
-        o.admin,
-        input(
+      const updated = yield* apply(o.admin, {
+        lock: created.lock,
+        ...input(
           o.bindings.organization,
           {
             home: {
@@ -196,7 +203,7 @@ describe("InfraSpecs channels", () => {
           },
           { home: { channels: { web: bound } } },
         ),
-      )
+      })
 
       expect(updated.changes).toEqual([
         InfraFixture.change("update", "channel", "spaces/home/channels/web", {
@@ -205,22 +212,22 @@ describe("InfraSpecs channels", () => {
       ])
       expect(yield* mappings(o.admin)).toMatchObject([{ agent: null, fallback: false, triggers: [] }])
 
-      const moved = yield* apply(
-        o.admin,
-        input(
+      const moved = yield* apply(o.admin, {
+        lock: updated.lock,
+        ...input(
           o.bindings.organization,
           {
             home: { name: "Home", agents: { triage: {} } },
-            eng: { name: "Eng", channels: { site: { kind: "github", purpose: "Web" } } },
+            eng: { name: "Eng", channels: { web: { kind: "github", purpose: "Web" } } },
           },
-          { eng: { channels: { site: bound } } },
+          { eng: { channels: { web: bound } } },
         ),
-      )
+      })
 
       expect(moved.changes).toEqual([
-        InfraFixture.change("update", "channel", "spaces/eng/channels/site", {
+        InfraFixture.change("update", "channel", "spaces/eng/channels/web", {
           fields: ["space"],
-          from: "spaces/home/channels/site",
+          from: "spaces/home/channels/web",
         }),
       ])
       expect(yield* mappings(o.admin)).toMatchObject([{ space: { id: eng.id }, fallback: false }])

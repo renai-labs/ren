@@ -1,5 +1,5 @@
 export * as App from "./app.js"
-export { CreateInput } from "@ren/schema/app"
+export { CreateInput, Declaration } from "@ren/schema/app"
 
 import { Database } from "@ren/db/database"
 import { App } from "@ren/schema/app"

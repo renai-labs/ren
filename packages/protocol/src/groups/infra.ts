@@ -7,15 +7,16 @@ import { Authentication } from "../middleware/authentication.js"
 
 export const InfraGroup = HttpApiGroup.make("infra")
   .add(
-    HttpApiEndpoint.get("infra.pull", "/infra", {
+    HttpApiEndpoint.post("infra.pull", "/infra/pull", {
+      payload: Infra.PullInput,
       success: Infra.Pulled,
-      error: ForbiddenError,
+      error: [ForbiddenError, InvalidRequestError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "infra.pull",
         summary: "Pull the org spec",
         description:
-          "Return the organization settings and the shared spaces as an org spec. Needs an organization admin.",
+          "Return the organization settings and the shared spaces as an org spec, with the resources that the folder should write and remove. A resource that changed in the folder and in Ren is a conflict. Needs an organization admin.",
       }),
     ),
   )
@@ -43,7 +44,7 @@ export const InfraGroup = HttpApiGroup.make("infra")
         identifier: "infra.apply",
         summary: "Apply an org spec",
         description:
-          "Plan the spec again and write its changes, when the digest matches. A failed write stops apply and names its change; the writes before it stay.",
+          "Plan the spec again and write its changes, when the digest matches. A conflict refuses the apply unless force is set. A failed write stops apply and names its change; the writes before it stay.",
       }),
     ),
   )

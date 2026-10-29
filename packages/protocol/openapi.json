@@ -10093,8 +10093,8 @@
         "summary": "List sign-in providers"
       }
     },
-    "/infra": {
-      "get": {
+    "/infra/pull": {
+      "post": {
         "tags": ["infra"],
         "operationId": "infra.pull",
         "parameters": [],
@@ -10113,6 +10113,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Infra.Pulled"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
                 }
               }
             }
@@ -10138,8 +10148,18 @@
             }
           }
         },
-        "description": "Return the organization settings and the shared spaces as an org spec. Needs an organization admin.",
-        "summary": "Pull the org spec"
+        "description": "Return the organization settings and the shared spaces as an org spec, with the resources that the folder should write and remove. A resource that changed in the folder and in Ren is a conflict. Needs an organization admin.",
+        "summary": "Pull the org spec",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Infra.PullInput"
+              }
+            }
+          },
+          "required": true
+        }
       }
     },
     "/infra/plan": {
@@ -10276,7 +10296,7 @@
             }
           }
         },
-        "description": "Plan the spec again and write its changes, when the digest matches. A failed write stops apply and names its change; the writes before it stay.",
+        "description": "Plan the spec again and write its changes, when the digest matches. A conflict refuses the apply unless force is set. A failed write stops apply and names its change; the writes before it stay.",
         "summary": "Apply an org spec",
         "requestBody": {
           "content": {
@@ -10625,13 +10645,13 @@
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        "description": "Without it, the channel reaches the ren agent."
+        "description": "Without it, the webhook runs on the ren agent."
       },
       "Agent.Name_3": {
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        "description": "Without it, the webhook runs on the ren agent."
+        "description": "Without it, the channel reaches the ren agent."
       },
       "Agent.Page": {
         "type": "object",
@@ -11964,7 +11984,7 @@
                 "minLength": 1
               },
               "agent": {
-                "$ref": "#/components/schemas/Agent.Name_2"
+                "$ref": "#/components/schemas/Agent.Name_3"
               },
               "fallback": {
                 "type": "boolean",
@@ -12005,7 +12025,7 @@
                 "minLength": 1
               },
               "agent": {
-                "$ref": "#/components/schemas/Agent.Name_2"
+                "$ref": "#/components/schemas/Agent.Name_3"
               },
               "fallback": {
                 "type": "boolean",
@@ -14102,22 +14122,46 @@
             "items": {
               "$ref": "#/components/schemas/Infra.Change"
             }
+          },
+          "lock": {
+            "$ref": "#/components/schemas/Infra.Lock"
           }
         },
-        "required": ["changes"],
+        "required": ["changes", "lock"],
         "additionalProperties": false
       },
       "Infra.ApplyInput": {
         "type": "object",
         "properties": {
           "spec": {
-            "$ref": "#/components/schemas/Infra.Spec"
+            "$ref": "#/components/schemas/Infra.Spec_1"
           },
           "bindings": {
             "$ref": "#/components/schemas/Infra.Bindings"
           },
+          "lock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Infra.Lock_2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "digest": {
             "type": "string"
+          },
+          "force": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Apply the folder over each conflict."
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": ["spec", "bindings", "digest"],
@@ -14151,7 +14195,13 @@
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["create", "update", "archive"]
+            "enum": ["create", "update", "archive"],
+            "description": "What apply does to make Ren match the folder."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["conflict", "changed", "new"],
+            "description": "Without it, apply runs the change. conflict: changed in the folder and in Ren since the lock; apply runs it only with force. changed: changed in Ren only. new: in Ren and not in the lock. Apply skips changed and new, and pull writes them."
           },
           "kind": {
             "$ref": "#/components/schemas/Infra.Kind"
@@ -14170,6 +14220,12 @@
               "type": "string"
             },
             "description": "The fields that an update changes."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Infra.Value"
+            }
           }
         },
         "required": ["action", "kind", "path", "fields"],
@@ -14241,6 +14297,86 @@
         "type": "string",
         "enum": ["organization", "space", "agent", "membership", "app", "schedule", "channel", "profile"]
       },
+      "Infra.Lock": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The slug of the organization."
+          },
+          "resources": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "For each resource path, the version that the folder last saw."
+          }
+        },
+        "required": ["organization", "resources"],
+        "additionalProperties": false,
+        "description": "The ren.lock file. Pull and apply write it; plan, apply and pull read it."
+      },
+      "Infra.Lock_1": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The slug of the organization."
+          },
+          "resources": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "For each resource path, the version that the folder last saw."
+          }
+        },
+        "required": ["organization", "resources"],
+        "additionalProperties": false,
+        "description": "The lock for the folder once pull writes it."
+      },
+      "Infra.Lock_2": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The slug of the organization."
+          },
+          "resources": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "For each resource path, the version that the folder last saw."
+          }
+        },
+        "required": ["organization", "resources"],
+        "additionalProperties": false,
+        "description": "Without it, the folder has not pulled yet."
+      },
+      "Infra.Lock_3": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The slug of the organization."
+          },
+          "resources": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "For each resource path, the version that the folder last saw."
+          }
+        },
+        "required": ["organization", "resources"],
+        "additionalProperties": false,
+        "description": "The lock with the version of each resource that the folder and Ren agree on."
+      },
       "Infra.Plan": {
         "type": "object",
         "properties": {
@@ -14260,19 +14396,32 @@
           "digest": {
             "type": "string",
             "description": "Apply refuses the plan when the digest has changed."
+          },
+          "lock": {
+            "$ref": "#/components/schemas/Infra.Lock_3"
           }
         },
-        "required": ["changes", "problems", "digest"],
+        "required": ["changes", "problems", "digest", "lock"],
         "additionalProperties": false
       },
       "Infra.PlanInput": {
         "type": "object",
         "properties": {
           "spec": {
-            "$ref": "#/components/schemas/Infra.Spec"
+            "$ref": "#/components/schemas/Infra.Spec_1"
           },
           "bindings": {
             "$ref": "#/components/schemas/Infra.Bindings"
+          },
+          "lock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Infra.Lock_2"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": ["spec", "bindings"],
@@ -14289,6 +14438,42 @@
           }
         },
         "required": ["path", "message"],
+        "additionalProperties": false
+      },
+      "Infra.PullInput": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Infra.Spec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bindings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Infra.Bindings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Infra.Lock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "Infra.Pulled": {
@@ -14337,9 +14522,33 @@
             },
             "required": ["org", "spaces"],
             "additionalProperties": false
+          },
+          "lock": {
+            "$ref": "#/components/schemas/Infra.Lock_1"
+          },
+          "write": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The resources that changed only in Ren: write them."
+          },
+          "remove": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The resources that Ren archived and the folder did not change: remove them."
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Infra.Change"
+            },
+            "description": "The resources that changed in the folder and in Ren. With any, pull writes nothing."
           }
         },
-        "required": ["bindings", "spec"],
+        "required": ["bindings", "spec", "lock", "write", "remove", "conflicts"],
         "additionalProperties": false,
         "description": "The part of the org spec that infra applies today: organization settings, shared spaces with their agents, apps, schedules and channels, and the channel and profile bindings of each space."
       },
@@ -14821,6 +15030,25 @@
         "required": ["org", "spaces"],
         "additionalProperties": false
       },
+      "Infra.Spec_1": {
+        "type": "object",
+        "properties": {
+          "org": {
+            "$ref": "#/components/schemas/OrganizationSettings.UpdateInput"
+          },
+          "spaces": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Infra.SpaceDeclaration"
+            }
+          }
+        },
+        "required": ["org", "spaces"],
+        "additionalProperties": false
+      },
       "Infra.Uses": {
         "type": "object",
         "properties": {
@@ -14832,6 +15060,26 @@
           }
         },
         "additionalProperties": false
+      },
+      "Infra.Value": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The field, with dots for nested fields: settings.instructions."
+          },
+          "ren": {
+            "type": "string",
+            "description": "The value in Ren. Without it, Ren has none."
+          },
+          "folder": {
+            "type": "string",
+            "description": "The value in the folder. Without it, the folder has none."
+          }
+        },
+        "required": ["field"],
+        "additionalProperties": false,
+        "description": "A field that differs between Ren and the folder, as text."
       },
       "Insights.Cost": {
         "type": "object",
@@ -20693,7 +20941,7 @@
         "type": "object",
         "properties": {
           "agent": {
-            "$ref": "#/components/schemas/Agent.Name_3"
+            "$ref": "#/components/schemas/Agent.Name_2"
           },
           "purpose": {
             "type": "string",

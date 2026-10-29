@@ -240,6 +240,7 @@ import type {
   ChannelConnectChannelPlaceListOutput,
   RepositoryListOutput,
   SignInSignInProviderListOutput,
+  InfraPullInput,
   InfraPullOutput,
   InfraPlanInput,
   InfraPlanOutput,
@@ -2035,9 +2036,16 @@ export function make(options: ClientOptions) {
       },
     },
     infra: {
-      pull: (requestOptions?: RequestOptions) =>
+      pull: (input?: InfraPullInput, requestOptions?: RequestOptions) =>
         request<InfraPullOutput>(
-          { method: "GET", path: `/infra`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
+          {
+            method: "POST",
+            path: `/infra/pull`,
+            body: { spec: input?.["spec"], bindings: input?.["bindings"], lock: input?.["lock"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403],
+            empty: false,
+          },
           requestOptions,
         ),
       plan: (input: InfraPlanInput, requestOptions?: RequestOptions) =>
@@ -2045,7 +2053,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/infra/plan`,
-            body: { spec: input["spec"], bindings: input["bindings"] },
+            body: { spec: input["spec"], bindings: input["bindings"], lock: input["lock"] },
             successStatus: 200,
             declaredStatuses: [401, 403],
             empty: false,
@@ -2057,7 +2065,13 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/infra/apply`,
-            body: { spec: input["spec"], bindings: input["bindings"], digest: input["digest"] },
+            body: {
+              spec: input["spec"],
+              bindings: input["bindings"],
+              lock: input["lock"],
+              digest: input["digest"],
+              force: input["force"],
+            },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,

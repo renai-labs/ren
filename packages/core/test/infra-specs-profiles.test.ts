@@ -30,10 +30,11 @@ const input = (organization: string, spaces: Record<string, unknown>, bound: Rec
 
 const apply = Effect.fnUntraced(function* (actor: Actor.Info, planned: Infra.PlanInput) {
   const infra = yield* InfraSpecs.Service
-  const plan = yield* infra.plan(actor, planned)
+  const input = yield* InfraFixture.current(actor, planned)
+  const plan = yield* infra.plan(actor, input)
   expect(plan.problems).toEqual([])
-  yield* infra.apply(actor, { spec: planned.spec, bindings: planned.bindings, digest: plan.digest })
-  return plan
+  yield* infra.apply(actor, { ...input, digest: plan.digest })
+  return { changes: InfraFixture.withoutValues(plan.changes) }
 })
 
 const setup = Effect.gen(function* () {
@@ -75,7 +76,7 @@ describe("InfraSpecs profiles", () => {
       expect(yield* listed(s.o.admin, s.team.id)).toEqual(["Eng", "Home"])
       expect(yield* infra.plan(s.o.admin, wanted)).toMatchObject({ changes: [], problems: [] })
 
-      const pulled = yield* infra.pull(s.o.admin)
+      const pulled = yield* infra.pull(s.o.admin, {})
       expect(pulled.bindings.spaces).toEqual({
         home: { channels: {}, profiles: { [s.slug]: ["home", "team"] } },
         eng: { channels: {}, profiles: { [s.slug]: ["team"] } },

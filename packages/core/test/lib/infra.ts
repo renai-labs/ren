@@ -5,9 +5,10 @@ import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Infra } from "@ren/schema/infra"
 import { eq } from "drizzle-orm"
-import { ConfigProvider, Effect, Layer, Schema } from "effect"
+import { ConfigProvider, Effect, Layer, Schema, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../../src/access.js"
+import type { Actor } from "../../src/actor.js"
 import { Agent } from "../../src/agent.js"
 import { AgentMembership } from "../../src/agent/membership.js"
 import { App } from "../../src/app.js"
@@ -120,5 +121,31 @@ export const change = (
   action: Infra.Change["action"],
   kind: Infra.Change["kind"],
   path: string,
-  more: { readonly fields?: ReadonlyArray<string>; readonly from?: string } = {},
-) => ({ action, kind, path, fields: more.fields ?? [], ...(more.from && { from: more.from }) })
+  more: {
+    readonly fields?: ReadonlyArray<string>
+    readonly from?: string
+    readonly values?: ReadonlyArray<Infra.Value>
+    readonly status?: Infra.Change["status"]
+  } = {},
+) => ({
+  action,
+  kind,
+  path,
+  fields: more.fields ?? [],
+  ...(more.from && { from: more.from }),
+  ...(more.values && { values: more.values }),
+  ...(more.status && { status: more.status }),
+})
+
+export const withoutValues = (changes: ReadonlyArray<Infra.Change>) =>
+  changes.map((change) => Struct.omit(change, ["values"]))
+
+export const pulled = Effect.fnUntraced(function* (actor: Actor.Info) {
+  const infra = yield* InfraSpecs.Service
+  return yield* replan(yield* infra.pull(actor, {}))
+})
+
+export const current = Effect.fnUntraced(function* (actor: Actor.Info, input: Infra.PlanInput) {
+  const infra = yield* InfraSpecs.Service
+  return { spec: input.spec, bindings: input.bindings, lock: (yield* infra.pull(actor, {})).lock }
+})

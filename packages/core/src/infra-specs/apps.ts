@@ -5,7 +5,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { App as AppSchema } from "@ren/schema/app"
 import type { Space } from "@ren/schema/space"
 import { and, asc, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm"
-import { Effect } from "effect"
+import { Effect, Schema, Struct } from "effect"
 import { App } from "../app.js"
 import { AppQueries } from "../app/queries.js"
 import { AppValidation } from "../app/validation.js"
@@ -26,8 +26,23 @@ export interface Live {
 
 const path = (space: string, slug: string) => `spaces/${space}/apps/${slug}`
 
-const sameMetadata = (left: AppSchema.Declaration, right: AppSchema.Declaration) =>
-  left.name === right.name && left.description === right.description && (left.icon ?? null) === (right.icon ?? null)
+export const canonical = (declaration: AppSchema.Declaration) => {
+  const encoded = Schema.encodeSync(App.Declaration)(declaration)
+  return {
+    name: encoded.name,
+    description: encoded.description,
+    icon: encoded.icon ?? null,
+    requiredCredentials: encoded.requiredCredentials,
+    environment: encoded.environment ?? null,
+    skills: encoded.skills,
+    mcps: encoded.mcps,
+    dependsOn: [...new Set(encoded.dependsOn)].toSorted(),
+  }
+}
+
+const metadata = ["name", "description", "icon"] as const
+
+const definition = ["requiredCredentials", "environment", "skills", "mcps", "dependsOn"] as const
 
 export const load = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
@@ -158,10 +173,16 @@ export const make = Effect.gen(function* () {
         ]
       }
       const owner = context.slugOf(current.ownerSpaceId)
+      const had = canonical(current.declaration)
+      const wanted = canonical(declaration)
       const fields = InfraPlan.changed({
         owner: owner !== entry.space,
-        metadata: !sameMetadata(current.declaration, declaration),
-        definition: AppValidation.execution(current.declaration) !== AppValidation.execution(declaration),
+        metadata:
+          AppValidation.canonical(Struct.pick(had, metadata)) !==
+          AppValidation.canonical(Struct.pick(wanted, metadata)),
+        definition:
+          AppValidation.canonical(Struct.pick(had, definition)) !==
+          AppValidation.canonical(Struct.pick(wanted, definition)),
       })
       if (fields.length === 0) return []
       context.touch(current.ownerSpaceId)

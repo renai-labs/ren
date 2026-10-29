@@ -8,7 +8,13 @@ import { join } from "node:path"
 import { Output } from "../services/output.js"
 
 export type Validated =
-  | { readonly kind: "org"; readonly spec: Infra.Spec; readonly bindings?: Infra.Bindings; readonly problems: [] }
+  | {
+      readonly kind: "org"
+      readonly spec: Infra.Spec
+      readonly bindings?: Infra.Bindings
+      readonly lock?: Infra.Lock
+      readonly problems: []
+    }
   | { readonly kind: "invalid"; readonly problems: ReadonlyArray<Output.Problem> }
 
 const records = ["schedules", "webhooks", "channels"] as const
@@ -60,6 +66,26 @@ const list = async (root: string) =>
   existsSync(root) ? (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: root, onlyFiles: true }))).toSorted() : []
 
 const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/u
+
+const lockFile = "ren.lock"
+
+export const lock = async (
+  root: string,
+): Promise<{ readonly lock?: Infra.Lock; readonly problems: Array<Output.Problem> }> => {
+  const file = Bun.file(join(root, lockFile))
+  if (!(await file.exists())) return { problems: [] }
+  const content = await file.text()
+  const decoded = Result.try(() => Bun.YAML.parse(content)).pipe(
+    Result.flatMap((parsed) => Schema.decodeUnknownResult(Infra.Lock)(parsed)),
+  )
+  return Result.isSuccess(decoded)
+    ? { lock: decoded.success, problems: [] }
+    : {
+        problems: [
+          { path: lockFile, message: "Ren did not write this lock. Restore it from git, or pull into a new folder." },
+        ],
+      }
+}
 
 export const validate = async (root: string): Promise<Validated> => {
   const files = await list(root)
@@ -201,17 +227,28 @@ export const validate = async (root: string): Promise<Validated> => {
           message: issue.message,
         }))
       : []
+  const locked = await lock(root)
   const all = [
     ...problems,
+    ...locked.problems,
     ...issues(spec).map((issue) => problem(...locate(issue.keys), issue.message)),
     ...issues(bindings).map((issue) => problem("deploy.yaml", issue.keys, issue.message)),
   ].toSorted((left, right) => Output.formatProblem(left).localeCompare(Output.formatProblem(right)))
   if (all.length > 0 || Result.isFailure(spec) || (bindings && Result.isFailure(bindings)))
     return { kind: "invalid", problems: all }
-  return { kind: "org", spec: spec.success, ...(bindings ? { bindings: bindings.success } : {}), problems: [] }
+  return {
+    kind: "org",
+    spec: spec.success,
+    ...(bindings ? { bindings: bindings.success } : {}),
+    ...(locked.lock ? { lock: locked.lock } : {}),
+    problems: [],
+  }
 }
 
 const dump = (value: unknown) => `${Bun.YAML.stringify(value, null, 2).replaceAll(/ +$/gmu, "")}\n`
+
+export const writeLock = (root: string, value: Infra.Lock) =>
+  Bun.write(join(root, lockFile), dump(Schema.encodeSync(Infra.Lock)(value)))
 
 const compact = (settings: (typeof Infra.Pulled.Encoded)["spec"]["org"]["settings"]) => {
   const kept = Object.entries(settings).filter(
@@ -290,105 +327,181 @@ const writeApp = async (folder: string, app: PulledApp) => {
   ])
 }
 
-const writeBindings = async (root: string, pulled: typeof Infra.Pulled.Encoded) => {
-  const deploy = Bun.file(join(root, "deploy.yaml"))
-  const parsed = (await deploy.exists()) ? Bun.YAML.parse(await deploy.text()) : {}
-  const current = Predicate.isObject(parsed) ? parsed : {}
-  const spaces = Predicate.isObject(current["spaces"]) ? current["spaces"] : {}
-  const slugs = [...new Set([...Object.keys(spaces), ...Object.keys(pulled.bindings.spaces)])].toSorted()
-  const written = Object.fromEntries(
-    slugs.flatMap((slug) => {
-      const before = Predicate.isObject(spaces[slug]) ? spaces[slug] : {}
-      const kept = Object.fromEntries(
-        Object.entries(before).filter(([key]) => key !== "channels" && key !== "profiles"),
-      )
-      const pulledSpace = pulled.bindings.spaces[slug]
-      const merged = {
-        ...kept,
-        ...(pulledSpace?.channels &&
-          Object.keys(pulledSpace.channels).length > 0 && { channels: pulledSpace.channels }),
-        ...(pulledSpace?.profiles &&
-          Object.keys(pulledSpace.profiles).length > 0 && { profiles: pulledSpace.profiles }),
-      }
-      return Object.keys(merged).length > 0 ? [[slug, merged]] : []
-    }),
-  )
-  const rest = Object.fromEntries(Object.entries(current).filter(([key]) => key !== "spaces"))
-  await Bun.write(
-    deploy,
-    dump({
-      ...rest,
-      organization: pulled.bindings.organization,
-      ...(Object.keys(written).length > 0 && { spaces: written }),
-    }),
-  )
+const fields = (value: unknown): Record<string, unknown> => (Predicate.isObject(value) ? { ...value } : {})
+
+const parsed = async (path: string) => {
+  const file = Bun.file(path)
+  if (!(await file.exists())) return {}
+  const content = await file.text()
+  return fields(Result.try(() => Bun.YAML.parse(content)).pipe(Result.getOrUndefined))
 }
+
+const without = (value: Record<string, unknown>, keys: ReadonlyArray<string>) =>
+  Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)))
+
+const filled = (value: Record<string, unknown>) =>
+  Object.fromEntries(
+    Object.entries(value).filter(
+      ([, entry]) => !Predicate.isUndefined(entry) && !(Predicate.isObject(entry) && Object.keys(entry).length === 0),
+    ),
+  )
+
+const replaced = (
+  current: Readonly<Record<string, unknown>>,
+  names: ReadonlyArray<string>,
+  value: (name: string) => unknown,
+) =>
+  Object.fromEntries(
+    [...new Set([...Object.keys(current), ...names])].flatMap((name) => {
+      const next = names.includes(name) ? value(name) : current[name]
+      return Predicate.isUndefined(next) ? [] : [[name, next]]
+    }),
+  )
+
+const relisted = (before: unknown, names: ReadonlyArray<string>, listed: (name: string) => boolean) => [
+  ...(Array.isArray(before) ? before.filter(Predicate.isString) : []).filter((name) => !names.includes(name)),
+  ...names.filter(listed),
+]
 
 export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) => {
   await mkdir(root, { recursive: true })
-  const files = await list(root)
+  const writes = new Set(pulled.write)
+  const removes = new Set(pulled.remove)
+  const paths = [...writes, ...removes]
+  const under = (prefix: string) =>
+    paths.flatMap((path) => (path.startsWith(prefix) ? [path.slice(prefix.length)] : [])).toSorted()
   const instructions = async (folder: string, text: string | undefined) => {
     const path = join(root, folder, "instructions.md")
     if (text) await Bun.write(path, `${text}\n`)
     else await rm(path, { force: true })
   }
-  await writeBindings(root, pulled)
-  const org = compact(pulled.spec.org.settings)
-  await Bun.write(join(root, "org.yaml"), org.settings ? dump(org) : "settings: {}\n")
-  await instructions("", pulled.spec.org.settings.instructions)
-  const spaces = Object.entries(pulled.spec.spaces)
-  await Promise.all(
-    [
-      ...children(files, "spaces/")
-        .filter((slug) => !(slug in pulled.spec.spaces))
-        .map((slug) => `spaces/${slug}`),
-      ...spaces.flatMap(([slug, space]) =>
-        children(files, `spaces/${slug}/agents/`)
-          .filter((name) => !(name in space.agents))
-          .map((name) => `spaces/${slug}/agents/${name}`),
-      ),
-      ...spaces.flatMap(([slug, space]) =>
-        children(files, `spaces/${slug}/apps/`)
-          .filter((name) => !(name in space.apps))
-          .map((name) => `spaces/${slug}/apps/${name}`),
-      ),
-    ].map((folder) => rm(join(root, folder), { recursive: true, force: true })),
-  )
-  await Promise.all([
-    ...spaces.flatMap(([slug, space]) => {
-      const folder = `spaces/${slug}`
-      return [
-        Bun.write(
-          join(root, folder, "space.yaml"),
-          dump({
-            name: space.name,
-            ...(Predicate.isString(space.description) && { description: space.description }),
-            ...compact(space.settings),
-            ...(space.factory && { factory: space.factory }),
-            ...(space.uses.agents?.length ? { uses: { agents: space.uses.agents } } : {}),
-          }),
-        ),
-        instructions(folder, space.settings.instructions),
-        record(join(root, folder, "schedules.yaml"), space.schedules),
-        record(join(root, folder, "channels.yaml"), space.channels),
-        ...Object.entries(space.apps).map(([name, app]) => writeApp(join(root, folder, "apps", name), app)),
-      ]
-    }),
-    ...spaces.flatMap(([slug, space]) =>
-      Object.entries(space.agents).flatMap(([name, agent]) => {
-        const folder = `spaces/${slug}/agents/${name}`
-        return [
-          Bun.write(
-            join(root, folder, "agent.yaml"),
-            dump({
-              ...(Predicate.isString(agent.description) && { description: agent.description }),
-              ...(agent.isSubagent && { isSubagent: true }),
-              ...(agent.settings && compact(agent.settings)),
-            }),
-          ),
-          instructions(folder, agent.settings?.instructions),
-        ]
+
+  if (writes.has("org")) {
+    const org = compact(pulled.spec.org.settings)
+    await Bun.write(join(root, "org.yaml"), org.settings ? dump(org) : "settings: {}\n")
+    await instructions("", pulled.spec.org.settings.instructions)
+  }
+
+  const deploy = join(root, "deploy.yaml")
+  const bound = await parsed(deploy)
+  const bindings = under("deploy.yaml/spaces/")
+  const channelBindings = paths.filter((path) => /^spaces\/[^/]+\/channels\//u.test(path))
+  if (
+    !(await Bun.file(deploy).exists()) ||
+    bindings.length > 0 ||
+    channelBindings.length > 0 ||
+    bound["organization"] !== pulled.bindings.organization
+  ) {
+    const spaces = fields(bound["spaces"])
+    const slugs = [
+      ...new Set([
+        ...bindings.map((path) => path.split("/").at(0) ?? ""),
+        ...channelBindings.map((path) => path.split("/").at(1) ?? ""),
+      ]),
+    ]
+    const written = Object.fromEntries(
+      [...new Set([...Object.keys(spaces), ...slugs])].flatMap((slug) => {
+        if (!slugs.includes(slug)) return [[slug, spaces[slug]]]
+        const space = fields(spaces[slug])
+        const prefix = `spaces/${slug}/channels/`
+        const channels = replaced(
+          fields(space["channels"]),
+          channelBindings.flatMap((path) => (path.startsWith(prefix) ? [path.slice(prefix.length)] : [])),
+          (name) => (writes.has(`${prefix}${name}`) ? pulled.bindings.spaces[slug]?.channels?.[name] : undefined),
+        )
+        const listed = bindings.flatMap((path) =>
+          path.startsWith(`${slug}/profiles/`) ? [path.slice(`${slug}/profiles/`.length)] : [],
+        )
+        const current = fields(space["profiles"])
+        const profiles = replaced(current, [...new Set(listed.map((path) => path.split("/").at(0) ?? ""))], (app) => {
+          const kept = relisted(
+            current[app],
+            listed.flatMap((path) => (path.startsWith(`${app}/`) ? [path.slice(app.length + 1)] : [])),
+            (name) => writes.has(`deploy.yaml/spaces/${slug}/profiles/${app}/${name}`),
+          )
+          return kept.length > 0 ? kept : undefined
+        })
+        const kept = filled({ ...space, channels, profiles })
+        return Object.keys(kept).length > 0 ? [[slug, kept]] : []
       }),
-    ),
-  ])
+    )
+    await Bun.write(
+      deploy,
+      dump(filled({ ...without(bound, ["spaces"]), organization: pulled.bindings.organization, spaces: written })),
+    )
+  }
+
+  const slugs = [...new Set(under("spaces/").map((path) => path.split("/").at(0) ?? ""))]
+  await Promise.all(
+    slugs.map(async (slug) => {
+      const folder = `spaces/${slug}`
+      if (removes.has(folder)) return rm(join(root, folder), { recursive: true, force: true })
+      const space = pulled.spec.spaces[slug]
+      const own = under(`${folder}/`)
+      const named = (kind: string) =>
+        own.flatMap((path) => (path.startsWith(`${kind}/`) ? [path.slice(kind.length + 1)] : []))
+      const uses = named("uses/agents")
+      if (writes.has(folder) || uses.length > 0) {
+        const file = join(root, folder, "space.yaml")
+        const current = await parsed(file)
+        const base =
+          writes.has(folder) && space
+            ? {
+                ...without(current, ["name", "description", "settings", "factory"]),
+                name: space.name,
+                ...(Predicate.isString(space.description) && { description: space.description }),
+                ...compact(space.settings),
+                ...(space.factory && { factory: space.factory }),
+              }
+            : current
+        const listed = relisted(fields(base["uses"])["agents"], uses, (name) =>
+          writes.has(`${folder}/uses/agents/${name}`),
+        )
+        await Bun.write(
+          file,
+          dump({
+            ...without(base, ["uses"]),
+            ...(listed.length > 0 && { uses: { ...fields(base["uses"]), agents: listed } }),
+          }),
+        )
+        if (writes.has(folder)) await instructions(folder, space?.settings.instructions)
+      }
+      const records = (["schedules", "channels"] as const).map(async (kind) => {
+        const names = named(kind)
+        if (names.length === 0) return
+        const file = join(root, folder, `${kind}.yaml`)
+        const entries: Record<string, unknown> = space?.[kind] ?? {}
+        await record(
+          file,
+          replaced(await parsed(file), names, (name) =>
+            writes.has(`${folder}/${kind}/${name}`) ? entries[name] : undefined,
+          ),
+        )
+      })
+      const agents = named("agents").map(async (name) => {
+        const at = `${folder}/agents/${name}`
+        const agent = space?.agents[name]
+        if (!writes.has(at) || !agent) return rm(join(root, at), { recursive: true, force: true })
+        const file = join(root, at, "agent.yaml")
+        await Bun.write(
+          file,
+          dump({
+            ...without(await parsed(file), ["description", "isSubagent", "settings"]),
+            ...(Predicate.isString(agent.description) && { description: agent.description }),
+            ...(agent.isSubagent && { isSubagent: true }),
+            ...(agent.settings && compact(agent.settings)),
+          }),
+        )
+        await instructions(at, agent.settings?.instructions)
+      })
+      const apps = named("apps").map((name) => {
+        const at = join(root, folder, "apps", name)
+        const app = space?.apps[name]
+        return writes.has(`${folder}/apps/${name}`) && app
+          ? writeApp(at, app)
+          : rm(at, { recursive: true, force: true })
+      })
+      await Promise.all([...records, ...agents, ...apps])
+    }),
+  )
 }

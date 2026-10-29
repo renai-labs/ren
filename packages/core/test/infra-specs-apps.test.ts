@@ -54,18 +54,19 @@ describe("InfraSpecs apps", () => {
           }),
         },
       })
-      const updated = yield* infra.plan(o.admin, second)
+      const locked = yield* InfraFixture.current(o.admin, second)
+      const updated = yield* infra.plan(o.admin, locked)
 
-      expect(updated.changes).toEqual([
+      expect(InfraFixture.withoutValues(updated.changes)).toEqual([
         InfraFixture.change("update", "app", `spaces/home/apps/${slug}`, { fields: ["metadata", "definition"] }),
         InfraFixture.change("archive", "app", `spaces/home/apps/${tools}`),
       ])
-      yield* infra.apply(o.admin, { ...second, digest: updated.digest })
+      yield* infra.apply(o.admin, { ...locked, digest: updated.digest })
       const written = yield* apps.get(o.admin, slug)
       expect(written).toMatchObject({ description: "Writes better notes.", revision: 2, dependsOn: [] })
       expect((yield* apps.get(o.admin, tools).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
 
-      const pulled = yield* infra.pull(o.admin)
+      const pulled = yield* infra.pull(o.admin, {})
       expect(pulled.spec.spaces["home"]?.apps).toEqual({
         [slug]: {
           name: "Notes",
@@ -101,15 +102,16 @@ describe("InfraSpecs apps", () => {
         spec: InfraFixture.spec({ home: { name: "Home" }, eng: { name: "Eng", apps: notes(slug) } }),
       }
 
-      const plan = yield* infra.plan(o.admin, after)
+      const moved = yield* InfraFixture.current(o.admin, after)
+      const plan = yield* infra.plan(o.admin, moved)
 
-      expect(plan.changes).toEqual([
+      expect(InfraFixture.withoutValues(plan.changes)).toEqual([
         InfraFixture.change("update", "app", `spaces/eng/apps/${slug}`, {
           fields: ["owner"],
           from: `spaces/home/apps/${slug}`,
         }),
       ])
-      yield* infra.apply(o.admin, { ...after, digest: plan.digest })
+      yield* infra.apply(o.admin, { ...moved, digest: plan.digest })
       expect((yield* apps.get(o.admin, slug)).ownerSpaceId).toBe(eng.id)
     }),
   )
