@@ -44,7 +44,7 @@ const spaceSections = [
   { value: "members", label: "Members", icon: IconUsers, to: "/spaces/$spaceId/members" },
   { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
   { value: "repositories", label: "Repositories", icon: IconGitBranch, to: "/spaces/$spaceId/repositories" },
-  { value: "channels", label: "Channels", icon: IconAt, to: "/spaces/$spaceId/channels" },
+  { value: "channels", label: "Mentions", icon: IconAt, to: "/spaces/$spaceId/channels" },
   { value: "credentials", label: "Keys", icon: IconKey, to: "/spaces/$spaceId/credentials" },
   { value: "schedules", label: "Scheduled", icon: IconClock, to: "/spaces/$spaceId/schedules" },
   { value: "factory", label: "Factory", icon: IconBuildingFactory2, to: "/spaces/$spaceId/factory" },
