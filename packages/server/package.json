@@ -15,7 +15,7 @@
     "check:generated": "bun run generate && git diff --exit-code -- ../db/src/auth.sql.ts",
     "dev": "bun --env-file=../../.env run --watch src/main.ts",
     "start": "bun run src/main.ts",
-    "test": "bun ../../script/test.ts",
+    "test": "bun ../../script/signoff/record.ts bun ../../script/test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo -b"
   },
