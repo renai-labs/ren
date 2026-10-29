@@ -1,5 +1,5 @@
 import type { ScheduleInfo } from "@ren/client"
-import { IconActivity, IconClock, IconCube, IconPlus, IconTrash } from "@tabler/icons-react"
+import { IconActivity, IconClock, IconCube, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -57,7 +57,7 @@ const nextRun = (schedule: ScheduleInfo, now: number) =>
   schedule.status === "active" && schedule.nextRunAt ? formatRelative(schedule.nextRunAt, now) : "—"
 
 const stateLabel = (schedule: ScheduleInfo, now: number) =>
-  schedule.status === "active" ? "On" : schedule.status === "ended" ? "Ended" : statusOf(schedule, now)
+  schedule.status === "active" ? "Running on schedule" : schedule.status === "ended" ? "Ended" : statusOf(schedule, now)
 
 export function ScheduleGrid(props: { list: Schedules }) {
   const list = props.list
@@ -118,10 +118,8 @@ export function ScheduleGrid(props: { list: Schedules }) {
                           disabled={schedule.status === "ended"}
                           onCheckedChange={() => list.toggle(schedule)}
                           aria-label={active ? `Turn off ${schedule.name}` : `Turn on ${schedule.name}`}
+                          title={stateLabel(schedule, list.now)}
                         />
-                        <span className={cn("text-xs", active ? "text-foreground" : "text-muted-foreground")}>
-                          {stateLabel(schedule, list.now)}
-                        </span>
                       </span>
                     </TableCell>
                     <TableCell>
@@ -129,7 +127,10 @@ export function ScheduleGrid(props: { list: Schedules }) {
                         <RowMenu
                           label={`${schedule.name} actions`}
                           className="flex text-muted-foreground"
-                          items={[{ label: "Delete", icon: <IconTrash />, onSelect: () => list.setDeleting(schedule) }]}
+                          items={[
+                            { label: "Edit", icon: <IconPencil />, onSelect: () => list.edit(schedule) },
+                            { label: "Delete", icon: <IconTrash />, onSelect: () => list.setDeleting(schedule) },
+                          ]}
                         />
                       </span>
                     </TableCell>
