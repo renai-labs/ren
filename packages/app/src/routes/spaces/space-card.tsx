@@ -8,7 +8,6 @@ import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } fr
 import { Card } from "@/components/ui/card"
 import { RowMenu } from "@/components/ren/row-menu"
 import { useCatalog } from "@/hooks/use-catalog"
-import { useMe } from "@/hooks/use-me"
 import { useNow } from "@/hooks/use-now"
 import { api, errorMessage } from "@/lib/api"
 import { formatRelative, initials, plural } from "@/lib/format"
@@ -25,7 +24,7 @@ function Fact(props: { icon: ReactNode; children: ReactNode }) {
 function Stack(props: {
   items: ReadonlyArray<{ id: string; name: string; image?: string | null | undefined }>
   total: number
-  label: string
+  label?: string | undefined
 }) {
   const shown = props.items.slice(0, 3)
   return (
@@ -59,7 +58,6 @@ export function SpaceCard(props: { space: SpaceInfo }) {
     ...api["space-member"].list.queryOptions({ spaceId: space.id, status: "active", page: 1, pageSize: 3 }),
     enabled: space.kind !== "private" && space.membershipId !== null,
   })
-  const me = useMe()
   const catalog = useCatalog()
   const archive = useMutation(api.space.archive.mutationOptions())
   const latest = chats.data?.items.at(0)
@@ -68,12 +66,9 @@ export function SpaceCard(props: { space: SpaceInfo }) {
     name: catalog.appOf(appId)?.name ?? appId,
     image: catalog.appOf(appId)?.icon,
   }))
-  const members =
-    space.kind === "private"
-      ? [{ id: me.user.id, name: me.user.name || me.user.email, image: me.user.image }]
-      : (people.data?.items ?? []).flatMap((member) =>
-          member.status === "active" ? [{ id: member.id, name: member.name, image: member.image }] : [],
-        )
+  const members = (people.data?.items ?? []).flatMap((member) =>
+    member.status === "active" ? [{ id: member.id, name: member.name, image: member.image }] : [],
+  )
   const Icon = space.kind === "private" ? IconLock : IconCube
   return (
     <Card className="relative gap-6 border p-5 shadow-soft ring-0 transition-[background-color,scale] duration-150 ease-out hover:bg-muted/40 active:scale-[0.99] motion-reduce:active:scale-100">
@@ -123,7 +118,7 @@ export function SpaceCard(props: { space: SpaceInfo }) {
           <Fact icon={<IconClock />}>{latest ? formatRelative(latest.updatedAt, now) : "Not used yet"}</Fact>
         </div>
         <div className="flex h-5 items-center gap-4">
-          <Stack items={members} total={space.memberCount} label={plural(space.memberCount, "member")} />
+          {space.kind === "private" ? null : <Stack items={members} total={space.memberCount} />}
           <Stack items={apps} total={apps.length} label={apps.length === 0 ? "No apps" : plural(apps.length, "app")} />
         </div>
       </div>
