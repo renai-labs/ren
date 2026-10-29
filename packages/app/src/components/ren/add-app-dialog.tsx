@@ -40,7 +40,7 @@ export function AddAppDialog(props: {
           Add app
         </DialogTrigger>
       ) : null}
-      <DialogContent className="flex h-[min(47.5rem,calc(100dvh-4rem))] flex-col gap-0 p-0 sm:max-w-182">
+      <DialogContent className="flex h-[min(35rem,calc(100dvh-4rem))] flex-col gap-0 p-0 sm:max-w-140">
         <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle className="text-base">Add apps to {props.space.name}</DialogTitle>
           <DialogDescription>Pick the apps this space can use. You can add more later.</DialogDescription>
