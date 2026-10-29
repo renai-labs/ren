@@ -177,6 +177,7 @@ export const layer = (options: {
               Effect.andThen(signal(binding.pid, "SIGSTOP")),
               Effect.andThen(Effect.sync(() => paused.add(binding.pid))),
               Effect.andThen(Effect.logInfo(`Paused local brain ${binding.brainId} (pid ${binding.pid})`)),
+              Effect.withErrorReporting,
             ),
           )
         }),

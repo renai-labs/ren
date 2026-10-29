@@ -169,6 +169,7 @@ export const alarm = Effect.fn("Cell.alarm")(function* () {
       if (running.length > 0) {
         // oxlint-disable-next-line ren/no-comments -- The order is the crash guarantee: the next alarm is set before the wait, so a cell that dies mid-wait reopens and resumes.
         yield* rearm
+        // ast-grep-ignore: require-fork-error-handling, -- joined below: its failure reaches the alarm
         const fiber = yield* FiberHandle.run(
           activity.wait,
           Effect.gen(function* () {

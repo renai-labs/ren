@@ -1,6 +1,6 @@
 id: require-fork-error-handling
 language: Tsx
-message: A forked fiber that fails leaves no trace. Before the fork, in the same pipe, report its failures with Effect.withErrorReporting, or handle its cause with Effect.catchCause, Effect.onError or Effect.onExit.
+message: A forked fiber that fails leaves no trace. Report its failures with Effect.withErrorReporting, or handle its cause with Effect.catchCause, Effect.onError or Effect.onExit, in the effect that it runs (before the fork in a pipe, or inside the call of FiberHandle.run, FiberMap.run, FiberSet.run or runFork).
 severity: error
 files:
   - packages/core/src/**
@@ -20,6 +20,9 @@ rule:
             - pattern: Effect.forkDaemon
             - pattern: Effect.forkDaemon($$$)
             - pattern: Effect.forkIn($$$)
+            - pattern: FiberHandle.run($HANDLE)
+            - pattern: FiberMap.run($MAP, $KEY)
+            - pattern: FiberSet.run($SET)
         - inside:
             kind: arguments
             inside:
@@ -39,3 +42,21 @@ rule:
               kind: arguments
               inside:
                 pattern: $SELF.pipe($$$)
+    - all:
+        - any:
+            - pattern: FiberHandle.run($HANDLE, $EFFECT)
+            - pattern: FiberHandle.run($HANDLE, $EFFECT, $$$)
+            - pattern: FiberMap.run($MAP, $KEY, $EFFECT)
+            - pattern: FiberMap.run($MAP, $KEY, $EFFECT, $$$)
+            - pattern: FiberSet.run($SET, $EFFECT)
+            - pattern: FiberSet.run($SET, $EFFECT, $$$)
+            - pattern: Effect.runFork($$$)
+            - pattern: $RUNTIME.runFork($$$)
+        - not:
+            has:
+              stopBy: end
+              any:
+                - pattern: Effect.withErrorReporting
+                - pattern: Effect.catchCause($$$)
+                - pattern: Effect.onError($$$)
+                - pattern: Effect.onExit($$$)
