@@ -112,7 +112,7 @@
       "Space.ID": {
         "type": "string",
         "pattern": "^spc_",
-        "description": "From the workload’s key. Ren checks it later."
+        "description": "From the workload’s key. Ren stores it as sent."
       },
       "UnauthorizedErrorEncoded": {
         "type": "object",

@@ -255,7 +255,7 @@ export const make = (
   directoryOf: (sessionId: string) => string,
   sources: GitSources.Interface,
   ren: Option.Option<OpenCodeMcp.Ren>,
-  rootChat: {
+  modelRequest: {
     readonly egress: boolean
     readonly lastUserMessage: (
       sessionId: string,
@@ -545,7 +545,7 @@ export const make = (
             delete event.headers[Models.personHeader]
             if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
             const root = yield* rootOf(event.sessionID)
-            const turn = yield* rootChat.lastUserMessage(root)
+            const turn = yield* modelRequest.lastUserMessage(root)
             const memberId = event.kind === "title" ? undefined : turn?.speaker?.memberID
             Object.assign(
               event.headers,
@@ -553,7 +553,7 @@ export const make = (
                 rootSession: root,
                 session: event.sessionID,
                 turn: turn?.id,
-                member: memberId && (rootChat.egress ? Models.personPlaceholder(memberId) : memberId),
+                member: memberId && (modelRequest.egress ? Models.personPlaceholder(memberId) : memberId),
                 agent: event.agent,
                 kind: event.kind,
                 variant: event.model.variant,

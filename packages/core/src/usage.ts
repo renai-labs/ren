@@ -6,9 +6,7 @@ import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
 
 export { Event } from "@ren/schema/usage"
 
-export class Unavailable extends Schema.TaggedError<Unavailable>()("Usage.Unavailable", {
-  message: Schema.String,
-}) {}
+export class Unavailable extends Schema.TaggedError<Unavailable>()("Usage.Unavailable", {}) {}
 
 export interface Interface {
   readonly record: (events: ReadonlyArray<Usage.Event>) => Effect.Effect<Usage.Recorded, Unavailable>
@@ -32,7 +30,7 @@ export const layer = Layer.effect(
           .returning({ id: events.id })
           .pipe(
             Effect.tapError(Effect.logError),
-            Effect.mapError(() => new Unavailable({ message: "The usage store is not available." })),
+            Effect.mapError(() => new Unavailable()),
           )
         return { inserted: inserted.length }
       }),

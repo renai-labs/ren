@@ -222,13 +222,14 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   const lastUserMessage = (sessionId: string) =>
     userMessages(sessionId).pipe(
       Stream.runHead,
-      Effect.map((found) =>
-        Option.getOrUndefined(
-          Option.map(found, (message) => ({
+      Effect.map(
+        Option.match({
+          onNone: () => undefined,
+          onSome: (message) => ({
             id: message.id,
             speaker: Option.getOrUndefined(OpenCodeChat.speakerOf(message.metadata)),
-          })),
-        ),
+          }),
+        }),
       ),
       Effect.orElseSucceed(() => undefined),
     )

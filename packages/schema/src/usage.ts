@@ -44,7 +44,7 @@ export const Event = Schema.Struct({
   workload: Schema.String.annotate({ description: "`brain:<id>` or `hand:<id>`, then `:<generation>` when known." }),
   organization: Auth.OrganizationID.annotate({ description: "From the workload’s key. Ren stores it as sent." }),
   brain: Schema.optionalKey(Brain.ID).annotate({ description: "From the workload’s key. Ren stores it as sent." }),
-  space: Schema.optionalKey(Space.ID).annotate({ description: "From the workload’s key. Ren checks it later." }),
+  space: Schema.optionalKey(Space.ID).annotate({ description: "From the workload’s key. Ren stores it as sent." }),
   root_session: Claim,
   session: Claim,
   turn: Claim,
