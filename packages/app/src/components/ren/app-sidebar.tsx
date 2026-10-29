@@ -113,7 +113,7 @@ const chatProperties = (spaces: ReadonlyArray<{ id: string; name: string }>): Fi
 
 const shortcut = /Mac|iPhone|iPad/u.test(navigator.userAgent) ? "⌘K" : "Ctrl+K"
 
-const row =
+export const sidebarRow =
   "h-7.5 font-medium [&_svg]:size-4.5 [&_svg]:text-sidebar-foreground/70 data-active:[&_svg]:text-sidebar-accent-foreground"
 
 function useChatAttention(sessionId: string) {
@@ -212,13 +212,13 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="gap-px">
               <SidebarMenuItem>
-                <SidebarMenuButton className={row} isActive={path === "/"} render={<Link to="/" />}>
+                <SidebarMenuButton className={sidebarRow} isActive={path === "/"} render={<Link to="/" />}>
                   <IconEdit />
                   <span>New chat</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton className={row} onClick={openSearch}>
+                <SidebarMenuButton className={sidebarRow} onClick={openSearch}>
                   <IconSearch />
                   <span>Search</span>
                 </SidebarMenuButton>
@@ -228,7 +228,11 @@ export function AppSidebar() {
               </SidebarMenuItem>
               {pages.map((page) => (
                 <SidebarMenuItem key={page.to}>
-                  <SidebarMenuButton className={row} isActive={path.startsWith(page.to)} render={<Link to={page.to} />}>
+                  <SidebarMenuButton
+                    className={sidebarRow}
+                    isActive={path.startsWith(page.to)}
+                    render={<Link to={page.to} />}
+                  >
                     <page.icon />
                     <span>{page.label}</span>
                   </SidebarMenuButton>
@@ -261,7 +265,7 @@ export function AppSidebar() {
               {chats.map((chat) => (
                 <SidebarMenuItem key={chat.id}>
                   <SidebarMenuButton
-                    className={cn(row, "group-has-data-[sidebar=menu-badge]/menu-item:pr-7")}
+                    className={cn(sidebarRow, "group-has-data-[sidebar=menu-badge]/menu-item:pr-7")}
                     isActive={path === `/sessions/${chat.id}`}
                     render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
                   >

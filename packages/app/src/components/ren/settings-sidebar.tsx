@@ -24,6 +24,7 @@ import {
   SidebarMenuItem,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { sidebarRow } from "@/components/ren/app-sidebar"
 
 export const settingsSections = [
   {
@@ -74,12 +75,12 @@ export function SettingsSidebar() {
   return (
     <Sidebar variant="inset">
       <SidebarHeader className="gap-1 px-0 pt-0">
-        <div className="mb-1 flex h-9">
+        <div className="mb-2 flex h-7 items-center">
           <SidebarTrigger />
         </div>
-        <SidebarMenu className="gap-1">
+        <SidebarMenu className="gap-px">
           <SidebarMenuItem>
-            <SidebarMenuButton className="h-9" render={<Link to="/" />}>
+            <SidebarMenuButton className={sidebarRow} render={<Link to="/" />}>
               <IconArrowLeft />
               <span>Back to app</span>
             </SidebarMenuButton>
@@ -101,12 +102,16 @@ export function SettingsSidebar() {
       <SidebarContent>
         {sections.map((group) => (
           <SidebarGroup key={group.label} className="px-0 pb-4">
-            <SidebarGroupLabel className="mb-1 text-sm text-sidebar-foreground">{group.label}</SidebarGroupLabel>
+            <SidebarGroupLabel className="font-medium text-muted-foreground">{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className="gap-1">
+              <SidebarMenu className="gap-px">
                 {group.items.map((item) => (
                   <SidebarMenuItem key={item.id}>
-                    <SidebarMenuButton className="h-9" isActive={section === item.id} render={<Link to={item.to} />}>
+                    <SidebarMenuButton
+                      className={sidebarRow}
+                      isActive={section === item.id}
+                      render={<Link to={item.to} />}
+                    >
                       <item.icon />
                       <span>{item.label}</span>
                     </SidebarMenuButton>
