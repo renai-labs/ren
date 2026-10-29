@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link } from "@tanstack/react-router"
-import { IconArrowLeft, IconCube, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
+import { IconArrowLeft, IconCopy, IconCube, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { Alert, AlertAction, AlertDescription } from "@/components/ui/alert"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList } from "@/components/ui/breadcrumb"
@@ -134,6 +134,7 @@ export function ChatPage() {
             items={[
               {
                 label: "Copy link",
+                icon: <IconCopy className="text-muted-foreground" />,
                 onSelect: () =>
                   void navigator.clipboard.writeText(window.location.href).then(
                     () => toast.success("Link copied"),
