@@ -38,29 +38,30 @@ export function problemOf(input: {
 }): Problem {
   const text = input.text
   const provider = input.provider
-  const resume: ProblemAction = input.midTurn ? "continue" : "try"
-  const then = input.midTurn ? "Then select Continue." : "Then try again."
-  if (/budget/iu.test(text) && /exceed/iu.test(text))
+  const model = input.model
+  const elsewhere = `pick a model from ${provider === "the model provider" ? "another provider" : `a provider other than ${provider}`}`
+  if (/budget/iu.test(text) && /exceed/iu.test(text)) {
+    if (input.midTurn)
+      return {
+        title: "Ren ran out of credits partway through.",
+        fix: input.admin
+          ? "Add credits, then hit Continue to pick up where Ren left off."
+          : "Ask an admin to add credits, then hit Continue to pick up where Ren left off.",
+        actions: input.admin ? ["continue", "providers"] : ["continue"],
+      }
     return {
-      title: input.midTurn
-        ? "Ren stopped. Your organization has no Ren credits."
-        : "Your organization has no Ren credits.",
+      title: "You’re out of Ren credits.",
       fix: input.admin
-        ? `Add Ren credits, or connect a Claude or ChatGPT account in Providers. ${then}`
-        : `Tell an admin to add Ren credits. ${then}`,
-      actions: input.admin ? [resume, "providers"] : [resume],
+        ? "Add credits, or connect your own Claude or ChatGPT account in Providers. Then try again."
+        : "Ask an admin to add credits, then try again.",
+      actions: input.admin ? ["try", "providers"] : ["try"],
     }
-  if (/context length|context window|too long|maximum context/iu.test(text))
-    return {
-      title: "This chat is too long for the model.",
-      fix: "Start a new chat, or select a model with a larger context.",
-      actions: ["new", "model"],
-    }
+  }
   if (/usage limit|weekly limit|plan limit/iu.test(text)) {
     const reset = resetPhrase(text)
     return {
-      title: `Your ${provider} account reached its usage limit.`,
-      fix: `${reset ? `The limit resets ${reset}.` : "The limit resets later."} Select a model from a different provider to continue now.`,
+      title: `You’ve hit your ${provider} usage limit.`,
+      fix: `${reset ? `It resets ${reset}.` : "It resets soon."} To keep going now, ${elsewhere}.`,
       actions: ["model", "try"],
     }
   }
@@ -70,75 +71,89 @@ export function problemOf(input: {
     )
   )
     return {
-      title: `Your ${provider} plan does not include ${input.model}.`,
-      fix: `Select a different model, or upgrade your ${provider} plan.`,
+      title: `${model} isn’t included in your ${provider} plan.`,
+      fix: "Pick another model to keep going, or upgrade your plan.",
       actions: ["model"],
     }
   if (/do not have access to it|does not have access to (the )?model/iu.test(text))
     return {
-      title: `Your ${provider} account cannot use ${input.model}.`,
-      fix: "Select a different model.",
+      title: `Your ${provider} account doesn’t have access to ${model}.`,
+      fix: "Pick another model to keep going.",
       actions: ["model"],
     }
   if (/model_not_found|does not exist|no such model|model not found/iu.test(text))
-    return { title: `${input.model} is not available.`, fix: "Select a different model.", actions: ["model"] }
+    return {
+      title: `${model} isn’t available right now.`,
+      fix: "Pick another model to keep going.",
+      actions: ["model"],
+    }
+  if (/context length|context window|too long|maximum context/iu.test(text))
+    return {
+      title: `This chat is too long for ${model}.`,
+      fix: "Start a new chat, or pick a model that can handle more.",
+      actions: ["new", "model"],
+    }
   if (/temporarily unavailable|not available now/iu.test(text))
     return {
-      title: `Your ${provider} account is not available now.`,
-      fix: "Wait some minutes. Then try again.",
+      title: `Your ${provider} account is temporarily unavailable.`,
+      fix: "Give it a few minutes, then try again.",
       actions: ["try"],
     }
   if (/subscription/iu.test(text) && /inactive|expired|cancel|not active|payment/iu.test(text))
     return {
-      title: `Your ${provider} subscription is not active.`,
-      fix: "Renew your subscription, or select a model from a different provider.",
+      title: `Your ${provider} subscription isn’t active.`,
+      fix: `Renew it, or ${elsewhere}.`,
       actions: ["model", "try"],
     }
   switch (input.kind) {
     case "provider.free-limit":
-      return { title: `${input.model} is not on your plan.`, fix: "Select a different model.", actions: ["model"] }
+      return {
+        title: `${model} isn’t included in your plan.`,
+        fix: "Pick another model to keep going.",
+        actions: ["model"],
+      }
     case "provider.quota":
       return {
-        title: `${provider} models are not available now.`,
-        fix: "This is a problem on Ren’s side. Select a model from a different provider.",
+        title: `${provider} models are down on our side.`,
+        fix: `We’re on it. In the meantime, ${elsewhere}.`,
         actions: ["model"],
       }
     case "provider.rate-limit":
       return {
-        title: `${provider} has too many requests now.`,
-        fix: "Wait one minute. Then try again, or select a model from a different provider.",
+        title: `${provider} is getting too many requests.`,
+        fix: `Wait a minute and try again, or ${elsewhere}.`,
         actions: ["try", "model"],
       }
     case "provider.auth":
       return input.admin
         ? {
-            title: `Ren cannot use the ${provider} account.`,
-            fix: "Connect the account again in Providers. Then try again.",
+            title: `Ren lost access to your ${provider} account.`,
+            fix: "Reconnect it in Providers, then try again.",
             actions: ["providers", "try"],
           }
         : {
-            title: `Ren cannot use the ${provider} account.`,
-            fix: "Tell an admin to connect the account again, or select a different model.",
+            title: `Ren lost access to the ${provider} account.`,
+            fix: "Ask an admin to reconnect it, or pick another model.",
             actions: ["model"],
           }
     case "provider.no-route":
-      return { title: `${input.model} is not available.`, fix: "Select a different model.", actions: ["model"] }
-    case "provider.content-filter":
       return {
-        title: `${provider} blocked this message.`,
-        fix: "Change your message. Then try again.",
-        actions: ["try"],
+        title: `${model} isn’t available right now.`,
+        fix: "Pick another model to keep going.",
+        actions: ["model"],
       }
+    case "provider.content-filter":
+      return { title: `${provider} blocked this message.`, fix: "Try rewording it.", actions: ["try"] }
     case "provider.timeout":
     case "provider.transport":
     case "provider.internal":
       return {
-        title: `${provider} did not answer.`,
-        fix: "Try again, or select a model from a different provider.",
+        title: `${provider} didn’t respond.`,
+        fix: `Try again, or ${elsewhere}.`,
         actions: ["try", "model"],
       }
     default:
-      return { title: "Ren stopped because of an error.", fix: "Try again.", actions: ["try"] }
+      return { title: "Ren couldn’t finish that reply.", fix: "Try again.", actions: ["try"] }
   }
 }
 
@@ -281,13 +296,11 @@ export function TurnRetrying(props: {
     <Shell
       icon={<Spinner />}
       waiting
-      title={busy ? `${props.provider} has too many requests now.` : `${props.provider} is not answering.`}
+      title={busy ? `${props.provider} is busy right now.` : `${props.provider} isn’t responding.`}
       fix={
         <span className="tabular-nums">
-          {seconds > 0
-            ? `Ren tries again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`
-            : "Ren is trying again now."}
-          {props.attempt > 1 ? ` This is attempt ${props.attempt}.` : null}
+          {seconds > 0 ? `Trying again in ${seconds}s…` : "Trying again now…"}
+          {props.attempt > 1 ? ` (attempt ${props.attempt})` : null}
         </span>
       }
       actions={["stop"]}
