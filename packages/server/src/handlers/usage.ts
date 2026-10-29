@@ -27,8 +27,8 @@ export const UsageHandler = HttpApiBuilder.group(UsageIngestApi, "usage", (handl
       usage
         .record(request.payload.events)
         .pipe(
-          Effect.catchTag("Usage.Unavailable", (error) =>
-            Effect.fail(new UnavailableError({ message: error.message, retryAfterMs: 5000 })),
+          Effect.catchTag("Usage.Unavailable", () =>
+            Effect.fail(new UnavailableError({ message: "The usage store is not available.", retryAfterMs: 5000 })),
           ),
         ),
     )

@@ -18,7 +18,7 @@ const documents = [
     target: fileURLToPath(new URL("../usage-ingest.openapi.json", import.meta.url)),
     spec: OpenApi.fromApi(UsageIngestApi),
   },
-] satisfies ReadonlyArray<{ readonly target: string; readonly spec: OpenApi.OpenAPISpec }>
+]
 
 const rendered = await Promise.all(
   documents.map(async (document) => {
