@@ -46,3 +46,41 @@ test("checks for a newer release at most once a day", async () => {
     after: 2,
   })
 })
+
+test("an older ren2 must upgrade once Ren names a minimum release, checked at most once an hour", async () => {
+  const published: { minimum?: string } = {}
+  const releases = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch: () =>
+      published.minimum ? new Response(`${published.minimum}\n`) : new Response("Not found", { status: 404 }),
+  })
+  const options = (current: string) => ({
+    host: releases.url.origin,
+    cache: join(root, `ren2/minimum-${current}.json`),
+    current,
+  })
+  const seen = await Effect.gen(function* () {
+    const before = yield* Upgrade.required(options("0.0.1"))
+    published.minimum = "0.0.2"
+    const cached = yield* Upgrade.required(options("0.0.1"))
+    yield* TestClock.adjust("61 minutes")
+    return {
+      before,
+      cached,
+      older: yield* Upgrade.required(options("0.0.1")),
+      current: yield* Upgrade.required(options("0.0.2")),
+    }
+  }).pipe(
+    Effect.provide(Layer.mergeAll(TestClock.layer(), FetchHttpClient.layer, BunServices.layer)),
+    Effect.ensuring(Effect.promise(() => releases.stop(true))),
+    Effect.runPromise,
+  )
+
+  expect(seen).toEqual({
+    before: Option.none(),
+    cached: Option.none(),
+    older: Option.some("0.0.2"),
+    current: Option.none(),
+  })
+})

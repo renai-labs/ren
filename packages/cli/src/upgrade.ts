@@ -13,11 +13,13 @@ const Version = Schema.String.check(
   Schema.isPattern(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/u),
 )
 
-const Cache = Schema.fromJsonString(Schema.Struct({ checkedAt: Schema.Number, latest: Version }))
+const Cache = Schema.fromJsonString(Schema.Struct({ checkedAt: Schema.Number, version: Schema.NullOr(Version) }))
 
 const Upgraded = Schema.Struct({ from: Schema.String, to: Schema.String, upgraded: Schema.Boolean })
 
-const day = 24 * 60 * 60 * 1000
+const hour = 60 * 60 * 1000
+
+const day = 24 * hour
 
 const core = (version: string) => (version.split("-").at(0) ?? "").split(".").map((part) => Number.parseInt(part, 10))
 
@@ -42,6 +44,31 @@ const latest = Effect.fn("Upgrade.latest")(function* (origin: string) {
   const http = HttpClient.filterStatusOk(yield* HttpClient.HttpClient)
   const text = yield* http.get(`${origin}/ren2/latest.txt`).pipe(Effect.flatMap((response) => response.text))
   return yield* Schema.decodeUnknownEffect(Version)(text.trim())
+})
+
+const minimum = Effect.fn("Upgrade.minimum")(function* (origin: string) {
+  const http = yield* HttpClient.HttpClient
+  const response = yield* http.get(`${origin}/ren2/minimum.txt`)
+  if (response.status === 403 || response.status === 404) return null
+  if (response.status !== 200) return yield* Effect.fail(new Error(`minimum.txt answered ${response.status}`))
+  return yield* Schema.decodeUnknownEffect(Version)((yield* response.text).trim())
+})
+
+const remembered = Effect.fn("Upgrade.remembered")(function* <E, R>(
+  options: { readonly cache: string; readonly within: number },
+  load: Effect.Effect<string | null, E, R>,
+) {
+  const fs = yield* FileSystem.FileSystem
+  const now = yield* Clock.currentTimeMillis
+  const cached = yield* fs
+    .readFileString(options.cache)
+    .pipe(Effect.flatMap(Schema.decodeUnknownEffect(Cache)), Effect.option)
+  const fresh = Option.filter(cached, (cache) => now - cache.checkedAt < options.within)
+  if (Option.isSome(fresh)) return fresh.value.version
+  const version = yield* load
+  yield* fs.makeDirectory(dirname(options.cache), { recursive: true })
+  yield* fs.writeFileString(options.cache, yield* Schema.encodeEffect(Cache)({ checkedAt: now, version }))
+  return version
 })
 
 export const run = Effect.fn("Upgrade.run")(function* (
@@ -112,26 +139,34 @@ export const available = Effect.fn("Upgrade.available")(function* (options: {
   readonly cache: string
   readonly current: string
 }) {
-  const fs = yield* FileSystem.FileSystem
-  const now = yield* Clock.currentTimeMillis
-  const cached = yield* fs
-    .readFileString(options.cache)
-    .pipe(Effect.flatMap(Schema.decodeUnknownEffect(Cache)), Effect.option)
-  const fresh = Option.filter(cached, (cache) => now - cache.checkedAt < day)
-  const found = Option.isSome(fresh)
-    ? fresh.value.latest
-    : yield* latest(options.host).pipe(
-        Effect.tap((version) =>
-          Effect.gen(function* () {
-            yield* fs.makeDirectory(dirname(options.cache), { recursive: true })
-            yield* fs.writeFileString(
-              options.cache,
-              yield* Schema.encodeEffect(Cache)({ checkedAt: now, latest: version }),
-            )
-          }),
-        ),
-      )
-  return isNewer(found, options.current) ? Option.some(found) : Option.none()
+  const found = yield* remembered({ cache: options.cache, within: day }, latest(options.host))
+  return found && isNewer(found, options.current) ? Option.some(found) : Option.none()
+})
+
+export const required = Effect.fn("Upgrade.required")(function* (options: {
+  readonly host: string
+  readonly cache: string
+  readonly current: string
+}) {
+  const found = yield* remembered({ cache: options.cache, within: hour }, minimum(options.host))
+  return found && isNewer(found, options.current) ? Option.some(found) : Option.none()
+})
+
+export const gate = Effect.gen(function* () {
+  if (!Release.compiled || process.env.REN2_NO_UPDATE_CHECK) return
+  const needed = yield* required({
+    host: host(),
+    cache: join(Directories.config(), "minimum.json"),
+    current: Release.version,
+  }).pipe(
+    Effect.timeoutOption("1 second"),
+    Effect.map(Option.flatten),
+    Effect.orElseSucceed(() => Option.none<string>()),
+  )
+  if (Option.isSome(needed))
+    return yield* new Output.Failure({
+      message: `ren2 v${Release.version} no longer works with Ren, which needs v${needed.value} or later. Run ren2 upgrade.`,
+    })
 })
 
 export const notice = Effect.gen(function* () {
