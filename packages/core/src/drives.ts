@@ -349,7 +349,7 @@ export const layer = Layer.effect(
               Effect.repeat({ while: (more) => more }),
               Effect.catch((error) =>
                 Effect.logWarning("Retention kept an archived drive for the next run", error.cause).pipe(
-                  Effect.annotateLogs({ spaceId: space.spaceId }),
+                  Effect.annotateLogs({ "ren.space.id": space.spaceId }),
                 ),
               ),
             ),

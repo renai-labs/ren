@@ -56,7 +56,9 @@ const control = Layer.succeed(
   }),
 )
 
-const logs = Logger.layer([Logger.make((options) => logged.push(String(options.message)))], { mergeWithExisting: true })
+const logs = Logger.layer([Logger.make((options) => logged.push(`${options.logLevel}: ${String(options.message)}`))], {
+  mergeWithExisting: true,
+})
 
 const it = testEffect(
   CredentialRefresh.layer.pipe(
@@ -236,11 +238,13 @@ describe("CredentialRefresh", () => {
       const soon = yield* expiring(3)
       yield* refresh.sweep
       yield* refresh.sweep
-      expect(logged.some((message) => message.includes("alert"))).toBe(false)
+      expect(logged.filter((message) => message.startsWith("Error"))).toEqual([])
       yield* refresh.sweep
       const saved = yield* stored(soon)
       expect(saved?.row).toMatchObject({ status: "ok", refresh_failures: 3, revision: 1 })
-      expect(logged.filter((message) => message.includes("alert")).length).toBe(1)
+      expect(logged.filter((message) => message.startsWith("Error"))).toEqual([
+        "Error: A credential failed to refresh 3 times in a row",
+      ])
     }).pipe(Effect.provide(logs)),
   )
 })

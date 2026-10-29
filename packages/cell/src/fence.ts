@@ -17,7 +17,8 @@ export const layer = Layer.effect(
     return Service.of({
       retired,
       retire: (reason) =>
-        Effect.logError(`Ren retired this brain's generation; the brain fences itself: ${reason}`).pipe(
+        Effect.logError("Ren retired this brain's generation; the brain fences itself").pipe(
+          Effect.annotateLogs({ reason }),
           Effect.andThen(Deferred.succeed(retired, reason)),
           Effect.asVoid,
         ),

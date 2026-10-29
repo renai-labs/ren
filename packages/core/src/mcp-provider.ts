@@ -311,8 +311,8 @@ export const cleanUp = Effect.fnUntraced(function* (
         while: () => Effect.map(Clock.currentTimeMillis, (now) => now - started < Duration.toMillis(cleanupFor)),
       }),
       Effect.catchCause(() =>
-        Effect.logError(`alert: the ${provider.id} cleanup stopped after 24 hours`).pipe(
-          Effect.annotateLogs({ alert: "provider_cleanup", account: leftover.account ?? "" }),
+        Effect.logError("A provider's cleanup stopped after 24 hours").pipe(
+          Effect.annotateLogs({ provider: provider.id, account: leftover.account ?? "" }),
         ),
       ),
     )
@@ -348,7 +348,11 @@ export const layerCleanup = Layer.effect(
       Effect.gen(function* () {
         const provider = yield* registry.get(payload.provider)
         yield* cleanUp(provider, { state: yield* stateOf(payload), account: payload.account })
-      }).pipe(Effect.catchTag("McpProvider.Unavailable", (error) => Effect.logError(`alert: ${error.message}`))),
+      }).pipe(
+        Effect.catchTag("McpProvider.Unavailable", (error) =>
+          Effect.logError("A provider's cleanup cannot run").pipe(Effect.annotateLogs({ reason: error.message })),
+        ),
+      ),
     )
     return Cleanup.of({
       start: (leftover) =>

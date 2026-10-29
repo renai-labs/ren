@@ -353,7 +353,8 @@ export const layer = Layer.effect(
             ),
           ),
           Effect.catchTag("BrainRejectedError", (error) =>
-            Effect.logError(`The brain rejected the start of ${payload.input.sessionId}: ${error.message}`).pipe(
+            Effect.logError("The brain rejected a start").pipe(
+              Effect.annotateLogs({ "ren.session.id": payload.input.sessionId, reason: error.message }),
               Effect.andThen(Ref.get(rejectedListeners)),
               Effect.flatMap((listeners) =>
                 Effect.forEach(

@@ -128,7 +128,7 @@ describe("TelemetryRelay", () => {
     }),
   )
 
-  it.live("forwards a brain's logs, and reports each exception record to error tracking as the brain", () =>
+  it.live("forwards a brain's logs, and reports each error record to error tracking as the brain", () =>
     Effect.gen(function* () {
       exported["logs"] = []
       exceptions.length = 0
@@ -145,6 +145,12 @@ describe("TelemetryRelay", () => {
                     severityText: "Error",
                     body: { stringValue: "The sync failed" },
                     attributes: [text("ren.session.id", "ses_test")],
+                  },
+                  {
+                    timeUnixNano: "1",
+                    severityText: "Warn",
+                    body: { stringValue: "The sync retries" },
+                    attributes: [],
                   },
                   {
                     timeUnixNano: "2",
@@ -174,10 +180,17 @@ describe("TelemetryRelay", () => {
       }).pipe(Effect.provide(relay))
 
       expect(JSON.stringify(exported["logs"])).toContain("The sync failed")
-      expect(exceptions).toHaveLength(1)
-      expect(exceptions[0]?.event).toBe("$exception")
-      expect(exceptions[0]?.distinct_id).toBe(host.brainId)
-      expect(exceptions[0]?.properties).toMatchObject({
+      const reported = (type: string) =>
+        exceptions.find((event) => JSON.stringify(event.properties["$exception_list"]).includes(`"type":"${type}"`))
+      expect(exceptions).toHaveLength(2)
+      expect(reported("ErrorLog")?.properties).toMatchObject({
+        $exception_level: "error",
+        $exception_list: [{ type: "ErrorLog", value: "The sync failed" }],
+        "ren.session.id": "ses_test",
+      })
+      expect(reported("TypeError")?.event).toBe("$exception")
+      expect(reported("TypeError")?.distinct_id).toBe(host.brainId)
+      expect(reported("TypeError")?.properties).toMatchObject({
         $exception_level: "fatal",
         $exception_list: [{ type: "TypeError", value: "boom" }],
         $process_person_profile: false,

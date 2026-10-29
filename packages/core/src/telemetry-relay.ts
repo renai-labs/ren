@@ -81,27 +81,39 @@ export const layer = Layer.effect(
         for (const resourceLogs of batch.resourceLogs) {
           const resource = stamp(host, resourceLogs.resource)
           pushLogs({ ...resourceLogs, resource })
-          const exceptions = resourceLogs.scopeLogs.flatMap((scope) =>
+          const errors = resourceLogs.scopeLogs.flatMap((scope) =>
             scope.logRecords.flatMap((log) => {
               const attributes = record(log.attributes)
-              return attributes["exception.type"] ? [{ log, attributes }] : []
+              if (attributes["exception.type"])
+                return [
+                  {
+                    log,
+                    error: Object.assign(new Error(String(attributes["exception.message"] ?? "")), {
+                      name: String(attributes["exception.type"]),
+                      stack: String(attributes["exception.stacktrace"] ?? ""),
+                    }),
+                  },
+                ]
+              if (log.severityText !== "Error" && log.severityText !== "Fatal") return []
+              return [
+                {
+                  log,
+                  error: Telemetry.errorLog(
+                    String((log.body && plain(log.body)) ?? JSON.stringify(log.body ?? null)),
+                    log.severityText,
+                  ),
+                },
+              ]
             }),
           )
-          for (const found of exceptions)
-            posthog.captureException(
-              Object.assign(new Error(String(found.attributes["exception.message"] ?? "")), {
-                name: String(found.attributes["exception.type"]),
-                stack: String(found.attributes["exception.stacktrace"] ?? ""),
-              }),
-              host.brainId,
-              {
-                ...record(found.log.attributes.filter((attribute) => !attribute.key.startsWith("exception."))),
-                ...record(resource.attributes),
-                $exception_level: found.log.severityText === "Fatal" ? "fatal" : "error",
-                $process_person_profile: false,
-                ...(found.log.traceId && { $trace_id: found.log.traceId, $span_id: found.log.spanId }),
-              },
-            )
+          for (const found of errors)
+            posthog.captureException(found.error, host.brainId, {
+              ...record(found.log.attributes.filter((attribute) => !attribute.key.startsWith("exception."))),
+              ...record(resource.attributes),
+              $exception_level: found.log.severityText === "Fatal" ? "fatal" : "error",
+              $process_person_profile: false,
+              ...(found.log.traceId && { $trace_id: found.log.traceId, $span_id: found.log.spanId }),
+            })
         }
       }),
     })
