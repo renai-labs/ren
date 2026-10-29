@@ -8,6 +8,7 @@ import { NewTaskDialog, useNewTaskShortcut } from "@/components/ren/new-task-dia
 import { SearchDialog } from "@/components/ren/search-dialog"
 import { SettingsSidebar } from "@/components/ren/settings-sidebar"
 import { SpaceSidebar } from "@/components/ren/space-sidebar"
+import { ModelPickerSwitcher } from "@/components/ren/model-picker"
 import { useMe } from "@/hooks/use-me"
 import { chatFor } from "@/lib/chat"
 import { toggleSearch } from "@/stores/ui"
@@ -38,6 +39,9 @@ export function AppShell() {
   useSearchShortcut()
   useNewTaskShortcut()
   const spaceId = useLocation({ select: (location) => /^\/spaces\/([^/]+)/u.exec(location.pathname)?.[1] })
+  const composing = useLocation({
+    select: (location) => location.pathname === "/" || location.pathname.startsWith("/sessions"),
+  })
   return (
     <RegistryContext value={chat.registry}>
       <ChatReact.Provider atoms={chat.atoms}>
@@ -54,6 +58,7 @@ export function AppShell() {
           </SidebarInset>
           <SearchDialog />
           <NewTaskDialog />
+          {composing ? <ModelPickerSwitcher /> : null}
         </SidebarProvider>
       </ChatReact.Provider>
     </RegistryContext>
