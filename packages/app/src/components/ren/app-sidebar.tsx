@@ -238,7 +238,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup className="min-h-0 flex-1 px-0 pb-0">
-          <SidebarGroupLabel className="shrink-0 font-medium text-muted-foreground/70">Chats</SidebarGroupLabel>
+          <SidebarGroupLabel className="shrink-0 font-medium text-muted-foreground">Chats</SidebarGroupLabel>
           <div className="absolute top-3.5 right-9 flex group-data-[collapsible=icon]:hidden">
             <FilterMenu
               label="Filter chats"
