@@ -213,6 +213,14 @@ export const MountInput = Schema.Struct({
   access: Drive.Access,
 }).annotate({ identifier: "Executor.MountInput" })
 
+export interface RefreshInput extends Schema.Schema.Type<typeof RefreshInput> {}
+export const RefreshInput = Schema.Struct({
+  path: Schema.String.annotate({
+    description:
+      "A folder on a mounted drive. The mount lists it again from the drive, so a file put in the drive from outside shows at once.",
+  }),
+}).annotate({ identifier: "Executor.RefreshInput" })
+
 export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundError>()("ProcessNotFoundError", {
   id: ProcessID,
 }) {}
@@ -281,4 +289,5 @@ export const Rpcs = RpcGroup.make(
   Rpc.make("files.mkdir", { payload: Path, error: FileSystemError }),
   Rpc.make("files.unpack", { payload: UnpackInput, error: Schema.Union([ArchiveError, FileSystemError]) }),
   Rpc.make("drives.mount", { payload: MountInput, error: MountError }),
+  Rpc.make("drives.refresh", { payload: RefreshInput, error: MountError }),
 ).middleware(Authentication)

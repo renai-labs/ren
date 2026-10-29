@@ -128,7 +128,7 @@ describe.skipIf(!hasDocker)("drives.mount", () => {
   )
 
   it.live(
-    "a read-only drive refuses writes; mounted again writable, it uploads what is written in it within seconds",
+    "a read-only drive refuses writes; mounted again writable, a write is in the drive when the sandbox stops 1 s later",
     () =>
       Effect.gen(function* () {
         const environment = yield* started
@@ -144,10 +144,45 @@ describe.skipIf(!hasDocker)("drives.mount", () => {
 
         yield* client["drives.mount"]({ ...space, access: "write" })
         yield* write
-        const uploaded = Effect.try(() =>
-          environment.exec("cat /tmp/s3/drives/org_1/drives/spaces/spc_1/reports/q3.md"),
-        ).pipe(Effect.retry({ schedule: Schedule.spaced("500 millis"), times: 40 }))
-        expect(yield* uploaded).toBe("by the agent")
+        yield* Effect.sleep("1 second")
+        environment.exec("pkill -9 -f '^rclone mount'")
+        expect(environment.exec("cat /tmp/s3/drives/org_1/drives/spaces/spc_1/reports/q3.md")).toBe("by the agent")
+      }),
+    300_000,
+  )
+
+  it.live(
+    "a file put in the drive from outside shows on the mount after a refresh of its folder, also in a folder the mount has not seen",
+    () =>
+      Effect.gen(function* () {
+        const environment = yield* started
+        const client = environment.client
+        const put = (key: string, text: string) =>
+          environment.exec(
+            `echo ${text} | rclone rcat --s3-no-check-bucket --s3-provider Minio --s3-region us-east-1 --s3-endpoint http://127.0.0.1:9100 --s3-force-path-style --s3-access-key-id drive-key --s3-secret-access-key drive-key :s3:drives/org_1/drives/spaces/spc_1/${key}`,
+          )
+        const read = (path: string) =>
+          client["files.read"]({ path: `/tmp/drives/space/${path}` }).pipe(
+            Effect.map((result) => new TextDecoder().decode(result.bytes)),
+          )
+        put("chats/ses_1/uploads/msg_1/a.txt", "first")
+        yield* client["drives.mount"]({
+          path: "/tmp/drives/space",
+          remote: remote("drive-key", "org_1/drives/spaces/spc_1/"),
+          access: "write",
+        })
+        expect(yield* read("chats/ses_1/uploads/msg_1/a.txt")).toBe("first\n")
+
+        put("chats/ses_1/uploads/msg_1/b.txt", "second")
+        put("chats/ses_1/uploads/msg_2/c.txt", "third")
+        expect((yield* Effect.flip(read("chats/ses_1/uploads/msg_1/b.txt")))._tag).toBe("FileNotFoundError")
+        yield* client["drives.refresh"]({ path: "/tmp/drives/space/chats/ses_1/uploads/msg_1" })
+        yield* client["drives.refresh"]({ path: "/tmp/drives/space/chats/ses_1/uploads/msg_2" })
+        expect(yield* read("chats/ses_1/uploads/msg_1/b.txt")).toBe("second\n")
+        expect(yield* read("chats/ses_1/uploads/msg_2/c.txt")).toBe("third\n")
+
+        const outside = yield* client["drives.refresh"]({ path: "/tmp/elsewhere" }).pipe(Effect.flip)
+        expect(outside._tag).toBe("MountError")
       }),
     300_000,
   )
