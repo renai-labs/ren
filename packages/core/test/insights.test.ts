@@ -111,6 +111,33 @@ describe("Insights", () => {
     }).pipe(Effect.provide(Insights.layer)),
   )
 
+  it.live("a sandbox run adds its cost to the space, as its own provider, with no calls, sessions or tokens", () =>
+    Effect.gen(function* () {
+      const insights = yield* Insights.Service
+      const o = yield* org
+      const from = utc("2026-10-01T00:00:00Z")
+      const to = utc("2026-10-02T00:00:00Z")
+      yield* spend(o.factory, from, { root_session: "ses_a" })
+      yield* spend(o.factory, from, {
+        source: "e2b",
+        type: "sandbox.compute",
+        provider: "e2b",
+        cost_micro_usd: 269_064,
+        data: { sandbox_id: "sbx_1", duration_ms: 1_818_000, vcpu_ms: 14_544_000, memory_mib_ms: 14_893_056_000 },
+      })
+
+      const total = yield* insights.query(o.ada, query(o.factory.id, from, to))
+      expect(total.rows.map((row) => [row.sessions, row.calls, row.tokens.input, row.cost.ren])).toEqual([
+        [1, 1, 1000, 274_064],
+      ])
+      const byProvider = yield* insights.query(o.ada, query(o.factory.id, from, to, { groupBy: "provider" }))
+      expect(byProvider.rows.map((row) => [row.key, row.calls, row.cost.ren])).toEqual([
+        ["e2b", 0, 269_064],
+        ["anthropic", 1, 5000],
+      ])
+    }).pipe(Effect.provide(Insights.layer)),
+  )
+
   it.live("a person who cannot see the space gets NotFound", () =>
     Effect.gen(function* () {
       const insights = yield* Insights.Service
