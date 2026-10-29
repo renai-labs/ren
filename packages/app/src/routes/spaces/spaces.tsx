@@ -191,48 +191,55 @@ function JoinSpaceDialog(props: {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Join space</DialogTitle>
-          <DialogDescription>Choose a space in your organization to join.</DialogDescription>
+          <DialogDescription>
+            {!props.loading && joinable.length === 0
+              ? "You’re already in every space."
+              : "Choose a space in your organization to join."}
+          </DialogDescription>
         </DialogHeader>
-        <Command className="rounded-lg! bg-muted inset-ring inset-ring-border **:data-[slot=input-group]:h-8.75!">
-          <CommandInput placeholder="Search spaces…" />
-          <CommandList className="pt-1">
-            <CommandEmpty>
-              {props.loading
-                ? "Loading…"
-                : joinable.length === 0
-                  ? "You’re already in every space"
-                  : "No matching spaces"}
-            </CommandEmpty>
-            {joinable.length > 0 ? (
-              <CommandGroup heading="Available spaces" className="p-0">
-                {joinable.map((space) => (
-                  <CommandItem
-                    key={space.id}
-                    value={`${space.name} ${space.id}`}
-                    data-checked={selected === space.id || undefined}
-                    onSelect={() => setSelected(space.id)}
-                    className="items-start py-1"
-                  >
-                    <IconCube className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-                    <span className="flex min-w-0 flex-col">
-                      {space.name}
-                      {space.description ? (
-                        <span className="truncate text-xs text-muted-foreground">{space.description}</span>
-                      ) : null}
-                    </span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-          </CommandList>
-        </Command>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          <Button disabled={!chosen || props.pending} onClick={() => chosen && props.onJoin(chosen.id, chosen.name)}>
-            {props.pending ? <Spinner data-icon="inline-start" /> : null}
-            Join space
-          </Button>
-        </DialogFooter>
+        {!props.loading && joinable.length === 0 ? (
+          <DialogFooter className="border-t-0 sm:justify-end">
+            <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
+          </DialogFooter>
+        ) : (
+          <>
+            <Command className="rounded-none! bg-transparent p-0 **:data-[slot=command-input-wrapper]:mx-0 **:data-[slot=command-input-wrapper]:mt-0">
+              <CommandInput placeholder="Search spaces…" />
+              <CommandList className="pt-1">
+                <CommandEmpty>{props.loading ? "Loading…" : "No matching spaces"}</CommandEmpty>
+                <CommandGroup className="p-0">
+                  {joinable.map((space) => (
+                    <CommandItem
+                      key={space.id}
+                      value={`${space.name} ${space.id}`}
+                      data-checked={selected === space.id || undefined}
+                      onSelect={() => setSelected(space.id)}
+                      className="items-start py-1.5"
+                    >
+                      <IconCube className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                      <span className="flex min-w-0 flex-col">
+                        {space.name}
+                        {space.description ? (
+                          <span className="truncate text-xs text-muted-foreground">{space.description}</span>
+                        ) : null}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+            <DialogFooter className="border-t-0 sm:justify-end">
+              <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
+              <Button
+                disabled={!chosen || props.pending}
+                onClick={() => chosen && props.onJoin(chosen.id, chosen.name)}
+              >
+                {props.pending ? <Spinner data-icon="inline-start" /> : null}
+                Join space
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )
