@@ -120,7 +120,9 @@ interface Look {
   readonly chat: string
   readonly skeleton: string
   readonly chatIcon: boolean
+  readonly avatar: "default" | "sm"
   readonly name: string
+  readonly org: string
 }
 
 const looks: Record<SidebarLook, Look> = {
@@ -131,7 +133,9 @@ const looks: Record<SidebarLook, Look> = {
     chat: "h-9",
     skeleton: "h-9",
     chatIcon: true,
+    avatar: "default",
     name: "",
+    org: "text-xs",
   },
   notion: {
     menu: "gap-px",
@@ -140,25 +144,31 @@ const looks: Record<SidebarLook, Look> = {
     chat: "h-7.5 font-medium [&_svg]:size-4.5 [&_svg]:text-sidebar-foreground/70",
     skeleton: "h-7.5",
     chatIcon: true,
+    avatar: "default",
     name: "",
+    org: "text-xs text-muted-foreground/70",
   },
   devin: {
     menu: "gap-px",
-    nav: "h-7 text-[13px] text-foreground/90 [&_svg]:text-foreground/70",
-    label: "text-muted-foreground",
+    nav: "h-7.5 text-[13px] tracking-[-0.005em] text-foreground/90",
+    label: "text-[13px] font-medium text-foreground/90",
     chat: "h-auto py-1.5",
     skeleton: "h-11",
     chatIcon: false,
+    avatar: "default",
     name: "text-[13px]",
+    org: "text-xs text-foreground/50",
   },
   cursor: {
     menu: "gap-0",
-    nav: "h-7 text-[13px] text-foreground/85 [&_svg]:size-3.5",
-    label: "text-muted-foreground/70",
-    chat: "h-7 text-[13px] text-foreground/75",
+    nav: "h-7 text-xs text-foreground/85 [&_svg]:size-3.5 [&_svg]:text-foreground/60",
+    label: "text-xs font-medium text-foreground/50",
+    chat: "h-7 text-xs text-foreground/80",
     skeleton: "h-7",
     chatIcon: false,
-    name: "text-[13px]",
+    avatar: "sm",
+    name: "text-xs",
+    org: "text-[11px] text-foreground/50",
   },
 }
 
@@ -221,8 +231,10 @@ function ChatItem(props: {
         {look.chatIcon ? <IconMessage /> : null}
         {props.look === "devin" ? (
           <span className="flex min-w-0 flex-col">
-            <span className="truncate text-[13px] text-foreground/90">{sessionTitle(chat.title)}</span>
-            <span className="truncate text-xs font-normal text-muted-foreground">{meta}</span>
+            <span className="truncate text-[13px] tracking-[-0.005em] text-foreground/90">
+              {sessionTitle(chat.title)}
+            </span>
+            <span className="truncate text-xs text-foreground/50">{meta}</span>
           </span>
         ) : (
           <span>{sessionTitle(chat.title)}</span>
@@ -373,7 +385,7 @@ export function AppSidebar() {
                 return (
                   <Fragment key={chat.id}>
                     {heading ? (
-                      <li className="px-2 pt-3 pb-1 text-[11px] text-muted-foreground/70 first:pt-1">{heading}</li>
+                      <li className="px-2 pt-3 pb-1 text-[11px] text-foreground/40 first:pt-1">{heading}</li>
                     ) : null}
                     <ChatItem
                       chat={chat}
@@ -416,13 +428,13 @@ export function AppSidebar() {
                   />
                 }
               >
-                <Avatar>
+                <Avatar size={look.avatar}>
                   {me.user.image ? <AvatarImage src={me.user.image} alt="" /> : null}
                   <AvatarFallback>{initials(userName)}</AvatarFallback>
                 </Avatar>
                 <span className="flex min-w-0 flex-1 flex-col text-start leading-tight">
                   <span className={cn("truncate font-medium text-foreground", look.name)}>{userName}</span>
-                  <span className="truncate text-xs">{me.organization.name}</span>
+                  <span className={cn("truncate", look.org)}>{me.organization.name}</span>
                 </span>
                 <IconChevronUp />
               </DropdownMenuTrigger>
