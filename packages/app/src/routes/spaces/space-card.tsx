@@ -1,95 +1,84 @@
-import type { ReferenceInfo, SpaceInfo } from "@ren/client"
-import { useQuery } from "@tanstack/react-query"
-import { Link, useNavigate } from "@tanstack/react-router"
-import {
-  IconActivity,
-  IconBrandGithub,
-  IconCube,
-  IconExclamationMark,
-  IconLock,
-  IconMessage,
-} from "@tabler/icons-react"
-import { Badge } from "@/components/ui/badge"
+import type { ReactNode } from "react"
+import type { SpaceInfo } from "@ren/client"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
+import { IconClock, IconCube, IconLock, IconMessage } from "@tabler/icons-react"
+import { toast } from "sonner"
+import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { RowMenu } from "@/components/ren/row-menu"
+import { useCatalog } from "@/hooks/use-catalog"
+import { useMe } from "@/hooks/use-me"
 import { useNow } from "@/hooks/use-now"
-import { api } from "@/lib/api"
-import { gaps } from "@/lib/apps"
-import { formatRelative, formatShortDate, plural } from "@/lib/format"
-import { sessionTitle } from "@/lib/sessions"
-import { cn } from "@/lib/utils"
+import { api, errorMessage } from "@/lib/api"
+import { formatRelative, initials, plural } from "@/lib/format"
 
-const day = 86_400_000
-
-const when = (at: string, now: number) => (now - Date.parse(at) < day ? formatRelative(at, now) : formatShortDate(at))
-
-function StatusRing(props: { busy: boolean; pending: number }) {
-  const state = props.busy
-    ? {
-        label: "Ren is working in a chat",
-        icon: <IconActivity className="size-4" />,
-        ring: "border-chart-1/30 text-chart-1",
-      }
-    : props.pending > 0
-      ? {
-          label: `${plural(props.pending, "app account")} not connected`,
-          icon: <IconExclamationMark className="size-4" />,
-          ring: "border-transparent bg-chart-3/15 text-chart-3",
-        }
-      : { label: "Idle", icon: <IconActivity className="size-4" />, ring: "text-muted-foreground" }
+function Fact(props: { icon: ReactNode; children: ReactNode }) {
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            aria-label={state.label}
-            className={cn(
-              "relative flex size-9 shrink-0 items-center justify-center rounded-full border-2",
-              state.ring,
-            )}
-          />
-        }
-      >
-        {props.busy ? (
-          <span className="absolute -inset-0.5 rounded-full border-2 border-transparent border-t-chart-1 motion-safe:animate-spin" />
-        ) : null}
-        {state.icon}
-      </TooltipTrigger>
-      <TooltipContent>{state.label}</TooltipContent>
-    </Tooltip>
+    <span className="flex items-center gap-1.5 [&_svg]:size-3.5">
+      {props.icon}
+      {props.children}
+    </span>
   )
 }
 
-function RepoChip(props: { reference: ReferenceInfo }) {
-  const path = props.reference.repository.replace(/^https?:\/\/(www\.)?github\.com\//u, "").replace(/\.git$/u, "")
+function Stack(props: {
+  items: ReadonlyArray<{ id: string; name: string; image?: string | null | undefined }>
+  total: number
+  label: string
+}) {
+  const shown = props.items.slice(0, 3)
   return (
-    <Badge variant="secondary" className="h-6 max-w-56 rounded-full px-2 font-normal">
-      <IconBrandGithub />
-      <span className="truncate">{path}</span>
-    </Badge>
+    <span className="flex items-center gap-1.5">
+      {shown.length > 0 ? (
+        <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
+          {shown.map((item) => (
+            <Avatar key={item.id} size="sm" className="data-[size=sm]:size-5">
+              {item.image ? <AvatarImage src={item.image} alt="" /> : null}
+              <AvatarFallback className="bg-secondary text-[10px]">{initials(item.name)}</AvatarFallback>
+            </Avatar>
+          ))}
+          {props.total > shown.length ? (
+            <AvatarGroupCount className="size-5 text-[10px] group-has-data-[size=sm]/avatar-group:size-5">
+              +{props.total - shown.length}
+            </AvatarGroupCount>
+          ) : null}
+        </AvatarGroup>
+      ) : null}
+      {props.label}
+    </span>
   )
 }
 
 export function SpaceCard(props: { space: SpaceInfo }) {
   const space = props.space
-  const personal = space.kind === "private"
-  const navigate = useNavigate()
   const now = useNow()
   const chats = useQuery(api.session.list.queryOptions({ spaceId: space.id, page: 1, pageSize: 1 }))
   const reach = useQuery({ ...api["app-profile-reach"].space.profiles.queryOptions({ id: space.id }), retry: false })
-  const settings = useQuery({ ...api["space-settings"].get.queryOptions({ idOrSlug: space.id }), retry: false })
+  const people = useQuery({
+    ...api["space-member"].list.queryOptions({ spaceId: space.id, status: "active", page: 1, pageSize: 3 }),
+    enabled: space.kind !== "private" && space.membershipId !== null,
+  })
+  const me = useMe()
+  const catalog = useCatalog()
+  const archive = useMutation(api.space.archive.mutationOptions())
   const latest = chats.data?.items.at(0)
-  const total = chats.data?.total ?? 0
-  const repo = settings.data?.settings.references?.at(0)
-  const pending = (reach.data?.profiles ?? []).filter((profile) => gaps(profile).length > 0).length
-  const Icon = personal ? IconLock : IconCube
-  const go = (to: "/spaces/$spaceId/members" | "/spaces/$spaceId/apps" | "/spaces/$spaceId/credentials") => () =>
-    void navigate({ to, params: { spaceId: space.id } })
+  const apps = [...new Set((reach.data?.profiles ?? []).map((profile) => profile.appId))].map((appId) => ({
+    id: appId,
+    name: catalog.appOf(appId)?.name ?? appId,
+    image: catalog.appOf(appId)?.icon,
+  }))
+  const members =
+    space.kind === "private"
+      ? [{ id: me.user.id, name: me.user.name || me.user.email, image: me.user.image }]
+      : (people.data?.items ?? []).flatMap((member) =>
+          member.status === "active" ? [{ id: member.id, name: member.name, image: member.image }] : [],
+        )
+  const Icon = space.kind === "private" ? IconLock : IconCube
   return (
-    <Card className="relative gap-0 border p-5 shadow-soft ring-0 transition-[background-color,scale] duration-150 ease-out hover:bg-muted/40 active:scale-[0.99] motion-reduce:active:scale-100">
+    <Card className="relative gap-6 border p-5 shadow-soft ring-0 transition-[background-color,scale] duration-150 ease-out hover:bg-muted/40 active:scale-[0.99] motion-reduce:active:scale-100">
       <div className="flex items-start gap-3">
-        <Icon className="mt-0.5 size-7 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+        <Icon className="mt-0.5 size-6 shrink-0 text-muted-foreground" strokeWidth={1.5} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <Link
             to="/spaces/$spaceId"
@@ -98,38 +87,45 @@ export function SpaceCard(props: { space: SpaceInfo }) {
           >
             {space.name}
           </Link>
-          <span className="truncate text-sm text-muted-foreground">
-            {space.description || (personal ? "Only you" : plural(space.memberCount, "member"))}
-          </span>
+          <span className="line-clamp-2 text-sm text-muted-foreground">{space.description || "No description"}</span>
         </div>
-        <StatusRing busy={latest?.status === "busy"} pending={pending} />
-        <span className="relative flex h-9 items-center">
-          <RowMenu
-            label={`${space.name} actions`}
-            items={[
-              ...(personal ? [] : [{ label: "Members", onSelect: go("/spaces/$spaceId/members") }]),
-              { label: "Apps", onSelect: go("/spaces/$spaceId/apps") },
-              { label: "Keys", onSelect: go("/spaces/$spaceId/credentials") },
-            ]}
-            className="flex text-muted-foreground"
-          />
-        </span>
+        {space.canArchive ? (
+          <span className="relative -mt-1 -mr-1">
+            <RowMenu
+              label={`${space.name} actions`}
+              className="flex text-muted-foreground"
+              items={[
+                {
+                  label: "Archive space",
+                  onSelect: () =>
+                    archive.mutateAsync(
+                      { id: space.id },
+                      {
+                        onSuccess: () => toast.success(`${space.name} archived`),
+                        onError: (error) =>
+                          toast.error("Could not archive the space", { description: errorMessage(error) }),
+                      },
+                    ),
+                  confirm: {
+                    title: `Archive “${space.name}”?`,
+                    description: "Its members lose access. Only the API can bring it back.",
+                    action: "Archive",
+                  },
+                },
+              ]}
+            />
+          </span>
+        ) : null}
       </div>
-      <div className="mt-3 flex h-6">{repo ? <RepoChip reference={repo} /> : null}</div>
-      <div className="mt-4 flex min-w-0 flex-col gap-1">
-        <span className={cn("truncate text-[15px]/5", latest ? "font-medium" : "text-muted-foreground")}>
-          {latest ? sessionTitle(latest.title) : "No chats yet"}
-        </span>
-        <span className="flex items-center gap-1.5 text-sm text-muted-foreground tabular-nums">
-          {latest ? when(latest.updatedAt, now) : when(space.createdAt, now)}
-          {total > 0 ? (
-            <>
-              <span aria-hidden>·</span>
-              <IconMessage className="size-3.5" />
-              {plural(total, "chat")}
-            </>
-          ) : null}
-        </span>
+      <div className="flex flex-col gap-2.5 text-xs text-muted-foreground tabular-nums">
+        <div className="flex items-center gap-4">
+          <Fact icon={<IconMessage />}>{plural(chats.data?.total ?? 0, "chat")}</Fact>
+          <Fact icon={<IconClock />}>{latest ? formatRelative(latest.updatedAt, now) : "Not used yet"}</Fact>
+        </div>
+        <div className="flex h-5 items-center gap-4">
+          <Stack items={members} total={space.memberCount} label={plural(space.memberCount, "member")} />
+          <Stack items={apps} total={apps.length} label={apps.length === 0 ? "No apps" : plural(apps.length, "app")} />
+        </div>
       </div>
     </Card>
   )
