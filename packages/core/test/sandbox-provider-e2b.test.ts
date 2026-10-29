@@ -99,6 +99,8 @@ const it = testEffect(
           E2B_DOMAIN: "e2b.test",
           E2B_API_URL: `http://127.0.0.1:${e2b.port}`,
           E2B_OWNER: "ren-test-a",
+          E2B_VCPU_SECOND_MICRO_USD: "14",
+          E2B_GIB_SECOND_MICRO_USD: "4.5",
         }),
       ),
     ),
