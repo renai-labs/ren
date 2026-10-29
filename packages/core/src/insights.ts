@@ -5,6 +5,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Insights } from "@ren/schema/insights"
 import { Models } from "@ren/schema/models"
 import type { Space as SpaceSchema } from "@ren/schema/space"
+import type { Usage } from "@ren/schema/usage"
 import { and, count, countDistinct, eq, gte, inArray, lt, type SQL, type SQLWrapper, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { Context, DateTime, Effect, Layer, Order, Predicate } from "effect"
@@ -50,9 +51,9 @@ const hasTasks = (groupBy: Insights.GroupBy) => groupBy !== "model" && groupBy !
 
 const total = (expression: SQL) => sql<number>`coalesce(${expression}, 0)`.mapWith(Number)
 
-const field = (name: keyof typeof events.$inferSelect.data) => sql<string | null>`${events.data} ->> ${name}`
+const field = (name: keyof Usage.ModelCall) => sql<string | null>`${events.data} ->> ${name}`
 
-const tokens = (...names: ReadonlyArray<keyof typeof events.$inferSelect.data>) =>
+const tokens = (...names: ReadonlyArray<keyof Usage.ModelCall>) =>
   total(
     sql`sum(${sql.join(
       names.map((name) => sql`coalesce((${field(name)})::bigint, 0)`),

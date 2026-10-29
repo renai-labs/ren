@@ -12,6 +12,8 @@ import { Seed } from "./lib/seed.js"
 
 const it = testEffect(Usage.layer.pipe(Layer.provideMerge(Testing.layer)))
 
+type ModelCallEvent = Extract<Usage.Event, { readonly type: "model.call" }>
+
 const owner = Effect.map(Seed.owner(), (found) => ({ ...found, brainId: Brain.ID.create() }))
 
 const event = Effect.fnUntraced(function* (
@@ -20,7 +22,7 @@ const event = Effect.fnUntraced(function* (
     readonly brainId: Brain.ID
     readonly spaceId: Space.ID
   },
-  fields: Partial<Usage.Event> & Pick<Usage.Event, "id">,
+  fields: Partial<ModelCallEvent> & Pick<ModelCallEvent, "id">,
 ) {
   return {
     source: "ren-inference",
@@ -41,7 +43,7 @@ const event = Effect.fnUntraced(function* (
       output_tokens: 512,
     },
     ...fields,
-  } satisfies Usage.Event
+  } satisfies ModelCallEvent
 })
 
 const stored = Effect.flatMap(Database.Service, (database) =>

@@ -152,79 +152,13 @@
           "events": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Usage.Event"
+              "$ref": "#/components/schemas/Usage.ModelCallEvent"
             },
             "minItems": 1,
             "maxItems": 500
           }
         },
         "required": ["events"],
-        "additionalProperties": false
-      },
-      "Usage.Event": {
-        "type": "object",
-        "properties": {
-          "source": {
-            "type": "string",
-            "minLength": 1
-          },
-          "id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "type": {
-            "type": "string",
-            "enum": ["model.call"]
-          },
-          "time": {
-            "type": "string"
-          },
-          "workload": {
-            "type": "string",
-            "description": "`brain:<id>` or `hand:<id>`, then `:<generation>` when known."
-          },
-          "organization": {
-            "$ref": "#/components/schemas/Auth.OrganizationID"
-          },
-          "brain": {
-            "$ref": "#/components/schemas/Brain.ID"
-          },
-          "space": {
-            "$ref": "#/components/schemas/Space.ID"
-          },
-          "root_session": {
-            "type": "string"
-          },
-          "session": {
-            "type": "string"
-          },
-          "turn": {
-            "type": "string"
-          },
-          "member": {
-            "type": "string"
-          },
-          "agent": {
-            "type": "string"
-          },
-          "payer": {
-            "$ref": "#/components/schemas/Usage.Payer"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "cost_micro_usd": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "error": {
-            "$ref": "#/components/schemas/Usage.Failure"
-          },
-          "data": {
-            "$ref": "#/components/schemas/Usage.ModelCall"
-          }
-        },
-        "required": ["source", "id", "type", "time", "workload", "organization", "payer", "provider", "data"],
         "additionalProperties": false
       },
       "Usage.Failure": {
@@ -292,6 +226,72 @@
           }
         },
         "required": ["requested_model", "served_model"],
+        "additionalProperties": false
+      },
+      "Usage.ModelCallEvent": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "time": {
+            "type": "string"
+          },
+          "workload": {
+            "type": "string",
+            "description": "`brain:<id>` or `hand:<id>`, then `:<generation>` when known."
+          },
+          "organization": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "brain": {
+            "$ref": "#/components/schemas/Brain.ID"
+          },
+          "space": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "root_session": {
+            "type": "string"
+          },
+          "session": {
+            "type": "string"
+          },
+          "turn": {
+            "type": "string"
+          },
+          "member": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "payer": {
+            "$ref": "#/components/schemas/Usage.Payer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "cost_micro_usd": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "error": {
+            "$ref": "#/components/schemas/Usage.Failure"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["model.call"]
+          },
+          "data": {
+            "$ref": "#/components/schemas/Usage.ModelCall"
+          }
+        },
+        "required": ["source", "id", "time", "workload", "organization", "payer", "provider", "type", "data"],
         "additionalProperties": false
       },
       "Usage.Payer": {

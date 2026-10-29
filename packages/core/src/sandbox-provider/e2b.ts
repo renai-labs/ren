@@ -1,8 +1,10 @@
 export * as E2BSandbox from "./e2b.js"
 
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
-import { Config, Duration, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
+import { Space } from "@ren/schema/space"
+import { Config, DateTime, Duration, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
 import { HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import { SandboxProvider } from "../sandbox-provider.js"
 
@@ -47,6 +49,39 @@ const Listed = Schema.Array(
 
 const Detail = Schema.Struct({ state: Schema.optional(Schema.String) })
 
+// oxlint-disable-next-line ren/no-comments -- E2B closes each run of a sandbox with one paused or killed event that measures it. A kill of a paused sandbox sends no event: its pause closed the run.
+const Runs = Schema.Array(
+  Schema.Struct({
+    id: Schema.String,
+    type: Schema.String,
+    timestamp: Schema.DateTimeUtcFromString,
+    sandboxId: Schema.String,
+    eventData: Schema.optional(
+      Schema.NullOr(
+        Schema.Struct({
+          sandbox_metadata: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+          execution: Schema.optional(
+            Schema.Struct({ execution_time: Schema.Int, vcpu_count: Schema.Int, memory_mb: Schema.Int }),
+          ),
+          kill_reason: Schema.optional(Schema.String),
+        }),
+      ),
+    ),
+  }),
+)
+type Run = (typeof Runs.Type)[number]
+
+const Tags = Schema.Struct({
+  brain: Brain.ID,
+  generation: Schema.NumberFromString,
+  organization: Auth.OrganizationID,
+  space: Space.ID,
+})
+
+const runTypes = ["sandbox.lifecycle.paused", "sandbox.lifecycle.killed"]
+
+const pageSize = 100
+
 const failed = (operation: string) => (error: { readonly message: string }) =>
   new SandboxProvider.Failed({ message: `E2B ${operation}: ${error.message}` })
 
@@ -63,6 +98,8 @@ export const layer = Layer.effect(
       port: Config.Int("BRAIN_PORT").pipe(Config.withDefault(4800)),
       maxRunning: Config.Int("SANDBOX_MAX_RUNNING").pipe(Config.withDefault(10)),
       owner: Config.String("E2B_OWNER").pipe(Config.withDefault(defaultOwner)),
+      vcpuSecond: Config.Number("E2B_VCPU_SECOND_MICRO_USD").pipe(Config.withDefault(14)),
+      gibSecond: Config.Number("E2B_GIB_SECOND_MICRO_USD").pipe(Config.withDefault(4.5)),
     })
     const owner = config.owner
     const http = yield* HttpClient.HttpClient
@@ -112,6 +149,30 @@ export const layer = Layer.effect(
           Schema.decodeUnknownEffect(Schema.fromJsonString(Listed))(text).pipe(Effect.mapError(failed("list"))),
         ),
         Effect.map((sandboxes) => sandboxes.filter((sandbox) => sandbox.metadata?.owner === owner)),
+      )
+    const runs = (offset: number) =>
+      send(
+        "events",
+        HttpClientRequest.get("/events/sandboxes").pipe(
+          HttpClientRequest.setUrlParams({ types: runTypes, limit: pageSize, offset }),
+        ),
+      ).pipe(
+        Effect.flatMap((response) => strict("events", response)),
+        Effect.flatMap((text) =>
+          Schema.decodeUnknownEffect(Schema.fromJsonString(Runs))(text).pipe(Effect.mapError(failed("events"))),
+        ),
+      )
+    const before = (since: Option.Option<DateTime.Utc>) => (run: Run) =>
+      Option.exists(since, (time) => DateTime.isLessThan(run.timestamp, time))
+    // oxlint-disable-next-line ren/no-comments -- Newest first: a run that ends while Ren reads moves the older ones down one place, so a page can repeat a run but never skips one.
+    const measured = (
+      since: Option.Option<DateTime.Utc>,
+      offset: number,
+    ): Effect.Effect<ReadonlyArray<Run>, SandboxProvider.Failed> =>
+      Effect.flatMap(runs(offset), (page) =>
+        page.length < pageSize || page.some(before(since))
+          ? Effect.succeed(page)
+          : Effect.map(measured(since, offset + pageSize), (rest) => [...page, ...rest]),
       )
     const upload = Effect.fnUntraced(function* (
       binding: Binding,
@@ -193,7 +254,7 @@ export const layer = Layer.effect(
               timeout: Duration.toSeconds(createTimeout),
               autoPause: true,
               secure: true,
-              metadata: { owner, ...metadata },
+              metadata: { owner, ...metadata, organization: input.organizationId, space: input.spaceId },
               envVars: input.env,
               ...Option.match(input.proxy, { onNone: () => ({}), onSome: (proxy) => ({ network: networkOf(proxy) }) }),
             }),
@@ -247,6 +308,47 @@ export const layer = Layer.effect(
           Effect.mapError(failed("info")),
         )
         return detail.state === "paused" ? ("paused" as const) : ("running" as const)
+      }),
+      metered: Effect.fn("E2BSandbox.metered")(function* (since) {
+        const found = [...new Map((yield* measured(since, 0)).map((run) => [run.id, run])).values()]
+        const mine = found.filter(
+          (run) =>
+            !before(since)(run) &&
+            run.eventData?.sandbox_metadata?.owner === owner &&
+            Boolean(run.eventData.sandbox_metadata.brain) &&
+            Boolean(run.eventData.execution),
+        )
+        const tagged = mine.flatMap((run) => {
+          const data = run.eventData
+          const tags = Schema.decodeUnknownOption(Tags)(data?.sandbox_metadata)
+          if (Option.isNone(tags) || !data?.execution) return []
+          const execution = data.execution
+          const vcpuMs = execution.vcpu_count * execution.execution_time
+          const memoryMibMs = execution.memory_mb * execution.execution_time
+          return [
+            {
+              id: run.id,
+              sandboxId: run.sandboxId,
+              brainId: tags.value.brain,
+              generation: tags.value.generation,
+              organizationId: tags.value.organization,
+              spaceId: tags.value.space,
+              endedAt: run.timestamp,
+              durationMs: execution.execution_time,
+              vcpuMs,
+              memoryMibMs,
+              end: run.type === "sandbox.lifecycle.killed" ? `killed:${data.kill_reason ?? "unknown"}` : "paused",
+              costMicroUsd: Math.round(
+                (vcpuMs / 1000) * config.vcpuSecond + (memoryMibMs / 1024 / 1000) * config.gibSecond,
+              ),
+            },
+          ]
+        })
+        if (tagged.length < mine.length)
+          yield* Effect.logWarning(
+            `${mine.length - tagged.length} E2B runs of brains have no organization or space tag; Ren does not record them`,
+          )
+        return tagged
       }),
       lost: Stream.empty,
       hand: () => Effect.succeed({ url: `http://127.0.0.1:${EnvironmentApi.port}`, workspace: "/home/user/workspace" }),

@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import { Usage } from "@ren/schema/usage"
 import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
 
-export { Event } from "@ren/schema/usage"
+export type { Event } from "@ren/schema/usage"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Usage.Unavailable", {}) {}
 

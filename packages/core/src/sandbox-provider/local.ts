@@ -229,6 +229,7 @@ export const layer = (options: {
               : [],
           )
         }),
+        metered: () => Effect.succeed([]),
       })
     }),
   )

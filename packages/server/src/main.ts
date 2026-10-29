@@ -39,6 +39,8 @@ import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Retention } from "@ren/core/retention"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
+import { SandboxUsage } from "@ren/core/sandbox-usage"
+import { Usage } from "@ren/core/usage"
 import { LocalSandbox } from "@ren/core/sandbox-provider/local"
 import { Settings } from "@ren/core/settings"
 import { SignupGuard } from "@ren/core/signup-guard"
@@ -78,6 +80,7 @@ const host = Layer.unwrap(
           Layer.provide(provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig),
         ),
       ),
+      Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),
       Layer.provide(
         provider === "e2b"
           ? E2BSandbox.layer

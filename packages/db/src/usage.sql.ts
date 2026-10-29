@@ -31,5 +31,6 @@ export const usage_event = pgTable(
     primaryKey({ columns: [table.source, table.id] }),
     index("usage_event_organization_time_idx").on(table.organization, table.time),
     index("usage_event_space_time_idx").on(table.space, table.time),
+    index("usage_event_source_time_idx").on(table.source, table.time),
   ],
 )
