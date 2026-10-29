@@ -2,7 +2,12 @@ import { IconSearch } from "@tabler/icons-react"
 import { Input } from "@/components/ui/input"
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 
-export function MenuSearch(props: { value: string; onChange: (value: string) => void; placeholder: string }) {
+export function MenuSearch(props: {
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  separator?: boolean | undefined
+}) {
   return (
     <>
       <div className="relative">
@@ -18,7 +23,7 @@ export function MenuSearch(props: { value: string; onChange: (value: string) => 
           className="h-10 border-0 bg-transparent pl-8 focus-visible:ring-0"
         />
       </div>
-      <DropdownMenuSeparator className="mt-0" />
+      {props.separator === false ? null : <DropdownMenuSeparator className="mt-0" />}
     </>
   )
 }

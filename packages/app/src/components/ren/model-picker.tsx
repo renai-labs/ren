@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react"
-import { IconCheck, IconChevronDown } from "@tabler/icons-react"
+import { IconChevronDown } from "@tabler/icons-react"
 import type { SessionModel } from "@ren/schema/session/model"
 import {
   DropdownMenu,
@@ -9,7 +9,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -171,19 +170,12 @@ function ClassicLook(props: {
       >
         <ProviderIcon provider={model.providerID} />
         {content ?? model.name}
-        {picker.isCurrent(model) ? <IconCheck className="ml-auto" /> : null}
       </DropdownMenuItem>
     ) : (
       <DropdownMenuSub key={modelKey(model)}>
         <DropdownMenuSubTrigger className={content ? "items-start py-2" : undefined}>
           <ProviderIcon provider={model.providerID} />
           {content ?? model.name}
-          {picker.isCurrent(model) ? (
-            <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-              {effortLabel(picker.variant ?? "")}
-              <IconCheck className="text-foreground" />
-            </span>
-          ) : null}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
           <DropdownMenuRadioGroup
@@ -208,7 +200,7 @@ function ClassicLook(props: {
         <TriggerLabel picker={picker} />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-80 p-0">
-        <MenuSearch value={query} onChange={setQuery} placeholder="Search models…" />
+        <MenuSearch value={query} onChange={setQuery} placeholder="Search models…" separator={false} />
         <div className={cn(listHeight, "p-1")}>
           {picker.featured.some((each) => match(each.model)) ? (
             <DropdownMenuGroup>
@@ -233,7 +225,6 @@ function ClassicLook(props: {
             if (models.length === 0) return null
             return (
               <DropdownMenuGroup key={provider}>
-                <DropdownMenuSeparator />
                 <DropdownMenuLabel>{providerName[provider] ?? provider}</DropdownMenuLabel>
                 {models.map((model) => row(model))}
               </DropdownMenuGroup>
