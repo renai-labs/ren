@@ -28,4 +28,7 @@ export const Vars = Schema.Struct({
     description: "The brain runs behind Ren’s egress: it holds no host token and keeps REN_URL (C8, C49).",
   }),
   REN_BRAIN_VERSION: Schema.optional(Schema.String),
+  REN_TELEMETRY: Schema.optional(Schema.String).annotate({
+    description: "The signals that Ren’s relay accepts from this brain, comma-separated: traces, logs or both.",
+  }),
 })

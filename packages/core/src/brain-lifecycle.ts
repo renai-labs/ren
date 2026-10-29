@@ -12,6 +12,7 @@ import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Sche
 import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
 import { DurableRunner } from "./durable-runner.js"
+import { Deployment } from "./deployment.js"
 import { Environments } from "./environments.js"
 import { SandboxEgress } from "./sandbox-egress.js"
 import { SandboxProvider } from "./sandbox-provider.js"
@@ -81,6 +82,11 @@ export const layer = Layer.effect(
     const egress = yield* SandboxEgress.Service
     const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(Config.withDefault(timing.wake))
     const bootWithin = yield* Config.Duration("BRAIN_BOOT_TIMEOUT").pipe(Config.withDefault(timing.boot))
+    const telemetry = yield* Deployment.telemetry
+    const signals = [
+      ...(Option.isSome(telemetry.traces) ? ["traces"] : []),
+      ...(Option.isSome(telemetry.logs) ? ["logs"] : []),
+    ].join(",")
 
     const read = (brainId: Brain.ID) =>
       database.db
@@ -142,6 +148,7 @@ export const layer = Layer.effect(
         REN_BRAIN_ID: row.id,
         REN_BRAIN_GENERATION: String(row.generation),
         BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(client.publicKeys),
+        ...(signals && { REN_TELEMETRY: signals }),
         ...(yield* environments.executorVariables(Environment.ofBrain(row.id))),
       }
     })

@@ -88,6 +88,7 @@
         "@ren/opencode-transcript": "workspace:*",
         "@ren/protocol": "workspace:*",
         "@ren/schema": "workspace:*",
+        "@ren/util": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {

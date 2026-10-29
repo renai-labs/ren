@@ -28,6 +28,10 @@ export const Trace = {
     "chat.open",
     "Opening a chat: Ren finds the brain, wakes it if it sleeps, and signs the client's token.",
   ),
+  chatPrompt: operation(
+    "chat.prompt",
+    "A message that a person sends from the app to a brain through the Chat API, until the brain accepts it.",
+  ),
   chatSend: operation(
     "chat.send",
     "A message that Ren sends to a brain for a channel, a task, a schedule, the CLI or the SDK. The app sends to the brain directly.",

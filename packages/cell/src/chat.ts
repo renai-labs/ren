@@ -8,9 +8,10 @@ import {
   NotFoundError,
   UnavailableError,
 } from "@ren/protocol/errors"
+import { Observability } from "@ren/schema/observability"
 import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
-import { Clock, Deferred, Effect, Layer, Option, Predicate, Ref, Result, Schema, Stream } from "effect"
+import { Clock, Deferred, Effect, Layer, Option, Predicate, Ref, Result, Schema, type Scope, Stream } from "effect"
 import { Base64Url } from "effect/encoding"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
@@ -325,7 +326,7 @@ const handlers = Layer.mergeAll(
               yield* hotReload.pull
               yield* harness.chat.prompt(request.params.sessionID, { ...request.payload, sender: yield* sender })
               return { id: request.payload.id }
-            }).pipe(notFound, conflict),
+            }).pipe(notFound, conflict, Observability.Trace.chatPrompt),
           ),
         )
         .handle("session.compact", (request) =>
@@ -496,6 +497,9 @@ export const layer = Layer.effect(
       ),
     )
     const context = yield* Effect.context<Services>()
-    return Cell.Chat.of({ owns, fetch: HttpEffect.toWebHandler(app.pipe(Effect.provide(context))) })
+    return Cell.Chat.of({
+      owns,
+      fetch: HttpEffect.toWebHandlerWith<Services, HttpServerRequest.HttpServerRequest | Scope.Scope>(context)(app),
+    })
   }),
 )
