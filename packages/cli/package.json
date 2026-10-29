@@ -15,7 +15,7 @@
     "build": "bun run script/build.ts",
     "dev": "bun run src/index.ts",
     "generate": "bun run script/generate.ts",
-    "test": "bun ../../script/test.ts",
+    "test": "bun ../../script/signoff/record.ts bun ../../script/test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo --noEmit"
   },

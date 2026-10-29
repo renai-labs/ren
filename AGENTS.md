@@ -76,5 +76,6 @@ Lint enforces most style rules. Run `bun run check` and follow each message. The
 
 ## Checks
 
-- Run `bun run check` from the repo root before pushing. The pre-push hook runs it too. Run `bun run format` to fix formatting.
+- Run `bun run check` from the repo root before pushing. The pre-push hook reuses or runs it, and attaches it and the latest affected test runs to the commit (`CONTRIBUTING.md`, Signoff). Run `bun run format` to fix formatting.
+- A package's `test` script and the root `lint` and `typecheck` scripts go through `script/signoff/record.ts`. Keep it there when you change one.
 - Run `bun typecheck` from a package directory to typecheck one package. Never run `tsc` directly.
