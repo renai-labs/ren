@@ -1,5 +1,6 @@
 export * as Brains from "./brains.js"
 
+import { Observability } from "@ren/schema/observability"
 import { Database } from "@ren/db/database"
 import type { StartBody, Synced } from "@ren/host-api/brain-api"
 import {
@@ -371,6 +372,7 @@ export const layer = Layer.effect(
               Effect.andThen(Effect.fail(error)),
             ),
           ),
+          Observability.Trace.sessionStart,
         ),
       ),
     )
@@ -426,7 +428,7 @@ export const layer = Layer.effect(
           token: signed.token,
           expiresAt: DateTime.makeUnsafe(signed.exp * 1000),
         } satisfies Session.ClientAccess
-      }),
+      }, Observability.Trace.chatOpen),
       prepare: Effect.fn("Brains.prepare")(function* (spaceId: Space.ID) {
         const brain = yield* spaceBrain(spaceId)
         if (Option.isNone(brain)) return

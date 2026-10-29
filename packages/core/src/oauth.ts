@@ -1,5 +1,6 @@
 export * as OAuth from "./oauth.js"
 
+import { Observability } from "@ren/schema/observability"
 import {
   checkResourceAllowed,
   discoverAuthorizationServerMetadata,
@@ -473,7 +474,7 @@ export const layer = Layer.effect(
         })
         .pipe(Effect.orDie)
       return { redirectUrl: authorize.toString(), expiresAt: DateTime.fromDateUnsafe(expiresAt) }
-    })
+    }, Observability.Trace.connectorConnect)
 
     type Session = typeof sessions.$inferSelect
 
@@ -661,7 +662,7 @@ export const layer = Layer.effect(
       }
       if (Result.isFailure(valid)) return yield* fail(taken.id, valid.failure)
       return yield* finishOAuth(taken, input, valid.success, now)
-    })
+    }, Observability.Trace.connectorCallback)
 
     const finishOAuth = Effect.fnUntraced(function* (
       taken: Session,

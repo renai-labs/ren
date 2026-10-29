@@ -1,5 +1,6 @@
 export * as Environments from "./environments.js"
 
+import { Observability } from "@ren/schema/observability"
 import { ExecutorVariables } from "@ren/environment-api/executor-variables"
 import type { EnvironmentToken } from "@ren/environment-api/environment-token"
 import { Database } from "@ren/db/database"
@@ -239,7 +240,7 @@ export const layer = Layer.effect(
           }
         }),
       )
-    })
+    }, Observability.Trace.environmentAssign)
 
     const replace = (environmentId: Environment.ID) =>
       database.transaction((transaction) =>

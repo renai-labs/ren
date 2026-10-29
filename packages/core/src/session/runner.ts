@@ -1,5 +1,6 @@
 export * as SessionRunner from "./runner.js"
 
+import { Observability } from "@ren/schema/observability"
 import { Database } from "@ren/db/database"
 import type { Agent } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
@@ -148,7 +149,7 @@ export const layer = Layer.effect(
             }),
           ),
         )
-      }),
+      }, Observability.Trace.chatSend),
       onStartRejected: brain.onStartRejected,
       get: Effect.fn("SessionRunner.get")(function* (sessionId: Session.ID) {
         const row = (yield* database.transaction((transaction) =>
