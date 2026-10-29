@@ -15,13 +15,6 @@ const levels: Record<LogLevel.Severity, string> = {
   Trace: "debug",
 }
 
-const reportErrorLogs = Logger.make((log) => {
-  if (!LogLevel.isGreaterThanOrEqualTo(log.logLevel, "Error")) return
-  const timestamp = BigInt(log.date.getTime()) * 1_000_000n
-  for (const reporter of log.fiber.getRef(ErrorReporter.CurrentErrorReporters))
-    reporter.report({ cause: log.cause, fiber: log.fiber, timestamp })
-})
-
 const reporter = ErrorReporter.layer([
   Effect.gen(function* () {
     const posthog = yield* PostHog.Service
@@ -55,4 +48,4 @@ const reporter = ErrorReporter.layer([
   }),
 ])
 
-export const layer = Layer.mergeAll(reporter, Logger.layer([reportErrorLogs], { mergeWithExisting: true }))
+export const layer = Layer.mergeAll(reporter, Logger.layer([Telemetry.reportErrorLogs], { mergeWithExisting: true }))
