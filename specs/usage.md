@@ -286,7 +286,7 @@ Each type has the fields of §4.3 that are not in `data`, and its own `data`. `u
 | Type              | `data`                                                                                                                                                                                      | Status |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | `model.call`      | `requested_model`, `served_model`, `kind`, `variant`, `input_tokens` … `cache_write_1h_tokens`, `latency_ms`, `time_to_first_token_ms`, `stop_reason`. A token count that is not sent is 0. | Built  |
-| `sandbox.compute` | `sandbox_id`, `duration_ms`, `vcpu_ms`, `memory_mib_ms`, `end`. One event for each run of a sandbox, from the sandbox provider; not accepted by the ingest route.                           | Built  |
+| `sandbox.compute` | `sandbox_id`, `duration_ms`, `vcpu_ms`, `memory_mib_ms`. One event for each span in which a sandbox ran, from the sandbox provider; not accepted by the ingest route.                       | Built  |
 
 ### 4.7 Ingest route
 

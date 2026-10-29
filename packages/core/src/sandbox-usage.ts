@@ -15,10 +15,10 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SandboxUsage") {}
 
-export const every = Duration.minutes(5)
+const every = Duration.minutes(5)
 
-// oxlint-disable-next-line ren/no-comments -- A span can reach the provider's list a little after it ended, so each sweep reads again from 10 minutes before the newest stored span; a repeat is ignored.
-export const overlap = Duration.minutes(10)
+// oxlint-disable-next-line ren/no-comments -- A span can reach the provider's list a little after it ends, so a sweep reads again from 10 minutes before the newest stored span. Usage ignores a repeat.
+const overlap = Duration.minutes(10)
 
 const SweepRun = DurableRunner.make("SandboxUsage", {
   payload: { slot: Schema.String },
@@ -27,7 +27,7 @@ const SweepRun = DurableRunner.make("SandboxUsage", {
 
 const events = Database.Schema.usage_event
 
-// oxlint-disable-next-line ren/no-comments -- The sandbox provider measures each span in which a sandbox ran; Ren stores each span as one sandbox.compute event (usage spec §10). It keeps no state between sweeps: the newest stored span says where to read from.
+// oxlint-disable-next-line ren/no-comments -- Each span in which a sandbox ran becomes one sandbox.compute event. The sweep keeps no state: the newest stored span says where to read from.
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -47,32 +47,31 @@ export const layer = Layer.effect(
       const since = Option.map(Option.fromNullishOr(newest.at(0)), (row) =>
         DateTime.subtractDuration(DateTime.fromDateUnsafe(row.time), overlap),
       )
-      const metered = yield* provider.metered(since)
+      const spans = yield* provider.metered(since)
       yield* Effect.forEach(
-        Array.chunksOf(
-          metered.map((span): Usage.Event => ({
-            source: provider.kind,
-            id: span.id,
-            type: "sandbox.compute",
-            time: span.endedAt,
-            workload: Workload.key({ kind: "brain", id: span.brainId, generation: span.generation }),
-            organization: span.organizationId,
-            brain: span.brainId,
-            space: span.spaceId,
-            payer: "ren",
-            provider: provider.kind,
-            cost_micro_usd: span.costMicroUsd,
-            data: {
-              sandbox_id: span.sandboxId,
-              duration_ms: span.durationMs,
-              vcpu_ms: span.vcpuMs,
-              memory_mib_ms: span.memoryMibMs,
-              end: span.end,
-            },
-          })),
-          500,
-        ),
-        (batch) => usage.record(batch),
+        Array.chunksOf(spans, 500),
+        (batch) =>
+          usage.record(
+            batch.map((span) => ({
+              source: provider.kind,
+              id: span.id,
+              type: "sandbox.compute",
+              time: span.endedAt,
+              workload: Workload.key({ kind: "brain", id: span.brainId, generation: span.generation }),
+              organization: span.organizationId,
+              brain: span.brainId,
+              space: span.spaceId,
+              payer: "ren",
+              provider: provider.kind,
+              cost_micro_usd: span.costMicroUsd,
+              data: {
+                sandbox_id: span.sandboxId,
+                duration_ms: span.durationMs,
+                vcpu_ms: span.vcpuMs,
+                memory_mib_ms: span.memoryMibMs,
+              },
+            })),
+          ),
         { discard: true },
       )
     }).pipe(Effect.withSpan("SandboxUsage.sweep"))

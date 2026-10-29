@@ -81,7 +81,6 @@ export const SandboxCompute = Schema.Struct({
   duration_ms: Count,
   vcpu_ms: Count.annotate({ description: "vCPUs × milliseconds." }),
   memory_mib_ms: Count.annotate({ description: "MiB of memory × milliseconds." }),
-  end: Schema.String.annotate({ description: "Why the run ended, as the provider gives it, for example `paused`." }),
 }).annotate({ identifier: "Usage.SandboxCompute" })
 
 export interface SandboxComputeEvent extends Schema.Schema.Type<typeof SandboxComputeEvent> {}
