@@ -47,23 +47,29 @@ const catalogOf = (apps: Option.Option<AppCatalog.Info>) => Option.map(apps, (in
 const entries = (apps: Option.Option<AppCatalog.Info>): ReadonlyArray<AppCatalog.McpEntry> =>
   Option.match(catalogOf(apps), { onNone: () => [], onSome: (catalog) => catalog.mcps })
 
-// oxlint-disable-next-line ren/no-comments -- §6.4 rule 3: a sign-in sends its token as a Bearer placeholder, a header MCP its pasted field in the declared header. A basic credential needs no placeholder: the egress sets its header by host.
-const headersOf = (entry: AppCatalog.McpEntry): Readonly<Record<string, string>> | undefined => {
+// oxlint-disable-next-line ren/no-comments -- §6.4 rule 3: a sign-in sends its token as a Bearer placeholder, a header MCP its pasted field in the declared header. A basic credential needs no placeholder: the egress sets its header by host. A managed MCP sends the integrations placeholder and its caller (integrations spec §5.1).
+const headersOf = (
+  entry: AppCatalog.McpEntry,
+  caller: Readonly<Record<string, string>>,
+): Readonly<Record<string, string>> | undefined => {
   const auth = entry.declaration.auth
   if (!entry.label) return undefined
+  if (entry.declaration.transport.type === "managed")
+    return { Authorization: `Bearer ${Credential.placeholder(entry.label)}`, ...caller }
   if (auth.type === "oauth") return { Authorization: `Bearer ${Credential.placeholder(entry.label)}` }
   if (auth.type === "header") return { [auth.name]: Credential.placeholder(entry.label, auth.credential) }
   return undefined
 }
 
-const configOf = (
-  entry: AppCatalog.McpEntry,
-  options: { readonly local: boolean },
-): Option.Option<Mcp.RemoteConfig | Mcp.LocalConfig> => {
+interface Options {
+  readonly local: boolean
+  readonly caller: Readonly<Record<string, string>>
+}
+
+const configOf = (entry: AppCatalog.McpEntry, options: Options): Option.Option<Mcp.RemoteConfig | Mcp.LocalConfig> => {
   const timeouts = entry.declaration.timeouts
   const timeout = timeouts && { timeout: new Mcp.TimeoutConfig(timeouts) }
   const transport = entry.declaration.transport
-  if (transport.type === "managed") return Option.none()
   if (transport.type === "local") {
     if (!options.local) return Option.none()
     const environment = { ...transport.env, ...entry.env }
@@ -79,16 +85,13 @@ const configOf = (
   }
   const url = transport.type === "remote" ? transport.url : entry.url
   if (!url) return Option.none()
-  const headers = headersOf(entry)
+  const headers = headersOf(entry, options.caller)
   return Option.some(
     new Mcp.RemoteConfig({ type: "remote", url, oauth: false, ...(headers && { headers }), ...timeout }),
   )
 }
 
-export const servers = (
-  apps: Option.Option<AppCatalog.Info>,
-  options: { readonly local: boolean },
-): ReadonlyArray<Server> =>
+export const servers = (apps: Option.Option<AppCatalog.Info>, options: Options): ReadonlyArray<Server> =>
   entries(apps).flatMap((entry) => {
     const config = configOf(entry, options)
     const timeouts = entry.declaration.timeouts
@@ -221,35 +224,16 @@ export const make = Effect.fnUntraced(function* (input: {
     ]
   })
   // oxlint-disable-next-line ren/no-comments -- integrations spec §5.1: a managed server names its chat and its sender, as a model call does; the egress puts in the integrations token and checks the member.
-  const managedServers = (apps: Option.Option<AppCatalog.Info>) =>
-    Effect.map(Ref.get(sender), (user) => {
-      const member = Option.flatMap(user, (speaker) => Option.fromUndefinedOr(speaker.memberID))
-      return entries(apps).flatMap((entry): ReadonlyArray<Server> => {
-        const timeouts = entry.declaration.timeouts
-        return entry.declaration.transport.type === "managed" && entry.url && entry.label
-          ? [
-              {
-                name: entry.server,
-                config: new Mcp.RemoteConfig({
-                  type: "remote",
-                  url: entry.url,
-                  oauth: false,
-                  headers: {
-                    Authorization: `Bearer ${Credential.placeholder(entry.label)}`,
-                    [Usage.headers.rootSession]: input.sessionId,
-                    ...(Option.isSome(member) && { [Models.personHeader]: Models.personPlaceholder(member.value) }),
-                  },
-                  ...(timeouts && { timeout: new Mcp.TimeoutConfig(timeouts) }),
-                }),
-                within: (timeouts?.startup ?? openCodeTimeout) + (timeouts?.catalog ?? openCodeTimeout),
-              },
-            ]
-          : []
-      })
-    })
+  const caller = Effect.map(Ref.get(sender), (user) => {
+    const member = Option.flatMap(user, (speaker) => Option.fromUndefinedOr(speaker.memberID))
+    return {
+      [Usage.headers.rootSession]: input.sessionId,
+      ...(Option.isSome(member) && { [Models.personHeader]: Models.personPlaceholder(member.value) }),
+    }
+  })
   const desired = (apps: Option.Option<AppCatalog.Info>) =>
     Effect.gen(function* (): Effect.fn.Return<ReadonlyArray<Server>> {
-      return [...servers(apps, local), ...(yield* managedServers(apps)), ...(yield* renServers)]
+      return [...servers(apps, { ...local, caller: yield* caller }), ...(yield* renServers)]
     })
   const applied = yield* Ref.make(yield* desired(input.apps))
   const skipped = yield* Ref.make<ReadonlySet<string>>(new Set())
@@ -362,7 +346,9 @@ export const make = Effect.fnUntraced(function* (input: {
         yield* Ref.set(sender, yield* input.ren.value.lastSender(input.sessionId))
       const before = yield* changed
       if (Option.isSome(before)) {
-        const managed = (yield* managedServers(Ref.getUnsafe(latest))).map((server) => server.name)
+        const managed = entries(Ref.getUnsafe(latest))
+          .filter((entry) => entry.declaration.transport.type === "managed")
+          .map((entry) => entry.server)
         yield* reload(before.value, [renServer, ...managed]).pipe(Effect.andThen(watchIfDown))
       }
       if ((yield* down).length) yield* retry

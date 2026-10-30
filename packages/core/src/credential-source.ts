@@ -11,7 +11,6 @@ import { and, eq, isNull, sql } from "drizzle-orm"
 import {
   Cache,
   Clock,
-  Config,
   Context,
   DateTime,
   Duration,
@@ -24,11 +23,11 @@ import {
   Schema,
 } from "effect"
 import { Access } from "./access.js"
-import { AppSelection } from "./app/selection.js"
 import { BrainClient } from "./brain-client.js"
 import { Credentials } from "./credentials.js"
 import { Drives } from "./drives.js"
 import { GitHubApp } from "./github-app.js"
+import { Integrations } from "./integrations.js"
 import { McpProvider } from "./mcp-provider.js"
 import { Models } from "./models.js"
 import { SessionPolicy } from "./session/policy.js"
@@ -150,7 +149,7 @@ const ttlUntil = (expiresAtMillis: number, now: number) =>
 const ren = "REN"
 const models = "MODELS"
 const person = Models.personLabel
-const integrations = AppSelection.integrationsLabel
+const integrations = Integrations.label
 
 // oxlint-disable-next-line ren/no-comments -- One hour, so a retired generation's token stops soon after its sandbox (integrations spec §7.2).
 const integrationsLifetime = Duration.hours(1)
@@ -167,9 +166,8 @@ export const layerMinted = Layer.effect(
     const drives = yield* Drives.Service
     const signer = yield* Signer.Service
     const renHost = new URL(brains.renUrl).hostname
-    const integrationsHost = Option.flatMap(yield* Config.option(Config.String("REN_INTEGRATIONS_URL")), (url) =>
-      Option.fromNullishOr(URL.parse(url)?.hostname),
-    )
+    const integrationsHost = Option.map(yield* Integrations.url, (url) => url.hostname)
+    if (Option.isSome(integrationsHost)) yield* signer.publicKeys("ren-integrations").pipe(Effect.orDie)
 
     const Key = Schema.fromJsonString(
       Schema.Struct({
@@ -279,15 +277,6 @@ export const layerMinted = Layer.effect(
 
     const cachedHostToken = (scope: Credentials.Scope) =>
       Effect.map(Cache.get(hostTokens, keyOf(scope)), (found) => found.token)
-    const cachedIntegrationsToken = (scope: Credentials.Scope) =>
-      scope.workload.kind === "brain" && Option.isSome(scope.spaceId)
-        ? Cache.get(integrationTokens, keyOf(scope)).pipe(
-            Effect.map(Option.some),
-            Effect.mapError(
-              () => new Unavailable({ label: integrations, message: "Ren could not sign the integrations token." }),
-            ),
-          )
-        : Effect.succeedNone
     const cachedGrant = (scope: Credentials.Scope) =>
       Effect.flatMap(grants.revision, (revision) => Cache.get(modelGrants, keyOf(scope, revision)))
 
@@ -482,11 +471,17 @@ export const layerMinted = Layer.effect(
             }),
           } satisfies Sourced)
         }
-        if (candidate.label === integrations)
-          return Option.map(yield* cachedIntegrationsToken(scope), (minted): Sourced => ({
+        if (candidate.label === integrations) {
+          const minted = yield* Cache.get(integrationTokens, keyOf(scope)).pipe(
+            Effect.mapError(
+              () => new Unavailable({ label: candidate.label, message: "Ren could not sign the integrations token." }),
+            ),
+          )
+          return Option.some({
             value: { type: "key", value: Redacted.make(minted.token) },
             expiresAt: DateTime.makeUnsafe(minted.exp * 1000),
-          }))
+          } satisfies Sourced)
+        }
         const granted = yield* cachedGrant(scope).pipe(
           Effect.mapError(
             () => new Unavailable({ label: candidate.label, message: "Ren could not mint the model key." }),

@@ -6,8 +6,9 @@ import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Credential } from "@ren/schema/credential"
 import type { Mcp } from "@ren/schema/mcp"
 import { and, eq, inArray } from "drizzle-orm"
-import { Config, Context, Effect, Layer, Option } from "effect"
+import { Context, Effect, Layer, Option } from "effect"
 import type { Credentials } from "../credentials.js"
+import { Integrations } from "../integrations.js"
 import { McpProvider } from "../mcp-provider.js"
 import { Primitive } from "../primitive.js"
 import { ProfileItems } from "./profile-items.js"
@@ -30,7 +31,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const registry = yield* McpProvider.Registry
-    const integrationsUrl = yield* Config.option(Config.String("REN_INTEGRATIONS_URL"))
+    const integrationsUrl = yield* Integrations.url
 
     const isSetUp = (provider: string) => Effect.map(Effect.option(registry.get(provider)), Option.isSome)
 
@@ -99,7 +100,7 @@ export const layer = Layer.effect(
           .toSorted((left, right) => left.localeCompare(right)),
         egress: found.egress,
         available: found.available,
-        integrationsUrl: Option.getOrNull(found.integrationsUrl),
+        integrationsUrl: Option.getOrNull(Option.map(found.integrationsUrl, (url) => url.href)),
       })
 
     // oxlint-disable-next-line ren/no-comments -- profiles.md §6.1, §8: each reached profile gives one server per connected MCP item (`<mcp>__<slug>`) and its local MCPs whose required keys are connected; an MCP with auth none is one server per app (P22). An item without a credential is absent (P23). A part that an older app in the org names is skipped (P25). Without a provider layer or an egress, a credential-backed server is listed as unavailable.
@@ -216,10 +217,8 @@ export const layer = Layer.effect(
       })
       const selected = AppSelection.select({
         resolved: [...owned, ...open],
-        managed: ordered.flatMap((row) =>
-          sortedMcps(row).flatMap(([slug, declaration]) =>
-            declaration.transport.type === "managed" ? [{ appId: row.id, appSlug: row.slug, slug, declaration }] : [],
-          ),
+        declared: ordered.flatMap((row) =>
+          sortedMcps(row).map(([slug, declaration]) => ({ appId: row.id, appSlug: row.slug, slug, declaration })),
         ),
         integrationsUrl: found.integrationsUrl,
         egress: found.egress,

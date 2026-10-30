@@ -9,7 +9,7 @@ For the billing agent. Billing code: integrations #12, `service/src/billing/`.
 
 ## 2. What changes later: correction rows
 
-Ren accepts these rows now (`Usage.ApiCallEvent`). No provider sends them yet. Make the change below before the first provider that holds a price.
+Ren does not accept these rows yet. No provider sends them. Before the first provider that holds a price, add `data.corrects` and a negative cost to `Usage.ApiCallEvent`, and make the change below.
 
 1. A paid job can give two rows:
 
