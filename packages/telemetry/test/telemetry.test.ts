@@ -222,7 +222,7 @@ describe("Telemetry.layer", () => {
     ).toEqual(["Test.continued", "Test.continued.child"])
   })
 
-  test("with reportErrors, exports each reported failure as an exception record, once, and none for an ignored one", async () => {
+  test("exports each reported failure as an exception record, once, and none for an ignored one", async () => {
     const failed = Object.assign(new Error("Failed query: select 1\nparams: ada@example.com"), { name: "QueryError" })
     const ignored = Object.assign(new Error("not found"), { [ErrorReporter.ignore]: true })
     await run(
@@ -236,7 +236,6 @@ describe("Telemetry.layer", () => {
         traces: Option.none(),
         logs: target("logs"),
         metrics: Option.none(),
-        reportErrors: true,
       }),
     )
 
@@ -250,12 +249,15 @@ describe("Telemetry.layer", () => {
     expect(bodies["logs"]?.join("")).not.toContain("ada@example.com")
   })
 
-  test("with reportErrors, sends an error log and a reported failure to each reporter and to OTLP once", async () => {
+  test("sends an error log and a reported failure to each reporter and to OTLP once, also a failure that was logged before a boundary reported it", async () => {
     const reported: Array<string> = []
+    const failure = new Error("the write failed")
     await run(
       Effect.gen(function* () {
         yield* Effect.logError("A sync failed")
         yield* Effect.die(new Error("the loop failed")).pipe(Effect.withErrorReporting, Effect.ignoreCause)
+        yield* Effect.logError("A write failed", Cause.die(failure))
+        yield* Effect.die(failure).pipe(Effect.withErrorReporting, Effect.ignoreCause)
       }),
       ErrorReporter.layer([ErrorReporter.make((report) => void reported.push(report.error.message))], {
         mergeWithExisting: true,
@@ -266,14 +268,13 @@ describe("Telemetry.layer", () => {
             traces: Option.none(),
             logs: target("logs"),
             metrics: Option.none(),
-            reportErrors: true,
           }),
         ),
       ),
     )
 
-    expect(reported).toEqual(["A sync failed", "the loop failed"])
-    expect(logs().map((log) => log.body)).toEqual(["A sync failed", "the loop failed"])
+    expect(reported).toEqual(["A sync failed", "the loop failed", "the write failed"])
+    expect(logs().map((log) => log.body)).toEqual(["A sync failed", "the loop failed", "A write failed"])
   })
 
   test("logs a warning when the backend refuses an export, which Effect would otherwise drop silently", async () => {

@@ -18,7 +18,6 @@ export const layer = Layer.unwrap(
         ...resource,
         attributes: Object.fromEntries(Object.entries(attributes).filter((entry) => !entry.at(0)?.startsWith("ren."))),
       },
-      reportErrors: true,
       continueTraces: true,
     }).pipe(Layer.provideMerge(Observability.layer("Info")), Layer.provide(FetchHttpClient.layer))
   }),

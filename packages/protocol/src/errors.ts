@@ -75,6 +75,4 @@ export class UnknownError extends Schema.TaggedError<UnknownError>()(
     ref: Schema.optional(Schema.String),
   },
   { httpApiStatus: 500 },
-) {
-  override readonly [ErrorReporter.severity] = "Error"
-}
+) {}
