@@ -82,18 +82,30 @@ describe("Models.fromInference", () => {
     })
   })
 
-  test("a tool model is not a chat model", () => {
+  test("non-chat model types do not create chat models or chat endpoints", () => {
     const catalog = Models.fromInference(
       decode({
         data: [
           entry("openai/gpt-6.1-sol", { model_key: "gpt-6.1-sol", provider_key: "openai", mode: "responses" }),
-          ...["image_generation", "audio_speech", "audio_transcription", "decisions"].map((mode) =>
+          entry("ren/gpt-image-2.5-flare", {
+            model_key: "gpt-image-2.5-flare",
+            provider_key: "ren",
+            display_name: "GPT Image 2.5 Flare",
+            mode: "image_generation",
+          }),
+          ...["audio_transcription", "decisions", "audio_speech", "embedding"].map((mode) =>
             entry(`ren/${mode}`, { model_key: mode, provider_key: "ren", mode }),
           ),
         ],
       }),
     )
-    expect(catalog.endpoints.flatMap((endpoint) => endpoint.models.map((model) => model.id))).toEqual(["gpt-6.1-sol"])
+    expect(catalog.endpoints).toEqual([
+      {
+        id: "openai",
+        protocol: "openai-responses",
+        models: [{ id: "gpt-6.1-sol", upstreamId: "openai/gpt-6.1-sol", input: ["text"] }],
+      },
+    ])
   })
 
   test("the same list in another order gives the same catalog", () => {
