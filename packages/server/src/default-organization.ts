@@ -53,5 +53,5 @@ export const provision = (database: AuthDatabase.Interface["db"], userId: string
     await tx
       .insert(Database.Schema.member)
       .values({ id: Auth.MemberID.create(), organizationId: id, userId: user.id, role: "owner", createdAt })
-    return { id, user: { id: user.id, name: user.name, email: user.email } }
+    return { id, name, user: { id: user.id, name: user.name, email: user.email } }
   })
