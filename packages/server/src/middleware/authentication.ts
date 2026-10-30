@@ -34,7 +34,7 @@ export const AuthenticationLayer = Layer.effect(
     })
     const provideSession = <A, E, R>(httpEffect: Effect.Effect<A, E, R>, session: AuthenticatedSession) => {
       const caller = {
-        posthogDistinctId: session.user.id,
+        "user.id": session.user.id,
         ...(session.session.activeOrganizationId && { "ren.organization.id": session.session.activeOrganizationId }),
       }
       return httpEffect.pipe(

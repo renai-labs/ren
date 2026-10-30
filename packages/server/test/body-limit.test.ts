@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
 import { Sync } from "@ren/schema/sync"
-import { maxBodyBytes } from "@ren/host-api/telemetry-api"
 import { Seed, SyncFixture, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
@@ -86,42 +85,5 @@ describe("body limit", () => {
         )
         expect(statuses).toEqual([413, 413, 204, 413, 411])
       }),
-  )
-
-  it.live("the telemetry relay takes a batch over 1 MiB with a host token, and refuses one without or over 4 MiB", () =>
-    Effect.gen(function* () {
-      const owner = yield* Seed.owner()
-      const sessionId = yield* Seed.session(owner)
-      const host = {
-        authorization: `Bearer ${yield* hostToken(Brain.ofSession(sessionId), owner.organizationId)}`,
-      }
-      const http = yield* HttpClient.HttpClient
-      const batch = (bytes: number) => ({
-        resourceLogs: [
-          {
-            resource: { attributes: [] },
-            scopeLogs: [
-              {
-                scope: { name: "ren-brain" },
-                logRecords: [{ timeUnixNano: "1", body: { stringValue: "x".repeat(bytes) }, attributes: [] }],
-              },
-            ],
-          },
-        ],
-      })
-      const statuses = yield* Effect.forEach(
-        [
-          json("/host/telemetry/v1/logs", host, batch(2 * 1024 * 1024)),
-          json("/host/telemetry/v1/logs", {}, batch(10)),
-          json("/host/telemetry/v1/logs", host, batch(maxBodyBytes)),
-        ],
-        (request) =>
-          http.execute(request).pipe(
-            Effect.tap((response) => response.text),
-            Effect.map((response) => response.status),
-          ),
-      )
-      expect(statuses).toEqual([204, 401, 413])
-    }),
   )
 })

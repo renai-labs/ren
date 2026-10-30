@@ -1,0 +1,17 @@
+id: posthog-in-main-only
+language: Tsx
+message: Only a process's main file provides PostHog.layer. Report through Effect logs, spans, metrics and ErrorReporter, so a vendor change touches only the main files.
+severity: error
+files:
+  - packages/**
+ignores:
+  - packages/telemetry/**
+  - packages/server/src/main.ts
+  - packages/cell/src/bun.ts
+  - packages/executor/src/main.ts
+rule:
+  kind: string_fragment
+  regex: "^(@ren/telemetry/posthog|posthog-node)$"
+  inside:
+    kind: import_statement
+    stopBy: end

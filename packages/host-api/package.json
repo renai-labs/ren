@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@ren/schema": "workspace:*",
-    "@ren/util": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

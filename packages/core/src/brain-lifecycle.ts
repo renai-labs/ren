@@ -88,12 +88,7 @@ export const layer = Layer.effect(
     const egress = yield* SandboxEgress.Service
     const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(Config.withDefault(timing.wake))
     const bootWithin = yield* Config.Duration("BRAIN_BOOT_TIMEOUT").pipe(Config.withDefault(timing.boot))
-    const telemetry = yield* Deployment.telemetry
-    const signals = [
-      ...(Option.isSome(telemetry.traces) ? ["traces"] : []),
-      ...(Option.isSome(telemetry.logs) ? ["logs"] : []),
-      ...(Option.isSome(telemetry.metrics) ? ["metrics"] : []),
-    ].join(",")
+    const sandboxVariables = yield* Deployment.sandboxVariables
 
     const read = (brainId: Brain.ID) =>
       database.db
@@ -155,7 +150,12 @@ export const layer = Layer.effect(
         REN_BRAIN_ID: row.id,
         REN_BRAIN_GENERATION: String(row.generation),
         BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(client.publicKeys),
-        ...(signals && { REN_TELEMETRY: signals }),
+        ...sandboxVariables({
+          "ren.organization.id": row.organization_id,
+          "ren.space.id": row.space_id,
+          "ren.brain.id": row.id,
+          "ren.brain.generation": String(row.generation),
+        }),
         ...(yield* environments.executorVariables(Environment.ofBrain(row.id))),
       }
     })

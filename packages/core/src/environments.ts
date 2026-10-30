@@ -12,6 +12,7 @@ import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { and, asc, count, eq, exists, inArray, isNull, type SQLWrapper, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Deployment } from "./deployment.js"
 import { EnvironmentProvider } from "./environment-provider.js"
 import { Signer } from "./signer.js"
 
@@ -114,6 +115,7 @@ export const layer = Layer.effect(
     })
     const database = yield* Database.Service
     const registry = yield* EnvironmentProvider.Registry
+    const sandboxVariables = yield* Deployment.sandboxVariables
     const directoryOf = (sessionId: Session.ID) => `${config.directory}/${sessionId}`
     const signer = yield* Signer.Service
     const signingKeys = signer.publicKeys("environment").pipe(
@@ -302,7 +304,10 @@ export const layer = Layer.effect(
             environmentId: assigned.environmentId,
             environmentTemplateId: assigned.template.id,
             config: assigned.template.config,
-            variables: ExecutorVariables.make(assigned.environmentId, keys.publicKeys),
+            variables: {
+              ...ExecutorVariables.make(assigned.environmentId, keys.publicKeys),
+              ...sandboxVariables({ "ren.organization.id": subject.organizationId }),
+            },
           })
           .pipe(
             Effect.mapError(unavailableBecause),

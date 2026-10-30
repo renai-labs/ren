@@ -29,11 +29,11 @@
     "@ren/environment-api": "workspace:*",
     "@ren/host-api": "workspace:*",
     "@ren/schema": "workspace:*",
+    "@ren/telemetry": "workspace:*",
     "@ren/util": "workspace:*",
     "disposable-email-domains-js": "catalog:",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
-    "posthog-node": "catalog:",
     "slackify-markdown": "5.0.0"
   },
   "devDependencies": {

@@ -31,12 +31,10 @@ import { Drives } from "@ren/core/drives"
 import { Deployment } from "@ren/core/deployment"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
-import { ErrorTracking } from "@ren/core/error-tracking"
 import { Docker } from "@ren/core/environment-provider/docker"
 import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
-import { PostHog } from "@ren/core/posthog"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Retention } from "@ren/core/retention"
@@ -53,7 +51,8 @@ import { Database } from "@ren/db/database"
 import { Postgres } from "@ren/db/postgres"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { Observability } from "@ren/schema/observability"
-import { Telemetry } from "@ren/util/telemetry"
+import { PostHog } from "@ren/telemetry/posthog"
+import { Telemetry } from "@ren/telemetry/telemetry"
 import { Config, Effect, Layer, Option, References } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { join } from "node:path"
@@ -131,6 +130,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
 
 const observability = Layer.mergeAll(
   Layer.unwrap(Effect.map(Deployment.telemetry, Telemetry.layer)).pipe(Layer.provide(FetchHttpClient.layer)),
+  Layer.effect(Deployment.ReporterVariables, PostHog.variables),
   Layer.unwrap(
     Effect.map(Config.LogLevel("LOG_LEVEL").pipe(Config.withDefault("Info")), (level) =>
       Layer.succeed(References.MinimumLogLevel, level),
@@ -160,7 +160,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide([AuthDatabase.layer, Database.layer]),
-  Layer.provide(ErrorTracking.layer.pipe(Layer.provideMerge(PostHog.layerConfig))),
+  Layer.provide(PostHog.layer),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
   Layer.provide(
     BunHttpServer.layerConfig({

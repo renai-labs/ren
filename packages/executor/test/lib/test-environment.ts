@@ -9,7 +9,6 @@ import { ConfigProvider, DateTime, Effect, Layer, Redacted, Schema } from "effec
 import { HttpRouter, HttpServer } from "effect/http"
 import { Sandbox } from "../../src/sandbox.js"
 import { Server } from "../../src/server.js"
-import { ExecutorTelemetry } from "../../src/telemetry.js"
 
 export const keys = await Effect.runPromise(Signature.generate("test"))
 
@@ -22,7 +21,6 @@ export const layer = (options: {
   HttpRouter.serve(Server.layer, { disableListenLog: true, disableLogger: true }).pipe(
     Layer.provide(HttpServer.layerServices),
     Layer.provide(options.executor ?? Sandbox.layer),
-    Layer.provide(ExecutorTelemetry.layer),
     Layer.provide(BunServices.layer),
     Layer.provide(
       ConfigProvider.layer(

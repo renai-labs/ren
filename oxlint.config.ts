@@ -39,8 +39,8 @@ const packageBoundaries = [
   },
   {
     files: ["packages/host-api/**"],
-    regex: "^@ren/(?!schema(/|$)|util(/|$))",
-    message: "The Host API depends only on schema and util. It holds BrainApi, RenHostApi, SyncApi and TelemetryApi.",
+    regex: "^@ren/(?!schema(/|$))",
+    message: "The Host API depends only on schema. It holds BrainApi and RenHostApi.",
   },
   {
     files: ["packages/environment-api/**"],
@@ -61,8 +61,9 @@ const packageBoundaries = [
   },
   {
     files: ["packages/executor/**"],
-    regex: "^@ren/(?!schema(/|$)|environment-api(/|$)|util(/|$))",
-    message: "The executor runs on an environment's machine. It depends only on schema, util and the Environment API.",
+    regex: "^@ren/(?!schema(/|$)|environment-api(/|$)|telemetry(/|$))",
+    message:
+      "The executor runs on an environment's machine. It depends only on schema, telemetry and the Environment API.",
   },
   {
     files: ["packages/opencode-transcript/**"],
@@ -113,6 +114,11 @@ const packageBoundaries = [
     regex: `^@ren/(?!schema(/|$)|protocol(/|$)|client(/|$))|${platformImports.regex}`,
     message:
       "The chat runtime runs on web, desktop and mobile. It depends on schema, protocol, client and effect, and on React only in src/react.ts.",
+  },
+  {
+    files: ["packages/telemetry/**"],
+    regex: "^@ren/",
+    message: "Telemetry knows nothing about Ren. It depends on effect and posthog-node only.",
   },
   {
     files: ["packages/util/src/**"],

@@ -1,5 +1,18 @@
 import { describe, expect, test } from "bun:test"
-import { Cause, Duration, Effect, ErrorReporter, Logger, Metric, Option, Schema, Tracer } from "effect"
+import {
+  Cause,
+  Config,
+  ConfigProvider,
+  Duration,
+  Effect,
+  ErrorReporter,
+  Layer,
+  Logger,
+  Metric,
+  Option,
+  Schema,
+  Tracer,
+} from "effect"
 import { FetchHttpClient } from "effect/http"
 import { OtlpExporter } from "effect/observability"
 import { Telemetry } from "../src/telemetry.js"
@@ -172,16 +185,6 @@ describe("Telemetry.layer", () => {
     expect(bodies["logs"]?.join("")).not.toContain("ada@example.com")
   })
 
-  test("decodes the batches that it exports, and keeps every field", async () => {
-    await run(Effect.logError("an error log", Cause.fail(new Error("boom"))).pipe(Effect.withSpan("Test.request")))
-    const json = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))
-    const decoded = (schema: Schema.Codec<unknown>, signal: string): Array<unknown> =>
-      (bodies[signal] ?? []).map((body) => Schema.decodeUnknownSync(Schema.fromJsonString(schema))(body))
-
-    expect(decoded(Telemetry.Traces, "traces")).toEqual((bodies["traces"] ?? []).map((body) => json(body)))
-    expect(decoded(Telemetry.Logs, "logs")).toEqual((bodies["logs"] ?? []).map((body) => json(body)))
-  })
-
   test("keeps the spans under a sampled caller only with continueTraces, and drops an unsampled root", async () => {
     const caller = Tracer.externalSpan({
       traceId: "0af7651916cd43dd8448eb211c80319c",
@@ -247,6 +250,32 @@ describe("Telemetry.layer", () => {
     expect(bodies["logs"]?.join("")).not.toContain("ada@example.com")
   })
 
+  test("with reportErrors, sends an error log and a reported failure to each reporter and to OTLP once", async () => {
+    const reported: Array<string> = []
+    await run(
+      Effect.gen(function* () {
+        yield* Effect.logError("A sync failed")
+        yield* Effect.die(new Error("the loop failed")).pipe(Effect.withErrorReporting, Effect.ignoreCause)
+      }),
+      ErrorReporter.layer([ErrorReporter.make((report) => void reported.push(report.error.message))], {
+        mergeWithExisting: true,
+      }).pipe(
+        Layer.provideMerge(
+          Telemetry.layer({
+            resource,
+            traces: Option.none(),
+            logs: target("logs"),
+            metrics: Option.none(),
+            reportErrors: true,
+          }),
+        ),
+      ),
+    )
+
+    expect(reported).toEqual(["A sync failed", "the loop failed"])
+    expect(logs().map((log) => log.body)).toEqual(["A sync failed", "the loop failed"])
+  })
+
   test("logs a warning when the backend refuses an export, which Effect would otherwise drop silently", async () => {
     const warnings: Array<unknown> = []
     await Effect.void.pipe(
@@ -269,5 +298,43 @@ describe("Telemetry.layer", () => {
     expect(warnings.flat()).toEqual([
       `A telemetry export to http://127.0.0.1:${receiver.port}/refuse/v1/traces answered 400`,
     ])
+  })
+})
+
+describe("Telemetry.targets", () => {
+  const read = <A>(env: Record<string, string>, config: Config.Config<A>) =>
+    Effect.runSync(config.parse(ConfigProvider.fromEnv({ env })))
+
+  const server = {
+    OTEL_EXPORTER_OTLP_ENDPOINT: "https://us.i.posthog.com/i/",
+    OTEL_EXPORTER_OTLP_HEADERS: "authorization=Bearer%20phc_test",
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "https://otlp.example.com/v1/traces",
+    OTEL_EXPORTER_OTLP_TRACES_HEADERS: "authorization=Bearer%20abc%20123, x-team=ren",
+    OTEL_METRICS_EXPORTER: "none",
+  }
+
+  test("reads a signal's own endpoint and headers, the shared ones for the rest, and none as off", () => {
+    expect(read(server, Telemetry.targets)).toEqual({
+      traces: Option.some({
+        url: "https://otlp.example.com/v1/traces",
+        headers: { authorization: "Bearer abc 123", "x-team": "ren" },
+      }),
+      logs: Option.some({ url: "https://us.i.posthog.com/i/v1/logs", headers: { authorization: "Bearer phc_test" } }),
+      metrics: Option.none(),
+    })
+    expect(read({}, Telemetry.targets)).toEqual({
+      traces: Option.none(),
+      logs: Option.none(),
+      metrics: Option.none(),
+    })
+  })
+
+  test("gives a sandbox variables that read back as the same targets and attributes", () => {
+    const targets = read(server, Telemetry.targets)
+    const attributes = { "deployment.environment.name": "production", "ren.brain.id": "brn_test=1,2" }
+    const variables = Telemetry.variables({ ...targets, attributes })
+
+    expect(read(variables, Telemetry.targets)).toEqual(targets)
+    expect(read(variables, Telemetry.attributes)).toEqual(attributes)
   })
 })
