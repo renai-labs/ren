@@ -53,6 +53,11 @@ export const Provider = Schema.Struct({
   apiKey: Models.ApiKey,
 }).annotate({ identifier: "ModelTypes.Provider" })
 
+export const Providers = Schema.Record(Type, Schema.optionalKey(Provider)).annotate({
+  identifier: "ModelTypes.Providers",
+})
+export type Providers = typeof Providers.Type
+
 const renTypes = ["image_generation", "audio_transcription", "decisions"] as const
 
 export interface SearchInfo extends Schema.Schema.Type<typeof SearchInfo> {}

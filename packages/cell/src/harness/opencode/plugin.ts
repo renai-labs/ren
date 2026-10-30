@@ -35,6 +35,7 @@ import {
 import type { Harness } from "../harness.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
+import { OpenCodeImages } from "./image-tool.js"
 import { basename } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
@@ -540,20 +541,39 @@ export const make = (
             Effect.flatMap((info) => (info.parentID ? rootOf(info.parentID) : Effect.succeed(sessionID))),
             Effect.orElseSucceed(() => sessionID),
           )
+        const claims = Effect.fn("RenPlugin.claims")(function* (
+          input: Omit<UsageClaims.Input, "rootSession" | "turn" | "member">,
+        ) {
+          const root = yield* rootOf(SessionID.make(input.session))
+          const turn = yield* modelRequest.lastUserMessage(root)
+          const memberId = input.kind === "title" ? undefined : turn?.speaker?.memberID
+          return UsageClaims.headers({
+            ...input,
+            rootSession: root,
+            turn: turn?.id,
+            member: memberId && (modelRequest.egress ? Models.personPlaceholder(memberId) : memberId),
+          })
+        })
+        yield* tool.transform(
+          (editor) =>
+            isSession &&
+            OpenCodeImages.register(editor, Ref.getUnsafe(applied), {
+              current: applied,
+              sessionId,
+              directory: context.location.directory,
+              connections: Option.filter(connections, () => Boolean(workspaceID)),
+              keyFor: refreshKey,
+              headers: (call) => claims({ session: call.sessionID, agent: call.agent, kind: "primary" }),
+            }),
+        )
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {
             delete event.headers[Models.personHeader]
             if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
-            const root = yield* rootOf(event.sessionID)
-            const turn = yield* modelRequest.lastUserMessage(root)
-            const memberId = event.kind === "title" ? undefined : turn?.speaker?.memberID
             Object.assign(
               event.headers,
-              UsageClaims.headers({
-                rootSession: root,
+              yield* claims({
                 session: event.sessionID,
-                turn: turn?.id,
-                member: memberId && (modelRequest.egress ? Models.personPlaceholder(memberId) : memberId),
                 agent: event.agent,
                 kind: event.kind,
                 variant: event.model.variant,
@@ -597,6 +617,7 @@ export const make = (
               const before = (yield* Ref.get(applied)).apps
               const apps = conflicts.length ? before : snapshot.apps
               yield* Ref.set(applied, { ...snapshot, apps })
+              if (isSession) yield* tool.reload()
               yield* mcp.apply(apps, snapshot.channels)
               if (!conflicts.length) yield* skills.apply(prepared)
               yield* synced

@@ -11,6 +11,7 @@ import type { Effect, Option } from "effect"
 export interface Update {
   readonly models?: ReadonlyArray<Models.Endpoint>
   readonly modelCatalogs?: ModelTypes.Catalogs
+  readonly modelProviders?: ModelTypes.Providers
   readonly apps?: Option.Option<AppCatalog.Info>
   readonly channels?: ReadonlyArray<Channel.Provider>
   readonly memory?: Option.Option<PullMemory>
@@ -24,6 +25,7 @@ export interface Snapshot {
   readonly revision: number
   readonly models: ReadonlyArray<Models.Endpoint>
   readonly modelCatalogs: ModelTypes.Catalogs
+  readonly modelProviders: ModelTypes.Providers
   readonly apps: Option.Option<AppCatalog.Info>
   readonly channels: ReadonlyArray<Channel.Provider>
   readonly memory: Option.Option<PullMemory>

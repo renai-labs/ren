@@ -9,6 +9,66 @@ import { ModelsTest } from "./lib/models.js"
 const it = testEffect(Layer.empty)
 
 it.live(
+  "publication rejects a snapshot if the source changes while credentials refresh, even when the URL returns",
+  () =>
+    Effect.gen(function* () {
+      const inference = Context.get(
+        yield* Layer.build(Inference.layer.pipe(Layer.provide(ModelsTest.storage()))),
+        Inference.Service,
+      )
+      const state = { model: "old", held: false }
+      const server = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          Bun.serve({
+            port: 0,
+            hostname: "127.0.0.1",
+            fetch: (request) =>
+              new URL(request.url).pathname === "/model/info"
+                ? Response.json({
+                    data: [
+                      {
+                        model_name: `ren/${state.model}`,
+                        model_info: { model_key: state.model, provider_key: "ren", mode: "chat" },
+                      },
+                    ],
+                  })
+                : new Response("Search unavailable", { status: 503 }),
+          }),
+        ),
+        (server) => Effect.promise(() => server.stop(true)),
+      )
+      const blocked = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      yield* Effect.addFinalizer(() => Deferred.succeed(release, undefined))
+      yield* inference.saveBaseUrl(Option.some(server.url.origin))
+      const applied: Array<string> = []
+      const discovery = yield* ModelDiscovery.make({
+        inference,
+        keyFor: (id) =>
+          Effect.gen(function* () {
+            if (id === "ren" && !state.held) {
+              state.held = true
+              yield* Deferred.succeed(blocked, undefined)
+              yield* Deferred.await(release)
+            }
+            return Option.some({ key: Redacted.make("key") })
+          }),
+        apply: (endpoints) =>
+          Effect.sync(() => {
+            applied.push(...endpoints.flatMap((endpoint) => endpoint.models.map((model) => model.id)))
+          }),
+      }).pipe(Effect.provide(FetchHttpClient.layer))
+      yield* Deferred.await(blocked)
+      yield* inference.saveBaseUrl(Option.some("https://replacement.example"))
+      yield* inference.saveBaseUrl(Option.some(server.url.origin))
+      state.model = "new"
+      yield* Deferred.succeed(release, undefined)
+      yield* discovery.refresh
+      expect(applied).toEqual(["new"])
+    }),
+)
+
+it.live(
   "a search failure preserves its snapshot while model discovery publishes; an empty success removes search",
   () =>
     Effect.gen(function* () {
@@ -97,6 +157,7 @@ it.live("model discovery publishes while search is pending, and a replaced sourc
       (server) => Effect.promise(() => server.stop(true)),
     )
     yield* inference.saveBaseUrl(Option.some(server.url.origin))
+    const source = yield* inference.snapshot
     yield* ModelDiscovery.make({
       inference,
       keyFor: () => Effect.succeed(Option.some({ key: Redacted.make("key") })),
@@ -108,10 +169,7 @@ it.live("model discovery publishes while search is pending, and a replaced sourc
     yield* inference.saveBaseUrl(Option.some("https://new.example"))
     yield* inference.saveModelCatalogs({ search: { providerId: "ren", models: [{ id: "new/search" }] } })
     expect(
-      yield* inference.saveModelCatalogs(
-        { search: { providerId: "ren", models: [{ id: "old/search" }] } },
-        { baseUrl: server.url.origin },
-      ),
+      yield* inference.saveModelCatalogs({ search: { providerId: "ren", models: [{ id: "old/search" }] } }, source),
     ).toBe(false)
     expect((yield* inference.modelCatalogs).search?.models).toEqual([{ id: "new/search" }])
     yield* Deferred.succeed(release, undefined)

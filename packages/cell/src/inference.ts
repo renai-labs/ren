@@ -2,7 +2,7 @@ export * as Inference from "./inference.js"
 
 import { Models } from "@ren/schema/models"
 import { ModelTypes } from "@ren/schema/model-types"
-import { Context, Effect, Layer, Option, Ref, Schema, Semaphore } from "effect"
+import { Context, Effect, Layer, Option, Schema, SynchronizedRef } from "effect"
 import { BrainStorage } from "./brain-storage.js"
 
 const baseUrlKey = "ren:inference-url"
@@ -12,80 +12,101 @@ const modelCatalogsKey = "ren:model-type-catalogs"
 const StoredCatalog = Schema.fromJsonString(Models.Catalog)
 const StoredCatalogs = Schema.fromJsonString(ModelTypes.Catalogs)
 
-// oxlint-disable-next-line ren/no-comments -- HR14, HR16: the inference service's URL from the last pull, and the last model list the harness read from it. Both stay in brain storage, so a restart has them before its first pull or read.
+export interface Snapshot {
+  readonly revision: number
+  readonly generation: number
+  readonly baseUrl: Option.Option<string>
+  readonly catalog: Option.Option<Models.Catalog>
+  readonly modelCatalogs: ModelTypes.Catalogs
+}
+
+type Source = Pick<Snapshot, "generation" | "baseUrl">
+
 export interface Interface {
+  readonly snapshot: Effect.Effect<Snapshot>
+  readonly publish: (snapshot: Snapshot, install: Effect.Effect<void>) => Effect.Effect<boolean>
   readonly baseUrl: Effect.Effect<Option.Option<string>>
   readonly saveBaseUrl: (baseUrl: Option.Option<string>) => Effect.Effect<boolean>
   readonly catalog: Effect.Effect<Option.Option<Models.Catalog>>
-  readonly saveCatalog: (catalog: Models.Catalog, source?: { readonly baseUrl: string }) => Effect.Effect<boolean>
+  readonly saveCatalog: (catalog: Models.Catalog, source?: Source) => Effect.Effect<boolean>
   readonly modelCatalogs: Effect.Effect<ModelTypes.Catalogs>
-  readonly saveModelCatalogs: (
-    catalogs: ModelTypes.Catalogs,
-    source?: { readonly baseUrl: string },
-  ) => Effect.Effect<boolean>
+  readonly saveModelCatalogs: (catalogs: ModelTypes.Catalogs, source?: Source) => Effect.Effect<boolean>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/cell/Inference") {}
+
+const currentSource = (snapshot: Snapshot, source: Source | undefined) =>
+  !source ||
+  (snapshot.generation === source.generation &&
+    Option.getOrUndefined(snapshot.baseUrl) === Option.getOrUndefined(source.baseUrl))
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const storage = yield* BrainStorage.Service
-    const writing = yield* Semaphore.make(1)
-    const baseUrl = yield* Ref.make(
-      Option.fromNullishOr(yield* Effect.promise(() => storage.get(baseUrlKey))).pipe(Option.filter(Boolean)),
-    )
-    const catalog = yield* Ref.make(
-      Schema.decodeUnknownOption(StoredCatalog)(yield* Effect.promise(() => storage.get(catalogKey))),
-    )
-    const modelCatalogs = yield* Ref.make(
-      Option.getOrElse(
+    const state = yield* SynchronizedRef.make<Snapshot>({
+      revision: 0,
+      generation: 0,
+      baseUrl: Option.fromNullishOr(yield* Effect.promise(() => storage.get(baseUrlKey))).pipe(Option.filter(Boolean)),
+      catalog: Schema.decodeUnknownOption(StoredCatalog)(yield* Effect.promise(() => storage.get(catalogKey))),
+      modelCatalogs: Option.getOrElse(
         Schema.decodeUnknownOption(StoredCatalogs)(yield* Effect.promise(() => storage.get(modelCatalogsKey))),
         () => ({}),
       ),
-    )
+    })
+    const snapshot = SynchronizedRef.get(state)
     return Service.of({
-      baseUrl: Ref.get(baseUrl),
-      saveBaseUrl: Effect.fn("Inference.saveBaseUrl")(
-        function* (next) {
-          if (Option.getOrUndefined(yield* Ref.get(baseUrl)) === Option.getOrUndefined(next)) return false
-          yield* Ref.set(baseUrl, next)
-          yield* Effect.promise(() =>
-            Option.match(next, {
-              onNone: () => storage.delete(baseUrlKey),
-              onSome: (url) => storage.put(baseUrlKey, url),
-            }),
-          )
-          return true
-        },
-        (effect) => writing.withPermit(effect),
+      snapshot,
+      publish: Effect.fn("Inference.publish")((expected, install) =>
+        SynchronizedRef.modifyEffect(state, (current) =>
+          expected.revision === current.revision
+            ? Effect.as(install, [true, current] as const)
+            : Effect.succeed([false, current] as const),
+        ),
       ),
-      catalog: Ref.get(catalog),
-      saveCatalog: Effect.fn("Inference.saveCatalog")(
-        function* (next, source) {
-          if (source && source.baseUrl !== Option.getOrUndefined(yield* Ref.get(baseUrl))) return false
-          const encoded = Schema.encodeSync(StoredCatalog)(next)
-          const previous = Option.map(yield* Ref.get(catalog), Schema.encodeSync(StoredCatalog))
-          if (Option.contains(previous, encoded)) return false
-          yield* Ref.set(catalog, Option.some(next))
-          yield* Effect.promise(() => storage.put(catalogKey, encoded))
-          return true
-        },
-        (effect) => writing.withPermit(effect),
+      baseUrl: Effect.map(snapshot, (current) => current.baseUrl),
+      saveBaseUrl: Effect.fn("Inference.saveBaseUrl")((next) =>
+        SynchronizedRef.modifyEffect(state, (current) =>
+          Effect.gen(function* () {
+            if (Option.getOrUndefined(current.baseUrl) === Option.getOrUndefined(next)) return [false, current] as const
+            yield* Effect.promise(() =>
+              Option.match(next, {
+                onNone: () => storage.delete(baseUrlKey),
+                onSome: (url) => storage.put(baseUrlKey, url),
+              }),
+            )
+            return [
+              true,
+              { ...current, baseUrl: next, revision: current.revision + 1, generation: current.generation + 1 },
+            ] as const
+          }),
+        ),
       ),
-      modelCatalogs: Ref.get(modelCatalogs),
-      saveModelCatalogs: Effect.fn("Inference.saveModelCatalogs")(
-        function* (patch, source) {
-          if (source && source.baseUrl !== Option.getOrUndefined(yield* Ref.get(baseUrl))) return false
-          const previous = yield* Ref.get(modelCatalogs)
-          const next = { ...previous, ...patch }
-          const encoded = Schema.encodeSync(StoredCatalogs)(next)
-          if (encoded === Schema.encodeSync(StoredCatalogs)(previous)) return false
-          yield* Effect.promise(() => storage.put(modelCatalogsKey, encoded))
-          yield* Ref.set(modelCatalogs, next)
-          return true
-        },
-        (effect) => writing.withPermit(effect),
+      catalog: Effect.map(snapshot, (current) => current.catalog),
+      saveCatalog: Effect.fn("Inference.saveCatalog")((next, source) =>
+        SynchronizedRef.modifyEffect(state, (current) =>
+          Effect.gen(function* () {
+            if (!currentSource(current, source)) return [false, current] as const
+            const encoded = Schema.encodeSync(StoredCatalog)(next)
+            if (Option.contains(Option.map(current.catalog, Schema.encodeSync(StoredCatalog)), encoded))
+              return [false, current] as const
+            yield* Effect.promise(() => storage.put(catalogKey, encoded))
+            return [true, { ...current, catalog: Option.some(next), revision: current.revision + 1 }] as const
+          }),
+        ),
+      ),
+      modelCatalogs: Effect.map(snapshot, (current) => current.modelCatalogs),
+      saveModelCatalogs: Effect.fn("Inference.saveModelCatalogs")((patch, source) =>
+        SynchronizedRef.modifyEffect(state, (current) =>
+          Effect.gen(function* () {
+            if (!currentSource(current, source)) return [false, current] as const
+            const next = { ...current.modelCatalogs, ...patch }
+            const encoded = Schema.encodeSync(StoredCatalogs)(next)
+            if (encoded === Schema.encodeSync(StoredCatalogs)(current.modelCatalogs)) return [false, current] as const
+            yield* Effect.promise(() => storage.put(modelCatalogsKey, encoded))
+            return [true, { ...current, modelCatalogs: next, revision: current.revision + 1 }] as const
+          }),
+        ),
       ),
     })
   }),

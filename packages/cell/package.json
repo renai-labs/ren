@@ -19,6 +19,8 @@
     "template:e2b": "bun e2b/stage.ts"
   },
   "dependencies": {
+    "@effect/ai-openai": "catalog:",
+    "@effect/platform-node-shared": "catalog:",
     "@opencode/ai": "catalog:",
     "@opencode/client": "catalog:",
     "@opencode/core": "catalog:",
