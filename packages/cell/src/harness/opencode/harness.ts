@@ -510,7 +510,8 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     firstAskedAt: Map<string, number>
     models: ReadonlyArray<Models.Endpoint>
     modelCatalogs: ModelTypes.Catalogs
-  } = { firstAskedAt: new Map(), models: endpoints, modelCatalogs: {} }
+    modelProviders: ModelTypes.Providers
+  } = { firstAskedAt: new Map(), models: endpoints, modelCatalogs: {}, modelProviders: {} }
   const mutations = yield* Semaphore.make(1)
   const configure = Effect.fn("OpenCodeHarness.configure")(function* (
     update: HarnessConfig.Update,
@@ -571,9 +572,11 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     }
     state.models = models
     state.modelCatalogs = modelCatalogs
+    state.modelProviders = update.modelProviders ?? state.modelProviders
     yield* server.configure({
       models,
       modelCatalogs,
+      modelProviders: state.modelProviders,
       ...(update.memory && { memory: update.memory }),
       ...(update.apps && { apps: update.apps }),
       ...(update.channels && { channels: update.channels }),
@@ -583,6 +586,18 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   // oxlint-disable-next-line ren/no-comments -- A pull while the harness was closed saved new layers and memory; an opening resolves each chat from them, not from what the chat had before.
   yield* configure({
     models: endpoints,
+    modelProviders: Option.isSome(models)
+      ? yield* Effect.gen(function* () {
+          const baseUrl = yield* models.value.inference.baseUrl
+          return Option.isSome(baseUrl)
+            ? yield* ModelDiscovery.providers(
+                yield* models.value.inference.modelCatalogs,
+                baseUrl.value,
+                models.value.refreshKey,
+              )
+            : {}
+        })
+      : {},
     modelCatalogs: Option.isSome(models) ? yield* models.value.inference.modelCatalogs : {},
     ...(Option.isSome(settings) && {
       settings: { layers: yield* settings.value.layers, chats: yield* settings.value.chats },
@@ -594,7 +609,8 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         yield* ModelDiscovery.make({
           inference: models.value.inference,
           keyFor: models.value.refreshKey,
-          apply: (next, modelCatalogs) => mutations.withPermit(configure({ models: next, modelCatalogs })),
+          apply: (next, modelCatalogs, modelProviders) =>
+            mutations.withPermit(configure({ models: next, modelCatalogs, modelProviders })),
         }).pipe(Effect.provide(FetchHttpClient.layer)),
       )
     : Option.none()

@@ -159,6 +159,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     revision: 0,
     models: initial,
     modelCatalogs: {},
+    modelProviders: {},
     apps: options.apps ?? Option.none(),
     channels: options.channels ?? [],
     memory: Option.none(),

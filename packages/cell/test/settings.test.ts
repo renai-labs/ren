@@ -123,6 +123,104 @@ const open = Effect.fnUntraced(function* (
 })
 
 describe("settings in the cell", () => {
+  it.live("the image tool uses its own provider's credentials instead of the Ren chat key", () =>
+    Effect.gen(function* () {
+      const keys: Array<string | null> = []
+      const provider = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          Bun.serve({
+            port: 0,
+            hostname: "127.0.0.1",
+            fetch: (request) => {
+              keys.push(request.headers.get("authorization"))
+              return Response.json({ created: 1, data: [] })
+            },
+          }),
+        ),
+        (server) => Effect.promise(() => server.stop(true)),
+      )
+      const layers = TestSettings.layers({
+        ren: { defaultModels: { image_generation: { providerId: "images", modelId: "chosen" } } },
+      })
+      const opened = yield* open(layers, {
+        refreshKey: () => Effect.succeed(Option.some({ key: Redacted.make("ren-chat-key") })),
+      })
+      yield* opened.pull(layers, {
+        modelCatalogs: { image_generation: { providerId: "images", models: [{ id: "chosen" }] } },
+        modelProviders: {
+          image_generation: {
+            id: "images",
+            baseUrl: `${provider.url.origin}/v1`,
+            apiKey: { key: Redacted.make("images-key") },
+          },
+        },
+      })
+      yield* opened.turn(
+        stub.script({
+          tool: { name: "execute", input: { code: 'return await tools.image_generation({ prompt: "A logo" })' } },
+        }),
+      )
+      expect(keys).toEqual(["Bearer images-key"])
+    }),
+  )
+  it.live("the image tool follows the configured model, sends root-turn claims, and disappears with its catalog", () =>
+    Effect.gen(function* () {
+      const calls: Array<{ model: string; headers: Record<string, string> }> = []
+      const provider = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          Bun.serve({
+            port: 0,
+            hostname: "127.0.0.1",
+            fetch: async (request) => {
+              const body = Schema.decodeUnknownSync(Schema.Struct({ model: Schema.String }))(await request.json())
+              calls.push({ model: body.model, headers: Object.fromEntries(request.headers) })
+              return Response.json({ created: 1, data: [{ b64_json: btoa("image bytes") }] })
+            },
+          }),
+        ),
+        (server) => Effect.promise(() => server.stop(true)),
+      )
+      const layers = TestSettings.layers({
+        ren: { defaultModels: { image_generation: { providerId: "ren", modelId: "chosen" } } },
+      })
+      const opened = yield* open(layers)
+      yield* opened.pull(layers, {
+        modelCatalogs: {
+          image_generation: { providerId: "ren", models: [{ id: "first" }, { id: "chosen", upstreamId: "ren/image" }] },
+        },
+        modelProviders: {
+          image_generation: {
+            id: "ren",
+            baseUrl: `${provider.url.origin}/v1`,
+            apiKey: { key: Redacted.make("image-key") },
+          },
+        },
+      })
+      yield* opened.turn(
+        stub.script({
+          tool: {
+            name: "execute",
+            input: { code: 'return await tools.image_generation({ prompt: "A logo", output_path: "logo.png" })' },
+          },
+        }),
+      )
+      expect(calls).toHaveLength(1)
+      expect(calls.at(0)).toMatchObject({
+        model: "ren/image",
+        headers: { authorization: "Bearer image-key", "ren-session": opened.sessionId },
+      })
+      expect(yield* Effect.promise(() => Bun.file(join(opened.directory, opened.sessionId, "logo.png")).text())).toBe(
+        "image bytes",
+      )
+      yield* opened.pull(layers, { modelCatalogs: {} })
+      yield* opened.turn(
+        stub.script({
+          tool: { name: "execute", input: { code: 'return await tools.image_generation({ prompt: "A logo" })' } },
+        }),
+      )
+      expect(calls).toHaveLength(1)
+    }),
+  )
   it.live("chat model-type overrides survive chat-model changes and re-resolve when a catalog changes", () =>
     Effect.gen(function* () {
       const fallback = { providerId: "ren", modelId: "default" }

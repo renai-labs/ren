@@ -1,6 +1,7 @@
 export * as ModelRefresh from "./model-refresh.js"
 
 import { Models } from "@ren/schema/models"
+import type { ModelTypes } from "@ren/schema/model-types"
 import { Context, DateTime, Duration, Effect, Layer, Option, Redacted, Semaphore } from "effect"
 import type { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
@@ -11,6 +12,11 @@ export class Service extends Context.Service<Service, Harness.Refresh>()("@ren/c
 export const window = Duration.hours(3)
 
 export const anyEndpoint = "*"
+
+export const forProvider = (provider: ModelTypes.Provider, refresh: Harness.Refresh) =>
+  provider.id === "ren"
+    ? refresh(anyEndpoint).pipe(Effect.map((key) => Option.getOrElse(key, () => provider.apiKey).key))
+    : Effect.succeed(provider.apiKey.key)
 
 const keyOf = (access: Models.Access | undefined, endpointId: string) =>
   (
