@@ -31,8 +31,11 @@ describe("InfraFolder.validate", () => {
         "upstream:\n  url: https://github.com/acme/skills\n  ref: main\n  path: fetch\n",
       "spaces/engineering/schedules.yaml":
         "nightly:\n  agent: build\n  cron: '0 3 * * *'\n  timeZone: UTC\n  message: Build it.\n",
+      "spaces/engineering/memory/memory.md": "- Ship on Fridays.\n",
+      "spaces/engineering/memory/people/ana.md": "Ana leads design.\n",
       "spaces/support/space.yaml": "name: Support\n",
       "spaces/support/agents/triage/agent.yaml": "description: Sorts tickets.\nisSubagent: false\n",
+      "memory/memory.md": "- Be brief.\n",
     })
 
     const result = await InfraFolder.validate(root)
@@ -64,6 +67,8 @@ describe("InfraFolder.validate", () => {
       },
     })
     expect(Object.keys(engineering?.schedules ?? {})).toEqual(["nightly"])
+    expect(engineering?.memory).toEqual({ "memory.md": "- Ship on Fridays.\n", "people/ana.md": "Ana leads design.\n" })
+    expect(result.spec.memory).toEqual({ "memory.md": "- Be brief.\n" })
     expect(Object.keys(result.spec.spaces)).toEqual(["engineering", "support"])
   })
 
@@ -79,14 +84,19 @@ describe("InfraFolder.validate", () => {
       "spaces/support/instructions.md": "Help.\n",
       "spaces/support/agents/qa/agent.yaml": "settings:\n  instructions: Test.\n",
       "spaces/support/agents/qa/instructions.md": "Test it.\n",
+      "spaces/support/memory/people/ana.md": "Ana leads design.\n",
+      "memory/memory.md": "- Be brief.\n",
+      "memory/logo.png": new Uint8Array([137, 80, 78, 71, 0, 1]),
     })
 
     const result = await InfraFolder.validate(root)
 
     expect(result.problems.map(Output.formatProblem)).toEqual([
+      "memory/logo.png: A memory holds text files only.",
       "spaces/engineering/agents/build/agent.yaml: isSubagent: Expected boolean",
       "spaces/engineering/space.yaml: name: Missing key",
       "spaces/support/agents/qa: Put the instructions in instructions.md only.",
+      "spaces/support/memory: A memory folder needs memory.md.",
     ])
   })
 
@@ -153,6 +163,7 @@ describe("InfraFolder.write", () => {
     },
     spec: {
       org: { settings: { instructions: "Be brief.", permissions: [], references: [] } },
+      memory: { "memory.md": "" },
       spaces: {
         engineering: {
           name: "Engineering",
@@ -198,6 +209,7 @@ describe("InfraFolder.write", () => {
             nightly: { agent: "build", cron: "0 3 * * *", timeZone: "UTC", message: "Run the nightly.", enabled: true },
           },
           channels: { ren: { kind: "github" as const, purpose: "GitHub acme/ren", agent: "build", fallback: false } },
+          memory: { "memory.md": "- Ship on Fridays.\n", "people/ana.md": "  Ana leads design.  \n\n" },
           uses: { agents: [] },
         },
         home: {
@@ -214,11 +226,14 @@ describe("InfraFolder.write", () => {
     lock: { organization: "acme", resources: {} },
     write: [
       "deploy.yaml/spaces/engineering/profiles/github/acme",
+      "memory/memory.md",
       "org",
       "spaces/engineering",
       "spaces/engineering/agents/build",
       "spaces/engineering/apps/tools",
       "spaces/engineering/channels/ren",
+      "spaces/engineering/memory/memory.md",
+      "spaces/engineering/memory/people/ana.md",
       "spaces/engineering/schedules/nightly",
       "spaces/home",
       "spaces/home/uses/agents/build",
@@ -237,6 +252,7 @@ describe("InfraFolder.write", () => {
     if (result.kind !== "org") throw new Error("Expected an org spec")
     expect(result.bindings?.organization).toBe("acme")
     expect(result.spec.org.settings).toEqual(pulled.spec.org.settings)
+    expect(result.spec.memory).toEqual(pulled.spec.memory)
     expect(result.spec.spaces["engineering"]).toMatchObject(pulled.spec.spaces.engineering)
     expect(result.spec.spaces["home"]).toMatchObject(pulled.spec.spaces.home)
     expect(await Bun.file(join(root, "spaces/engineering/agents/build/agent.yaml")).text()).toBe(
@@ -272,22 +288,28 @@ describe("InfraFolder.write", () => {
     expect(result.problems).toEqual([])
   })
 
-  test("removes the spaces, agents and instructions that pull removes, and keeps every other file", async () => {
+  test("removes the spaces, agents, memory files and instructions that pull removes, and keeps every other file", async () => {
     const root = await folder({
       "spaces/old/space.yaml": "name: Old\n",
       "spaces/engineering/agents/lint/agent.yaml": "{}\n",
       "spaces/engineering/schedules.yaml": "{}\n",
+      "spaces/engineering/memory/stale.md": "Deleted in Ren.\n",
+      "spaces/engineering/memory/drafts/mine.md": "Not applied yet.\n",
       "spaces/home/instructions.md": "Stale.\n",
       "README.md": "Ours.\n",
     })
 
-    await InfraFolder.write(root, { ...pulled, remove: ["spaces/engineering/agents/lint", "spaces/old"] })
+    await InfraFolder.write(root, {
+      ...pulled,
+      remove: ["spaces/engineering/agents/lint", "spaces/engineering/memory/stale.md", "spaces/old"],
+    })
 
     const files = (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: root }))).toSorted()
     expect(files).toEqual([
       "README.md",
       "deploy.yaml",
       "instructions.md",
+      "memory/memory.md",
       "org.yaml",
       "spaces/engineering/agents/build/agent.yaml",
       "spaces/engineering/agents/build/instructions.md",
@@ -297,6 +319,9 @@ describe("InfraFolder.write", () => {
       "spaces/engineering/apps/tools/skills/style/skill.yaml",
       "spaces/engineering/channels.yaml",
       "spaces/engineering/instructions.md",
+      "spaces/engineering/memory/drafts/mine.md",
+      "spaces/engineering/memory/memory.md",
+      "spaces/engineering/memory/people/ana.md",
       "spaces/engineering/schedules.yaml",
       "spaces/engineering/space.yaml",
       "spaces/home/space.yaml",

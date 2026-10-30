@@ -15,6 +15,7 @@ import { Agent } from "./agent.js"
 import { AgentMembership } from "./agent/membership.js"
 import { InfraApps } from "./infra-specs/apps.js"
 import { InfraChannels } from "./infra-specs/channels.js"
+import { InfraMemory } from "./infra-specs/memory.js"
 import { InfraPlan } from "./infra-specs/plan.js"
 import { InfraPolicy } from "./infra-specs/policy.js"
 import { InfraProfiles } from "./infra-specs/profiles.js"
@@ -71,6 +72,7 @@ interface Live {
   readonly schedules: InfraSchedules.Live
   readonly channels: InfraChannels.Live
   readonly profiles: InfraProfiles.Live
+  readonly memory: InfraMemory.Live
 }
 
 type Step = InfraPlan.Step
@@ -198,6 +200,7 @@ export const layer = Layer.effect(
       schedules: yield* InfraSchedules.make,
       channels: yield* InfraChannels.make,
       profiles: yield* InfraProfiles.make,
+      memory: yield* InfraMemory.make,
     }
 
     const authorize = (actor: Actor.Info, action: string) =>
@@ -276,6 +279,7 @@ export const layer = Layer.effect(
             const schedules = yield* InfraSchedules.load(transaction, actor.organizationId)
             const channels = yield* InfraChannels.load(transaction, actor.organizationId)
             const profiles = yield* InfraProfiles.load(transaction, actor.organizationId)
+            const memory = yield* InfraMemory.load(transaction, actor.organizationId)
             return {
               organization: {
                 slug: organization.slug,
@@ -315,6 +319,7 @@ export const layer = Layer.effect(
               schedules,
               channels,
               profiles,
+              memory,
             } satisfies Live
           }),
         )
@@ -358,6 +363,7 @@ export const layer = Layer.effect(
         },
         spec: {
           org: { settings: live.organization.settings },
+          memory: kinds.memory.pull(live.memory),
           spaces: Object.fromEntries(
             inScope.shared.map((space) => [
               space.slug,
@@ -381,6 +387,7 @@ export const layer = Layer.effect(
                 apps: kinds.apps.pull(live.apps, space.id),
                 schedules: kinds.schedules.pull(live.schedules, space.id, pulledNames),
                 channels: kinds.channels.pull(live.channels, space.id, pulledNames, aliases),
+                memory: kinds.memory.pull(live.memory, space.id),
                 uses: {
                   agents: inScope.memberships
                     .filter((membership) => membership.spaceId === space.id)
@@ -398,13 +405,17 @@ export const layer = Layer.effect(
       const pulled = snapshot(live, aliases)
       return InfraVersions.resources({
         org: pulled.spec.org,
+        memory: pulled.spec.memory,
         spaces: pulled.spec.spaces,
         bindings: pulled.bindings.spaces,
       })
     }
 
     const folderResources = (spec: Infra.Spec, bindings: Infra.Bindings, live: InfraVersions.Resources) =>
-      InfraVersions.resources({ org: spec.org, spaces: spec.spaces, bindings: bindings.spaces }, live)
+      InfraVersions.resources(
+        { org: spec.org, memory: spec.memory, spaces: spec.spaces, bindings: bindings.spaces },
+        live,
+      )
 
     const lockOf = (live: Live, lock: Infra.Lock | undefined) =>
       lock?.organization === live.organization.slug ? lock.resources : {}
@@ -762,6 +773,7 @@ export const layer = Layer.effect(
         schedules: kinds.schedules.diff(context, live.schedules),
         channels: kinds.channels.diff(context, live.channels),
         profiles: kinds.profiles.diff(context, live.profiles),
+        memory: kinds.memory.diff(context, live.memory, spec.memory),
       }
       problems.push(
         ...planned.apps.problems,
@@ -780,6 +792,7 @@ export const layer = Layer.effect(
         ...planned.schedules.steps,
         ...planned.channels.steps,
         ...planned.profiles.steps,
+        ...planned.memory.steps,
         ...planned.profiles.removals,
         ...planned.channels.removals,
         ...planned.schedules.removals,
@@ -895,7 +908,8 @@ export const layer = Layer.effect(
           const path = entry.step.change.path
           if (entry.step.change.kind !== "space" || !archived.has(path)) return []
           const retained = [...renVersions.keys()].filter(
-            (child) => InfraVersions.spaceOf(child) === path && !archived.has(child),
+            (child) =>
+              InfraVersions.spaceOf(child) === path && !archived.has(child) && ren.get(child)?.kind !== "memory",
           )
           return retained.length > 0 ? [path, ...retained] : []
         }),

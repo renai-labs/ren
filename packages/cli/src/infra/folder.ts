@@ -50,6 +50,7 @@ const inSpace = (space: string, rest: ReadonlyArray<string>): Place => {
     return isInstructions(rest.slice(2)) ? [`${agent}/instructions.md`, []] : [`${agent}/agent.yaml`, rest.slice(2)]
   }
   if (kind === "apps" && rest.length >= 2) return inApp(`${space}/apps/${rest.at(1)}`, rest.slice(2))
+  if (kind === "memory") return [`${space}/memory`, []]
   if (kind === "environment" || records.some((record) => record === kind))
     return [`${space}/${kind}.yaml`, rest.slice(1)]
   if (isInstructions(rest)) return [`${space}/instructions.md`, []]
@@ -58,6 +59,7 @@ const inSpace = (space: string, rest: ReadonlyArray<string>): Place => {
 
 const locate = (keys: ReadonlyArray<string>): Place => {
   if (keys.at(0) === "org") return isInstructions(keys.slice(1)) ? ["instructions.md", []] : ["org.yaml", keys.slice(1)]
+  if (keys.at(0) === "memory") return ["memory", []]
   if (keys.at(0) !== "spaces" || keys.length < 2) return [".", keys]
   return inSpace(`spaces/${keys.at(1)}`, keys.slice(2))
 }
@@ -122,6 +124,24 @@ export const validate = async (root: string): Promise<Validated> => {
     return { ...value, settings: { ...settings, instructions } }
   }
 
+  const textFiles = async (folder: string, noun: string, skip?: string) => {
+    const contents = await Promise.all(
+      files
+        .filter((file) => file.startsWith(folder) && file !== `${folder}${skip}`)
+        .map(async (file) => ({ file, bytes: await Bun.file(join(root, file)).bytes() })),
+    )
+    problems.push(
+      ...contents
+        .filter((content) => content.bytes.includes(0))
+        .map((content) => ({ path: content.file, message: `${noun} holds text files only.` })),
+    )
+    return Object.fromEntries(
+      contents
+        .filter((content) => !content.bytes.includes(0))
+        .map((content) => [content.file.slice(folder.length), new TextDecoder().decode(content.bytes)]),
+    )
+  }
+
   const skill = async (folder: string, slug: string) => {
     if (present.has(`${folder}skill.yaml`)) {
       if (present.has(`${folder}SKILL.md`))
@@ -133,15 +153,7 @@ export const validate = async (root: string): Promise<Validated> => {
       problems.push({ path: folder.slice(0, -1), message: "A skill folder needs SKILL.md or skill.yaml." })
       return
     }
-    const others = files.filter((file) => file.startsWith(folder) && file !== `${folder}SKILL.md`)
-    const contents = await Promise.all(
-      others.map(async (file) => ({ file, bytes: await Bun.file(join(root, file)).bytes() })),
-    )
-    problems.push(
-      ...contents
-        .filter((content) => content.bytes.includes(0))
-        .map((content) => ({ path: content.file, message: "A skill holds text files only." })),
-    )
+    const others = await textFiles(folder, "A skill", "SKILL.md")
     const match = frontmatter.exec(await text(`${folder}SKILL.md`))
     const header = Result.try(() => Bun.YAML.parse(match?.at(1) ?? "")).pipe(Result.getOrUndefined)
     const data = Predicate.isObject(header) ? header : {}
@@ -159,11 +171,7 @@ export const validate = async (root: string): Promise<Validated> => {
         ? { requiredCredentials: metadata["requiredCredentials"] }
         : {}),
       instructions: match?.at(2) ?? "",
-      files: Object.fromEntries(
-        contents
-          .filter((content) => !content.bytes.includes(0))
-          .map((content) => [content.file.slice(folder.length), new TextDecoder().decode(content.bytes)]),
-      ),
+      files: others,
     }
   }
 
@@ -198,6 +206,7 @@ export const validate = async (root: string): Promise<Validated> => {
         settled(`${folder}agents/${name}/`, "agent.yaml"),
       ),
       apps: await entries(children(files, `${folder}apps/`), (slug) => app(`${folder}apps/${slug}/`)),
+      memory: await textFiles(`${folder}memory/`, "A memory"),
     }
   }
 
@@ -213,6 +222,7 @@ export const validate = async (root: string): Promise<Validated> => {
 
   const input = {
     org: await settled("", "org.yaml"),
+    memory: await textFiles("memory/", "A memory"),
     spaces: await entries(children(files, "spaces/"), (slug) => space(`spaces/${slug}/`)),
   }
   const deploy = await yaml("deploy.yaml")
@@ -375,6 +385,15 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
     if (text) await Bun.write(path, `${text}\n`)
     else await rm(path, { force: true })
   }
+  const memory = (folder: string, files: Readonly<Record<string, string>> | undefined) =>
+    Promise.all(
+      under(`${folder}memory/`).map((name) => {
+        const content = writes.has(`${folder}memory/${name}`) ? files?.[name] : undefined
+        const path = join(root, folder, "memory", name)
+        return Predicate.isString(content) ? Bun.write(path, content) : rm(path, { force: true })
+      }),
+    )
+  await memory("", pulled.spec.memory)
 
   if (writes.has("org")) {
     const org = compact(pulled.spec.org.settings)
@@ -501,7 +520,7 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
           ? writeApp(at, app)
           : rm(at, { recursive: true, force: true })
       })
-      await Promise.all([...records, ...agents, ...apps])
+      await Promise.all([...records, ...agents, ...apps, memory(`${folder}/`, space?.memory)])
     }),
   )
 }

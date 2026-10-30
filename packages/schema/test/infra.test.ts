@@ -206,6 +206,15 @@ describe("Infra.Spec", () => {
       expect(Exit.isFailure(exit)).toBe(true)
     }
   })
+
+  test("a memory folder has memory.md, and each file has a relative path that a folder can hold", () => {
+    const memory = (files: Record<string, string>) => decode({ engineering: { name: "Engineering", memory: files } })
+    expect(Exit.isSuccess(memory({}))).toBe(true)
+    expect(Exit.isSuccess(memory({ "memory.md": "", "people/ana.md": "Ana leads design." }))).toBe(true)
+    expect(String(memory({ "people/ana.md": "Ana leads design." }))).toContain("A memory folder needs memory.md.")
+    for (const path of ["/people.md", "../people.md", "people//ana.md", "people/../ana.md", "people/.ana.md"])
+      expect(Exit.isFailure(memory({ "memory.md": "", [path]: "Ana." }))).toBe(true)
+  })
 })
 
 describe("Infra.SpaceBindings", () => {

@@ -1945,6 +1945,16 @@
           "204": {
             "description": "<No Content>"
           },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
           "401": {
             "description": "UnauthorizedError",
             "content": {
@@ -10108,7 +10118,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The part of the org spec that infra applies today: organization settings, shared spaces with their agents, apps, schedules and channels, and the channel and profile bindings of each space.",
+            "description": "The part of the org spec that infra applies today: organization settings and memory, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -14208,7 +14218,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/channels/<slug> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
+            "description": "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
           },
           "from": {
             "type": "string",
@@ -14295,7 +14305,7 @@
       },
       "Infra.Kind": {
         "type": "string",
-        "enum": ["organization", "space", "agent", "membership", "app", "schedule", "channel", "profile"]
+        "enum": ["organization", "space", "agent", "membership", "app", "schedule", "channel", "profile", "memory"]
       },
       "Infra.Lock": {
         "type": "object",
@@ -14508,6 +14518,9 @@
               "org": {
                 "$ref": "#/components/schemas/OrganizationSettings.UpdateInput"
               },
+              "memory": {
+                "$ref": "#/components/schemas/Memory.Files"
+              },
               "spaces": {
                 "type": "object",
                 "propertyNames": {
@@ -14550,7 +14563,7 @@
         },
         "required": ["bindings", "spec", "lock", "write", "remove", "conflicts"],
         "additionalProperties": false,
-        "description": "The part of the org spec that infra applies today: organization settings, shared spaces with their agents, apps, schedules and channels, and the channel and profile bindings of each space."
+        "description": "The part of the org spec that infra applies today: organization settings and memory, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space."
       },
       "Infra.PulledApp": {
         "type": "object",
@@ -14742,6 +14755,9 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/Channel.Declaration"
             }
+          },
+          "memory": {
+            "$ref": "#/components/schemas/Memory.Files"
           },
           "uses": {
             "$ref": "#/components/schemas/Infra.Uses"
@@ -14962,6 +14978,16 @@
           "environment": {
             "$ref": "#/components/schemas/EnvironmentTemplate.Declaration"
           },
+          "memory": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "factory": {
             "type": "object",
             "properties": {
@@ -15015,6 +15041,16 @@
           "org": {
             "$ref": "#/components/schemas/OrganizationSettings.UpdateInput"
           },
+          "memory": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "spaces": {
             "type": "object",
             "propertyNames": {
@@ -15036,10 +15072,22 @@
           "org": {
             "$ref": "#/components/schemas/OrganizationSettings.UpdateInput"
           },
+          "memory": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "spaces": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Infra.SpaceDeclaration"
@@ -16107,9 +16155,20 @@
         "required": ["path", "content"],
         "additionalProperties": false
       },
+      "Memory.Files": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "description": "The files of one memory, by path relative to its root: the same shape as a skill’s files."
+      },
       "Memory.Path": {
         "type": "string",
         "description": "A file path relative to the memory root, such as `memory.md` or `people/ana.md`."
+      },
+      "Memory.SafePathEncoded": {
+        "type": "string",
+        "minLength": 1
       },
       "Memory.WriteInput": {
         "type": "object",
@@ -16125,7 +16184,7 @@
             ]
           },
           "path": {
-            "$ref": "#/components/schemas/Memory.Path"
+            "$ref": "#/components/schemas/Memory.SafePathEncoded"
           },
           "content": {
             "type": "string",

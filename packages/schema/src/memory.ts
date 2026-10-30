@@ -1,6 +1,7 @@
 export * as Memory from "./memory.js"
 
 import { Schema } from "effect"
+import { Drive } from "./drive.js"
 import { Space } from "./space.js"
 
 export const root = "memory.md"
@@ -8,10 +9,15 @@ export const root = "memory.md"
 // oxlint-disable-next-line ren/no-comments -- memory M9: the part of a root file that goes in every turn's context; the agent reads the rest with the read tool.
 export const injectedLength = 16_000
 
-export const Path = Schema.String.annotate({
-  identifier: "Memory.Path",
-  description: `A file path relative to the memory root, such as \`${root}\` or \`people/ana.md\`.`,
-})
+const description = `A file path relative to the memory root, such as \`${root}\` or \`people/ana.md\`.`
+
+export const Path = Schema.String.annotate({ identifier: "Memory.Path", description })
+
+export const SafePath = Drive.Path.check(
+  Schema.makeFilter(
+    (path) => path.split("/").every((name) => !name.startsWith(".")) || "A memory has no hidden files or folders.",
+  ),
+).annotate({ identifier: "Memory.SafePath", description })
 
 export const Files = Schema.Record(Schema.String, Schema.String).annotate({
   identifier: "Memory.Files",
@@ -42,7 +48,7 @@ export const PathInput = Schema.Struct({ ...scope, path: Path }).annotate({ iden
 export interface WriteInput extends Schema.Schema.Type<typeof WriteInput> {}
 export const WriteInput = Schema.Struct({
   ...scope,
-  path: Path,
+  path: SafePath,
   content: Schema.String.annotate({ description: "The whole new content of the file." }),
 }).annotate({ identifier: "Memory.WriteInput" })
 

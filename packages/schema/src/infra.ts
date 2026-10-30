@@ -9,6 +9,7 @@ import { Credential } from "./credential.js"
 import { EnvironmentTemplate } from "./environment-template.js"
 import { Factory } from "./factory.js"
 import { FactoryCheck } from "./factory-check.js"
+import { Memory } from "./memory.js"
 import { OrganizationSettings } from "./organization-settings.js"
 import { Primitive } from "./primitive.js"
 import { Schedule } from "./schedule.js"
@@ -57,6 +58,16 @@ export const FactoryDeclaration = Schema.Struct({
   description: "The space’s factory, with agent names. Without it, the factory has no agents.",
 })
 
+const PulledMemory = Memory.Files.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({})))
+
+const MemoryFiles = Schema.Record(Memory.SafePath, Schema.String)
+  .check(
+    Schema.makeFilter(
+      (files) => Object.keys(files).length === 0 || Memory.root in files || `A memory folder needs ${Memory.root}.`,
+    ),
+  )
+  .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({})))
+
 export interface SpaceDeclaration extends Schema.Schema.Type<typeof SpaceDeclaration> {}
 export const SpaceDeclaration = Schema.Struct({
   ...Struct.omit(Space.CreateInput.fields, ["slug"]),
@@ -81,6 +92,7 @@ export const SpaceDeclaration = Schema.Struct({
     Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
   ),
   environment: Schema.optionalKey(EnvironmentTemplate.Declaration),
+  memory: MemoryFiles,
   factory: Schema.optionalKey(
     FactoryDeclaration.check(Schema.makeFilter((factory) => FactoryCheck.issues(factory.agents, "agent"))),
   ),
@@ -90,6 +102,7 @@ export const SpaceDeclaration = Schema.Struct({
 export interface Spec extends Schema.Schema.Type<typeof Spec> {}
 export const Spec = Schema.Struct({
   org: OrganizationSettings.UpdateInput,
+  memory: MemoryFiles,
   spaces: Schema.Record(Primitive.Slug, SpaceDeclaration),
 })
   .check(
@@ -257,6 +270,7 @@ export const Kind = Schema.Literals([
   "schedule",
   "channel",
   "profile",
+  "memory",
 ]).annotate({
   identifier: "Infra.Kind",
 })
@@ -285,7 +299,7 @@ export const Change = Schema.Struct({
   kind: Kind,
   path: Schema.String.annotate({
     description:
-      "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/channels/<slug> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
+      "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
   }),
   from: Schema.optionalKey(Schema.String.annotate({ description: "The path before a rename or a move." })),
   fields: Schema.Array(Schema.String).annotate({ description: "The fields that an update changes." }),
@@ -367,6 +381,7 @@ export const PulledSpace = Schema.Struct({
   apps: Schema.Record(Primitive.Slug, PulledApp),
   schedules: Schema.Record(Primitive.Slug, PulledSchedule),
   channels: Schema.Record(Primitive.Slug, Channel.Declaration),
+  memory: PulledMemory,
   uses: Uses,
 }).annotate({ identifier: "Infra.PulledSpace" })
 
@@ -384,6 +399,7 @@ export const Pulled = Schema.Struct({
   }),
   spec: Schema.Struct({
     org: OrganizationSettings.UpdateInput,
+    memory: PulledMemory,
     spaces: Schema.Record(Primitive.Slug, PulledSpace),
   }),
   lock: Lock.annotate({ description: "The lock for the folder once pull writes it." }),
@@ -397,5 +413,5 @@ export const Pulled = Schema.Struct({
 }).annotate({
   identifier: "Infra.Pulled",
   description:
-    "The part of the org spec that infra applies today: organization settings, shared spaces with their agents, apps, schedules and channels, and the channel and profile bindings of each space.",
+    "The part of the org spec that infra applies today: organization settings and memory, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
 })

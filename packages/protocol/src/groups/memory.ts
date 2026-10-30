@@ -39,7 +39,7 @@ export const MemoryGroup = HttpApiGroup.make("memory")
     HttpApiEndpoint.put("memory.write", "/memory/file", {
       payload: Memory.WriteInput,
       success: HttpApiSchema.NoContent,
-      error: [NotFoundError, ForbiddenError],
+      error: [NotFoundError, ForbiddenError, InvalidRequestError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "memory.write",
