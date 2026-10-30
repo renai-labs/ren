@@ -1,4 +1,6 @@
 import { describe, expect } from "bun:test"
+import { Billing } from "@ren/core/billing"
+import { BillingCustomer } from "@ren/core/billing-customer"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { SlackApp } from "@ren/core/slack-app"
@@ -11,7 +13,7 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { Testing } from "@ren/db/testing"
 import { Space } from "@ren/schema/space"
 import { getAuthTables } from "better-auth/db"
-import { ConfigProvider, Deferred, Effect, Fiber, Layer, Option, Schedule } from "effect"
+import { ConfigProvider, Deferred, Effect, Fiber, Layer, Option, Queue, Schedule } from "effect"
 import { HttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { TestClock, TestConsole } from "effect/testing"
@@ -35,6 +37,20 @@ const stalledMail = Layer.mergeAll(
   Layer.succeed(Postmark.Outbox, Postmark.Outbox.of({ next: Effect.never })),
 )
 
+const customers = Effect.runSync(
+  Queue.unbounded<{ readonly organizationId: string; readonly name: string; readonly ownerEmail: string }>(),
+)
+
+// oxlint-disable-next-line ren/no-comments -- Billing as Ren Cloud has it, keeping each customer it is asked for.
+const billing = Layer.succeed(
+  Billing.Service,
+  Billing.Service.of({
+    ensureCustomer: (organizationId, input) => Queue.offer(customers, { organizationId, ...input }).pipe(Effect.asVoid),
+    check: () => Effect.void,
+    removeOrganization: () => Effect.void,
+  }),
+)
+
 const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postmark.layer> = Postmark.layer()) =>
   Auth.layer.pipe(
     Layer.provideMerge(Layer.effect(SignupGuard.Service, SignupGuard.make(dns))),
@@ -42,6 +58,7 @@ const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postma
     Layer.provideMerge(
       RenInferenceRemoval.layer.pipe(Layer.provide([RenInference.layerNone, DurableRunner.layerMemory])),
     ),
+    Layer.provideMerge(BillingCustomer.layer.pipe(Layer.provide([billing, DurableRunner.layerMemory]))),
     Layer.provideMerge(Layer.mergeAll(GitHubAccounts.layerNone, SlackApp.layerNone)),
     Layer.provideMerge(Testing.layer),
     Layer.provideMerge(Mailer.layer),
@@ -222,6 +239,24 @@ describe("Auth", () => {
     }),
   )
 
+  it.live(
+    "makes a billing customer for the default organization and for each created one, with the owner's email",
+    () =>
+      Effect.gen(function* () {
+        yield* Queue.clear(customers)
+        const session = sessionCookie(yield* register("hedy@gmail.com", "Hedy Lamarr"))
+        const first = (yield* get("/get-session", session)).session.activeOrganizationId
+        const created = yield* post("/organization/create", { name: "Side Project", slug: "hedy-side" }, session).pipe(
+          Effect.flatMap(json),
+        )
+
+        expect(yield* Queue.takeN(customers, 2)).toEqual([
+          { organizationId: first, name: "Hedy's Org", ownerEmail: "hedy@gmail.com" },
+          { organizationId: created.id, name: "Side Project", ownerEmail: "hedy@gmail.com" },
+        ])
+      }),
+  )
+
   it.live("normalizes explicit organization slugs before the duplicate check", () =>
     Effect.gen(function* () {
       const session = sessionCookie(yield* register("linus@example.com"))
@@ -391,6 +426,7 @@ describe("Auth", () => {
             activatePendingMemberships: () => Promise.resolve(),
             archiveMemberships: () => Promise.resolve(),
             forgetInferenceMember: () => Promise.resolve(),
+            ensureBillingCustomer: () => Promise.resolve(),
           },
         })
         const context = yield* Effect.promise(() => instance.$context)

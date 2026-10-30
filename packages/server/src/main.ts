@@ -29,6 +29,8 @@ import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
 import { Deployment } from "@ren/core/deployment"
+import { Billing } from "@ren/core/billing"
+import { BillingCustomer } from "@ren/core/billing-customer"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
@@ -146,6 +148,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provideMerge(host), Layer.provide(CredentialEnv.layer)),
       Retention.layer,
       RenInferenceRemoval.layer,
+      BillingCustomer.layer.pipe(Layer.provide(Billing.layerConfig)),
     ),
     Layer.mergeAll(ChannelNotice.layer, ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer))).pipe(
       Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider]))),

@@ -54,6 +54,10 @@ export interface Input {
     readonly activatePendingMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
     readonly archiveMemberships: (organizationId: string, userId: string) => Promise<void>
     readonly forgetInferenceMember: (organizationId: string, memberId: string) => Promise<void>
+    readonly ensureBillingCustomer: (
+      organizationId: string,
+      input: { readonly name: string; readonly ownerEmail: string },
+    ) => Promise<void>
   }
 }
 
@@ -147,6 +151,9 @@ const provisionOrganization =
       await input.provisioning
         .createInitialMemberships(organization.id, organization.user)
         .catch((error: unknown) => input.logFailure("Space provisioning failed", error, session.userId))
+      await input.provisioning
+        .ensureBillingCustomer(organization.id, { name: organization.name, ownerEmail: organization.user.email })
+        .catch((error: unknown) => input.logFailure("Billing customer run failed to start", error, session.userId))
     }
     return { data: { ...session, activeOrganizationId: organization.id } }
   }
@@ -261,6 +268,11 @@ export const make = (input: Input) => {
     invitationExpiresIn: 60 * 60 * 24 * 7,
     requireEmailVerificationOnInvitation: false,
     organizationHooks: {
+      afterCreateOrganization: (data) =>
+        input.provisioning.ensureBillingCustomer(data.organization.id, {
+          name: data.organization.name,
+          ownerEmail: data.user.email,
+        }),
       afterAddMember: (data) => input.provisioning.createInitialMemberships(data.organization.id, data.user),
       afterAcceptInvitation: async (data) => {
         await input.provisioning.createInitialMemberships(data.organization.id, data.user)
