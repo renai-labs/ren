@@ -11,6 +11,7 @@ import { and, eq, isNull, sql } from "drizzle-orm"
 import {
   Cache,
   Clock,
+  Config,
   Context,
   DateTime,
   Duration,
@@ -23,6 +24,7 @@ import {
   Schema,
 } from "effect"
 import { Access } from "./access.js"
+import { AppSelection } from "./app/selection.js"
 import { BrainClient } from "./brain-client.js"
 import { Credentials } from "./credentials.js"
 import { Drives } from "./drives.js"
@@ -30,6 +32,7 @@ import { GitHubApp } from "./github-app.js"
 import { McpProvider } from "./mcp-provider.js"
 import { Models } from "./models.js"
 import { SessionPolicy } from "./session/policy.js"
+import { Signer } from "./signer.js"
 
 export type Value =
   | { readonly type: "key"; readonly value: Redacted.Redacted }
@@ -147,8 +150,12 @@ const ttlUntil = (expiresAtMillis: number, now: number) =>
 const ren = "REN"
 const models = "MODELS"
 const person = Models.personLabel
+const integrations = AppSelection.integrationsLabel
 
-// oxlint-disable-next-line ren/no-comments -- Ren mints REN, MODELS, PERSON (space members only, AC4) and DRIVE (a brain's space and org drives, read-only); one mint at a time per workload (C29).
+// oxlint-disable-next-line ren/no-comments -- One hour, so a retired generation's token stops soon after its sandbox (integrations spec §7.2).
+const integrationsLifetime = Duration.hours(1)
+
+// oxlint-disable-next-line ren/no-comments -- Ren mints REN, MODELS, PERSON (space members only, AC4), DRIVE (a brain's space and org drives, read-only) and INTEGRATIONS (a brain in a space, for the managed MCPs); one mint at a time per workload (C29).
 export const layerMinted = Layer.effect(
   Minted,
   Effect.gen(function* () {
@@ -158,7 +165,11 @@ export const layerMinted = Layer.effect(
     const access = yield* Access.Service
     const github = yield* GitHubApp.Service
     const drives = yield* Drives.Service
+    const signer = yield* Signer.Service
     const renHost = new URL(brains.renUrl).hostname
+    const integrationsHost = Option.flatMap(yield* Config.option(Config.String("REN_INTEGRATIONS_URL")), (url) =>
+      Option.fromNullishOr(URL.parse(url)?.hostname),
+    )
 
     const Key = Schema.fromJsonString(
       Schema.Struct({
@@ -199,6 +210,30 @@ export const layerMinted = Layer.effect(
                 onSome: (exp) => ttlUntil(exp * 1000, exit.value.mintedAt),
               })
             : Duration.zero,
+      },
+    )
+
+    const integrationTokens = yield* Cache.makeWith(
+      (key: string) =>
+        Effect.gen(function* () {
+          const found = decodeKey(key)
+          if (found.workload.kind !== "brain" || !found.spaceId)
+            return yield* Effect.die(new Error("Only a brain in a space gets INTEGRATIONS"))
+          const mintedAt = yield* Clock.currentTimeMillis
+          const exp = Math.floor((mintedAt + Duration.toMillis(integrationsLifetime)) / 1000)
+          const token = yield* signer.sign("ren-integrations", {
+            org: found.organizationId,
+            space: found.spaceId,
+            brain: found.workload.id,
+            gen: found.workload.generation,
+            exp,
+          })
+          return { token, exp, mintedAt }
+        }),
+      {
+        capacity: 10_000,
+        timeToLive: (exit) =>
+          Exit.isSuccess(exit) ? ttlUntil(exit.value.exp * 1000, exit.value.mintedAt) : Duration.zero,
       },
     )
 
@@ -244,6 +279,15 @@ export const layerMinted = Layer.effect(
 
     const cachedHostToken = (scope: Credentials.Scope) =>
       Effect.map(Cache.get(hostTokens, keyOf(scope)), (found) => found.token)
+    const cachedIntegrationsToken = (scope: Credentials.Scope) =>
+      scope.workload.kind === "brain" && Option.isSome(scope.spaceId)
+        ? Cache.get(integrationTokens, keyOf(scope)).pipe(
+            Effect.map(Option.some),
+            Effect.mapError(
+              () => new Unavailable({ label: integrations, message: "Ren could not sign the integrations token." }),
+            ),
+          )
+        : Effect.succeedNone
     const cachedGrant = (scope: Credentials.Scope) =>
       Effect.flatMap(grants.revision, (revision) => Cache.get(modelGrants, keyOf(scope, revision)))
 
@@ -274,6 +318,8 @@ export const layerMinted = Layer.effect(
             ),
           ),
         ]
+        const integrationHosts = Option.isSome(scope.spaceId) ? Option.toArray(integrationsHost) : []
+        const personHosts = [...modelHosts, ...integrationHosts]
         const drive = Option.match(scope.spaceId, {
           onNone: (): ReadonlyArray<Credentials.Candidate> => [],
           onSome: (): ReadonlyArray<Credentials.Candidate> => [
@@ -313,7 +359,16 @@ export const layerMinted = Layer.effect(
               },
             ]
           }),
-          ...(modelHosts.length === 0
+          ...integrationHosts.map((host): Credentials.Candidate => ({
+            id: `minted:${integrations}`,
+            source: "minted",
+            label: integrations,
+            owner: "workload",
+            hosts: [host],
+            inject: { op: "replace", in: ["header"] },
+            revision: 0,
+          })),
+          ...(personHosts.length === 0
             ? []
             : [
                 {
@@ -321,7 +376,7 @@ export const layerMinted = Layer.effect(
                   source: "minted",
                   label: person,
                   owner: "workload",
-                  hosts: modelHosts,
+                  hosts: personHosts,
                   inject: { op: "replace", in: ["header"] },
                 } satisfies Credentials.Candidate,
               ]),
@@ -427,6 +482,11 @@ export const layerMinted = Layer.effect(
             }),
           } satisfies Sourced)
         }
+        if (candidate.label === integrations)
+          return Option.map(yield* cachedIntegrationsToken(scope), (minted): Sourced => ({
+            value: { type: "key", value: Redacted.make(minted.token) },
+            expiresAt: DateTime.makeUnsafe(minted.exp * 1000),
+          }))
         const granted = yield* cachedGrant(scope).pipe(
           Effect.mapError(
             () => new Unavailable({ label: candidate.label, message: "Ren could not mint the model key." }),
@@ -438,7 +498,7 @@ export const layerMinted = Layer.effect(
           ...(found.apiKey.expiresAt && { expiresAt: found.apiKey.expiresAt }),
         }))
       }),
-      // oxlint-disable-next-line ren/no-comments -- After an upstream 401 on REN or MODELS, the next request mints again (§9 rule 7).
+      // oxlint-disable-next-line ren/no-comments -- After an upstream 401 on REN, MODELS or INTEGRATIONS, the next request mints again (§9 rule 7).
       forget: Effect.fn("CredentialSource.minted.forget")(function* (
         candidate: Credentials.Candidate,
         scope: Credentials.Scope,
@@ -450,6 +510,7 @@ export const layerMinted = Layer.effect(
           return
         }
         if (candidate.label === ren) return yield* Cache.invalidate(hostTokens, keyOf(scope))
+        if (candidate.label === integrations) return yield* Cache.invalidate(integrationTokens, keyOf(scope))
         yield* Cache.invalidate(modelGrants, keyOf(scope, yield* grants.revision))
       }),
     })

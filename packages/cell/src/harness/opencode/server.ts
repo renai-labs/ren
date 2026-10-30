@@ -250,8 +250,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       sources,
       Option.map(options.ren ?? Option.none(), (access) => ({
         ...access,
-        lastSender: (sessionId: string) =>
-          lastSpeaker(sessionId).pipe(Effect.map(Option.map((speaker) => speaker.userID))),
+        lastSender: lastSpeaker,
       })),
       { egress: options.egress ?? false, lastUserMessage },
     ),

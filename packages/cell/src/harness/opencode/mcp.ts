@@ -7,6 +7,8 @@ import { HostMcp } from "@ren/host-api/host-mcp"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
 import { Credential } from "@ren/schema/credential"
+import { Models } from "@ren/schema/models"
+import { Usage } from "@ren/schema/usage"
 import { Clock, Duration, Effect, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
 import { HostToken } from "../../host-token.js"
 import { OpenCodeChat } from "./chat.js"
@@ -20,7 +22,7 @@ export interface RenAccess {
 }
 
 export interface Ren extends RenAccess {
-  readonly lastSender: (sessionId: string) => Effect.Effect<Option.Option<string>>
+  readonly lastSender: (sessionId: string) => Effect.Effect<Option.Option<OpenCodeChat.Speaker>>
 }
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 waits 30 seconds for each of startup and tools/list when a server declares no timeout.
@@ -61,6 +63,7 @@ const configOf = (
   const timeouts = entry.declaration.timeouts
   const timeout = timeouts && { timeout: new Mcp.TimeoutConfig(timeouts) }
   const transport = entry.declaration.transport
+  if (transport.type === "managed") return Option.none()
   if (transport.type === "local") {
     if (!options.local) return Option.none()
     const environment = { ...transport.env, ...entry.env }
@@ -104,16 +107,18 @@ const namespace = (name: string) => name.replaceAll(/[^A-Za-z0-9_-]/gu, "_")
 
 // oxlint-disable-next-line ren/no-comments -- HR20: the profile of a server goes into the description of its tool namespace; OpenCode sends a change of the tool catalog as a short message, so the system prompt and its cache stay.
 const namespaces = (apps: Option.Option<AppCatalog.Info>, options: { readonly local: boolean }) =>
-  entries(apps).flatMap((entry) =>
-    entry.profile && (options.local || entry.declaration.transport.type !== "local")
+  entries(apps).flatMap((entry) => {
+    if (entry.declaration.transport.type === "managed")
+      return [{ name: namespace(entry.server), description: `${entry.declaration.name}, paid with Ren credits` }]
+    return entry.profile && (options.local || entry.declaration.transport.type !== "local")
       ? [
           {
             name: namespace(entry.server),
             description: `${entry.declaration.name} for the profile “${entry.profile.name}”`,
           },
         ]
-      : [],
-  )
+      : []
+  })
 
 // oxlint-disable-next-line ren/no-comments -- §6.4 rule 9 (P47): the env keys of each app's profiles, from the catalog only and in its order, so one catalog gives the same bytes (INV-34).
 export const notes = (apps: Option.Option<AppCatalog.Info>) =>
@@ -169,7 +174,7 @@ export const make = Effect.fnUntraced(function* (input: {
   const local = { local: input.hasEnvironment }
   const latest = yield* Ref.make(input.apps)
   const channels = yield* Ref.make(input.channels)
-  const sender = yield* Ref.make(Option.none<string>())
+  const sender = yield* Ref.make(Option.none<OpenCodeChat.Speaker>())
   const presented = yield* Ref.make(Option.none<string>())
   const tokenOf = (ren: Ren) =>
     Effect.gen(function* () {
@@ -199,7 +204,7 @@ export const make = Effect.fnUntraced(function* (input: {
           type: "remote",
           url: `${base}${HostMcp.path}`,
           oauth: false,
-          headers: { ...headers, ...(Option.isSome(user) && { [HostMcp.userHeader]: user.value }) },
+          headers: { ...headers, ...(Option.isSome(user) && { [HostMcp.userHeader]: user.value.userID }) },
         }),
         within: 2 * openCodeTimeout,
       },
@@ -215,8 +220,37 @@ export const make = Effect.fnUntraced(function* (input: {
       })),
     ]
   })
+  // oxlint-disable-next-line ren/no-comments -- integrations spec §5.1: a managed server names its chat and its sender, as a model call does; the egress puts in the integrations token and checks the member.
+  const managedServers = (apps: Option.Option<AppCatalog.Info>) =>
+    Effect.map(Ref.get(sender), (user) => {
+      const member = Option.flatMap(user, (speaker) => Option.fromUndefinedOr(speaker.memberID))
+      return entries(apps).flatMap((entry): ReadonlyArray<Server> => {
+        const timeouts = entry.declaration.timeouts
+        return entry.declaration.transport.type === "managed" && entry.url && entry.label
+          ? [
+              {
+                name: entry.server,
+                config: new Mcp.RemoteConfig({
+                  type: "remote",
+                  url: entry.url,
+                  oauth: false,
+                  headers: {
+                    Authorization: `Bearer ${Credential.placeholder(entry.label)}`,
+                    [Usage.headers.rootSession]: input.sessionId,
+                    ...(Option.isSome(member) && { [Models.personHeader]: Models.personPlaceholder(member.value) }),
+                  },
+                  ...(timeouts && { timeout: new Mcp.TimeoutConfig(timeouts) }),
+                }),
+                within: (timeouts?.startup ?? openCodeTimeout) + (timeouts?.catalog ?? openCodeTimeout),
+              },
+            ]
+          : []
+      })
+    })
   const desired = (apps: Option.Option<AppCatalog.Info>) =>
-    Effect.map(renServers, (ren): ReadonlyArray<Server> => [...servers(apps, local), ...ren])
+    Effect.gen(function* (): Effect.fn.Return<ReadonlyArray<Server>> {
+      return [...servers(apps, local), ...(yield* managedServers(apps)), ...(yield* renServers)]
+    })
   const applied = yield* Ref.make(yield* desired(input.apps))
   const skipped = yield* Ref.make<ReadonlySet<string>>(new Set())
   const retries = yield* FiberHandle.make<void>()
@@ -319,16 +353,17 @@ export const make = Effect.fnUntraced(function* (input: {
       )
       .pipe(Effect.withErrorReporting, Effect.forkScoped({ startImmediately: true }))
   }
-  // oxlint-disable-next-line ren/no-comments -- A turn calls Ren MCP as its sender: when the sender changes, the prompt waits for the ren server's new headers, so no step runs as the previous sender. Other changes reload in the background (HR19).
+  // oxlint-disable-next-line ren/no-comments -- A turn calls Ren MCP and the managed servers as its sender: when the sender changes, the prompt waits for their new headers, so no step runs as the previous sender. Other changes reload in the background (HR19).
   yield* input.context.session.hook("prompt", (event) =>
     Effect.gen(function* () {
-      if (Option.isSome(input.ren)) {
-        const named = Option.map(OpenCodeChat.speakerOf(event.metadata), (speaker) => speaker.userID)
-        if (Option.isSome(named)) yield* Ref.set(sender, named)
-        else if (Option.isNone(yield* Ref.get(sender)))
-          yield* Ref.set(sender, yield* input.ren.value.lastSender(input.sessionId))
-        const before = yield* changed
-        if (Option.isSome(before)) yield* reload(before.value, [renServer]).pipe(Effect.andThen(watchIfDown))
+      const named = OpenCodeChat.speakerOf(event.metadata)
+      if (Option.isSome(named)) yield* Ref.set(sender, named)
+      else if (Option.isNone(yield* Ref.get(sender)) && Option.isSome(input.ren))
+        yield* Ref.set(sender, yield* input.ren.value.lastSender(input.sessionId))
+      const before = yield* changed
+      if (Option.isSome(before)) {
+        const managed = (yield* managedServers(Ref.getUnsafe(latest))).map((server) => server.name)
+        yield* reload(before.value, [renServer, ...managed]).pipe(Effect.andThen(watchIfDown))
       }
       if ((yield* down).length) yield* retry
     }),

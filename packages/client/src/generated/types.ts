@@ -1126,6 +1126,7 @@ export type McpInfo = {
     | { type: "remote"; url: string }
     | { type: "local"; command: [string, ...Array<string>]; cwd?: string; env?: { [x: CredentialEnvName]: string } }
     | { type: "provider"; provider: CredentialProvider; integration: string }
+    | { type: "managed"; server: PrimitiveSlug; replaces?: PrimitiveSlug }
   auth:
     | { type: "none" }
     | {
@@ -2133,6 +2134,7 @@ export type AppCreateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2286,6 +2288,7 @@ export type AppCreateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2439,6 +2442,7 @@ export type AppCreateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2592,6 +2596,7 @@ export type AppCreateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2745,6 +2750,7 @@ export type AppCreateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2898,6 +2904,7 @@ export type AppCreateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3051,6 +3058,7 @@ export type AppCreateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3204,6 +3212,7 @@ export type AppCreateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3357,6 +3366,7 @@ export type AppCreateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3510,6 +3520,7 @@ export type AppCreateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3666,6 +3677,7 @@ export type AppUpdateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3818,6 +3830,7 @@ export type AppUpdateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3970,6 +3983,7 @@ export type AppUpdateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -4122,6 +4136,7 @@ export type AppUpdateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -4274,6 +4289,7 @@ export type AppUpdateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -4426,6 +4442,7 @@ export type AppUpdateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -4578,6 +4595,7 @@ export type AppUpdateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -4730,6 +4748,7 @@ export type AppUpdateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -4882,6 +4901,7 @@ export type AppUpdateInput = {
               readonly env?: { readonly [x: string]: string }
             }
           | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -7050,6 +7070,7 @@ export type InfraPullInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {
@@ -7362,6 +7383,7 @@ export type InfraPullInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {
@@ -7674,6 +7696,7 @@ export type InfraPullInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {
@@ -7991,6 +8014,7 @@ export type InfraPlanInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {
@@ -8303,6 +8327,7 @@ export type InfraPlanInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {
@@ -8615,6 +8640,7 @@ export type InfraPlanInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {
@@ -8932,6 +8958,7 @@ export type InfraApplyInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {
@@ -9246,6 +9273,7 @@ export type InfraApplyInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {
@@ -9560,6 +9588,7 @@ export type InfraApplyInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {
@@ -9874,6 +9903,7 @@ export type InfraApplyInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {
@@ -10188,6 +10218,7 @@ export type InfraApplyInput = {
                         readonly env?: { readonly [x: string]: string }
                       }
                     | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+                    | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
                   readonly auth:
                     | { readonly type: "none" }
                     | {

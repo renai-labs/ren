@@ -3,7 +3,7 @@ export * as Signer from "./signer.js"
 import { Signature } from "@ren/schema/signature"
 import { Array, Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 
-export type Purpose = "brain" | "environment" | "ren-inference" | "ren-billing"
+export type Purpose = "brain" | "environment" | "ren-inference" | "ren-billing" | "ren-integrations"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Signer.Unavailable", { message: Schema.String }) {}
 
@@ -25,6 +25,7 @@ const variables = {
   environment: "ENVIRONMENT_KEYS",
   "ren-inference": "REN_INFERENCE_KEYS",
   "ren-billing": "REN_BILLING_KEYS",
+  "ren-integrations": "REN_INTEGRATIONS_KEYS",
 } as const
 
 // oxlint-disable-next-line ren/no-comments -- Keys are listed newest first. A token for a workload is signed with the newest key that the workload already holds (`holders`), so a new key signs only after workloads got it in a pull (E45).
@@ -47,6 +48,7 @@ export const layerLocal = Layer.effect(
       environment: yield* load("environment"),
       "ren-inference": yield* load("ren-inference"),
       "ren-billing": yield* load("ren-billing"),
+      "ren-integrations": yield* load("ren-integrations"),
     }
     const keysOf = (purpose: Purpose) =>
       Option.match(sets[purpose], {

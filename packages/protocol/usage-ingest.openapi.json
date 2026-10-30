@@ -58,7 +58,7 @@
             }
           }
         },
-        "description": "Store a batch of 1 to 500 usage events. Ren answers after the insert commits. A repeat of `(source, id)` is ignored, so `inserted` counts only new rows. 400: an event is not valid, and Ren stores no event of the batch; do not send it again. 503: send the same batch again later.",
+        "description": "Store a batch of 1 to 500 usage events. Ren answers after the insert commits. A repeat of `(source, id)` is ignored, so `inserted` counts only new rows. 400: an event is not valid, and Ren stores no event of the batch; do not send it again. 401: the key may not write an event’s source, and Ren stores no event of the batch. 503: send the same batch again later.",
         "summary": "Record usage events",
         "requestBody": {
           "content": {
@@ -148,13 +148,121 @@
         "required": ["_tag", "message", "retryAfterMs"],
         "additionalProperties": false
       },
+      "Usage.ApiCall": {
+        "type": "object",
+        "properties": {
+          "mcp": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The MCP slug that the call went through."
+          },
+          "tool": {
+            "type": "string"
+          },
+          "upstream": {
+            "type": "string",
+            "description": "The provider’s API or product that it used."
+          },
+          "units": {
+            "type": "object",
+            "description": "What the provider counted, as it sent it: milliseconds, requests or results. Ren does not read it."
+          },
+          "latency_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "corrects": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The `id` of the earlier row of the same source whose cost this row changes."
+          }
+        },
+        "required": ["mcp"],
+        "additionalProperties": false
+      },
+      "Usage.ApiCallEvent": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "time": {
+            "type": "string"
+          },
+          "workload": {
+            "type": "string",
+            "description": "`brain:<id>` or `hand:<id>`, then `:<generation>` when known."
+          },
+          "organization": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "brain": {
+            "$ref": "#/components/schemas/Brain.ID"
+          },
+          "space": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "root_session": {
+            "type": "string"
+          },
+          "session": {
+            "type": "string"
+          },
+          "turn": {
+            "type": "string"
+          },
+          "member": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "payer": {
+            "$ref": "#/components/schemas/Usage.Payer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "cost_micro_usd": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Negative on a correction row: the amount to take off the cost of the row it corrects."
+          },
+          "error": {
+            "$ref": "#/components/schemas/Usage.Failure"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["api.call"]
+          },
+          "data": {
+            "$ref": "#/components/schemas/Usage.ApiCall"
+          }
+        },
+        "required": ["source", "id", "time", "workload", "organization", "payer", "provider", "type", "data"],
+        "additionalProperties": false
+      },
       "Usage.Batch": {
         "type": "object",
         "properties": {
           "events": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Usage.ModelCallEvent"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Usage.ModelCallEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/Usage.ApiCallEvent"
+                }
+              ]
             },
             "minItems": 1,
             "maxItems": 500
@@ -334,7 +442,7 @@
     },
     "securitySchemes": {
       "bearer": {
-        "description": "The usage ingest key.",
+        "description": "A usage ingest key. `INTEGRATIONS_INGEST_KEY` writes only rows of source `ren-integrations`.",
         "type": "http",
         "scheme": "Bearer"
       }

@@ -58,6 +58,26 @@ it.live("self-dependency during creation reports the authored slug", () =>
   }),
 )
 
+it.live("an org's own app cannot declare a managed MCP, on create or on edit", () =>
+  Effect.gen(function* () {
+    const apps = yield* App.Service
+    const organizationId = yield* Seed.organization()
+    const actor = yield* ProfilesFixture.user(organizationId, "Root", "admin")
+    const mcps = {
+      kernel: ProfilesFixture.remote("Kernel"),
+      "kernel-managed": ProfilesFixture.managed("Kernel", "kernel"),
+    }
+    expect((yield* Effect.flip(ProfilesFixture.app(actor, actor.personal, "kernel", { mcps })))._tag).toBe(
+      "Primitive.Invalid",
+    )
+    const app = yield* ProfilesFixture.app(actor, actor.personal, "kernel", { mcps: { kernel: mcps.kernel } })
+    expect(
+      (yield* Effect.flip(apps.update(actor, app.id, { ...definition(app), mcps, expectedRevision: app.revision })))
+        ._tag,
+    ).toBe("Primitive.Invalid")
+  }),
+)
+
 it.live("a space cannot archive while it owns an app; an app archive is never refused for use (P11)", () =>
   Effect.gen(function* () {
     const apps = yield* App.Service

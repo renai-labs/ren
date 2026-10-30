@@ -317,3 +317,53 @@ it.live("a provider without a layer, and a brain without the egress, leave the e
     ])
   }),
 )
+
+it.live("a managed MCP is on until a credential connects its official MCP, and comes back when it is removed", () =>
+  Effect.gen(function* () {
+    const apps = yield* App.Service
+    const registry = yield* AppRegistry.Service
+    const credentials = yield* Credentials.Service
+    const organizationId = yield* Seed.organization()
+    const root = yield* ProfilesFixture.user(organizationId, "Root", "admin")
+    yield* registry.publish({
+      apps: [
+        Schema.decodeUnknownSync(AppRegistry.Publication)({
+          slug: "kernel",
+          name: "Kernel",
+          description: "Cloud browsers",
+          listing: {},
+          mcps: {
+            kernel: ProfilesFixture.remote("Kernel"),
+            "kernel-managed": ProfilesFixture.managed("Kernel", "kernel"),
+          },
+        }),
+      ],
+    })
+    const kernel = yield* apps.get(root, "kernel")
+    const main = yield* ProfilesFixture.profile(root, {
+      appId: kernel.id,
+      slug: "main",
+      kind: "shared",
+      allSpaces: true,
+      name: "Main",
+    })
+    const servers = Effect.map(ProfilesFixture.catalog(organizationId, root.personal), (found) => ({
+      fingerprint: found.fingerprint,
+      servers: found.catalog.mcps.map((entry) => `${entry.server} ${entry.label} ${entry.url ?? ""}`.trim()),
+    }))
+    const before = yield* servers
+    const credentialId = yield* ProfilesFixture.connect(organizationId, main.id, "MCP_KERNEL__MAIN")
+    const connected = yield* servers
+    yield* credentials.remove(root, credentialId, {})
+    const removed = yield* servers
+    expect([before.servers, connected.servers, removed.servers]).toEqual([
+      ["kernel-managed INTEGRATIONS https://mcp.ren.test/managed/kernel/mcp"],
+      ["kernel__main MCP_KERNEL__MAIN"],
+      ["kernel-managed INTEGRATIONS https://mcp.ren.test/managed/kernel/mcp"],
+    ])
+    expect([connected.fingerprint === before.fingerprint, removed.fingerprint === connected.fingerprint]).toEqual([
+      false,
+      false,
+    ])
+  }),
+)

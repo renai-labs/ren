@@ -50,7 +50,7 @@ export const McpEntry = Schema.Struct({
   url: Schema.optionalKey(
     Schema.String.annotate({
       description:
-        "For a provider MCP: the address to call, the provider’s host with the first path segment `ren:<label>`.",
+        "For a provider MCP: the address to call, the provider’s host with the first path segment `ren:<label>`. For a managed MCP: `<integrations URL>/<server>/mcp`.",
     }),
   ),
 }).annotate({ identifier: "AppCatalog.McpEntry" })
@@ -68,11 +68,11 @@ export const Unavailable = Schema.Struct({
   appSlug: Primitive.Slug,
   mcp: Primitive.Slug,
   profile: Schema.NullOr(Primitive.Name).annotate({ description: "The profile’s display name." }),
-  reason: Schema.Literals(["provider", "egress"]),
+  reason: Schema.Literals(["provider", "egress", "managed"]),
 }).annotate({
   identifier: "AppCatalog.Unavailable",
   description:
-    "An MCP that Ren leaves out: its provider is not set up on this Ren, or the brain cannot reach credentials.",
+    "An MCP that Ren leaves out: its provider is not set up on this Ren, the brain cannot reach credentials, or this Ren has no managed MCPs.",
 })
 
 export interface Catalog extends Schema.Schema.Type<typeof Catalog> {}

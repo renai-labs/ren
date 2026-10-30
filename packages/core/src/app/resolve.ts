@@ -6,13 +6,14 @@ import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Credential } from "@ren/schema/credential"
 import type { Mcp } from "@ren/schema/mcp"
 import { and, eq, inArray } from "drizzle-orm"
-import { Context, Effect, Layer, Option } from "effect"
+import { Config, Context, Effect, Layer, Option } from "effect"
 import type { Credentials } from "../credentials.js"
 import { McpProvider } from "../mcp-provider.js"
 import { Primitive } from "../primitive.js"
 import { ProfileItems } from "./profile-items.js"
 import { ProfileLabel } from "./profile-label.js"
 import { AppProfiles } from "./profiles.js"
+import { AppSelection } from "./selection.js"
 import { AppValidation } from "./validation.js"
 
 export interface Interface {
@@ -29,10 +30,11 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const registry = yield* McpProvider.Registry
+    const integrationsUrl = yield* Config.option(Config.String("REN_INTEGRATIONS_URL"))
 
     const isSetUp = (provider: string) => Effect.map(Effect.option(registry.get(provider)), Option.isSome)
 
-    // oxlint-disable-next-line ren/no-comments -- What a catalog depends on: the reached profiles, the org's apps and their revisions (names clash org-wide, P25), the reached profiles' credentials (P23), the brain's egress (C53) and the providers this Ren has (P38).
+    // oxlint-disable-next-line ren/no-comments -- What a catalog depends on: the reached profiles, the org's apps and their revisions (names clash org-wide, P25), the reached profiles' credentials (P23), the brain's egress (C53), the providers this Ren has (P38) and where its managed MCPs run.
     const inputs = Effect.fnUntraced(function* (scope: Credentials.Scope) {
       if (scope.workload.kind === "brain") {
         const space = (yield* database.db
@@ -80,7 +82,7 @@ export const layer = Layer.effect(
         ),
       ].toSorted()
       const available = yield* Effect.filter(providers, isSetUp)
-      return { reached, claims, connected, egress, available }
+      return { reached, claims, connected, egress, available, integrationsUrl }
     })
 
     const fingerprintOf = (found: Effect.Success<ReturnType<typeof inputs>>) =>
@@ -97,6 +99,7 @@ export const layer = Layer.effect(
           .toSorted((left, right) => left.localeCompare(right)),
         egress: found.egress,
         available: found.available,
+        integrationsUrl: Option.getOrNull(found.integrationsUrl),
       })
 
     // oxlint-disable-next-line ren/no-comments -- profiles.md §6.1, §8: each reached profile gives one server per connected MCP item (`<mcp>__<slug>`) and its local MCPs whose required keys are connected; an MCP with auth none is one server per app (P22). An item without a credential is absent (P23). A part that an older app in the org names is skipped (P25). Without a provider layer or an egress, a credential-backed server is listed as unavailable.
@@ -139,7 +142,12 @@ export const layer = Layer.effect(
       const open = ordered.flatMap((row) =>
         sortedMcps(row).flatMap(([slug, declaration]): ReadonlyArray<AppCatalog.McpEntry> => {
           const needsEnv = declaration.requiredCredentials.some((requirement) => requirement.kind === "env")
-          if (declaration.auth.type !== "none" || (declaration.transport.type === "local" && needsEnv)) return []
+          if (
+            declaration.auth.type !== "none" ||
+            declaration.transport.type === "managed" ||
+            (declaration.transport.type === "local" && needsEnv)
+          )
+            return []
           return [
             {
               appId: row.id,
@@ -206,6 +214,16 @@ export const layer = Layer.effect(
           ]
         })
       })
+      const selected = AppSelection.select({
+        resolved: [...owned, ...open],
+        managed: ordered.flatMap((row) =>
+          sortedMcps(row).flatMap(([slug, declaration]) =>
+            declaration.transport.type === "managed" ? [{ appId: row.id, appSlug: row.slug, slug, declaration }] : [],
+          ),
+        ),
+        integrationsUrl: found.integrationsUrl,
+        egress: found.egress,
+      })
       return {
         apps: ordered.map((row) => ({
           appId: row.id,
@@ -231,14 +249,14 @@ export const layer = Layer.effect(
               ),
             })),
         })),
-        mcps: [...owned, ...open],
+        mcps: selected.mcps,
         skills: ordered.flatMap((row) =>
           Object.entries(row.skills)
             .filter(([slug]) => !skipped(row.id, "skills", slug))
             .toSorted(([left], [right]) => left.localeCompare(right))
             .map(([slug, declaration]) => ({ appId: row.id, appSlug: row.slug, slug, declaration })),
         ),
-        unavailable,
+        unavailable: [...unavailable, ...selected.unavailable],
       }
     }
 
