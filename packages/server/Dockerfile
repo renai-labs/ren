@@ -25,6 +25,7 @@ COPY packages/environment-api ./packages/environment-api
 COPY packages/opencode-transcript ./packages/opencode-transcript
 COPY packages/protocol ./packages/protocol
 COPY packages/schema ./packages/schema
+COPY packages/telemetry ./packages/telemetry
 COPY packages/util ./packages/util
 COPY packages/server/docker/start.sh /usr/local/bin/ren-server
 
