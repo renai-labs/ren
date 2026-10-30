@@ -37,8 +37,6 @@ export interface Targets {
 
 export class Service extends Context.Service<Service, { readonly resource: Resource }>()("@ren/telemetry/Telemetry") {}
 
-const signals = ["traces", "logs", "metrics"] as const
-
 const record = (name: string) =>
   Config.Record(Schema.StringFromUriComponent, Schema.StringFromUriComponent, name, { trim: true })
 
@@ -47,7 +45,7 @@ const encode = (values: Readonly<Record<string, string>>) =>
     .map((entry) => entry.map(encodeURIComponent).join("="))
     .join(",")
 
-const target = (signal: (typeof signals)[number]) => {
+const target = (signal: "traces" | "logs" | "metrics") => {
   const name = signal.toUpperCase()
   return Config.all({
     exporter: Config.Literals(["otlp", "none"], `OTEL_${name}_EXPORTER`).pipe(Config.withDefault("otlp")),
@@ -82,22 +80,8 @@ export const targets: Config.Config<Targets> = Config.all({
 
 export const attributes = record("OTEL_RESOURCE_ATTRIBUTES").pipe(Config.withDefault({}))
 
-export const variables = (options: Targets & { readonly attributes: Readonly<Record<string, string>> }) =>
-  Object.fromEntries(
-    [
-      ...signals.flatMap((signal) => {
-        const name = `OTEL_EXPORTER_OTLP_${signal.toUpperCase()}`
-        return Option.match(options[signal], {
-          onNone: () => [],
-          onSome: (found) => [
-            [`${name}_ENDPOINT`, found.url] as const,
-            [`${name}_HEADERS`, encode(found.headers)] as const,
-          ],
-        })
-      }),
-      ["OTEL_RESOURCE_ATTRIBUTES", encode(options.attributes)] as const,
-    ].filter((entry) => entry.at(1) !== ""),
-  )
+export const variables = (attributes: Readonly<Record<string, string>>): Readonly<Record<string, string>> =>
+  Object.keys(attributes).length > 0 ? { OTEL_RESOURCE_ATTRIBUTES: encode(attributes) } : {}
 
 const parameters = "\nparams: "
 

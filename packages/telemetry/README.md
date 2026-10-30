@@ -11,6 +11,7 @@ How a Ren process sends its telemetry. The server, the brain and the executor us
 
 - Ren code reports through Effect: logs, spans, metrics and `ErrorReporter`. It never names a vendor.
 - Only the main file of a process provides `PostHog.layer`. ast-grep rule `posthog-in-main-only` checks this.
+- Brains and executors hold no secret but the PostHog token. `PostHog.variables` names what a sandbox gets: the token and PostHog's OTLP endpoint. The server's own `OTEL_*` headers never leave the server.
 - To use another error tracker, write a module like `posthog.ts` and provide it in the main files.
 
 ## Dependencies

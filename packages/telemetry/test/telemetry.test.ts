@@ -330,12 +330,8 @@ describe("Telemetry.targets", () => {
     })
   })
 
-  test("gives a sandbox variables that read back as the same targets and attributes", () => {
-    const targets = read(server, Telemetry.targets)
+  test("names a sandbox's resource in a variable that reads back as the same attributes", () => {
     const attributes = { "deployment.environment.name": "production", "ren.brain.id": "brn_test=1,2" }
-    const variables = Telemetry.variables({ ...targets, attributes })
-
-    expect(read(variables, Telemetry.targets)).toEqual(targets)
-    expect(read(variables, Telemetry.attributes)).toEqual(attributes)
+    expect(read(Telemetry.variables(attributes), Telemetry.attributes)).toEqual(attributes)
   })
 })

@@ -18,16 +18,16 @@ export const telemetry = Effect.all({ resource, targets: Telemetry.targets }).pi
   Effect.map((found) => ({ resource: found.resource, ...found.targets })),
 )
 
-export const ReporterVariables = Context.Reference<Readonly<Record<string, string>>>(
-  "@ren/core/Deployment/ReporterVariables",
+export const SandboxTelemetry = Context.Reference<Readonly<Record<string, string>>>(
+  "@ren/core/Deployment/SandboxTelemetry",
   { defaultValue: () => ({}) },
 )
 
 export const sandboxVariables = Effect.gen(function* () {
-  const configured = yield* telemetry
-  const reporter = yield* ReporterVariables
+  const server = yield* resource
+  const vendor = yield* SandboxTelemetry
   return (tenant: Readonly<Record<string, string>>) => ({
-    ...Telemetry.variables({ ...configured, attributes: { ...configured.resource.attributes, ...tenant } }),
-    ...reporter,
+    ...vendor,
+    ...Telemetry.variables({ ...server.attributes, ...tenant }),
   })
 })
