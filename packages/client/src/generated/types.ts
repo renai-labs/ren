@@ -267,11 +267,22 @@ export type AuthSignInProvider = "google" | "github" | "slack"
 
 export type ChannelTarget = { kind: "slack"; channelId: string } | { kind: "github"; repository: string }
 
+export type MemoryFiles = { [x: string]: string }
+
 export type AgentName = string
 
 export type InfraLock = { organization: string; resources: { [x: string]: string } }
 
-export type InfraKind = "organization" | "space" | "agent" | "membership" | "app" | "schedule" | "channel" | "profile"
+export type InfraKind =
+  | "organization"
+  | "space"
+  | "agent"
+  | "membership"
+  | "app"
+  | "schedule"
+  | "channel"
+  | "profile"
+  | "memory"
 
 export type InfraValue = { field: string; ren?: string; folder?: string }
 
@@ -1226,6 +1237,7 @@ export type InfraPulledSpace = {
   apps: { [x: PrimitiveSlug]: InfraPulledApp }
   schedules: { [x: PrimitiveSlug]: InfraPulledSchedule }
   channels: { [x: PrimitiveSlug]: ChannelDeclaration }
+  memory?: MemoryFiles
   uses: InfraUses
 }
 
@@ -1246,7 +1258,11 @@ export type SessionMessageAssistant = {
 
 export type InfraPulled = {
   bindings: { organization: string; spaces: { [x: PrimitiveSlug]: InfraPulledBindings } }
-  spec: { org: OrganizationSettingsUpdateInput2; spaces: { [x: PrimitiveSlug]: InfraPulledSpace } }
+  spec: {
+    org: OrganizationSettingsUpdateInput2
+    memory?: MemoryFiles
+    spaces: { [x: PrimitiveSlug]: InfraPulledSpace }
+  }
   lock: InfraLock
   write: Array<string>
   remove: Array<string>
@@ -1662,17 +1678,9 @@ export type MemoryReadInput = {
 export type MemoryReadOutput = MemoryFile
 
 export type MemoryWriteInput = {
-  readonly spaceId?: {
-    readonly spaceId?: string | undefined
-    readonly path: string
-    readonly content: string
-  }["spaceId"]
-  readonly path: { readonly spaceId?: string | undefined; readonly path: string; readonly content: string }["path"]
-  readonly content: {
-    readonly spaceId?: string | undefined
-    readonly path: string
-    readonly content: string
-  }["content"]
+  readonly spaceId?: { readonly spaceId?: string | null; readonly path: string; readonly content: string }["spaceId"]
+  readonly path: { readonly spaceId?: string | null; readonly path: string; readonly content: string }["path"]
+  readonly content: { readonly spaceId?: string | null; readonly path: string; readonly content: string }["content"]
 }
 
 export type MemoryWriteOutput = void
@@ -6917,6 +6925,7 @@ export type InfraPullInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -7176,6 +7185,7 @@ export type InfraPullInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{
@@ -7230,6 +7240,7 @@ export type InfraPullInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -7489,6 +7500,7 @@ export type InfraPullInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{
@@ -7543,6 +7555,7 @@ export type InfraPullInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -7802,6 +7815,7 @@ export type InfraPullInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{
@@ -7861,6 +7875,7 @@ export type InfraPlanInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -8120,6 +8135,7 @@ export type InfraPlanInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{
@@ -8174,6 +8190,7 @@ export type InfraPlanInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -8433,6 +8450,7 @@ export type InfraPlanInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{
@@ -8487,6 +8505,7 @@ export type InfraPlanInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -8746,6 +8765,7 @@ export type InfraPlanInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{
@@ -8805,6 +8825,7 @@ export type InfraApplyInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -9064,6 +9085,7 @@ export type InfraApplyInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{
@@ -9120,6 +9142,7 @@ export type InfraApplyInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -9379,6 +9402,7 @@ export type InfraApplyInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{
@@ -9435,6 +9459,7 @@ export type InfraApplyInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -9694,6 +9719,7 @@ export type InfraApplyInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{
@@ -9750,6 +9776,7 @@ export type InfraApplyInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -10009,6 +10036,7 @@ export type InfraApplyInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{
@@ -10065,6 +10093,7 @@ export type InfraApplyInput = {
           }>
         }
       }
+      readonly memory?: { readonly [x: string]: string }
       readonly spaces: {
         readonly [x: string]: {
           readonly name: string
@@ -10324,6 +10353,7 @@ export type InfraApplyInput = {
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
           }
+          readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
             readonly maxHandoffs?: number
             readonly agents: ReadonlyArray<{

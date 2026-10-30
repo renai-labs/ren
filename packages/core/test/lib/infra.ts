@@ -20,6 +20,7 @@ import { DurableRunner } from "../../src/durable-runner.js"
 import { EgressControl } from "../../src/egress-control.js"
 import { Envelope } from "../../src/envelope.js"
 import { InfraSpecs } from "../../src/infra-specs.js"
+import { Memory } from "../../src/memory.js"
 import { OAuthFetch } from "../../src/oauth-fetch.js"
 import { OrganizationSettings } from "../../src/organization-settings.js"
 import { ReferenceCheck } from "../../src/reference-check.js"
@@ -52,6 +53,7 @@ export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>
         App.layer,
         AppProfiles.layer,
         ChannelMappings.layer,
+        Memory.layer,
         Schedules.layer.pipe(Layer.provide(ScheduleTrigger.layerPostgres), Layer.provide(runner)),
       ),
     ),
@@ -82,8 +84,11 @@ export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>
 
 export const empty = { permissions: [], references: [] }
 
-export const spec = (spaces: Record<string, unknown>, org: Record<string, unknown> = {}) =>
-  Schema.decodeUnknownSync(Infra.Spec)({ org: { settings: org }, spaces })
+export const spec = (
+  spaces: Record<string, unknown>,
+  org: Record<string, unknown> = {},
+  memory: Record<string, string> = {},
+) => Schema.decodeUnknownSync(Infra.Spec)({ org: { settings: org }, memory, spaces })
 
 export const bindings = (organization: string, spaces: Record<string, unknown> = {}) =>
   Schema.decodeUnknownSync(Infra.Bindings)({ organization, spaces })
@@ -139,6 +144,11 @@ export const change = (
 
 export const withoutValues = (changes: ReadonlyArray<Infra.Change>) =>
   changes.map((change) => Struct.omit(change, ["values"]))
+
+export const withoutMemory = (lock: Infra.Lock) => ({
+  organization: lock.organization,
+  resources: Object.fromEntries(Object.entries(lock.resources).filter((entry) => !entry[0].includes("memory/"))),
+})
 
 export const pulled = Effect.fnUntraced(function* (actor: Actor.Info) {
   const infra = yield* InfraSpecs.Service

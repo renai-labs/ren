@@ -12,11 +12,13 @@ import { Predicate, Struct } from "effect"
 import { AppValidation } from "../app/validation.js"
 import { InfraApps } from "./apps.js"
 import { InfraChannels } from "./channels.js"
+import { InfraMemory } from "./memory.js"
 import { InfraProfiles } from "./profiles.js"
 import { InfraSchedules } from "./schedules.js"
 
 export interface Source {
   readonly org: OrganizationSettings.UpdateInput
+  readonly memory: Readonly<Record<string, string>>
   readonly spaces: Readonly<
     Record<
       string,
@@ -29,6 +31,7 @@ export interface Source {
         readonly apps: Readonly<Record<string, App.Declaration>>
         readonly schedules: Readonly<Record<string, Schedule.Declaration>>
         readonly channels: Readonly<Record<string, Channel.Declaration>>
+        readonly memory: Readonly<Record<string, string>>
         readonly uses: Infra.Uses
       }
     >
@@ -111,6 +114,13 @@ export const resources = (source: Source, live?: Resources): Resources => {
         },
       ]
     }),
+    ...[
+      ...Object.entries(source.memory).map(([name, value]) => ({ slug: undefined, name, value })),
+      ...owned((space) => space.memory),
+    ].map((file): [string, Resource] => [
+      InfraMemory.path(file.slug, file.name),
+      { kind: "memory", value: { content: file.value } },
+    ]),
     ...Object.entries(source.bindings).flatMap(([slug, bindings]) =>
       Object.entries(bindings.profiles).flatMap(([app, profiles]) =>
         profiles.map((profile): [string, Resource] => [
@@ -197,6 +207,8 @@ export const planPull = (folder: Resources, ren: Resources, locked: Readonly<Rec
       const version = renVersions.get(path)
       const seen = locked[path]
       if (folderVersions.get(path) === version) return { path, decision: "same" }
+      if (ren.get(path)?.kind === "memory" && !folder.has(path) && folder.has(spaceOf(path) ?? "org"))
+        return { path, decision: "write" }
       if (folderVersions.get(path) === seen) return { path, decision: version ? "write" : "remove" }
       if (version === seen) return { path, decision: "keep" }
       return { path, decision: "conflict" }

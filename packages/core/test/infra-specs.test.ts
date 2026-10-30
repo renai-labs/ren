@@ -63,6 +63,7 @@ describe("InfraSpecs", () => {
         bindings: { organization: o.bindings.organization, spaces: {} },
         spec: {
           org: { settings: { ...empty, instructions: "Be brief." } },
+          memory: { "memory.md": "" },
           spaces: {
             home: {
               name: "Home",
@@ -71,6 +72,7 @@ describe("InfraSpecs", () => {
               apps: {},
               schedules: {},
               channels: {},
+              memory: { "memory.md": "" },
               uses: { agents: ["build"] },
             },
             engineering: {
@@ -87,6 +89,7 @@ describe("InfraSpecs", () => {
               apps: {},
               schedules: {},
               channels: {},
+              memory: { "memory.md": "" },
               uses: { agents: [] },
             },
           },
@@ -94,10 +97,13 @@ describe("InfraSpecs", () => {
       })
       expect(pulled).toMatchObject({
         write: [
+          "memory/memory.md",
           "org",
           "spaces/engineering",
           "spaces/engineering/agents/build",
+          "spaces/engineering/memory/memory.md",
           "spaces/home",
+          "spaces/home/memory/memory.md",
           "spaces/home/uses/agents/build",
         ],
         remove: [],
@@ -170,7 +176,9 @@ describe("InfraSpecs", () => {
       ])
       const applied = yield* infra.apply(o.admin, { ...input, digest: plan.digest })
       expect(applied.changes).toEqual(plan.changes)
-      expect(applied.lock).toEqual((yield* infra.pull(o.admin, {})).lock)
+      expect(InfraFixture.withoutMemory(applied.lock)).toEqual(
+        InfraFixture.withoutMemory((yield* infra.pull(o.admin, {})).lock),
+      )
       expect((yield* infra.plan(o.admin, { ...input, lock: applied.lock })).changes).toEqual([])
       expect((yield* agents.get(o.admin, build.id)).settings.instructions).toBe("Test first.")
       expect((yield* agents.get(o.admin, lint.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
@@ -542,7 +550,9 @@ describe("InfraSpecs", () => {
       expect(applied.lock).toEqual({
         organization: o.bindings.organization,
         resources: Object.fromEntries(
-          Object.entries(pulled.lock.resources).filter((entry) => entry[0] !== "spaces/design"),
+          Object.entries(InfraFixture.withoutMemory(pulled.lock).resources).filter(
+            (entry) => entry[0] !== "spaces/design",
+          ),
         ),
       })
     }),
@@ -652,7 +662,12 @@ describe("InfraSpecs", () => {
       })
 
       expect(pulled).toMatchObject({
-        write: ["spaces/home/agents/docs", "spaces/home/agents/review"],
+        write: [
+          "memory/memory.md",
+          "spaces/home/agents/docs",
+          "spaces/home/agents/review",
+          "spaces/home/memory/memory.md",
+        ],
         remove: ["spaces/home/agents/old", "spaces/legacy"],
         conflicts: [],
       })

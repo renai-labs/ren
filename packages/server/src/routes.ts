@@ -203,6 +203,7 @@ export const layer = Layer.mergeAll(
             settingsAndAgents,
             App.layer,
             ChannelMappings.layer,
+            Memory.layer,
             schedules,
           ]),
         ),

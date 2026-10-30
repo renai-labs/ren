@@ -669,7 +669,7 @@ export function make(options: ClientOptions) {
             path: `/memory/file`,
             body: { spaceId: input["spaceId"], path: input["path"], content: input["content"] },
             successStatus: 204,
-            declaredStatuses: [401, 403, 404],
+            declaredStatuses: [400, 401, 403, 404],
             empty: true,
           },
           requestOptions,

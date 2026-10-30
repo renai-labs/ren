@@ -56,7 +56,7 @@ describe("InfraSpecs schedules", () => {
         problems: [],
       })
       const applied = yield* infra.apply(o.admin, { ...first, digest: created.digest })
-      expect(applied.lock).toEqual((yield* infra.pull(o.admin, {})).lock)
+      expect(applied.lock).toEqual(InfraFixture.withoutMemory((yield* infra.pull(o.admin, {})).lock))
       const reporter = yield* agents.get(o.admin, "reporter")
       const after = yield* listed(o.admin, o.home.id)
       expect(after.get("report")).toMatchObject({

@@ -32,6 +32,7 @@ export const MemoryHandler = HttpApiBuilder.group(Api, "memory", (handlers) =>
           Effect.catchTags({
             "Primitive.NotFound": notFound,
             "Primitive.Forbidden": forbidden,
+            "Primitive.Invalid": invalid,
           }),
         ),
       )

@@ -21,7 +21,7 @@ export interface Interface {
   readonly write: (
     actor: Actor.Info,
     input: Memory.WriteInput,
-  ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden>
+  ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid>
   readonly edit: (
     actor: Actor.Info,
     input: Memory.EditInput,
@@ -33,6 +33,8 @@ export interface Interface {
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Memory") {}
+
+export const root = Memory.root
 
 const missing = (path: string) => new Primitive.NotFound({ message: `The memory has no file ${path}.` })
 
@@ -163,7 +165,16 @@ export const layer = Layer.effect(
         return { path: input.path, content: files[input.path] ?? "" }
       }),
       write: Effect.fn("Memory.write")(function* (actor: Actor.Info, input: Memory.WriteInput) {
-        yield* change(actor, input.spaceId, (files) => Effect.succeed({ ...files, [input.path]: input.content }))
+        yield* change(actor, input.spaceId, (files) => {
+          const clash = Object.keys(files).find(
+            (path) => path.startsWith(`${input.path}/`) || input.path.startsWith(`${path}/`),
+          )
+          return clash
+            ? Effect.fail(
+                new Primitive.Invalid({ message: `${clash} is in the way: a path is a file or a folder, not both.` }),
+              )
+            : Effect.succeed({ ...files, [input.path]: input.content })
+        })
       }),
       edit: Effect.fn("Memory.edit")(function* (actor: Actor.Info, input: Memory.EditInput) {
         const files = yield* change(actor, input.spaceId, (files) =>

@@ -65,6 +65,21 @@ describe("Memory", () => {
     }),
   )
 
+  it.live("a path is never both a file and a folder, so the memory fits in a folder on disk", () =>
+    Effect.gen(function* () {
+      const memory = yield* Memory.Service
+      const owner = yield* Seed.owner()
+      const ada = { userId: owner.createdBy, organizationId: owner.organizationId, roles: ["owner"] }
+      const spaceId = owner.spaceId
+      yield* memory.write(ada, { spaceId, path: "people/ana.md", content: "Ana." })
+      const file = yield* Effect.flip(memory.write(ada, { spaceId, path: "people", content: "All." }))
+      const folder = yield* Effect.flip(memory.write(ada, { spaceId, path: "people/ana.md/notes.md", content: "Hi." }))
+      expect([file._tag, folder._tag]).toEqual(["Primitive.Invalid", "Primitive.Invalid"])
+      yield* memory.write(ada, { spaceId, path: "people.md", content: "All." })
+      expect(yield* memory.list(ada, { spaceId })).toEqual(["people.md", "people/ana.md"])
+    }),
+  )
+
   it.live("writes to two files of one memory at the same time both land (memory M3)", () =>
     Effect.gen(function* () {
       const memory = yield* Memory.Service
