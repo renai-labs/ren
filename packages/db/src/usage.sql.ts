@@ -2,7 +2,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Space } from "@ren/schema/space"
 import type { Usage } from "@ren/schema/usage"
-import { bigint, index, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
+import { bigint, bigserial, index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 
 export const usage_event = pgTable(
   "usage_event",
@@ -26,11 +26,13 @@ export const usage_event = pgTable(
     error: jsonb().$type<Usage.Failure>(),
     data: jsonb().$type<Usage.Event["data"]>().notNull(),
     received_at: timestamp().defaultNow().notNull(),
+    position: bigserial({ mode: "number" }).notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.source, table.id] }),
     index("usage_event_organization_time_idx").on(table.organization, table.time),
     index("usage_event_space_time_idx").on(table.space, table.time),
     index("usage_event_source_time_idx").on(table.source, table.time),
+    uniqueIndex("usage_event_position_idx").on(table.position),
   ],
 )
