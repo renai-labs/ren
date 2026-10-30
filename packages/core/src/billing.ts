@@ -30,7 +30,6 @@ export const layerRenCloud = Layer.effect(
   Effect.gen(function* () {
     const base = yield* Config.String("REN_BILLING_URL")
     const signer = yield* Signer.Service
-    // oxlint-disable-next-line ren/no-comments -- With REN_BILLING_URL and no REN_BILLING_KEYS, Ren fails at start, not in each organization's run.
     yield* signer.publicKeys("ren-billing").pipe(Effect.orDie)
     const http = (yield* HttpClient.HttpClient).pipe(
       HttpClient.mapRequest(HttpClientRequest.prependUrl(base)),

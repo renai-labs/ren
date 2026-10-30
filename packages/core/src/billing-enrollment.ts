@@ -10,7 +10,6 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BillingEnrollment") {}
 
-// oxlint-disable-next-line ren/no-comments -- One durable run per organization, so billing gets its customer even when billing is down when the organization is created. Until the run succeeds, the organization has no credit.
 const EnrollRun = DurableRunner.make("BillingEnrollment", {
   payload: Billing.Customer,
   idempotencyKey: (customer) => `billing-enrollment:${customer.organizationId}`,
