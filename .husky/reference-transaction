@@ -1,0 +1,12 @@
+#!/bin/sh
+[ "$1" = committed ] && [ "${HUSKY-}" != 0 ] || exit 0
+while read -r old new ref; do
+  case "$ref" in
+  refs/remotes/*)
+    pending="${pending:-$(git rev-parse --git-common-dir)/ren-signoff/pending}"
+    if [ -f "$pending/$new.json" ]; then
+      bun script/signoff/post.ts "$pending/$new.json" </dev/null
+    fi
+    ;;
+  esac
+done

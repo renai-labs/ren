@@ -10,7 +10,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "test": "bun ../../script/test.ts",
+    "test": "bun ../../script/signoff/record.ts bun ../../script/test.ts",
     "db": "bun --bun drizzle-kit",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo --noEmit"

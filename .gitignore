@@ -24,6 +24,7 @@ logs/
 # Test output
 /artifacts/
 packages/e2e/.runs/
+packages/httpapi-codegen/test/.emitted-*/
 packages/e2e/chaos/infra/e2b/executor.js
 playwright-report/
 test-results/

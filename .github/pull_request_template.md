@@ -22,6 +22,5 @@ _If this is a UI change, include a screenshot or recording._
 
 ### Checklist
 
-- [ ] I ran `bun run check` and the affected package tests locally
 - [ ] I regenerated and committed generated files if the API contract changed
 - [ ] I have not included unrelated changes in this PR

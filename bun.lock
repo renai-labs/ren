@@ -11,6 +11,7 @@
         "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
+        "effect": "catalog:",
         "eslint-plugin-better-tailwindcss": "4.9.0",
         "husky": "9.1.7",
         "knip": "6.40.0",

@@ -4,7 +4,7 @@
   "workspaces": {
     ".": {
       "entry": ["script/**/*.ts", "oxlint.config.ts", ".opencode/plugins/*.ts"],
-      "ignoreDependencies": ["@opencode/plugin", "effect"]
+      "ignoreDependencies": ["@opencode/plugin"]
     },
     "packages/*": {
       "entry": ["test/**/*.test.{ts,tsx}", "script/**/*.ts"]
