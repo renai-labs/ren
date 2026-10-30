@@ -4313,7 +4313,7 @@
             "name": "category",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Primitive.Slug_3"
+              "$ref": "#/components/schemas/Primitive.Slug_5"
             },
             "required": false
           },
@@ -11819,7 +11819,7 @@
             "type": "string"
           },
           "also": {
-            "$ref": "#/components/schemas/Primitive.Slug_2"
+            "$ref": "#/components/schemas/Primitive.Slug_4"
           }
         },
         "required": ["kind", "slug", "also"],
@@ -15159,7 +15159,9 @@
           "spaces": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug_1"
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Infra.SpaceDeclaration"
@@ -15963,6 +15965,24 @@
                 },
                 "required": ["type", "provider", "integration"],
                 "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["managed"]
+                  },
+                  "server": {
+                    "$ref": "#/components/schemas/Primitive.Slug_2"
+                  },
+                  "replaces": {
+                    "$ref": "#/components/schemas/Primitive.Slug_3"
+                  }
+                },
+                "required": ["type", "server"],
+                "additionalProperties": false,
+                "description": "An MCP that Ren runs on its own provider account, paid with Ren credits."
               }
             ]
           },
@@ -16172,6 +16192,24 @@
             },
             "required": ["type", "provider", "integration"],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["managed"]
+              },
+              "server": {
+                "$ref": "#/components/schemas/Primitive.Slug_2"
+              },
+              "replaces": {
+                "$ref": "#/components/schemas/Primitive.Slug_3"
+              }
+            },
+            "required": ["type", "server"],
+            "additionalProperties": false,
+            "description": "An MCP that Ren runs on its own provider account, paid with Ren credits."
           }
         ]
       },
@@ -16805,15 +16843,27 @@
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        "description": "The older app in the org that has the same name."
+        "description": "The managed MCP of the integrations service that Ren calls."
       },
       "Primitive.Slug_3": {
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        "description": "Match a category in any group."
+        "description": "An MCP of the same app with auth. When a reached profile has its credential, this MCP is left out."
       },
       "Primitive.Slug_4": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "The older app in the org that has the same name."
+      },
+      "Primitive.Slug_5": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Match a category in any group."
+      },
+      "Primitive.Slug_6": {
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -17104,7 +17154,7 @@
             "$ref": "#/components/schemas/Space.ID"
           },
           "slug": {
-            "$ref": "#/components/schemas/Primitive.Slug_4"
+            "$ref": "#/components/schemas/Primitive.Slug_6"
           },
           "name": {
             "type": "string"

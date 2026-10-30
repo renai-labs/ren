@@ -23,7 +23,16 @@ const Provider = Schema.Struct({
     description: "The provider’s name for the service, such as a Composio toolkit or a Pipedream app.",
   }),
 })
-export const Transport = Schema.Union([Remote, Local, Provider]).annotate({ identifier: "Mcp.Transport" })
+const Managed = Schema.Struct({
+  type: Schema.Literal("managed"),
+  server: Primitive.Slug.annotate({ description: "The managed MCP of the integrations service that Ren calls." }),
+  replaces: Schema.optionalKey(
+    Primitive.Slug.annotate({
+      description: "An MCP of the same app with auth. When a reached profile has its credential, this MCP is left out.",
+    }),
+  ),
+}).annotate({ description: "An MCP that Ren runs on its own provider account, paid with Ren credits." })
+export const Transport = Schema.Union([Remote, Local, Provider, Managed]).annotate({ identifier: "Mcp.Transport" })
 export type Transport = typeof Transport.Type
 
 const NoAuth = Schema.Struct({ type: Schema.Literal("none") })
@@ -89,13 +98,18 @@ export const Declaration = Schema.Struct({
           issue: `The auth uses credential "${name}", which the MCP does not require.`,
         }))
     }),
+    Schema.makeFilter((mcp) =>
+      mcp.transport.type === "managed" && mcp.auth.type !== "none"
+        ? { path: ["auth"], issue: "A managed MCP has auth none." }
+        : undefined,
+    ),
   )
   .annotate({ identifier: "Mcp.Declaration" })
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   ...Declaration.fields,
-  transport: Schema.Union([Schema.Struct({ ...Remote.fields, url: Schema.String }), Local, Provider]),
+  transport: Schema.Union([Schema.Struct({ ...Remote.fields, url: Schema.String }), Local, Provider, Managed]),
   auth: Schema.Union([
     NoAuth,
     Schema.Struct({

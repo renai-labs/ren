@@ -3,6 +3,9 @@ import { Session } from "@opencode/client/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { testEffect } from "@ren/executor/testing"
 import { HostMcp } from "@ren/host-api/host-mcp"
+import { App } from "@ren/schema/app"
+import { Auth } from "@ren/schema/auth"
+import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
@@ -30,6 +33,7 @@ const open = Effect.fnUntraced(function* (
     readonly database?: string
     readonly directory?: string
     readonly channels?: ReadonlyArray<Channel.Provider>
+    readonly apps?: AppCatalog.Info
   } = {},
 ) {
   const access = Shared.access(undefined, stub.url)
@@ -55,13 +59,18 @@ const open = Effect.fnUntraced(function* (
       makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
       ren,
       ...(options.channels && { channels: options.channels }),
+      ...(options.apps && { apps: Option.some(options.apps) }),
     },
   )
   const harness = yield* OpenCodeHarness.make(server, access.endpoints)
   const wait = (sessionId: RenSession.ID) =>
     server.client.session.wait({ sessionID: Session.ID.make(sessionId) }).pipe(Effect.orDie)
-  const call = Effect.fnUntraced(function* (sessionId: RenSession.ID, sender: Option.Option<string>) {
-    const script = McpPeer.execute("ren.marker")
+  const call = Effect.fnUntraced(function* (
+    sessionId: RenSession.ID,
+    sender: Option.Option<string>,
+    options: { readonly tool?: string; readonly memberId?: typeof Auth.MemberID.Type } = {},
+  ) {
+    const script = McpPeer.execute(options.tool ?? "ren.marker")
     const text = `${script.marker} read the marker`
     yield* Option.match(sender, {
       onNone: () =>
@@ -73,7 +82,7 @@ const open = Effect.fnUntraced(function* (
             messageId: RenSession.MessageID.create(),
             prompt: { text },
             delivery: "steer",
-            sender: { userId },
+            sender: { userId, ...(options.memberId && { memberId: options.memberId }) },
           })
           .pipe(Effect.asVoid),
     })
@@ -180,6 +189,59 @@ it.live("after a restart, a prompt with no sender calls Ren as the sender of the
     expect(yield* reopened.call(sessionId, Option.none())).toBe("first")
     expect(ren.peer.headers.slice(before).at(-1)?.get(HostMcp.userHeader)).toBe("usr_grace")
   }),
+)
+
+it.live(
+  "a managed server is called with the integrations placeholder, its chat and the sender as a person placeholder",
+  () =>
+    Effect.gen(function* () {
+      const ren = yield* renAt()
+      const kernel = yield* McpPeer.make()
+      const apps: AppCatalog.Info = {
+        fingerprint: "managed",
+        catalog: {
+          apps: [],
+          skills: [],
+          unavailable: [],
+          mcps: [
+            {
+              appId: App.ID.create(),
+              appSlug: "kernel",
+              slug: "browsers",
+              server: "browsers",
+              profile: null,
+              label: "INTEGRATIONS",
+              url: kernel.url,
+              declaration: {
+                name: "Kernel",
+                description: "Cloud browsers",
+                transport: { type: "managed", server: "kernel" },
+                auth: { type: "none" },
+                requiredCredentials: [],
+              },
+            },
+          ],
+        },
+      }
+      const opened = yield* open(Option.some(ren.ren), { apps })
+      const sessionId = yield* opened.chat()
+      const tool = "browsers.marker"
+      expect(
+        yield* opened.call(sessionId, Option.some("usr_ada"), { tool, memberId: Auth.MemberID.make("mem_ada") }),
+      ).toBe("first")
+      const ada = kernel.headers.at(-1)
+      yield* opened.call(sessionId, Option.some("usr_grace"), { tool, memberId: Auth.MemberID.make("mem_grace") })
+      expect(
+        [ada, kernel.headers.at(-1)].map((headers) => [
+          headers?.get("authorization"),
+          headers?.get("ren-root-session"),
+          headers?.get("ren-member"),
+        ]),
+      ).toEqual([
+        ["Bearer ren:INTEGRATIONS", sessionId, "ren:PERSON.mem_ada"],
+        ["Bearer ren:INTEGRATIONS", sessionId, "ren:PERSON.mem_grace"],
+      ])
+    }),
 )
 
 it.live("a brain without Ren has no ren server", () =>

@@ -58,6 +58,7 @@ export const layer = Layer.mergeAll(
         ENVELOPE_KEYS: JSON.stringify([
           { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
         ]),
+        REN_INTEGRATIONS_URL: "https://mcp.ren.test/managed",
       }),
     ),
   ),
@@ -106,6 +107,14 @@ export const remote = (
   description: `The ${name} server`,
   transport: { type: "remote", url: `https://${name.toLowerCase()}.example.com/mcp` },
   auth,
+  requiredCredentials: [],
+})
+
+export const managed = (name: string, replaces?: string): Mcp.Declaration => ({
+  name,
+  description: `The ${name} server, paid with Ren credits`,
+  transport: { type: "managed", server: name.toLowerCase(), ...(replaces && { replaces }) },
+  auth: { type: "none" },
   requiredCredentials: [],
 })
 

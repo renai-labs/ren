@@ -19,6 +19,12 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Ap
 
 const stale = new Primitive.Conflict({ message: "The app changed. Reload before saving." })
 
+// oxlint-disable-next-line ren/no-comments -- Only a registry app declares a managed MCP (integrations spec, decision 1): an org could otherwise send Ren's integrations token to a server of its own choice.
+const ownMcps = (mcps: App.Definition["mcps"]) =>
+  Object.values(mcps).some((mcp) => mcp.transport.type === "managed")
+    ? Effect.fail(new Primitive.Invalid({ message: "Only a registry app can declare a managed MCP." }))
+    : Effect.void
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -77,6 +83,7 @@ export const layer = Layer.effect(
               })
             )
               return yield* new Primitive.Forbidden({ message: "You cannot create apps in this space." })
+            yield* ownMcps(input.mcps)
             const id = App.ID.create()
             if (input.dependsOn.includes(input.slug))
               return yield* new Primitive.Conflict({ message: `App “${input.slug}” cannot depend on itself.` })
@@ -125,6 +132,7 @@ export const layer = Layer.effect(
             if (!authorize(actor, "app.update", found))
               return yield* new Primitive.Forbidden({ message: "Only the owner space can edit this app." })
             if (found.app.revision !== input.expectedRevision) return yield* stale
+            yield* ownMcps(input.mcps)
             const dependencies = yield* AppValidation.dependencies(
               transaction,
               access,

@@ -18,7 +18,9 @@ const it = testEffect(
     Layer.provide(FetchHttpClient.layer),
     Layer.provideMerge(BunHttpServer.layerTest),
     Layer.provideMerge(Testing.layer),
-    Layer.provide(environment(undefined, { USAGE_INGEST_KEY: "ren_usage_test" })),
+    Layer.provide(
+      environment(undefined, { USAGE_INGEST_KEY: "ren_usage_test", INTEGRATIONS_INGEST_KEY: "ren_integrations_test" }),
+    ),
   ),
 )
 
@@ -101,6 +103,53 @@ describe("usage ingest", () => {
       )
       expect(yield* response.json).toEqual({ inserted: 1 })
       expect(yield* database.db.select().from(Database.Schema.usage_event).pipe(Effect.orDie)).toMatchObject([{ data }])
+    }),
+  )
+
+  it.live("the integrations key records only ren-integrations rows; an api.call keeps a negative cost", () =>
+    Effect.gen(function* () {
+      const owner = yield* Seed.owner()
+      const http = yield* HttpClient.HttpClient
+      const database = yield* Database.Service
+      const time = DateTime.formatIso(yield* DateTime.now)
+      const event = (source: string, id: string, cost: number) => ({
+        source,
+        id,
+        type: "api.call",
+        time,
+        workload: "brain:brn_1",
+        organization: owner.organizationId,
+        space: owner.spaceId,
+        payer: "ren",
+        provider: "kernel",
+        cost_micro_usd: cost,
+        data: { mcp: "kernel-managed", upstream: "browsers", units: { uptime_ms: 1200 }, corrects: "kernel:abc" },
+      })
+      const send = (secret: string, events: ReadonlyArray<unknown>) =>
+        http
+          .execute(
+            HttpClientRequest.post("/usage/v1/events").pipe(
+              HttpClientRequest.bearerToken(secret),
+              HttpClientRequest.bodyJsonUnsafe({ events }),
+            ),
+          )
+          .pipe(Effect.flatMap((response) => Effect.map(response.json, (body) => [response.status, body] as const)))
+      expect([
+        yield* send("ren_integrations_test", [
+          event("ren-integrations", "kernel:abc:1", -20),
+          event("ren-inference", "chatcmpl-2:anthropic-sonnet-1", 5),
+        ]),
+        yield* send("ren_integrations_test", [event("ren-integrations", "kernel:abc:1", -20)]),
+      ]).toMatchObject([
+        [401, { _tag: "UnauthorizedError" }],
+        [200, { inserted: 1 }],
+      ])
+      expect(
+        yield* database.db
+          .select({ id: Database.Schema.usage_event.id, cost: Database.Schema.usage_event.cost_micro_usd })
+          .from(Database.Schema.usage_event)
+          .pipe(Effect.orDie),
+      ).toEqual([{ id: "kernel:abc:1", cost: -20 }])
     }),
   )
 })

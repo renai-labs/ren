@@ -97,11 +97,38 @@ export const SandboxComputeEvent = Schema.Struct({
   data: SandboxCompute,
 }).annotate({ identifier: "Usage.SandboxComputeEvent" })
 
-export type Event = ModelCallEvent | SandboxComputeEvent
+export interface ApiCall extends Schema.Schema.Type<typeof ApiCall> {}
+export const ApiCall = Schema.Struct({
+  mcp: Schema.NonEmptyString.annotate({ description: "The MCP slug that the call went through." }),
+  tool: Schema.optionalKey(Schema.String),
+  upstream: Schema.optionalKey(Schema.String).annotate({ description: "The provider’s API or product that it used." }),
+  units: Schema.optionalKey(Schema.Record(Schema.String, Schema.Json)).annotate({
+    description: "What the provider counted, as it sent it: milliseconds, requests or results. Ren does not read it.",
+  }),
+  latency_ms: Schema.optionalKey(Count),
+  corrects: Schema.optionalKey(Schema.NonEmptyString).annotate({
+    description: "The `id` of the earlier row of the same source whose cost this row changes.",
+  }),
+}).annotate({ identifier: "Usage.ApiCall" })
+
+export interface ApiCallEvent extends Schema.Schema.Type<typeof ApiCallEvent> {}
+export const ApiCallEvent = Schema.Struct({
+  ...fields,
+  cost_micro_usd: Schema.optionalKey(Schema.Int).annotate({
+    description: "Negative on a correction row: the amount to take off the cost of the row it corrects.",
+  }),
+  type: Schema.Literal("api.call"),
+  data: ApiCall,
+}).annotate({ identifier: "Usage.ApiCallEvent" })
+
+export type Event = ModelCallEvent | SandboxComputeEvent | ApiCallEvent
 
 export interface Batch extends Schema.Schema.Type<typeof Batch> {}
 export const Batch = Schema.Struct({
-  events: Schema.Array(ModelCallEvent).check(Schema.isMinLength(1), Schema.isMaxLength(500)),
+  events: Schema.Array(Schema.Union([ModelCallEvent, ApiCallEvent])).check(
+    Schema.isMinLength(1),
+    Schema.isMaxLength(500),
+  ),
 }).annotate({ identifier: "Usage.Batch" })
 
 export interface Recorded extends Schema.Schema.Type<typeof Recorded> {}

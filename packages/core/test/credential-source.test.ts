@@ -32,6 +32,11 @@ import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 
 const key = await Effect.runPromise(Signature.generate("brain"))
+const integrationsKey = await Effect.runPromise(Signature.generate("ren-integrations"))
+const encodeKey = (generated: typeof key) =>
+  JSON.stringify([
+    { id: generated.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(generated.privateKey.key) },
+  ])
 
 const grants = Ref.makeUnsafe(0)
 const failuresLeft = Ref.makeUnsafe(0)
@@ -73,16 +78,17 @@ const it = testEffect(
   CredentialSource.layerMinted.pipe(
     Layer.provide(Access.layer),
     Layer.provideMerge(Layer.mergeAll(models, GitHubApp.layerNone)),
-    Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal), Layer.provide(FetchHttpClient.layer))),
+    Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(FetchHttpClient.layer))),
+    Layer.provideMerge(Signer.layerLocal),
     Layer.provideMerge(Drives.layer.pipe(Layer.provide(Access.layer))),
     Layer.provideMerge(Testing.layer),
     Layer.provide(
       ConfigProvider.layer(
         ConfigProvider.fromUnknown({
-          BRAIN_KEYS: JSON.stringify([
-            { id: key.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.privateKey.key) },
-          ]),
+          BRAIN_KEYS: encodeKey(key),
+          REN_INTEGRATIONS_KEYS: encodeKey(integrationsKey),
           REN_URL: "https://api.ren.test",
+          REN_INTEGRATIONS_URL: "https://mcp.ren.test/managed",
           ...TestDrives.config,
         }),
       ),
@@ -162,5 +168,51 @@ describe("CredentialSource.layerMinted", () => {
         return yield* Effect.die(new Error("expected a key"))
       expect(Redacted.value(value.value.value.value).slice(0, 2)).toBe("ey")
     }),
+  )
+
+  it.effect(
+    "with REN_INTEGRATIONS_URL, a brain in a space gets INTEGRATIONS for its host: a token with org, space, brain, generation and expiry",
+    () =>
+      Effect.gen(function* () {
+        const source = yield* CredentialSource.Minted
+        const signer = yield* Signer.Service
+        const found = (yield* source.candidates(scope, [])).find((candidate) => candidate.label === "INTEGRATIONS")
+        expect(found).toMatchObject({ hosts: ["mcp.ren.test"], owner: "workload", inject: { op: "replace" } })
+        if (!found) return
+        const value = yield* source.value(found, scope)
+        if (Option.isNone(value) || value.value.value.type !== "key") return yield* Effect.die(new Error("no key"))
+        const claims = yield* Signature.verify(
+          yield* signer.publicKeys("ren-integrations"),
+          Schema.Struct({
+            kid: Schema.String,
+            org: Schema.String,
+            space: Schema.String,
+            brain: Schema.String,
+            gen: Schema.Int,
+            exp: Schema.Int,
+          }),
+          Redacted.value(value.value.value.value),
+        )
+        expect(claims).toEqual(
+          Option.some({
+            kid: integrationsKey.privateKey.id,
+            org: "org_01",
+            space: "spc_01",
+            brain: "brn_01",
+            gen: 1,
+            exp: Math.floor(Duration.toSeconds(Duration.hours(1))),
+          }),
+        )
+        const withoutUrl = yield* CredentialSource.Minted.pipe(
+          Effect.flatMap((other) => other.candidates(scope, [])),
+          Effect.provide(
+            Layer.fresh(CredentialSource.layerMinted).pipe(
+              Layer.provide(Access.layer),
+              Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({}))),
+            ),
+          ),
+        )
+        expect(withoutUrl.map((candidate) => candidate.label)).not.toContain("INTEGRATIONS")
+      }),
   )
 })

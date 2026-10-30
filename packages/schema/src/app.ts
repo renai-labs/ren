@@ -36,7 +36,23 @@ export const Definition = Schema.Struct({
   requiredCredentials: Schema.Array(Credential.Requirement).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
   environment: Schema.optionalKey(Environment),
   skills: Schema.Record(Primitive.Slug, Skill.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
-  mcps: Schema.Record(Primitive.Slug, Mcp.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
+  mcps: Schema.Record(Primitive.Slug, Mcp.Declaration)
+    .check(
+      Schema.makeFilter((mcps) =>
+        Object.entries(mcps).flatMap(([slug, mcp]) => {
+          const replaces = mcp.transport.type === "managed" ? mcp.transport.replaces : undefined
+          return replaces && (mcps[replaces]?.auth.type ?? "none") === "none"
+            ? [
+                {
+                  path: [slug, "transport", "replaces"],
+                  issue: `The managed MCP replaces "${replaces}", which is not an MCP of this app with auth.`,
+                },
+              ]
+            : []
+        }),
+      ),
+    )
+    .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   dependsOn: Schema.Array(Primitive.Slug).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
 }).annotate({ identifier: "App.Definition", description: "The app’s content. One per app; an edit replaces it." })
 
