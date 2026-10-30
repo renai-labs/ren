@@ -36,6 +36,9 @@ export interface ModelCall extends Schema.Schema.Type<typeof ModelCall> {}
 export const ModelCall = Schema.Struct({
   requested_model: Schema.String,
   served_model: Schema.String,
+  operation: Schema.optionalKey(Schema.String).annotate({
+    description: "The gateway’s call type, such as completion, image_generation, speech, transcription or decisions.",
+  }),
   kind: Claim,
   variant: Claim,
   input_tokens: Schema.optionalKey(Count),
@@ -47,6 +50,10 @@ export const ModelCall = Schema.Struct({
   latency_ms: Schema.optionalKey(Count),
   time_to_first_token_ms: Schema.optionalKey(Count),
   stop_reason: Schema.optionalKey(Schema.String),
+  usage: Schema.optionalKey(Schema.Record(Schema.String, Schema.Json)).annotate({
+    description:
+      "The usage the provider reported, as it sent it: tokens, seconds, images or characters. Ren does not read it.",
+  }),
 }).annotate({ identifier: "Usage.ModelCall" })
 
 const fields = {
