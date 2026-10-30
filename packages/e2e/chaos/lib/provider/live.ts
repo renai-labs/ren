@@ -147,7 +147,7 @@ export const named = async (selected: Selected) => {
     headers: { authorization: `Bearer ${Redacted.value(selected.apiKey)}` },
   }).catch(() => undefined)
   if (!response?.ok) return own
-  const catalog = Models.fromLiteLLM(Schema.decodeUnknownSync(Models.LiteLLMModelInfo)(await response.json()))
+  const catalog = Models.fromInference(Schema.decodeUnknownSync(Models.InferenceModelInfo)(await response.json()))
   const model = catalog.endpoints
     .flatMap((endpoint) =>
       endpoint.models.flatMap((entry) =>

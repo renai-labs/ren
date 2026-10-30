@@ -559,7 +559,6 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
       )
     : Option.none()
   const refreshModels = Option.match(reader, { onNone: () => Effect.void, onSome: (found) => found.refresh })
-  // oxlint-disable-next-line ren/no-comments -- HR14: a model that the brain does not know yet may be new in LiteLLM, so the brain reads the list once before it refuses the model.
   const knowing = Effect.fnUntraced(function* (model: Model | null | undefined) {
     if (!model) return
     if (Option.isSome((yield* lookupOf(client))(model))) return

@@ -48,7 +48,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.live !== undefined |
     // oxlint-disable-next-line ren/no-comments -- HR15: the brain names LiteLLM's model by its provider and model key, which it reads from /model/info.
     const session = async (access: Models.Access, key: string) => {
       const response = await fetch(`${LiteLLM.url}/model/info`, { headers: { authorization: `Bearer ${key}` } })
-      const catalog = Models.fromLiteLLM(Schema.decodeUnknownSync(Models.LiteLLMModelInfo)(await response.json()))
+      const catalog = Models.fromInference(Schema.decodeUnknownSync(Models.InferenceModelInfo)(await response.json()))
       const found = catalog.endpoints.flatMap((endpoint) =>
         endpoint.models.flatMap((entry) =>
           (entry.upstreamId ?? entry.id) === model ? [{ endpointId: endpoint.id, modelId: entry.id }] : [],

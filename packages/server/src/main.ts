@@ -99,10 +99,11 @@ const host = Layer.unwrap(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- HR28, F2: the picker and the brains read the model list from LiteLLM: through the Ren Inference Service when REN_INFERENCE_URL is set, else REN_LITELLM_URL; a local run uses LiteLLM or its stub.
 const models = Layer.unwrap(
   Effect.map(Config.option(Config.String("REN_INFERENCE_URL")), (url) =>
-    Option.isSome(url) ? Models.layerRenInference : Models.layerLiteLLM.pipe(Layer.provide(FetchHttpClient.layer)),
+    Option.isSome(url)
+      ? Models.layerRenInference
+      : Models.layerInferenceGateway.pipe(Layer.provide(FetchHttpClient.layer)),
   ),
 ).pipe(Layer.provideMerge(RenInference.layerConfig), Layer.provide(Access.layer))
 

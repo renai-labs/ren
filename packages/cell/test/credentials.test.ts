@@ -42,12 +42,12 @@ describe("the ren method's refresh", () => {
   test("without a key from Ren it fails, naming the endpoint", async () => {
     expect(
       await Effect.runPromise(
-        RenPlugin.refresh("litellm", managed(60_000), () => Effect.succeedNone).pipe(Effect.result),
+        RenPlugin.refresh("gateway", managed(60_000), () => Effect.succeedNone).pipe(Effect.result),
       ),
     ).toEqual(
       Result.fail(
         new RenPlugin.ManagedKeyError({
-          message: "The model key for endpoint litellm expired, and Ren gave no new key",
+          message: "The model key for endpoint gateway expired, and Ren gave no new key",
         }),
       ),
     )
@@ -60,7 +60,7 @@ describe("the ren method's refresh", () => {
     ["never expires", undefined, Number.MAX_SAFE_INTEGER],
   ])("takes a key from Ren that %s", async (_name, expiresAt, expires) => {
     const refreshed = await Effect.runPromise(
-      RenPlugin.refresh("litellm", managed(60_000), () =>
+      RenPlugin.refresh("gateway", managed(60_000), () =>
         Effect.succeedSome({
           key: Redacted.make("refreshed"),
           ...(expiresAt !== undefined && { expiresAt: DateTime.makeUnsafe(expiresAt) }),

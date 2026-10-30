@@ -224,7 +224,7 @@ it.effect(
 )
 
 it.effect(
-  "an endpoint that the renewed grant does not name gets the grant's key: one LiteLLM key serves every endpoint (HR29)",
+  "an endpoint that the renewed grant does not name gets the grant's key: one gateway key serves every endpoint (HR29)",
   () =>
     Effect.gen(function* () {
       const subject = yield* make

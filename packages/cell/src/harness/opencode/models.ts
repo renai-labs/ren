@@ -7,12 +7,10 @@ import type { Inference } from "../../inference.js"
 import { ModelRefresh } from "../../model-refresh.js"
 import type { Harness } from "../harness.js"
 
-// oxlint-disable-next-line ren/no-comments -- HR14: the same interval as OpenCode's own provider discovery (`plugin/provider/local.ts`, 2.0.27).
 const interval = Duration.seconds(30)
 
 const answersWithin = Duration.seconds(10)
 
-// oxlint-disable-next-line ren/no-comments -- OpenCode's clients add the API path to a base URL that ends in /v1; the inference URL is LiteLLM's root (spec §7).
 const apiUrl = (baseUrl: string) => `${baseUrl.replace(/\/+$/u, "")}/v1`
 
 export const endpoints = Effect.fnUntraced(function* (
@@ -27,9 +25,8 @@ export const endpoints = Effect.fnUntraced(function* (
   ).pipe(Effect.map((all) => all.flatMap((each) => (Option.isSome(each) ? [each.value] : []))))
 })
 
-const decode = HttpClientResponse.schemaBodyJson(Models.LiteLLMModelInfo)
+const decode = HttpClientResponse.schemaBodyJson(Models.InferenceModelInfo)
 
-// oxlint-disable-next-line ren/no-comments -- HR14, HR24: reads LiteLLM's /model/info with the brain's key, keeps the last list when the read fails, stores a changed list and hands it to OpenCode.
 export const make = Effect.fnUntraced(function* (input: {
   readonly inference: Inference.Interface
   readonly keyFor: Harness.Refresh
@@ -49,7 +46,7 @@ export const make = Effect.fnUntraced(function* (input: {
           HttpClientRequest.bearerToken(Redacted.value(key.value.key)),
         ),
       )
-      .pipe(Effect.flatMap(decode), Effect.timeout(answersWithin), Effect.map(Models.fromLiteLLM))
+      .pipe(Effect.flatMap(decode), Effect.timeout(answersWithin), Effect.map(Models.fromInference))
     yield* input.inference.saveCatalog(catalog)
     const read = `${baseUrl.value}\n${JSON.stringify(catalog)}`
     if (read === applied.value) return

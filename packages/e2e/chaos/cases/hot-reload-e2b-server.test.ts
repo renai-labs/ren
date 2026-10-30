@@ -129,9 +129,9 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
       ENVIRONMENT_KEYS: encoded(TestEnvironment.keys.privateKey),
       REN_URL: renTunnel,
       E2B_TEMPLATE: template,
-      REN_LITELLM_URL: LiteLLM.url,
-      REN_LITELLM_BRAIN_URL: litellmTunnel,
-      REN_LITELLM_KEY: key,
+      REN_INFERENCE_GATEWAY_URL: LiteLLM.url,
+      REN_INFERENCE_GATEWAY_BRAIN_URL: litellmTunnel,
+      REN_INFERENCE_GATEWAY_KEY: key,
       ENVELOPE_KEYS: JSON.stringify([
         { id: "local:e2b", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
       ]),
@@ -215,7 +215,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
             Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
             Layer.provide(Settings.layer),
-            Layer.provide(Models.layerLiteLLM),
+            Layer.provide(Models.layerInferenceGateway),
             Layer.provide(
               Environments.layer
                 .pipe(Layer.provide(Signer.layerLocal))

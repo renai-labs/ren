@@ -32,7 +32,6 @@ const mailbox = Bun.serve({
   port: ports.mailbox,
   hostname: "127.0.0.1",
   fetch: async (request) => {
-    // oxlint-disable-next-line ren/no-comments -- A journey changes the model list that the stub LiteLLM serves at /model/info (U3).
     if (request.method === "POST" && new URL(request.url).pathname === "/models") {
       Shared.stub().modelInfo.set(Schema.decodeUnknownSync(Schema.Array(ModelEntry))(await request.json()))
       return new Response(null, { status: 204 })
@@ -134,8 +133,8 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
         key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestEnvironment.keys.privateKey.key),
       },
     ]),
-    REN_LITELLM_URL: Shared.stub().root,
-    REN_LITELLM_KEY: "stub-key",
+    REN_INFERENCE_GATEWAY_URL: Shared.stub().root,
+    REN_INFERENCE_GATEWAY_KEY: "stub-key",
     ENVELOPE_KEYS: JSON.stringify([
       { id: "local:e2e", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
     ]),

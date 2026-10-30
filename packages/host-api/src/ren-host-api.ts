@@ -79,7 +79,7 @@ export const PullEnv = Schema.Struct({
 export interface PullInference extends Schema.Schema.Type<typeof PullInference> {}
 export const PullInference = Schema.Struct({
   baseUrl: Schema.String.annotate({
-    description: "The root URL of the inference service (LiteLLM). The brain reads `/model/info` from it.",
+    description: "The root URL of the inference gateway. The brain reads `/model/info` from it.",
   }),
 }).annotate({ identifier: "Host.PullInference" })
 

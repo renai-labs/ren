@@ -25,9 +25,9 @@ export {
   Access,
   Catalog,
   Endpoint,
-  LiteLLMModelInfo,
+  InferenceModelInfo,
   catalog,
-  fromLiteLLM,
+  fromInference,
   personLabel,
   placeholderKey,
 } from "@ren/schema/models"
@@ -38,14 +38,12 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Models.Unava
 
 export interface Interface {
   readonly catalog: (organizationId: Auth.OrganizationID) => Effect.Effect<Models.Catalog, Unavailable>
-  // oxlint-disable-next-line ren/no-comments -- Changes when the model list or a key in it changes, so a cache of grants knows to ask again (H4).
   readonly revision: Effect.Effect<string>
   readonly grant: (
     brainId: Brain.ID,
     organizationId: Auth.OrganizationID,
     spaceId: Space.ID,
   ) => Effect.Effect<Models.Access, Unavailable>
-  // oxlint-disable-next-line ren/no-comments -- HR16: the root URL where a brain reads the model list (LiteLLM's /model/info). None: brains get no models.
   readonly inference: Effect.Effect<Option.Option<{ readonly baseUrl: string }>>
 }
 
@@ -69,32 +67,30 @@ export const layerNone = Layer.succeed(
 
 const refreshEvery = Duration.seconds(30)
 
-// oxlint-disable-next-line ren/no-comments -- OpenCode and LiteLLM's OpenAI and Anthropic routes add their API path to a base URL that ends in /v1.
 const apiUrl = (root: string) => `${root}/v1`
 
-// oxlint-disable-next-line ren/no-comments -- HR28: the picker, the model checks and every brain read the same /model/info, through Models.fromLiteLLM. Ren reads it every 30 s and keeps its last list when LiteLLM fails. Until Ren mints a key per brain, each grant is REN_LITELLM_KEY with a 6 h expiry, so all spend goes to that key.
-export const layerLiteLLM = Layer.effect(
+export const layerInferenceGateway = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const root = (yield* Config.String("REN_LITELLM_URL")).replace(/\/+$/u, "")
-    const brainRoot = (yield* Config.String("REN_LITELLM_BRAIN_URL").pipe(Config.withDefault(root))).replace(
+    const root = (yield* Config.String("REN_INFERENCE_GATEWAY_URL")).replace(/\/+$/u, "")
+    const brainRoot = (yield* Config.String("REN_INFERENCE_GATEWAY_BRAIN_URL").pipe(Config.withDefault(root))).replace(
       /\/+$/u,
       "",
     )
-    const key = yield* Config.Redacted("REN_LITELLM_KEY")
+    const key = yield* Config.Redacted("REN_INFERENCE_GATEWAY_KEY")
     const http = HttpClient.filterStatusOk(yield* HttpClient.HttpClient)
     const read = http
       .execute(HttpClientRequest.get(`${root}/model/info`).pipe(HttpClientRequest.bearerToken(Redacted.value(key))))
       .pipe(
-        Effect.flatMap(HttpClientResponse.schemaBodyJson(Models.LiteLLMModelInfo)),
+        Effect.flatMap(HttpClientResponse.schemaBodyJson(Models.InferenceModelInfo)),
         Effect.timeout(Duration.seconds(10)),
-        Effect.map(Models.fromLiteLLM),
+        Effect.map(Models.fromInference),
       )
     const current = yield* Ref.make(Option.none<Models.Catalog>())
     const load = read.pipe(
       Effect.tap((catalog) => Ref.set(current, Option.some(catalog))),
       Effect.tapError((error) =>
-        Effect.logWarning("LiteLLM's model list could not be read; Ren keeps its last list", error),
+        Effect.logWarning("The inference gateway's model list could not be read; Ren keeps its last list", error),
       ),
     )
     yield* load.pipe(
@@ -129,7 +125,6 @@ export const layerLiteLLM = Layer.effect(
 
 const encodeCatalog = Schema.encodeSync(Models.Catalog)
 
-// oxlint-disable-next-line ren/no-comments -- The Ren Inference Service holds the keys and serves LiteLLM's /model/info, so the picker and every brain read the model list as with layerLiteLLM. A key names the brain and its organization only; each model request names its person.
 export const layerRenInference = Layer.effect(
   Service,
   Effect.gen(function* () {
