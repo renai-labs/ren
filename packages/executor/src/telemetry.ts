@@ -19,7 +19,6 @@ export const layer = Layer.unwrap(
         serviceVersion: manifest.version,
         attributes: { ...(yield* Telemetry.attributes), "ren.environment.id": environmentId },
       },
-      reportErrors: true,
       continueTraces: true,
     }).pipe(Layer.provideMerge(Observability.layer("Info")), Layer.provide(FetchHttpClient.layer))
   }),

@@ -11,6 +11,7 @@ import {
   Logger,
   LogLevel,
   Option,
+  Predicate,
   Schema,
   Tracer,
 } from "effect"
@@ -112,7 +113,20 @@ export const withoutQueryParameters = <A>(error: A): A | Error => {
 const errorLog = (message: string, severity: LogLevel.Severity) =>
   Object.assign(new Error(message), { name: "ErrorLog", stack: "", [ErrorReporter.severity]: severity })
 
-const reportsToLogs = ErrorReporter.make((report) => {
+const logged = new WeakSet<object>()
+
+const failureOf = (reason: Cause.Reason<unknown>): unknown => {
+  if (reason._tag === "Fail") return reason.error
+  if (reason._tag === "Die") return reason.defect
+  return undefined
+}
+
+const isLogged = (reason: Cause.Reason<unknown>) => {
+  const failure = failureOf(reason)
+  return Predicate.isObjectKeyword(failure) && logged.has(failure)
+}
+
+const writeToLogs = ErrorReporter.make((report) => {
   const date = new Date(Number(report.timestamp / 1_000_000n))
   for (const logger of report.fiber.getRef(Logger.CurrentLoggers))
     if (logger !== reportErrorLogs)
@@ -125,8 +139,21 @@ const reportsToLogs = ErrorReporter.make((report) => {
       })
 })
 
+const reportsToLogs: ErrorReporter.ErrorReporter = {
+  [ErrorReporter.TypeId]: ErrorReporter.TypeId,
+  report: (options) =>
+    writeToLogs.report({
+      ...options,
+      cause: Cause.fromReasons(options.cause.reasons.filter((reason) => !isLogged(reason))),
+    }),
+}
+
 const reportErrorLogs = Logger.make((log) => {
   if (!LogLevel.isGreaterThanOrEqualTo(log.logLevel, "Error")) return
+  for (const reason of log.cause.reasons) {
+    const failure = failureOf(reason)
+    if (Predicate.isObjectKeyword(failure)) logged.add(failure)
+  }
   const timestamp = BigInt(log.date.getTime()) * 1_000_000n
   const cause = log.cause.reasons.some((reason) => reason._tag !== "Interrupt")
     ? log.cause
@@ -160,7 +187,6 @@ export const layer = (
   options: Targets & {
     readonly resource: Resource
     readonly metricsResource?: Resource
-    readonly reportErrors?: boolean
     readonly continueTraces?: boolean
   },
 ) =>
@@ -235,7 +261,7 @@ export const layer = (
           }),
         ),
     }),
-    options.reportErrors ? ErrorReporter.layer([reportsToLogs], { mergeWithExisting: true }) : Layer.empty,
+    ErrorReporter.layer([reportsToLogs], { mergeWithExisting: true }),
   ).pipe(
     Layer.provideMerge(OtlpExporter.layerFlusher),
     Layer.provide(OtlpSerialization.layerJson),
