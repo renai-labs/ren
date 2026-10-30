@@ -4,6 +4,7 @@ import { Generated, OpenAiClientGenerated, OpenAiConfig } from "@effect/ai-opena
 import type { ModelTypes } from "@ren/schema/model-types"
 import { Cause, Context, Effect, Layer, Redacted, Schema, Struct } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
+import { ModelHttp } from "./model-http.js"
 
 export const Parameters = Generated.CreateImageRequest.mapFields(
   Struct.pick(["prompt", "n", "size", "background", "output_format"]),
@@ -38,17 +39,7 @@ export const layerRen = (provider: ModelTypes.Provider, key: Effect.Effect<Redac
     Service,
     Effect.gen(function* () {
       const http = yield* HttpClient.HttpClient
-      const client = yield* OpenAiClientGenerated.make({
-        apiUrl: provider.baseUrl.replace(/\/+$/u, ""),
-        transformClient: (client) =>
-          client.pipe(
-            HttpClient.mapRequest(HttpClientRequest.setHeaders(provider.headers ?? {})),
-            HttpClient.mapRequestEffect((request) =>
-              Effect.map(key, (value) => HttpClientRequest.bearerToken(request, Redacted.value(value))),
-            ),
-            HttpClient.transformResponse(Effect.repeat({ times: 1, while: (response) => response.status === 401 })),
-          ),
-      })
+      const client = yield* OpenAiClientGenerated.make(ModelHttp.options(provider, key))
       return Service.of({
         generate: Effect.fn("Images.generate")(
           function* (input) {

@@ -1,7 +1,7 @@
 import { expect } from "bun:test"
 import { NodeFileSystem } from "@effect/platform-node-shared"
 import { testEffect } from "@ren/executor/testing"
-import { Effect, FileSystem, Layer, Redacted, Result, Schema } from "effect"
+import { Effect, FileSystem, Layer, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Images } from "../src/images.js"
 import { ImageGeneration } from "../src/image-generation.js"
@@ -35,7 +35,7 @@ it.live("an empty image response succeeds with an explanatory result and writes 
   }),
 )
 
-it.live("images use the configured default, renew once, edit input files, and save base64 and URL artifacts", () =>
+it.live("images renew once, edit input files, and save base64 and URL artifacts", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const directory = yield* fs.makeTempDirectoryScoped()
@@ -98,43 +98,29 @@ it.live("images use the configured default, renew once, edit input files, and sa
       ),
       WorkspaceFiles.layerLocal(directory),
     )
-    const selection = {
-      catalog: {
-        providerId: "ren",
-        models: [
-          { id: "first", upstreamId: "wrong" },
-          { id: "chosen", upstreamId: "ren/chosen" },
-        ],
-      },
-      defaultModel: { providerId: "ren", modelId: "chosen" },
-      headers: { "x-claim": "turn" },
-    }
+    const headers = { "x-claim": "turn" }
     const generated = yield* ImageGeneration.run(
-      Result.getOrThrow(ImageGeneration.prepare({ prompt: "A logo", output_path: "logo.png" }, selection)),
-      selection.headers,
+      { prompt: "A logo", model: "ren/image", output_path: "logo.png" },
+      headers,
     ).pipe(Effect.provide(layers))
     expect(generated.images.map((image) => image.path)).toEqual(["logo.png", "logo.1.png"])
     expect(yield* fs.readFileString(`${directory}/logo.png`)).toBe("generated image")
     expect(yield* fs.readFileString(`${directory}/logo.1.png`)).toBe("downloaded image")
-    yield* ImageGeneration.run(
-      Result.getOrThrow(ImageGeneration.prepare({ prompt: "Edit", images: ["input.png"], model: "first" }, selection)),
-      selection.headers,
-    ).pipe(Effect.provide(layers))
+    yield* ImageGeneration.run({ prompt: "Edit", images: ["input.png"], model: "ren/image" }, headers).pipe(
+      Effect.provide(layers),
+    )
     expect(calls).toEqual([
-      { path: "/v1/images/generations", key: "Bearer expired", route: "images", claim: "turn", model: "ren/chosen" },
-      { path: "/v1/images/generations", key: "Bearer fresh", route: "images", claim: "turn", model: "ren/chosen" },
+      { path: "/v1/images/generations", key: "Bearer expired", route: "images", claim: "turn", model: "ren/image" },
+      { path: "/v1/images/generations", key: "Bearer fresh", route: "images", claim: "turn", model: "ren/image" },
       {
         path: "/v1/images/edits",
         key: "Bearer fresh",
         route: "images",
         claim: "turn",
-        model: "wrong",
+        model: "ren/image",
         image: "input image",
         imageType: "image/png",
       },
     ])
-    const invalid = ImageGeneration.prepare({ prompt: "No request", model: "missing" }, selection)
-    expect(Result.isFailure(invalid) && invalid.failure).toBeInstanceOf(ImageGeneration.Invalid)
-    expect(calls).toHaveLength(3)
   }),
 )

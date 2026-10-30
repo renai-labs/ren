@@ -9,12 +9,26 @@ import { Session as RenSession } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import { App } from "@ren/schema/app"
 import { AppCatalog } from "@ren/schema/app-catalog"
-import { Context, Effect, Layer, Option, Predicate, Queue, Redacted, Ref, Schema, Stream, Struct } from "effect"
+import {
+  Context,
+  Deferred,
+  Effect,
+  Layer,
+  Option,
+  Predicate,
+  Queue,
+  Redacted,
+  Ref,
+  Schema,
+  Stream,
+  Struct,
+} from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ChatSettings } from "../src/chat-settings.js"
+import { Inference } from "../src/inference.js"
 import type { Harness } from "../src/harness/harness.js"
 import type { HarnessConfig } from "../src/harness/config.js"
 import { OpenCodeEvents } from "../src/harness/opencode/events.js"
@@ -42,6 +56,9 @@ const open = Effect.fnUntraced(function* (
     readonly stored?: Map<string, string>
     readonly directory?: string
     readonly refreshKey?: Harness.Refresh
+    readonly config?: string
+    readonly inference?: Inference.Interface
+    readonly restore?: boolean
   } = {},
 ) {
   const access = Struct.evolve(Shared.access(undefined, stub.url), {
@@ -58,13 +75,13 @@ const open = Effect.fnUntraced(function* (
     yield* Layer.build(ChatSettings.layer.pipe(Layer.provide(ModelsTest.storage(options.stored)))),
     ChatSettings.Service,
   )
-  yield* settings.save(initial, [])
+  if (!options.restore) yield* settings.save(initial, [])
   const server = yield* OpenCodeServer.make(
     (replacements) =>
       createEmbeddedRoutes(
         {
           database: { path: options.database ?? ":memory:" },
-          config: { directory, project: false, content: Shared.vars(stub.url).OPENCODE_CONFIG },
+          config: { directory, project: false, content: options.config ?? Shared.vars(stub.url).OPENCODE_CONFIG },
           models: { fetch: false },
           fs: { filewatcher: false, fff: false },
         },
@@ -79,7 +96,15 @@ const open = Effect.fnUntraced(function* (
       makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
     },
   )
-  const harness = yield* OpenCodeHarness.make(server, access.endpoints, Option.some(settings))
+  const harness = yield* OpenCodeHarness.make(
+    server,
+    access.endpoints,
+    Option.some(settings),
+    Option.map(Option.fromUndefinedOr(options.inference), (inference) => ({
+      inference,
+      refreshKey: options.refreshKey ?? (() => Effect.succeedNone),
+    })),
+  )
   const client = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
     Effect.provide(Layer.fresh(FetchHttpClient.layer)),
     Effect.provideService(
@@ -123,44 +148,295 @@ const open = Effect.fnUntraced(function* (
 })
 
 describe("settings in the cell", () => {
-  it.live("the image tool uses its own provider's credentials instead of the Ren chat key", () =>
+  it.live(
+    "a reopened chat restores model-type overrides and cached catalogs before a pull, with fresh credentials",
+    () =>
+      Effect.gen(function* () {
+        const directory = yield* Effect.promise(async () =>
+          realpath(await mkdtemp(join(tmpdir(), "ren-model-reopen-"))),
+        )
+        const database = join(directory, "opencode.db")
+        const sessionId = RenSession.ID.create()
+        const stored = new Map<string, string>()
+        const state = { reopened: false }
+        const discovery = yield* Deferred.make<void>()
+        const calls: Array<{ path: string; model: string; key: string | null }> = []
+        const gateway = yield* Effect.acquireRelease(
+          Effect.sync(() =>
+            Bun.serve({
+              port: 0,
+              hostname: "127.0.0.1",
+              fetch: async (request) => {
+                const path = new URL(request.url).pathname
+                if (path === "/model/info" || path === "/v1/search/tools") {
+                  if (state.reopened) await Effect.runPromise(Deferred.succeed(discovery, undefined))
+                  return new Response("Discovery unavailable", { status: 503 })
+                }
+                if (path.endsWith("/transcriptions")) {
+                  // oxlint-disable-next-line typescript/no-deprecated -- Read the generated client's multipart request across a real restart.
+                  const form = await request.formData()
+                  calls.push({
+                    path,
+                    model: Schema.decodeUnknownSync(Schema.String)(form.get("model")),
+                    key: request.headers.get("authorization"),
+                  })
+                  return Response.json({ text: "Restored transcript" })
+                }
+                const body = Schema.decodeUnknownSync(
+                  Schema.Struct({
+                    model: Schema.optionalKey(Schema.String),
+                    search_tool_name: Schema.optionalKey(Schema.String),
+                  }),
+                )(await request.json())
+                calls.push({
+                  path,
+                  model: body.model ?? body.search_tool_name ?? "",
+                  key: request.headers.get("authorization"),
+                })
+                if (path.endsWith("/generations")) return Response.json({ created: 1, data: [] })
+                if (path.endsWith("/decisions")) return Response.json({ answers: [] })
+                return Response.json({ results: [] })
+              },
+            }),
+          ),
+          (server) => Effect.promise(() => server.stop(true)),
+        )
+        const types = ["image_generation", "audio_transcription", "decisions", "search"] as const
+        const defaults = Object.fromEntries(types.map((type) => [type, { providerId: "ren", modelId: "default" }]))
+        const overrides = Object.fromEntries(types.map((type) => [type, { providerId: "ren", modelId: "chosen" }]))
+        const layers = TestSettings.layers({ ren: { defaultModels: defaults } })
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const inference = Context.get(
+              yield* Layer.build(Inference.layer.pipe(Layer.provide(ModelsTest.storage(stored)))),
+              Inference.Service,
+            )
+            yield* inference.saveBaseUrl(Option.some(gateway.url.origin))
+            yield* inference.saveModelCatalogs(
+              Object.fromEntries(
+                types.map((type) => [
+                  type,
+                  { providerId: "ren", models: [{ id: "default" }, { id: "chosen", upstreamId: `ren/${type}` }] },
+                ]),
+              ),
+            )
+            const first = yield* open(layers, {
+              database,
+              sessionId,
+              stored,
+              directory,
+              inference,
+              refreshKey: () => Effect.succeed(Option.some({ key: Redacted.make("old-key") })),
+            })
+            yield* first.pull(layers)
+            yield* first.harness.start({ sessionId, harness: "opencode", interactive: true, defaultModels: overrides })
+            yield* Effect.promise(() => Bun.write(join(directory, sessionId, "clip.wav"), "audio"))
+            yield* first.turn(
+              stub.script({
+                tool: {
+                  name: "execute",
+                  input: { code: 'return await tools.decisions({ input: "Before restart", questions: [] })' },
+                },
+              }),
+            )
+            expect(calls).toEqual([{ path: "/v1/decisions", model: "ren/decisions", key: "Bearer old-key" }])
+          }),
+        )
+        calls.length = 0
+        state.reopened = true
+        const inference = Context.get(
+          yield* Layer.build(Inference.layer.pipe(Layer.provide(ModelsTest.storage(stored)))),
+          Inference.Service,
+        )
+        const opened = yield* open(TestSettings.layers(), {
+          database,
+          sessionId,
+          stored,
+          directory,
+          inference,
+          restore: true,
+          start: false,
+          refreshKey: () => Effect.succeed(Option.some({ key: Redacted.make("fresh-key") })),
+        })
+        yield* Deferred.await(discovery)
+        const turn = stub.script({
+          tools: [
+            { name: "execute", input: { code: 'return await tools.image_generation({ prompt: "A logo" })' } },
+            { name: "execute", input: { code: 'return await tools.audio_transcription({ file: "clip.wav" })' } },
+            {
+              name: "execute",
+              input: { code: 'return await tools.decisions({ input: "After restart", questions: [] })' },
+            },
+            { name: "websearch", input: { query: "Effect" } },
+          ],
+        })
+        yield* opened.client.session
+          .prompt({ sessionID: opened.sessionID, text: `${turn.marker} go` })
+          .pipe(Effect.orDie)
+        yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+        expect(calls.toSorted((a, b) => a.path.localeCompare(b.path))).toEqual([
+          { path: "/v1/audio/transcriptions", model: "ren/audio_transcription", key: "Bearer fresh-key" },
+          { path: "/v1/decisions", model: "ren/decisions", key: "Bearer fresh-key" },
+          { path: "/v1/images/generations", model: "ren/image_generation", key: "Bearer fresh-key" },
+          { path: "/v1/search", model: "ren/search", key: "Bearer fresh-key" },
+        ])
+      }),
+  )
+  it.live("each model type uses its own provider URL, headers, and credentials instead of the Ren chat key", () =>
     Effect.gen(function* () {
-      const keys: Array<string | null> = []
-      const provider = yield* Effect.acquireRelease(
+      const calls: Array<{ path: string; key: string | null; route: string | null }> = []
+      const gateway = yield* Effect.acquireRelease(
         Effect.sync(() =>
           Bun.serve({
             port: 0,
             hostname: "127.0.0.1",
             fetch: (request) => {
-              keys.push(request.headers.get("authorization"))
-              return Response.json({ created: 1, data: [] })
+              const path = new URL(request.url).pathname
+              calls.push({ path, key: request.headers.get("authorization"), route: request.headers.get("x-route") })
+              if (path.endsWith("/generations")) return Response.json({ created: 1, data: [] })
+              if (path.endsWith("/transcriptions")) return Response.json({ text: "Transcript" })
+              if (path.endsWith("/decisions")) return Response.json({ answers: [] })
+              return Response.json({ results: [] })
+            },
+          }),
+        ),
+        (server) => Effect.promise(() => server.stop(true)),
+      )
+      const types = ["image_generation", "audio_transcription", "decisions", "search"] as const
+      const layers = TestSettings.layers({
+        ren: {
+          defaultModels: Object.fromEntries(types.map((type) => [type, { providerId: type, modelId: "chosen" }])),
+        },
+      })
+      const opened = yield* open(layers, {
+        refreshKey: () => Effect.succeed(Option.some({ key: Redacted.make("ren-chat-key") })),
+      })
+      yield* Effect.promise(() => Bun.write(join(opened.directory, opened.sessionId, "clip.wav"), "audio"))
+      yield* opened.pull(layers, {
+        modelCatalogs: Object.fromEntries(
+          types.map((type) => [type, { providerId: type, models: [{ id: "chosen" }] }]),
+        ),
+        modelProviders: Object.fromEntries(
+          types.map((type) => [
+            type,
+            {
+              id: type,
+              baseUrl: `${gateway.url.origin}/${type}/v1`,
+              apiKey: { key: Redacted.make(`${type}-key`) },
+              headers: { "x-route": type },
+            },
+          ]),
+        ),
+      })
+      yield* opened.turn(
+        stub.script({
+          tools: [
+            { name: "execute", input: { code: 'return await tools.image_generation({ prompt: "A logo" })' } },
+            { name: "execute", input: { code: 'return await tools.audio_transcription({ file: "clip.wav" })' } },
+            { name: "execute", input: { code: 'return await tools.decisions({ input: "Review", questions: [] })' } },
+            { name: "websearch", input: { query: "Effect" } },
+          ],
+        }),
+      )
+      expect(calls.toSorted((a, b) => a.path.localeCompare(b.path))).toEqual([
+        {
+          path: "/audio_transcription/v1/audio/transcriptions",
+          key: "Bearer audio_transcription-key",
+          route: "audio_transcription",
+        },
+        { path: "/decisions/v1/decisions", key: "Bearer decisions-key", route: "decisions" },
+        {
+          path: "/image_generation/v1/images/generations",
+          key: "Bearer image_generation-key",
+          route: "image_generation",
+        },
+        { path: "/search/v1/search", key: "Bearer search-key", route: "search" },
+      ])
+    }),
+  )
+  it.live("Ren search honors explicit OpenCode disablement", () =>
+    Effect.gen(function* () {
+      const layers = TestSettings.layers({
+        ren: { defaultModels: { search: { providerId: "ren", modelId: "search" } } },
+      })
+      const opened = yield* open(layers, { config: JSON.stringify({ websearch: false }) })
+      yield* opened.pull(layers, {
+        modelCatalogs: { search: { providerId: "ren", models: [{ id: "search" }] } },
+        modelProviders: {
+          search: { id: "ren", baseUrl: "http://127.0.0.1:1/v1", apiKey: { key: Redacted.make("key") } },
+        },
+      })
+      expect(
+        (yield* opened.client.websearch.providers({
+          location: { directory: join(opened.directory, opened.sessionId) },
+        })).data.some((provider) => provider.id === "ren"),
+      ).toBe(true)
+      const result = yield* opened.client.websearch
+        .query({ query: "Effect", location: { directory: join(opened.directory, opened.sessionId) } })
+        .pipe(Effect.result)
+      expect(result._tag).toBe("Failure")
+      if (result._tag === "Failure") expect(String(result.failure)).toContain("disabled")
+    }),
+  )
+  it.live("Ren search follows the executing agent's default across reloads and leaves with its catalog", () =>
+    Effect.gen(function* () {
+      const calls: Array<{ model: string; session: string | null }> = []
+      const provider = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          Bun.serve({
+            port: 0,
+            hostname: "127.0.0.1",
+            fetch: async (request) => {
+              const body = Schema.decodeUnknownSync(Schema.Struct({ search_tool_name: Schema.String }))(
+                await request.json(),
+              )
+              calls.push({ model: body.search_tool_name, session: request.headers.get("ren-session") })
+              return Response.json({ results: [{ url: "https://example.com", snippet: "Result" }] })
             },
           }),
         ),
         (server) => Effect.promise(() => server.stop(true)),
       )
       const layers = TestSettings.layers({
-        ren: { defaultModels: { image_generation: { providerId: "images", modelId: "chosen" } } },
+        ren: { defaultModels: { search: { providerId: "ren", modelId: "chosen" } } },
       })
-      const opened = yield* open(layers, {
-        refreshKey: () => Effect.succeed(Option.some({ key: Redacted.make("ren-chat-key") })),
-      })
+      const opened = yield* open(layers)
       yield* opened.pull(layers, {
-        modelCatalogs: { image_generation: { providerId: "images", models: [{ id: "chosen" }] } },
+        modelCatalogs: {
+          search: { providerId: "ren", models: [{ id: "first" }, { id: "chosen", upstreamId: "ren/chosen" }] },
+        },
         modelProviders: {
-          image_generation: {
-            id: "images",
-            baseUrl: `${provider.url.origin}/v1`,
-            apiKey: { key: Redacted.make("images-key") },
-          },
+          search: { id: "ren", baseUrl: `${provider.url.origin}/v1`, apiKey: { key: Redacted.make("key") } },
         },
       })
-      yield* opened.turn(
-        stub.script({
-          tool: { name: "execute", input: { code: 'return await tools.image_generation({ prompt: "A logo" })' } },
+      yield* opened.turn(stub.script({ tool: { name: "websearch", input: { query: "Effect" } } }))
+      expect(calls).toEqual([{ model: "ren/chosen", session: opened.sessionId }])
+      yield* opened.pull(
+        TestSettings.layers({
+          ren: { defaultModels: { search: { providerId: "ren", modelId: "first" } } },
+          agents: [
+            TestSettings.agent("ren", {}, { isSubagent: false }),
+            TestSettings.agent("explore", { defaultModels: { search: { providerId: "ren", modelId: "chosen" } } }),
+          ],
         }),
       )
-      expect(keys).toEqual(["Bearer images-key"])
+      yield* opened.turn(stub.script({ tool: { name: "websearch", input: { query: "Effect" } } }))
+      const child = stub.script({ tool: { name: "websearch", input: { query: "Effect from a subagent" } } })
+      yield* opened.turn(
+        stub.script({
+          tool: {
+            name: "subagent",
+            input: { agent: "explore", description: "Review", prompt: `${child.marker} review` },
+          },
+        }),
+      )
+      expect(calls.slice(1).map((call) => call.model)).toEqual(["first", "ren/chosen"])
+      yield* opened.pull(layers, { modelCatalogs: {} })
+      expect(
+        (yield* opened.client.websearch.providers({
+          location: { directory: join(opened.directory, opened.sessionId) },
+        })).data.some((provider) => provider.id === "ren"),
+      ).toBe(false)
     }),
   )
   it.live("the image tool follows the configured model, sends root-turn claims, and disappears with its catalog", () =>
