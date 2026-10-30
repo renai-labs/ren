@@ -274,7 +274,6 @@ export const layer = Layer.effect(
         arch: process.arch,
         shells,
         mount: yield* SandboxDrives.canMount,
-        telemetry: true,
       },
       spawn,
       output,

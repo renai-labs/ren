@@ -32,6 +32,7 @@
     "@ren/opencode-transcript": "workspace:*",
     "@ren/protocol": "workspace:*",
     "@ren/schema": "workspace:*",
+    "@ren/telemetry": "workspace:*",
     "@ren/util": "workspace:*",
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",

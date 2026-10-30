@@ -34,13 +34,14 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 ## Layering
 
 - Runtime dependencies point from `schema` to `protocol`, `db` and `core`, and from those to `server`.
-- `host-api` holds the internal contracts between Ren and a session's host, one per direction: `BrainApi` (`cell` serves, `core` calls) and `RenHostApi` (`server` serves, `cell` calls). It depends only on `schema` and `util`. `cell` depends only on `schema`, `util`, `host-api`, `environment-api`, `brain` and the Chat API (`@ren/protocol/chat`, which it serves to clients).
+- `host-api` holds the internal contracts between Ren and a session's host, one per direction: `BrainApi` (`cell` serves, `core` calls) and `RenHostApi` (`server` serves, `cell` calls). It depends only on `schema`. `cell` depends only on `schema`, `telemetry`, `host-api`, `environment-api`, `brain` and the Chat API (`@ren/protocol/chat`, which it serves to clients).
 - `environment-api` is the internal contract between a brain and an environment's executor, and the environment token Ren signs for it: it depends only on `schema`; `core` signs, `brain` calls and `executor` serves.
-- `executor` runs on an environment's machine and serves the Environment API. It depends only on `schema`, `util` and `environment-api`.
+- `executor` runs on an environment's machine and serves the Environment API. It depends only on `schema`, `telemetry` and `environment-api`.
 - `brain` holds brain code that is the same on every host and every harness: how a brain reaches its environment. It depends only on `schema` and `environment-api`.
 - `opencode-transcript` translates OpenCode rows and types into the Chat API types. It depends only on `schema`, `@opencode/schema` and `@opencode/core/session/info`. `cell` and `server` use it; `core` never imports it.
 - `client` may depend only on `schema` and `protocol`. `chat` builds on `client`, `schema` and `protocol` and is the live chat runtime for every client platform. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `chat`, `schema`, `ui` and `util`, and uses `better-auth/client` for auth flows.
-- `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`. Its `Telemetry` (OTLP export and the relayed batch schemas) is shared by `core`, `server`, `host-api`, `cell` and `executor`.
+- `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`.
+- `telemetry` is how a process sends telemetry: OTLP export from the standard `OTEL_*` variables, and PostHog's error reporter in `posthog.ts`, the only module that knows a telemetry vendor. It imports nothing from Ren. `core`, `server`, `cell` and `executor` use it; only a process's main file provides `PostHog.layer`.
 - `client`, `chat`, `sdk`, `cli`, `app` and `ui` never import `core`, `db`, `server`, `host-api` or `environment-api`.
 - `httpapi-codegen` stays independent of every Ren package.
 - `repos/` holds read-only copies of external repositories. Prefer their patterns over memory or web search. Do not edit or import them. The one exception is `repos/iron-proxy`, Ren's egress: a subtree of iron-proxy (Go) that Ren builds on and edits, and a workspace (`@ren/egress`). See `repos/iron-proxy/AGENTS.md`.

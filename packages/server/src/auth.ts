@@ -125,7 +125,7 @@ export const layer = Layer.effect(
         run(mailer.send(email).pipe(Effect.ignoreCause({ log: "Error", message: "Failed to send email" })))
       },
       logFailure: (message, error, userId) =>
-        runPromise(Effect.logError(message, Cause.die(error)).pipe(Effect.annotateLogs({ posthogDistinctId: userId }))),
+        runPromise(Effect.logError(message, Cause.die(error)).pipe(Effect.annotateLogs({ "user.id": userId }))),
       signupGuard: {
         checkEmailSignUp: (email) => runPromise(signupGuard.checkEmailSignUp(email)),
         checkAccountCreation: (email) => runPromise(signupGuard.checkAccountCreation(email)),

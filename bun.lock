@@ -89,7 +89,7 @@
         "@ren/opencode-transcript": "workspace:*",
         "@ren/protocol": "workspace:*",
         "@ren/schema": "workspace:*",
-        "@ren/util": "workspace:*",
+        "@ren/telemetry": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -187,11 +187,11 @@
         "@ren/environment-api": "workspace:*",
         "@ren/host-api": "workspace:*",
         "@ren/schema": "workspace:*",
+        "@ren/telemetry": "workspace:*",
         "@ren/util": "workspace:*",
         "disposable-email-domains-js": "catalog:",
         "drizzle-orm": "catalog:",
         "effect": "catalog:",
-        "posthog-node": "catalog:",
         "slackify-markdown": "5.0.0",
       },
       "devDependencies": {
@@ -274,7 +274,7 @@
         "@effect/platform-bun": "catalog:",
         "@ren/environment-api": "workspace:*",
         "@ren/schema": "workspace:*",
-        "@ren/util": "workspace:*",
+        "@ren/telemetry": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -287,7 +287,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@ren/schema": "workspace:*",
-        "@ren/util": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -375,6 +374,7 @@
         "@ren/opencode-transcript": "workspace:*",
         "@ren/protocol": "workspace:*",
         "@ren/schema": "workspace:*",
+        "@ren/telemetry": "workspace:*",
         "@ren/util": "workspace:*",
         "better-auth": "catalog:",
         "drizzle-orm": "catalog:",
@@ -426,6 +426,18 @@
         "sharp": "catalog:",
         "tailwindcss": "catalog:",
         "typescript": "catalog:",
+      },
+    },
+    "packages/telemetry": {
+      "name": "@ren/telemetry",
+      "version": "0.0.0",
+      "dependencies": {
+        "effect": "catalog:",
+        "posthog-node": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
       },
     },
     "packages/test-harness": {
@@ -1739,6 +1751,8 @@
     "@ren/server": ["@ren/server@workspace:packages/server"],
 
     "@ren/site": ["@ren/site@workspace:packages/site"],
+
+    "@ren/telemetry": ["@ren/telemetry@workspace:packages/telemetry"],
 
     "@ren/test-harness": ["@ren/test-harness@workspace:packages/test-harness"],
 

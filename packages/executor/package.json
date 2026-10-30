@@ -19,7 +19,7 @@
     "@effect/platform-bun": "catalog:",
     "@ren/environment-api": "workspace:*",
     "@ren/schema": "workspace:*",
-    "@ren/util": "workspace:*",
+    "@ren/telemetry": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

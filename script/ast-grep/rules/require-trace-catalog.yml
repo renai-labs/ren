@@ -6,7 +6,7 @@ files:
   - packages/*/src/**
 ignores:
   - packages/schema/src/observability.ts
-  - packages/util/src/telemetry.ts
+  - packages/telemetry/src/telemetry.ts
 rule:
   any:
     - pattern: Tracer.CurrentTraceLevel

@@ -1,9 +1,8 @@
-import { describe, expect } from "bun:test"
-import { Cause, ConfigProvider, Effect, Layer, Schema, Tracer } from "effect"
-import { HttpRouter } from "effect/http"
-import { ErrorTracking } from "../src/error-tracking.js"
+import { describe, expect, test } from "bun:test"
+import { Cause, ConfigProvider, Effect, Layer, Option, Schema, Tracer } from "effect"
+import { FetchHttpClient, HttpRouter } from "effect/http"
 import { PostHog } from "../src/posthog.js"
-import { testEffect } from "./lib/effect.js"
+import { Telemetry } from "../src/telemetry.js"
 
 const Batch = Schema.fromJsonString(
   Schema.Struct({
@@ -31,24 +30,32 @@ const posthog = Bun.serve({
   },
 })
 
-const reporting = ErrorTracking.layer.pipe(
-  Layer.provide(PostHog.layer),
+const reporting = PostHog.layer.pipe(
+  Layer.provideMerge(
+    Telemetry.layer({
+      resource: {
+        serviceName: "ren-server",
+        serviceVersion: "test-version",
+        attributes: { "deployment.environment.name": "test" },
+      },
+      traces: Option.none(),
+      logs: Option.none(),
+      metrics: Option.none(),
+    }),
+  ),
+  Layer.provide(FetchHttpClient.layer),
   Layer.provide(
     ConfigProvider.layer(
       ConfigProvider.fromUnknown({
         POSTHOG_PROJECT_KEY: "phc_test",
         POSTHOG_HOST: `http://127.0.0.1:${posthog.port}`,
-        REN_VERSION: "test-version",
-        REN_DEPLOYMENT: "test",
       }),
     ),
   ),
 )
 
-const it = testEffect(Layer.empty)
-
-describe("ErrorTracking", () => {
-  it.live("sends a defect to PostHog with the caller, the level, the trace and the release", () =>
+describe("PostHog.layer", () => {
+  test("sends a defect to PostHog with the caller, the level, the trace and the release", () =>
     Effect.gen(function* () {
       received.length = 0
       const span = yield* Effect.gen(function* () {
@@ -56,7 +63,7 @@ describe("ErrorTracking", () => {
         return yield* Effect.currentSpan
       }).pipe(
         Effect.withSpan("Test.request"),
-        Effect.annotateLogs({ posthogDistinctId: "usr_test", "ren.organization.id": "org_test" }),
+        Effect.annotateLogs({ "user.id": "usr_test", "ren.organization.id": "org_test" }),
         Effect.provide(reporting),
       )
 
@@ -74,32 +81,28 @@ describe("ErrorTracking", () => {
         $exception_list: [{ value: "boom" }],
       })
       expect(received[0]?.properties).not.toHaveProperty("$process_person_profile")
-    }),
-  )
+    }).pipe(Effect.runPromise))
 
-  it.live(
-    "reports an error log that carries a cause once, also after a boundary reported it, and never a warning",
-    () =>
-      Effect.gen(function* () {
-        received.length = 0
-        yield* Effect.die(new Error("the run stopped")).pipe(
-          Effect.withErrorReporting,
-          Effect.catchCause((cause) => Effect.logError("The run stopped", cause)),
-          Effect.andThen(Effect.logWarning("The run failed; it retries", Cause.die(new Error("a retry")))),
-          Effect.andThen(Effect.logError("The loop failed", Cause.die(new Error("the loop failed")))),
-          Effect.provide(reporting),
-        )
+  test("reports an error log that carries a cause once, also after a boundary reported it, and never a warning", () =>
+    Effect.gen(function* () {
+      received.length = 0
+      yield* Effect.die(new Error("the run stopped")).pipe(
+        Effect.withErrorReporting,
+        Effect.catchCause((cause) => Effect.logError("The run stopped", cause)),
+        Effect.andThen(Effect.logWarning("The run failed; it retries", Cause.die(new Error("a retry")))),
+        Effect.andThen(Effect.logError("The loop failed", Cause.die(new Error("the loop failed")))),
+        Effect.provide(reporting),
+      )
 
-        const exception = (value: string) =>
-          expect.objectContaining({
-            properties: expect.objectContaining({ $exception_list: [expect.objectContaining({ value })] }),
-          })
-        expect(received).toHaveLength(2)
-        expect(received).toEqual(expect.arrayContaining([exception("the run stopped"), exception("the loop failed")]))
-      }),
-  )
+      const exception = (value: string) =>
+        expect.objectContaining({
+          properties: expect.objectContaining({ $exception_list: [expect.objectContaining({ value })] }),
+        })
+      expect(received).toHaveLength(2)
+      expect(received).toEqual(expect.arrayContaining([exception("the run stopped"), exception("the loop failed")]))
+    }).pipe(Effect.runPromise))
 
-  it.live("reports an error log without a cause as an ErrorLog with no stack, so its message alone groups it", () =>
+  test("reports an error log without a cause as an ErrorLog with no stack, so its message alone groups it", () =>
     Effect.gen(function* () {
       received.length = 0
       const errorLog = (value: string) =>
@@ -122,10 +125,9 @@ describe("ErrorTracking", () => {
         [[errorLog("The brain rejected a start")], "error", "ses_b"],
         [[errorLog("Ren cannot start")], "fatal", undefined],
       ])
-    }),
-  )
+    }).pipe(Effect.runPromise))
 
-  it.live("names the HTTP route and path of the request that failed, though its span is not exported", () =>
+  test("names the HTTP route and path of the request that failed, though its span is not exported", () =>
     Effect.gen(function* () {
       received.length = 0
       const app = HttpRouter.toWebHandler(
@@ -141,10 +143,9 @@ describe("ErrorTracking", () => {
 
       expect(received).toHaveLength(1)
       expect(received[0]?.properties).toMatchObject({ "http.route": "/sessions/:id", "url.path": "/sessions/ses_test" })
-    }),
-  )
+    }).pipe(Effect.runPromise))
 
-  it.live("leaves out the trace of a failure whose trace is not exported", () =>
+  test("leaves out the trace of a failure whose trace is not exported", () =>
     Effect.gen(function* () {
       received.length = 0
       yield* Effect.die(new Error("an untraced failure")).pipe(
@@ -158,10 +159,9 @@ describe("ErrorTracking", () => {
 
       expect(received).toHaveLength(1)
       expect(received[0]?.properties).not.toHaveProperty("$trace_id")
-    }),
-  )
+    }).pipe(Effect.runPromise))
 
-  it.live("leaves the parameters of a failed query out of the exception", () =>
+  test("leaves the parameters of a failed query out of the exception", () =>
     Effect.gen(function* () {
       received.length = 0
       yield* Effect.die(new Error("Failed query: insert into message values ($1)\nparams: a private message")).pipe(
@@ -174,10 +174,9 @@ describe("ErrorTracking", () => {
       expect(received[0]?.properties).toMatchObject({
         $exception_list: [{ value: "Failed query: insert into message values ($1)" }],
       })
-    }),
-  )
+    }).pipe(Effect.runPromise))
 
-  it.live("names the server and makes no person profile when no user caused the failure", () =>
+  test("names the server and makes no person profile when no user caused the failure", () =>
     Effect.gen(function* () {
       received.length = 0
       yield* Effect.die(new Error("loop failed")).pipe(
@@ -189,6 +188,5 @@ describe("ErrorTracking", () => {
       expect(received).toHaveLength(1)
       expect(received[0]?.distinct_id).toBe("ren-server")
       expect(received[0]?.properties).toMatchObject({ $process_person_profile: false })
-    }),
-  )
+    }).pipe(Effect.runPromise))
 })

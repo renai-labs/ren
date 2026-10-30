@@ -2,7 +2,6 @@ export * as Routes from "./routes.js"
 
 import { RenHostApi } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
-import { maxBodyBytes, TelemetryApi } from "@ren/host-api/telemetry-api"
 import { Sync } from "@ren/schema/sync"
 import { Access } from "@ren/core/access"
 import { Agent } from "@ren/core/agent"
@@ -29,7 +28,6 @@ import { Schedules } from "@ren/core/schedules"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
-import { TelemetryRelay } from "@ren/core/telemetry-relay"
 import { Space } from "@ren/core/space"
 import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
@@ -88,7 +86,6 @@ import { TaskHandler } from "./handlers/api/task.js"
 import { TaskActivityHandler } from "./handlers/api/task-activity.js"
 import { TaskCommentHandler } from "./handlers/api/task-comment.js"
 import { SyncHandler } from "./handlers/sync.js"
-import { HostTelemetryHandler } from "./handlers/ren-host/telemetry.js"
 import { UsageAuthenticationLayer, UsageHandler } from "./handlers/usage.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
@@ -247,10 +244,6 @@ export const layer = Layer.mergeAll(
       ChannelTurns.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
       Task.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
     ]),
-  ),
-  HttpApiBuilder.layer(TelemetryApi).pipe(
-    Layer.provide(HostTelemetryHandler),
-    Layer.provide([Brains.hostAuthentication, bodyLimit(maxBodyBytes), TelemetryRelay.layer]),
   ),
   Cors,
 ).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))

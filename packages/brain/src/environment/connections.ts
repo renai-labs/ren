@@ -12,18 +12,15 @@ import {
   Effect,
   Exit,
   Layer,
-  Option,
   RcMap,
   Redacted,
   Ref,
-  Schedule,
   Schema,
   Scope,
   SynchronizedRef,
 } from "effect"
 import { HttpClient } from "effect/http"
 import { EnvironmentAccess } from "./access.js"
-import { EnvironmentTelemetry } from "./telemetry.js"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("EnvironmentConnections.Unavailable", {
   sessionId: Session.ID,
@@ -84,7 +81,6 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const environmentAccess = yield* EnvironmentAccess.Service
     const http = yield* HttpClient.HttpClient
-    const telemetry = yield* Effect.serviceOption(EnvironmentTelemetry.Service)
     const liveEntries = new Map<Session.ID, SynchronizedRef.SynchronizedRef<Environment.Access>>()
     const renDown = new Map<Session.ID, { readonly untilMs: number; readonly error: Unavailable }>()
     const openAccess = Effect.fn("EnvironmentConnections.openAccess")(function* (sessionId: Session.ID) {
@@ -194,16 +190,6 @@ export const layer = Layer.effect(
                 : unreachableBecause(error),
             ),
           )
-          if (hello.telemetry && Option.isSome(telemetry))
-            yield* client["telemetry.drain"]().pipe(
-              Effect.flatMap(telemetry.value.forward),
-              Effect.catchCause((cause) =>
-                Effect.logDebug(`The telemetry of the environment at ${access.url} was not collected`, cause),
-              ),
-              Effect.repeat(Schedule.spaced(EnvironmentTelemetry.drainEvery)),
-              Effect.withTracerEnabled(false),
-              Effect.forkScoped,
-            )
           const checkAccess: Effect.Effect<void, Unavailable> = Effect.gen(function* () {
             const latest = yield* freshAccess
             const now = yield* Clock.currentTimeMillis

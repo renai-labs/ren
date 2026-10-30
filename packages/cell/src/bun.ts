@@ -3,6 +3,7 @@ import { Global } from "@opencode/util/global"
 import type { OpenCodeSync } from "@ren/brain/opencode-sync"
 import { Observability } from "@ren/schema/observability"
 import { Session } from "@ren/schema/session"
+import { PostHog } from "@ren/telemetry/posthog"
 import {
   Deferred,
   Duration,
@@ -127,6 +128,7 @@ const runtime = ManagedRuntime.make(
     ),
     Layer.provideMerge(Sync.layerWith(reader, vars.REN_URL)),
     Layer.provideMerge(Layer.mergeAll(ChatSettings.layer, BrainKeys.layer)),
+    Layer.provideMerge(PostHog.layer),
     Layer.provideMerge(BrainTelemetry.layer),
     Layer.provideMerge(base),
   ),
