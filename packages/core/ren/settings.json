@@ -4,6 +4,24 @@
     "endpointId": "anthropic",
     "modelId": "claude-sonnet-5-5"
   },
+  "defaultModels": {
+    "image_generation": {
+      "providerId": "ren",
+      "modelId": "ren/gpt-image-2.5-flare"
+    },
+    "audio_transcription": {
+      "providerId": "ren",
+      "modelId": "ren/gpt-4o-mini-transcribe"
+    },
+    "decisions": {
+      "providerId": "ren",
+      "modelId": "ren/gpt-6-luna-decisions"
+    },
+    "search": {
+      "providerId": "ren",
+      "modelId": "ren/search"
+    }
+  },
   "permissions": [
     {
       "action": "edit",
