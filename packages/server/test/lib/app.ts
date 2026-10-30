@@ -12,7 +12,7 @@ import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
 import { Billing } from "@ren/core/billing"
-import { BillingCustomer } from "@ren/core/billing-customer"
+import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
@@ -113,7 +113,7 @@ export const services = Layer.mergeAll(
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   OAuth.layer,
   RenInferenceRemoval.layer.pipe(Layer.provide(DurableRunner.layerMemory)),
-  BillingCustomer.layer.pipe(Layer.provide([Billing.layerNone, DurableRunner.layerMemory])),
+  BillingEnrollment.layer.pipe(Layer.provide([Billing.layerNone, DurableRunner.layerMemory])),
 ).pipe(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(AppProfiles.layer),

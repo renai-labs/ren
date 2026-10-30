@@ -3,13 +3,13 @@ import { Auth } from "@ren/schema/auth"
 import { Deferred, Effect, Layer, Queue, Ref } from "effect"
 import { TestClock } from "effect/testing"
 import { Billing } from "../src/billing.js"
-import { BillingCustomer } from "../src/billing-customer.js"
+import { BillingEnrollment } from "../src/billing-enrollment.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { testEffect } from "./lib/effect.js"
 
 const it = testEffect(Layer.empty)
 
-describe("BillingCustomer", () => {
+describe("BillingEnrollment", () => {
   it.effect("asks billing again until billing stores the customer", () =>
     Effect.gen(function* () {
       const asked = yield* Queue.unbounded<Billing.Customer>()
@@ -36,12 +36,12 @@ describe("BillingCustomer", () => {
       }
 
       yield* Effect.gen(function* () {
-        const customers = yield* BillingCustomer.Service
-        yield* customers.ensure(customer)
+        const enrollment = yield* BillingEnrollment.Service
+        yield* enrollment.enroll(customer)
         yield* Queue.take(asked)
         yield* TestClock.adjust("1 minute")
         yield* Deferred.await(stored)
-      }).pipe(Effect.provide(BillingCustomer.layer.pipe(Layer.provide([billing, DurableRunner.layerMemory]))))
+      }).pipe(Effect.provide(BillingEnrollment.layer.pipe(Layer.provide([billing, DurableRunner.layerMemory]))))
 
       expect(yield* Queue.takeAll(asked)).toEqual([customer, customer])
     }),

@@ -25,7 +25,7 @@ export const auth = BetterAuth.make({
     activatePendingMemberships: () => Promise.resolve(),
     archiveMemberships: () => Promise.resolve(),
     forgetInferenceMember: () => Promise.resolve(),
-    ensureBillingCustomer: () => Promise.resolve(),
+    enrollInBilling: () => Promise.resolve(),
   },
 })
 
