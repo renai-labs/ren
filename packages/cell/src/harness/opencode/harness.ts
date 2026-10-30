@@ -54,7 +54,7 @@ import type { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
 import { OpenCodeServer } from "./server.js"
 import { InstructionEntries } from "./instruction-entries.js"
-import { OpenCodeModels } from "./models.js"
+import { ModelDiscovery } from "../../model-discovery.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { SessionSettings } from "./session-settings.js"
 import type { HarnessConfig } from "../config.js"
@@ -434,7 +434,7 @@ const layerWith = (opener: Opener) =>
               const catalog = yield* inference.catalog
               const baseUrl = yield* inference.baseUrl
               if (Option.isNone(catalog) || Option.isNone(baseUrl)) return []
-              return yield* OpenCodeModels.endpoints(catalog.value, baseUrl.value, refreshKey)
+              return yield* ModelDiscovery.endpoints(catalog.value, baseUrl.value, refreshKey)
             }),
           ),
           Effect.flatMap((endpoints) =>
@@ -583,6 +583,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   // oxlint-disable-next-line ren/no-comments -- A pull while the harness was closed saved new layers and memory; an opening resolves each chat from them, not from what the chat had before.
   yield* configure({
     models: endpoints,
+    modelCatalogs: Option.isSome(models) ? yield* models.value.inference.modelCatalogs : {},
     ...(Option.isSome(settings) && {
       settings: { layers: yield* settings.value.layers, chats: yield* settings.value.chats },
     }),
@@ -590,10 +591,10 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   })
   const reader = Option.isSome(models)
     ? Option.some(
-        yield* OpenCodeModels.make({
+        yield* ModelDiscovery.make({
           inference: models.value.inference,
           keyFor: models.value.refreshKey,
-          apply: (next) => mutations.withPermit(configure({ models: next })),
+          apply: (next, modelCatalogs) => mutations.withPermit(configure({ models: next, modelCatalogs })),
         }).pipe(Effect.provide(FetchHttpClient.layer)),
       )
     : Option.none()

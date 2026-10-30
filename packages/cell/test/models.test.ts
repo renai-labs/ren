@@ -13,7 +13,7 @@ import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
-import { OpenCodeModels } from "../src/harness/opencode/models.js"
+import { ModelDiscovery } from "../src/model-discovery.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { Inference } from "../src/inference.js"
 import { ModelsTest } from "./lib/models.js"
@@ -31,7 +31,7 @@ const reader = Effect.gen(function* () {
   )
   yield* inference.saveBaseUrl(Option.some(stub.root))
   const applied: Array<ReadonlyArray<string>> = []
-  const models = yield* OpenCodeModels.make({
+  const models = yield* ModelDiscovery.make({
     inference,
     keyFor: () => Effect.succeed(Option.some({ key: Redacted.make("stub-key") })),
     apply: (endpoints: ReadonlyArray<Models.Endpoint>) =>
