@@ -22,7 +22,8 @@ export interface Live {
   readonly profiles: ReadonlyArray<LiveProfile>
 }
 
-const path = (space: string, app: string, profile: string) => `deploy.yaml/spaces/${space}/profiles/${app}/${profile}`
+export const path = (space: string, app: string, profile: string) =>
+  `deploy.yaml/spaces/${space}/profiles/${app}/${profile}`
 
 export const load = Effect.fnUntraced(function* (
   transaction: Database.Transaction,

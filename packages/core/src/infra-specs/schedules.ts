@@ -6,7 +6,7 @@ import type { Agent } from "@ren/schema/agent"
 import type { Schedule } from "@ren/schema/schedule"
 import type { Space } from "@ren/schema/space"
 import { and, asc, eq, isNull } from "drizzle-orm"
-import { DateTime, Effect } from "effect"
+import { DateTime, Effect, Equal, Struct } from "effect"
 import { Schedules } from "../schedules.js"
 import { InfraPlan } from "./plan.js"
 
@@ -28,7 +28,7 @@ export interface Live {
   readonly unmanaged: ReadonlyArray<{ readonly spaceId: Space.ID; readonly slug: string }>
 }
 
-const path = (space: string, slug: string) => `spaces/${space}/schedules/${slug}`
+export const path = (space: string, slug: string) => `spaces/${space}/schedules/${slug}`
 
 const normalize = (cron: string) => cron.trim().split(/\s+/u).join(" ")
 
@@ -46,6 +46,8 @@ export const canonical = (slug: string, declaration: Schedule.Declaration) => ({
   message: declaration.message,
   enabled: declaration.enabled,
 })
+
+const when = ["cron", "timeZone", "until"] as const
 
 const whenOf = (declaration: Schedule.Declaration) => ({
   cron: declaration.cron,
@@ -156,7 +158,7 @@ export const make = Effect.gen(function* () {
       const fields = InfraPlan.changed({
         name: current.name !== wanted.name,
         agent: agent !== wanted.agent,
-        when: current.cron !== wanted.cron || current.timeZone !== wanted.timeZone || current.until !== wanted.until,
+        when: !Equal.equals(Struct.pick(current, when), Struct.pick(wanted, when)),
         message: current.message !== wanted.message,
         enabled: current.enabled !== wanted.enabled,
       })
