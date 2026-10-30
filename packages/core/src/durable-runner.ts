@@ -41,6 +41,17 @@ export const ensure = <Name extends string, Payload extends Workflow.AnyStructSc
   payload: Payload["~type.make.in"],
 ) => run.execute(payload, { discard: true }).pipe(Effect.asVoid)
 
+export const supervised = <Name extends string, Payload extends Workflow.AnyStructSchema, E>(
+  run: Run<Name, Payload>,
+  handler: (payload: Payload["Type"]) => Effect.Effect<void, E>,
+) =>
+  Effect.gen(function* () {
+    const engine = yield* WorkflowEngine.WorkflowEngine
+    yield* register(run, (payload) => supervise(run.idempotencyKey(payload), handler(payload)))
+    return (payload: Payload["~type.make.in"]) =>
+      ensure(run, payload).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
+  })
+
 export const layerMemory = WorkflowEngine.layerMemory
 
 export const layerEffect = ClusterWorkflowEngine.layer.pipe(

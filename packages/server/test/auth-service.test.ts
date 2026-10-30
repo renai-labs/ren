@@ -37,18 +37,11 @@ const stalledMail = Layer.mergeAll(
   Layer.succeed(Postmark.Outbox, Postmark.Outbox.of({ next: Effect.never })),
 )
 
-const customers = Effect.runSync(
-  Queue.unbounded<{ readonly organizationId: string; readonly name: string; readonly ownerEmail: string }>(),
-)
+const customers = Effect.runSync(Queue.unbounded<Billing.Customer>())
 
-// oxlint-disable-next-line ren/no-comments -- Billing as Ren Cloud has it, keeping each customer it is asked for.
 const billing = Layer.succeed(
   Billing.Service,
-  Billing.Service.of({
-    ensureCustomer: (organizationId, input) => Queue.offer(customers, { organizationId, ...input }).pipe(Effect.asVoid),
-    check: () => Effect.void,
-    removeOrganization: () => Effect.void,
-  }),
+  Billing.Service.of({ ensureCustomer: (customer) => Queue.offer(customers, customer).pipe(Effect.asVoid) }),
 )
 
 const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postmark.layer> = Postmark.layer()) =>

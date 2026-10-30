@@ -5,7 +5,7 @@ import { Brain } from "@ren/schema/brain"
 import { Models } from "@ren/schema/models"
 import { Space } from "@ren/schema/space"
 import { asc, eq } from "drizzle-orm"
-import { DateTime, Deferred, Effect, Fiber, Layer } from "effect"
+import { DateTime, Deferred, Effect, Fiber, Layer, Schedule } from "effect"
 import { SqlClient } from "effect/sql"
 import { Usage } from "../src/usage.js"
 import { testEffect } from "./lib/effect.js"
@@ -129,7 +129,10 @@ it.live("a usage save waits for the one in progress and numbers its rows after i
     const fast = yield* Effect.forkChild(usage.record([second]))
     const waiting = yield* sql<{ readonly waiting: number }>`select count(*)::int as waiting from pg_stat_activity
       where datname = current_database() and wait_event_type = 'Lock'`.pipe(
-      Effect.repeat({ until: (rows) => (rows.at(0)?.waiting ?? 0) > 0 || fast.pollUnsafe() !== undefined }),
+      Effect.repeat({
+        until: (rows) => (rows.at(0)?.waiting ?? 0) > 0 || fast.pollUnsafe() !== undefined,
+        schedule: Schedule.spaced("10 millis"),
+      }),
       Effect.ensuring(Deferred.succeed(release, undefined)),
     )
     expect(waiting.at(0)?.waiting).toBe(1)

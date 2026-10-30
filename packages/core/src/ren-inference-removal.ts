@@ -2,7 +2,6 @@ export * as RenInferenceRemoval from "./ren-inference-removal.js"
 
 import { Auth } from "@ren/schema/auth"
 import { Context, Effect, Layer } from "effect"
-import { WorkflowEngine } from "effect/workflow"
 import { DurableRunner } from "./durable-runner.js"
 import { RenInference } from "./ren-inference.js"
 
@@ -25,18 +24,12 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const inference = yield* RenInference.Service
-    const engine = yield* WorkflowEngine.WorkflowEngine
-    yield* DurableRunner.register(ForgetMemberRun, (payload) =>
-      DurableRunner.supervise(
-        `ren-inference-forget-member:${payload.memberId}`,
-        inference.removeMember(payload.organizationId, payload.memberId),
-      ),
+    const forget = yield* DurableRunner.supervised(ForgetMemberRun, (payload) =>
+      inference.removeMember(payload.organizationId, payload.memberId),
     )
     return Service.of({
       forgetMember: Effect.fn("RenInferenceRemoval.forgetMember")(function* (input) {
-        yield* DurableRunner.ensure(ForgetMemberRun, input).pipe(
-          Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-        )
+        yield* forget(input)
       }),
     })
   }),
