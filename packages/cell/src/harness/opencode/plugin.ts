@@ -35,7 +35,8 @@ import {
 import type { Harness } from "../harness.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
-import { OpenCodeImages } from "./image-tool.js"
+import { OpenCodeModelTools } from "./model-tools.js"
+import { OpenCodeSearch } from "./search-provider.js"
 import { basename } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
@@ -554,18 +555,20 @@ export const make = (
             member: memberId && (modelRequest.egress ? Models.personPlaceholder(memberId) : memberId),
           })
         })
-        yield* tool.transform(
-          (editor) =>
-            isSession &&
-            OpenCodeImages.register(editor, Ref.getUnsafe(applied), {
-              current: applied,
-              sessionId,
-              directory: context.location.directory,
-              connections: Option.filter(connections, () => Boolean(workspaceID)),
-              keyFor: refreshKey,
-              headers: (call) => claims({ session: call.sessionID, agent: call.agent, kind: "primary" }),
-            }),
-        )
+        const modelTools: OpenCodeModelTools.Input = {
+          current: applied,
+          sessionId,
+          directory: context.location.directory,
+          connections: Option.filter(connections, () => Boolean(workspaceID)),
+          keyFor: refreshKey,
+          headers: (call) => claims({ session: call.sessionID, agent: call.agent, kind: "primary" }),
+        }
+        yield* tool.transform((editor) => {
+          if (!isSession) return
+          OpenCodeModelTools.register(editor, modelTools)
+          OpenCodeSearch.withExecution(editor)
+        })
+        yield* context.websearch.transform((editor) => isSession && OpenCodeSearch.register(editor, modelTools))
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {
             delete event.headers[Models.personHeader]
@@ -617,7 +620,10 @@ export const make = (
               const before = (yield* Ref.get(applied)).apps
               const apps = conflicts.length ? before : snapshot.apps
               yield* Ref.set(applied, { ...snapshot, apps })
-              if (isSession) yield* tool.reload()
+              if (isSession) {
+                yield* tool.reload()
+                yield* context.websearch.reload()
+              }
               yield* mcp.apply(apps, snapshot.channels)
               if (!conflicts.length) yield* skills.apply(prepared)
               yield* synced

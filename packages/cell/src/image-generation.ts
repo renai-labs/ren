@@ -1,7 +1,6 @@
 export * as ImageGeneration from "./image-generation.js"
 
-import type { ModelTypes } from "@ren/schema/model-types"
-import { Effect, Result, Schema, Struct } from "effect"
+import { Effect, Schema, Struct } from "effect"
 import { basename, extname } from "node:path"
 import { Images } from "./images.js"
 import { WorkspaceFiles } from "./workspace-files.js"
@@ -50,36 +49,19 @@ const mediaTypes: Readonly<Record<string, string>> = {
   ".webp": "image/webp",
 }
 
-interface Prepared extends Omit<typeof Input.Type, "model"> {
+interface Request extends Omit<typeof Input.Type, "model"> {
   readonly model: string
 }
 
-export const prepare = (
-  input: typeof Input.Type,
-  selection: {
-    readonly catalog: ModelTypes.Catalog
-    readonly defaultModel: ModelTypes.ModelRef
-  },
-): Result.Result<Prepared, Invalid> => {
-  if (selection.defaultModel.providerId !== selection.catalog.providerId)
-    return Result.fail(new Invalid({ message: "The image provider is no longer available." }))
-  const model = selection.catalog.models.find((model) => model.id === (input.model ?? selection.defaultModel.modelId))
-  if (!model)
-    return Result.fail(
-      new Invalid({ message: `Unknown image model: ${input.model ?? selection.defaultModel.modelId}` }),
-    )
-  if (input.mask && !input.images) return Result.fail(new Invalid({ message: "A mask requires input images." }))
-  return Result.succeed({ ...input, model: model.upstreamId ?? model.id })
-}
-
 export const run = Effect.fn("ImageGeneration.run")(function* (
-  input: Prepared,
+  input: Request,
   headers: Readonly<Record<string, string>>,
 ): Effect.fn.Return<
   typeof Output.Type,
-  Images.Failure | WorkspaceFiles.Failure,
+  Invalid | Images.Failure | WorkspaceFiles.Failure,
   Images.Service | WorkspaceFiles.Service
 > {
+  if (input.mask && !input.images) return yield* new Invalid({ message: "A mask requires input images." })
   const files = yield* WorkspaceFiles.Service
   const images = yield* Images.Service
   const readImage = Effect.fnUntraced(function* (path: string) {
