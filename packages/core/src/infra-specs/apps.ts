@@ -24,7 +24,7 @@ export interface Live {
   readonly taken: ReadonlyArray<string>
 }
 
-const path = (space: string, slug: string) => `spaces/${space}/apps/${slug}`
+export const path = (space: string, slug: string) => `spaces/${space}/apps/${slug}`
 
 export const canonical = (declaration: AppSchema.Declaration) => {
   const encoded = Schema.encodeSync(App.Declaration)(declaration)

@@ -38,7 +38,7 @@ const maximumSlugLength = 64
 
 const isApplied = (provider: Channel.Provider): provider is Provider => provider === "github" || provider === "slack"
 
-const path = (space: string, slug: string) => `spaces/${space}/channels/${slug}`
+export const path = (space: string, slug: string) => `spaces/${space}/channels/${slug}`
 
 const bindingPath = (space: string, slug: string) => `deploy.yaml/spaces/${space}/channels/${slug}`
 

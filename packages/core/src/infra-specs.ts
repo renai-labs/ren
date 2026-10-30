@@ -13,7 +13,6 @@ import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { Agent } from "./agent.js"
 import { AgentMembership } from "./agent/membership.js"
-import { AppValidation } from "./app/validation.js"
 import { InfraApps } from "./infra-specs/apps.js"
 import { InfraChannels } from "./infra-specs/channels.js"
 import { InfraPlan } from "./infra-specs/plan.js"
@@ -76,7 +75,7 @@ interface Live {
 
 type Step = InfraPlan.Step
 
-type Verdict = "apply" | "changed" | "new" | "conflict"
+type Verdict = "apply" | NonNullable<Infra.Change["status"]>
 
 const rank = { apply: 0, changed: 1, new: 1, conflict: 2 } satisfies Record<Verdict, number>
 
@@ -856,14 +855,14 @@ export const layer = Layer.effect(
     const plan = Effect.fnUntraced(function* (actor: Actor.Info, input: Infra.PlanInput) {
       const live = yield* load(actor, input)
       const planned = diff(actor, live, input)
-      const theirs = liveResources(live, planned.aliases)
-      const mine = folderResources(input.spec, input.bindings, theirs)
-      const liveVersions = InfraVersions.versions(theirs)
-      const folderVersions = InfraVersions.versions(mine)
-      const seen = lockOf(live, input.lock)
+      const ren = liveResources(live, planned.aliases)
+      const folder = folderResources(input.spec, input.bindings, ren)
+      const renVersions = InfraVersions.versions(ren)
+      const folderVersions = InfraVersions.versions(folder)
+      const locked = lockOf(live, input.lock)
       const verdictOf = (step: Step, base: string): Verdict => {
-        const version = seen[base]
-        if (liveVersions.get(base) === version) return "apply"
+        const version = locked[base]
+        if (renVersions.get(base) === version) return "apply"
         if (step.change.from || folderVersions.get(step.change.path) !== version) return "conflict"
         return version ? "changed" : "new"
       }
@@ -887,7 +886,7 @@ export const layer = Layer.effect(
         ),
       )
       const stays = (space: string) =>
-        (liveVersions.has(space) && !archived.has(space)) ||
+        (renVersions.has(space) && !archived.has(space)) ||
         judged.some(
           (entry) => entry.step.change.path === space && entry.step.change.action !== "archive" && applied(space),
         )
@@ -895,7 +894,7 @@ export const layer = Layer.effect(
         ...judged.flatMap((entry) => {
           const path = entry.step.change.path
           if (entry.step.change.kind !== "space" || !archived.has(path)) return []
-          const retained = [...liveVersions.keys()].filter(
+          const retained = [...renVersions.keys()].filter(
             (child) => InfraVersions.spaceOf(child) === path && !archived.has(child),
           )
           return retained.length > 0 ? [path, ...retained] : []
@@ -916,7 +915,7 @@ export const layer = Layer.effect(
       const changes = steps.flatMap((entry, index): Array<Infra.Change> => {
         const change = entry.step.change
         const first = firsts.get(change.path) === index
-        const values = InfraVersions.values(theirs.get(entry.base)?.value, mine.get(change.path)?.value)
+        const values = InfraVersions.differences(ren.get(entry.base)?.value, folder.get(change.path)?.value)
         if (entry.verdict === "apply") return [first && change.action === "update" ? described(change, values) : change]
         return first ? [described(change, values, entry.verdict)] : []
       })
@@ -924,24 +923,20 @@ export const layer = Layer.effect(
         steps,
         changes,
         problems: planned.problems,
-        seen,
-        digest: new Bun.CryptoHasher("sha256")
-          .update(
-            AppValidation.canonical(
-              steps
-                .filter((entry) => entry.verdict === "apply" || entry.verdict === "conflict")
-                .map((entry) => ({
-                  change: entry.step.change,
-                  verdict: entry.verdict,
-                  from: liveVersions.get(entry.base) ?? null,
-                  to: folderVersions.get(entry.step.change.path) ?? null,
-                })),
-            ),
-          )
-          .digest("hex"),
+        locked,
+        digest: InfraVersions.hash(
+          steps
+            .filter((entry) => entry.verdict === "apply" || entry.verdict === "conflict")
+            .map((entry) => ({
+              change: entry.step.change,
+              verdict: entry.verdict,
+              from: renVersions.get(entry.base) ?? null,
+              to: folderVersions.get(entry.step.change.path) ?? null,
+            })),
+        ),
         lock: {
           organization: live.organization.slug,
-          resources: InfraVersions.next(folderVersions, liveVersions, seen),
+          resources: InfraVersions.advanceLock(folderVersions, renVersions, locked),
         },
       }
     })
@@ -980,18 +975,18 @@ export const layer = Layer.effect(
           })
         const bindings = input.bindings ?? { organization, spaces: {} }
         const aliases = input.spec ? diff(actor, live, { spec: input.spec, bindings }).aliases : new Map()
-        const known = liveResources(live, aliases)
-        const merged = InfraVersions.merge(
-          input.spec ? folderResources(input.spec, bindings, known) : new Map(),
-          known,
+        const ren = liveResources(live, aliases)
+        const pulled = InfraVersions.planPull(
+          input.spec ? folderResources(input.spec, bindings, ren) : new Map(),
+          ren,
           input.lock?.resources ?? {},
         )
         return {
           ...snapshot(live, aliases),
-          lock: { organization: live.organization.slug, resources: merged.lock },
-          write: merged.write,
-          remove: merged.remove,
-          conflicts: merged.conflicts,
+          lock: { organization: live.organization.slug, resources: pulled.lock },
+          write: pulled.write,
+          remove: pulled.remove,
+          conflicts: pulled.conflicts,
         }
       }),
       plan: Effect.fn("InfraSpecs.plan")(function* (actor: Actor.Info, input: Infra.PlanInput) {
@@ -1022,10 +1017,10 @@ export const layer = Layer.effect(
           changes: result.changes.filter((change) => change.status !== "changed" && change.status !== "new"),
           lock: {
             organization: after.organization.slug,
-            resources: InfraVersions.next(
+            resources: InfraVersions.advanceLock(
               InfraVersions.versions(folderResources(input.spec, input.bindings, settled)),
               InfraVersions.versions(settled),
-              result.seen,
+              result.locked,
             ),
           },
         }
