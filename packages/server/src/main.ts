@@ -130,7 +130,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
 
 const observability = Layer.mergeAll(
   Layer.unwrap(Effect.map(Deployment.telemetry, Telemetry.layer)).pipe(Layer.provide(FetchHttpClient.layer)),
-  Layer.effect(Deployment.ReporterVariables, PostHog.variables),
+  Layer.effect(Deployment.SandboxTelemetry, PostHog.variables),
   Layer.unwrap(
     Effect.map(Config.LogLevel("LOG_LEVEL").pipe(Config.withDefault("Info")), (level) =>
       Layer.succeed(References.MinimumLogLevel, level),

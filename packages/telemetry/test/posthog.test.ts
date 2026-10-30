@@ -190,3 +190,21 @@ describe("PostHog.layer", () => {
       expect(received[0]?.properties).toMatchObject({ $process_person_profile: false })
     }).pipe(Effect.runPromise))
 })
+
+describe("PostHog.variables", () => {
+  const variables = (env: Record<string, string>) =>
+    Effect.runSync(PostHog.variables.pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(env)))))
+
+  test("gives a sandbox PostHog's OTLP endpoint and token, and nothing without a key", () => {
+    const sandbox = variables({ POSTHOG_PROJECT_KEY: "phc_test", POSTHOG_HOST: "https://eu.i.posthog.com/" })
+    const target = (signal: string) =>
+      Option.some({ url: `https://eu.i.posthog.com/i/v1/${signal}`, headers: { authorization: "Bearer phc_test" } })
+
+    expect(Effect.runSync(Telemetry.targets.parse(ConfigProvider.fromEnv({ env: sandbox })))).toEqual({
+      traces: target("traces"),
+      logs: target("logs"),
+      metrics: target("metrics"),
+    })
+    expect(variables({})).toEqual({})
+  })
+})

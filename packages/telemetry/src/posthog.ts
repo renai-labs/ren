@@ -36,7 +36,12 @@ export const variables = Effect.map(
   Config.option(project),
   Option.match({
     onNone: (): Readonly<Record<string, string>> => ({}),
-    onSome: (found) => ({ POSTHOG_PROJECT_KEY: found.key, POSTHOG_HOST: found.host }),
+    onSome: (found) => ({
+      POSTHOG_PROJECT_KEY: found.key,
+      POSTHOG_HOST: found.host,
+      OTEL_EXPORTER_OTLP_ENDPOINT: `${found.host.replace(/\/$/u, "")}/i`,
+      OTEL_EXPORTER_OTLP_HEADERS: `authorization=${encodeURIComponent(`Bearer ${found.key}`)}`,
+    }),
   }),
 )
 
