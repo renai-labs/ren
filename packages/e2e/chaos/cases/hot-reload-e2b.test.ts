@@ -30,7 +30,7 @@ const unmet =
 
 const accessFor = async (key: string): Promise<Models.Access> => {
   const response = await fetch(`${LiteLLM.url}/model/info`, { headers: { authorization: `Bearer ${key}` } })
-  const catalog = Models.fromLiteLLM(Schema.decodeUnknownSync(Models.LiteLLMModelInfo)(await response.json()))
+  const catalog = Models.fromInference(Schema.decodeUnknownSync(Models.InferenceModelInfo)(await response.json()))
   return {
     endpoints: catalog.endpoints.map((endpoint) =>
       Struct.assign(endpoint, { baseUrl: `${litellmTunnel}/v1`, apiKey: { key: Redacted.make(key) } }),

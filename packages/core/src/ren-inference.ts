@@ -52,7 +52,6 @@ const tokenLifetimeSeconds = 5 * 60
 
 const ErrorBody = Schema.Struct({ error: Schema.optional(Schema.String) })
 
-// oxlint-disable-next-line ren/no-comments -- As the service sends it; Ren decides who manages it.
 const Upstream = Schema.Struct({
   ...Struct.omit(RenInference.Connection.fields, ["canManage"]),
   connectedBy: Schema.NullOr(Schema.String),
@@ -202,8 +201,8 @@ export const layer = Layer.effect(
       }),
       catalog: Effect.fn("RenInference.catalog")(function* (organizationId) {
         return yield* onlyUnavailable(
-          call({ org: organizationId }, "GET", "/model/info", Models.LiteLLMModelInfo).pipe(
-            Effect.map(Models.fromLiteLLM),
+          call({ org: organizationId }, "GET", "/model/info", Models.InferenceModelInfo).pipe(
+            Effect.map(Models.fromInference),
           ),
         )
       }),

@@ -2,20 +2,19 @@ import { describe, expect, test } from "bun:test"
 import { Schema } from "effect"
 import { Models } from "../src/models.js"
 
-const decode = Schema.decodeUnknownSync(Models.LiteLLMModelInfo)
+const decode = Schema.decodeUnknownSync(Models.InferenceModelInfo)
 
 const entry = (model_name: string, model_info: Record<string, unknown>) => ({ model_name, model_info })
 
-describe("Models.fromLiteLLM", () => {
-  test("groups models by provider, keeps Ren's ids, gives a model its own protocol when it differs and drops fallback copies", () => {
-    const catalog = Models.fromLiteLLM(
+describe("Models.fromInference", () => {
+  test("groups models by provider, keeps Ren's ids, gives a model its own protocol when it differs and drops hidden models", () => {
+    const catalog = Models.fromInference(
       decode({
         data: [
           entry("anthropic/claude-sonnet-5-5", {
             model_key: "claude-sonnet-5-5",
             provider_key: "anthropic",
             display_name: "Claude Sonnet 5.5",
-            routing: "subscription",
             max_input_tokens: 1_000_000,
             max_output_tokens: 128_000,
             modalities: { input: ["text", "image", "pdf"], output: ["text"] },
@@ -29,10 +28,10 @@ describe("Models.fromLiteLLM", () => {
           entry("anthropic/claude-sonnet-5-5-fallback", {
             model_key: "claude-sonnet-5-5-fallback",
             provider_key: "anthropic",
-            routing: "openrouter-fallback",
+            hidden: true,
           }),
           entry("openai/gpt-6.1-sol", { model_key: "gpt-6.1-sol", provider_key: "openai", mode: "responses" }),
-          entry("openai/gpt-5.4-nano", { model_key: "gpt-5.4-nano", provider_key: "openai", routing: "openrouter" }),
+          entry("openai/gpt-5.4-nano", { model_key: "gpt-5.4-nano", provider_key: "openai" }),
           entry("z-ai/glm-5.1", {
             model_key: "glm-5.1",
             provider_key: "zhipu",
@@ -40,7 +39,6 @@ describe("Models.fromLiteLLM", () => {
             modalities: null,
           }),
           entry("no-key", { provider_key: "zhipu" }),
-          entry("hidden/model", { model_key: "hidden", provider_key: "zhipu", hidden: true }),
         ],
       }),
     )
@@ -89,8 +87,8 @@ describe("Models.fromLiteLLM", () => {
       entry("b/two", { model_key: "two", provider_key: "b" }),
       entry("a/one", { model_key: "one", provider_key: "a" }),
     ]
-    expect(Models.fromLiteLLM(decode({ data: models }))).toEqual(
-      Models.fromLiteLLM(decode({ data: models.toReversed() })),
+    expect(Models.fromInference(decode({ data: models }))).toEqual(
+      Models.fromInference(decode({ data: models.toReversed() })),
     )
   })
 })

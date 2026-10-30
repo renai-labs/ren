@@ -48,21 +48,23 @@ const reader = Effect.gen(function* () {
   return { inference, refresh: models.refresh, applied }
 })
 
-it.live("LiteLLM down at boot leaves the brain without a list until it answers, then the list arrives (test 34)", () =>
-  Effect.gen(function* () {
-    stub.modelInfo.down(true)
-    const opened = yield* reader
-    yield* opened.refresh
-    expect(yield* opened.inference.catalog).toEqual(Option.none())
-    stub.modelInfo.down(false)
-    yield* opened.refresh
-    expect(Option.map(yield* opened.inference.catalog, (catalog) => catalog.endpoints.map((each) => each.id))).toEqual(
-      Option.some(["anthropic", "stub"]),
-    )
-  }),
+it.live(
+  "The gateway down at boot leaves the brain without a list until it answers, then the list arrives (test 34)",
+  () =>
+    Effect.gen(function* () {
+      stub.modelInfo.down(true)
+      const opened = yield* reader
+      yield* opened.refresh
+      expect(yield* opened.inference.catalog).toEqual(Option.none())
+      stub.modelInfo.down(false)
+      yield* opened.refresh
+      expect(
+        Option.map(yield* opened.inference.catalog, (catalog) => catalog.endpoints.map((each) => each.id)),
+      ).toEqual(Option.some(["anthropic", "stub"]))
+    }),
 )
 
-it.live("LiteLLM down after a read keeps the last list: models do not go and come back (test 35)", () =>
+it.live("The gateway down after a read keeps the last list: models do not go and come back (test 35)", () =>
   Effect.gen(function* () {
     const opened = yield* reader
     yield* opened.refresh

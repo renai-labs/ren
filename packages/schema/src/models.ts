@@ -73,19 +73,16 @@ export const catalog = (access: Access): Catalog => ({
   endpoints: access.endpoints.map((endpoint) => Struct.pick(endpoint, ["id", "protocol", "models"])),
 })
 
-// oxlint-disable-next-line ren/no-comments -- Behind an egress a brain holds no model key: it sends ren:MODELS, and the egress puts in the real key that Ren mints (CredentialSource.layerMinted).
 export const placeholderKey = "ren:MODELS"
 
-// oxlint-disable-next-line ren/no-comments -- A model request names the member who sent the message in Ren's own header; the service maps it to the gateway's person.
 export const personHeader = "ren-member"
 
 export const personLabel = "PERSON"
 
-// oxlint-disable-next-line ren/no-comments -- Behind the egress a brain names the member by placeholder; Ren puts the member id in only when that member is in the brain's space.
 export const personPlaceholder = (memberId: string) => `ren:${personLabel}.${memberId}`
 
-export interface LiteLLMModelInfo extends Schema.Schema.Type<typeof LiteLLMModelInfo> {}
-export const LiteLLMModelInfo = Schema.Struct({
+export interface InferenceModelInfo extends Schema.Schema.Type<typeof InferenceModelInfo> {}
+export const InferenceModelInfo = Schema.Struct({
   data: Schema.Array(
     Schema.Struct({
       model_name: Schema.String,
@@ -93,7 +90,6 @@ export const LiteLLMModelInfo = Schema.Struct({
         model_key: Schema.optionalKey(Schema.NullOr(Schema.String)),
         provider_key: Schema.optionalKey(Schema.NullOr(Schema.String)),
         display_name: Schema.optionalKey(Schema.NullOr(Schema.String)),
-        routing: Schema.optionalKey(Schema.NullOr(Schema.String)),
         mode: Schema.optionalKey(Schema.NullOr(Schema.String)),
         hidden: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
         max_input_tokens: Schema.optionalKey(Schema.NullOr(Schema.Number)),
@@ -106,9 +102,11 @@ export const LiteLLMModelInfo = Schema.Struct({
       }),
     }),
   ),
-}).annotate({ identifier: "Models.LiteLLMModelInfo", description: "The body of LiteLLM’s GET /model/info." })
+}).annotate({
+  identifier: "Models.InferenceModelInfo",
+  description: "The body of the inference gateway’s GET /model/info.",
+})
 
-// oxlint-disable-next-line ren/no-comments -- OpenCode's output limit for a model that declares none.
 export const defaultOutputLimit = 32_000
 
 const isModality = Schema.is(Modality)
@@ -116,28 +114,26 @@ const isModality = Schema.is(Modality)
 const positive = (value: number | null | undefined) =>
   typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
 
-type LiteLLMEntry = LiteLLMModelInfo["data"][number]
+type Entry = InferenceModelInfo["data"][number]
 
 const protocols: Readonly<Record<string, Protocol>> = { anthropic: "anthropic-messages", openai: "openai-responses" }
 
 const endpointProtocol = (endpointId: string) => protocols[endpointId] ?? "openai-chat"
 
-// oxlint-disable-next-line ren/no-comments -- As ren-v1 (api/src/model/index.ts:321): Anthropic's models use its Messages API, a model whose LiteLLM mode is "responses" uses OpenAI's Responses API, and every other model uses chat completions.
-const protocolOf = (found: LiteLLMEntry["model_info"]): Protocol => {
+const protocolOf = (found: Entry["model_info"]): Protocol => {
   if (found.provider_key === "anthropic") return "anthropic-messages"
   if (found.mode === "responses") return "openai-responses"
   return "openai-chat"
 }
 
-// oxlint-disable-next-line ren/no-comments -- The default variant comes first: E62 uses the first effort when a stored one is gone.
-const effortsOf = (found: LiteLLMEntry["model_info"]) => {
+const effortsOf = (found: Entry["model_info"]) => {
   const efforts = (found.variants ?? []).map((variant) => variant.id)
   const preferred = found.default_variant
   if (!preferred || !efforts.includes(preferred)) return efforts
   return [preferred, ...efforts.filter((effort) => effort !== preferred)]
 }
 
-const infoOf = (entry: LiteLLMEntry, id: string, inherited: Protocol): Info => {
+const infoOf = (entry: Entry, id: string, inherited: Protocol): Info => {
   const found = entry.model_info
   const protocol = protocolOf(found)
   const context = positive(found.max_input_tokens)
@@ -154,11 +150,10 @@ const infoOf = (entry: LiteLLMEntry, id: string, inherited: Protocol): Info => {
   }
 }
 
-// oxlint-disable-next-line ren/no-comments -- HR15: an endpoint is a provider group (E56). An endpoint's protocol follows the provider, and a model whose protocol differs names its own; a fallback copy (routing openrouter-fallback) and a hidden model are not offered. LiteLLM filters the list by the key that reads it. The output is sorted, so one list gives the same bytes (INV-34).
-export const fromLiteLLM = (info: LiteLLMModelInfo): Catalog => {
+export const fromInference = (info: InferenceModelInfo): Catalog => {
   const models = info.data.flatMap((entry) => {
     const found = entry.model_info
-    if (!found.model_key || !found.provider_key || found.routing === "openrouter-fallback" || found.hidden) return []
+    if (!found.model_key || !found.provider_key || found.hidden) return []
     return [
       {
         endpointId: found.provider_key,

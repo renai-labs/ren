@@ -9,7 +9,7 @@ setDefaultTimeout(60_000)
 const it = testEffect(ModelSource.layer)
 
 describe("models on a brain, from the inference service (HR14, HR16)", () => {
-  it.live("a model added in LiteLLM can be chosen by the next start: the brain reads the list again first", () =>
+  it.live("a model added in the gateway can be chosen by the next start: the brain reads the list again first", () =>
     Effect.gen(function* () {
       const opened = yield* ModelSource.chat(ModelSource.access({ stub: ModelSource.lasting("sk-stub") }))
       ModelSource.stub.modelInfo.set([...StubModel.defaultModels, StubModel.modelEntry("later", "stub-model")])
@@ -24,7 +24,6 @@ describe("models on a brain, from the inference service (HR14, HR16)", () => {
     }),
   )
 
-  // oxlint-disable-next-line ren/no-comments -- HR33: LiteLLM moves with the same key, so the brain keeps its key and only the URL changes.
   it.live("an inference URL moved on Ren reaches the next turn, with the brain's key", () =>
     Effect.gen(function* () {
       const key = ModelSource.lasting("sk-stub")
