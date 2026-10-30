@@ -10,7 +10,7 @@ import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
 import { Billing } from "@ren/core/billing"
-import { BillingCustomer } from "@ren/core/billing-customer"
+import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
@@ -72,7 +72,7 @@ HttpRouter.serve(Routes.layer).pipe(
       Layer.provide(CredentialEnv.layerNone),
     ),
     RenInferenceRemoval.layer,
-    BillingCustomer.layer.pipe(Layer.provide(Billing.layerNone)),
+    BillingEnrollment.layer.pipe(Layer.provide(Billing.layerNone)),
     ChannelRoute.layer.pipe(
       Layer.provide(ChannelIdentity.layer),
       Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),

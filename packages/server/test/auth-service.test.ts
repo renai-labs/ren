@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Billing } from "@ren/core/billing"
-import { BillingCustomer } from "@ren/core/billing-customer"
+import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { SlackApp } from "@ren/core/slack-app"
@@ -51,7 +51,7 @@ const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postma
     Layer.provideMerge(
       RenInferenceRemoval.layer.pipe(Layer.provide([RenInference.layerNone, DurableRunner.layerMemory])),
     ),
-    Layer.provideMerge(BillingCustomer.layer.pipe(Layer.provide([billing, DurableRunner.layerMemory]))),
+    Layer.provideMerge(BillingEnrollment.layer.pipe(Layer.provide([billing, DurableRunner.layerMemory]))),
     Layer.provideMerge(Layer.mergeAll(GitHubAccounts.layerNone, SlackApp.layerNone)),
     Layer.provideMerge(Testing.layer),
     Layer.provideMerge(Mailer.layer),
@@ -419,7 +419,7 @@ describe("Auth", () => {
             activatePendingMemberships: () => Promise.resolve(),
             archiveMemberships: () => Promise.resolve(),
             forgetInferenceMember: () => Promise.resolve(),
-            ensureBillingCustomer: () => Promise.resolve(),
+            enrollInBilling: () => Promise.resolve(),
           },
         })
         const context = yield* Effect.promise(() => instance.$context)
