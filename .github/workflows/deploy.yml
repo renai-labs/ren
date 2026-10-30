@@ -141,6 +141,7 @@ jobs:
             echo "settings=$(jq -r '.taskDefinitionArn != $running' --arg running "$running" current.json)"
           } >>"$GITHUB_OUTPUT"
 
+      # Image tags are immutable: a run for a commit that a deploy already pushed reuses its image.
       - name: Build and push the image
         id: image
         if: needs.changes.outputs.server == 'true'
@@ -150,10 +151,14 @@ jobs:
         run: |
           set -euo pipefail
           registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$REGION.amazonaws.com"
-          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
           image="$registry/$DEPLOY-server:$GITHUB_SHA"
-          docker build --platform linux/amd64 --build-arg REN_VERSION="$GITHUB_SHA" -f packages/server/Dockerfile -t "$image" .
-          docker push "$image"
+          if aws ecr describe-images --repository-name "$DEPLOY-server" --image-ids imageTag="$GITHUB_SHA" >/dev/null 2>&1; then
+            echo "The image of $GITHUB_SHA exists; the deploy uses it"
+          else
+            aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+            docker build --platform linux/amd64 --build-arg REN_VERSION="$GITHUB_SHA" -f packages/server/Dockerfile -t "$image" .
+            docker push "$image"
+          fi
           echo "image=$image" >>"$GITHUB_OUTPUT"
 
       # Only the image and the template change here.
