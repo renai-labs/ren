@@ -20,7 +20,7 @@
     "generate": "bun run script/generate.ts",
     "keys": "bun run packages/schema/script/keys.ts",
     "format": "bun run script/format.ts",
-    "prepare": "husky && cp .husky/reference-transaction .husky/_/reference-transaction",
+    "prepare": "husky && { [ ! -d .husky/_ ] || cp .husky/reference-transaction .husky/_/reference-transaction; }",
     "test": "echo 'do not run tests from root' && exit 1"
   },
   "workspaces": {
