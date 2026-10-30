@@ -158,6 +158,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   const desired = yield* Ref.make<HarnessConfig.Snapshot>({
     revision: 0,
     models: initial,
+    modelCatalogs: {},
     apps: options.apps ?? Option.none(),
     channels: options.channels ?? [],
     memory: Option.none(),

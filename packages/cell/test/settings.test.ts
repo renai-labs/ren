@@ -9,7 +9,7 @@ import { Session as RenSession } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import { App } from "@ren/schema/app"
 import { AppCatalog } from "@ren/schema/app-catalog"
-import { Context, Effect, Layer, Option, Predicate, Queue, Redacted, Schema, Stream, Struct } from "effect"
+import { Context, Effect, Layer, Option, Predicate, Queue, Redacted, Ref, Schema, Stream, Struct } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -109,7 +109,7 @@ const open = Effect.fnUntraced(function* (
       .pipe(Effect.andThen(client.session.wait({ sessionID })), Effect.orDie)
   const pull = (layers: SessionSettings.Layers, update: Omit<HarnessConfig.Update, "settings"> = {}) =>
     Effect.gen(function* () {
-      yield* settings.save(layers, [])
+      yield* settings.save(layers, [{ id: sessionId, agent: null, archived: false }])
       yield* harness.configure({
         ...update,
         settings: {
@@ -123,6 +123,41 @@ const open = Effect.fnUntraced(function* (
 })
 
 describe("settings in the cell", () => {
+  it.live("chat model-type overrides survive chat-model changes and re-resolve when a catalog changes", () =>
+    Effect.gen(function* () {
+      const fallback = { providerId: "ren", modelId: "default" }
+      const override = { providerId: "ren", modelId: "chosen" }
+      const layers = TestSettings.layers({ ren: { defaultModels: { image_generation: fallback } } })
+      const opened = yield* open(layers)
+      yield* opened.pull(layers, {
+        modelCatalogs: { image_generation: { providerId: "ren", models: [{ id: "default" }, { id: "chosen" }] } },
+      })
+      yield* opened.harness.start({
+        sessionId: opened.sessionId,
+        harness: "opencode",
+        interactive: true,
+        defaultModels: { image_generation: override },
+      })
+      const current = Ref.get(Option.getOrThrow(opened.server.chats).latest).pipe(
+        Effect.map((chats) => chats.get(opened.sessionId)?.resolved.primary.defaultModels),
+      )
+      expect(yield* current).toEqual({ image_generation: override })
+      yield* opened.harness.setModel(opened.sessionId, Option.none())
+      expect(yield* current).toEqual({ image_generation: override })
+      yield* opened.harness.configure({
+        modelCatalogs: { image_generation: { providerId: "ren", models: [{ id: "default" }] } },
+      })
+      expect(yield* current).toEqual({ image_generation: fallback })
+      const session = yield* opened.client.session.get({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+      expect(session.metadata?.ren).toMatchObject({ defaultModels: { image_generation: override } })
+      yield* opened.harness.configure({
+        modelCatalogs: { image_generation: { providerId: "ren", models: [{ id: "default" }, { id: "chosen" }] } },
+      })
+      expect(yield* current).toEqual({ image_generation: override })
+      yield* opened.harness.start({ sessionId: opened.sessionId, harness: "opencode", interactive: true })
+      expect(yield* current).toEqual({ image_generation: override })
+    }),
+  )
   it.live("a pull during a step reaches the next step: the child and the queued message use the new config", () =>
     Effect.gen(function* () {
       const opened = yield* open(TestSettings.layers({ ren: { instructions: "Parent config." } }))

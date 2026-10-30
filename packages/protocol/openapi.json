@@ -16350,6 +16350,42 @@
         "required": ["path", "content"],
         "additionalProperties": false
       },
+      "ModelTypes.Defaults": {
+        "type": "object",
+        "properties": {
+          "image_generation": {
+            "$ref": "#/components/schemas/ModelTypes.ModelRef"
+          },
+          "audio_transcription": {
+            "$ref": "#/components/schemas/ModelTypes.ModelRef"
+          },
+          "decisions": {
+            "$ref": "#/components/schemas/ModelTypes.ModelRef"
+          },
+          "search": {
+            "$ref": "#/components/schemas/ModelTypes.ModelRef"
+          },
+          "video_generation": {
+            "$ref": "#/components/schemas/ModelTypes.ModelRef"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ModelTypes.ModelRef": {
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "modelId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["providerId", "modelId"],
+        "additionalProperties": false
+      },
       "NotFoundErrorEncoded": {
         "type": "object",
         "properties": {
@@ -17677,6 +17713,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Session.FirstMessage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "defaultModels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelTypes.Defaults"
               },
               {
                 "type": "null"
@@ -19113,6 +19159,9 @@
           },
           "model": {
             "$ref": "#/components/schemas/Session.Model"
+          },
+          "defaultModels": {
+            "$ref": "#/components/schemas/ModelTypes.Defaults"
           },
           "steps": {
             "type": "integer",

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Permission } from "@ren/schema/permission"
+import type { ModelTypes } from "@ren/schema/model-types"
 import type { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import { Settings } from "@ren/schema/settings"
@@ -69,6 +70,53 @@ const resolve = (
 const rule = (action: string, resource: string, effect: Permission.RuleEffect) => ({ action, resource, effect })
 
 describe("BrainSettings.resolve", () => {
+  test("model defaults resolve independently through chat, executing agent, space, organization and Ren", () => {
+    const selection = (modelId: string) => ({ providerId: "ren", modelId })
+    const catalogs: ModelTypes.Catalogs = {
+      image_generation: { providerId: "ren", models: ["ren", "org", "space", "agent", "chat"].map((id) => ({ id })) },
+      audio_transcription: { providerId: "ren", models: [{ id: "audio" }] },
+    }
+    const layers = read({
+      ren: layer({
+        model: stub,
+        defaultModels: { image_generation: selection("ren"), audio_transcription: selection("audio") },
+      }),
+      organization: layer({ defaultModels: { image_generation: selection("org") } }),
+      space: layer({ defaultModels: { image_generation: selection("space") } }),
+      agents: [
+        primary({ defaultModels: { image_generation: selection("agent") } }),
+        { name: "explore", isSubagent: true, settings: layer({}) },
+      ],
+    })
+    const resolved = (defaultModels: ModelTypes.Defaults = {}, available = catalogs) =>
+      Result.getOrThrow(
+        BrainSettings.resolve(layers, { agent: null, model: Option.none(), defaultModels }, lookup, available),
+      )
+    expect(resolved().primary.defaultModels).toEqual({
+      image_generation: selection("agent"),
+      audio_transcription: selection("audio"),
+    })
+    expect(resolved().subagents.at(0)?.defaultModels?.image_generation).toEqual(selection("space"))
+    expect(resolved({ image_generation: selection("chat") }).subagents.at(0)?.defaultModels?.image_generation).toEqual(
+      selection("chat"),
+    )
+    expect(resolved({ image_generation: selection("missing") }).primary.defaultModels?.image_generation).toEqual(
+      selection("agent"),
+    )
+    expect(
+      resolved({}, { ...catalogs, image_generation: { providerId: "ren", models: [{ id: "org" }, { id: "ren" }] } })
+        .primary.defaultModels?.image_generation,
+    ).toEqual(selection("org"))
+    expect(
+      resolved({}, { ...catalogs, image_generation: { providerId: "ren", models: [{ id: "ren" }] } }).primary
+        .defaultModels?.image_generation,
+    ).toEqual(selection("ren"))
+    expect(
+      resolved({}, { ...catalogs, image_generation: { providerId: "custom", models: [{ id: "agent" }] } }).primary
+        .defaultModels,
+    ).toEqual({ audio_transcription: selection("audio") })
+    expect(resolved({}, {}).primary.defaultModels).toBeUndefined()
+  })
   test("the main agent gets the layers' instructions in order and the most specific model; a subagent gets its own instructions and falls back to that model", () => {
     const resolved = resolve({
       ren: layer({ instructions: "House rules.", model: stub }),

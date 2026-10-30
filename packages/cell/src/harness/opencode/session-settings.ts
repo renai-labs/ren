@@ -2,11 +2,13 @@ export * as SessionSettings from "./session-settings.js"
 
 import type { Session } from "@opencode/client/effect"
 import { Model } from "@ren/schema/session"
+import { ModelTypes } from "@ren/schema/model-types"
 import { Option, Schema } from "effect"
 
 const Saved = Schema.Struct({
   start: Schema.NullOr(Model),
   model: Schema.NullOr(Model),
+  defaultModels: Schema.optionalKey(ModelTypes.Defaults),
   interactive: Schema.Boolean,
 })
 

@@ -30,6 +30,8 @@ export type SpaceEnvironmentTemplateID = string
 
 export type SessionModel = { endpointId: string; modelId: string; variant?: string }
 
+export type ModelTypesModelRef = { providerId: string; modelId: string }
+
 export type PermissionRuleEffect = "ask" | "deny"
 
 export type ReferenceAlias = string
@@ -367,6 +369,14 @@ export type SpaceEnvironmentTemplateInfo = {
   environmentTemplateId: EnvironmentTemplateID
   createdAt: string
   archivedAt: string | null
+}
+
+export type ModelTypesDefaults = {
+  image_generation?: ModelTypesModelRef
+  audio_transcription?: ModelTypesModelRef
+  decisions?: ModelTypesModelRef
+  search?: ModelTypesModelRef
+  video_generation?: ModelTypesModelRef
 }
 
 export type PermissionRule = { action: string; resource: string; effect: PermissionRuleEffect }
@@ -962,6 +972,7 @@ export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pag
 export type SettingsInfo = {
   instructions?: string
   model?: SessionModel
+  defaultModels?: ModelTypesDefaults
   steps?: number
   permissions?: PermissionRuleList
   references?: ReferenceList
@@ -1617,6 +1628,13 @@ export type SpaceSettingsUpdateInput = {
     readonly settings: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -1645,6 +1663,13 @@ export type OrganizationSettingsUpdateInput = {
     readonly settings: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -1816,6 +1841,13 @@ export type AgentCreateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -1838,6 +1870,13 @@ export type AgentCreateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -1860,6 +1899,13 @@ export type AgentCreateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -1882,6 +1928,13 @@ export type AgentCreateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -1904,6 +1957,13 @@ export type AgentCreateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -1931,6 +1991,13 @@ export type AgentUpdateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -1952,6 +2019,13 @@ export type AgentUpdateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -1973,6 +2047,13 @@ export type AgentUpdateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -1994,6 +2075,13 @@ export type AgentUpdateInput = {
     readonly settings?: {
       readonly instructions?: string
       readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly search?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
       readonly steps?: number
       readonly permissions?: ReadonlyArray<{
         readonly action: string
@@ -5414,24 +5502,75 @@ export type SessionCreateInput = {
     readonly id: string
     readonly spaceId: string
     readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly defaultModels?:
+      | {
+          readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+          readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+          readonly decisions?: { readonly providerId: string; readonly modelId: string }
+          readonly search?: { readonly providerId: string; readonly modelId: string }
+          readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+        }
+      | undefined
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
   }["id"]
   readonly spaceId: {
     readonly id: string
     readonly spaceId: string
     readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly defaultModels?:
+      | {
+          readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+          readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+          readonly decisions?: { readonly providerId: string; readonly modelId: string }
+          readonly search?: { readonly providerId: string; readonly modelId: string }
+          readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+        }
+      | undefined
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
   }["spaceId"]
   readonly message?: {
     readonly id: string
     readonly spaceId: string
     readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly defaultModels?:
+      | {
+          readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+          readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+          readonly decisions?: { readonly providerId: string; readonly modelId: string }
+          readonly search?: { readonly providerId: string; readonly modelId: string }
+          readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+        }
+      | undefined
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
   }["message"]
+  readonly defaultModels?: {
+    readonly id: string
+    readonly spaceId: string
+    readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly defaultModels?:
+      | {
+          readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+          readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+          readonly decisions?: { readonly providerId: string; readonly modelId: string }
+          readonly search?: { readonly providerId: string; readonly modelId: string }
+          readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+        }
+      | undefined
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+  }["defaultModels"]
   readonly model?: {
     readonly id: string
     readonly spaceId: string
     readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly defaultModels?:
+      | {
+          readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+          readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+          readonly decisions?: { readonly providerId: string; readonly modelId: string }
+          readonly search?: { readonly providerId: string; readonly modelId: string }
+          readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+        }
+      | undefined
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
   }["model"]
 }
@@ -6911,6 +7050,13 @@ export type InfraPullInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -6934,6 +7080,13 @@ export type InfraPullInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -6954,6 +7107,13 @@ export type InfraPullInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
@@ -7226,6 +7386,13 @@ export type InfraPullInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -7249,6 +7416,13 @@ export type InfraPullInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -7269,6 +7443,13 @@ export type InfraPullInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
@@ -7541,6 +7722,13 @@ export type InfraPullInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -7564,6 +7752,13 @@ export type InfraPullInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -7584,6 +7779,13 @@ export type InfraPullInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
@@ -7861,6 +8063,13 @@ export type InfraPlanInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -7884,6 +8093,13 @@ export type InfraPlanInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -7904,6 +8120,13 @@ export type InfraPlanInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
@@ -8176,6 +8399,13 @@ export type InfraPlanInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -8199,6 +8429,13 @@ export type InfraPlanInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -8219,6 +8456,13 @@ export type InfraPlanInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
@@ -8491,6 +8735,13 @@ export type InfraPlanInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -8514,6 +8765,13 @@ export type InfraPlanInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -8534,6 +8792,13 @@ export type InfraPlanInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
@@ -8811,6 +9076,13 @@ export type InfraApplyInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -8834,6 +9106,13 @@ export type InfraApplyInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -8854,6 +9133,13 @@ export type InfraApplyInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
@@ -9128,6 +9414,13 @@ export type InfraApplyInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -9151,6 +9444,13 @@ export type InfraApplyInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -9171,6 +9471,13 @@ export type InfraApplyInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
@@ -9445,6 +9752,13 @@ export type InfraApplyInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -9468,6 +9782,13 @@ export type InfraApplyInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -9488,6 +9809,13 @@ export type InfraApplyInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
@@ -9762,6 +10090,13 @@ export type InfraApplyInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -9785,6 +10120,13 @@ export type InfraApplyInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -9805,6 +10147,13 @@ export type InfraApplyInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
@@ -10079,6 +10428,13 @@ export type InfraApplyInput = {
         readonly settings: {
           readonly instructions?: string
           readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+          readonly defaultModels?: {
+            readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+            readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+            readonly decisions?: { readonly providerId: string; readonly modelId: string }
+            readonly search?: { readonly providerId: string; readonly modelId: string }
+            readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+          }
           readonly steps?: number
           readonly permissions?: ReadonlyArray<{
             readonly action: string
@@ -10102,6 +10458,13 @@ export type InfraApplyInput = {
           readonly settings?: {
             readonly instructions?: string
             readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+            readonly defaultModels?: {
+              readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+              readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+              readonly decisions?: { readonly providerId: string; readonly modelId: string }
+              readonly search?: { readonly providerId: string; readonly modelId: string }
+              readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+            }
             readonly steps?: number
             readonly permissions?: ReadonlyArray<{
               readonly action: string
@@ -10122,6 +10485,13 @@ export type InfraApplyInput = {
               readonly settings?: {
                 readonly instructions?: string
                 readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+                readonly defaultModels?: {
+                  readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+                  readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+                  readonly decisions?: { readonly providerId: string; readonly modelId: string }
+                  readonly search?: { readonly providerId: string; readonly modelId: string }
+                  readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+                }
                 readonly steps?: number
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
