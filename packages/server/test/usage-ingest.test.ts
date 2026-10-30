@@ -106,7 +106,7 @@ describe("usage ingest", () => {
     }),
   )
 
-  it.live("the integrations key records only ren-integrations rows; an api.call keeps a negative cost", () =>
+  it.live("the integrations key records only ren-integrations rows", () =>
     Effect.gen(function* () {
       const owner = yield* Seed.owner()
       const http = yield* HttpClient.HttpClient
@@ -123,7 +123,7 @@ describe("usage ingest", () => {
         payer: "ren",
         provider: "kernel",
         cost_micro_usd: cost,
-        data: { mcp: "kernel-managed", upstream: "browsers", units: { uptime_ms: 1200 }, corrects: "kernel:abc" },
+        data: { mcp: "kernel-managed", upstream: "browsers", units: { uptime_ms: 1200 } },
       })
       const send = (secret: string, events: ReadonlyArray<unknown>) =>
         http
@@ -136,12 +136,12 @@ describe("usage ingest", () => {
           .pipe(Effect.flatMap((response) => Effect.map(response.json, (body) => [response.status, body] as const)))
       expect([
         yield* send("ren_integrations_test", [
-          event("ren-integrations", "kernel:abc:1", -20),
+          event("ren-integrations", "kernel:abc", 20),
           event("ren-inference", "chatcmpl-2:anthropic-sonnet-1", 5),
         ]),
-        yield* send("ren_integrations_test", [event("ren-integrations", "kernel:abc:1", -20)]),
+        yield* send("ren_integrations_test", [event("ren-integrations", "kernel:abc", 20)]),
       ]).toMatchObject([
-        [401, { _tag: "UnauthorizedError" }],
+        [403, { _tag: "ForbiddenError" }],
         [200, { inserted: 1 }],
       ])
       expect(
@@ -149,7 +149,7 @@ describe("usage ingest", () => {
           .select({ id: Database.Schema.usage_event.id, cost: Database.Schema.usage_event.cost_micro_usd })
           .from(Database.Schema.usage_event)
           .pipe(Effect.orDie),
-      ).toEqual([{ id: "kernel:abc:1", cost: -20 }])
+      ).toEqual([{ id: "kernel:abc", cost: 20 }])
     }),
   )
 })

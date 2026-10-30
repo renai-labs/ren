@@ -106,17 +106,11 @@ export const ApiCall = Schema.Struct({
     description: "What the provider counted, as it sent it: milliseconds, requests or results. Ren does not read it.",
   }),
   latency_ms: Schema.optionalKey(Count),
-  corrects: Schema.optionalKey(Schema.NonEmptyString).annotate({
-    description: "The `id` of the earlier row of the same source whose cost this row changes.",
-  }),
 }).annotate({ identifier: "Usage.ApiCall" })
 
 export interface ApiCallEvent extends Schema.Schema.Type<typeof ApiCallEvent> {}
 export const ApiCallEvent = Schema.Struct({
   ...fields,
-  cost_micro_usd: Schema.optionalKey(Schema.Int).annotate({
-    description: "Negative on a correction row: the amount to take off the cost of the row it corrects.",
-  }),
   type: Schema.Literal("api.call"),
   data: ApiCall,
 }).annotate({ identifier: "Usage.ApiCallEvent" })

@@ -2,23 +2,22 @@ export * as AppSelection from "./selection.js"
 
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Option, Struct } from "effect"
+import { Integrations } from "../integrations.js"
 import { ProfileLabel } from "./profile-label.js"
-
-export const integrationsLabel = "INTEGRATIONS"
 
 export type Candidate = Pick<AppCatalog.McpEntry, "appId" | "appSlug" | "slug" | "declaration">
 
 // oxlint-disable-next-line ren/no-comments -- integrations spec §5.1: a managed MCP is on until a connected official server of its app replaces it. Every input comes from the resolve inputs that the fingerprint hashes, so a change reaches the brain in one pull.
 export const select = (input: {
   readonly resolved: ReadonlyArray<AppCatalog.McpEntry>
-  readonly managed: ReadonlyArray<Candidate>
-  readonly integrationsUrl: Option.Option<string>
+  readonly declared: ReadonlyArray<Candidate>
+  readonly integrationsUrl: Option.Option<URL>
   readonly egress: boolean
 }): {
   readonly mcps: ReadonlyArray<AppCatalog.McpEntry>
   readonly unavailable: ReadonlyArray<AppCatalog.Unavailable>
 } => {
-  const kept = input.managed.flatMap((candidate) => {
+  const kept = input.declared.flatMap((candidate) => {
     const transport = candidate.declaration.transport
     if (transport.type !== "managed") return []
     const replaces = transport.replaces
@@ -26,7 +25,7 @@ export const select = (input: {
       return []
     return [{ candidate, server: transport.server }]
   })
-  const unavailable = (reason: AppCatalog.Unavailable["reason"]) => ({
+  const leftOut = (reason: AppCatalog.Unavailable["reason"]) => ({
     mcps: input.resolved,
     unavailable: kept.map((each) => ({
       appSlug: each.candidate.appSlug,
@@ -35,9 +34,9 @@ export const select = (input: {
       reason,
     })),
   })
-  if (Option.isNone(input.integrationsUrl)) return unavailable("managed")
-  if (!input.egress) return unavailable("egress")
-  const base = input.integrationsUrl.value.replace(/\/$/u, "")
+  if (Option.isNone(input.integrationsUrl)) return leftOut("managed")
+  if (!input.egress) return leftOut("egress")
+  const base = input.integrationsUrl.value.href.replace(/\/$/u, "")
   return {
     mcps: [
       ...input.resolved,
@@ -45,7 +44,7 @@ export const select = (input: {
         Struct.assign(each.candidate, {
           server: ProfileLabel.serverOf(each.candidate.slug),
           profile: null,
-          label: integrationsLabel,
+          label: Integrations.label,
           url: `${base}/${each.server}/mcp`,
         }),
       ),

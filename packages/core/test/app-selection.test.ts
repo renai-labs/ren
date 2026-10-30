@@ -28,8 +28,8 @@ const candidate = (slug: string, replaces?: string): AppSelection.Candidate => (
 const select = (input: Partial<Parameters<typeof AppSelection.select>[0]>) =>
   AppSelection.select({
     resolved: [],
-    managed: [candidate("kernel-managed", "kernel")],
-    integrationsUrl: Option.some("https://mcp.useren.ai/managed"),
+    declared: [candidate("kernel-managed", "kernel")],
+    integrationsUrl: Option.some(new URL("https://mcp.useren.ai/managed")),
     egress: true,
     ...input,
   })
@@ -68,8 +68,8 @@ describe("AppSelection.select", () => {
 
   test("a managed MCP that replaces nothing stays on next to the official server", () => {
     const connected = official("main")
-    expect(select({ resolved: [connected], managed: [candidate("search")] }).mcps.map((entry) => entry.server)).toEqual(
-      ["kernel__main", "search"],
-    )
+    expect(
+      select({ resolved: [connected], declared: [candidate("search")] }).mcps.map((entry) => entry.server),
+    ).toEqual(["kernel__main", "search"])
   })
 })

@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto"
 import { Usage } from "@ren/core/usage"
-import { UnauthorizedError, UnavailableError } from "@ren/protocol/errors"
-import { UsageAuthentication, UsageIngestApi, UsageProducer } from "@ren/protocol/usage-ingest"
+import { ForbiddenError, UnauthorizedError, UnavailableError } from "@ren/protocol/errors"
+import { UsageAuthentication, UsageIngestApi, UsageKey } from "@ren/protocol/usage-ingest"
 import { Config, Effect, Layer, Option, Redacted } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
@@ -12,13 +12,10 @@ export const UsageAuthenticationLayer = Layer.effect(
   Effect.gen(function* () {
     // oxlint-disable-next-line ren/no-comments -- The integrations key writes only its own source, so a leaked key cannot write model or sandbox rows.
     const keys = [
-      {
-        key: yield* Config.option(Config.Redacted("USAGE_INGEST_KEY")),
-        source: Option.none<string>(),
-      },
+      { key: yield* Config.option(Config.Redacted("USAGE_INGEST_KEY")), onlySource: Option.none<string>() },
       {
         key: yield* Config.option(Config.Redacted("INTEGRATIONS_INGEST_KEY")),
-        source: Option.some("ren-integrations"),
+        onlySource: Option.some("ren-integrations"),
       },
     ]
     return UsageAuthentication.of({
@@ -27,9 +24,7 @@ export const UsageAuthenticationLayer = Layer.effect(
           Option.exists(entry.key, (expected) => timingSafeEqual(digest(options.credential), digest(expected))),
         )
         return found
-          ? Effect.provideService(httpEffect, UsageProducer, {
-              source: found.source,
-            })
+          ? Effect.provideService(httpEffect, UsageKey, { onlySource: found.onlySource })
           : Effect.fail(new UnauthorizedError({ message: "Unknown usage key." }))
       },
     })
@@ -41,20 +36,13 @@ export const UsageHandler = HttpApiBuilder.group(UsageIngestApi, "usage", (handl
     const usage = yield* Usage.Service
     return handlers.handle("usage.record", (request) =>
       Effect.gen(function* () {
-        const producer = yield* UsageProducer
-        if (request.payload.events.some((event) => Option.exists(producer.source, (source) => source !== event.source)))
-          return yield* new UnauthorizedError({
-            message: "This key cannot write events of that source.",
-          })
+        const key = yield* UsageKey
+        if (request.payload.events.some((event) => Option.exists(key.onlySource, (source) => source !== event.source)))
+          return yield* new ForbiddenError({ message: "This key cannot write events of that source." })
         return yield* usage.record(request.payload.events)
       }).pipe(
         Effect.catchTag("Usage.Unavailable", () =>
-          Effect.fail(
-            new UnavailableError({
-              message: "The usage store is not available.",
-              retryAfterMs: 5000,
-            }),
-          ),
+          Effect.fail(new UnavailableError({ message: "The usage store is not available.", retryAfterMs: 5000 })),
         ),
       ),
     )
