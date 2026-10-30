@@ -1,6 +1,7 @@
 import { describe, expect } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
 import { Seed, testEffect } from "@ren/core/testing"
+import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
 import { DateTime, Effect, Layer } from "effect"
@@ -63,6 +64,43 @@ describe("usage ingest", () => {
         [401, { _tag: "UnauthorizedError" }],
         [200, { inserted: 1 }],
       ])
+    }),
+  )
+
+  it.live("a call keeps the gateway's operation and the usage the provider reported", () =>
+    Effect.gen(function* () {
+      const owner = yield* Seed.owner()
+      const http = yield* HttpClient.HttpClient
+      const database = yield* Database.Service
+      const data = {
+        requested_model: "ren/gpt-transcribe",
+        served_model: "ren/gpt-transcribe",
+        operation: "transcription",
+        usage: { type: "duration", seconds: 2 },
+      }
+      const response = yield* http.execute(
+        HttpClientRequest.post("/usage/v1/events").pipe(
+          HttpClientRequest.bearerToken("ren_usage_test"),
+          HttpClientRequest.bodyJsonUnsafe({
+            events: [
+              {
+                source: "ren-inference",
+                id: "image-1:deployment-image",
+                type: "model.call",
+                time: DateTime.formatIso(yield* DateTime.now),
+                workload: "brain:tools",
+                organization: owner.organizationId,
+                payer: "ren",
+                provider: "openai",
+                cost_micro_usd: 42000,
+                data,
+              },
+            ],
+          }),
+        ),
+      )
+      expect(yield* response.json).toEqual({ inserted: 1 })
+      expect(yield* database.db.select().from(Database.Schema.usage_event).pipe(Effect.orDie)).toMatchObject([{ data }])
     }),
   )
 })

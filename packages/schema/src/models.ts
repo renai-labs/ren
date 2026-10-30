@@ -150,10 +150,13 @@ const infoOf = (entry: Entry, id: string, inherited: Protocol): Info => {
   }
 }
 
+const chatModes = new Set(["chat", "responses", "completion"])
+
 export const fromInference = (info: InferenceModelInfo): Catalog => {
   const models = info.data.flatMap((entry) => {
     const found = entry.model_info
     if (!found.model_key || !found.provider_key || found.hidden) return []
+    if (found.mode && !chatModes.has(found.mode)) return []
     return [
       {
         endpointId: found.provider_key,

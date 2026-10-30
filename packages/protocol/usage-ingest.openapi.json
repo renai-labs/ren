@@ -187,6 +187,10 @@
           "served_model": {
             "type": "string"
           },
+          "operation": {
+            "type": "string",
+            "description": "The gateway’s call type, such as completion, image_generation, speech, transcription or decisions."
+          },
           "kind": {
             "type": "string"
           },
@@ -235,6 +239,10 @@
           },
           "stop_reason": {
             "type": "string"
+          },
+          "usage": {
+            "type": "object",
+            "description": "The usage the provider reported, as it sent it: tokens, seconds, images or characters. Ren does not read it."
           }
         },
         "required": ["requested_model", "served_model"],
