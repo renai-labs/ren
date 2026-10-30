@@ -1,12 +1,13 @@
 export * as BrainSettings from "./settings.js"
 
 import { Drive } from "@ren/schema/drive"
+import { ModelTypes } from "@ren/schema/model-types"
 import { Permission } from "@ren/schema/permission"
 import { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import { Settings } from "@ren/schema/settings"
-import { Array, Option, Result, Schema } from "effect"
+import { Array, Option, Result, Schema, Struct } from "effect"
 
 export class Unconfigured extends Schema.TaggedError<Unconfigured>()("BrainSettings.Unconfigured", {
   message: Schema.String,
@@ -19,6 +20,7 @@ export const Agent = Schema.Struct({
   instructions: Schema.Array(Schema.String),
   permissions: Permission.RuleList,
   model: Session.Model,
+  defaultModels: Schema.optionalKey(ModelTypes.Defaults),
   steps: Schema.Int,
 }).annotate({ identifier: "BrainSettings.Agent" })
 
@@ -50,6 +52,7 @@ export type Layers = SessionSettings.Layers
 export interface Placement {
   readonly agent: string | null
   readonly model: Option.Option<Session.Model>
+  readonly defaultModels?: ModelTypes.Defaults | undefined
   readonly drives?: Drive.Availability | undefined
 }
 
@@ -83,7 +86,12 @@ const available = (lookup: Lookup, model: Session.Model | undefined): Option.Opt
   })
 }
 
-export const resolve = (layers: Layers, chat: Placement, lookup: Lookup): Result.Result<Resolved, Unconfigured> => {
+export const resolve = (
+  layers: Layers,
+  chat: Placement,
+  lookup: Lookup,
+  catalogs: ModelTypes.Catalogs = {},
+): Result.Result<Resolved, Unconfigured> => {
   const primary =
     layers.agents.find((agent) => !agent.isSubagent && agent.name === chat.agent) ??
     layers.agents.find((agent) => !agent.isSubagent)
@@ -92,6 +100,28 @@ export const resolve = (layers: Layers, chat: Placement, lookup: Lookup): Result
     layer.settings ? [layer.settings] : [],
   )
   const own = [...shared, primary.settings]
+  const defaultModels = (agent: Settings.Info) => {
+    const candidates = [
+      chat.defaultModels,
+      agent.defaultModels,
+      ...shared.toReversed().map((settings) => settings.defaultModels),
+    ]
+    const defaults = Object.fromEntries(
+      ModelTypes.Type.literals.flatMap((type) => {
+        const catalog = catalogs[type]
+        const selected = candidates
+          .map((candidate) => candidate?.[type])
+          .find(
+            (candidate) =>
+              candidate &&
+              catalog?.providerId === candidate.providerId &&
+              catalog.models.some((model) => model.id === candidate.modelId),
+          )
+        return selected ? [[type, selected] as const] : []
+      }),
+    )
+    return Object.keys(defaults).length ? { defaultModels: defaults } : {}
+  }
   const candidates = [Option.getOrUndefined(chat.model), ...own.toReversed().map((settings) => settings.model)]
   const model = candidates.reduce<Option.Option<Session.Model>>(
     (found, candidate) => (Option.isSome(found) ? found : available(lookup, candidate)),
@@ -110,18 +140,24 @@ export const resolve = (layers: Layers, chat: Placement, lookup: Lookup): Result
       instructions: instructions(own),
       permissions,
       model: model.value,
+      ...defaultModels(primary.settings),
       steps: steps(own),
     },
     subagents: layers.agents
       .filter((agent) => agent.isSubagent)
-      .map((agent) => ({
-        name: agent.name,
-        description: agent.description,
-        instructions: instructions([...shared, agent.settings]),
-        permissions: union([...permissions, ...agent.settings.permissions]),
-        model: Option.getOrElse(available(lookup, agent.settings.model), () => model.value),
-        steps: steps([...shared, agent.settings]),
-      })),
+      .map((agent) =>
+        Struct.assign(
+          {
+            name: agent.name,
+            description: agent.description,
+            instructions: instructions([...shared, agent.settings]),
+            permissions: union([...permissions, ...agent.settings.permissions]),
+            model: Option.getOrElse(available(lookup, agent.settings.model), () => model.value),
+            steps: steps([...shared, agent.settings]),
+          },
+          defaultModels(agent.settings),
+        ),
+      ),
     references: Array.fromIterable(
       new Map(
         own.flatMap((settings) => settings.references.map((reference) => [reference.alias, reference] as const)),

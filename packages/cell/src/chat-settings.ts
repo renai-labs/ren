@@ -1,6 +1,7 @@
 export * as ChatSettings from "./chat-settings.js"
 
 import { BrainSettings } from "@ren/brain/settings"
+import type { ModelTypes } from "@ren/schema/model-types"
 import { PullChat } from "@ren/host-api/ren-host-api"
 import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
@@ -27,6 +28,10 @@ export interface Interface {
     sessionId: string,
     model: Option.Option<Session.Model>,
     lookup: BrainSettings.Lookup,
+    defaults?: {
+      readonly models?: ModelTypes.Defaults | undefined
+      readonly catalogs: ModelTypes.Catalogs
+    },
   ) => Effect.Effect<BrainSettings.Resolved, BrainSettings.Unconfigured>
 }
 
@@ -71,13 +76,14 @@ export const layer = Layer.effect(
           storage.put(resolvedKey, Schema.encodeSync(StoredResolved)(Object.fromEntries(next))),
         )
       }),
-      resolve: Effect.fn("ChatSettings.resolve")(function* (sessionId, model, lookup) {
+      resolve: Effect.fn("ChatSettings.resolve")(function* (sessionId, model, lookup, defaults) {
         const chat = (yield* Ref.get(chats)).find((each) => each.id === sessionId)
         return yield* Result.match(
           BrainSettings.resolve(
             yield* Ref.get(layers),
-            { agent: chat?.agent ?? null, model, drives: chat?.drives },
+            { agent: chat?.agent ?? null, model, drives: chat?.drives, defaultModels: defaults?.models },
             lookup,
+            defaults?.catalogs,
           ),
           { onFailure: Effect.fail, onSuccess: Effect.succeed },
         )

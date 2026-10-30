@@ -772,11 +772,18 @@ type SessionCreateInput = {
   readonly id: SessionCreateRequest["payload"]["id"]
   readonly spaceId: SessionCreateRequest["payload"]["spaceId"]
   readonly message?: SessionCreateRequest["payload"]["message"]
+  readonly defaultModels?: SessionCreateRequest["payload"]["defaultModels"]
   readonly model?: SessionCreateRequest["payload"]["model"]
 }
 const EndpointSessionCreate = (raw: RawClient["session"]) => (input: SessionCreateInput) =>
   raw["session.create"]({
-    payload: { id: input["id"], spaceId: input["spaceId"], message: input["message"], model: input["model"] },
+    payload: {
+      id: input["id"],
+      spaceId: input["spaceId"],
+      message: input["message"],
+      defaultModels: input["defaultModels"],
+      model: input["model"],
+    },
   }).pipe(Effect.mapError(mapClientError))
 
 type SessionArchiveRequest = Parameters<RawClient["session"]["session.archive"]>[0]

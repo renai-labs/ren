@@ -310,6 +310,7 @@ export const layer = Layer.effect(
           sessionId: input.id,
           harness: "opencode",
           interactive: true,
+          ...(input.defaultModels && { defaultModels: input.defaultModels }),
           ...(model && {
             model: {
               endpointId: model.providerID,

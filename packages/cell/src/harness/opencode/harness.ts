@@ -1,5 +1,7 @@
 export * as OpenCodeHarness from "./harness.js"
 
+import type { ModelTypes } from "@ren/schema/model-types"
+
 import { AbsolutePath, Agent, Session, SessionMessage } from "@opencode/client/effect"
 import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
@@ -177,9 +179,13 @@ const environmentDirectoryOf = Effect.fn("OpenCodeHarness.environmentDirectoryOf
   return Option.some(input.directory)
 })
 
-const overrideOf = (session: Option.Option<Session.Info>, start: Model | null) => {
+const overrideOf = (session: Option.Option<Session.Info>, input: StartBody) => {
   const saved = Option.getOrUndefined(Option.flatMap(session, SessionSettings.savedOf))
-  return saved && JSON.stringify(saved.start) === JSON.stringify(start) ? saved.model : start
+  const start = input.model ?? null
+  return {
+    model: saved && JSON.stringify(saved.start) === JSON.stringify(start) ? saved.model : start,
+    defaultModels: input.defaultModels ?? saved?.defaultModels ?? {},
+  }
 }
 
 const lookupOf = (client: OpenCodeClient) =>
@@ -198,12 +204,16 @@ const resolve = (
   settings: Option.Option<ChatSettings.Interface>,
   sessionId: Session.ID,
   override: Model | null,
+  defaults: {
+    readonly models?: ModelTypes.Defaults | undefined
+    readonly catalogs: ModelTypes.Catalogs
+  },
 ) =>
   Option.match(settings, {
     onNone: () => rejectUnknownModel(client, override ?? undefined).pipe(Effect.as(undefined)),
     onSome: (chats) =>
       lookupOf(client).pipe(
-        Effect.flatMap((lookup) => chats.resolve(sessionId, Option.fromNullishOr(override), lookup)),
+        Effect.flatMap((lookup) => chats.resolve(sessionId, Option.fromNullishOr(override), lookup, defaults)),
         Effect.mapError(rejected),
       ),
   })
@@ -244,7 +254,11 @@ const pick = Effect.fnUntraced(function* (
   settings: Option.Option<ChatSettings.Interface>,
   sessionID: Session.ID,
   model: Option.Option<Model>,
-  options: { readonly interactive: boolean },
+  options: {
+    readonly interactive: boolean
+    readonly defaultModels?: ModelTypes.Defaults | undefined
+    readonly catalogs: ModelTypes.Catalogs
+  },
 ) {
   if (Option.isNone(settings)) {
     if (Option.isNone(model)) return
@@ -254,7 +268,10 @@ const pick = Effect.fnUntraced(function* (
   }
   if (Option.isSome(model) && Option.isNone((yield* lookupOf(client))(model.value)))
     return yield* new BrainRejectedError({ message: `Unknown model: ${model.value.endpointId}/${model.value.modelId}` })
-  const resolved = yield* resolve(client, settings, sessionID, Option.getOrNull(model))
+  const resolved = yield* resolve(client, settings, sessionID, Option.getOrNull(model), {
+    models: options.defaultModels,
+    catalogs: options.catalogs,
+  })
   yield* remember(server, settings, sessionID, resolved && { resolved, interactive: options.interactive }, {
     install: true,
   })
@@ -265,17 +282,26 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   server: OpenCodeServer.Instance,
   settings: Option.Option<ChatSettings.Interface>,
   input: StartBody,
+  catalogs: ModelTypes.Catalogs,
 ) {
   const sessionID = Session.ID.make(input.sessionId)
   const directory = AbsolutePath.make(server.directoryOf(input.sessionId))
   const session = yield* findSession(client, sessionID)
   const start = input.model ?? null
-  const override = overrideOf(session, start)
-  const resolved = yield* resolve(client, settings, sessionID, override)
+  const override = overrideOf(session, input)
+  const resolved = yield* resolve(client, settings, sessionID, override.model, {
+    models: override.defaultModels,
+    catalogs,
+  })
   const agent = resolved && Agent.ID.make(resolved.primary.name)
-  const chosen = resolved?.primary.model ?? override ?? undefined
+  const chosen = resolved?.primary.model ?? override.model ?? undefined
   const model = chosen && RenPlugin.modelRef(chosen)
-  const metadata = SessionSettings.metadata(session, { start, model: override, interactive: input.interactive })
+  const metadata = SessionSettings.metadata(session, {
+    start,
+    model: override.model,
+    interactive: input.interactive,
+    defaultModels: override.defaultModels,
+  })
   const environmentDirectory = yield* environmentDirectoryOf(server, input, session)
   // oxlint-disable-next-line ren/no-comments -- The folder on the brain's own hand exists from the start, so a restore that finds it missing knows its files were lost (E105).
   if (Option.getOrElse(environmentDirectory, () => directory) === directory) yield* server.makeDirectory(directory)
@@ -480,14 +506,23 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   memory: Option.Option<PullMemory> = Option.none(),
 ) {
   const client = server.client
-  const state = { firstAskedAt: new Map<string, number>(), models: endpoints }
+  const state: {
+    firstAskedAt: Map<string, number>
+    models: ReadonlyArray<Models.Endpoint>
+    modelCatalogs: ModelTypes.Catalogs
+  } = { firstAskedAt: new Map(), models: endpoints, modelCatalogs: {} }
   const mutations = yield* Semaphore.make(1)
   const configure = Effect.fn("OpenCodeHarness.configure")(function* (
     update: HarnessConfig.Update,
   ): Effect.fn.Return<void> {
     const models = update.models ?? state.models
-    if (Option.isSome(server.chats) && update.settings) {
-      const pulled = update.settings
+    const modelCatalogs = update.modelCatalogs ?? state.modelCatalogs
+    const pulled =
+      update.settings ??
+      (Option.isSome(settings)
+        ? { layers: yield* settings.value.layers, chats: yield* settings.value.chats }
+        : undefined)
+    if (Option.isSome(server.chats) && pulled) {
       const known = server.chats.value
       const native = yield* lookupOf(client)
       const managed = new Set([...state.models, ...models].map((endpoint) => endpoint.id))
@@ -517,8 +552,10 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                 agent: chat.agent,
                 model: Option.fromUndefinedOr(picked),
                 drives: chat.drives,
+                defaultModels: saved?.defaultModels,
               },
               lookup,
+              modelCatalogs,
             )
             if (Result.isFailure(resolved)) {
               yield* Effect.logWarning(`Chat ${chat.id} keeps its settings: ${resolved.failure.message}`)
@@ -533,8 +570,10 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
       )
     }
     state.models = models
+    state.modelCatalogs = modelCatalogs
     yield* server.configure({
       models,
+      modelCatalogs,
       ...(update.memory && { memory: update.memory }),
       ...(update.apps && { apps: update.apps }),
       ...(update.channels && { channels: update.channels }),
@@ -572,7 +611,11 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     configuration: server.configuration,
     refreshModels,
     start: (input: StartBody) =>
-      knowing(input.model).pipe(Effect.andThen(mutations.withPermit(start(client, server, settings, input)))),
+      knowing(input.model).pipe(
+        Effect.andThen(
+          mutations.withPermit(Effect.suspend(() => start(client, server, settings, input, state.modelCatalogs))),
+        ),
+      ),
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
     transcript: {
       drop: (chat) =>
@@ -586,10 +629,18 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
       start: (input) =>
         mutations
           .withPermit(
-            start(client, server, settings, {
-              ...Struct.omit(input, ["environmentTemplateId", "directory"]),
-              ...(input.directory && { directory: Environment.Directory.make(input.directory) }),
-            }),
+            Effect.suspend(() =>
+              start(
+                client,
+                server,
+                settings,
+                {
+                  ...Struct.omit(input, ["environmentTemplateId", "directory"]),
+                  ...(input.directory && { directory: Environment.Directory.make(input.directory) }),
+                },
+                state.modelCatalogs,
+              ),
+            ),
           )
           .pipe(Effect.asVoid),
       // oxlint-disable-next-line ren/no-comments -- The in-process import keeps the chat's workspace link, so its tools stay on its hand (E104); OpenCode's import route drops it.
@@ -671,7 +722,11 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               if (Option.isNone(session))
                 return yield* new SessionNotStartedError({ message: `Session ${sessionId} has not been started` })
               const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
-              yield* pick(client, server, settings, sessionID, model, { interactive: saved?.interactive ?? true })
+              yield* pick(client, server, settings, sessionID, model, {
+                interactive: saved?.interactive ?? true,
+                defaultModels: saved?.defaultModels,
+                catalogs: state.modelCatalogs,
+              })
               yield* client.session
                 .update({
                   sessionID,
@@ -679,6 +734,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                     start: saved?.start ?? null,
                     model: Option.getOrNull(model),
                     interactive: saved?.interactive ?? true,
+                    ...(saved?.defaultModels && { defaultModels: saved.defaultModels }),
                   }),
                 })
                 .pipe(Effect.orDie)

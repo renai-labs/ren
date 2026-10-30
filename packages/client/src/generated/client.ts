@@ -1176,7 +1176,13 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/sessions`,
-            body: { id: input["id"], spaceId: input["spaceId"], message: input["message"], model: input["model"] },
+            body: {
+              id: input["id"],
+              spaceId: input["spaceId"],
+              message: input["message"],
+              defaultModels: input["defaultModels"],
+              model: input["model"],
+            },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,

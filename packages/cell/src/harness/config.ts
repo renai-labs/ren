@@ -5,10 +5,12 @@ import type { PullChat, PullMemory } from "@ren/host-api/ren-host-api"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
 import type { Models } from "@ren/schema/models"
+import type { ModelTypes } from "@ren/schema/model-types"
 import type { Effect, Option } from "effect"
 
 export interface Update {
   readonly models?: ReadonlyArray<Models.Endpoint>
+  readonly modelCatalogs?: ModelTypes.Catalogs
   readonly apps?: Option.Option<AppCatalog.Info>
   readonly channels?: ReadonlyArray<Channel.Provider>
   readonly memory?: Option.Option<PullMemory>
@@ -21,6 +23,7 @@ export interface Update {
 export interface Snapshot {
   readonly revision: number
   readonly models: ReadonlyArray<Models.Endpoint>
+  readonly modelCatalogs: ModelTypes.Catalogs
   readonly apps: Option.Option<AppCatalog.Info>
   readonly channels: ReadonlyArray<Channel.Provider>
   readonly memory: Option.Option<PullMemory>

@@ -11,6 +11,7 @@ import { ScheduleOrigin } from "./schedule-origin.js"
 import { SessionCapabilities } from "./session/capabilities.js"
 import { SessionMessage } from "./session/message.js"
 import { SessionModel } from "./session/model.js"
+import { ModelTypes } from "./model-types.js"
 import { Space } from "./space.js"
 
 const encoder = new TextEncoder()
@@ -108,6 +109,7 @@ export const StartInput = Schema.Struct({
   harness: Harness,
   title: Schema.optionalKey(Schema.String),
   model: Schema.optionalKey(Model),
+  defaultModels: Schema.optionalKey(ModelTypes.Defaults),
   interactive: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
   environmentTemplateId: Schema.optionalKey(EnvironmentTemplate.ID),
   initialMessage: Schema.optionalKey(
@@ -191,6 +193,7 @@ export const CreateInput = Schema.Struct({
   id: ID,
   spaceId: Space.ID,
   message: Schema.optional(FirstMessage),
+  defaultModels: Schema.optional(ModelTypes.Defaults),
   model: Schema.optional(SessionModel.Ref).annotate({
     description:
       "The model and variant the session starts with, from `chat.models`. Without it the session’s settings give the model.",
