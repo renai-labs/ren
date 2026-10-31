@@ -15,6 +15,7 @@ import {
 } from "./dropdown-menu.js"
 import { Icon } from "./icon.js"
 import { InputGroupButton } from "./input-group.js"
+import { Skeleton } from "./skeleton.js"
 import { Text } from "./text.js"
 
 export type Variant = { value: string; label: string }
@@ -32,7 +33,6 @@ export type ModelPickerProps = {
   onValueChange: (value: Selection) => void
   disabled?: boolean
   loading?: boolean
-  fallback?: string
   open?: boolean | undefined
   onOpenChange?: ((open: boolean) => void) | undefined
 }
@@ -44,8 +44,7 @@ function triggerLabel(name: string | undefined, effort: string | undefined) {
 }
 
 const describe = (props: ModelPickerProps, selected: Model | undefined) => {
-  if (props.loading) return { name: "Loading…", effort: undefined }
-  if (!selected?.variants.length) return { name: selected?.label ?? props.fallback, effort: undefined }
+  if (!selected?.variants.length) return { name: selected?.label, effort: undefined }
   const variant = selected.variants.find((each) => each.value === props.value?.variant)
   return { name: selected.label, effort: variant?.label }
 }
@@ -60,6 +59,7 @@ export function ModelPicker(props: ModelPickerProps) {
   const matches = (model: Model) => model.label.toLowerCase().includes(needle)
   const groups = [...Map.groupBy(props.models.filter(matches), (model) => model.group)]
   const byValue = new Map(props.models.filter(matches).map((model) => [model.value, model]))
+  if (props.loading || !selected) return <Skeleton className="h-7 w-44 rounded-md" />
   return (
     <DropdownMenu
       open={props.open}
@@ -69,11 +69,11 @@ export function ModelPicker(props: ModelPickerProps) {
       }}
     >
       <DropdownMenuTrigger
-        disabled={props.disabled === true || props.loading === true || props.models.length === 0}
+        disabled={props.disabled === true}
         aria-label={triggerLabel(name, effort)}
         render={<InputGroupButton size="sm" className="max-w-72 min-w-0 pr-1.5 font-normal text-muted-foreground" />}
       >
-        <TriggerContent icon={props.loading ? undefined : selected?.icon} name={name} effort={effort} />
+        <TriggerContent icon={selected.icon} name={name} effort={effort} />
         <Icon glyph="ChevronDown" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-80 p-0">
@@ -92,20 +92,13 @@ export function ModelPicker(props: ModelPickerProps) {
         </label>
         <div className="h-80 overflow-y-auto overscroll-contain p-1">
           {props.featured?.length ? (
-            <DropdownMenuGroup>
-              {props.featured.map((each) => {
-                const model = byValue.get(each.model)
-                return model ? (
-                  <FeaturedRow key={each.label} featured={each} model={model} onValueChange={props.onValueChange} />
-                ) : null
-              })}
-            </DropdownMenuGroup>
+            <FeaturedGroup featured={props.featured} byValue={byValue} onValueChange={props.onValueChange} />
           ) : null}
           {groups.map(([group, models]) => (
             <DropdownMenuGroup key={group}>
               <DropdownMenuLabel>{group}</DropdownMenuLabel>
               <DropdownMenuRadioGroup
-                value={selected?.group === group ? selected.value : ""}
+                value={selected.group === group ? selected.value : ""}
                 onValueChange={(value) => {
                   const model = props.models.find((item) => item.value === value)
                   if (model) props.onValueChange({ model: model.value })
@@ -132,26 +125,34 @@ export function ModelPicker(props: ModelPickerProps) {
   )
 }
 
-function FeaturedRow(props: { featured: Featured; model: Model; onValueChange: (value: Selection) => void }) {
+function FeaturedGroup(props: {
+  featured: readonly Featured[]
+  byValue: ReadonlyMap<string, Model>
+  onValueChange: (value: Selection) => void
+}) {
   return (
-    <DropdownMenuItem
-      className="items-center gap-2.5 py-2"
-      onClick={() =>
-        props.onValueChange({
-          model: props.model.value,
-          ...(props.featured.variant && { variant: props.featured.variant }),
-        })
-      }
-    >
-      {props.model.icon}
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex h-5 min-w-0 items-center gap-1.5">
-          <span className="font-medium">{props.featured.label}</span>
-          <span className="truncate text-muted-foreground">{props.model.label}</span>
-        </span>
-        <span className="text-xs text-muted-foreground">{props.featured.hint}</span>
-      </span>
-    </DropdownMenuItem>
+    <DropdownMenuGroup>
+      {props.featured.flatMap((each) => {
+        const model = props.byValue.get(each.model)
+        if (!model) return []
+        return [
+          <DropdownMenuItem
+            key={each.label}
+            className="items-center gap-2.5 py-2"
+            onClick={() => props.onValueChange({ model: model.value, ...(each.variant && { variant: each.variant }) })}
+          >
+            {model.icon}
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex h-5 min-w-0 items-center gap-1.5">
+                <span className="font-medium">{each.label}</span>
+                <span className="truncate text-muted-foreground">{model.label}</span>
+              </span>
+              <span className="text-xs text-muted-foreground">{each.hint}</span>
+            </span>
+          </DropdownMenuItem>,
+        ]
+      })}
+    </DropdownMenuGroup>
   )
 }
 

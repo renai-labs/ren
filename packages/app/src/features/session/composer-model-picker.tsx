@@ -97,7 +97,6 @@ export function ComposerModelPicker(props: {
       value={selected && { model: SessionModel.key(selected), ...(selected.variant && { variant: selected.variant }) }}
       loading={props.loading}
       disabled={props.disabled}
-      fallback="Default model"
       open={props.open}
       onOpenChange={props.onOpenChange}
       onValueChange={(value) => {

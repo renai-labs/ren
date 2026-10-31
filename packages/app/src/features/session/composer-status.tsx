@@ -6,11 +6,18 @@ import type { ChatView } from "./chat-view.js"
 export function ComposerStatus(props: { notice: ChatView.Notice; retrying: boolean; onRetry: () => void }) {
   if (props.notice._tag === "Failed")
     return (
-      <output className="flex min-w-0 items-center gap-2 text-xs">
-        <span className="truncate text-destructive">
-          {props.notice.reason.split("\n")[0]?.trim() || "The sandbox failed to start."}
-        </span>
-        <Button variant="link" size="sm" className="h-auto px-0" disabled={props.retrying} onClick={props.onRetry}>
+      <output
+        className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground"
+        title={props.notice.reason.split("\n")[0]?.trim()}
+      >
+        <span className="truncate">Couldn’t wake Ren up.</span>
+        <Button
+          variant="link"
+          size="sm"
+          className="h-auto px-0 text-sm text-foreground"
+          disabled={props.retrying}
+          onClick={props.onRetry}
+        >
           {props.retrying ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           Retry
         </Button>
@@ -18,9 +25,8 @@ export function ComposerStatus(props: { notice: ChatView.Notice; retrying: boole
     )
   if (props.notice._tag === "Starting") return <Starting />
   return (
-    <output className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-      <Spinner className="size-3" />
-      <span className="truncate">Reconnecting…</span>
+    <output className="flex min-w-0 items-center text-sm text-muted-foreground">
+      <span className="shimmer truncate motion-reduce:shimmer-none">Reconnecting…</span>
     </output>
   )
 }
