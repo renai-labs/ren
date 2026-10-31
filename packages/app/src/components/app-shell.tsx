@@ -1,94 +1,68 @@
-import { Icon } from "@ren/ui/icon"
-import type { Glyph } from "@ren/ui/icon"
-import {
-  SidebarInset,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
-  useSidebar,
-} from "@ren/ui/sidebar"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
-import { Schema } from "effect"
+import { RegistryContext } from "@effect/atom-react"
+import { ChatReact } from "@ren/chat/react"
+import { Outlet, useLocation } from "@tanstack/react-router"
 import { useState } from "react"
-import type { ReactElement, ReactNode } from "react"
-import { Preference } from "../lib/preference.js"
+import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@ren/ui/sidebar"
+import { AppSidebar } from "./app-sidebar.js"
+import { NewTaskDialog, useNewTaskShortcut } from "./new-task-dialog.js"
+import { SearchDialog } from "./search-dialog.js"
+import { SettingsSidebar } from "./settings-sidebar.js"
+import { SpaceSidebar } from "./space-sidebar.js"
+import { useMe } from "../lib/use-me.js"
+import { chatFor } from "../lib/chat.js"
+import { Keyboard } from "../platform/keyboard.js"
 import { Platform } from "../platform/platform.js"
-import { Viewport } from "../platform/viewport.js"
 
-const sidebarPreference = Preference.make("sidebar.v1", Schema.Literals(["expanded", "collapsed"]), "expanded")
+const insetClass = "h-svh overflow-hidden md:h-[calc(100svh-1rem)] md:shadow-none md:inset-ring md:inset-ring-border"
 
-export function AppShell(props: { sidebar: ReactNode; children: ReactNode }) {
+function useSearchShortcut(onToggle: () => void) {
+  Keyboard.useKeyDown((event) => {
+    if (event.key.toLowerCase() !== "k" || !(event.ctrlKey || event.metaKey) || event.altKey) return
+    event.preventDefault()
+    onToggle()
+  })
+}
+
+function SidebarOpen() {
+  const sidebar = useSidebar()
+  if (!sidebar.isMobile && sidebar.state === "expanded") return null
+  return <SidebarTrigger className="absolute top-2 left-2 z-20 text-muted-foreground" />
+}
+
+function ShellSidebar(props: { path: string; onSearch: () => void }) {
+  const spaceId = /^\/spaces\/([^/]+)/u.exec(props.path)?.[1]
+  if (spaceId !== undefined) return <SpaceSidebar spaceId={spaceId} />
+  if (/^\/settings(?:\/|$)/u.test(props.path)) return <SettingsSidebar />
+  return <AppSidebar onSearch={props.onSearch} />
+}
+
+export function AppShell() {
   const platform = Platform.usePlatform()
-  const [open, setOpen] = useState(() => sidebarPreference.read(platform.storage) === "expanded")
+  const me = useMe()
+  const chat = chatFor(platform, me.user.id)
+  const [searching, setSearching] = useState(false)
+  const [creatingTask, setCreatingTask] = useState(false)
+  useSearchShortcut(() => setSearching((current) => !current))
+  useNewTaskShortcut(() => setCreatingTask(true))
+  const path = useLocation({ select: (location) => location.pathname })
   return (
-    <SidebarProvider
-      open={open}
-      onOpenChange={(next) => {
-        sidebarPreference.write(platform.storage, next ? "expanded" : "collapsed")
-        setOpen(next)
-      }}
-      className="h-svh min-h-0 overflow-hidden"
-    >
-      {props.sidebar}
-      <SidebarInset className="h-svh min-w-0 overflow-hidden md:h-[calc(100svh-var(--ren-spacing-4))] md:shadow-none md:inset-ring md:inset-ring-border">
-        <SidebarTrigger
-          aria-label="Open navigation"
-          className="absolute top-2 left-2 z-20 text-muted-foreground md:hidden"
-        />
-        <div
-          data-slot="page-scroll"
-          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
-        >
-          {props.children}
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
-  )
-}
-
-export function SidebarToggle() {
-  const sidebar = useSidebar()
-  const desktop = sidebar.state === "collapsed" ? "Expand sidebar" : "Collapse sidebar"
-  const label = sidebar.isMobile ? "Close navigation" : desktop
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <SidebarTrigger aria-label={label} aria-keyshortcuts="Meta+B Control+B" className="text-muted-foreground" />
-        }
-      />
-      <TooltipContent side="right">{`${label} (${Viewport.shortcut("B")})`}</TooltipContent>
-    </Tooltip>
-  )
-}
-
-export function SidebarItem(props: {
-  label: string
-  glyph: Glyph
-  isActive?: boolean
-  render?: ReactElement
-  shortcut?: string
-  onClick?: () => void
-  trailing?: ReactNode
-}) {
-  const sidebar = useSidebar()
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        tooltip={props.label}
-        isActive={props.isActive ?? false}
-        aria-keyshortcuts={props.shortcut}
-        render={props.render}
-        onClick={() => {
-          sidebar.setOpenMobile(false)
-          props.onClick?.()
-        }}
-      >
-        <Icon glyph={props.glyph} />
-        <span>{props.label}</span>
-      </SidebarMenuButton>
-      {props.trailing}
-    </SidebarMenuItem>
+    <RegistryContext value={chat.registry}>
+      <ChatReact.Provider atoms={chat.atoms}>
+        <SidebarProvider>
+          <ShellSidebar path={path} onSearch={() => setSearching(true)} />
+          <SidebarInset className={insetClass}>
+            <SidebarOpen />
+            <div
+              data-slot="page-scroll"
+              className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+            >
+              <Outlet />
+            </div>
+          </SidebarInset>
+          <SearchDialog open={searching} onOpenChange={setSearching} />
+          <NewTaskDialog open={creatingTask} onOpenChange={setCreatingTask} />
+        </SidebarProvider>
+      </ChatReact.Provider>
+    </RegistryContext>
   )
 }
