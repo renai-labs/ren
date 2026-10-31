@@ -24,6 +24,7 @@ export interface Value {
     readonly reverting: boolean
     readonly detail: TimelineDetail.Detail | undefined
     readonly apps: ReadonlyArray<AppMention.App>
+    readonly modelNames: ReadonlyMap<string, string>
   }
   readonly actions: {
     readonly onRevert: ((message: SessionMessage.User) => void) | undefined

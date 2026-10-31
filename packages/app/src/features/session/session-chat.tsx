@@ -13,7 +13,6 @@ import { IconAlertCircle, IconRestore } from "@tabler/icons-react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useRouteContext } from "@tanstack/react-router"
 import { DateTime, Effect, Option, SubscriptionRef } from "effect"
-import { AsyncResult } from "effect/reactivity"
 import { useDeferredValue, useState } from "react"
 import type { ReactNode } from "react"
 import { Auth } from "../../lib/auth.js"
@@ -276,8 +275,11 @@ const liveOf = (info: SessionInfo.Info | undefined, session: { readonly running:
   return { title: SessionTitle.display(info.title, "") || undefined, status: session.running ? "busy" : "idle" }
 }
 
-const modelNamesOf = (models: ReturnType<typeof ChatReact.useModels>) =>
-  new Map(AsyncResult.getOrElse(models, () => []).map((model) => [model.id, model.name]))
+function useModelNames(sessionID: Session.ID) {
+  const context = RouterContext.useRouterContext()
+  const models = useQuery(context.api.chat.models.queryOptions({ id: sessionID })).data ?? []
+  return new Map(models.map((model) => [model.id, model.name]))
+}
 
 function OpenFailed(props: { onRetry: () => void }) {
   return (
@@ -345,7 +347,7 @@ export function SessionChat(props: {
   const [restored, setRestored] = useState(0)
   const finder = useFind(messages, rows)
   const reveal = finder.row ?? partTarget(rows, messages, props.part) ?? Timeline.rowFor(rows, props.message)
-  const modelNames = modelNamesOf(ChatReact.useModels(props.sessionID))
+  const modelNames = useModelNames(props.sessionID)
   const inputs = useInputActions(props.sessionID)
   const openSession = useOpenSession({
     sessionID: props.sessionID,

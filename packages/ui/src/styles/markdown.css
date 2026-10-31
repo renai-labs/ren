@@ -67,7 +67,7 @@
   font-size: 1.125em;
 }
 
-[data-slot="markdown"] :is(strong, b) {
+[data-slot="markdown"] :is(strong, b, [data-streamdown="strong"]) {
   font-weight: var(--ren-font-weight-reading-semibold);
 }
 

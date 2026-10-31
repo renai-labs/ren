@@ -17,7 +17,6 @@ import { InputGroupAddon } from "@ren/ui/input-group"
 import { Markdown } from "@ren/ui/markdown"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
 import { PromptInput } from "@ren/ui/prompt-input"
-import { Time } from "@ren/ui/time"
 import {
   Trace,
   TraceCollapsible,
@@ -28,7 +27,6 @@ import {
   TraceLine,
   TraceTitle,
 } from "@ren/ui/trace"
-import { Initials } from "@ren/util/initials"
 import { IconClock, IconPencil, IconRestore } from "@tabler/icons-react"
 import { DateTime } from "effect"
 import { useState } from "react"
@@ -53,13 +51,11 @@ export interface RowData {
   readonly streaming?: boolean
   readonly messages?: ReadonlyArray<SessionMessage.Info | undefined>
   readonly status?: ChatState.PendingStatus | undefined
-  readonly caption?: string | undefined
   readonly sender?: string | undefined
   readonly senderImage?: string | undefined
   readonly updating?: boolean
   readonly working?: boolean
   readonly copy?: string | undefined
-  readonly meta?: string | undefined
   readonly retry?: TimelineText.Retry | undefined
   readonly provider?: string | undefined
   readonly model?: string | undefined
@@ -97,7 +93,6 @@ function Response(props: { data: RowData; text: string }) {
         {write && copy !== undefined ? (
           <MessageFooter className="gap-1 px-0">
             <CopyButton value={copy} onCopy={write} label="Copy response" size="extra-small" />
-            {props.data.meta ? <span className="tabular-nums">{props.data.meta}</span> : null}
           </MessageFooter>
         ) : null}
       </MessageContent>
@@ -298,7 +293,7 @@ function UserActions(props: { message: SessionMessage.User; pending: boolean; re
   const message = props.message
   if (!write && !revert) return null
   return (
-    <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100 pointer-coarse:opacity-100">
+    <span className="flex items-center gap-1">
       {!props.pending && transcript.actions.onEdit !== undefined && message.text !== "" ? (
         <Button
           variant="ghost"
@@ -419,16 +414,16 @@ function UserMessage(props: { data: RowData }) {
       </Message>
     )
   return (
-    <Message align="end">
+    <Message align="end" className="w-auto @min-transcript:-mr-13.5">
       {props.data.sender ? (
-        <MessageAvatar className="mb-7 min-w-6">
+        <MessageAvatar className="ml-3.5">
           <Avatar size="sm" aria-hidden>
-            <AvatarImage src={props.data.senderImage} alt="" />
-            <AvatarFallback className="bg-secondary text-xs">{Initials.of(props.data.sender)}</AvatarFallback>
+            {props.data.senderImage ? <AvatarImage src={props.data.senderImage} alt="" /> : null}
+            <AvatarFallback className="bg-secondary">{props.data.sender.charAt(0)}</AvatarFallback>
           </Avatar>
         </MessageAvatar>
       ) : null}
-      <MessageContent className="max-w-5/6 items-end">
+      <MessageContent>
         {props.data.sender ? <MessageHeader className="px-0">{props.data.sender}</MessageHeader> : null}
         <ChannelMessageHeader origin={message.channel} />
         <ScheduleMessageHeader origin={message.schedule} />
@@ -441,11 +436,8 @@ function UserMessage(props: { data: RowData }) {
             </Bubble>
           )}
         </UserBody>
-        <MessageFooter className="min-h-6 gap-1 px-0">
-          <span className="tabular-nums">
-            {props.data.caption ? `${props.data.caption} · ` : ""}
-            <Time value={DateTime.toEpochMillis(message.time.created)} format="time-of-day" />
-          </span>
+        <MessageFooter className="justify-end gap-1">
+          {pending ? <span className="px-1 text-xs text-muted-foreground">Pending</span> : null}
           <UserActions
             message={message}
             pending={pending}

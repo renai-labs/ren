@@ -2,7 +2,6 @@ import { type ChatState, Projection, type TimelineDetail, TimelineRow, TimelineT
 import type { ChatAtoms } from "@ren/chat"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
-import type { SessionModel } from "@ren/schema/session/model"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -100,7 +99,6 @@ function rowData(input: {
   updating: ReadonlySet<string>
 }) {
   const lastGroups = Projection.indexes(input.rows).lastAssistantGroupKey
-  const contexts: ReadonlyMap<string, { readonly model: SessionModel.Ref }> = Projection.userContext(input.all)
   const part = (message: SessionMessage.Info | undefined, partID: string): RowData => ({
     content: Projection.resolveContent(message, partID),
     streaming: message?.type === "assistant" && !message.time.completed,
@@ -109,19 +107,12 @@ function rowData(input: {
   return Match.typeTags<TimelineRow.Row, RowData>()({
     UserMessage: (row) => {
       const message = input.messages.get(row.userMessageID)
-      const context = contexts.get(row.userMessageID)
       const status = input.statuses.get(row.userMessageID)
       const senderID = message?.type === "user" ? (message.sender?.userId ?? input.viewer) : undefined
       const sender = senderID ? (input.people.get(senderID) ?? member) : undefined
       return {
         message,
         status,
-        caption: [
-          status === "steering" || status === "stranded" ? "Pending" : undefined,
-          context ? TimelineText.modelLabel(context.model, input.modelNames) : undefined,
-        ]
-          .filter(Boolean)
-          .join(" · "),
         sender: sender?.name,
         senderImage: sender?.image,
         updating: input.updating.has(row.userMessageID),
@@ -141,16 +132,6 @@ function rowData(input: {
       return {
         ...part(input.messages.get(group.ref.messageID), group.ref.partID),
         copy: copyable ? copy.text : undefined,
-        meta: copyable
-          ? [
-              TimelineText.duration(
-                TimelineText.turnDuration(userOf(input.messages, row.userMessageID), assistants) ?? -1,
-              ),
-              Projection.isInterrupted(assistants.at(-1)?.error) ? "Interrupted" : undefined,
-            ]
-              .filter(Boolean)
-              .join(" · ")
-          : undefined,
       }
     },
     Notice: (row) => ({ message: input.messages.get(row.messageID) }),
@@ -244,6 +225,7 @@ export function Transcript(props: {
   const messages: ReadonlyMap<string, SessionMessage.Info> = new Map(
     props.messages.map((message) => [message.id, message]),
   )
+  const modelNames = props.modelNames ?? unnamed
   const turns: TranscriptTurn.Turns = {
     turns: Projection.assistantMessagesByParent(props.messages),
     activeMessageID: props.activeMessageID,
@@ -257,7 +239,7 @@ export function Transcript(props: {
     statuses: props.statuses,
     viewer: props.viewer,
     people: props.people ?? nobody,
-    modelNames: props.modelNames ?? unnamed,
+    modelNames,
     updating: props.updating ?? none,
   })
   const reset = resetOf(props.rows, messages, props.filesResetAt)
@@ -277,6 +259,7 @@ export function Transcript(props: {
           reverting: props.reverting === true,
           detail: props.detail,
           apps: props.apps ?? noApps,
+          modelNames,
         },
         actions: {
           onRevert: props.onRevert,
@@ -288,7 +271,7 @@ export function Transcript(props: {
         },
       }}
     >
-      <MessageScroller data-slot="transcript" className="flex-1">
+      <MessageScroller data-slot="transcript" className="@container flex-1">
         <MessageScrollerViewport aria-label={props.label} preserveScrollOnPrepend className="scrollbar-gutter-both">
           {history.more && !history.loading ? <LoadEarlier onVisible={history.onLoadOlder} /> : null}
           <MessageScrollerContent className="mx-auto w-full max-w-192 px-4 pt-6 pb-8 md:px-6">

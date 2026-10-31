@@ -138,6 +138,7 @@
   --container-sm: 24rem;
   --container-md: 28rem;
   --container-lg: 32rem;
+  --container-transcript: 52rem;
 
   --animate-spin: spin 1s linear infinite;
   --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
