@@ -563,11 +563,33 @@ export const SessionList = (input: Command.Command.Config.Infer<typeof Commands.
   Operation.run(
     ClientApi.groups["session"].endpoints["session.list"],
     {
-      query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-      labels: { spaceId: "--space", page: "--page", pageSize: "--page-size" },
+      query: {
+        spaceId: input["spaceId"],
+        createdBy: input["createdBy"],
+        agentId: input["agentId"],
+        origin: input["origin"],
+        status: input["status"],
+        archived: input["archived"],
+        orderBy: input["orderBy"],
+        page: input["page"],
+        pageSize: input["pageSize"],
+      },
+      labels: {
+        spaceId: "--space",
+        createdBy: "--created-by",
+        agentId: "--agent",
+        origin: "--origin",
+        status: "--status",
+        archived: "--archived",
+        orderBy: "--order-by",
+        page: "--page",
+        pageSize: "--page-size",
+      },
       lookups: {
         spaceId: (client, value) =>
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        agentId: (client, value) =>
+          client["agent"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
     (client, request) => client["session"]["list"]({ ...request.query }),

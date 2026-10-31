@@ -257,7 +257,32 @@ export const AppRegistryList = {
 export const AppRegistryGet = { idOrSlug: Argument.String("entry").pipe(Argument.withDescription("Entry slug or ID")) }
 
 export const SessionList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(
+    Flag.atLeast(0),
+    Flag.withMetavar("list"),
+    Flag.withDescription("Space slug or ID Separate values with commas."),
+  ),
+  createdBy: Flag.String("created-by").pipe(
+    Flag.atLeast(0),
+    Flag.withMetavar("list"),
+    Flag.withDescription("Chats any of these people started. Separate values with commas."),
+  ),
+  agentId: Flag.String("agent").pipe(
+    Flag.atLeast(0),
+    Flag.withMetavar("list"),
+    Flag.withDescription("Agent slug or ID Separate values with commas."),
+  ),
+  origin: Flag.Literals("origin", ["chat", "task", "schedule", "webhook", "slack", "linear", "github"]).pipe(
+    Flag.atLeast(0),
+    Flag.withMetavar("list"),
+    Flag.withDescription("Separate values with commas."),
+  ),
+  status: Flag.Literals("status", ["idle", "busy"]).pipe(Flag.optional),
+  archived: Flag.Boolean("archived").pipe(Flag.optional, Flag.withDescription("Only archived chats.")),
+  orderBy: Flag.Literals("order-by", ["updated", "created"]).pipe(
+    Flag.optional,
+    Flag.withDescription("Newest first by last activity, the default, or by when the chat started."),
+  ),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }

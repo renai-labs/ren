@@ -5182,13 +5182,167 @@ export type AgentMembershipArchiveOutput = AgentMembershipInfo
 
 export type SessionListInput = {
   readonly spaceId?: {
-    readonly spaceId?: string | undefined
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
     readonly page: number
     readonly pageSize: number
   }["spaceId"]
-  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly createdBy?: {
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["createdBy"]
+  readonly agentId?: {
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["agentId"]
+  readonly origin?: {
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["origin"]
+  readonly status?: {
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["status"]
+  readonly archived?: {
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["archived"]
+  readonly orderBy?: {
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["orderBy"]
+  readonly from?: {
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["from"]
+  readonly to?: {
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["to"]
+  readonly page: {
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
   readonly pageSize: {
-    readonly spaceId?: string | undefined
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
     readonly page: number
     readonly pageSize: number
   }["pageSize"]

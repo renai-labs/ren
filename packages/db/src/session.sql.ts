@@ -69,6 +69,8 @@ export const agent_session = pgTable(
     index("agent_session_root_id_idx").on(table.root_id),
     index("agent_session_agent_id_idx").on(table.agent_id),
     index("agent_session_brain_id_idx").on(table.brain_id),
+    index("agent_session_space_id_created_at_idx").on(table.space_id, table.created_at),
+    index("agent_session_created_by_created_at_idx").on(table.created_by, table.created_at),
   ],
 )
 

@@ -1,6 +1,7 @@
 export * as Session from "./session.js"
 
 import { Effect, Schema, Struct } from "effect"
+import { AgentIdentity } from "./agent/identity.js"
 import { Auth } from "./auth.js"
 import { ChannelOrigin } from "./channel-origin.js"
 import { EnvironmentTemplate } from "./environment-template.js"
@@ -185,9 +186,26 @@ export const Info = Schema.Struct({
   }),
 }).annotate({ identifier: "Session.Info" })
 
+export const OrderBy = Schema.Literals(["updated", "created"]).annotate({ identifier: "Session.OrderBy" })
+export type OrderBy = typeof OrderBy.Type
+
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID),
+  spaceId: Schema.optional(Schema.Array(Space.ID)).annotate({
+    description: "Chats in any of these spaces. Without it or `createdBy`, only the caller’s own chats.",
+  }),
+  createdBy: Schema.optional(Schema.Array(Auth.UserID)).annotate({ description: "Chats any of these people started." }),
+  agentId: Schema.optional(Schema.Array(AgentIdentity.ID)),
+  origin: Schema.optional(Schema.Array(Origin)),
+  status: Schema.optional(Status),
+  archived: Schema.optional(Schema.Boolean).annotate({
+    description: "Only archived chats. Without it, only chats not archived.",
+  }),
+  orderBy: Schema.optional(OrderBy).annotate({
+    description: "Newest first by last activity, the default, or by when the chat started.",
+  }),
+  from: Schema.optional(Schema.DateTimeUtc).annotate({ description: "The earliest time of `orderBy`, included." }),
+  to: Schema.optional(Schema.DateTimeUtc).annotate({ description: "The latest time of `orderBy`, not included." }),
   ...Pagination.fields(50),
 }).annotate({ identifier: "Session.ListInput" })
 

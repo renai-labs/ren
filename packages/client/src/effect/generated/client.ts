@@ -754,13 +754,33 @@ const adaptGroupAgentMembership = (raw: RawClient["agent-membership"]) => ({
 type SessionListRequest = Parameters<RawClient["session"]["session.list"]>[0]
 type SessionListInput = {
   readonly spaceId?: SessionListRequest["query"]["spaceId"]
+  readonly createdBy?: SessionListRequest["query"]["createdBy"]
+  readonly agentId?: SessionListRequest["query"]["agentId"]
+  readonly origin?: SessionListRequest["query"]["origin"]
+  readonly status?: SessionListRequest["query"]["status"]
+  readonly archived?: SessionListRequest["query"]["archived"]
+  readonly orderBy?: SessionListRequest["query"]["orderBy"]
+  readonly from?: SessionListRequest["query"]["from"]
+  readonly to?: SessionListRequest["query"]["to"]
   readonly page: SessionListRequest["query"]["page"]
   readonly pageSize: SessionListRequest["query"]["pageSize"]
 }
 const EndpointSessionList = (raw: RawClient["session"]) => (input: SessionListInput) =>
-  raw["session.list"]({ query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+  raw["session.list"]({
+    query: {
+      spaceId: input["spaceId"],
+      createdBy: input["createdBy"],
+      agentId: input["agentId"],
+      origin: input["origin"],
+      status: input["status"],
+      archived: input["archived"],
+      orderBy: input["orderBy"],
+      from: input["from"],
+      to: input["to"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
 
 type SessionGetRequest = Parameters<RawClient["session"]["session.get"]>[0]
 type SessionGetInput = { readonly idOrSlug: SessionGetRequest["params"]["idOrSlug"] }
