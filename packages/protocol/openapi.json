@@ -4706,7 +4706,114 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Space.ID"
+                  }
+                }
+              ],
+              "description": "Chats in any of these spaces. Without it or `createdBy`, only the caller’s own chats."
+            },
+            "required": false
+          },
+          {
+            "name": "createdBy",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Auth.UserID"
+                  }
+                }
+              ],
+              "description": "Chats any of these people started."
+            },
+            "required": false
+          },
+          {
+            "name": "agentId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Agent.ID"
+              }
+            },
+            "required": false
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Session.Origin"
+              }
+            },
+            "required": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Session.Status"
+            },
+            "required": false
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": ["true", "false"]
+                }
+              ],
+              "description": "Only archived chats. Without it, only chats not archived."
+            },
+            "required": false
+          },
+          {
+            "name": "orderBy",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Session.OrderBy"
+                }
+              ],
+              "description": "Newest first by last activity, the default, or by when the chat started."
+            },
+            "required": false
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "The earliest time of `orderBy`, included."
+            },
+            "required": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "The latest time of `orderBy`, not included."
             },
             "required": false
           },
@@ -17612,6 +17719,10 @@
         },
         "required": ["endpointId", "modelId"],
         "additionalProperties": false
+      },
+      "Session.OrderBy": {
+        "type": "string",
+        "enum": ["updated", "created"]
       },
       "Session.Origin": {
         "type": "string",

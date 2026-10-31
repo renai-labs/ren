@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "52a50e3b-1313-469a-b2ed-e76a1d1ba9f8",
+  "id": "c5ccc830-9ba7-429a-a3f7-7673c5522831",
   "prevIds": [
     "3516ee57-71ed-4874-b72e-31ffca888278"
   ],
@@ -9907,6 +9907,62 @@
       "method": "btree",
       "concurrently": false,
       "name": "agent_session_brain_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "agent_session"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "space_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "agent_session_space_id_created_at_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "agent_session"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "created_by",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "agent_session_created_by_created_at_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "agent_session"

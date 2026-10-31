@@ -6,7 +6,21 @@ import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { Space } from "@ren/schema/space"
-import { and, count, desc, eq, isNull, sql, type SQL } from "drizzle-orm"
+import {
+  and,
+  type Column,
+  count,
+  desc,
+  eq,
+  type GetColumnData,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  sql,
+  type SQL,
+} from "drizzle-orm"
 import type { NonEmptyReadonlyArray } from "effect/Array"
 import { Array, Context, DateTime, Duration, Effect, Layer, Option, Schema, Semaphore, Struct } from "effect"
 import { Access } from "./access.js"
@@ -59,6 +73,11 @@ const notFound = new Primitive.NotFound({ message: "Session not found." })
 const spaceNotFound = new Primitive.NotFound({ message: "Space not found." })
 
 const updatedAt = sql<Date>`coalesce(to_timestamp(${Database.Schema.opencode_session.time_updated} / 1000.0), ${Database.Schema.agent_session.created_at})`
+
+const anyOf = <TColumn extends Column>(
+  column: TColumn,
+  values: ReadonlyArray<GetColumnData<TColumn, "raw">> | undefined,
+) => values && inArray(column, values)
 
 const select = (transaction: Database.Transaction, actor: Actor.Info) =>
   transaction
@@ -263,24 +282,31 @@ export const layer = Layer.effect(
       list: Effect.fn("Session.list")(function* (actor: Actor.Info, input: Session.ListInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
+            const time =
+              input.orderBy === "created" ? sql<Date>`${Database.Schema.agent_session.created_at}` : updatedAt
             const where = and(
               visibleTo(actor, actions.list),
-              input.spaceId
-                ? eq(Database.Schema.agent_session.space_id, input.spaceId)
-                : eq(Database.Schema.agent_session.created_by, actor.userId),
-              isNull(Database.Schema.agent_session.archived_at),
+              anyOf(Database.Schema.agent_session.space_id, input.spaceId),
+              anyOf(
+                Database.Schema.agent_session.created_by,
+                input.createdBy ?? (input.spaceId ? undefined : [actor.userId]),
+              ),
+              anyOf(Database.Schema.agent_session.agent_id, input.agentId),
+              anyOf(Database.Schema.agent_session.origin, input.origin),
+              input.status &&
+                (input.status === "busy" ? isNotNull : isNull)(Database.Schema.opencode_session.time_suspended),
+              (input.archived ? isNotNull : isNull)(Database.Schema.agent_session.archived_at),
+              input.from && gte(time, DateTime.toDateUtc(input.from)),
+              input.to && lt(time, DateTime.toDateUtc(input.to)),
             )
             const rows = yield* select(transaction, actor)
               .where(where)
-              .orderBy(desc(updatedAt), desc(Database.Schema.agent_session.id))
+              .orderBy(desc(time), desc(Database.Schema.agent_session.id))
               .limit(input.pageSize)
               .offset((input.page - 1) * input.pageSize)
             const totals = yield* transaction
               .select({ total: count() })
-              .from(Database.Schema.agent_session)
-              .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_session.space_id))
-              .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
-              .where(where)
+              .from(select(transaction, actor).where(where).as("listed"))
             return {
               items: rows.map(toInfo),
               page: input.page,

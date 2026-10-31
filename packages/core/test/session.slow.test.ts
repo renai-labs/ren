@@ -49,9 +49,9 @@ describe("Session", () => {
           .where(eq(Database.Schema.agent_session.id, id))).at(0)
         expect(row?.start).toMatchObject({ initialMessage: { sender: { userId: ada.userId, memberId: ada.memberId } } })
         expect(
-          (yield* sessions.list(ada, { spaceId: team.id, ...Configured.page })).items.map((item) => item.id),
+          (yield* sessions.list(ada, { spaceId: [team.id], ...Configured.page })).items.map((item) => item.id),
         ).toEqual([id])
-        expect(yield* sessions.list(grace, { spaceId: team.id, ...Configured.page })).toMatchObject({
+        expect(yield* sessions.list(grace, { spaceId: [team.id], ...Configured.page })).toMatchObject({
           items: [],
           total: 0,
         })
