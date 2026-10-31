@@ -25,11 +25,40 @@ import { ComposerCopy } from "./composer-copy.js"
 import { SessionDrafts } from "./session-drafts.js"
 import { Working } from "./transcript-notice.js"
 
-// oxlint-disable-next-line ren/no-comments -- With no listed pick the chat sends no model, so the brain takes the space's default.
+// oxlint-disable-next-line ren/no-comments -- With no listed pick the chat uses the space's default model, or the first listed model, and sends it.
 const listed = (
   models: ReadonlyArray<SessionModel.Choice>,
   picks: ReadonlyArray<SessionModel.Ref | null | undefined>,
 ) => picks.find((pick) => pick && models.some((item) => SessionModel.key(item) === SessionModel.key(pick))) ?? undefined
+
+function useDefaultModel(input: {
+  spaceId: string | undefined
+  list: ReadonlyArray<SessionModel.Choice>
+  draft: SessionModel.Ref | undefined
+}) {
+  const context = RouterContext.useRouterContext()
+  const platform = Platform.usePlatform()
+  const settings = useQuery({
+    ...context.api["space-settings"].get.queryOptions({ idOrSlug: input.spaceId ?? "" }),
+    enabled: input.spaceId !== undefined,
+    retry: false,
+  }).data?.settings.model
+  const first = input.list.at(0)
+  return listed(input.list, [
+    input.draft,
+    ChatPreferences.model.read(platform.storage),
+    settings && {
+      id: settings.modelId,
+      providerID: settings.endpointId,
+      ...(settings.variant && { variant: settings.variant }),
+    },
+    first && {
+      id: first.id,
+      providerID: first.providerID,
+      ...(first.variants.some((variant) => variant.id === "medium") && { variant: "medium" }),
+    },
+  ])
+}
 
 export function NewChat(props: { userId: string }) {
   const context = RouterContext.useRouterContext()
@@ -50,7 +79,7 @@ export function NewChat(props: { userId: string }) {
   const options = (spaces.data?.items ?? []).map((space) => ({ value: space.id, label: space.name }))
   const spaceId = chosen ?? options.at(0)?.value
   const list = models.data ?? []
-  const model = listed(list, [draft.model, ChatPreferences.model.read(platform.storage)])
+  const model = useDefaultModel({ spaceId, list, draft: draft.model })
   const text = draft.text.trim()
   const change = (next: Composer.Draft) => {
     if (spaceId && next.text.trim() && !prepared.current.has(spaceId)) {
