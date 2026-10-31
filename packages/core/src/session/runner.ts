@@ -25,6 +25,7 @@ export interface Owner {
   readonly organizationId: Auth.OrganizationID
   readonly spaceId: Space.ID
   readonly createdBy: Auth.UserID
+  readonly origin: Session.Origin
 }
 
 export interface Info extends Owner {
@@ -101,6 +102,7 @@ export const layer = Layer.effect(
                 organization_id: owner.organizationId,
                 space_id: owner.spaceId,
                 created_by: owner.createdBy,
+                origin: owner.origin,
                 root_id: input.sessionId,
                 brain_id: brainId,
                 harness: input.harness,
@@ -166,6 +168,7 @@ export const layer = Layer.effect(
           organizationId: row.session.organization_id,
           spaceId: row.session.space_id,
           createdBy: row.session.created_by,
+          origin: row.session.origin,
           rootId: row.session.root_id,
           brainId: row.session.brain_id,
           harness: row.session.harness,

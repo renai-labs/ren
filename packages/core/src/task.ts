@@ -260,7 +260,12 @@ export const layer = Layer.effect(
             .pipe(Effect.catchTag("SessionRunner.NotFound", Effect.die))
         : runner
             .create(
-              { organizationId: planned.task.organization_id, spaceId: planned.task.space_id, createdBy: actor.userId },
+              {
+                organizationId: planned.task.organization_id,
+                spaceId: planned.task.space_id,
+                createdBy: actor.userId,
+                origin: "task",
+              },
               { sessionId, harness: "opencode", interactive: true, initialMessage: message },
               planned.plan.isGlobal ? {} : { agentId: planned.plan.agentId },
             )

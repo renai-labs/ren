@@ -230,7 +230,12 @@ export const layer = Layer.effect(
           ? deliver
           : runner
               .create(
-                { organizationId: route.organizationId, spaceId: route.spaceId, createdBy: route.senderUserId },
+                {
+                  organizationId: route.organizationId,
+                  spaceId: route.spaceId,
+                  createdBy: route.senderUserId,
+                  origin: event.provider,
+                },
                 { sessionId, harness: "opencode", interactive: false, initialMessage: initial },
                 task.isGlobal ? {} : { agentId: task.agentId },
               )
@@ -331,7 +336,12 @@ export const layer = Layer.effect(
       if (claimed.created) return yield* sendToThread
       const create = (options: { readonly agentId?: Agent.ID }) =>
         runner.create(
-          { organizationId: route.organizationId, spaceId: route.spaceId, createdBy: route.senderUserId },
+          {
+            organizationId: route.organizationId,
+            spaceId: route.spaceId,
+            createdBy: route.senderUserId,
+            origin: event.provider,
+          },
           { sessionId: claimed.sessionId, harness: "opencode", interactive: false, initialMessage: message },
           options,
         )
