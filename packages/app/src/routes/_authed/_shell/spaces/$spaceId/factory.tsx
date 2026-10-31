@@ -1,12 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { SpaceFactory } from "../../../../../features/spaces/space-factory.js"
+import { SpaceFactoryTab } from "../../../../../features/spaces/space-factory.js"
+import { Routing } from "../../../../../lib/routing.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/factory")({
-  head: () => ({ meta: [{ title: "Space factory · Ren" }] }),
-  component: FactoryRoute,
+  head: () => ({ meta: [{ title: "Factory · Space · Ren" }] }),
+  validateSearch: Routing.PageSearch,
+  component: SpaceFactoryTab,
 })
-
-function FactoryRoute() {
-  const params = Route.useParams()
-  return <SpaceFactory spaceId={params.spaceId} />
-}

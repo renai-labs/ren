@@ -5,7 +5,7 @@ description: Use when designing or reviewing screens, layouts, motion, accessibi
 
 # Interface in Ren
 
-Lint and tests enforce the checkable interface rules: colour roles, focus rings, scroll containment, reading order, copy punctuation and banned phrases, page titles and submit buttons. Run `bun run check` and follow each message. This skill covers the judgment calls. Tokens and the look are fixed by `packages/ui/DESIGN.md`; nothing here overrides a token. Components are shadcn's (the `shadcn` skill).
+Lint and tests enforce the checkable interface rules: colour roles, focus rings, scroll containment, reading order, copy punctuation and banned phrases, page titles and submit buttons. Run `bun run check` and follow each message. This skill covers the judgment calls. The look is fixed by the theme in `packages/ui/src/styles/index.css` and the variants in `packages/ui/VARIANTS.md`; nothing here overrides them. Components are shadcn's (the `shadcn` skill).
 
 ## Layout
 

@@ -1,71 +1,52 @@
-import type { AppProfileInfo, AppProfileItem } from "@ren/client"
+import { useState } from "react"
+import { IconBuilding, IconChevronDown, IconCube, IconDots, IconTrash } from "@tabler/icons-react"
+import type { AppProfileInfo } from "@ren/client"
+import { useMutation } from "@tanstack/react-query"
+import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
-import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { Icon } from "@ren/ui/icon"
-import { Spinner } from "@ren/ui/spinner"
-import { toast } from "@ren/ui/toast"
-import { useMutation } from "@tanstack/react-query"
-import { useState } from "react"
+import { ConfirmDialog, type Confirmation } from "./confirm-dialog.js"
+import { isLastSpace, lastSpaceWarning, signsIn } from "../lib/apps.js"
+import { useSignIn } from "../lib/use-sign-in.js"
+import { useSpaces } from "../lib/use-spaces.js"
+import { errorMessage } from "../lib/errors.js"
 import { RouterContext } from "../lib/router-context.js"
-import { Platform } from "../platform/platform.js"
-import { Apps } from "./apps.js"
 
-const signsIn = (item: AppProfileItem) => "mcp" in item.item && (item.kind === "oauth" || item.kind === "provider")
+type AppProfile = AppProfileInfo
 
-// oxlint-disable-next-line ren/no-comments -- A sign-in opens in a new tab; the lists ask again when the window gets focus.
-export function useSignIn() {
-  const context = RouterContext.useRouterContext()
-  const platform = Platform.usePlatform()
-  const connect = useMutation(context.api["credential-connect"].credential.connect.mutationOptions())
-  const start = (profile: AppProfileInfo, item: AppProfileItem) => {
-    if (!("mcp" in item.item)) return
-    connect.mutate(
-      { profileId: profile.id, item: item.item, ...(item.status !== "missing" && { reconnect: true }) },
-      {
-        onSuccess: (result) => {
-          if ("redirectUrl" in result) platform.openExternal(result.redirectUrl)
-        },
-        onError: (error) =>
-          toast.add({ type: "error", title: `Couldn’t connect ${item.name}`, description: error.message }),
-      },
-    )
-  }
-  return { start, pending: connect.isPending }
-}
-
-// oxlint-disable-next-line ren/no-comments -- ren-v1 connection row actions: Connect while something is missing, then Reconnect and Remove in the menu. Only a pasted key needs the profile dialog.
 export function AccountActions(props: {
-  profile: AppProfileInfo
+  profile: AppProfile
   onOpen: () => void
-  onRemove?: (() => void) | undefined
+  onRemove?: (() => void | Promise<unknown>) | undefined
 }) {
+  const [confirming, setConfirming] = useState<Confirmation>()
   const signIn = useSignIn()
-  const [confirming, setConfirming] = useState(false)
-  const remove = props.onRemove
+  const startSignIn = (item: AppProfile["items"][number]) => signIn.start(props.profile.id, item)
   const items = props.profile.items.filter((item) => item.status !== "unavailable")
   const missing = items.filter((item) => !item.optional && item.status !== "ok")
-  const connected = items.filter((item) => signsIn(item) && item.status === "ok")
-  const pasted = items.some((item) => !signsIn(item))
   const first = missing.at(0)
-  const connect = () =>
-    missing.length === 1 && first && signsIn(first) ? signIn.start(props.profile, first) : props.onOpen()
+  const remove = props.onRemove
   return (
     <>
       {first ? (
-        <Button variant="outline" size="xs" className="h-6.5" disabled={signIn.pending} onClick={connect}>
-          {signIn.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
+        <Button
+          size="sm"
+          disabled={signIn.pending}
+          onClick={() => (missing.length === 1 && signsIn(first) ? startSignIn(first) : props.onOpen())}
+        >
           {missing.length === 1 ? "Connect" : `Connect ${missing.length}`}
         </Button>
       ) : null}
-      {connected.length > 0 || pasted || props.onRemove ? (
+      {remove ? (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -77,47 +58,111 @@ export function AccountActions(props: {
               />
             }
           >
-            <Icon glyph="MoreHorizontal" />
+            <IconDots />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuGroup>
-              {connected.map((item) => (
-                <DropdownMenuItem key={item.label} onClick={() => signIn.start(props.profile, item)}>
-                  <Icon glyph="RefreshCw" />
-                  {connected.length === 1 ? "Reconnect" : `Reconnect ${item.name}`}
-                </DropdownMenuItem>
-              ))}
-              {pasted ? (
-                <DropdownMenuItem onClick={props.onOpen}>
-                  <Icon glyph="KeyRound" />
-                  Manage keys
-                </DropdownMenuItem>
-              ) : null}
-              {props.onRemove ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => (Apps.isLastSpace(props.profile) ? setConfirming(true) : props.onRemove?.())}
-                  >
-                    <Icon glyph="Trash2" />
-                    Remove from space
-                  </DropdownMenuItem>
-                </>
-              ) : null}
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() =>
+                  isLastSpace(props.profile)
+                    ? setConfirming({
+                        title: `Remove ${props.profile.name}?`,
+                        description: lastSpaceWarning(props.profile),
+                        action: "Remove and delete",
+                      })
+                    : void remove()
+                }
+              >
+                <IconTrash />
+                Remove from space
+              </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      {remove ? (
-        <ConfirmationDialog
-          open={confirming}
-          onOpenChange={setConfirming}
-          title={`Remove ${props.profile.name}?`}
-          description={Apps.lastSpaceWarning(props.profile)}
-          confirmLabel="Remove and delete"
-          tone="danger"
+      {confirming && remove ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setConfirming(undefined)
+          }}
+          confirmation={confirming}
           onConfirm={remove}
+        />
+      ) : null}
+    </>
+  )
+}
+
+export function AccountAccess(props: { profile: AppProfile }) {
+  const { api } = RouterContext.useRouterContext()
+  const spaces = useSpaces().joined
+  const access = useMutation({ ...api["app-profile"].access.mutationOptions() })
+  const [confirming, setConfirming] = useState<string>()
+  const allSpaces = props.profile.allSpaces
+  const listed = new Set(props.profile.spaces.map((space) => space.id))
+  if (props.profile.kind === "private") return null
+  if (!props.profile.canAccess) return null
+  const change = (input: { add?: string[]; remove?: string[]; allSpaces?: boolean }) =>
+    access.mutateAsync(
+      { id: props.profile.id, ...input },
+      { onError: (error) => toast.error("Couldn’t change the spaces", { description: errorMessage(error) }) },
+    )
+  const remove = (spaceId: string) => change({ remove: [spaceId] })
+  const setAllSpaces = (checked: boolean) => void change({ allSpaces: checked })
+  const last = !allSpaces && listed.size === 1
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="sm" aria-label={`Spaces that use ${props.profile.name}`} />}
+        >
+          Spaces
+          <IconChevronDown className="text-muted-foreground" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          {props.profile.canShareEverySpace ? (
+            <>
+              <DropdownMenuCheckboxItem checked={allSpaces} onCheckedChange={setAllSpaces}>
+                <IconBuilding />
+                Every space
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Spaces</DropdownMenuLabel>
+            {spaces.map((space) => (
+              <DropdownMenuCheckboxItem
+                key={space.id}
+                checked={allSpaces || listed.has(space.id)}
+                disabled={allSpaces}
+                onCheckedChange={(checked) => {
+                  if (checked) void change({ add: [space.id] })
+                  else if (last) setConfirming(space.id)
+                  else void remove(space.id)
+                }}
+              >
+                <IconCube />
+                {space.name}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {confirming ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setConfirming(undefined)
+          }}
+          confirmation={{
+            title: `Remove ${props.profile.name} from its last space?`,
+            description: lastSpaceWarning(props.profile),
+            action: "Remove and delete",
+          }}
+          onConfirm={() => remove(confirming)}
         />
       ) : null}
     </>

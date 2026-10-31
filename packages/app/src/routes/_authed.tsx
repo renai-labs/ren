@@ -1,21 +1,22 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
 import { AppBoot } from "../components/app-boot.js"
-import { Auth } from "../lib/auth.js"
+import { authKeys, sessionOptions } from "../lib/auth.js"
 
 export const Route = createFileRoute("/_authed")({
-  head: () => ({ meta: [{ title: "Ren" }] }),
   beforeLoad: async (options) => {
-    const context = options.context
-    const session = await context.queryClient.query({ ...Auth.sessionOptions(context.auth), staleTime: "static" })
-    if (session === null) throw redirect({ to: "/login", search: { redirect: options.location.href } })
-    const me = await context.queryClient.query({ ...context.api.me.get.queryOptions(), staleTime: "static" })
-    if (me.organization !== null) return { session, me }
-    const invitations = await context.auth.organization.listUserInvitations()
+    const queryClient = options.context.queryClient
+    const location = options.location
+    const session = await queryClient.query(sessionOptions(options.context.auth))
+    if (!session) throw redirect({ to: "/login", search: { redirect: location.href } })
+    const me = await queryClient.query(options.context.api.me.get.queryOptions())
+    if (me.organization || location.pathname === "/organizations/new") return { me }
+    const invitations = await queryClient.query({
+      queryKey: authKeys.invitations(),
+      queryFn: () => options.context.auth.organization.listUserInvitations(),
+    })
     const pending = invitations.data?.find((invitation) => invitation.status === "pending")
-    if (pending !== undefined) {
-      throw redirect({ to: "/invites/accept", search: { id: pending.id, redirect: options.location.href } })
-    }
-    throw new Error("Could not load your organization")
+    if (pending) throw redirect({ to: "/invites/accept", search: { id: pending.id, redirect: location.href } })
+    throw redirect({ to: "/organizations/new" })
   },
   pendingComponent: AppBoot,
   component: Outlet,

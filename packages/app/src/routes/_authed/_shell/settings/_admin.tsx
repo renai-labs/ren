@@ -1,9 +1,9 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
-import { Auth } from "../../../../lib/auth.js"
+import { canAdministerOptions } from "../../../../lib/auth.js"
 
 export const Route = createFileRoute("/_authed/_shell/settings/_admin")({
   beforeLoad: async (options) => {
-    const canAdminister = await options.context.queryClient.query(Auth.canAdministerOptions(options.context.auth))
+    const canAdminister = await options.context.queryClient.query(canAdministerOptions(options.context.auth))
     if (!canAdminister) throw redirect({ to: "/settings/preferences", replace: true })
   },
   component: Outlet,

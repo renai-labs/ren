@@ -15,31 +15,25 @@ export interface Drafts extends Storage {
 }
 
 interface Base {
-  readonly version: string
   readonly serverUrl: string
   readonly appUrl: string
   readonly storage: Storage
   readonly drafts?: Drafts
   readonly openExternal: (url: string) => void
   readonly redirect?: (url: string) => void
+  readonly blankTab?: () => Window | null
   readonly notify: (title: string, body?: string) => Promise<void>
   readonly requestNotifications?: () => Promise<boolean>
   readonly fetch?: typeof globalThis.fetch
-  readonly authorizationQuery?: string | undefined
   readonly writeClipboardText?: (text: string) => Promise<void>
-  readonly readClipboardImage?: () => Promise<File | undefined>
+  readonly authorizationQuery?: string | undefined
   readonly onLifecycle?: (listener: (event: "foreground" | "online") => void) => () => void
   readonly analytics?: Analytics.Interface
 }
 
 export type Info =
   | (Base & { readonly platform: "web" })
-  | (Base & {
-      readonly platform: "desktop"
-      readonly os: "macos" | "windows" | "linux"
-      readonly openDirectoryPicker: () => Promise<string | undefined>
-      readonly revealPath: (path: string) => Promise<void>
-    })
+  | (Base & { readonly platform: "desktop"; readonly os: "macos" | "windows" | "linux" })
   | (Base & { readonly platform: "mobile"; readonly os: "ios" | "android" })
 
 const Context = createContext<Info | null>(null)

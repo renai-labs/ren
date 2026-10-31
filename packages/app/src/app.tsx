@@ -1,10 +1,10 @@
-import { Theme } from "@ren/ui/theme"
-import { Toaster } from "@ren/ui/toast"
+import { Toaster } from "@ren/ui/sonner"
 import { TooltipProvider } from "@ren/ui/tooltip"
-import { Schema } from "effect"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { RouterProvider } from "@tanstack/react-router"
+import { Schema } from "effect"
 import { useState } from "react"
+import { Theme } from "./components/theme.js"
 import { Preference } from "./lib/preference.js"
 import type { Runtime } from "./lib/runtime.js"
 import { Platform } from "./platform/platform.js"
@@ -24,11 +24,10 @@ export function App(props: { runtime: ReturnType<typeof Runtime.make> }) {
         }}
       >
         <TooltipProvider>
-          <Toaster timeout={4000}>
-            <QueryClientProvider client={props.runtime.context.queryClient}>
-              <RouterProvider router={props.runtime.router} />
-            </QueryClientProvider>
-          </Toaster>
+          <QueryClientProvider client={props.runtime.context.queryClient}>
+            <RouterProvider router={props.runtime.router} />
+          </QueryClientProvider>
+          <Toaster />
         </TooltipProvider>
       </Theme.Provider>
     </Platform.Provider>

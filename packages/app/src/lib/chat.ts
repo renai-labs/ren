@@ -1,62 +1,35 @@
-export * as Chat from "./chat.js"
-
-import { scheduleTask, useAtomRefresh, useAtomValue } from "@effect/atom-react"
-import { ChatAtoms, Outbox } from "@ren/chat"
-import type { TimelineDetail } from "@ren/chat"
+import { scheduleTask, useAtomValue } from "@effect/atom-react"
+import { ChatAtoms, type ChatSession, Outbox } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Ren } from "@ren/client/effect"
-import { Session } from "@ren/schema/session"
-import { SessionMessage } from "@ren/schema/session/message"
+import type { SessionInfo, SessionPage } from "@ren/client"
+import type { Session } from "@ren/schema/session"
+import { useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query"
 import { Effect, Layer, Option, Schema, Stream, SubscriptionRef } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
+import { useEffect } from "react"
 import type { Platform } from "../platform/platform.js"
-import { ChatPreferences } from "./chat-preferences.js"
-import { FormProgress } from "./form-progress.js"
+import { RouterContext } from "./router-context.js"
+import type { Runtime } from "./runtime.js"
 
 export interface Chat {
+  readonly userId: string
   readonly atoms: ChatAtoms.ChatAtoms
   readonly registry: AtomRegistry.AtomRegistry
-  readonly detail: TimelineDetail.Detail | undefined
 }
 
-const made = new Map<string, Chat>()
-
-export function forget() {
-  for (const chat of made.values()) chat.registry.dispose()
-  made.clear()
-  FormProgress.reset()
-}
-
-export function forUser(platform: Platform.Info, userId: string) {
-  const found = made.get(userId)
-  if (found) return found
-  forget()
-  const detail = ChatPreferences.detailValue(ChatPreferences.detail.read(platform.storage))
-  const chat = {
-    atoms: atomsFor(platform, userId, detail),
-    registry: AtomRegistry.make({ scheduleTask, defaultIdleTTL: 400 }),
-    detail,
-  }
-  made.set(userId, chat)
-  return chat
-}
-
-// oxlint-disable-next-line ren/no-comments -- Messages a chat's brain has not accepted yet, kept across reloads (E118).
 const Kept = Schema.fromJsonString(Schema.Array(Outbox.Kept))
 
-const untraced = Layer.succeed(HttpClient.TracerPropagationEnabled, false)
-
-function atomsFor(platform: Platform.Info, userId: string, detail: TimelineDetail.Detail | undefined) {
+function makeAtoms(platform: Platform.Info, userId: string) {
   const server = Layer.mergeAll(
     FetchHttpClient.layer,
-    untraced,
+    Layer.succeed(HttpClient.TracerPropagationEnabled, false),
     platform.fetch ? Layer.succeed(FetchHttpClient.Fetch, platform.fetch) : Layer.empty,
   )
   return ChatAtoms.make({
     runtime: Atom.runtime(FetchHttpClient.layer),
     sender: { userId },
-    ...(detail && { detail }),
     ...(platform.onLifecycle && { lifecycle: platform.onLifecycle }),
     access: (sessionID: Session.ID, input: { readonly unreachable: boolean }) =>
       Ren.make({ baseUrl: platform.serverUrl }).pipe(
@@ -87,46 +60,51 @@ function atomsFor(platform: Platform.Info, userId: string, detail: TimelineDetai
   })
 }
 
-const perAtoms = <K, A>(make: (atoms: ChatAtoms.ChatAtoms) => (key: K) => A) => {
-  const made = new WeakMap<ChatAtoms.ChatAtoms, (key: K) => A>()
-  return (atoms: ChatAtoms.ChatAtoms) => {
-    const found = made.get(atoms)
-    if (found) return found
-    const family = make(atoms)
-    made.set(atoms, family)
-    return family
-  }
+const current: { chat: Chat | undefined } = { chat: undefined }
+
+function forget() {
+  current.chat?.registry.dispose()
+  current.chat = undefined
 }
 
-const revealFamily = perAtoms((atoms) =>
-  Atom.family((key: string) => {
-    const parts = key.split(" ")
-    const root = Session.ID.make(parts.at(0) ?? "")
-    const sessionID = Session.ID.make(parts.at(1) ?? "")
-    const messageID = parts.at(2)
-    return Atom.make((get) =>
-      messageID
-        ? Effect.flatMap(get.result(atoms.session(root)), (opened) =>
-            opened.reveal(sessionID, SessionMessage.ID.make(messageID)),
-          )
-        : Effect.succeed(false),
-    )
-  }),
-)
+export function chatFor(platform: Platform.Info, userId: string): Chat {
+  if (current.chat?.userId === userId) return current.chat
+  forget()
+  const chat = {
+    userId,
+    atoms: makeAtoms(platform, userId),
+    registry: AtomRegistry.make({ scheduleTask, defaultIdleTTL: 400 }),
+  }
+  current.chat = chat
+  return chat
+}
 
-const autoApproveFamily = perAtoms((atoms) =>
-  Atom.family((sessionID: Session.ID) =>
+export function handoff(platform: Platform.Info, userId: string, sessionID: Session.ID, message: ChatSession.Handoff) {
+  chatFor(platform, userId).atoms.handoff(sessionID, message)
+}
+
+export function resetSession(queryClient: QueryClient) {
+  forget()
+  queryClient.clear()
+}
+
+const autoApproveFamilies = new WeakMap<
+  ChatAtoms.ChatAtoms,
+  (sessionID: Session.ID) => Atom.Atom<AsyncResult.AsyncResult<boolean, unknown>>
+>()
+
+const autoApproveFamily = (atoms: ChatAtoms.ChatAtoms) => {
+  const found = autoApproveFamilies.get(atoms)
+  if (found) return found
+  const family = Atom.family((sessionID: Session.ID) =>
     Atom.make((get) =>
       Stream.unwrap(
         Effect.map(get.result(atoms.session(sessionID)), (opened) => SubscriptionRef.changes(opened.autoApprove)),
       ),
     ),
-  ),
-)
-
-export function useReveal(root: Session.ID, sessionID: Session.ID, messageID: string | undefined) {
-  const result = useAtomValue(revealFamily(ChatReact.useAtoms())(`${root} ${sessionID} ${messageID ?? ""}`))
-  return AsyncResult.isSuccess(result) ? result.value : undefined
+  )
+  autoApproveFamilies.set(atoms, family)
+  return family
 }
 
 export function useAutoApprove(sessionID: Session.ID) {
@@ -137,4 +115,42 @@ export function useAutoApprove(sessionID: Session.ID) {
   return { enabled: AsyncResult.isSuccess(result) && result.value, set }
 }
 
-export const useRetry = (sessionID: Session.ID) => useAtomRefresh(ChatReact.useAtoms().session(sessionID))
+const patchSession = (
+  queryClient: QueryClient,
+  api: Runtime.Context["api"],
+  sessionID: string,
+  patch: Partial<SessionInfo>,
+) => {
+  const update = (item: SessionInfo) => (item.id === sessionID ? { ...item, ...patch } : item)
+  queryClient.setQueriesData<SessionPage>({ queryKey: api.session.list.queryKey() }, (page) =>
+    page ? { ...page, items: page.items.map(update) } : page,
+  )
+  queryClient.setQueriesData<InfiniteData<SessionPage>>({ queryKey: sessionKeys.infinite() }, (data) =>
+    data ? { ...data, pages: data.pages.map((page) => ({ ...page, items: page.items.map(update) })) } : data,
+  )
+  queryClient.setQueriesData<SessionInfo>({ queryKey: api.session.get.queryKey() }, (info) =>
+    info ? update(info) : info,
+  )
+}
+
+export const sessionKeys = {
+  infinite: () => ["session", "infinite"] as const,
+  infinitePage: (input: { readonly pageSize: number }) => ["session", "infinite", input] as const,
+}
+
+export function useChatCacheBridge(
+  sessionID: string,
+  live: { readonly title?: string | undefined; readonly status?: Session.Status | undefined },
+) {
+  const queryClient = useQueryClient()
+  const { api } = RouterContext.useRouterContext()
+  const title = live.title
+  const status = live.status
+  useEffect(() => {
+    if (title === undefined && status === undefined) return
+    patchSession(queryClient, api, sessionID, {
+      ...(title !== undefined && { title }),
+      ...(status !== undefined && { status }),
+    })
+  }, [queryClient, api, sessionID, title, status])
+}

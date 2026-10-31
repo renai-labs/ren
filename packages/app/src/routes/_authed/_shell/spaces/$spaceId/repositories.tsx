@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { SpaceRepositories } from "../../../../../features/spaces/space-repositories.js"
+import { SpaceRepositoriesTab } from "../../../../../features/spaces/space-repositories.js"
 import { Loader } from "../../../../../lib/loader.js"
+import { Routing } from "../../../../../lib/routing.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/repositories")({
-  head: () => ({ meta: [{ title: "Space repositories · Ren" }] }),
+  head: () => ({ meta: [{ title: "Repositories · Space · Ren" }] }),
+  validateSearch: Routing.PageSearch,
   loader: (options) => {
     Loader.start(
       options.context.queryClient.query(
@@ -11,10 +13,5 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/repositori
       ),
     )
   },
-  component: SpaceRepositoriesRoute,
+  component: SpaceRepositoriesTab,
 })
-
-function SpaceRepositoriesRoute() {
-  const params = Route.useParams()
-  return <SpaceRepositories spaceId={params.spaceId} />
-}

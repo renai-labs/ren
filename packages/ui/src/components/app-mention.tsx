@@ -1,24 +1,24 @@
-export * as AppMention from "./app-mention.js"
-
+import type { ReactNode } from "react"
 import { cn } from "cn"
 
-export type App = {
-  slug: string
-  name: string
-  icon: string | null
+export type MentionApp = {
+  readonly slug: string
+  readonly name: string
+  readonly icon: string | null
+  readonly brandColor: string | null
 }
 
-export function Logo(props: { name: string; icon: string | null; className?: string | undefined }) {
-  if (props.icon)
-    return (
-      <img
-        src={props.icon}
-        alt=""
-        draggable={false}
-        className={cn("inline-block size-[1.25em] rounded-sm object-cover", props.className)}
-      />
-    )
-  return (
+const mention = /(^|\s)@([a-z0-9][a-z0-9-]*)/giu
+
+export function MentionLogo(props: { name: string; icon: string | null; className?: string | undefined }) {
+  return props.icon ? (
+    <img
+      src={props.icon}
+      alt=""
+      draggable={false}
+      className={cn("inline-block size-[1.25em] rounded-sm object-cover", props.className)}
+    />
+  ) : (
     <span
       aria-hidden
       className={cn(
@@ -31,37 +31,33 @@ export function Logo(props: { name: string; icon: string | null; className?: str
   )
 }
 
-export function Chip(props: { app: App }) {
+export function AppMention(props: { app: MentionApp }) {
   return (
-    <span data-slot="app-mention" className="font-medium whitespace-nowrap text-ring">
-      <Logo name={props.app.name} icon={props.app.icon} className="mr-[0.3em] align-[-0.28em]" />
+    <span className="whitespace-nowrap" style={{ color: props.app.brandColor ?? "var(--ring)" }}>
+      <MentionLogo name={props.app.name} icon={props.app.icon} className="mr-[0.3em] align-[-0.28em]" />
       {props.app.name}
     </span>
   )
 }
 
-const mention = /(^|\s)@([a-z0-9][a-z0-9-]*)/giu
-
-export const link = "#ren-app:"
-
-export function withMentions(text: string, apps: ReadonlyArray<App>) {
-  if (!text.includes("@") || apps.length === 0) return [text]
+export function withAppMentions(text: string, apps: ReadonlyArray<MentionApp>): ReactNode {
+  if (!text.includes("@") || apps.length === 0) return text
   const bySlug = new Map(apps.map((app) => [app.slug.toLowerCase(), app]))
-  const found = [...text.matchAll(mention)].flatMap((match) => {
+  const nodes: ReactNode[] = []
+  const state = { from: 0 }
+  for (const match of text.matchAll(mention)) {
     const app = bySlug.get((match[2] ?? "").toLowerCase())
+    if (!app) continue
     const start = match.index + (match[1] ?? "").length
-    return app ? [{ start, end: start + 1 + (match[2] ?? "").length, app }] : []
-  })
-  return [
-    ...found.flatMap((item, index) => [
-      text.slice(found[index - 1]?.end ?? 0, item.start),
-      <Chip key={item.start} app={item.app} />,
-    ]),
-    text.slice(found.at(-1)?.end ?? 0),
-  ]
+    nodes.push(text.slice(state.from, start), <AppMention key={start} app={app} />)
+    state.from = start + 1 + (match[2] ?? "").length
+  }
+  if (nodes.length === 0) return text
+  nodes.push(text.slice(state.from))
+  return nodes
 }
 
-export function links(markdown: string, apps: ReadonlyArray<App>) {
+export const mentionLinks = (markdown: string, apps: ReadonlyArray<MentionApp>) => {
   if (!markdown.includes("@") || apps.length === 0) return markdown
   const slugs = new Set(apps.map((app) => app.slug.toLowerCase()))
   return markdown
@@ -70,7 +66,7 @@ export function links(markdown: string, apps: ReadonlyArray<App>) {
       index % 2 === 1
         ? part
         : part.replaceAll(mention, (whole, space: string, slug: string) =>
-            slugs.has(slug.toLowerCase()) ? `${space}[@${slug}](${link}${slug.toLowerCase()})` : whole,
+            slugs.has(slug.toLowerCase()) ? `${space}[@${slug}](#ren-app:${slug.toLowerCase()})` : whole,
           ),
     )
     .join("")

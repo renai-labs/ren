@@ -1,53 +1,41 @@
-import { PublicShell } from "@ren/ui/public-shell"
-import { Text } from "@ren/ui/text"
 import { createFileRoute, redirect } from "@tanstack/react-router"
 import { Schema } from "effect"
-import { AuthSchemas } from "../../features/auth/schemas.js"
-import { AcceptInvitation } from "../../features/invitation/accept-invitation.js"
-import { InvitationActions } from "../../features/invitation/invitation-actions.js"
-import { InvitationSchemas } from "../../features/invitation/schemas.js"
-import { Auth } from "../../lib/auth.js"
+import { AppBoot } from "../../components/app-boot.js"
+import { AcceptInvitationPage } from "../../features/invitation/accept-invitation-page.js"
+import { sessionOptions } from "../../lib/auth.js"
+import { joinInvitation } from "../../lib/invitation.js"
+import { Routing } from "../../lib/routing.js"
 
 export const Route = createFileRoute("/invites/accept")({
   head: () => ({ meta: [{ title: "Join organization · Ren" }] }),
   validateSearch: Schema.toStandardSchemaV1(
-    Schema.Struct({ id: InvitationSchemas.Id, join: InvitationSchemas.Join, redirect: AuthSchemas.Redirect }),
+    Schema.Struct({
+      id: Schema.optional(Schema.String),
+      join: Schema.optional(Schema.Boolean),
+      redirect: Routing.Redirect,
+    }),
   ),
   loaderDeps: (options) => options.search,
   loader: async (options) => {
-    const context = options.context
+    const deps = options.deps
+    if (!deps.id) return {}
+    const queryClient = options.context.queryClient
     const [session, preview] = await Promise.all([
-      context.queryClient.query(Auth.sessionOptions(context.auth)),
-      context.queryClient
-        .query({ ...context.api.invitation.preview.queryOptions({ id: options.deps.id }), retry: false })
+      queryClient.query(sessionOptions(options.context.auth)),
+      queryClient
+        .query({ ...options.context.api.invitation.preview.queryOptions({ id: deps.id }), retry: false })
         .catch(() => undefined),
     ])
     const organization = preview?.organization
-    if (!options.deps.join || session === null || preview?.state !== "pending" || organization == null) return {}
-    const outcome = await InvitationActions.join(context, {
-      invitationId: options.deps.id,
+    if (!deps.join || !session || preview?.state !== "pending" || !organization) return {}
+    const outcome = await joinInvitation(options.context, {
+      invitationId: deps.id,
       organizationId: organization.id,
-      redirect: options.deps.redirect,
+      redirect: deps.redirect,
     })
     if (outcome.kind === "opened") throw redirect({ href: outcome.href })
     return { failure: outcome }
   },
-  pendingComponent: LoadingInvitation,
+  pendingComponent: AppBoot,
   component: AcceptInvitationPage,
 })
-
-function LoadingInvitation() {
-  return (
-    <PublicShell.Centered>
-      <Text tone="secondary" element="div" alignment="center">
-        Loading invitation…
-      </Text>
-    </PublicShell.Centered>
-  )
-}
-
-function AcceptInvitationPage() {
-  const search = Route.useSearch()
-  const data = Route.useLoaderData()
-  return <AcceptInvitation id={search.id} redirect={search.redirect} failure={data.failure} />
-}
