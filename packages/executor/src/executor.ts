@@ -64,6 +64,7 @@ export interface Interface {
   readonly mount: (input: HandApi.MountInput) => Effect.Effect<void, HandApi.MountError>
   readonly refresh: (input: HandApi.RefreshInput) => Effect.Effect<void, HandApi.MountError>
   readonly uploaded: (input: HandApi.UploadedInput) => Effect.Effect<void, HandApi.MountError>
+  readonly setup: (entries: ReadonlyArray<HandApi.SetupEntry>) => Effect.Effect<void, HandApi.SetupFailedError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/executor/Executor") {}

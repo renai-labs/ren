@@ -21,6 +21,7 @@ export const layer = Sandbox.layer.pipe(
       ConfigProvider.fromUnknown({
         EXECUTOR_ENVIRONMENT_ID: Hand.ID.create(),
         EXECUTOR_WORKSPACE: workspace,
+        EXECUTOR_SETUP_DIRECTORY: await mkdtemp(join(tmpdir(), "ren-setup-")),
         ...(process.env.SHELL && { SHELL: process.env.SHELL }),
         ...ExecutorVariables.hiding([
           "POSTHOG_PROJECT_KEY",

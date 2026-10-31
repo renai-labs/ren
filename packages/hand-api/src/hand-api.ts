@@ -3,6 +3,8 @@ export * as HandApi from "./hand-api.js"
 import { Drive } from "@ren/schema/drive"
 import { Hand } from "@ren/schema/hand"
 import { Identifier } from "@ren/schema/identifier"
+import { Packages } from "@ren/schema/packages"
+import { Primitive } from "@ren/schema/primitive"
 import { Brain } from "@ren/schema/brain"
 import { Context, Duration, Effect, ErrorReporter, Schema } from "effect"
 import { Rpc, type RpcClientError, RpcGroup, RpcMiddleware } from "effect/rpc"
@@ -253,6 +255,19 @@ export const UploadedInput = Schema.Struct({
   }),
 }).annotate({ identifier: "Executor.UploadedInput" })
 
+export interface SetupEntry extends Schema.Schema.Type<typeof SetupEntry> {}
+export const SetupEntry = Schema.Struct({
+  key: Primitive.Slug.annotate({
+    description: "Names what the steps install. The machine runs an entry’s steps once per key.",
+  }),
+  name: Schema.NonEmptyString.annotate({ description: "What the error message calls the entry, such as an app" }),
+  steps: Schema.Array(Packages.Step),
+}).annotate({ identifier: "Executor.SetupEntry" })
+
+export class SetupFailedError extends Schema.TaggedError<SetupFailedError>()("SetupFailedError", {
+  message: Schema.String.annotate({ description: "One line for each entry that failed" }),
+}) {}
+
 export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundError>()("ProcessNotFoundError", {
   id: ProcessID,
 }) {
@@ -333,4 +348,13 @@ export const Rpcs = RpcGroup.make(
   Rpc.make("drives.mount", { payload: MountInput, error: MountError }),
   Rpc.make("drives.refresh", { payload: RefreshInput, error: MountError }),
   Rpc.make("drives.uploaded", { payload: UploadedInput, error: MountError }),
+  Rpc.make("setup.run", {
+    payload: {
+      entries: Schema.Array(SetupEntry).annotate({
+        description:
+          "Run in order, one call at a time on the machine. An entry that ran to the end is skipped; one that fails does not stop the others",
+      }),
+    },
+    error: SetupFailedError,
+  }),
 ).middleware(Authentication)

@@ -100,6 +100,7 @@ const operations = HandApi.Rpcs.toLayer(
       "drives.mount": (input) => executor.mount(input),
       "drives.refresh": (input) => executor.refresh(input),
       "drives.uploaded": (input) => executor.uploaded(input),
+      "setup.run": (input) => executor.setup(input.entries),
     })
   }),
 )
