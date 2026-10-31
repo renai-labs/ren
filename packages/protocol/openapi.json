@@ -15641,7 +15641,7 @@
           "environment": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/App.Environment"
+                "$ref": "#/components/schemas/Packages.Setup"
               },
               {
                 "type": "null"
@@ -15696,27 +15696,6 @@
           }
         },
         "required": ["name", "description", "slug", "ownerSpaceId"],
-        "additionalProperties": false
-      },
-      "App.Environment": {
-        "type": "object",
-        "properties": {
-          "packages": {
-            "$ref": "#/components/schemas/App.Packages"
-          },
-          "buildCommands": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 4096
-            },
-            "maxItems": 50,
-            "title": "Build commands",
-            "description": "Run in order after the packages. One per line.",
-            "examples": [["corepack enable"]]
-          }
-        },
         "additionalProperties": false
       },
       "App.ID": {
@@ -15779,7 +15758,7 @@
             }
           },
           "environment": {
-            "$ref": "#/components/schemas/App.Environment"
+            "$ref": "#/components/schemas/Packages.Setup"
           },
           "skills": {
             "type": "object",
@@ -15861,50 +15840,6 @@
         ],
         "additionalProperties": false
       },
-      "App.Packages": {
-        "type": "object",
-        "properties": {
-          "apt": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            },
-            "title": "APT packages",
-            "examples": [["ffmpeg"]]
-          },
-          "npm": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            },
-            "title": "npm packages",
-            "examples": [["typescript"]]
-          },
-          "pip": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            },
-            "title": "pip packages",
-            "examples": [["requests"]]
-          },
-          "go": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            },
-            "title": "Go modules",
-            "examples": [["golang.org/x/tools/gopls@latest"]]
-          }
-        },
-        "additionalProperties": false,
-        "title": "Packages",
-        "description": "One per line."
-      },
       "App.Page": {
         "type": "object",
         "properties": {
@@ -15955,7 +15890,7 @@
           "environment": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/App.Environment"
+                "$ref": "#/components/schemas/Packages.Setup"
               },
               {
                 "type": "null"
@@ -20175,7 +20110,7 @@
             "type": "string"
           },
           "environment": {
-            "$ref": "#/components/schemas/App.Environment"
+            "$ref": "#/components/schemas/Packages.Setup"
           }
         },
         "required": ["name", "description", "skills", "mcps"],
@@ -20452,7 +20387,7 @@
                   }
                 },
                 "environment": {
-                  "$ref": "#/components/schemas/App.Environment"
+                  "$ref": "#/components/schemas/Packages.Setup"
                 },
                 "skills": {
                   "type": "object",
@@ -22840,6 +22775,72 @@
         },
         "required": ["settings"],
         "additionalProperties": false
+      },
+      "Packages.Info": {
+        "type": "object",
+        "properties": {
+          "apt": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "title": "APT packages",
+            "examples": [["ffmpeg"]]
+          },
+          "npm": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "title": "npm packages",
+            "examples": [["typescript"]]
+          },
+          "pip": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "title": "pip packages",
+            "examples": [["requests"]]
+          },
+          "go": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "title": "Go modules",
+            "examples": [["golang.org/x/tools/gopls@latest"]]
+          }
+        },
+        "additionalProperties": false,
+        "title": "Packages",
+        "description": "One per line."
+      },
+      "Packages.Setup": {
+        "type": "object",
+        "properties": {
+          "packages": {
+            "$ref": "#/components/schemas/Packages.Info"
+          },
+          "buildCommands": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "maxItems": 50,
+            "title": "Build commands",
+            "description": "Run in order after the packages. One per line.",
+            "examples": [["corepack enable"]]
+          }
+        },
+        "additionalProperties": false,
+        "description": "What a machine installs, then the commands it runs, in order."
       },
       "Permission.Rule": {
         "type": "object",

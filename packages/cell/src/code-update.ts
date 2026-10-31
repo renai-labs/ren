@@ -1,6 +1,6 @@
 export * as CodeUpdate from "./code-update.js"
 
-import type { Step } from "@ren/host-api/brain-api"
+import type { Packages } from "@ren/schema/packages"
 import { BrainRejectedError } from "@ren/host-api/errors"
 import { Bundle } from "@ren/schema/bundle"
 import { Context, Effect, FileSystem, Layer, Path, Schema, Semaphore, Stream } from "effect"
@@ -10,7 +10,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process"
 export interface Interface {
   readonly update: (
     bundles: ReadonlyArray<Bundle.Download>,
-    steps: ReadonlyArray<Step>,
+    steps: ReadonlyArray<Packages.Step>,
   ) => Effect.Effect<void, BrainRejectedError>
 }
 
