@@ -80,7 +80,7 @@ function CodeBlockActions({ className, ...props }: React.ComponentProps<"div">) 
 function CodeBlockCopyButton({
   value,
   variant = "ghost",
-  size = "icon-xs",
+  size = "icon-sm",
   className,
   onClick,
   ...props
@@ -160,8 +160,10 @@ function CodeBlockContent({
           ? children
               .replace(/\n$/, "")
               .split("\n")
-              // oxlint-disable-next-line react/no-array-index-key -- a line's position is its identity
-              .map((line, index) => <CodeBlockLine key={index}>{line}</CodeBlockLine>)
+              .map((line, index) => (
+                // oxlint-disable-next-line react/no-array-index-key -- a line's position is its identity
+                <CodeBlockLine key={index}>{line}</CodeBlockLine>
+              ))
           : children}
       </code>
     </pre>
@@ -231,3 +233,5 @@ export {
   CodeBlockLine,
   CodeBlockFooter,
 }
+
+export { useHighlightedCode } from "#hooks/use-highlighted-code"

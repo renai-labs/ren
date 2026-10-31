@@ -6,19 +6,17 @@
   "type": "module",
   "imports": {
     "#components/*": "./src/components/*.tsx",
-    "#lib/*": "./src/lib/*.ts",
     "#hooks/*": "./src/hooks/*.ts"
   },
   "license": "UNLICENSED",
   "exports": {
     "./styles": "./src/styles/index.css",
-    "./styles/fonts": "./src/styles/fonts.css",
+    "./factory-model": "./src/lib/factory/model.ts",
     "./*": "./src/components/*.tsx"
   },
   "scripts": {
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo --noEmit",
-    "generate": "bun run script/design-tokens.ts"
+    "typecheck": "tsgo --noEmit"
   },
   "peerDependencies": {
     "react": "catalog:",
@@ -35,22 +33,19 @@
   "dependencies": {
     "@base-ui/react": "catalog:",
     "@fontsource/ibm-plex-mono": "catalog:",
-    "@mdxeditor/editor": "catalog:",
+    "@pierre/diffs": "1.6.1",
+    "@pierre/trees": "1.0.0-beta.6",
     "@shadcn/react": "catalog:",
-    "@streamdown/cjk": "catalog:",
-    "@streamdown/math": "catalog:",
-    "@streamdown/mermaid": "catalog:",
     "@tabler/icons-react": "catalog:",
-    "@tanstack/react-form": "catalog:",
     "class-variance-authority": "catalog:",
-    "clsx": "catalog:",
+    "cmdk": "catalog:",
     "cn": "catalog:",
     "input-otp": "catalog:",
+    "motion": "catalog:",
     "react-day-picker": "catalog:",
     "shadcn": "catalog:",
     "shiki": "catalog:",
-    "streamdown": "catalog:",
-    "tailwind-merge": "catalog:",
+    "sonner": "catalog:",
     "tailwindcss": "catalog:",
     "tw-animate-css": "catalog:"
   },

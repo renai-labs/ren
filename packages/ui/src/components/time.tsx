@@ -1,95 +1,71 @@
-import { useSyncExternalStore } from "react"
-import { readClock, subscribeClock } from "../lib/clock.js"
-import {
-  formatDate,
-  formatDateShort,
-  formatDateTime,
-  formatDateTimeInZone,
-  formatElapsed,
-  formatRelative,
-  formatTimeOfDay,
-  toDate,
-} from "../lib/date.js"
-import type { DateInput } from "../lib/date.js"
-import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip.js"
+const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" })
+const shortDateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" })
+const dateTimeFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" })
+const clockFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+const relativeFormat = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
+const narrowRelativeFormat = new Intl.RelativeTimeFormat("en", { style: "narrow", numeric: "auto" })
 
-type AbsoluteFormat = "date" | "short-date" | "date-time" | "time-of-day"
-type RelativeFormat = "relative" | "elapsed"
+const units = [
+  { unit: "year", ms: 365 * 86_400_000 },
+  { unit: "month", ms: 30 * 86_400_000 },
+  { unit: "week", ms: 7 * 86_400_000 },
+  { unit: "day", ms: 86_400_000 },
+  { unit: "hour", ms: 3_600_000 },
+  { unit: "minute", ms: 60_000 },
+] as const
 
-export type TimeProps = {
-  value: DateInput
-  format: AbsoluteFormat | RelativeFormat
-  timeZone?: string | undefined
-  relativeStyle?: "long" | "narrow"
-  label?: string
+export const formatDate = (value: string | Date) => dateFormat.format(new Date(value))
+
+export const formatShortDate = (value: string | Date) => shortDateFormat.format(new Date(value))
+
+export const formatDateTime = (value: string | Date) => dateTimeFormat.format(new Date(value))
+
+export const formatClock = (value: number | Date) => clockFormat.format(value)
+
+export function formatRelative(value: string | Date, now = Date.now()) {
+  const difference = new Date(value).getTime() - now
+  const found = units.find((each) => Math.abs(difference) >= each.ms)
+  if (!found) return "just now"
+  return relativeFormat.format(Math.round(difference / found.ms), found.unit)
 }
 
-export function Time(props: TimeProps) {
-  const dateTime = formatDateTime(props.value, { timeZone: props.timeZone })
-  const title = props.label === undefined ? undefined : `${props.label}: ${dateTime}`
-  if (props.format === "relative" || props.format === "elapsed") {
-    return (
-      <RelativeTime
-        value={props.value}
-        format={props.format}
-        relativeStyle={props.relativeStyle ?? "long"}
-        title={title ?? dateTime}
-      />
-    )
-  }
-  return (
-    <TimeElement value={props.value} title={title}>
-      {formatAbsolute(props.value, props.format, props.timeZone)}
-    </TimeElement>
-  )
+export function formatCountdown(value: string, now: number) {
+  const minutes = Math.round((Date.parse(value) - now) / 60_000)
+  if (minutes < 60) return narrowRelativeFormat.format(minutes, "minute")
+  if (minutes < 24 * 60) return narrowRelativeFormat.format(Math.round(minutes / 60), "hour")
+  return narrowRelativeFormat.format(Math.round(minutes / (24 * 60)), "day")
 }
 
-function formatAbsolute(value: DateInput, format: AbsoluteFormat, timeZone: string | undefined) {
-  if (format === "date") return formatDate(value, { timeZone })
-  if (format === "short-date") return formatDateShort(value, { timeZone })
-  if (format === "time-of-day") return formatTimeOfDay(value, { timeZone })
-  if (timeZone === undefined) return formatDateTime(value)
-  return formatDateTimeInZone(value, timeZone)
+export const formatInZone = (instant: string, timeZone: string) =>
+  new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+    timeZoneName: "short",
+  }).format(new Date(instant))
+
+const legacyZones: Readonly<Record<string, string>> = {
+  "Asia/Calcutta": "Asia/Kolkata",
+  "Asia/Katmandu": "Asia/Kathmandu",
+  "Asia/Rangoon": "Asia/Yangon",
+  "Asia/Saigon": "Asia/Ho_Chi_Minh",
+  "Europe/Kiev": "Europe/Kyiv",
 }
 
-function RelativeTime(props: {
-  value: DateInput
-  format: RelativeFormat
-  relativeStyle: "long" | "narrow"
-  title: string
-}) {
-  const now = useSyncExternalStore(subscribeClock, readClock, readClock)
-  return (
-    <TimeElement value={props.value} title={props.title}>
-      {props.format === "relative"
-        ? formatRelative(props.value, now, props.relativeStyle)
-        : formatElapsed(props.value, now)}
-    </TimeElement>
-  )
-}
-
-function TimeElement(props: { value: DateInput; title?: string | undefined; children: string }) {
-  const date = toDate(props.value)
-  const valid = !Number.isNaN(date.getTime())
-  const element = (
-    <time data-slot="time" className="tabular-nums" dateTime={valid ? date.toISOString() : undefined}>
-      {props.children}
-    </time>
-  )
-  if (!valid || props.title === undefined) return element
-  return (
-    <Tooltip>
-      <TooltipTrigger render={element} />
-      <TooltipContent>{props.title}</TooltipContent>
-    </Tooltip>
-  )
-}
-
-// oxlint-disable-next-line ren/no-comments -- The viewer's IANA time zone, for example "Europe/Berlin".
 export function localTimeZone() {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  return legacyZones[zone] ?? zone
 }
 
 export function timeZones() {
-  return Intl.supportedValuesOf("timeZone")
+  const zones = Intl.supportedValuesOf("timeZone")
+  return zones.includes("UTC") ? zones : ["UTC", ...zones]
 }
+
+export const civilDate = (date: Date) =>
+  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, "0"))
+    .join("-")

@@ -1,51 +1,50 @@
-import { Field, FieldTitle } from "@ren/ui/field"
-import { InlineEdit } from "@ren/ui/inline-edit"
-import { Page } from "@ren/ui/page"
-import { Text } from "@ren/ui/text"
-import { useMutation, useQuery } from "@tanstack/react-query"
-import { Forms } from "../../lib/forms.js"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { toast } from "@ren/ui/sonner"
+import { EditableText } from "../../components/editable-text.js"
+import { Row, Rows } from "../../components/page.js"
+import { errorMessage } from "../../lib/errors.js"
+import { FactoryDashboard } from "./factory-view.js"
+import { isSoftwareFactory } from "../../lib/factory.js"
+import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
 
-export function SpaceOverview(props: { spaceId: string }) {
-  const context = RouterContext.useRouterContext()
-  const space = useQuery(context.api.space.get.queryOptions({ idOrSlug: props.spaceId }))
-  const update = useMutation(context.api.space.update.mutationOptions())
-  if (!space.data) return null
-  const save = async (change: { name?: string; description?: string | null }) => {
-    await update.mutateAsync({ id: props.spaceId, ...change })
-  }
+export function SpaceOverviewTab() {
+  const { api } = RouterContext.useRouterContext()
+  const space = useSpace()
+  const queryClient = useQueryClient()
+  const update = useMutation(api.space.update.mutationOptions())
+  const save = (change: { name?: string; description?: string | null }) =>
+    update.mutateAsync(
+      { id: space.id, ...change },
+      {
+        onSuccess: (updated) =>
+          queryClient.setQueryData(api.space.get.queryOptions({ idOrSlug: space.id }).queryKey, updated),
+        onError: (error) => toast.error("Could not save the space", { description: errorMessage(error) }),
+      },
+    )
+  if (isSoftwareFactory(space)) return <FactoryDashboard space={space} />
   return (
-    <Page.Section frame="divided">
-      <Field orientation="horizontal">
-        <FieldTitle>Name</FieldTitle>
-        {space.data.canUpdate ? (
-          <InlineEdit
-            label="Space name"
-            alignment="end"
-            placeholder="Enter space name"
+    <Rows>
+      {[
+        <Row key="name" title="Name">
+          <EditableText
+            value={space.name}
+            label="space name"
             required
-            schema={Forms.spaceName}
-            value={space.data.name}
+            readOnly={!space.canUpdate}
             onCommit={(name) => save({ name })}
           />
-        ) : (
-          <Text element="span">{space.data.name}</Text>
-        )}
-      </Field>
-      <Field orientation="horizontal">
-        <FieldTitle>Description</FieldTitle>
-        {space.data.canUpdate ? (
-          <InlineEdit
-            label="Space description"
-            alignment="end"
-            placeholder="What does this space work on?"
-            value={space.data.description ?? ""}
+        </Row>,
+        <Row key="description" title="Description">
+          <EditableText
+            value={space.description ?? ""}
+            placeholder="No description"
+            label="space description"
+            readOnly={!space.canUpdate}
             onCommit={(description) => save({ description: description || null })}
           />
-        ) : (
-          <Text element="span">{space.data.description ?? "—"}</Text>
-        )}
-      </Field>
-    </Page.Section>
+        </Row>,
+      ]}
+    </Rows>
   )
 }

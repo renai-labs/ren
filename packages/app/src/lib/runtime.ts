@@ -3,10 +3,11 @@ export * as Runtime from "./runtime.js"
 import { ClientError, Ren } from "@ren/client"
 import { RenQuery } from "@ren/client/react"
 import { hashKey, MutationCache, QueryClient } from "@tanstack/react-query"
-import { Page } from "@ren/ui/page"
 import { createRouter } from "@tanstack/react-router"
-import { routeTree } from "../route-tree.gen.js"
+import { PageSkeleton } from "../components/page.js"
+import { RouteError } from "../components/route-error.js"
 import type { Platform } from "../platform/platform.js"
+import { routeTree } from "../route-tree.gen.js"
 import { Auth } from "./auth.js"
 import { OAuthSearch } from "./oauth-search.js"
 import { ProductEvents } from "./product-events.js"
@@ -30,6 +31,7 @@ const invalidates: Readonly<Record<string, ReadonlyArray<string>>> = {
   "credential-connect": ["app-profile", "app-profile-reach"],
   schedule: ["schedule", "schedule-run"],
   "channel-mapping": ["channel-mapping", "channel-connect"],
+  "channel-install": ["channel-install", "channel-mapping", "channel-connect"],
   chat: [],
 }
 
@@ -37,7 +39,7 @@ export function make(platform: Platform.Info) {
   const client = Ren.make({ baseUrl: platform.serverUrl, fetch: platform.fetch })
   const api = RenQuery.make(client)
   const queryClient: QueryClient = new QueryClient({
-    defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+    defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
     mutationCache: new MutationCache({
       onSuccess: (_data, _variables, _context, mutation) => {
         const group = mutation.options.mutationKey?.[0]
@@ -49,8 +51,11 @@ export function make(platform: Platform.Info) {
       },
     }),
   })
-  queryClient.setQueryDefaults(api.me.get.queryKey(), { staleTime: Number.POSITIVE_INFINITY })
+  queryClient.setQueryDefaults(api.me.get.queryKey().slice(0, 1), { staleTime: Number.POSITIVE_INFINITY })
+  queryClient.setQueryDefaults(api["organization-settings"].get.queryKey(), { staleTime: Number.POSITIVE_INFINITY })
   queryClient.setQueryDefaults(api.chat.models.queryKey(), { staleTime: 10 * 60_000 })
+  queryClient.setQueryDefaults(api.task.list.queryKey().slice(0, 1), { staleTime: 30_000 })
+  queryClient.setQueryDefaults(api.session.list.queryKey().slice(0, 1), { staleTime: 30_000 })
   const analytics = platform.analytics
   if (analytics !== undefined) {
     const me = api.me.get.queryOptions().queryKey
@@ -77,13 +82,14 @@ export function make(platform: Platform.Info) {
       if (error instanceof Error && "_tag" in error && error.name === error._tag) return
       analytics?.captureException(error)
     },
+    basepath: "/app",
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
-    defaultPendingMs: 200,
-    defaultPendingMinMs: 400,
-    defaultPendingComponent: Page.Pending,
+    defaultPendingMs: 1000,
+    defaultPendingMinMs: 500,
+    defaultPendingComponent: PageSkeleton,
+    defaultErrorComponent: RouteError,
     scrollRestoration: true,
-    basepath: "/app",
     parseSearch: OAuthSearch.parse,
     stringifySearch: OAuthSearch.stringify,
   })

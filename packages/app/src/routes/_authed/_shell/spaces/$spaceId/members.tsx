@@ -1,32 +1,23 @@
-import { Pagination } from "@ren/schema/pagination"
 import { createFileRoute } from "@tanstack/react-router"
-import { SpaceMembers } from "../../../../../features/spaces/space-members.js"
-import { Auth } from "../../../../../lib/auth.js"
+import { SpaceMembersTab } from "../../../../../features/spaces/space-members.js"
+import { pageSize, currentPage } from "../../../../../lib/pagination.js"
 import { Loader } from "../../../../../lib/loader.js"
+import { Routing } from "../../../../../lib/routing.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/members")({
-  head: () => ({ meta: [{ title: "Space members · Ren" }] }),
+  head: () => ({ meta: [{ title: "Members · Space · Ren" }] }),
+  validateSearch: Routing.PageSearch,
+  loaderDeps: (options) => ({ page: currentPage(options.search) }),
   loader: (options) => {
-    const context = options.context
-    const organization = context.me.organization
     Loader.start(
-      context.queryClient.query(
-        context.api["space-member"].list.queryOptions({
+      options.context.queryClient.query(
+        options.context.api["space-member"].list.queryOptions({
           spaceId: options.params.spaceId,
-          page: 1,
-          pageSize: Pagination.maximumPageSize,
+          page: options.deps.page,
+          pageSize,
         }),
       ),
-      ...(organization ? [context.queryClient.query(Auth.organizationOptions(context.auth, organization.id))] : []),
     )
   },
-  component: SpaceMembersRoute,
+  component: SpaceMembersTab,
 })
-
-function SpaceMembersRoute() {
-  const params = Route.useParams()
-  const context = Route.useRouteContext()
-  const organization = context.me.organization
-  if (!organization) return null
-  return <SpaceMembers spaceId={params.spaceId} organizationId={organization.id} userId={context.me.user.id} />
-}

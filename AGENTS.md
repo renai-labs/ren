@@ -10,7 +10,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 | Write React or interface code           | The `react` and `interface` skills.                                          |
 | Run, debug or verify Ren                | The `ren-dev` skill.                                                         |
 | Review code or prepare commits          | The `ren-dev` skill (scope, review checkpoints and test selection).          |
-| Change design tokens                    | The `sync-with-paper` skill.                                                 |
+| Change a UI component or the theme      | `packages/ui/AGENTS.md` and the `shadcn` skill.                              |
 | Change lint rules or `oxlint.config.ts` | `script/AGENTS.md`.                                                          |
 | Change Turborepo config                 | `docs/` in the installed `turbo` package. Its behaviour differs from memory. |
 | Write a spec                            | `specs/README.md`.                                                           |

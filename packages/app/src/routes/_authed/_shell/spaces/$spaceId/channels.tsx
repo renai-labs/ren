@@ -1,22 +1,19 @@
-import { Pagination } from "@ren/schema/pagination"
 import { createFileRoute } from "@tanstack/react-router"
-import { SpaceChannels } from "../../../../../features/channels/space-channels.js"
+import { SpaceChannelsTab } from "../../../../../features/spaces/space-channels.js"
+import { Channels } from "../../../../../lib/channels.js"
 import { Loader } from "../../../../../lib/loader.js"
+import { Routing } from "../../../../../lib/routing.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/channels")({
-  head: () => ({ meta: [{ title: "Space channels · Ren" }] }),
+  head: () => ({ meta: [{ title: "Mentions · Space · Ren" }] }),
+  validateSearch: Routing.PageSearch,
   loader: (options) => {
     Loader.start(
       options.context.queryClient.query(
-        options.context.api["channel-install"].list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }),
+        options.context.api["channel-mapping"].list.queryOptions({ ...Channels.all, spaceId: options.params.spaceId }),
       ),
+      options.context.queryClient.query(Channels.installsOptions(options.context.api)),
     )
   },
-  component: SpaceChannelsRoute,
+  component: SpaceChannelsTab,
 })
-
-function SpaceChannelsRoute() {
-  const params = Route.useParams()
-  const context = Route.useRouteContext()
-  return <SpaceChannels key={params.spaceId} spaceId={params.spaceId} userId={context.me.user.id} />
-}

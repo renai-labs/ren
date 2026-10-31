@@ -1,87 +1,162 @@
-import { Pagination } from "@ren/schema/pagination"
+import { useState } from "react"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { getRouteApi } from "@tanstack/react-router"
+import { IconPlus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
-import { Icon } from "@ren/ui/icon"
-import { Page } from "@ren/ui/page"
-import { SearchField } from "@ren/ui/search-field"
-import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
-import { useQuery } from "@tanstack/react-query"
-import { useDeferredValue, useState } from "react"
-import type { ReactNode } from "react"
+import { Tabs } from "@ren/ui/tabs"
+import { AccountActions } from "../../components/account-actions.js"
+import { AccountList, AppSheet } from "../../components/app-list.js"
+import { AppsTable } from "../../components/apps-table.js"
+import { CredentialSheet, ownerOptions } from "../../components/credential-sheet.js"
+import { CredentialsTable } from "../../components/credentials-table.js"
+import { ListPagination } from "../../components/list-pagination.js"
+import { Page, PageTabsList, PageTabsTrigger, SkeletonRows } from "../../components/page.js"
+import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
+import { useCatalog } from "../../lib/use-catalog.js"
+import { useDebouncedValue } from "../../lib/use-debounced-value.js"
+import { useMe } from "../../lib/use-me.js"
+import { useSpaces } from "../../lib/use-spaces.js"
+import { pageSize, currentPage, lastPageAfterRemoval } from "../../lib/pagination.js"
+import { reach, usedIn } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { PasteCredentialDialog } from "../../components/paste-credential-dialog.js"
-import { Credentials } from "../../components/credentials.js"
-import { CredentialsTable } from "./credentials-table.js"
-import { Owners } from "./owners.js"
+import { Loader } from "../../lib/loader.js"
 
-export type Tab = "apps" | "credentials"
+const route = getRouteApi("/_authed/_shell/settings/credentials")
 
-// oxlint-disable-next-line ren/no-comments -- The space Apps and Credentials tabs, for the whole org: app accounts, and loose credentials.
-export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNode; onTabChange: (tab: Tab) => void }) {
-  const context = RouterContext.useRouterContext()
-  const credentials = useQuery(
-    context.api.credential.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }),
-  )
-  const spaces = useQuery(
-    context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize, joined: true }),
-  )
-  const [query, setQuery] = useState("")
-  const [creating, setCreating] = useState(false)
-  const needle = useDeferredValue(query)
-  const spaceList = spaces.data?.items ?? []
-  const names = new Map(spaceList.map((space) => [space.id, space.name]))
-  const items = (credentials.data?.items ?? []).filter((item) => item.owner.kind !== "profile")
-  const visible = items.filter((item) => Credentials.matches(item, needle))
-  const owners = Owners.options(spaceList)
-  const state = { pending: "loading", error: "failed", success: visible.length > 0 ? "ready" : "empty" } as const
+function CredentialTabs(props: { tab: "apps" | "keys"; keys?: number | undefined }) {
+  const navigate = route.useNavigate()
   return (
-    <Page.Root
-      title="Credentials"
-      description="The app accounts and credentials your organization’s chats use."
-      leading={
-        <Tabs value={props.tab} onValueChange={(next: Tab) => props.onTabChange(next)}>
-          <TabsList variant="page" aria-label="Credential kinds">
-            <TabsTrigger value="apps">Apps</TabsTrigger>
-            <TabsTrigger value="credentials">
-              Credentials
-              <span className="text-muted-foreground tabular-nums">{items.length}</span>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      }
-      actions={
-        props.tab === "credentials" ? (
-          <>
-            <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
-            <Button size="sm" onClick={() => setCreating(true)}>
-              <Icon glyph="Plus" data-icon="inline-start" />
-              Add credential
-            </Button>
-          </>
-        ) : undefined
-      }
+    <Tabs
+      value={props.tab}
+      onValueChange={(value: string) => void navigate({ search: { tab: value === "keys" ? "keys" : "apps" } })}
     >
-      {props.tab === "apps" ? props.apps : null}
-      {props.tab === "credentials" ? (
+      <PageTabsList>
+        <PageTabsTrigger value="apps">Apps</PageTabsTrigger>
+        <PageTabsTrigger value="keys" count={props.keys}>
+          Keys
+        </PageTabsTrigger>
+      </PageTabsList>
+    </Tabs>
+  )
+}
+
+export function CredentialsSettingsPage() {
+  const search = route.useSearch()
+  if (search.tab === "keys") return <CredentialKeys />
+  return (
+    <Page title="Credentials" description="App accounts and keys you can use." leading={<CredentialTabs tab="apps" />}>
+      <OrgApps />
+    </Page>
+  )
+}
+
+function CredentialKeys() {
+  const { api } = RouterContext.useRouterContext()
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
+  const me = useMe()
+  const spaces = useSpaces().spaces
+  const page = currentPage(search)
+  const [query, setQuery] = useState("")
+  const needle = useDebouncedValue(query.trim(), 250)
+  const [adding, setAdding] = useState(false)
+  const list = useQuery({
+    ...api.credential.list.queryOptions({ page, pageSize, ...(needle && { search: needle }) }),
+    placeholderData: keepPreviousData,
+    select: (data) => ({ ...data, items: data.items.filter((credential) => credential.owner.kind !== "profile") }),
+    ...Loader.required,
+  })
+  const total = list.data?.total ?? 0
+  const removed = () => {
+    const next = lastPageAfterRemoval(page, total, pageSize)
+    if (next !== page) void navigate({ search: (previous) => ({ ...previous, page: next }) })
+  }
+  return (
+    <Page
+      title="Credentials"
+      description="App accounts and keys you can use."
+      leading={<CredentialTabs tab="keys" keys={total} />}
+      actions={
+        <>
+          <ToolbarSearch label="Search keys" value={query} onChange={setQuery} />
+          <Button onClick={() => setAdding(true)}>
+            <IconPlus />
+            Add key
+          </Button>
+        </>
+      }
+      footer={<ListPagination page={page} pageSize={pageSize} total={total} noun="key" />}
+    >
+      {list.data ? (
         <CredentialsTable
-          rows={visible}
-          state={state[credentials.status]}
-          query={needle.trim()}
-          spaces={names}
-          owners={owners}
-          userId={props.userId}
-          emptyMessage="No credentials"
+          credentials={list.data.items}
+          stale={list.isPlaceholderData}
+          onRemoved={removed}
+          empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
         />
-      ) : null}
-      {creating ? (
-        <PasteCredentialDialog
-          title="Add credential"
-          description="Paste a key. Ren keeps it encrypted and never shows it again."
-          owners={owners}
-          userId={props.userId}
-          submitLabel="Save credential"
-          onClose={() => setCreating(false)}
-        />
-      ) : null}
-    </Page.Root>
+      ) : (
+        <SkeletonRows count={4} />
+      )}
+      <CredentialSheet
+        open={adding}
+        onOpenChange={setAdding}
+        title="Add key"
+        description="Paste a key. Ren keeps it encrypted and never shows it again."
+        owners={ownerOptions(spaces)}
+        userId={me.user.id}
+      />
+    </Page>
+  )
+}
+
+function OrgApps() {
+  const catalog = useCatalog()
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
+  const opened = search.app
+  const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
+  const [profile, setProfile] = useState<ProfileTarget>()
+  const used = catalog.apps.filter((app) => catalog.profilesOf(app.id).length > 0)
+  const app = opened ? catalog.appOf(opened) : undefined
+  if (catalog.loading) return <SkeletonRows count={4} />
+  return (
+    <>
+      <AppsTable
+        rows={used.map((each) => ({
+          app: each,
+          profiles: catalog.profilesOf(each.id),
+          usedIn: usedIn(catalog.profilesOf(each.id)),
+        }))}
+        empty="No apps. Add one to a space from the Marketplace."
+        onOpen={setOpened}
+        onNew={(appId) => setProfile({ appId })}
+      />
+      <AppSheet app={app} onClose={() => setOpened(undefined)}>
+        {app ? (
+          <AccountList
+            title="Accounts"
+            actions={
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => setProfile({ appId: app.id })}
+              >
+                <IconPlus />
+                New account
+              </Button>
+            }
+            profiles={catalog.profilesOf(app.id)}
+            caption={reach}
+            onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, edit: true })}
+            action={(each) => (
+              <AccountActions profile={each} onOpen={() => setProfile({ appId: each.appId, profileId: each.id })} />
+            )}
+          />
+        ) : null}
+      </AppSheet>
+      {profile ? <ProfileDialog {...profile} onClose={() => setProfile(undefined)} /> : null}
+    </>
   )
 }
