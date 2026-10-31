@@ -1,10 +1,12 @@
 export * as HandCopies from "./copies.js"
 
 import type { HandApi } from "@ren/hand-api/hand-api"
+import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Drive } from "@ren/schema/drive"
+import { Packages } from "@ren/schema/packages"
 import type { Session } from "@ren/schema/session"
 import { Skill } from "@ren/schema/skill"
-import { Effect, Option, Schema, Semaphore } from "effect"
+import { Effect, Hash, Option, Schema, Semaphore } from "effect"
 import type { HandConnections } from "./connections.js"
 
 export interface File {
@@ -17,6 +19,7 @@ export type Copy =
   | { readonly type: "archive"; readonly unpack: Omit<HandApi.UnpackInput, "path"> }
   | { readonly type: "inline"; readonly files: ReadonlyArray<File> }
   | { readonly type: "mount"; readonly remote: Drive.Remote; readonly access: Drive.Access }
+  | { readonly type: "setup"; readonly entries: ReadonlyArray<HandApi.SetupEntry> }
 
 export interface Item {
   readonly path: string
@@ -29,7 +32,7 @@ export interface Failure<I extends Item = Item> {
 }
 
 export interface Interface {
-  // oxlint-disable-next-line ren/no-comments -- Failed mounts retain their explanation until the next turn or destination; other failed copies can retry immediately.
+  // oxlint-disable-next-line ren/no-comments -- Failed mounts and setups retain their explanation until the next turn or destination; other failed copies can retry immediately.
   readonly ensure: <I extends Item>(items: ReadonlyArray<I>) => Effect.Effect<ReadonlyArray<Failure<I>>>
   // oxlint-disable-next-line ren/no-comments -- R44: the next call copies every item again; the executor answers at once for a folder that exists.
   readonly turnStarted: Effect.Effect<void>
@@ -41,6 +44,7 @@ const copyWith = (connection: HandConnections.Connection, item: Item) => {
   const client = connection.client
   const copy = item.copy
   if (copy.type === "archive") return client["files.unpack"]({ ...copy.unpack, path: item.path })
+  if (copy.type === "setup") return client["setup.run"]({ entries: copy.entries })
   if (copy.type === "mount")
     return connection.hello.mount
       ? client["drives.mount"]({ path: item.path, remote: copy.remote, access: copy.access })
@@ -66,7 +70,25 @@ const copyWith = (connection: HandConnections.Connection, item: Item) => {
   })
 }
 
-// oxlint-disable-next-line ren/no-comments -- Destination identity and generation come from one connection. Serialize callers so a failed mount is attempted only once per turn.
+export const setupOf = (apps: ReadonlyArray<AppCatalog.AppEntry>): Option.Option<Item> => {
+  const entries = apps.flatMap((app) => {
+    const steps = app.environment ? Packages.steps(app.environment) : []
+    return steps.length
+      ? [
+          {
+            key: Math.abs(Hash.string(JSON.stringify([app.appSlug, app.environment]))).toString(36),
+            name: `the app ${app.appSlug}`,
+            steps,
+          },
+        ]
+      : []
+  })
+  return entries.length
+    ? Option.some({ path: `setup:${entries.map((entry) => entry.key).join(",")}`, copy: { type: "setup", entries } })
+    : Option.none()
+}
+
+// oxlint-disable-next-line ren/no-comments -- Destination identity and generation come from one connection. Serialize callers so a failed mount or setup is attempted only once per turn.
 export const make = (connections: HandConnections.Interface, sessionId: Session.ID): Interface => {
   const lock = Semaphore.makeUnsafe(1)
   const copied = { destination: "", generation: Number.NaN, paths: new Map<string, Option.Option<string>>() }
@@ -91,7 +113,7 @@ export const make = (connections: HandConnections.Interface, sessionId: Session.
                 ),
                 Effect.tap((failure) =>
                   Effect.sync(() => {
-                    if (Option.isNone(failure) || item.copy.type === "mount")
+                    if (Option.isNone(failure) || item.copy.type === "mount" || item.copy.type === "setup")
                       copied.paths.set(
                         item.path,
                         Option.map(failure, (failed) => failed.message),
