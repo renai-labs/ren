@@ -1,7 +1,7 @@
 export * as Runtime from "./runtime.js"
 
 import { ApiError } from "@renai-labs/sdk/effect"
-import { Array, Cause, Console, Data, Effect, Exit, Predicate, Runtime } from "effect"
+import { Array, Cause, Console, Data, Effect, Exit, Predicate, Runtime, Schema } from "effect"
 import { CliConfig, CliError, CliOutput, Command, GlobalFlag } from "effect/cli"
 import { HttpClientError } from "effect/http"
 import { format } from "node:util"
@@ -11,8 +11,7 @@ const formatter = CliOutput.defaultFormatter()
 
 class Exited extends Data.Error<{ readonly [Runtime.errorExitCode]: number }> {}
 
-const isApiError = (error: unknown): error is InstanceType<(typeof ApiError)[keyof typeof ApiError]> =>
-  Object.values(ApiError).some((type) => error instanceof type)
+const reported = [...Object.values(ApiError), Output.Failure]
 
 export const describe = (
   error: unknown,
@@ -27,13 +26,14 @@ export const describe = (
   if (CliError.isCliError(error) && error._tag !== "UserError") return { type: "UsageError", message: error.message }
   if (Predicate.isTagged(error, "UnauthorizedError"))
     return { type: "UnauthorizedError", message: "Not logged in. Run ren2 login." }
-  if (isApiError(error) || error instanceof Output.Failure)
-    return {
-      type: error._tag,
-      message: error.message,
-      ...Object.fromEntries(Object.entries(error).filter((entry) => entry.at(0) !== "_tag")),
-    }
-  return { type: "CliError", message: message(error) }
+  const schema = reported.find((type) => error instanceof type)
+  if (!schema) return { type: "CliError", message: message(error) }
+  const encoded = Schema.encodeUnknownSync(schema)(error)
+  return {
+    type: encoded._tag,
+    message: encoded.message,
+    ...Object.fromEntries(Object.entries(encoded).filter((entry) => entry.at(0) !== "_tag")),
+  }
 }
 
 const message = (error: unknown): string => {
