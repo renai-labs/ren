@@ -24,12 +24,14 @@ import {
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { constants } from "node:fs"
 import { access, mkdir, open, realpath } from "node:fs/promises"
-import { dirname, resolve } from "node:path"
+import { tmpdir } from "node:os"
+import { dirname, join, resolve } from "node:path"
 import manifest from "../package.json"
 import { Executor } from "./executor.js"
 import { SandboxArchive } from "./sandbox/archive.js"
 import { SandboxDrives } from "./sandbox/drives.js"
 import { SandboxFiles } from "./sandbox/files.js"
+import { SandboxSetup } from "./sandbox/setup.js"
 import { OutputLog } from "./sandbox/output-log.js"
 
 const exitedLimitBytes = 64 * 1024 * 1024
@@ -68,8 +70,16 @@ export const layer = Layer.effect(
       workspaceDirectory: Config.String(workspaceVariable).pipe(Config.withDefault(process.cwd())),
       shell: Config.option(Config.String("SHELL")),
       hidden: Config.String(ExecutorVariables.hidden).pipe(Config.withDefault("")),
+      setupDirectory: Config.String("EXECUTOR_SETUP_DIRECTORY").pipe(Config.withDefault(join(tmpdir(), "ren-setup"))),
     })
     const hidden = new Set([ExecutorVariables.hidden, ...config.hidden.split(",")])
+    const visible = () =>
+      Object.fromEntries(
+        Object.keys(process.env).flatMap((name) => {
+          const value = process.env[name]
+          return typeof value === "string" && !hidden.has(name) ? [[name, value]] : []
+        }),
+      )
     const workspace = yield* Effect.promise(() => realpath(resolve(config.workspaceDirectory)))
     const shells = yield* Effect.filter(
       [
@@ -158,15 +168,7 @@ export const layer = Layer.effect(
         .spawn(
           ChildProcess.make(input.command, input.arguments, {
             cwd: path(input.directory ?? workspace),
-            env: {
-              ...Object.fromEntries(
-                Object.keys(process.env).flatMap((name) => {
-                  const value = process.env[name]
-                  return typeof value === "string" && !hidden.has(name) ? [[name, value]] : []
-                }),
-              ),
-              ...input.variables,
-            },
+            env: { ...visible(), ...input.variables },
             extendEnv: false,
             shell: input.shell,
             stdin: stdin ? { stream: Stream.fromQueue(stdin), endOnDone: true } : "ignore",
@@ -294,6 +296,7 @@ export const layer = Layer.effect(
       unpack: SandboxArchive.unpack(workspace),
       pack: SandboxArchive.pack(workspace),
       ...SandboxDrives.make(workspace),
+      setup: SandboxSetup.make({ spawner, workspace, directory: config.setupDirectory, variables: visible }),
     })
   }),
 )
