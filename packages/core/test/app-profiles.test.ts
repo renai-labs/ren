@@ -306,10 +306,10 @@ it.live(
         spaceIds: [found.design],
       })
       const catalog = (yield* ProfilesFixture.catalog(found.organizationId, found.design)).catalog
-      expect(catalog.apps.map((app) => app.appSlug)).toEqual(["base", "docs", "google", "tools"])
+      expect(catalog.apps.map((app) => app.appSlug)).toEqual(["base", "tools", "docs", "google"])
       expect(catalog.skills.map((skill) => `${skill.appSlug}/${skill.slug}`)).toEqual(["tools/notes"])
       expect(catalog.mcps.map((mcp) => mcp.server)).toEqual(["search"])
-      expect(catalog.apps.at(3)?.appId).toEqual(tools.id)
+      expect(catalog.apps.at(1)?.appId).toEqual(tools.id)
     }),
 )
 
