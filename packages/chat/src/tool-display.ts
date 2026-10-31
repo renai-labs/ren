@@ -73,6 +73,32 @@ const results: Readonly<Record<string, string>> = {
   list: "Listed",
   webfetch: "Fetched",
   websearch: "Searched",
+  execute: "Executed",
+  subagent: "Ran task",
+  task: "Ran task",
+  question: "Asked",
+  skill: "Ran skill",
+  tool_search: "Searched tools",
+  tool_execute: "Executed",
+}
+
+const failures: Readonly<Record<string, string>> = {
+  shell: "Failed to run",
+  bash: "Failed to run",
+  execute: "Failed to execute",
+  read: "Failed to read",
+  write: "Failed to write",
+  edit: "Failed to edit",
+  patch: "Failed to patch",
+  apply_patch: "Failed to patch",
+  glob: "Failed to find",
+  grep: "Failed to search",
+  list: "Failed to list",
+  webfetch: "Failed to fetch",
+  websearch: "Failed to search",
+  subagent: "Failed to run task",
+  task: "Failed to run task",
+  question: "Not answered",
 }
 
 const kinds: Readonly<Record<string, Kind>> = {
@@ -152,7 +178,9 @@ export const hidden = (tool: SessionMessage.Tool) =>
 
 export const label = (tool: SessionMessage.Tool) => {
   const action = lookup(actions, tool.name) ?? capitalize(tool.name.replaceAll(/[_-]+/g, " "))
-  return tool.state.status === "completed" ? (lookup(results, tool.name) ?? action) : action
+  const state = status(tool)
+  if (state === "failed") return lookup(failures, tool.name) ?? action
+  return state === "completed" ? (lookup(results, tool.name) ?? action) : action
 }
 
 export const webSearchProvider = (provider: unknown) => {
@@ -174,6 +202,12 @@ type Subject = (
 const command: Subject = (input, metadata) => text(input.command) ?? text(metadata.command)
 const file: Subject = (input) => basename(input.filePath) ?? basename(input.path)
 const directory: Subject = (input) => text(input.path)
+const workspace = /^.*\/workspace\/[^/]+\/?/u
+const searched: Subject = (input) => {
+  const pattern = text(input.pattern)
+  const path = text(input.path)?.replace(workspace, "") || undefined
+  return pattern && path ? `${pattern} in ${path}` : (pattern ?? path)
+}
 const files: Subject = (_input, metadata) => count(metadata.files, "file")
 const delegated: Subject = (input, metadata) => text(input.description) ?? text(metadata.sessionID)
 
@@ -184,8 +218,8 @@ const subjects: Readonly<Record<string, Subject>> = {
   read: file,
   write: file,
   edit: file,
-  glob: directory,
-  grep: directory,
+  glob: searched,
+  grep: searched,
   list: directory,
   skill: (input, metadata) => text(metadata.name) ?? text(input.id) ?? text(input.name),
   patch: files,
