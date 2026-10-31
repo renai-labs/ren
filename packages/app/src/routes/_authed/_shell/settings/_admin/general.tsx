@@ -1,14 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { GeneralSettings } from "../../../../../features/organization/general-settings.js"
+import { GeneralSettingsPage } from "../../../../../features/organization/general-page.js"
 
 export const Route = createFileRoute("/_authed/_shell/settings/_admin/general")({
   head: () => ({ meta: [{ title: "General · Ren" }] }),
-  component: GeneralPage,
+  component: GeneralSettingsPage,
 })
-
-function GeneralPage() {
-  const context = Route.useRouteContext()
-  const organization = context.me.organization
-  if (organization === null) return null
-  return <GeneralSettings key={organization.id} organizationId={organization.id} />
-}

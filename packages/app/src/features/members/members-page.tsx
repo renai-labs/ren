@@ -1,100 +1,336 @@
+import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { getRouteApi } from "@tanstack/react-router"
+import { IconPlus, IconSearch, IconShield } from "@tabler/icons-react"
+import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
-import { Icon } from "@ren/ui/icon"
-import { Page } from "@ren/ui/page"
-import { SearchField } from "@ren/ui/search-field"
-import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { useDeferredValue, useState } from "react"
-import { Auth } from "../../lib/auth.js"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@ren/ui/dialog"
+import { Field, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
+import { Spinner } from "@ren/ui/spinner"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
+import { Tabs } from "@ren/ui/tabs"
+import { Textarea } from "@ren/ui/textarea"
+import { FilterMenu, passes, type Filters } from "../../components/filter-menu.js"
+import { ListPagination } from "../../components/list-pagination.js"
+import { MembersTable } from "../../components/members-table.js"
+import { Page, PageTabsList, PageTabsTrigger, TableCard, TableEmpty } from "../../components/page.js"
+import { RowMenu } from "../../components/row-menu.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
+import { useMe } from "../../lib/use-me.js"
+import { useMembers } from "../../lib/use-members.js"
+import { useCanAdminister, useOrganization } from "../../lib/use-organization.js"
+import { pageSize, currentPage } from "../../lib/pagination.js"
+import { organizationOptions } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { AddMembersDialog } from "./add-members-dialog.js"
-import { InvitationsTable } from "./invitations-table.js"
-import { Members } from "./members.js"
-import { MembersTable } from "./members-table.js"
+import { formatDate } from "@ren/ui/time"
+import { isRole, roleLabel, type Role } from "../../lib/format.js"
+import { Choice, roles } from "../../components/settings-shared.js"
 
-export function MembersPage(props: {
-  organizationId: string
-  userId: string
-  tab: Members.Tab
-  onTabChange: (tab: Members.Tab) => void
+const route = getRouteApi("/_authed/_shell/settings/_admin/members")
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u
+
+function InviteDialog(props: {
+  onInvite: (emails: ReadonlyArray<string>, role: Role) => Promise<ReadonlyArray<string>>
 }) {
-  const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
-  const options = Auth.organizationOptions(context.auth, props.organizationId)
-  const organization = useQuery(options)
-  const [query, setQuery] = useState("")
-  const [adding, setAdding] = useState(false)
-  const needle = useDeferredValue(query)
-  const members = Members.memberRows(organization.data?.members ?? [], props.userId)
-  const invitations = Members.invitationRows(organization.data?.invitations ?? [])
-  const table = {
-    query: needle,
-    state: ({ pending: "loading", error: "failed", success: "ready" } as const)[organization.status],
-    organizationId: props.organizationId,
-    // ast-grep-ignore: no-manual-invalidation -- members and invitations change through Better Auth
-    onChanged: () => queryClient.invalidateQueries({ queryKey: options.queryKey }),
-  } as const
+  const [open, setOpen] = useState(false)
+  const [role, setRole] = useState<Role>("member")
+  const [text, setText] = useState("")
+  const [error, setError] = useState("")
+  const [pending, setPending] = useState(false)
   return (
-    <Page.Root
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button />}>
+        <IconPlus />
+        Add member
+      </DialogTrigger>
+      <DialogContent>
+        <form
+          className="contents"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const emails = text
+              .split(/[\s,]+/u)
+              .map((email) => email.trim())
+              .filter(Boolean)
+            const invalid = emails.filter((email) => !emailPattern.test(email))
+            if (emails.length === 0 || invalid.length > 0) {
+              setError(invalid.length > 0 ? `Not a valid email: ${invalid.join(", ")}` : "Add at least one email.")
+              return
+            }
+            setError("")
+            setPending(true)
+            void props.onInvite(emails, role).then((failures) => {
+              setPending(false)
+              if (failures.length === 0) {
+                setText("")
+                setOpen(false)
+              } else setError(failures.join("\n"))
+            })
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Add members</DialogTitle>
+            <DialogDescription>
+              Invitations are sent by email. Separate addresses with commas or new lines.
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="gap-4">
+            <Field data-invalid={error !== "" || undefined}>
+              <FieldLabel htmlFor="invite-emails">Emails</FieldLabel>
+              <Textarea
+                id="invite-emails"
+                required
+                value={text}
+                onChange={(event) => setText(event.currentTarget.value)}
+                placeholder="name@company.com"
+                className="min-h-20"
+              />
+              {error ? <FieldError className="whitespace-pre-wrap">{error}</FieldError> : null}
+            </Field>
+            <Field>
+              <FieldLabel>Role</FieldLabel>
+              <Choice
+                label="Invite role"
+                options={roles}
+                value={role}
+                onChange={(value) => setRole(isRole(value) ? value : "member")}
+                className="w-full"
+              />
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
+            <Button type="submit" disabled={pending}>
+              {pending ? <Spinner data-icon="inline-start" /> : null}
+              Send invite
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function MembersSettingsPage() {
+  const { auth } = RouterContext.useRouterContext()
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
+  const me = useMe()
+  const queryClient = useQueryClient()
+  const organization = useOrganization()
+  const members = useMembers().members
+  const canAdminister = useCanAdminister()
+  const tab = search.tab ?? "members"
+  const page = currentPage(search)
+  const [filters, setFilters] = useState<Filters>({})
+  const [searching, setSearching] = useState(false)
+  const [query, setQuery] = useState("")
+  const needle = query.trim().toLowerCase()
+  const rows = members
+    .filter((member) => passes(filters, { role: [member.role] }))
+    .filter((member) => !needle || `${member.name} ${member.email}`.toLowerCase().includes(needle))
+    .map((member) => ({
+      id: member.id,
+      memberId: member.memberId,
+      name: member.name,
+      email: member.email,
+      image: member.image,
+      role: member.role,
+      you: member.id === me.user.id,
+    }))
+  const invitations = organization.invitations.filter((invitation) => invitation.status === "pending")
+  const refresh = () =>
+    // ast-grep-ignore: no-manual-invalidation -- members and invitations change through Better Auth
+    queryClient.invalidateQueries({ queryKey: organizationOptions(auth, me.organization.id).queryKey })
+  const visibleRows = rows.slice((page - 1) * pageSize, page * pageSize)
+  const visibleInvitations = invitations.slice((page - 1) * pageSize, page * pageSize)
+  const total = tab === "members" ? rows.length : invitations.length
+  const openTab = (next: string) =>
+    void navigate({ search: { tab: next === "invitations" ? "invitations" : "members" } })
+  const memberCount = members.length
+  const invitationCount = invitations.length
+  const changeRole = async (memberId: string, name: string, role: string) => {
+    const result = await auth.organization.updateMemberRole({ memberId, role, organizationId: me.organization.id })
+    await refresh()
+    if (result.error === null)
+      toast.success(`${name} is now ${roleLabel[isRole(role) ? role : "member"].toLowerCase()}`)
+    else toast.error("Couldn’t change role", { description: result.error.message })
+  }
+  const remove = async (memberId: string, name: string) => {
+    const result = await auth.organization.removeMember({
+      memberIdOrEmail: memberId,
+      organizationId: me.organization.id,
+    })
+    await refresh()
+    if (result.error === null) toast.success(`${name} removed from organization`)
+    else toast.error("Couldn’t remove member", { description: result.error.message })
+  }
+  const invite = async (emails: ReadonlyArray<string>, role: Role) => {
+    const failures: string[] = []
+    for (const email of emails) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- invitations go one at a time so a failure names its email
+      const result = await auth.organization.inviteMember({
+        email,
+        role,
+        organizationId: me.organization.id,
+        resend: false,
+      })
+      if (result.error !== null) failures.push(`${email}: ${result.error.message ?? "failed"}`)
+    }
+    await refresh()
+    if (failures.length === 0) toast.success(emails.length === 1 ? "Invitation sent" : "Invitations sent")
+    return failures
+  }
+  const resend = async (email: string, role: string) => {
+    const result = await auth.organization.inviteMember({
+      email,
+      role: isRole(role) ? role : "member",
+      organizationId: me.organization.id,
+      resend: true,
+    })
+    await refresh()
+    if (result.error === null) toast.success(`Invitation resent to ${email}`)
+    else toast.error("Couldn’t resend invitation", { description: result.error.message })
+  }
+  const revoke = async (invitationId: string, email: string) => {
+    const result = await auth.organization.cancelInvitation({ invitationId })
+    await refresh()
+    if (result.error === null) toast.success(`Invitation to ${email} revoked`)
+    else toast.error("Couldn’t revoke invitation", { description: result.error.message })
+  }
+  return (
+    <Page
       title="Members"
       description="Everyone in your organization."
       leading={
-        <Tabs
-          value={props.tab}
-          onValueChange={(next: Members.Tab) => {
-            if (next === props.tab) return
-            setQuery("")
-            props.onTabChange(next)
-          }}
-        >
-          <TabsList variant="page" aria-label="Members">
-            <TabsTrigger value="members">
+        <Tabs value={tab} onValueChange={(value: string) => openTab(value)}>
+          <PageTabsList>
+            <PageTabsTrigger value="members" count={memberCount}>
               Members
-              <span className="text-muted-foreground tabular-nums">{members.length}</span>
-            </TabsTrigger>
-            <TabsTrigger value="invitations">
+            </PageTabsTrigger>
+            <PageTabsTrigger value="invitations" count={invitationCount}>
               Invitations
-              <span className="text-muted-foreground tabular-nums">{invitations.length}</span>
-            </TabsTrigger>
-          </TabsList>
+            </PageTabsTrigger>
+          </PageTabsList>
         </Tabs>
       }
       actions={
         <>
-          <SearchField.Expandable
-            value={query}
-            onValueChange={setQuery}
-            placeholder={props.tab === "members" ? "Search for a member" : "Search for an invitation"}
+          {searching ? (
+            <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground"
+              aria-label="Search members"
+              onClick={() => setSearching(true)}
+            >
+              <IconSearch />
+            </Button>
+          )}
+          <FilterMenu
+            label="Filter members"
+            properties={[{ key: "role", label: "Role", any: "Any", icon: IconShield, options: roles }]}
+            value={filters}
+            onChange={setFilters}
           />
-          <Button size="xs" className="h-6.5" onClick={() => setAdding(true)}>
-            <Icon glyph="Plus" data-icon="inline-start" />
-            Add member
-          </Button>
+          {canAdminister ? <InviteDialog onInvite={invite} /> : null}
         </>
       }
-    >
-      <section key={props.tab} aria-live="polite">
-        {props.tab === "members" ? (
-          <MembersTable
-            {...table}
-            rows={members}
-            failureMessage={`Couldn’t load members. ${organization.error?.message ?? ""}`.trim()}
-          />
-        ) : (
-          <InvitationsTable
-            {...table}
-            rows={invitations}
-            failureMessage={`Couldn’t load invitations. ${organization.error?.message ?? ""}`.trim()}
-          />
-        )}
-      </section>
-      {adding ? (
-        <AddMembersDialog
-          onClose={() => setAdding(false)}
-          organizationId={props.organizationId}
-          onChanged={table.onChanged}
+      footer={
+        <ListPagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          noun={tab === "members" ? "member" : "invitation"}
         />
-      ) : null}
-    </Page.Root>
+      }
+    >
+      {tab === "members" ? (
+        <MembersTable
+          rows={visibleRows}
+          column={{
+            heading: "Role",
+            cell: (row) => (
+              <Choice
+                label="Role"
+                options={roles}
+                value={row.role}
+                size="sm"
+                className="w-28 justify-between border-transparent bg-muted px-2 text-xs dark:bg-muted"
+                disabled={row.you || !canAdminister}
+                onChange={(role) => void changeRole(row.memberId, row.name, role)}
+              />
+            ),
+          }}
+          remove={(row) =>
+            row.you || !canAdminister
+              ? undefined
+              : {
+                  title: `Remove ${row.name}?`,
+                  description: "They lose access to this organization and its spaces.",
+                  action: "Remove",
+                }
+          }
+          onRemove={(row) => remove(row.memberId, row.name)}
+          empty="No members match these filters"
+        />
+      ) : (
+        <TableCard>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Sent</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibleInvitations.length === 0 ? <TableEmpty columns={5}>No pending invitations</TableEmpty> : null}
+              {visibleInvitations.map((invite) => (
+                <TableRow key={invite.id}>
+                  <TableCell>{invite.email}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {roleLabel[isRole(invite.role) ? invite.role : "member"]}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground tabular-nums">{formatDate(invite.createdAt)}</TableCell>
+                  <TableCell>
+                    {canAdminister ? (
+                      <RowMenu
+                        label="Invitation actions"
+                        items={[
+                          { label: "Resend", onSelect: () => resend(invite.email, invite.role) },
+                          {
+                            label: "Revoke",
+                            onSelect: () => revoke(invite.id, invite.email),
+                            confirm: {
+                              title: "Revoke invitation?",
+                              description: `The invitation to ${invite.email} stops working.`,
+                              action: "Revoke",
+                            },
+                          },
+                        ]}
+                      />
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableCard>
+      )}
+    </Page>
   )
 }

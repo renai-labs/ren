@@ -1,9 +1,38 @@
-export * as Schedules from "./schedules.js"
+import type { ScheduleInfo, ScheduleListInput, ScheduleWhen } from "@ren/client"
+import { Cron, DateTime, Option, Result, Schema } from "effect"
+import { civilDate, formatInZone, formatRelative, localTimeZone, timeZones } from "@ren/ui/time"
 
-import type { ScheduleInfo, ScheduleRunInfo, ScheduleWhen } from "@ren/client"
-import { Cron, DateTime, Option, Result } from "effect"
+const ScheduleSearchSchema = Schema.Struct({
+  page: Schema.optional(Schema.Number),
+  filters: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))),
+  schedule: Schema.optional(Schema.String),
+})
 
-export const frequencies = ["hourly", "daily", "weekdays", "weekly", "monthly", "custom", "once"] as const
+export type ScheduleSearch = typeof ScheduleSearchSchema.Type
+
+export const ScheduleSearch = Schema.toStandardSchemaV1(ScheduleSearchSchema)
+
+export function scheduleListInput(
+  search: ScheduleSearch,
+  paging: {
+    readonly page: number
+    readonly pageSize: number
+    readonly text?: string | undefined
+    readonly spaceId?: string | undefined
+  },
+): ScheduleListInput {
+  const status = search.filters?.state?.at(0)
+  const spaceId = paging.spaceId ?? search.filters?.space?.at(0)
+  return {
+    page: paging.page,
+    pageSize: paging.pageSize,
+    ...((status === "active" || status === "paused") && { status }),
+    ...(spaceId && { spaceId }),
+    ...(paging.text && { search: paging.text }),
+  }
+}
+
+const frequencies = ["hourly", "daily", "weekdays", "weekly", "monthly", "custom", "once"] as const
 export type Frequency = (typeof frequencies)[number]
 
 export const frequencyOptions = [
@@ -15,6 +44,8 @@ export const frequencyOptions = [
   { value: "custom", label: "Custom cron" },
   { value: "once", label: "Once" },
 ] satisfies ReadonlyArray<{ value: Frequency; label: string }>
+
+export const isFrequency = (value: unknown): value is Frequency => frequencies.some((frequency) => frequency === value)
 
 export const weekdays = [
   { value: "1", label: "Monday" },
@@ -45,6 +76,8 @@ export interface Cadence {
   readonly timeZone: string
 }
 
+export { localTimeZone, timeZones }
+
 const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/u
 const datePattern = /^(\d{4})-(\d{2})-(\d{2})$/u
 
@@ -55,7 +88,13 @@ const partsOf = (time: string) => {
   return match ? { hours: Number(match[1]), minutes: Number(match[2]) } : undefined
 }
 
-// oxlint-disable-next-line ren/no-comments -- The cron of a cadence, as ren-v1's schedule builder wrote it.
+export const dateKey = civilDate
+
+export const dateOfKey = (key: string) => {
+  const day = datePattern.exec(key)
+  return day ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3])) : undefined
+}
+
 const cronOf = (cadence: Cadence) => {
   if (cadence.frequency === "custom") return cadence.cron.trim()
   if (cadence.frequency === "hourly") return "0 * * * *"
@@ -64,7 +103,7 @@ const cronOf = (cadence: Cadence) => {
   const head = `${time.minutes} ${time.hours}`
   if (cadence.frequency === "daily") return `${head} * * *`
   if (cadence.frequency === "weekdays") return `${head} * * 1-5`
-  if (cadence.frequency === "weekly") return `${head} * * ${cadence.weekday}`
+  if (cadence.frequency === "weekly") return cadence.weekday === "" ? "" : `${head} * * ${cadence.weekday}`
   return `${head} ${cadence.monthDay} * *`
 }
 
@@ -94,7 +133,6 @@ const localOf = (instant: string, timeZone: string) => {
   }
 }
 
-// oxlint-disable-next-line ren/no-comments -- The `when` that a cadence sends: a one-time schedule is an instant in its time zone; an end date ends after its last minute.
 export const whenOf = (cadence: Cadence): Option.Option<ScheduleWhen> => {
   if (cadence.frequency === "once")
     return Option.map(instantIn(cadence.date, cadence.time, cadence.timeZone), (at) => ({
@@ -111,7 +149,6 @@ export const whenOf = (cadence: Cadence): Option.Option<ScheduleWhen> => {
   })
 }
 
-// oxlint-disable-next-line ren/no-comments -- The cadence that shows a stored `when` in the builder; a cron that no preset writes stays custom.
 export const cadenceOf = (when: ScheduleWhen | undefined, fallbackZone: string): Cadence => {
   const empty = {
     frequency: "daily" as Frequency,
@@ -121,11 +158,11 @@ export const cadenceOf = (when: ScheduleWhen | undefined, fallbackZone: string):
     cron: "0 9 * * *",
     date: "",
     until: "",
-    untilTime: "23:59",
+    untilTime: "",
     timeZone: fallbackZone,
   }
   if (!when) return empty
-  if ("at" in when) return { ...empty, frequency: "once", timeZone: fallbackZone, ...localOf(when.at, fallbackZone) }
+  if ("at" in when) return { ...empty, frequency: "once", ...localOf(when.at, fallbackZone) }
   const base = {
     ...empty,
     cron: when.cron,
@@ -147,64 +184,62 @@ export const cadenceOf = (when: ScheduleWhen | undefined, fallbackZone: string):
   return { ...base, frequency: preset.frequency, time }
 }
 
+const clock = (time: string) => {
+  const parts = partsOf(time)
+  if (!parts) return time
+  return `${pad(parts.hours % 12 || 12)}:${pad(parts.minutes)} ${parts.hours < 12 ? "AM" : "PM"}`
+}
+
 const zoneName = (timeZone: string) => timeZone.split("/").at(-1)?.replaceAll("_", " ") ?? timeZone
 
-// oxlint-disable-next-line ren/no-comments -- A cron `when` in words, for example “Every day at 09:00 · Berlin”.
-export const describe = (when: { readonly cron: string; readonly timeZone: string }) => {
-  const cadence = cadenceOf(when, when.timeZone)
+export const describeCadence = (cadence: Cadence) => {
   const days = cadence.weekday.split(",").flatMap((value) => {
     const day = weekdayNames.get(value)
     return day ? [day.slice(0, 3)] : []
   })
-  const words = {
+  return {
     hourly: "Every hour",
-    daily: `Every day at ${cadence.time}`,
-    weekdays: `Every weekday at ${cadence.time}`,
-    weekly: `${days.join(", ")} at ${cadence.time}`,
-    monthly: `Day ${cadence.monthDay} of each month at ${cadence.time}`,
-    custom: `Cron ${when.cron}`,
-    once: "",
+    daily: `At ${clock(cadence.time)}, every day`,
+    weekdays: `At ${clock(cadence.time)}, every weekday`,
+    weekly: `At ${clock(cadence.time)}, on ${days.join(", ")}`,
+    monthly: `At ${clock(cadence.time)}, on day ${cadence.monthDay} of the month`,
+    custom: `Cron ${cadence.cron.trim()}`,
+    once: "Once",
   }[cadence.frequency]
-  return `${words} · ${zoneName(when.timeZone)}`
 }
+
+export const describe = (when: ScheduleWhen, viewerZone: string) => {
+  if ("at" in when) return `Once, ${formatRun(when.at, viewerZone)}`
+  const words = describeCadence(cadenceOf(when, when.timeZone))
+  return when.timeZone === viewerZone ? words : `${words} · ${zoneName(when.timeZone)}`
+}
+
+export const formatRun = formatInZone
 
 const pauseWords = {
   user: "Paused",
-  owner_left: "Owner left",
-  agent_removed: "Agent removed",
-  failing: "Failing",
+  owner_left: "Paused · owner left",
+  agent_removed: "Paused · agent removed",
+  failing: "Paused · failing",
 } as const
 
-export const statusOf = (schedule: ScheduleInfo) => {
-  if (schedule.pausedReason) return { label: pauseWords[schedule.pausedReason], glyph: "Stop" } as const
-  if (schedule.status === "ended") return { label: "Ended", glyph: "CircleCheck" } as const
-  return { label: "Active", glyph: "Clock" } as const
+export const statusOf = (schedule: ScheduleInfo, now: number) => {
+  if (schedule.status === "paused") return pauseWords[schedule.pausedReason ?? "user"]
+  if (schedule.status === "ended" || !schedule.nextRunAt) return "Expired"
+  return `Next run ${formatRelative(schedule.nextRunAt, now)}`
 }
 
-const reasonWords = {
-  previous_run_busy: "previous run busy",
-  paused: "paused",
-  archived: "archived",
-  owner_left: "owner left",
-  agent_removed: "agent removed",
-  chat_archived: "chat archived",
-} as const
+export const nameOf = (message: string) =>
+  (
+    message
+      .trim()
+      .split("\n")
+      .find((line) => line.trim() !== "") ?? ""
+  )
+    .trim()
+    .slice(0, 80)
+    .trim()
 
-export const runStatus = (run: ScheduleRunInfo) => {
-  if (run.status === "skipped") return `Skipped: ${run.reason ? reasonWords[run.reason] : "unknown"}`
-  if (run.status === "failed") return `Failed: ${run.error ?? "unknown error"}`
-  if (run.status === "pending") return "Starting"
-  return "Started"
-}
-
-// oxlint-disable-next-line ren/no-comments -- The state of a table from its query and the rows it shows.
-export const tableState = (query: { readonly isPending: boolean; readonly isError: boolean }, rows: number) => {
-  if (query.isPending) return "loading" as const
-  if (query.isError) return "failed" as const
-  return rows === 0 ? ("empty" as const) : ("ready" as const)
-}
-
-// oxlint-disable-next-line ren/no-comments -- The next fire that the dialog shows under the cadence, as ren-v1's preview line did; the server decides the real fire time.
 export const preview = (cadence: Cadence) => {
   const when = whenOf(cadence)
   if (Option.isNone(when)) return { kind: "invalid" as const }
