@@ -15,6 +15,7 @@ export type Source = {
   readonly group: HttpApiGroup.Top
   readonly endpoint: HttpApiEndpoint.Top
   readonly middleware: ReadonlySet<HttpApiMiddleware.AnyService>
+  readonly successes: ReadonlyMap<number, readonly [Schema.Top, ...Array<Schema.Top>]>
   readonly errors: ReadonlyMap<number, readonly [Schema.Top, ...Array<Schema.Top>]>
 }
 
@@ -168,6 +169,7 @@ export function buildEndpoint(source: Source, portable: Map<SchemaAST.AST, boole
     clientPath,
     unwrapData: SchemaShape.isDataEnvelope(transports.success.schema),
     successes: [transports.success.schema],
+    successStatus: [...source.successes.keys()].at(0) ?? 200,
     errors: transports.errors.map((item) => ({ status: item.status, schema: item.schema })),
     operation: buildOperation(group.identifier, clientPath, input, transports),
   }

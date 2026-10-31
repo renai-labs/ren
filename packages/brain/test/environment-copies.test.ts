@@ -135,6 +135,32 @@ it.live(
     }),
 )
 
+it.live("a mount on an environment that cannot mount fails at once, and is tried again at the next turn", () =>
+  Effect.gen(function* () {
+    const session = yield* copiesOf()
+    const item: EnvironmentCopies.Item = {
+      path: join(session.directory, ".ren", "drives", "space"),
+      copy: {
+        type: "mount",
+        remote: {
+          type: "s3",
+          bucket: "drives",
+          prefix: "org_1/drives/org/",
+          region: "us-east-1",
+          endpoint: "http://127.0.0.1:1",
+          placeholder: "ren:DRIVE",
+        },
+        access: "read",
+      },
+    }
+    const failure = { item, message: "its environment has no rclone or no usable /dev/fuse" }
+    expect(yield* session.copies.ensure([item])).toEqual([failure])
+    expect(yield* session.copies.ensure([item])).toEqual([])
+    yield* session.copies.turnStarted
+    expect(yield* session.copies.ensure([item])).toEqual([failure])
+  }),
+)
+
 it.live("a copy that a chat deletes comes back after turnStarted and for a new generation, not before", () =>
   Effect.gen(function* () {
     const session = yield* copiesOf()

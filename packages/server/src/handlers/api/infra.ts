@@ -11,8 +11,11 @@ export const InfraHandler = HttpApiBuilder.group(Api, "infra", (handlers) =>
   Effect.gen(function* () {
     const infra = yield* InfraSpecs.Service
     return handlers
-      .handle("infra.pull", () =>
-        Effect.flatMap(Primitive.currentActor, infra.pull).pipe(Effect.catchTag("Primitive.Forbidden", forbidden)),
+      .handle("infra.pull", (request) =>
+        Effect.flatMap(Primitive.currentActor, (actor) => infra.pull(actor, request.payload)).pipe(
+          Effect.catchTag("Primitive.Forbidden", forbidden),
+          Effect.catchTag("Primitive.Invalid", Primitive.invalid),
+        ),
       )
       .handle("infra.plan", (request) =>
         Effect.flatMap(Primitive.currentActor, (actor) => infra.plan(actor, request.payload)).pipe(

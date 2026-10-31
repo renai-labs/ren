@@ -2,17 +2,24 @@ export * as InfraSpecs from "./infra-specs.js"
 
 import { Database } from "@ren/db/database"
 import type { Agent as AgentSchema } from "@ren/schema/agent"
+import type { ChannelMapping } from "@ren/schema/channel-mapping"
+import { Factory } from "@ren/schema/factory"
 import { Infra } from "@ren/schema/infra"
 import { Settings } from "@ren/schema/settings"
 import type { Space as SpaceSchema } from "@ren/schema/space"
 import { and, asc, eq, isNull } from "drizzle-orm"
-import { Context, Effect, Layer, Predicate, Schema } from "effect"
+import { Context, Effect, Layer, Predicate, Schema, Struct } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { Agent } from "./agent.js"
 import { AgentMembership } from "./agent/membership.js"
-import { AppValidation } from "./app/validation.js"
+import { InfraApps } from "./infra-specs/apps.js"
+import { InfraChannels } from "./infra-specs/channels.js"
+import { InfraPlan } from "./infra-specs/plan.js"
 import { InfraPolicy } from "./infra-specs/policy.js"
+import { InfraProfiles } from "./infra-specs/profiles.js"
+import { InfraSchedules } from "./infra-specs/schedules.js"
+import { InfraVersions } from "./infra-specs/versions.js"
 import { OrganizationSettings } from "./organization-settings.js"
 import { Primitive } from "./primitive.js"
 import { Space } from "./space.js"
@@ -20,10 +27,13 @@ import { SpaceQueries } from "./space/queries.js"
 import { SpaceSettings } from "./space/settings.js"
 import { SettingsRows } from "./settings/rows.js"
 
-type Failure = Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid
+type Failure = InfraPlan.Failure
 
 export interface Interface {
-  readonly pull: (actor: Actor.Info) => Effect.Effect<Infra.Pulled, Primitive.Forbidden>
+  readonly pull: (
+    actor: Actor.Info,
+    input: Infra.PullInput,
+  ) => Effect.Effect<Infra.Pulled, Primitive.Forbidden | Primitive.Invalid>
   readonly plan: (actor: Actor.Info, input: Infra.PlanInput) => Effect.Effect<Infra.Plan, Primitive.Forbidden>
   readonly apply: (actor: Actor.Info, input: Infra.ApplyInput) => Effect.Effect<Infra.Applied, Failure>
 }
@@ -37,6 +47,7 @@ interface LiveSpace {
   readonly name: string
   readonly description: string | null
   readonly settings: Settings.Info
+  readonly factory: Factory.Info
   readonly isMember: boolean
 }
 
@@ -55,17 +66,69 @@ interface Live {
   readonly spaces: ReadonlyArray<LiveSpace>
   readonly agents: ReadonlyArray<LiveAgent>
   readonly memberships: ReadonlyArray<{ readonly spaceId: SpaceSchema.ID; readonly agentId: AgentSchema.ID }>
-  readonly apps: ReadonlyArray<{ readonly ownerSpaceId: SpaceSchema.ID | null; readonly slug: string }>
+  readonly globals: ReadonlyArray<{ readonly id: AgentSchema.ID; readonly name: string }>
+  readonly apps: InfraApps.Live
+  readonly schedules: InfraSchedules.Live
+  readonly channels: InfraChannels.Live
+  readonly profiles: InfraProfiles.Live
 }
 
-interface Step {
-  readonly change: Infra.Change
-  readonly run: Effect.Effect<unknown, Failure>
-}
+type Step = InfraPlan.Step
 
-const unsupported = ["apps", "schedules", "webhooks", "channels"] as const
+type Verdict = "apply" | NonNullable<Infra.Change["status"]>
+
+const rank = { apply: 0, changed: 1, new: 1, conflict: 2 } satisfies Record<Verdict, number>
+
+const described = (
+  change: Infra.Change,
+  values: ReadonlyArray<Infra.Value>,
+  status?: Exclude<Verdict, "apply">,
+): Infra.Change => ({
+  action: change.action,
+  kind: change.kind,
+  path: change.path,
+  ...(change.from && { from: change.from }),
+  fields: change.fields,
+  values,
+  ...(status && { status }),
+})
+
+const unsupported = ["webhooks"] as const
 
 const sameSettings = Schema.toEquivalence(Settings.Info)
+
+const sameFactory = Schema.toEquivalence(Infra.FactoryDeclaration)
+
+const noFactory: Infra.FactoryDeclaration = { maxHandoffs: Factory.defaultMaxHandoffs, agents: [] }
+
+const factoryNames = (factory: Factory.Info, names: ReadonlyMap<string, string>): Infra.FactoryDeclaration => {
+  const name = (id: string) => names.get(id) ?? id
+  return {
+    maxHandoffs: factory.maxHandoffs,
+    agents: factory.agents
+      .filter((entry) => names.has(entry.agentId))
+      .map((entry) =>
+        Struct.renameKeys(
+          Struct.evolve(entry, {
+            agentId: name,
+            to: (to) =>
+              (to ?? [])
+                .filter((edge) => names.has(edge.agentId))
+                .map((edge) =>
+                  Struct.renameKeys(
+                    Struct.evolve(!edge.else || names.has(edge.else) ? edge : Struct.omit(edge, ["else"]), {
+                      agentId: name,
+                      else: (id: string | undefined) => name(id ?? ""),
+                    }),
+                    { agentId: "agent" },
+                  ),
+                ),
+          }),
+          { agentId: "agent" },
+        ),
+      ),
+  }
+}
 
 interface Claim {
   readonly key: string
@@ -114,20 +177,11 @@ const resolve = <L>(
   }
 }
 
-const changed = (fields: Record<string, boolean>) => Object.keys(fields).filter((field) => fields[field])
+const changed = InfraPlan.changed
 
-const step = (
-  action: Infra.Change["action"],
-  kind: Infra.Change["kind"],
-  path: string,
-  run: Effect.Effect<unknown, Failure>,
-  more: { readonly fields?: ReadonlyArray<string>; readonly from?: string } = {},
-): Step => ({
-  change: { action, kind, path, fields: more.fields ?? [], ...(more.from && { from: more.from }) },
-  run,
-})
+const step = InfraPlan.step
 
-const byPath = (left: Step, right: Step) => left.change.path.localeCompare(right.change.path)
+const byPath = InfraPlan.byPath
 
 export const layer = Layer.effect(
   Service,
@@ -139,13 +193,19 @@ export const layer = Layer.effect(
     const organizationSettings = yield* OrganizationSettings.Service
     const agents = yield* Agent.Service
     const memberships = yield* AgentMembership.Service
+    const kinds = {
+      apps: yield* InfraApps.make,
+      schedules: yield* InfraSchedules.make,
+      channels: yield* InfraChannels.make,
+      profiles: yield* InfraProfiles.make,
+    }
 
     const authorize = (actor: Actor.Info, action: string) =>
       access.isAllowed({ actor, action, resource: Access.organization })
         ? Effect.void
         : Effect.fail(new Primitive.Forbidden({ message: "Only organization admins can use the org spec." }))
 
-    const load = (actor: Actor.Info) =>
+    const load = (actor: Actor.Info, input?: Infra.PlanInput) =>
       database
         .transaction((transaction) =>
           Effect.gen(function* () {
@@ -200,16 +260,22 @@ export const layer = Layer.effect(
               .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_membership.space_id))
               .where(eq(Database.Schema.space.organization_id, actor.organizationId))
               .orderBy(asc(Database.Schema.agent_membership.space_id), asc(Database.Schema.agent_membership.agent_id))
-            const apps = yield* transaction
-              .select({ ownerSpaceId: Database.Schema.app.owner_space_id, slug: Database.Schema.app.slug })
-              .from(Database.Schema.app)
+            const globals = yield* transaction
+              .select({ id: Database.Schema.agent.id, name: Database.Schema.agent.name })
+              .from(Database.Schema.agent)
               .where(
                 and(
-                  eq(Database.Schema.app.organization_id, actor.organizationId),
-                  isNull(Database.Schema.app.archived_at),
+                  isNull(Database.Schema.agent.organization_id),
+                  isNull(Database.Schema.agent.archived_at),
+                  eq(Database.Schema.agent.is_subagent, false),
                 ),
               )
-              .orderBy(asc(Database.Schema.app.slug))
+              .orderBy(asc(Database.Schema.agent.name))
+            const declaredApps = Object.values(input?.spec.spaces ?? {}).flatMap((space) => Object.keys(space.apps))
+            const apps = yield* InfraApps.load(transaction, actor.organizationId, declaredApps)
+            const schedules = yield* InfraSchedules.load(transaction, actor.organizationId)
+            const channels = yield* InfraChannels.load(transaction, actor.organizationId)
+            const profiles = yield* InfraProfiles.load(transaction, actor.organizationId)
             return {
               organization: {
                 slug: organization.slug,
@@ -224,6 +290,7 @@ export const layer = Layer.effect(
                   name: row.space.name,
                   description: row.space.description,
                   settings: decoded.settings,
+                  factory: row.space.factory,
                   isMember: Boolean(row.membershipId),
                 })),
               ),
@@ -243,7 +310,11 @@ export const layer = Layer.effect(
                   })),
               ),
               memberships: membershipRows,
+              globals,
               apps,
+              schedules,
+              channels,
+              profiles,
             } satisfies Live
           }),
         )
@@ -260,16 +331,83 @@ export const layer = Layer.effect(
         memberships: live.memberships.filter(
           (membership) => sharedIds.has(membership.spaceId) && ownedIds.has(membership.agentId),
         ),
+        factoryNames: new Map([...live.globals, ...owned].map((agent) => [agent.id, agent.name])),
       }
     }
 
-    const digest = (live: Live, input: Infra.PlanInput) =>
-      Schema.encodeEffect(Infra.PlanInput)(input).pipe(
-        Effect.orDie,
-        Effect.map((encoded) =>
-          new Bun.CryptoHasher("sha256").update(AppValidation.canonical({ live, input: encoded })).digest("hex"),
-        ),
-      )
+    const snapshot = (live: Live, aliases: ReadonlyMap<ChannelMapping.ID, string>) => {
+      const inScope = scope(live)
+      const names = new Map(inScope.owned.map((agent) => [agent.id, agent.name]))
+      const factoryOf = (factory: Factory.Info) => {
+        const named = factoryNames(factory, inScope.factoryNames)
+        return sameFactory(named, noFactory) ? {} : { factory: named }
+      }
+      const pulledNames = (id: AgentSchema.ID) => inScope.factoryNames.get(id)
+      return {
+        bindings: {
+          organization: live.organization.slug,
+          spaces: Object.fromEntries(
+            inScope.shared.flatMap((space) => {
+              const channels = kinds.channels.pullBindings(live.channels, space.id, aliases)
+              const profiles = kinds.profiles.pull(live.profiles, space.id)
+              return Object.keys(channels).length + Object.keys(profiles).length > 0
+                ? [[space.slug, { channels, profiles }]]
+                : []
+            }),
+          ),
+        },
+        spec: {
+          org: { settings: live.organization.settings },
+          spaces: Object.fromEntries(
+            inScope.shared.map((space) => [
+              space.slug,
+              {
+                name: space.name,
+                ...(Predicate.isNotNull(space.description) && { description: space.description }),
+                settings: space.settings,
+                ...factoryOf(space.factory),
+                agents: Object.fromEntries(
+                  inScope.owned
+                    .filter((agent) => agent.ownerSpaceId === space.id)
+                    .map((agent) => [
+                      agent.name,
+                      {
+                        ...(Predicate.isNotNull(agent.description) && { description: agent.description }),
+                        isSubagent: agent.isSubagent,
+                        settings: agent.settings,
+                      },
+                    ]),
+                ),
+                apps: kinds.apps.pull(live.apps, space.id),
+                schedules: kinds.schedules.pull(live.schedules, space.id, pulledNames),
+                channels: kinds.channels.pull(live.channels, space.id, pulledNames, aliases),
+                uses: {
+                  agents: inScope.memberships
+                    .filter((membership) => membership.spaceId === space.id)
+                    .flatMap((membership) => names.get(membership.agentId) ?? [])
+                    .toSorted(),
+                },
+              },
+            ]),
+          ),
+        },
+      }
+    }
+
+    const liveResources = (live: Live, aliases: ReadonlyMap<ChannelMapping.ID, string>) => {
+      const pulled = snapshot(live, aliases)
+      return InfraVersions.resources({
+        org: pulled.spec.org,
+        spaces: pulled.spec.spaces,
+        bindings: pulled.bindings.spaces,
+      })
+    }
+
+    const folderResources = (spec: Infra.Spec, bindings: Infra.Bindings, live: InfraVersions.Resources) =>
+      InfraVersions.resources({ org: spec.org, spaces: spec.spaces, bindings: bindings.spaces }, live)
+
+    const lockOf = (live: Live, lock: Infra.Lock | undefined) =>
+      lock?.organization === live.organization.slug ? lock.resources : {}
 
     const diff = (actor: Actor.Info, live: Live, input: Infra.PlanInput) => {
       const inScope = scope(live)
@@ -515,6 +653,46 @@ export const layer = Layer.effect(
             }),
           )
         })
+      const globalIds = new Map(live.globals.map((agent) => [agent.name, agent.id]))
+      const factorySteps = spaceMatches.flatMap((match): Array<Step> => {
+        const declared = match.declaration.factory ?? noFactory
+        if (sameFactory(declared, match.live ? factoryNames(match.live.factory, inScope.factoryNames) : noFactory))
+          return []
+        if (match.live) touched.push(match.live.id)
+        const idOf = (name: string) => agentIds.get(name) ?? globalIds.get(name) ?? name
+        return [
+          step(
+            "update",
+            "space",
+            `spaces/${match.slug}`,
+            Effect.gen(function* () {
+              yield* spaces.update(actor, yield* spaceId(match.slug), {
+                factory: {
+                  maxHandoffs: declared.maxHandoffs,
+                  agents: declared.agents.map((entry) =>
+                    Struct.renameKeys(
+                      Struct.evolve(entry, {
+                        agent: idOf,
+                        to: (to) =>
+                          (to ?? []).map((edge) =>
+                            Struct.renameKeys(
+                              Struct.evolve(edge, { agent: idOf, else: (agent) => idOf(agent ?? "") }),
+                              {
+                                agent: "agentId",
+                              },
+                            ),
+                          ),
+                      }),
+                      { agent: "agentId" },
+                    ),
+                  ),
+                },
+              })
+            }),
+            { fields: ["factory"] },
+          ),
+        ]
+      })
       const membershipArchives = [...current]
         .filter(([path]) => !wanted.has(path))
         .map(([path, membership]) => {
@@ -559,20 +737,53 @@ export const layer = Layer.effect(
               path: `spaces/${space.slug}`,
               message: "This is the first space of the organization, so it cannot be archived. Declare it.",
             })
-          const apps = live.apps.filter((app) => app.ownerSpaceId === space.id).map((app) => app.slug)
-          if (apps.length > 0)
-            problems.push({
-              path: `spaces/${space.slug}`,
-              message: `This space owns apps ${apps.join(", ")}. Move or archive them in the app first.`,
-            })
           return step("archive", "space", `spaces/${space.slug}`, spaces.archive(actor, space.id))
         })
+
+      const context: InfraPlan.Context = {
+        actor,
+        spaces: spaceMatches.map((match) => ({
+          slug: match.slug,
+          declaration: match.declaration,
+          bindings: input.bindings.spaces[match.slug],
+          liveId: match.live?.id,
+        })),
+        shared: new Set(inScope.shared.map((space) => space.id)),
+        slugOf: (id) => slugOf.get(id) ?? liveById.get(id)?.slug,
+        spaceId,
+        agentId,
+        agentName: (id) => nameOf.get(id) ?? inScope.factoryNames.get(id),
+        touch: (id) => {
+          if (id) touched.push(id)
+        },
+      }
+      const planned = {
+        apps: kinds.apps.diff(context, live.apps),
+        schedules: kinds.schedules.diff(context, live.schedules),
+        channels: kinds.channels.diff(context, live.channels),
+        profiles: kinds.profiles.diff(context, live.profiles),
+      }
+      problems.push(
+        ...planned.apps.problems,
+        ...planned.schedules.problems,
+        ...planned.channels.problems,
+        ...planned.profiles.problems,
+      )
 
       const steps = [
         ...organization,
         ...spaceSteps.toSorted(byPath),
         ...agentSteps.toSorted(byPath),
         ...membershipCreates.toSorted(byPath),
+        ...factorySteps.toSorted(byPath),
+        ...planned.apps.steps,
+        ...planned.schedules.steps,
+        ...planned.channels.steps,
+        ...planned.profiles.steps,
+        ...planned.profiles.removals,
+        ...planned.channels.removals,
+        ...planned.schedules.removals,
+        ...planned.apps.removals,
         ...membershipArchives.toSorted(byPath),
         ...agentArchives.toSorted(byPath),
         ...spaceArchives.toSorted(byPath),
@@ -592,8 +803,32 @@ export const layer = Layer.effect(
           path: "deploy.yaml",
           message: `deploy.yaml names “${input.bindings.organization}”, but you are signed in to “${live.organization.slug}”.`,
         })
-      if (Object.keys(input.bindings.spaces).length > 0)
-        problems.push({ path: "deploy.yaml", message: "Infra does not apply the bindings of spaces yet." })
+      if (input.lock && input.lock.organization !== live.organization.slug)
+        problems.push({
+          path: "ren.lock",
+          message: `ren.lock is for “${input.lock.organization}”, but you are signed in to “${live.organization.slug}”.`,
+        })
+      const bound = Object.entries(input.bindings.spaces)
+      problems.push(
+        ...bound
+          .filter(([, bindings]) => bindings.timezone)
+          .map(([slug]) => ({
+            path: `deploy.yaml/spaces/${slug}/timezone`,
+            message: "Infra does not apply the timezone of a space yet.",
+          })),
+        ...bound
+          .filter(([, bindings]) => Object.keys(bindings.webhooks).length > 0)
+          .map(([slug]) => ({
+            path: `deploy.yaml/spaces/${slug}/webhooks`,
+            message: "Infra does not apply webhooks yet.",
+          })),
+        ...bound
+          .filter(([slug]) => !(slug in input.spec.spaces))
+          .map(([slug]) => ({
+            path: `deploy.yaml/spaces/${slug}`,
+            message: `deploy.yaml binds space “${slug}”, which the spec does not declare.`,
+          })),
+      )
       problems.push(
         ...declared.flatMap(([slug, declaration]) =>
           unsupported
@@ -613,13 +848,97 @@ export const layer = Layer.effect(
         problems: problems.toSorted(
           (left, right) => left.path.localeCompare(right.path) || left.message.localeCompare(right.message),
         ),
+        aliases: planned.channels.aliases,
       }
     }
 
     const plan = Effect.fnUntraced(function* (actor: Actor.Info, input: Infra.PlanInput) {
-      const live = yield* load(actor)
+      const live = yield* load(actor, input)
       const planned = diff(actor, live, input)
-      return { live, planned, digest: yield* digest(live, input) }
+      const ren = liveResources(live, planned.aliases)
+      const folder = folderResources(input.spec, input.bindings, ren)
+      const renVersions = InfraVersions.versions(ren)
+      const folderVersions = InfraVersions.versions(folder)
+      const locked = lockOf(live, input.lock)
+      const verdictOf = (step: Step, base: string): Verdict => {
+        const version = locked[base]
+        if (renVersions.get(base) === version) return "apply"
+        if (step.change.from || folderVersions.get(step.change.path) !== version) return "conflict"
+        return version ? "changed" : "new"
+      }
+      const judged = planned.steps.map((step) => {
+        const base = step.change.from ?? step.change.path
+        return { step, base, verdict: verdictOf(step, base) }
+      })
+      const worst = new Map(
+        [...Map.groupBy(judged, (entry) => entry.step.change.path)].map(([path, entries]) => [
+          path,
+          entries.reduce<Verdict>(
+            (found, entry) => (rank[entry.verdict] > rank[found] ? entry.verdict : found),
+            "apply",
+          ),
+        ]),
+      )
+      const applied = (path: string) => worst.get(path) === "apply"
+      const archived = new Set(
+        judged.flatMap((entry) =>
+          entry.step.change.action === "archive" && applied(entry.step.change.path) ? [entry.step.change.path] : [],
+        ),
+      )
+      const stays = (space: string) =>
+        (renVersions.has(space) && !archived.has(space)) ||
+        judged.some(
+          (entry) => entry.step.change.path === space && entry.step.change.action !== "archive" && applied(space),
+        )
+      const held = new Set([
+        ...judged.flatMap((entry) => {
+          const path = entry.step.change.path
+          if (entry.step.change.kind !== "space" || !archived.has(path)) return []
+          const retained = [...renVersions.keys()].filter(
+            (child) => InfraVersions.spaceOf(child) === path && !archived.has(child),
+          )
+          return retained.length > 0 ? [path, ...retained] : []
+        }),
+        ...judged.flatMap((entry) => {
+          const path = entry.step.change.path
+          const space = InfraVersions.spaceOf(path)
+          if (!space || entry.step.change.action === "archive" || !applied(path) || stays(space)) return []
+          return [path, space]
+        }),
+      ])
+      const steps = judged.map((entry) => ({
+        step: entry.step,
+        base: entry.base,
+        verdict: held.has(entry.step.change.path) ? "conflict" : (worst.get(entry.step.change.path) ?? entry.verdict),
+      }))
+      const firsts = new Map(steps.map((entry, index) => [entry.step.change.path, index] as const).toReversed())
+      const changes = steps.flatMap((entry, index): Array<Infra.Change> => {
+        const change = entry.step.change
+        const first = firsts.get(change.path) === index
+        const values = InfraVersions.differences(ren.get(entry.base)?.value, folder.get(change.path)?.value)
+        if (entry.verdict === "apply") return [first && change.action === "update" ? described(change, values) : change]
+        return first ? [described(change, values, entry.verdict)] : []
+      })
+      return {
+        steps,
+        changes,
+        problems: planned.problems,
+        locked,
+        digest: InfraVersions.hash(
+          steps
+            .filter((entry) => entry.verdict === "apply" || entry.verdict === "conflict")
+            .map((entry) => ({
+              change: entry.step.change,
+              verdict: entry.verdict,
+              from: renVersions.get(entry.base) ?? null,
+              to: folderVersions.get(entry.step.change.path) ?? null,
+            })),
+        ),
+        lock: {
+          organization: live.organization.slug,
+          resources: InfraVersions.advanceLock(folderVersions, renVersions, locked),
+        },
+      }
     })
 
     const at =
@@ -642,66 +961,69 @@ export const layer = Layer.effect(
         )
 
     return Service.of({
-      pull: Effect.fn("InfraSpecs.pull")(function* (actor: Actor.Info) {
+      pull: Effect.fn("InfraSpecs.pull")(function* (actor: Actor.Info, input: Infra.PullInput) {
         yield* authorize(actor, InfraPolicy.actions.pull)
         const live = yield* load(actor)
-        const inScope = scope(live)
-        const names = new Map(inScope.owned.map((agent) => [agent.id, agent.name]))
+        const organization = live.organization.slug
+        if (input.bindings && input.bindings.organization !== organization)
+          return yield* new Primitive.Invalid({
+            message: `deploy.yaml names “${input.bindings.organization}”, but you are signed in to “${organization}”.`,
+          })
+        if (input.lock && input.lock.organization !== organization)
+          return yield* new Primitive.Invalid({
+            message: `ren.lock is for “${input.lock.organization}”, but you are signed in to “${organization}”.`,
+          })
+        const bindings = input.bindings ?? { organization, spaces: {} }
+        const aliases = input.spec ? diff(actor, live, { spec: input.spec, bindings }).aliases : new Map()
+        const ren = liveResources(live, aliases)
+        const pulled = InfraVersions.planPull(
+          input.spec ? folderResources(input.spec, bindings, ren) : new Map(),
+          ren,
+          input.lock?.resources ?? {},
+        )
         return {
-          bindings: { organization: live.organization.slug },
-          spec: {
-            org: { settings: live.organization.settings },
-            spaces: Object.fromEntries(
-              inScope.shared.map((space) => [
-                space.slug,
-                {
-                  name: space.name,
-                  ...(Predicate.isNotNull(space.description) && { description: space.description }),
-                  settings: space.settings,
-                  agents: Object.fromEntries(
-                    inScope.owned
-                      .filter((agent) => agent.ownerSpaceId === space.id)
-                      .map((agent) => [
-                        agent.name,
-                        {
-                          ...(Predicate.isNotNull(agent.description) && { description: agent.description }),
-                          isSubagent: agent.isSubagent,
-                          settings: agent.settings,
-                        },
-                      ]),
-                  ),
-                  uses: {
-                    agents: inScope.memberships
-                      .filter((membership) => membership.spaceId === space.id)
-                      .flatMap((membership) => names.get(membership.agentId) ?? [])
-                      .toSorted(),
-                  },
-                },
-              ]),
-            ),
-          },
+          ...snapshot(live, aliases),
+          lock: { organization: live.organization.slug, resources: pulled.lock },
+          write: pulled.write,
+          remove: pulled.remove,
+          conflicts: pulled.conflicts,
         }
       }),
       plan: Effect.fn("InfraSpecs.plan")(function* (actor: Actor.Info, input: Infra.PlanInput) {
         yield* authorize(actor, InfraPolicy.actions.plan)
         const result = yield* plan(actor, input)
-        return {
-          changes: result.planned.steps.map((planned) => planned.change),
-          problems: result.planned.problems,
-          digest: result.digest,
-        }
+        return { changes: result.changes, problems: result.problems, digest: result.digest, lock: result.lock }
       }),
       apply: Effect.fn("InfraSpecs.apply")(function* (actor: Actor.Info, input: Infra.ApplyInput) {
         yield* authorize(actor, InfraPolicy.actions.apply)
         const result = yield* plan(actor, input)
-        if (result.planned.problems.length > 0)
+        if (result.problems.length > 0)
           return yield* new Primitive.Invalid({ message: "The plan has problems. Run ren infra plan to see them." })
         if (result.digest !== input.digest)
           return yield* new Primitive.Conflict({ message: "The plan is stale. Run ren infra plan again." })
-        yield* Effect.forEach(result.planned.steps, (planned) => planned.run.pipe(at(planned.change.path)), {
-          discard: true,
-        })
-        return { changes: result.planned.steps.map((planned) => planned.change) }
+        const conflicts = result.changes.filter((change) => change.status === "conflict")
+        if (conflicts.length > 0 && !input.force)
+          return yield* new Primitive.Conflict({
+            message: `${conflicts.map((change) => change.path).join(", ")} changed in Ren and in the folder. Pull and merge them, or apply with force.`,
+          })
+        yield* Effect.forEach(
+          result.steps.filter((entry) => entry.verdict === "apply" || entry.verdict === "conflict"),
+          (entry) => entry.step.run.pipe(at(entry.step.change.path)),
+          { discard: true },
+        )
+        const after = yield* load(actor, input)
+        const settled = liveResources(after, diff(actor, after, input).aliases)
+        return {
+          changes: result.changes.filter((change) => change.status !== "changed" && change.status !== "new"),
+          lock: {
+            organization: after.organization.slug,
+            resources: InfraVersions.advanceLock(
+              InfraVersions.versions(folderResources(input.spec, input.bindings, settled)),
+              InfraVersions.versions(settled),
+              result.locked,
+            ),
+          },
+        }
       }),
     })
   }),

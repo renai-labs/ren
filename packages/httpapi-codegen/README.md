@@ -18,6 +18,9 @@ The package is private. Its tests are the executable specification for the gener
 
 - Reflect one authoritative `HttpApi` into a shared contract with `compile(Api)`.
 - Emit clients independently with `emitPromise(contract)`, `emitEffectImported(contract, { module, api })` and `emitReactQuery(contract, { client })`.
+- Emit `effect/cli` commands with `emitCli(contract, { module, api, runtime, groups, commands })`. The caller's table names every command path, argument and flag; the emitter names nothing on its own. Definitions (`commands.ts`) load the adapters (`operations.ts`) lazily, so help never loads the API. Each adapter hands the endpoint, the parsed values and the typed client call to the caller's runtime.
+- Make a CLI flag of each scalar, literal choice, boolean or list of scalars: path and query fields by their decoded type, payload fields by their JSON wire type. A flag is optional when the wire may omit it, and payload flags are always optional because the runtime can take the rest as JSON input.
+- Reject a repeated command path, a command that is also a group, a group without a description or without commands, two inputs with one name, an unknown operation or input, and streaming or data-envelope operations.
 - Give each emitter its own public type projection; the shared contract, not a generated type package, is the common source.
 - Generate the Effect client over the authoritative `HttpApi` it imports, so it keeps decoded Effect-native values and transformations through `HttpApiClient`.
 - Generate TanStack Query option factories over the Promise client for every non-streaming operation.

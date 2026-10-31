@@ -12,7 +12,7 @@ test("a member creates a daily schedule, runs it now and finds the scheduled mes
   await page.goto("/app/schedules")
   await expect(page.getByText("No schedules yet")).toBeVisible()
 
-  await page.getByRole("button", { name: "Create schedule" }).click()
+  await page.getByRole("button", { name: "Create schedule" }).first().click()
   const dialog = page.getByRole("dialog", { name: "New schedule" })
   await dialog.getByRole("combobox", { name: "Space" }).click()
   await page.getByRole("option").first().click()
@@ -21,10 +21,12 @@ test("a member creates a daily schedule, runs it now and finds the scheduled mes
   await dialog.getByRole("button", { name: "Create schedule" }).click()
   await expect(dialog).toHaveCount(0)
 
-  const card = page.getByRole("link", { name: "Open schedule: Daily report" })
-  await expect(card).toContainText("Every day at 09:00")
-  await expect(page.getByRole("switch", { name: "Pause schedule: Daily report" })).toBeChecked()
+  const card = page.getByRole("button", { name: "Daily report", exact: true })
+  await expect(page.getByRole("region", { name: "Schedules" })).toContainText("Every day at 09:00")
+  await page.getByRole("switch", { name: "Pause schedule: Daily report" }).click()
+  await expect(page.getByRole("switch", { name: "Resume schedule: Daily report" })).not.toBeChecked()
   await card.click()
+  await page.getByRole("dialog", { name: "Edit schedule" }).getByRole("link", { name: "View runs" }).click()
   await expect(page.getByRole("heading", { name: "Daily report" })).toBeVisible()
   await expect(page.getByText("No runs yet")).toBeVisible()
 

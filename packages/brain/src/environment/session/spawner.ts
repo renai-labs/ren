@@ -13,6 +13,7 @@ import {
   Predicate,
   Queue,
   Record,
+  Redacted,
   Ref,
   Schedule,
   Schema,
@@ -84,9 +85,10 @@ export const make = (
       const stdinStream = Stream.isStream(stdinConfig.stream) ? stdinConfig.stream : undefined
       const hasStdin = Boolean(stdinStream) || !stdinConfig.stream || stdinConfig.stream === "pipe"
       const shouldEndStdin = stdinConfig.endOnDone !== false
+      const args = command.args.map((arg) => (Redacted.isRedacted(arg) ? Redacted.value(arg) : arg))
       const remoteProcess = yield* executor["process.spawn"]({
-        command: commandToRun(command.command, command.args, connection.hello.shells),
-        arguments: command.args,
+        command: commandToRun(command.command, args, connection.hello.shells),
+        arguments: args,
         hasStdin,
         variables: { ...options.variables, ...Record.filter(command.options.env ?? {}, Predicate.isString) },
         ...(command.options.cwd && { directory: command.options.cwd }),

@@ -48,6 +48,7 @@ export type Endpoint = {
   readonly unwrapData: boolean
   readonly errors: ReadonlyArray<{ readonly status: number; readonly schema: Schema.Top }>
   readonly successes: readonly [Schema.Top]
+  readonly successStatus: number
 }
 
 export type Group = {

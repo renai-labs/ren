@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import { Auth } from "@ren/schema/auth"
 import { decodeJwt } from "jose"
-import { authRequest, origin, sessionCookie, signUp } from "./lib/app.js"
+import { Routes } from "../src/routes.js"
+import { authRequest, makeApp, origin, sessionCookie, signUp } from "./lib/app.js"
 import {
   Redirect,
   authorize,
@@ -14,8 +15,12 @@ import {
 } from "./lib/mcp.js"
 
 const app = makeMcpApp()
+const offline = makeApp(Routes.layer)
 
-afterAll(() => app.dispose())
+afterAll(async () => {
+  await app.dispose()
+  await offline.dispose()
+})
 
 const get = (path: string, headers: HeadersInit = {}) => app.handler(new Request(`${base}${path}`, { headers }))
 
@@ -114,5 +119,18 @@ describe("Ren MCP OAuth", () => {
       aud: expect.arrayContaining([resource]),
       ren_org: organizationId,
     })
+  })
+
+  test("knows the Ren CLI without fetching its metadata and accepts its loopback callback on any port", async () => {
+    const cookie = sessionCookie(await signUp(offline, "cli@example.com"))
+    const organizationId = await organizationOf(offline, cookie)
+    const client = { id: Auth.cliClient.client_id, redirectUri: "http://127.0.0.1:49152/callback" }
+    const started = await startAuthorization(offline, { cookie, client })
+    expect(started.page.pathname).toBe("/app/consent")
+    const flow = await finishAuthorization(offline, cookie, started.page, started.verifier, organizationId)
+    expect(flow.callback.origin).toBe("http://127.0.0.1:49152")
+    const body = await flow.token.json()
+    expect(body.refresh_token).toEqual(expect.any(String))
+    expect(decodeJwt(body.access_token)).toMatchObject({ ren_org: organizationId })
   })
 })

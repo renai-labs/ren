@@ -1,8 +1,10 @@
 export * as E2BSandbox from "./e2b.js"
 
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
-import { Config, Duration, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
+import { Space } from "@ren/schema/space"
+import { Config, DateTime, Duration, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
 import { HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import { SandboxProvider } from "../sandbox-provider.js"
 
@@ -47,6 +49,32 @@ const Listed = Schema.Array(
 
 const Detail = Schema.Struct({ state: Schema.optional(Schema.String) })
 
+const runTypes = ["sandbox.lifecycle.paused", "sandbox.lifecycle.killed"] as const
+
+const Runs = Schema.Array(
+  Schema.Struct({
+    id: Schema.String,
+    type: Schema.Literals(runTypes),
+    timestamp: Schema.DateTimeUtcFromString,
+    sandboxId: Schema.String,
+    eventData: Schema.Unknown,
+  }),
+)
+type Run = (typeof Runs.Type)[number]
+
+const Measured = Schema.Struct({
+  sandbox_metadata: Schema.Struct({
+    owner: Schema.String,
+    brain: Brain.ID,
+    generation: Schema.NumberFromString,
+    organization: Auth.OrganizationID,
+    space: Space.ID,
+  }),
+  execution: Schema.Struct({ execution_time: Schema.Int, vcpu_count: Schema.Int, memory_mb: Schema.Int }),
+})
+
+const pageSize = 100
+
 const failed = (operation: string) => (error: { readonly message: string }) =>
   new SandboxProvider.Failed({ message: `E2B ${operation}: ${error.message}` })
 
@@ -63,6 +91,8 @@ export const layer = Layer.effect(
       port: Config.Int("BRAIN_PORT").pipe(Config.withDefault(4800)),
       maxRunning: Config.Int("SANDBOX_MAX_RUNNING").pipe(Config.withDefault(10)),
       owner: Config.String("E2B_OWNER").pipe(Config.withDefault(defaultOwner)),
+      vcpuSecond: Config.Number("E2B_VCPU_SECOND_MICRO_USD"),
+      gibSecond: Config.Number("E2B_GIB_SECOND_MICRO_USD"),
     })
     const owner = config.owner
     const http = yield* HttpClient.HttpClient
@@ -112,6 +142,18 @@ export const layer = Layer.effect(
           Schema.decodeUnknownEffect(Schema.fromJsonString(Listed))(text).pipe(Effect.mapError(failed("list"))),
         ),
         Effect.map((sandboxes) => sandboxes.filter((sandbox) => sandbox.metadata?.owner === owner)),
+      )
+    const page = (offset: number) =>
+      send(
+        "events",
+        HttpClientRequest.get("/events/sandboxes").pipe(
+          HttpClientRequest.setUrlParams({ types: runTypes, limit: pageSize, offset }),
+        ),
+      ).pipe(
+        Effect.flatMap((response) => strict("events", response)),
+        Effect.flatMap((text) =>
+          Schema.decodeUnknownEffect(Schema.fromJsonString(Runs))(text).pipe(Effect.mapError(failed("events"))),
+        ),
       )
     const upload = Effect.fnUntraced(function* (
       binding: Binding,
@@ -167,6 +209,7 @@ export const layer = Layer.effect(
     return SandboxProvider.Service.of({
       kind: "e2b",
       canEgress: true,
+      canMount: true,
       template: config.template,
       create: Effect.fn("E2BSandbox.create")(function* (input) {
         const metadata = { brain: input.brainId, generation: String(input.generation) }
@@ -192,7 +235,7 @@ export const layer = Layer.effect(
               timeout: Duration.toSeconds(createTimeout),
               autoPause: true,
               secure: true,
-              metadata: { owner, ...metadata },
+              metadata: { owner, ...metadata, organization: input.organizationId, space: input.spaceId },
               envVars: input.env,
               ...Option.match(input.proxy, { onNone: () => ({}), onSome: (proxy) => ({ network: networkOf(proxy) }) }),
             }),
@@ -246,6 +289,40 @@ export const layer = Layer.effect(
           Effect.mapError(failed("info")),
         )
         return detail.state === "paused" ? ("paused" as const) : ("running" as const)
+      }),
+      metered: Effect.fn("E2BSandbox.metered")(function* (since) {
+        const older = (run: Run) => Option.exists(since, (time) => DateTime.isLessThan(run.timestamp, time))
+        const runsFrom = (offset: number): Effect.Effect<ReadonlyArray<Run>, SandboxProvider.Failed> =>
+          Effect.flatMap(page(offset), (runs) =>
+            runs.length < pageSize || runs.some(older)
+              ? Effect.succeed(runs)
+              : Effect.map(runsFrom(offset + pageSize), (rest) => [...runs, ...rest]),
+          )
+        return (yield* runsFrom(0)).flatMap((run) => {
+          const measured = Schema.decodeUnknownOption(Measured)(run.eventData)
+          if (older(run) || Option.isNone(measured) || measured.value.sandbox_metadata.owner !== owner) return []
+          const tags = measured.value.sandbox_metadata
+          const execution = measured.value.execution
+          const vcpuMs = execution.vcpu_count * execution.execution_time
+          const memoryMibMs = execution.memory_mb * execution.execution_time
+          return [
+            {
+              id: run.id,
+              sandboxId: run.sandboxId,
+              brainId: tags.brain,
+              generation: tags.generation,
+              organizationId: tags.organization,
+              spaceId: tags.space,
+              endedAt: run.timestamp,
+              durationMs: execution.execution_time,
+              vcpuMs,
+              memoryMibMs,
+              costMicroUsd: Math.round(
+                (vcpuMs / 1000) * config.vcpuSecond + (memoryMibMs / 1024 / 1000) * config.gibSecond,
+              ),
+            },
+          ]
+        })
       }),
       lost: Stream.empty,
       hand: () => Effect.succeed({ url: `http://127.0.0.1:${EnvironmentApi.port}`, workspace: "/home/user/workspace" }),

@@ -21,6 +21,7 @@ import { CredentialEnv } from "../src/credential-env.js"
 import { CredentialRefresh } from "../src/credential-refresh.js"
 import { CredentialSource } from "../src/credential-source.js"
 import { Credentials } from "../src/credentials.js"
+import { Drives } from "../src/drives.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { Egress } from "../src/egress.js"
 import { EgressControl } from "../src/egress-control.js"
@@ -34,6 +35,7 @@ import { Signer } from "../src/signer.js"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
+import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 import { GitHubServer } from "./lib/github-server.js"
 import { ProfilesFixture } from "./lib/profiles.js"
@@ -150,7 +152,14 @@ const it = testEffect(
       Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
     ),
     Layer.provideMerge(
-      Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, models, PersonCredentials.layer),
+      Layer.mergeAll(
+        Credentials.layer,
+        CredentialCallers.layer,
+        BrainClient.layer,
+        models,
+        PersonCredentials.layer,
+        Drives.layer,
+      ),
     ),
     Layer.provideMerge(
       Layer.mergeAll(
@@ -182,6 +191,7 @@ const it = testEffect(
           REN_URL: "https://api.ren.test",
           COMPOSIO_API_KEY: "composio-project-key",
           ...GitHubServer.config(github.url, { GITHUB_URL: "https://github.com" }),
+          ...TestDrives.config,
         }),
       ),
     ),
@@ -265,11 +275,16 @@ const request = (
 
 const values = (reply: Injection.Reply) =>
   reply.allow
-    ? reply.inject.map((op) =>
-        op.op === "route"
-          ? { op: op.op, upstream: Redacted.value(op.upstream) }
-          : { ...op, value: Redacted.value(op.value) },
-      )
+    ? reply.inject.map((op) => {
+        if (op.op === "route") return { op: op.op, upstream: Redacted.value(op.upstream) }
+        if (op.op === "awsSign")
+          return {
+            ...op,
+            secretAccessKey: Redacted.value(op.secretAccessKey),
+            sessionToken: Redacted.value(op.sessionToken),
+          }
+        return { ...op, value: Redacted.value(op.value) }
+      })
     : reply
 
 describe("Egress.resolve", () => {
@@ -463,6 +478,100 @@ describe("Egress.resolve", () => {
           allow: false,
           reason: "credential_reconnect",
           label: "MCP_GMAIL",
+        })
+      }),
+  )
+})
+
+describe("Egress.resolve, a brain's drives", () => {
+  const rustfs = (keys: {
+    readonly accessKeyId: string
+    readonly secretAccessKey: string
+    readonly sessionToken?: string
+  }) =>
+    new Bun.S3Client({ ...keys, endpoint: TestDrives.config.DRIVE_ENDPOINT, bucket: TestDrives.config.DRIVE_BUCKET })
+  const root = rustfs({
+    accessKeyId: TestDrives.config.DRIVE_ACCESS_KEY_ID,
+    secretAccessKey: TestDrives.config.DRIVE_SECRET_ACCESS_KEY,
+  })
+  const host = new URL(TestDrives.config.DRIVE_ENDPOINT).hostname
+
+  it.live(
+    "ren:DRIVE on the bucket host is signed again with keys that read the brain's space drive and the org drive, and write only the space drive",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const spaces = yield* Space.Service
+        const found = yield* setup()
+        const other = (yield* spaces.create(found.ada, { name: "Other" })).id
+        const prefixes = {
+          space: Drives.prefixOf({ organizationId: found.organizationId, spaceId: found.space.id }),
+          org: Drives.prefixOf({ organizationId: found.organizationId }),
+          other: Drives.prefixOf({ organizationId: found.organizationId, spaceId: other }),
+        }
+        yield* Effect.promise(() =>
+          Promise.all(Object.values(prefixes).map((prefix) => root.write(`${prefix}notes.txt`, "notes"))),
+        )
+        const reply = yield* resolver.resolve(all, request(found.proof, host, [Drives.placeholder]))
+        expect(reply).toMatchObject({ allow: true, labels: ["DRIVE"] })
+        const op = reply.allow ? reply.inject.at(0) : undefined
+        if (op?.op !== "awsSign") return yield* Effect.die(new Error("expected an awsSign op"))
+        const minted = rustfs({
+          accessKeyId: op.accessKeyId,
+          secretAccessKey: Redacted.value(op.secretAccessKey),
+          sessionToken: Redacted.value(op.sessionToken),
+        })
+        const list = (prefix: string) =>
+          Effect.promise(() => minted.list({ prefix })).pipe(
+            Effect.map((listed) => (listed.contents ?? []).map((each) => each.key)),
+          )
+        const refused = (run: () => Promise<unknown>) =>
+          Effect.tryPromise({ try: run, catch: (cause) => Bun.inspect(cause) }).pipe(Effect.flip)
+        expect(yield* list(prefixes.space)).toEqual([`${prefixes.space}notes.txt`])
+        expect(yield* list(prefixes.org)).toEqual([`${prefixes.org}notes.txt`])
+        expect(yield* Effect.promise(() => minted.file(`${prefixes.space}notes.txt`).text())).toBe("notes")
+        expect(yield* refused(() => minted.list({ prefix: prefixes.other }))).toContain("AccessDenied")
+        expect(yield* refused(() => minted.file(`${prefixes.other}notes.txt`).text())).toContain("AccessDenied")
+        expect(yield* refused(() => minted.list())).toContain("AccessDenied")
+        yield* Effect.promise(() => minted.write(`${prefixes.space}new.txt`, "new"))
+        expect(yield* Effect.promise(() => root.file(`${prefixes.space}new.txt`).text())).toBe("new")
+        yield* Effect.promise(() => minted.delete(`${prefixes.space}new.txt`))
+        expect(yield* Effect.promise(() => root.file(`${prefixes.space}new.txt`).exists())).toBe(false)
+        expect(yield* refused(() => minted.write(`${prefixes.org}new.txt`, "new"))).toContain("AccessDenied")
+        expect(yield* refused(() => minted.write(`${prefixes.other}new.txt`, "new"))).toContain("AccessDenied")
+        expect(yield* refused(() => minted.delete(`${prefixes.org}notes.txt`))).toContain("AccessDenied")
+        expect(yield* Effect.promise(() => root.file(`${prefixes.org}notes.txt`).text())).toBe("notes")
+      }),
+  )
+
+  it.live(
+    "an egress without awsSign and a request to the bucket host without ren:DRIVE get no keys; nor does a space archived after its keys were minted",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const spaces = yield* Space.Service
+        const found = yield* setup()
+        expect(
+          yield* resolver.resolve(
+            all,
+            request(
+              found.proof,
+              host,
+              [Drives.placeholder],
+              everyOp.filter((op) => op !== "awsSign"),
+            ),
+          ),
+        ).toEqual({ allow: false, reason: "egress_outdated", label: "DRIVE" })
+        expect(yield* resolver.resolve(all, request(found.proof, host, []))).toMatchObject({ allow: true, inject: [] })
+        expect(yield* resolver.resolve(all, request(found.proof, host, [Drives.placeholder]))).toMatchObject({
+          allow: true,
+          inject: [{ op: "awsSign" }],
+        })
+        yield* spaces.archive(found.ada, found.space.id)
+        expect(yield* resolver.resolve(all, request(found.proof, host, [Drives.placeholder]))).toEqual({
+          allow: false,
+          reason: "credential_missing",
+          label: "DRIVE",
         })
       }),
   )

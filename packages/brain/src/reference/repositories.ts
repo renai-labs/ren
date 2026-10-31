@@ -1,40 +1,38 @@
 export * as Repositories from "./repositories.js"
 
-import type { GitHost } from "@ren/schema/git-host"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { GitHost } from "@ren/schema/git-host"
 import type { Reference } from "@ren/schema/reference"
 import { Cache, Duration, Effect, Equal, Exit, Ref, type Scope, Semaphore } from "effect"
 import { GitHosts } from "../git/hosts.js"
 import { LsRefs } from "../git/ls-refs.js"
+import type { References } from "./references.js"
 
 export interface Key {
   readonly repository: string
   readonly branch?: string
 }
 
-// oxlint-disable-next-line ren/no-comments -- R52: a reference that the brain can copy, with its path below the root, or one that it cannot, with the reason.
-export type Prepared =
-  | {
-      readonly type: "ready"
-      readonly info: Reference.Info
-      readonly path: string
-      readonly archive: GitHosts.Archive
-    }
-  | { readonly type: "unavailable"; readonly info: Reference.Info; readonly unavailable: GitHost.Unavailable }
+export const root = "references"
 
-export interface Chat {
-  readonly prepared: () => ReadonlyArray<Prepared>
-  // oxlint-disable-next-line ren/no-comments -- R36: starts a lookup in the background and returns at once.
-  readonly refresh: Effect.Effect<void>
-  // oxlint-disable-next-line ren/no-comments -- R37: looks up, after any lookup that runs, so a prompt sees the current references.
-  readonly ready: Effect.Effect<void>
-}
+const note =
+  "A reference is a copy of a GitHub archive: it has no submodules, no Git LFS file contents, no symlinks and no files marked export-ignore."
+
+const readOnly = "is a read-only copy of a reference. To change code, clone the repository."
+
+const nameOf = (repository: string) =>
+  URL.parse(repository)
+    ?.pathname.split("/")
+    .filter(Boolean)
+    .join("/")
+    .replace(/\.git$/u, "") ?? repository
 
 export interface Interface {
   readonly resolve: (key: Key) => Effect.Effect<GitHosts.Lookup, GitHosts.Failed>
   readonly chat: (input: {
     readonly references: Effect.Effect<ReadonlyArray<Reference.Info>>
     readonly changed: Effect.Effect<void>
-  }) => Effect.Effect<Chat, never, Scope.Scope>
+  }) => Effect.Effect<References.Source, never, Scope.Scope>
 }
 
 export const refreshAfter = Duration.days(1)
@@ -92,21 +90,31 @@ export const make = Effect.fnUntraced(function* (
       references,
       (info) =>
         resolve({ repository: info.repository, ...(info.branch && { branch: info.branch }) }).pipe(
-          Effect.map((lookup): Prepared => ({
+          Effect.map((lookup): References.Prepared => ({
             type: "ready",
-            info,
+            alias: info.alias,
+            description: info.description,
             path: `${lookup.repository.host}/${GitHosts.nameOf(lookup.repository)}/${lookup.commit.slice(0, 12)}`,
-            archive: lookup.archive,
+            copy: {
+              type: "archive",
+              unpack: {
+                ...lookup.archive,
+                folder: ".",
+                maxBytes: EnvironmentApi.maxReferenceBytes,
+                maxFiles: EnvironmentApi.maxReferenceFiles,
+                links: "skip",
+              },
+            },
           })),
           Effect.catch((error) =>
-            Effect.succeed<Prepared>({
+            Effect.succeed<References.Prepared>({
               type: "unavailable",
-              info,
-              unavailable: {
+              alias: info.alias,
+              note: `The reference ${info.alias} (${nameOf(info.repository)}) is not available: ${GitHost.message({
                 reason: error.reason,
                 name: error.name,
                 ...(error.detail && { detail: error.detail }),
-              },
+              })}.`,
             }),
           ),
         ),
@@ -115,7 +123,7 @@ export const make = Effect.fnUntraced(function* (
   return {
     resolve,
     chat: Effect.fnUntraced(function* (input) {
-      const current = yield* Ref.make<ReadonlyArray<Prepared>>([])
+      const current = yield* Ref.make<ReadonlyArray<References.Prepared>>([])
       const lookups = yield* Semaphore.make(1)
       // oxlint-disable-next-line ren/no-comments -- R36, R37: one lookup at a time for the chat. The start and a settings change look up in the background; a prompt waits.
       const lookUp = lookups.withPermit(
@@ -128,7 +136,14 @@ export const make = Effect.fnUntraced(function* (
       )
       const refresh = Effect.asVoid(Effect.forkIn(lookUp, yield* Effect.scope))
       yield* refresh
-      return { prepared: () => Ref.getUnsafe(current), refresh, ready: lookUp } satisfies Chat
+      return {
+        root,
+        note,
+        readOnly,
+        prepared: () => Ref.getUnsafe(current),
+        refresh,
+        ready: lookUp,
+      } satisfies References.Source
     }),
   } satisfies Interface
 })

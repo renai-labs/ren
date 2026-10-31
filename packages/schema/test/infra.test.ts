@@ -15,6 +15,20 @@ const decode = (spaces: Record<string, unknown>) =>
   Schema.decodeUnknownExit(Infra.Spec)({ org: { settings: {} }, spaces })
 
 describe("Infra.Spec", () => {
+  test("rejects a Linear channel and a Linear binding: the spec maps GitHub and Slack, not Linear", () => {
+    expect(
+      Exit.isFailure(decode({ home: { name: "Home", channels: { tickets: { kind: "linear", purpose: "T" } } } })),
+    ).toBe(true)
+    expect(
+      Exit.isFailure(
+        Schema.decodeUnknownExit(Infra.Bindings)({
+          organization: "acme",
+          spaces: { home: { channels: { tickets: { kind: "linear", projectId: "P1" } } } },
+        }),
+      ),
+    ).toBe(true)
+  })
+
   test("a space uses an agent that another space owns", () => {
     const exit = decode({
       engineering: { name: "Engineering", agents: { build: agent } },
@@ -75,6 +89,21 @@ describe("Infra.Spec", () => {
     })
     expect(String(exit)).toContain(
       'Schedule "digest" in space "support" runs on agent "build", which is not in the space.',
+    )
+  })
+
+  test("a factory names the agents of its space, ren included, and keeps the factory rules", () => {
+    const factory = (agents: ReadonlyArray<unknown>) =>
+      decode({
+        engineering: { name: "Engineering", agents: { build: agent, review: agent } },
+        support: { name: "Support", agents: { triage: agent }, factory: { agents } },
+      })
+    expect(Exit.isSuccess(factory([{ agent: "ren", to: [{ agent: "triage" }] }, { agent: "triage" }]))).toBe(true)
+    expect(String(factory([{ agent: "build" }]))).toContain(
+      'The factory of space "support" names agent "build", which is not in the space.',
+    )
+    expect(String(factory([{ agent: "triage", to: [{ agent: "triage" }] }]))).toContain(
+      "triage cannot hand off to itself.",
     )
   })
 

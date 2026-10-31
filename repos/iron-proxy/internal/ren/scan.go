@@ -1,7 +1,7 @@
 // Package ren connects iron-proxy to Ren: it finds Ren placeholders
 // (ren:<LABEL>) in a request, asks Ren what the request gets, and carries
 // out the ops in Ren's reply. It knows no credential type; only the ops
-// replace, setHeader and route.
+// replace, setHeader, route and awsSign.
 package ren
 
 import (
@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // maxBodyBytes caps the response bodies the egress reads to mask injected
@@ -28,11 +29,15 @@ type Op struct {
 	In          []string `json:"in,omitempty"`
 	Name        string   `json:"name,omitempty"`
 	Upstream    string   `json:"upstream,omitempty"`
+
+	AccessKeyID     string `json:"accessKeyId,omitempty"`
+	SecretAccessKey string `json:"secretAccessKey,omitempty"`
+	SessionToken    string `json:"sessionToken,omitempty"`
 }
 
 // SupportedOps are the ops this egress carries out. Ren sends no other op
 // (README C41).
-var SupportedOps = []string{"replace", "setHeader", "route"}
+var SupportedOps = []string{"replace", "setHeader", "route", "awsSign"}
 
 func decodeBasic(value string) (string, bool) {
 	after, ok := strings.CutPrefix(value, "Basic ")
@@ -172,6 +177,10 @@ func apply(req *http.Request, ops []Op) error {
 			req.Header.Set(op.Name, op.Value)
 		case "route":
 			removeFirstSegment(req, op.Placeholder)
+		case "awsSign":
+			if err := awsSign(req, op, time.Now()); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unknown op %q", op.Op)
 		}

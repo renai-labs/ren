@@ -1,10 +1,14 @@
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { eq } from "drizzle-orm"
+import type { Agent } from "@ren/schema/agent"
+import type { Task as TaskSchema } from "@ren/schema/task"
 import { Effect } from "effect"
+import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { Task } from "../src/task.js"
 import { TaskActivity } from "../src/task/activity.js"
+import { TaskTrail } from "../src/task/trail.js"
 import { Seed } from "./lib/seed.js"
 import { TaskFixture } from "./lib/task-fixture.js"
 
@@ -226,5 +230,168 @@ describe("Task review", () => {
         event: { data: { _tag: "reviewed", decision: "changes_requested", comment: "Cover SCIM." } },
       })
     }),
+  )
+})
+
+describe("Task factory", () => {
+  const factory = Effect.gen(function* () {
+    const spaces = yield* Space.Service
+    const o = yield* org
+    const session = (agentId: Agent.ID) =>
+      Seed.session({ organizationId: o.organizationId, spaceId: o.factory.id, createdBy: o.ada.userId }).pipe(
+        Effect.map((sessionId) => TaskFixture.actingAs(o.ada, o.factory.id, agentId, sessionId)),
+      )
+    const plan = yield* o.agent("plan")
+    const build = yield* o.agent("build")
+    const review = yield* o.agent("review")
+    const qa = yield* o.agent("qa")
+    yield* spaces.update(o.ada, o.factory.id, {
+      factory: {
+        maxHandoffs: 20,
+        agents: [
+          { agentId: plan },
+          { agentId: build, to: [{ agentId: review }] },
+          { agentId: review, to: [{ agentId: qa }, { agentId: build, max: 1 }] },
+          { agentId: qa, to: [{ agentId: build, max: 1, else: review }] },
+        ],
+      },
+    })
+    return {
+      o,
+      plan,
+      build,
+      review,
+      qa,
+      builder: yield* session(build),
+      reviewer: yield* session(review),
+      tester: yield* session(qa),
+    }
+  })
+
+  it.live(
+    "a governed agent hands off only along its edges, an edge at its max asks a person, and the person's decision resets it",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const activity = yield* TaskActivity.Service
+        const f = yield* factory
+        const created = yield* tasks.create(f.o.ada, { spaceId: f.o.factory.id, title: "Ship", agentId: f.build })
+        const handOff = (actor: typeof f.builder, agentId: Agent.ID) =>
+          tasks.assign(actor, created.id, { agentId, start: "none" })
+        const refused = yield* Effect.flip(handOff(f.builder, f.plan))
+        expect(refused).toMatchObject({ _tag: "Primitive.Invalid", message: "build can hand off only to review." })
+        expect(yield* handOff(f.builder, f.review)).toMatchObject({ agentId: f.review })
+        expect(yield* handOff(f.builder, f.review)).toMatchObject({ agentId: f.review })
+        expect((yield* Effect.flip(handOff(f.builder, f.qa)))._tag).toBe("Primitive.Conflict")
+        expect(yield* handOff(f.reviewer, f.build)).toMatchObject({ agentId: f.build })
+        yield* handOff(f.builder, f.review)
+        expect(yield* handOff(f.reviewer, f.build)).toMatchObject({
+          agentId: f.review,
+          humanReview: true,
+          humanReviewReason: "review → build used 1 of 1.",
+        })
+        expect((yield* activity.list(f.o.ada, { taskId: created.id, ...page })).items.at(-1)).toMatchObject({
+          event: {
+            data: { _tag: "review_requested", reason: "review → build used 1 of 1." },
+            actor: { userId: null, agentId: null },
+          },
+        })
+        yield* tasks.review(f.o.ada, created.id, { humanReview: false, decision: "approved", start: "none" })
+        expect(yield* handOff(f.reviewer, f.build)).toMatchObject({ agentId: f.build, humanReview: false })
+      }),
+  )
+
+  it.live("an edge at its max sends the task to its else agent, with a note that says why", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const activity = yield* TaskActivity.Service
+      const f = yield* factory
+      const created = yield* tasks.create(f.o.ada, { spaceId: f.o.factory.id, title: "Test", agentId: f.qa })
+      yield* tasks.assign(f.tester, created.id, { agentId: f.build, start: "none" })
+      yield* tasks.assign(f.builder, created.id, { agentId: f.review, start: "none" })
+      yield* tasks.assign(f.reviewer, created.id, { agentId: f.qa, start: "none" })
+      expect(yield* tasks.assign(f.tester, created.id, { agentId: f.build, start: "none" })).toMatchObject({
+        agentId: f.review,
+      })
+      expect((yield* activity.list(f.o.ada, { taskId: created.id, ...page })).items.at(-1)).toMatchObject({
+        event: {
+          data: {
+            _tag: "assigned",
+            fromAgentId: f.qa,
+            toAgentId: f.review,
+            note: "review got the task instead of build: qa → build used 1 of 1.",
+          },
+        },
+      })
+    }),
+  )
+
+  it.live(
+    "a governed agent's run that ends with no handoff asks a person; a handoff, an interruption, an earlier turn or an agent with no edges does not",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const tasks = yield* Task.Service
+        const f = yield* factory
+        const ran = Effect.fnUntraced(function* (
+          actor: typeof f.builder,
+          outcome: "succeeded" | "failed" | "interrupted",
+          more: { readonly handOff?: Agent.ID; readonly idleAt?: number } = {},
+        ) {
+          const task = yield* tasks.create(f.o.ada, {
+            spaceId: f.o.factory.id,
+            title: "Ship",
+            agentId: actor.agent.agentId,
+          })
+          const sessionId = yield* Seed.session({
+            organizationId: f.o.organizationId,
+            spaceId: f.o.factory.id,
+            createdBy: f.o.ada.userId,
+          })
+          yield* database.db
+            .insert(Database.Schema.task_session)
+            .values({ task_id: task.id, session_id: sessionId, agent_id: actor.agent.agentId })
+          yield* database.transaction((transaction) =>
+            TaskTrail.record(transaction, { id: task.id, organizationId: f.o.organizationId }, f.o.ada, [
+              { _tag: "started", agentId: actor.agent.agentId, sessionId, mode: "new" },
+              { _tag: "status", from: "todo", to: "in_progress" },
+            ]),
+          )
+          if (more.handOff) yield* tasks.assign(actor, task.id, { agentId: more.handOff, start: "none" })
+          yield* database.db.insert(Database.Schema.opencode_session).values({
+            session_id: sessionId,
+            project_id: "prj_1",
+            slug: "calm-river",
+            directory: "/workspace",
+            version: "2.0.27",
+            cost: 0,
+            tokens_input: 0,
+            tokens_output: 0,
+            tokens_reasoning: 0,
+            tokens_cache_read: 0,
+            tokens_cache_write: 0,
+            time_created: 1,
+            time_updated: 2,
+            time_idle: more.idleAt ?? Date.now() + 60_000,
+            idle_outcome: outcome,
+          })
+          yield* tasks.runEnded(sessionId)
+          return yield* tasks.get(f.o.ada, task.id)
+        })
+        const review = (task: TaskSchema.Info) => ({ humanReview: task.humanReview, reason: task.humanReviewReason })
+        expect(review(yield* ran(f.builder, "succeeded"))).toEqual({
+          humanReview: true,
+          reason: "build ended its run without a handoff.",
+        })
+        expect(review(yield* ran(f.builder, "failed"))).toEqual({
+          humanReview: true,
+          reason: "build stopped with an error.",
+        })
+        expect((yield* ran(f.builder, "succeeded", { handOff: f.review })).humanReview).toBe(false)
+        expect((yield* ran(f.builder, "succeeded", { idleAt: Date.now() - 60_000 })).humanReview).toBe(false)
+        expect((yield* ran(f.builder, "interrupted")).humanReview).toBe(false)
+        const planner = TaskFixture.actingAs(f.o.ada, f.o.factory.id, f.plan, f.builder.agent.sessionId)
+        expect((yield* ran(planner, "succeeded")).humanReview).toBe(false)
+      }),
   )
 })

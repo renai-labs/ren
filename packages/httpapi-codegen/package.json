@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "bun test --timeout 5000 --only-failures",
+    "test": "bun ../../script/signoff/record.ts bun test --timeout 5000 --only-failures",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo --noEmit"
   },

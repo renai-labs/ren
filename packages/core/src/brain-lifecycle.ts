@@ -41,6 +41,7 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Br
 // oxlint-disable-next-line ren/no-comments -- The brain's own machine as an environment. It is behind the egress when its brain is (R19).
 export interface Hand extends SandboxProvider.Hand {
   readonly egress: boolean
+  readonly canMount: boolean
 }
 
 const CleanupRun = DurableRunner.make("BrainCleanup", {
@@ -163,6 +164,8 @@ export const layer = Layer.effect(
         .create({
           brainId: row.id,
           generation: row.generation,
+          organizationId: row.organization_id,
+          spaceId: row.space_id,
           // oxlint-disable-next-line ren/no-comments -- Behind an egress, the brain calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49).
           env: { ...(yield* env(row)), ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },
           proxy,
@@ -626,7 +629,11 @@ export const layer = Layer.effect(
       hand: Effect.fn("BrainLifecycle.hand")(function* (brainId: Brain.ID) {
         const row = yield* read(brainId)
         if (!row.binding) return Option.none()
-        return Option.some({ ...(yield* provider.hand(row.binding).pipe(Effect.orDie)), egress: row.egress })
+        return Option.some({
+          ...(yield* provider.hand(row.binding).pipe(Effect.orDie)),
+          egress: row.egress,
+          canMount: provider.canMount,
+        })
       }),
     })
   }),

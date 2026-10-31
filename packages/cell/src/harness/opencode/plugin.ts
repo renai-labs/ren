@@ -10,6 +10,7 @@ import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { EnvironmentCopies } from "@ren/brain/environment/copies"
 import { BrainSettings } from "@ren/brain/settings"
+import { UsageClaims } from "@ren/brain/usage-claims"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import type { Memory } from "@ren/schema/memory"
 import { AppCatalog } from "@ren/schema/app-catalog"
@@ -254,9 +255,11 @@ export const make = (
   directoryOf: (sessionId: string) => string,
   sources: GitSources.Interface,
   ren: Option.Option<OpenCodeMcp.Ren>,
-  members: {
+  modelRequest: {
     readonly egress: boolean
-    readonly lastSpeaker: (sessionId: string) => Effect.Effect<Option.Option<OpenCodeChat.Speaker>>
+    readonly lastUserMessage: (
+      sessionId: string,
+    ) => Effect.Effect<{ readonly id: string; readonly speaker: OpenCodeChat.Speaker | undefined } | undefined>
   },
 ) =>
   Plugin.define({
@@ -285,7 +288,7 @@ export const make = (
           )
         const folder = context.location.directory
         if (Option.isSome(confinement) && folder.startsWith(`${confinement.value.workspace}/`)) {
-          const allow = [...confinement.value.allow, `${OpenCodeReferences.rootOf(folder)}/`]
+          const allow = [...confinement.value.allow, ...OpenCodeReferences.rootsOf(folder).map((root) => `${root}/`)]
           yield* context.permission.hook("evaluate", (event) =>
             Effect.sync(() => {
               if (event.action !== "external_directory" || event.effect === "deny") return
@@ -437,6 +440,7 @@ export const make = (
               editor.update(agent.name, (info) => {
                 info.mode = agent === resolved.primary ? "primary" : "subagent"
                 info.model = modelRef(agent.model)
+                info.steps = agent.steps
                 if (agent.description) info.description = agent.description
                 info.permissions = [
                   ...info.permissions,
@@ -454,6 +458,7 @@ export const make = (
             references: Effect.sync(() =>
               Option.match(Ref.getUnsafe(installed), { onNone: () => [], onSome: (chat) => chat.resolved.references }),
             ),
+            drives: () => Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives,
           })
           copySources.push(references.items)
           yield* context.session.hook("context", (event) =>
@@ -538,15 +543,22 @@ export const make = (
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {
             delete event.headers[Models.personHeader]
-            if (event.kind === "title") return
             if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
-            const memberId = Option.flatMap(yield* members.lastSpeaker(yield* rootOf(event.sessionID)), (speaker) =>
-              Option.fromUndefinedOr(speaker.memberID),
+            const root = yield* rootOf(event.sessionID)
+            const turn = yield* modelRequest.lastUserMessage(root)
+            const memberId = event.kind === "title" ? undefined : turn?.speaker?.memberID
+            Object.assign(
+              event.headers,
+              UsageClaims.headers({
+                rootSession: root,
+                session: event.sessionID,
+                turn: turn?.id,
+                member: memberId && (modelRequest.egress ? Models.personPlaceholder(memberId) : memberId),
+                agent: event.agent,
+                kind: event.kind,
+                variant: event.model.variant,
+              }),
             )
-            if (Option.isNone(memberId)) return
-            event.headers[Models.personHeader] = members.egress
-              ? Models.personPlaceholder(memberId.value)
-              : memberId.value
           }),
         )
         yield* context.session.hook("retry", (event) =>

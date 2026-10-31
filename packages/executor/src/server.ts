@@ -10,6 +10,8 @@ import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effe
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import { Executor } from "./executor.js"
 
+export const idleTimeoutSeconds = 10
+
 const bearerPrefix = "bearer "
 
 const unauthorized = new EnvironmentApi.UnauthorizedError({ message: "Authentication required" })
@@ -93,6 +95,7 @@ const operations = EnvironmentApi.Rpcs.toLayer(
       "files.move": (input) => executor.move(input.from, input.to),
       "files.mkdir": (input) => executor.mkdir(input.path),
       "files.unpack": (input) => executor.unpack(input),
+      "drives.mount": (input) => executor.mount(input),
     })
   }),
 )

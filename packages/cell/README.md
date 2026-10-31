@@ -83,4 +83,4 @@ bun typecheck
 - `crash.test.ts`: durable recovery against celld killed at the critical lifecycle boundaries.
 - `environment-lifecycle-cell.test.ts`: the production Worker with a fake Ren, across workerd sleep, crash and restart; it runs only under Wrangler.
 
-Integration processes are acquired and released by scoped layers. Cloudflare deployment measurements and the next host-contract steps remain in [`brain-host-roadmap.md`](../../specs/brain-host-roadmap.md).
+Integration processes are acquired and released by scoped layers.

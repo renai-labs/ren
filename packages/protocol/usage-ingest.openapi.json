@@ -1,0 +1,341 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ren Usage Ingest API",
+    "version": "1",
+    "description": "Internal API where a trusted producer, such as the model gateway, sends the costs that it saw."
+  },
+  "paths": {
+    "/usage/v1/events": {
+      "post": {
+        "tags": ["usage"],
+        "operationId": "usage.record",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage.Recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usage.Recorded"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Store a batch of 1 to 500 usage events. Ren answers after the insert commits. A repeat of `(source, id)` is ignored, so `inserted` counts only new rows. 400: an event is not valid, and Ren stores no event of the batch; do not send it again. 503: send the same batch again later.",
+        "summary": "Record usage events",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Usage.Batch"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Auth.OrganizationID": {
+        "type": "string",
+        "pattern": "^org_",
+        "description": "From the workload’s key. Ren stores it as sent."
+      },
+      "Brain.ID": {
+        "type": "string",
+        "pattern": "^brn_",
+        "description": "From the workload’s key. Ren stores it as sent."
+      },
+      "InvalidRequestErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["InvalidRequestError"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["_tag", "message"],
+        "additionalProperties": false
+      },
+      "Space.ID": {
+        "type": "string",
+        "pattern": "^spc_",
+        "description": "From the workload’s key. Ren stores it as sent."
+      },
+      "UnauthorizedErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["UnauthorizedError"]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "message"],
+        "additionalProperties": false
+      },
+      "UnavailableErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["UnavailableError"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryAfterMs": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Ask again after this many milliseconds."
+          }
+        },
+        "required": ["_tag", "message", "retryAfterMs"],
+        "additionalProperties": false
+      },
+      "Usage.Batch": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Usage.ModelCallEvent"
+            },
+            "minItems": 1,
+            "maxItems": 500
+          }
+        },
+        "required": ["events"],
+        "additionalProperties": false
+      },
+      "Usage.Failure": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["message"],
+        "additionalProperties": false
+      },
+      "Usage.ModelCall": {
+        "type": "object",
+        "properties": {
+          "requested_model": {
+            "type": "string"
+          },
+          "served_model": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "output_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reasoning_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cache_read_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cache_write_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cache_write_1h_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "latency_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "time_to_first_token_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "stop_reason": {
+            "type": "string"
+          }
+        },
+        "required": ["requested_model", "served_model"],
+        "additionalProperties": false
+      },
+      "Usage.ModelCallEvent": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "time": {
+            "type": "string"
+          },
+          "workload": {
+            "type": "string",
+            "description": "`brain:<id>` or `hand:<id>`, then `:<generation>` when known."
+          },
+          "organization": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "brain": {
+            "$ref": "#/components/schemas/Brain.ID"
+          },
+          "space": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "root_session": {
+            "type": "string"
+          },
+          "session": {
+            "type": "string"
+          },
+          "turn": {
+            "type": "string"
+          },
+          "member": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "payer": {
+            "$ref": "#/components/schemas/Usage.Payer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "cost_micro_usd": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "error": {
+            "$ref": "#/components/schemas/Usage.Failure"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["model.call"]
+          },
+          "data": {
+            "$ref": "#/components/schemas/Usage.ModelCall"
+          }
+        },
+        "required": ["source", "id", "time", "workload", "organization", "payer", "provider", "type", "data"],
+        "additionalProperties": false
+      },
+      "Usage.Payer": {
+        "type": "string",
+        "enum": ["ren", "customer"]
+      },
+      "Usage.Recorded": {
+        "type": "object",
+        "properties": {
+          "inserted": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["inserted"],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "description": "The usage ingest key.",
+        "type": "http",
+        "scheme": "Bearer"
+      }
+    }
+  },
+  "security": [],
+  "tags": [
+    {
+      "name": "usage"
+    }
+  ]
+}

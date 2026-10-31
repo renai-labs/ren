@@ -79,6 +79,7 @@ export const layer = (options: {
       return SandboxProvider.Service.of({
         kind: "local",
         canEgress: true,
+        canMount: false,
         template: options.template ?? null,
         create: Effect.fn("LocalSandbox.create")(function* (input) {
           const home = homeOf(input.brainId, input.generation)
@@ -228,6 +229,7 @@ export const layer = (options: {
               : [],
           )
         }),
+        metered: () => Effect.succeed([]),
       })
     }),
   )

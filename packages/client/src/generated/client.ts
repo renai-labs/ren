@@ -54,6 +54,14 @@ import type {
   MemoryEditOutput,
   MemoryDeleteInput,
   MemoryDeleteOutput,
+  DriveListInput,
+  DriveListOutput,
+  DriveStartUploadInput,
+  DriveStartUploadOutput,
+  DriveDownloadInput,
+  DriveDownloadOutput,
+  DriveDeleteInput,
+  DriveDeleteOutput,
   AgentListInput,
   AgentListOutput,
   AgentGetInput,
@@ -232,11 +240,14 @@ import type {
   ChannelConnectChannelPlaceListOutput,
   RepositoryListOutput,
   SignInSignInProviderListOutput,
+  InfraPullInput,
   InfraPullOutput,
   InfraPlanInput,
   InfraPlanOutput,
   InfraApplyInput,
   InfraApplyOutput,
+  InsightsQueryInput,
+  InsightsQueryOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -390,7 +401,7 @@ export function make(options: ClientOptions) {
             method: "PATCH",
             path: `/spaces/${encodeURIComponent(input.id)}`,
             body: {
-              agentOrder: input["agentOrder"],
+              factory: input["factory"],
               name: input["name"],
               description: input["description"],
               brainScope: input["brainScope"],
@@ -689,6 +700,56 @@ export function make(options: ClientOptions) {
             query: { spaceId: input["spaceId"], path: input["path"] },
             successStatus: 204,
             declaredStatuses: [401, 403, 404],
+            empty: true,
+          },
+          requestOptions,
+        ),
+    },
+    drive: {
+      list: (input?: DriveListInput, requestOptions?: RequestOptions) =>
+        request<DriveListOutput>(
+          {
+            method: "GET",
+            path: `/drive`,
+            query: { spaceId: input?.["spaceId"], folder: input?.["folder"], cursor: input?.["cursor"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      startUpload: (input: DriveStartUploadInput, requestOptions?: RequestOptions) =>
+        request<DriveStartUploadOutput>(
+          {
+            method: "POST",
+            path: `/drive/uploads`,
+            body: { spaceId: input["spaceId"], path: input["path"], size: input["size"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      download: (input: DriveDownloadInput, requestOptions?: RequestOptions) =>
+        request<DriveDownloadOutput>(
+          {
+            method: "GET",
+            path: `/drive/file`,
+            query: { spaceId: input["spaceId"], path: input["path"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      delete: (input: DriveDeleteInput, requestOptions?: RequestOptions) =>
+        request<DriveDeleteOutput>(
+          {
+            method: "DELETE",
+            path: `/drive/file`,
+            query: { spaceId: input["spaceId"], path: input["path"] },
+            successStatus: 204,
+            declaredStatuses: [401, 403, 404, 503],
             empty: true,
           },
           requestOptions,
@@ -1975,9 +2036,16 @@ export function make(options: ClientOptions) {
       },
     },
     infra: {
-      pull: (requestOptions?: RequestOptions) =>
+      pull: (input?: InfraPullInput, requestOptions?: RequestOptions) =>
         request<InfraPullOutput>(
-          { method: "GET", path: `/infra`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
+          {
+            method: "POST",
+            path: `/infra/pull`,
+            body: { spec: input?.["spec"], bindings: input?.["bindings"], lock: input?.["lock"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403],
+            empty: false,
+          },
           requestOptions,
         ),
       plan: (input: InfraPlanInput, requestOptions?: RequestOptions) =>
@@ -1985,7 +2053,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/infra/plan`,
-            body: { spec: input["spec"], bindings: input["bindings"] },
+            body: { spec: input["spec"], bindings: input["bindings"], lock: input["lock"] },
             successStatus: 200,
             declaredStatuses: [401, 403],
             empty: false,
@@ -1997,9 +2065,42 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/infra/apply`,
-            body: { spec: input["spec"], bindings: input["bindings"], digest: input["digest"] },
+            body: {
+              spec: input["spec"],
+              bindings: input["bindings"],
+              lock: input["lock"],
+              digest: input["digest"],
+              force: input["force"],
+            },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    insights: {
+      query: (input: InsightsQueryInput, requestOptions?: RequestOptions) =>
+        request<InsightsQueryOutput>(
+          {
+            method: "GET",
+            path: `/insights`,
+            query: {
+              spaceId: input["spaceId"],
+              from: input["from"],
+              to: input["to"],
+              timezone: input["timezone"],
+              groupBy: input["groupBy"],
+              userId: input["userId"],
+              agent: input["agent"],
+              model: input["model"],
+              payer: input["payer"],
+              kind: input["kind"],
+              orderBy: input["orderBy"],
+              limit: input["limit"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,

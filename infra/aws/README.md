@@ -2,9 +2,12 @@
 
 Terraform for one Ren deployment on AWS. The deploy workflow (`.github/workflows/deploy.yml`) releases code into it.
 
+The `cli-release.yml` workflow publishes CLI binaries and the installer under `/ren2/` in the app bucket. CloudFront serves those paths directly; app deploys only replace `/app/`.
+
 ```
-browser ──HTTPS──▶ CloudFront ──▶ S3 (app, /app/)
+browser ──HTTPS──▶ CloudFront ──▶ S3 (site, /; app, /app/)
 browser ──HTTPS api.<domain>──▶ load balancer ──▶ ECS service server :4100
+browser ──HTTPS POST (form the server signed)──▶ S3 (drives)
 server ──E2B API──▶ sandbox (brain + hand) ──every connection, egress.<domain>:1080──▶ egress (EC2) ──▶ internet
 egress ──mTLS server.<name>.internal:4443──▶ server        server ──mTLS egress.<name>.internal:9443──▶ egress
 ```
@@ -16,7 +19,8 @@ egress ──mTLS server.<name>.internal:4443──▶ server        server ─�
 | `server.tf`  | ECS cluster, ECR repository, server secret, roles, task definition, service               |
 | `egress.tf`  | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document     |
 | `waf.tf`     | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules         |
-| `app.tf`     | App bucket and CloudFront distribution                                                    |
+| `app.tf`     | Site and app bucket and CloudFront distribution                                           |
+| `drives.tf`  | Drives bucket, CORS for the app's uploads, the server's access, the `drive-access` role   |
 | `deploy.tf`  | The role the deploy workflow assumes with GitHub OIDC                                     |
 
 ## Rules
@@ -57,5 +61,6 @@ The deploy workflow runs in the environment that `github_environment` names:
 | Variable | `APP_DISTRIBUTION_ID` | output `app_distribution_id`                         |
 | Variable | `EGRESS_INSTANCE_ID`  | output `egress_instance_id`                          |
 | Variable | `REN_API_URL`         | `https://api.<domain>`                               |
+| Variable | `REN2_HOST_URL`       | CLI release origin, currently `https://v2.useren.ai` |
 | Variable | `E2B_TEMPLATE_NAME`   | the brain template's name                            |
 | Variable | `E2B_OWNER`           | the owner tag, the same as `E2B_OWNER` of the server |

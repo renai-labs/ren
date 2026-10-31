@@ -22,7 +22,13 @@ jobs:
     name: changes
     if: github.repository == 'renai-labs/ren'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
+      server: ${{ steps.diff.outputs.server }}
+      app: ${{ steps.diff.outputs.app }}
+      site: ${{ steps.diff.outputs.site }}
       egress: ${{ steps.diff.outputs.egress }}
     steps:
       - name: Checkout repository
@@ -30,22 +36,33 @@ jobs:
         with:
           fetch-depth: 0
 
-      # A release restarts the one egress copy, which pauses new sandbox connections for its drain
-      # time, so the egress is released only when its code changed.
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      # The base is the last successful deploy, so a failed or cancelled run never drops a change.
+      # The brain template decides for itself (cell/e2b/stage.ts).
       - name: Find changed parts
         id: diff
         env:
-          BEFORE: ${{ github.event.before }}
           EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$EVENT" != "push" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            echo "egress=true" >>"$GITHUB_OUTPUT"
+          set -euo pipefail
+          base=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
+          if [ "$EVENT" != "push" ] || [ -z "$base" ] || ! git merge-base --is-ancestor "$base" "$GITHUB_SHA" \
+            || ! git diff --quiet "$base" "$GITHUB_SHA" -- .github/workflows/deploy.yml; then
+            printf '%s=true\n' server app site egress >>"$GITHUB_OUTPUT"
             exit 0
           fi
-          if git diff --quiet "$BEFORE" "$GITHUB_SHA" -- repos/iron-proxy; then
-            echo "egress=false" >>"$GITHUB_OUTPUT"
+          echo "Last successful deploy: $base"
+          for part in server app site; do
+            affected=$(bun turbo query affected --packages "@ren/$part" --base "$base" --head "$GITHUB_SHA" | jq '.data.affectedPackages.length > 0')
+            echo "$part=$affected" | tee -a "$GITHUB_OUTPUT"
+          done
+          if git diff --quiet "$base" "$GITHUB_SHA" -- repos/iron-proxy; then
+            echo "egress=false" | tee -a "$GITHUB_OUTPUT"
           else
-            echo "egress=true" >>"$GITHUB_OUTPUT"
+            echo "egress=true" | tee -a "$GITHUB_OUTPUT"
           fi
 
   template:
@@ -70,7 +87,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           mask-aws-account-id: true
 
-      # Builds only when no template with this code's hash exists; then prints the existing tag.
+      # Builds only when no template with this hash exists, and then prints the existing tag.
       - name: Build the brain template
         id: build
         env:
@@ -92,7 +109,7 @@ jobs:
 
   server:
     name: server
-    needs: template
+    needs: [changes, template]
     runs-on: ubuntu-latest
     environment: v2-prod
     timeout-minutes: 30
@@ -107,8 +124,26 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           mask-aws-account-id: true
 
+      # The service runs one revision; the newest revision of the family carries what infra/aws last
+      # set. A newer one than the service runs means new settings to roll out.
+      - name: Read the running revision
+        id: current
+        env:
+          DEPLOY: ${{ vars.DEPLOY_NAME }}
+        run: |
+          set -euo pipefail
+          running=$(aws ecs describe-services --cluster "$DEPLOY" --services server --query 'services[0].taskDefinition' --output text)
+          aws ecs describe-task-definition --task-definition "$running" --query taskDefinition >running.json
+          aws ecs describe-task-definition --task-definition "$DEPLOY-server" --query taskDefinition >current.json
+          {
+            echo "image=$(jq -r '.containerDefinitions[0].image' running.json)"
+            echo "template=$(jq -r '[.containerDefinitions[0].environment[] | select(.name == "E2B_TEMPLATE") | .value][0] // ""' running.json)"
+            echo "settings=$(jq -r '.taskDefinitionArn != $running' --arg running "$running" current.json)"
+          } >>"$GITHUB_OUTPUT"
+
       - name: Build and push the image
         id: image
+        if: needs.changes.outputs.server == 'true'
         env:
           DEPLOY: ${{ vars.DEPLOY_NAME }}
           REGION: ${{ vars.AWS_REGION }}
@@ -121,16 +156,15 @@ jobs:
           docker push "$image"
           echo "image=$image" >>"$GITHUB_OUTPUT"
 
-      # The newest revision of the family carries what infra/aws last set; only the image and the
-      # template change here.
+      # Only the image and the template change here.
       - name: Roll out
+        if: steps.image.outputs.image != '' || steps.current.outputs.template != needs.template.outputs.tag || steps.current.outputs.settings == 'true'
         env:
           DEPLOY: ${{ vars.DEPLOY_NAME }}
-          IMAGE: ${{ steps.image.outputs.image }}
+          IMAGE: ${{ steps.image.outputs.image || steps.current.outputs.image }}
           TEMPLATE: ${{ needs.template.outputs.tag }}
         run: |
           set -euo pipefail
-          aws ecs describe-task-definition --task-definition "$DEPLOY-server" --query taskDefinition >current.json
           jq --arg image "$IMAGE" --arg template "$TEMPLATE" '
             .containerDefinitions[0].image = $image
             | .containerDefinitions[0].environment = ([.containerDefinitions[0].environment[] | select(.name != "E2B_TEMPLATE")] + [{ name: "E2B_TEMPLATE", value: $template }])
@@ -142,6 +176,7 @@ jobs:
   app:
     name: app
     needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     environment: v2-prod
     timeout-minutes: 20
@@ -177,6 +212,43 @@ jobs:
           aws s3 sync packages/app/dist/assets/ "s3://$bucket/app/assets/" --cache-control "public, max-age=31536000, immutable" --only-show-errors
           aws s3 sync packages/app/dist/ "s3://$bucket/app/" --exclude "assets/*" --cache-control "no-cache" --delete --only-show-errors
           aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/app/*" --query Invalidation.Status --output text
+
+  site:
+    name: site
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    environment: v2-prod
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Build the site
+        run: bun run --cwd packages/site build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      # The same order as the app. The site owns the bucket's root, the app owns /app/ and the CLI release
+      # (cli-release.yml) owns /ren2/, so the delete leaves /app/ and /ren2/ alone.
+      - name: Upload
+        env:
+          DEPLOY: ${{ vars.DEPLOY_NAME }}
+          DISTRIBUTION: ${{ vars.APP_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+          bucket="$DEPLOY-app-$(aws sts get-caller-identity --query Account --output text)"
+          aws s3 sync packages/site/dist/_astro/ "s3://$bucket/_astro/" --cache-control "public, max-age=31536000, immutable" --only-show-errors
+          aws s3 sync packages/site/dist/ "s3://$bucket/" --exclude "_astro/*" --exclude "app/*" --exclude "ren2/*" --cache-control "no-cache" --delete --only-show-errors
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/*" --query Invalidation.Status --output text
 
   egress:
     name: egress

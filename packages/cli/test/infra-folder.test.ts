@@ -3,6 +3,7 @@ import { mkdtemp } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { InfraFolder } from "../src/infra/folder.js"
+import { Output } from "../src/services/output.js"
 
 const folder = async (files: Record<string, string | Uint8Array>) => {
   const root = await mkdtemp(join(tmpdir(), "ren-infra-"))
@@ -82,7 +83,7 @@ describe("InfraFolder.validate", () => {
 
     const result = await InfraFolder.validate(root)
 
-    expect(result.problems.map(InfraFolder.format)).toEqual([
+    expect(result.problems.map(Output.formatProblem)).toEqual([
       "spaces/engineering/agents/build/agent.yaml: isSubagent: Expected boolean",
       "spaces/engineering/space.yaml: name: Missing key",
       "spaces/support/agents/qa: Put the instructions in instructions.md only.",
@@ -100,7 +101,7 @@ describe("InfraFolder.validate", () => {
 
     const result = await InfraFolder.validate(root)
 
-    expect(result.problems.map(InfraFolder.format)).toEqual([
+    expect(result.problems.map(Output.formatProblem)).toEqual([
       "spaces/engineering/agents/ren/agent.yaml: The name ren is reserved.",
       'spaces/engineering/schedules.yaml: nightly.agent: Schedule "nightly" in space "engineering" runs on agent "review", which is not in the space.',
     ])
@@ -118,7 +119,7 @@ describe("InfraFolder.validate", () => {
 
     const result = await InfraFolder.validate(root)
 
-    expect(result.problems.map(InfraFolder.format)).toEqual([
+    expect(result.problems.map(Output.formatProblem)).toEqual([
       "spaces/engineering/apps/notes/skills/empty: A skill folder needs SKILL.md or skill.yaml.",
       "spaces/engineering/apps/notes/skills/write/logo.png: A skill holds text files only.",
       "spaces/engineering/apps/notes/skills/write/SKILL.md: name: The name “draft” must be the folder name, write.",
@@ -133,7 +134,7 @@ describe("InfraFolder.validate", () => {
 
     expect(missing.problems).toEqual(result.problems)
 
-    expect(result.problems.map(InfraFolder.format)).toEqual([
+    expect(result.problems.map(Output.formatProblem)).toEqual([
       ".: No spec here. An org spec has org.yaml, and a private spec has space.yaml.",
     ])
   })
@@ -141,7 +142,15 @@ describe("InfraFolder.validate", () => {
 
 describe("InfraFolder.write", () => {
   const pulled = {
-    bindings: { organization: "acme" },
+    bindings: {
+      organization: "acme",
+      spaces: {
+        engineering: {
+          channels: { ren: { kind: "github" as const, repository: "acme/ren" } },
+          profiles: { github: ["acme"] },
+        },
+      },
+    },
     spec: {
       org: { settings: { instructions: "Be brief.", permissions: [], references: [] } },
       spaces: {
@@ -160,11 +169,62 @@ describe("InfraFolder.write", () => {
               settings: { instructions: "Test first.", permissions: [], references: [] },
             },
           },
+          factory: { maxHandoffs: 5, agents: [{ agent: "ren", to: [{ agent: "build", max: 2 }] }, { agent: "build" }] },
+          apps: {
+            tools: {
+              name: "Tools",
+              description: "The team’s tools.",
+              requiredCredentials: [],
+              environment: { packages: { apt: ["gh"] }, buildCommands: [] },
+              skills: {
+                review: {
+                  type: "content" as const,
+                  description: "Reviews code.",
+                  requiredCredentials: [],
+                  instructions: "# Review\n\nRead the diff.\n",
+                  files: { "references/rules.md": "No comments.\n" },
+                },
+                style: {
+                  type: "upstream" as const,
+                  requiredCredentials: [],
+                  upstream: { url: "https://github.com/acme/skills", ref: "main", path: "style" },
+                },
+              },
+              mcps: {},
+              dependsOn: [],
+            },
+          },
+          schedules: {
+            nightly: { agent: "build", cron: "0 3 * * *", timeZone: "UTC", message: "Run the nightly.", enabled: true },
+          },
+          channels: { ren: { kind: "github" as const, purpose: "GitHub acme/ren", agent: "build", fallback: false } },
           uses: { agents: [] },
         },
-        home: { name: "Home", settings: { permissions: [], references: [] }, agents: {}, uses: { agents: ["build"] } },
+        home: {
+          name: "Home",
+          settings: { permissions: [], references: [] },
+          agents: {},
+          apps: {},
+          schedules: {},
+          channels: {},
+          uses: { agents: ["build"] },
+        },
       },
     },
+    lock: { organization: "acme", resources: {} },
+    write: [
+      "deploy.yaml/spaces/engineering/profiles/github/acme",
+      "org",
+      "spaces/engineering",
+      "spaces/engineering/agents/build",
+      "spaces/engineering/apps/tools",
+      "spaces/engineering/channels/ren",
+      "spaces/engineering/schedules/nightly",
+      "spaces/home",
+      "spaces/home/uses/agents/build",
+    ],
+    remove: [],
+    conflicts: [],
   }
 
   test("writes a folder that reads back as the same spec", async () => {
@@ -185,9 +245,34 @@ describe("InfraFolder.write", () => {
     expect(await Bun.file(join(root, "spaces/home/space.yaml")).text()).toBe(
       "name: Home\nuses:\n  agents:\n    - build\n",
     )
+    expect(result.bindings?.spaces["engineering"]).toMatchObject(pulled.bindings.spaces.engineering)
   })
 
-  test("removes the spaces, agents and instructions that are gone, and keeps every other file", async () => {
+  test("keeps the other frontmatter of a SKILL.md and the other bindings of a space", async () => {
+    const root = await folder({
+      "spaces/engineering/apps/tools/skills/review/SKILL.md":
+        "---\nname: review\ndescription: Old.\nlicense: MIT\nmetadata:\n  icon: https://acme.test/icon.svg\n---\nOld.\n",
+      "spaces/engineering/apps/tools/skills/review/stale.md": "Gone.\n",
+      "spaces/engineering/apps/tools/skills/gone/SKILL.md": "---\nname: gone\ndescription: Gone.\n---\n",
+      "deploy.yaml": "organization: old\nspaces:\n  engineering:\n    timezone: Asia/Kolkata\n    channels: {}\n",
+    })
+
+    await InfraFolder.write(root, pulled)
+
+    expect(await Bun.file(join(root, "spaces/engineering/apps/tools/skills/review/SKILL.md")).text()).toBe(
+      "---\nname: review\ndescription: Reviews code.\nlicense: MIT\nmetadata:\n  icon: https://acme.test/icon.svg\n---\n# Review\n\nRead the diff.\n",
+    )
+    expect(await Bun.file(join(root, "spaces/engineering/apps/tools/skills/review/stale.md")).exists()).toBe(false)
+    expect(await Bun.file(join(root, "spaces/engineering/apps/tools/skills/gone/SKILL.md")).exists()).toBe(false)
+    expect(Bun.YAML.parse(await Bun.file(join(root, "deploy.yaml")).text())).toEqual({
+      organization: "acme",
+      spaces: { engineering: { timezone: "Asia/Kolkata", ...pulled.bindings.spaces.engineering } },
+    })
+    const result = await InfraFolder.validate(root)
+    expect(result.problems).toEqual([])
+  })
+
+  test("removes the spaces, agents and instructions that pull removes, and keeps every other file", async () => {
     const root = await folder({
       "spaces/old/space.yaml": "name: Old\n",
       "spaces/engineering/agents/lint/agent.yaml": "{}\n",
@@ -196,7 +281,7 @@ describe("InfraFolder.write", () => {
       "README.md": "Ours.\n",
     })
 
-    await InfraFolder.write(root, pulled)
+    await InfraFolder.write(root, { ...pulled, remove: ["spaces/engineering/agents/lint", "spaces/old"] })
 
     const files = (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: root }))).toSorted()
     expect(files).toEqual([
@@ -206,10 +291,42 @@ describe("InfraFolder.write", () => {
       "org.yaml",
       "spaces/engineering/agents/build/agent.yaml",
       "spaces/engineering/agents/build/instructions.md",
+      "spaces/engineering/apps/tools/app.yaml",
+      "spaces/engineering/apps/tools/skills/review/SKILL.md",
+      "spaces/engineering/apps/tools/skills/review/references/rules.md",
+      "spaces/engineering/apps/tools/skills/style/skill.yaml",
+      "spaces/engineering/channels.yaml",
       "spaces/engineering/instructions.md",
       "spaces/engineering/schedules.yaml",
       "spaces/engineering/space.yaml",
       "spaces/home/space.yaml",
     ])
+  })
+  test("writes only the resources that pull returns, and keeps the edits and keys of the others", async () => {
+    const root = await folder({
+      "spaces/engineering/space.yaml": "name: Mine\nrenamedFrom: [eng]\n",
+      "spaces/engineering/agents/build/agent.yaml": "description: Mine.\n",
+      "spaces/engineering/schedules.yaml":
+        "local:\n  cron: '0 1 * * *'\n  timeZone: UTC\n  message: Ours.\nnightly:\n  cron: '0 2 * * *'\n  timeZone: UTC\n  message: Old.\n",
+      "spaces/home/space.yaml": "name: Home\nuses:\n  agents: [review]\n",
+      "deploy.yaml": "organization: acme\nspaces:\n  engineering:\n    timezone: UTC\n",
+    })
+
+    await InfraFolder.write(root, {
+      ...pulled,
+      write: ["spaces/engineering/schedules/nightly", "spaces/home/uses/agents/build"],
+      remove: ["spaces/home/uses/agents/review"],
+    })
+
+    const text = (file: string) => Bun.file(join(root, file)).text()
+    expect(await text("spaces/engineering/space.yaml")).toBe("name: Mine\nrenamedFrom: [eng]\n")
+    expect(await text("spaces/engineering/agents/build/agent.yaml")).toBe("description: Mine.\n")
+    expect(Bun.YAML.parse(await text("spaces/engineering/schedules.yaml"))).toEqual({
+      local: { cron: "0 1 * * *", timeZone: "UTC", message: "Ours." },
+      nightly: pulled.spec.spaces.engineering.schedules.nightly,
+    })
+    expect(Bun.YAML.parse(await text("spaces/home/space.yaml"))).toEqual({ name: "Home", uses: { agents: ["build"] } })
+    expect(await text("deploy.yaml")).toBe("organization: acme\nspaces:\n  engineering:\n    timezone: UTC\n")
+    expect(await Bun.file(join(root, "org.yaml")).exists()).toBe(false)
   })
 })

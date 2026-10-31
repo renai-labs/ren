@@ -153,7 +153,7 @@ const tools = Layer.effectDiscard(
     const router = yield* HttpRouter.HttpRouter
     const endpoints: Array<HttpApiEndpoint.Top> = []
     HttpApi.reflect(Api, {
-      predicate: (options) => Context.get(options.endpoint.annotations, Mcp.Tool),
+      predicate: Mcp.isTool,
       onGroup: () => {},
       onEndpoint: (options) => {
         endpoints.push(options.endpoint)

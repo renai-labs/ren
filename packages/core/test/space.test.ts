@@ -442,49 +442,68 @@ describe("Space archive and agents", () => {
   )
 })
 
-describe("Space factory order", () => {
-  it.live("the order keeps usable agents in order, a read drops the ones no longer usable, and it starts as ren", () =>
-    Effect.gen(function* () {
-      const spaces = yield* Space.Service
-      const database = yield* Database.Service
-      yield* Seed.ren()
-      const ren = (yield* database.db
-        .select({ id: Database.Schema.agent.id })
-        .from(Database.Schema.agent)
-        .where(and(eq(Database.Schema.agent.name, "ren"), isNull(Database.Schema.agent.organization_id)))).at(0)?.id
-      if (!ren) return yield* Effect.die(new Error("The seed wrote no ren agent"))
-      const organizationId = yield* Seed.organization()
-      const ada = yield* user(organizationId)
-      const factory = yield* spaces.create(ada, { name: "Factory" })
-      const other = yield* spaces.create(ada, { name: "Other" })
-      expect(factory.agentOrder).toEqual([ren])
-      const owner = { organizationId, spaceId: factory.id }
-      const plan = yield* Seed.agent(owner, "plan", { isSubagent: false })
-      const build = yield* Seed.agent(owner, "build", { isSubagent: false })
-      const helper = yield* Seed.agent(owner, "helper", { isSubagent: true })
-      const elsewhere = yield* Seed.agent({ organizationId, spaceId: other.id }, "elsewhere", { isSubagent: false })
-      expect((yield* spaces.get(ada, factory.id)).agentOrder).toEqual([])
-      expect((yield* spaces.update(ada, factory.id, { agentOrder: [build, plan, ren] })).agentOrder).toEqual([
-        build,
-        plan,
-        ren,
-      ])
-      for (const unusable of [elsewhere, helper, "agt_missing", "plan"]) {
-        expect((yield* Effect.flip(spaces.update(ada, factory.id, { agentOrder: [unusable] })))._tag).toBe(
-          "Primitive.Invalid",
-        )
-      }
-      yield* database.db
-        .update(Database.Schema.agent)
-        .set({ archived_at: new Date() })
-        .where(eq(Database.Schema.agent.id, plan))
-      expect((yield* spaces.get(ada, factory.id)).agentOrder).toEqual([build, ren])
-      const stored = yield* database.db
-        .select({ order: Database.Schema.space.agent_order })
-        .from(Database.Schema.space)
-        .where(eq(Database.Schema.space.id, factory.id))
-      expect(stored).toEqual([{ order: [build, plan, ren] }])
-    }),
+describe("Space factory", () => {
+  it.live(
+    "the factory keeps usable agents in order, a read drops the ones no longer usable with their edges, and it starts as ren",
+    () =>
+      Effect.gen(function* () {
+        const spaces = yield* Space.Service
+        const database = yield* Database.Service
+        yield* Seed.ren()
+        const ren = (yield* database.db
+          .select({ id: Database.Schema.agent.id })
+          .from(Database.Schema.agent)
+          .where(and(eq(Database.Schema.agent.name, "ren"), isNull(Database.Schema.agent.organization_id)))).at(0)?.id
+        if (!ren) return yield* Effect.die(new Error("The seed wrote no ren agent"))
+        const organizationId = yield* Seed.organization()
+        const ada = yield* user(organizationId)
+        const factory = yield* spaces.create(ada, { name: "Factory" })
+        const other = yield* spaces.create(ada, { name: "Other" })
+        expect(factory.factory).toEqual({ maxHandoffs: 20, agents: [{ agentId: ren }] })
+        const owner = { organizationId, spaceId: factory.id }
+        const plan = yield* Seed.agent(owner, "plan", { isSubagent: false })
+        const build = yield* Seed.agent(owner, "build", { isSubagent: false })
+        const helper = yield* Seed.agent(owner, "helper", { isSubagent: true })
+        const elsewhere = yield* Seed.agent({ organizationId, spaceId: other.id }, "elsewhere", { isSubagent: false })
+        expect((yield* spaces.get(ada, factory.id)).factory.agents).toEqual([])
+        const stored = {
+          maxHandoffs: 5,
+          agents: [
+            { agentId: build, to: [{ agentId: plan, max: 2, else: ren }, { agentId: ren }] },
+            { agentId: plan, maxRuns: 3 },
+            { agentId: ren },
+          ],
+        }
+        expect((yield* spaces.update(ada, factory.id, { factory: stored })).factory).toEqual(stored)
+        for (const unusable of [elsewhere, helper, "agt_missing", "plan"]) {
+          expect(
+            (yield* Effect.flip(
+              spaces.update(ada, factory.id, { factory: { maxHandoffs: 5, agents: [{ agentId: unusable }] } }),
+            ))._tag,
+          ).toBe("Primitive.Invalid")
+        }
+        expect(
+          (yield* Effect.flip(
+            spaces.update(ada, factory.id, {
+              factory: { maxHandoffs: 5, agents: [{ agentId: build, to: [{ agentId: build }] }] },
+            }),
+          )).message,
+        ).toBe(`${build} cannot hand off to itself.`)
+        yield* database.db
+          .update(Database.Schema.agent)
+          .set({ archived_at: new Date() })
+          .where(eq(Database.Schema.agent.id, plan))
+        expect((yield* spaces.get(ada, factory.id)).factory).toEqual({
+          maxHandoffs: 5,
+          agents: [{ agentId: build, to: [{ agentId: ren }] }, { agentId: ren }],
+        })
+        expect(
+          yield* database.db
+            .select({ factory: Database.Schema.space.factory })
+            .from(Database.Schema.space)
+            .where(eq(Database.Schema.space.id, factory.id)),
+        ).toEqual([{ factory: stored }])
+      }),
   )
 })
 

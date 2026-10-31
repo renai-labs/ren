@@ -2,6 +2,7 @@ export * as DurableRunner from "./durable-runner.js"
 
 import { Duration, Effect, Layer, Schedule, type Schema } from "effect"
 import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
+import { Digest } from "effect/crypto"
 import { Workflow, WorkflowEngine } from "effect/workflow"
 
 // oxlint-disable-next-line ren/no-comments -- A run is named and keyed: one execution per key at a time, also across Ren replicas. A key that finished does not run again, so a run that must run again puts a counter in its key.
@@ -42,4 +43,7 @@ export const ensure = <Name extends string, Payload extends Workflow.AnyStructSc
 
 export const layerMemory = WorkflowEngine.layerMemory
 
-export const layerEffect = ClusterWorkflowEngine.layer.pipe(Layer.provideMerge(SingleRunner.layer()))
+export const layerEffect = ClusterWorkflowEngine.layer.pipe(
+  Layer.provideMerge(SingleRunner.layer()),
+  Layer.provide(Digest.layerWebCrypto),
+)

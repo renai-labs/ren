@@ -45,7 +45,7 @@ function renderDescriptor(endpoint: Types.Endpoint) {
   const parts = renderRequestParts(endpoint)
   const declaredStatuses = [...new Set(endpoint.errors.map((error) => error.status))]
   const success = endpoint.successes[0]
-  return `{ method: ${JSON.stringify(endpoint.endpoint.method)}, path: ${path}${parts.length === 0 ? "" : `, ${parts.join(", ")}`}, successStatus: ${SchemaShape.resolveHttpApiStatus(success.ast) ?? 200}, declaredStatuses: [${declaredStatuses.join(", ")}], empty: ${endpoint.operation.success === "void"}${SchemaShape.isBinarySchema(success) ? ", binary: true" : ""}${SchemaShape.isBinaryPayload(endpoint) ? ", binaryBody: true" : ""} }`
+  return `{ method: ${JSON.stringify(endpoint.endpoint.method)}, path: ${path}${parts.length === 0 ? "" : `, ${parts.join(", ")}`}, successStatus: ${endpoint.successStatus}, declaredStatuses: [${declaredStatuses.join(", ")}], empty: ${endpoint.operation.success === "void"}${SchemaShape.isBinarySchema(success) ? ", binary: true" : ""}${SchemaShape.isBinaryPayload(endpoint) ? ", binaryBody: true" : ""} }`
 }
 
 function renderMethod(group: Types.Group, endpoint: Types.Endpoint) {

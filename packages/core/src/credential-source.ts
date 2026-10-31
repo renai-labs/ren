@@ -6,6 +6,7 @@ import type { AppProfile } from "@ren/schema/app-profile"
 import { Credential } from "@ren/schema/credential"
 import { Workload } from "@ren/schema/workload"
 import { Auth } from "@ren/schema/auth"
+import { Space } from "@ren/schema/space"
 import { and, eq, isNull, sql } from "drizzle-orm"
 import {
   Cache,
@@ -24,6 +25,7 @@ import {
 import { Access } from "./access.js"
 import { BrainClient } from "./brain-client.js"
 import { Credentials } from "./credentials.js"
+import { Drives } from "./drives.js"
 import { GitHubApp } from "./github-app.js"
 import { McpProvider } from "./mcp-provider.js"
 import { Models } from "./models.js"
@@ -37,6 +39,12 @@ export type Value =
       readonly type: "route"
       readonly upstream: Redacted.Redacted
       readonly headers: ReadonlyArray<{ readonly name: string; readonly value: Redacted.Redacted }>
+    }
+  | {
+      readonly type: "aws"
+      readonly accessKeyId: string
+      readonly secretAccessKey: Redacted.Redacted
+      readonly sessionToken: Redacted.Redacted
     }
 
 // oxlint-disable-next-line ren/no-comments -- expiresAt is when the value stops working upstream; the egress never sends it after that (C37).
@@ -140,7 +148,7 @@ const ren = "REN"
 const models = "MODELS"
 const person = Models.personLabel
 
-// oxlint-disable-next-line ren/no-comments -- Ren mints REN, MODELS and PERSON (space members only, AC4); one mint at a time per workload (C29).
+// oxlint-disable-next-line ren/no-comments -- Ren mints REN, MODELS, PERSON (space members only, AC4) and DRIVE (a brain's space and org drives, read-only); one mint at a time per workload (C29).
 export const layerMinted = Layer.effect(
   Minted,
   Effect.gen(function* () {
@@ -149,15 +157,26 @@ export const layerMinted = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const github = yield* GitHubApp.Service
+    const drives = yield* Drives.Service
     const renHost = new URL(brains.renUrl).hostname
 
     const Key = Schema.fromJsonString(
-      Schema.Struct({ workload: Workload.Info, organizationId: Schema.String, revision: Schema.String }),
+      Schema.Struct({
+        workload: Workload.Info,
+        organizationId: Schema.String,
+        spaceId: Schema.NullOr(Space.ID),
+        revision: Schema.String,
+      }),
     )
     const encodeKey = Schema.encodeSync(Key)
     const decodeKey = Schema.decodeSync(Key)
     const keyOf = (scope: Credentials.Scope, revision = "") =>
-      encodeKey({ workload: scope.workload, organizationId: scope.organizationId, revision })
+      encodeKey({
+        workload: scope.workload,
+        organizationId: scope.organizationId,
+        spaceId: Option.getOrNull(scope.spaceId),
+        revision,
+      })
 
     const hostTokens = yield* Cache.makeWith(
       (key: string) =>
@@ -188,9 +207,9 @@ export const layerMinted = Layer.effect(
         Effect.gen(function* () {
           const found = decodeKey(key)
           const access =
-            found.workload.kind === "brain"
+            found.workload.kind === "brain" && found.spaceId
               ? yield* grants
-                  .grant(found.workload.id, Auth.OrganizationID.make(found.organizationId))
+                  .grant(found.workload.id, Auth.OrganizationID.make(found.organizationId), found.spaceId)
                   .pipe(Effect.retry({ schedule: Schedule.exponential(Duration.millis(500)), times: 3 }))
               : { endpoints: [] }
           return { access, mintedAt: yield* Clock.currentTimeMillis }
@@ -204,6 +223,22 @@ export const layerMinted = Layer.effect(
           )
           return expiries.length === 0 ? Duration.hours(1) : ttlUntil(Math.min(...expiries), exit.value.mintedAt)
         },
+      },
+    )
+
+    const DriveKey = Schema.fromJsonString(Schema.Struct({ organizationId: Auth.OrganizationID, spaceId: Space.ID }))
+    const driveKeys = yield* Cache.makeWith(
+      (key: string) =>
+        Effect.gen(function* () {
+          const keys = yield* drives.keys(Schema.decodeSync(DriveKey)(key))
+          return { keys, mintedAt: yield* Clock.currentTimeMillis }
+        }),
+      {
+        capacity: 10_000,
+        timeToLive: (exit) =>
+          Exit.isSuccess(exit)
+            ? ttlUntil(DateTime.toEpochMillis(exit.value.keys.expiresAt), exit.value.mintedAt)
+            : Duration.zero,
       },
     )
 
@@ -239,7 +274,21 @@ export const layerMinted = Layer.effect(
             ),
           ),
         ]
+        const drive = Option.match(scope.spaceId, {
+          onNone: (): ReadonlyArray<Credentials.Candidate> => [],
+          onSome: (): ReadonlyArray<Credentials.Candidate> => [
+            {
+              id: `minted:${Drives.label}`,
+              source: "minted",
+              label: Drives.label,
+              owner: "workload",
+              hosts: drives.hosts,
+              inject: { op: "awsSign" },
+            },
+          ],
+        })
         return [
+          ...drive,
           {
             id: `minted:${ren}`,
             source: "minted",
@@ -323,6 +372,33 @@ export const layerMinted = Layer.effect(
             },
           } satisfies Sourced)
         }
+        if (candidate.label === Drives.label) {
+          if (scope.workload.kind !== "brain" || Option.isNone(scope.spaceId)) return Option.none()
+          const live = yield* database.db
+            .select({ id: Database.Schema.space.id })
+            .from(Database.Schema.space)
+            .where(and(eq(Database.Schema.space.id, scope.spaceId.value), isNull(Database.Schema.space.archived_at)))
+            .pipe(Effect.orDie)
+          if (live.length === 0) return Option.none()
+          const minted = yield* Cache.get(
+            driveKeys,
+            Schema.encodeSync(DriveKey)({ organizationId: scope.organizationId, spaceId: scope.spaceId.value }),
+          ).pipe(
+            Effect.tapError((error) => Effect.logWarning("Ren could not mint drive keys", error)),
+            Effect.mapError(
+              () => new Unavailable({ label: candidate.label, message: "Ren could not mint the drive keys." }),
+            ),
+          )
+          return Option.some({
+            value: {
+              type: "aws",
+              accessKeyId: minted.keys.accessKeyId,
+              secretAccessKey: minted.keys.secretAccessKey,
+              sessionToken: minted.keys.sessionToken,
+            },
+            expiresAt: minted.keys.expiresAt,
+          } satisfies Sourced)
+        }
         if (candidate.label === GitHubApp.label) {
           const installation = yield* github.installationOf(scope.organizationId)
           if (
@@ -367,7 +443,7 @@ export const layerMinted = Layer.effect(
         candidate: Credentials.Candidate,
         scope: Credentials.Scope,
       ) {
-        if (candidate.label === person) return
+        if (candidate.label === person || candidate.label === Drives.label) return
         if (candidate.label === GitHubApp.label) {
           const installation = yield* github.installationOf(scope.organizationId)
           if (Option.isSome(installation)) yield* installation.value.client.forget(installation.value.installation)

@@ -18,6 +18,7 @@ import { Channels } from "@ren/core/channels"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { InfraSpecs } from "@ren/core/infra-specs"
+import { Insights } from "@ren/core/insights"
 import { Invitation } from "@ren/core/invitation"
 import { Label } from "@ren/core/label"
 import { Memory } from "@ren/core/memory"
@@ -36,6 +37,8 @@ import { SpaceSettings } from "@ren/core/space/settings"
 import { Task } from "@ren/core/task"
 import { TaskActivity } from "@ren/core/task/activity"
 import { TaskComment } from "@ren/core/task/comment"
+import { Usage } from "@ren/core/usage"
+import { UsageIngestApi } from "@ren/protocol/usage-ingest"
 import { Effect, Layer } from "effect"
 import { HttpEffect, HttpMiddleware, HttpPlatform, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
@@ -60,10 +63,12 @@ import { OAuthApps } from "@ren/core/oauth-apps"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
 import { HealthHandler } from "./handlers/api/health.js"
 import { InfraHandler } from "./handlers/api/infra.js"
+import { InsightsHandler } from "./handlers/api/insights.js"
 import { InvitationHandler } from "./handlers/api/invitation.js"
 import { LabelHandler } from "./handlers/api/label.js"
 import { MeHandler } from "./handlers/api/me.js"
 import { MemoryHandler } from "./handlers/api/memory.js"
+import { DriveHandler } from "./handlers/api/drive.js"
 import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handlers/api/environment-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
@@ -81,6 +86,7 @@ import { TaskHandler } from "./handlers/api/task.js"
 import { TaskActivityHandler } from "./handlers/api/task-activity.js"
 import { TaskCommentHandler } from "./handlers/api/task-comment.js"
 import { SyncHandler } from "./handlers/sync.js"
+import { UsageAuthenticationLayer, UsageHandler } from "./handlers/usage.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 import { bodyLimit } from "./middleware/body-limit.js"
@@ -113,6 +119,12 @@ const settingsAndAgents = Layer.mergeAll(SpaceSettings.layer, OrganizationSettin
   Layer.provide(RepositoryHosts.layer),
 )
 
+const schedules = Schedules.layer.pipe(
+  Layer.provide(ScheduleTrigger.layerPostgres),
+  Layer.provide(SessionRunner.layer),
+  Layer.provide(BrainRegistry.layer),
+)
+
 // oxlint-disable-next-line ren/no-comments -- Api only (MCP may stream SSE); gzip only (Bun's brotli blocks the event loop).
 const Compression = HttpRouter.middleware(
   Effect.gen(function* () {
@@ -139,6 +151,7 @@ export const layer = Layer.mergeAll(
         SpaceSettingsHandler,
         OrganizationSettingsHandler,
         MemoryHandler,
+        DriveHandler,
         AgentHandler,
         AppHandler,
         AppProfileHandler,
@@ -164,6 +177,7 @@ export const layer = Layer.mergeAll(
         RepositoryHandler,
         SignInHandler,
         InfraHandler,
+        InsightsHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer, Compression]),
       Layer.provide([
@@ -174,15 +188,23 @@ export const layer = Layer.mergeAll(
         EnvironmentTemplates.layer,
         SpaceEnvironmentTemplate.layer,
         Memory.layer,
+        Insights.layer.pipe(Layer.provide(Space.layer)),
         settingsAndAgents,
-        InfraSpecs.layer.pipe(Layer.provide([Space.layer, AgentMembership.layer, settingsAndAgents])),
-        Layer.mergeAll(
-          Task.layer,
-          TaskActivity.layer,
-          TaskComment.layer,
-          Label.layer,
-          Schedules.layer.pipe(Layer.provide(ScheduleTrigger.layerPostgres)),
-        ).pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
+        InfraSpecs.layer.pipe(
+          Layer.provide([
+            Space.layer,
+            AgentMembership.layer,
+            settingsAndAgents,
+            App.layer,
+            ChannelMappings.layer,
+            schedules,
+          ]),
+        ),
+        Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
+          Layer.provide(SessionRunner.layer),
+          Layer.provide(BrainRegistry.layer),
+        ),
+        schedules,
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,
@@ -197,6 +219,11 @@ export const layer = Layer.mergeAll(
     HttpApiBuilder.layer(RenHostApi).pipe(
       Layer.provide([HostPullHandler, HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
       Layer.provide(Brains.hostAuthentication),
+    ),
+    HttpApiBuilder.layer(UsageIngestApi).pipe(
+      Layer.provide(UsageHandler),
+      Layer.provide(UsageAuthenticationLayer),
+      Layer.provide(Usage.layer),
     ),
     AuthRoute,
     RenMcp.layer,
@@ -215,6 +242,7 @@ export const layer = Layer.mergeAll(
       bodyLimit(Sync.maxBodyBytes),
       SessionSync.layer,
       ChannelTurns.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
+      Task.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
     ]),
   ),
   Cors,

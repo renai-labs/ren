@@ -4,7 +4,7 @@
   "workspaces": {
     ".": {
       "entry": ["script/**/*.ts", "oxlint.config.ts", ".opencode/plugins/*.ts"],
-      "ignoreDependencies": ["@opencode/plugin", "effect"]
+      "ignoreDependencies": ["@opencode/plugin"]
     },
     "packages/*": {
       "entry": ["test/**/*.test.{ts,tsx}", "script/**/*.ts"]
@@ -27,6 +27,10 @@
     "packages/core": {
       "entry": ["test/**/*.test.ts", "test/lib/preload.ts", "script/**/*.ts"]
     },
+    "packages/executor": {
+      "entry": ["test/**/*.test.ts"],
+      "ignoreBinaries": ["rclone", "fusermount3"]
+    },
     "packages/db": {
       "entry": ["test/**/*.test.ts", "script/**/*.ts"],
       "ignoreDependencies": ["@ren/schema"]
@@ -41,6 +45,10 @@
         "playwright.config.ts"
       ],
       "ignoreDependencies": ["@ren/server"]
+    },
+    "packages/site": {
+      "entry": ["src/layouts/legal.astro"],
+      "ignoreDependencies": ["react-dom", "@types/react-dom"]
     },
     "packages/httpapi-codegen": {
       "entry": ["test/**/*.test.ts", "script/**/*.ts"]

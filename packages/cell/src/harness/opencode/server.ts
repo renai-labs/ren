@@ -205,17 +205,33 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     located(sessionId, Location.Service).pipe(
       Effect.flatMap((location) => api.permission.saved.list({ projectID: location.project.id }).pipe(Effect.orDie)),
     )
-  const lastSpeaker = (sessionId: string) =>
+  const userMessages = (sessionId: string) =>
     Stream.paginate(undefined, (cursor: string | undefined) =>
       api.message
         .list({ sessionID: SessionID.make(sessionId), limit: 50, ...(cursor ? { cursor } : { order: "desc" }) })
         .pipe(Effect.map((page) => [page.data, Option.fromNullishOr(page.cursor.next)] as const)),
-    ).pipe(
-      Stream.map((message) => (message.type === "user" ? OpenCodeChat.speakerOf(message.metadata) : Option.none())),
+    ).pipe(Stream.filter((message) => message.type === "user"))
+  const lastSpeaker = (sessionId: string) =>
+    userMessages(sessionId).pipe(
+      Stream.map((message) => OpenCodeChat.speakerOf(message.metadata)),
       Stream.filter(Option.isSome),
       Stream.runHead,
       Effect.map(Option.flatten),
       Effect.orElseSucceed(() => Option.none<OpenCodeChat.Speaker>()),
+    )
+  const lastUserMessage = (sessionId: string) =>
+    userMessages(sessionId).pipe(
+      Stream.runHead,
+      Effect.map(
+        Option.match({
+          onNone: () => undefined,
+          onSome: (message) => ({
+            id: message.id,
+            speaker: Option.getOrUndefined(OpenCodeChat.speakerOf(message.metadata)),
+          }),
+        }),
+      ),
+      Effect.orElseSucceed(() => undefined),
     )
   yield* plugins.register(
     RenPlugin.make(
@@ -237,7 +253,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
         lastSender: (sessionId: string) =>
           lastSpeaker(sessionId).pipe(Effect.map(Option.map((speaker) => speaker.userID))),
       })),
-      { egress: options.egress ?? false, lastSpeaker },
+      { egress: options.egress ?? false, lastUserMessage },
     ),
   )
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.

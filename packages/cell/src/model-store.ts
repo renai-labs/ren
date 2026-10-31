@@ -35,12 +35,14 @@ export const layer = Layer.effect(
     const keys = [accessKey, hostTokenKey]
     const get = (key: string) => Effect.promise(() => storage.get(key))
     const remove = (key: string) => Effect.promise(() => storage.delete(key)).pipe(Effect.asVoid)
+    const stored = Effect.filter(keys, (key) => Effect.map(get(key), Boolean))
     const store = KeyValueStore.makeStringOnly({
       get,
       set: (key, value) => Effect.promise(() => storage.put(key, value)),
       remove,
       clear: Effect.forEach(keys, remove, { discard: true }),
-      size: Effect.forEach(keys, get).pipe(Effect.map((values) => values.filter(Boolean).length)),
+      size: Effect.map(stored, (found) => found.length),
+      keys: stored,
     })
     const access = KeyValueStore.toSchemaStore(store, Models.Access)
     const storedHostToken = yield* SynchronizedRef.make(

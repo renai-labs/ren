@@ -582,7 +582,7 @@ it.live("J34 a command with a NUL byte fails with a clear error, and the cell go
     const refused = RemoteHost.lastToolResult(
       yield* session.turn(stub.script(RemoteHost.shell(`touch ${marker}\u0000; echo a`))),
     )
-    expect(refused).toContain("must be a string without null bytes")
+    expect(refused).toContain("contains a NUL character")
     expect(yield* Effect.promise(() => Bun.file(marker).exists())).toBe(false)
     expect(RemoteHost.lastToolResult(yield* session.turn(stub.script(RemoteHost.shell("echo alive"))))).toBe(
       JSON.stringify("alive\n"),

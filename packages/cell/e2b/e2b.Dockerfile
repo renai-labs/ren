@@ -1,8 +1,19 @@
 FROM oven/bun:1.4.2
 
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl \
+  && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip \
   && rm -rf /var/lib/apt/lists/*
+
+RUN version=v1.75.2 arch="$(dpkg --print-architecture)" \
+  && case "$arch" in \
+       amd64) sum=349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702 ;; \
+       arm64) sum=7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10 ;; \
+       *) echo "no rclone for $arch" >&2; exit 1 ;; \
+     esac \
+  && curl -fsSL -o /tmp/rclone.zip "https://downloads.rclone.org/$version/rclone-$version-linux-$arch.zip" \
+  && echo "$sum  /tmp/rclone.zip" | sha256sum -c - \
+  && unzip -q -j /tmp/rclone.zip "*/rclone" -d /usr/local/bin \
+  && rm /tmp/rclone.zip
 
 COPY ren.tar.gz /tmp/ren.tar.gz
 RUN mkdir -p /opt/ren && tar -xzf /tmp/ren.tar.gz -C /opt/ren && rm /tmp/ren.tar.gz \

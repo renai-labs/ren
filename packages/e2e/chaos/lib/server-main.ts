@@ -8,6 +8,7 @@ import { ChannelProvider } from "@ren/core/channel-provider"
 import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
+import { Drives } from "@ren/core/drives"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
@@ -52,6 +53,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(
     Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
   ),
+  Layer.provideMerge(Drives.layer),
   Layer.provideMerge(AppProfiles.layer),
   Layer.provideMerge(
     Layer.mergeAll(Credentials.layer, CredentialCallers.layer, PersonCredentials.layer, ChannelSecrets.layer),
@@ -89,7 +91,12 @@ HttpRouter.serve(Routes.layer).pipe(
   Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
-  Layer.provide(BunHttpServer.layerConfig({ port: Config.Port("PORT").pipe(Config.withDefault(4000)) })),
+  Layer.provide(
+    BunHttpServer.layerConfig({
+      port: Config.Port("PORT").pipe(Config.withDefault(4000)),
+      idleTimeout: Config.succeed(10),
+    }),
+  ),
   Layer.launch,
   BunRuntime.runMain,
 )

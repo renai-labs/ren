@@ -23,7 +23,7 @@ import { ReferenceCheck } from "@ren/core/reference-check"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SpaceSettings } from "@ren/core/space/settings"
-import { Seed } from "@ren/core/testing"
+import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
 import { TestEnvironment } from "@ren/executor/testing"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
@@ -47,6 +47,7 @@ import { ModelProvider } from "./provider/model.js"
 import { Wait } from "./wait.js"
 import { Signer } from "@ren/core/signer"
 import { CredentialEnv } from "@ren/core/credential-env"
+import { Drives } from "@ren/core/drives"
 
 const root = path.resolve(import.meta.dir, "../../..")
 const adminUrl = process.env.DATABASE_URL ?? "postgres://ren:ren@localhost:54320/ren"
@@ -233,6 +234,7 @@ export const start = async (options: {
         PORT: String(serverPort),
         DATABASE_URL: database.href,
         BETTER_AUTH_SECRET: "e2e-secret-do-not-use-in-production",
+        ...TestDrives.config,
         BETTER_AUTH_URL: `http://127.0.0.1:${serverPort}`,
         TRUSTED_ORIGINS: `http://127.0.0.1:${serverPort}`,
         APP_URL: `http://127.0.0.1:${serverPort}/app`,
@@ -281,11 +283,13 @@ export const start = async (options: {
               .pipe(Layer.provide(Signer.layerLocal))
               .pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers))),
           ),
+          Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
           Layer.provide(FetchHttpClient.layer),
           Layer.provide(
             ConfigProvider.layer(
               ConfigProvider.fromUnknown({
                 ...keys,
+                ...TestDrives.config,
                 CELL_URL: cell.url,
                 [ChaosEnvironments.fileVariable]: environmentsFile,
                 [ChaosModels.fileVariable]: modelsFile,

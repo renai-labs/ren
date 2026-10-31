@@ -31,7 +31,7 @@ export const layer = (options: {
         }),
       ),
     ),
-    Layer.provideMerge(BunHttpServer.layer({ port: 0, hostname: "127.0.0.1" })),
+    Layer.provideMerge(BunHttpServer.layer({ port: 0, hostname: "127.0.0.1", idleTimeout: Server.idleTimeoutSeconds })),
   )
 
 export const url = Effect.map(HttpServer.HttpServer, (server) => HttpServer.formatAddress(server.address))

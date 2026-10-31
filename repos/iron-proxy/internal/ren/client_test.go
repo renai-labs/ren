@@ -4,9 +4,11 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"io"
@@ -23,8 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/stretchr/testify/require"
 )
+
+const emptySHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 type certs struct {
 	dir    string
@@ -169,7 +175,7 @@ func TestResolveKeepsAnswers(t *testing.T) {
 	_, err = client.Resolve(ctx, stripe("ren-a"))
 	require.NoError(t, err)
 	require.Equal(t, int32(1), h.calls.Load(), "a fresh answer is reused for 30s")
-	require.Contains(t, h.lastBody.Load(), `"ops":["replace","setHeader","route"]`)
+	require.Contains(t, h.lastBody.Load(), `"ops":["replace","setHeader","route","awsSign"]`)
 
 	clk.advance(31 * time.Second)
 	h.down.Store(true)
@@ -436,4 +442,110 @@ func TestObserveIgnoresAnswersWithoutRefreshableLabels(t *testing.T) {
 	client.Observe(nil, upstreamAnswer(http.StatusUnauthorized, ""))
 	client.reporting.Wait()
 	require.Empty(t, h.reports)
+}
+
+func awsSignClient(t *testing.T) *Client {
+	t.Helper()
+	client, h, _ := newClient(t)
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", Inject: []Op{
+		{Op: "awsSign", AccessKeyID: "ASIAREALKEY", SecretAccessKey: "real-secret-access-key", SessionToken: "real-session-token"},
+	}})
+	return client
+}
+
+func signS3(t *testing.T, req *http.Request, credentials aws.Credentials, payloadHash string, at time.Time) {
+	t.Helper()
+	require.NoError(t, v4.NewSigner().SignHTTP(t.Context(), credentials, req, payloadHash, "s3", "us-east-1", at, func(o *v4.SignerOptions) { o.DisableURIPathEscaping = true }))
+}
+
+func TestHandleSignsAgainWithRensAWSKeys(t *testing.T) {
+	const bucket = "https://ren-drives.s3.us-east-1.amazonaws.com"
+	const space = bucket + "/org_1/drives/spaces/spc_1"
+	completion := `<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>"etag"</ETag></Part></CompleteMultipartUpload>`
+	completionHash := sha256.Sum256([]byte(completion))
+	chunked := map[string]string{"Content-Encoding": "aws-chunked", "X-Amz-Decoded-Content-Length": "5", "X-Amz-Trailer": "x-amz-checksum-crc32"}
+	chunks := "5\r\nhello\r\n0\r\nx-amz-checksum-crc32:NhCmhg==\r\n\r\n"
+	cases := []struct {
+		name, method, url, payloadHash, body string
+		headers                              map[string]string
+	}{
+		{name: "a list on the bucket host", method: "GET", url: bucket + "/?delimiter=%2F&list-type=2&prefix=org_1%2Fdrives%2Forg%2F", payloadHash: emptySHA256},
+		{name: "a ranged get of a Unicode key, path-style", method: "GET", url: "http://rustfs:9000/ren-drives/org_1/drives/org/r%C3%A9sum%C3%A9%20final.pdf", payloadHash: emptySHA256, headers: map[string]string{"Range": "bytes=0-99"}},
+		{name: "a put in aws-chunked with an unsigned trailer", method: "PUT", url: space + "/notes.md?x-id=PutObject", payloadHash: "STREAMING-UNSIGNED-PAYLOAD-TRAILER", body: chunks, headers: chunked},
+		{name: "a put with an unsigned payload, path-style", method: "PUT", url: "http://rustfs:9000/ren-drives/org_1/drives/spaces/spc_1/notes.md", payloadHash: "UNSIGNED-PAYLOAD", body: "hello", headers: map[string]string{"Content-Type": "text/markdown", "X-Amz-Meta-Mtime": "1800000000.5"}},
+		{name: "the start of a multipart upload", method: "POST", url: space + "/big.bin?uploads=", payloadHash: emptySHA256},
+		{name: "a part of a multipart upload", method: "PUT", url: space + "/big.bin?partNumber=1&uploadId=VXBsb2Fk", payloadHash: "STREAMING-UNSIGNED-PAYLOAD-TRAILER", body: chunks, headers: chunked},
+		{name: "the completion of a multipart upload", method: "POST", url: space + "/big.bin?uploadId=VXBsb2Fk", payloadHash: hex.EncodeToString(completionHash[:]), body: completion, headers: map[string]string{"Content-Type": "application/xml"}},
+		{name: "the abort of a multipart upload", method: "DELETE", url: space + "/big.bin?uploadId=VXBsb2Fk", payloadHash: emptySHA256},
+		{name: "a delete", method: "DELETE", url: space + "/notes.md", payloadHash: emptySHA256},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := awsSignClient(t)
+			build := func() *http.Request {
+				req := newRequest(t, tc.method, tc.url, []byte(tc.body), "")
+				for name, value := range tc.headers {
+					req.Header.Set(name, value)
+				}
+				req.Header.Set("X-Amz-Content-Sha256", tc.payloadHash)
+				return req
+			}
+			req := build()
+			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set("User-Agent", "rclone/v1.75.2")
+			signS3(t, req, aws.Credentials{AccessKeyID: "ren:DRIVE", SecretAccessKey: "ren:DRIVE"}, tc.payloadHash, time.Now().Add(-time.Minute))
+			require.Equal(t, []string{"ren:DRIVE"}, findPlaceholders(req))
+
+			resp, _ := client.Handle(t.Context(), req, "ren-a")
+			require.Nil(t, resp)
+			require.Empty(t, findPlaceholders(req))
+			require.Equal(t, "real-session-token", req.Header.Get("X-Amz-Security-Token"))
+			require.NotContains(t, req.Header.Get("Authorization"), "user-agent")
+
+			signedAt, err := time.Parse("20060102T150405Z", req.Header.Get("X-Amz-Date"))
+			require.NoError(t, err)
+			expected := build()
+			for name := range expected.Header {
+				if !strings.HasPrefix(name, "X-Amz-") {
+					expected.Header.Del(name)
+				}
+			}
+			signS3(t, expected, aws.Credentials{AccessKeyID: "ASIAREALKEY", SecretAccessKey: "real-secret-access-key", SessionToken: "real-session-token"}, tc.payloadHash, signedAt)
+			require.Equal(t, expected.Header.Get("Authorization"), req.Header.Get("Authorization"))
+			sent, err := io.ReadAll(req.Body)
+			require.NoError(t, err)
+			require.Equal(t, tc.body, string(sent), "the body goes on unchanged")
+		})
+	}
+}
+
+func TestHandleRefusesAWSSignItCannotDo(t *testing.T) {
+	withoutSignature := func(t *testing.T) *http.Request {
+		req := newRequest(t, "GET", "https://ren-drives.s3.us-east-1.amazonaws.com/?list-type=2", nil, "")
+		req.Header.Set("X-Amz-Meta-Note", "ren:DRIVE")
+		return req
+	}
+	signedChunks := func(t *testing.T) *http.Request {
+		req := newRequest(t, "PUT", "https://ren-drives.s3.us-east-1.amazonaws.com/org_1/drives/spaces/spc_1/notes.md", []byte("5;chunk-signature=0\r\nhello\r\n"), "")
+		req.Header.Set("Content-Encoding", "aws-chunked")
+		req.Header.Set("X-Amz-Decoded-Content-Length", "5")
+		req.Header.Set("X-Amz-Content-Sha256", "STREAMING-AWS4-HMAC-SHA256-PAYLOAD")
+		signS3(t, req, aws.Credentials{AccessKeyID: "ren:DRIVE", SecretAccessKey: "ren:DRIVE"}, "STREAMING-AWS4-HMAC-SHA256-PAYLOAD", time.Now())
+		return req
+	}
+	cases := []struct {
+		name  string
+		build func(t *testing.T) *http.Request
+	}{
+		{"a request without a signature", withoutSignature},
+		{"a put whose chunks are signed", signedChunks},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := tc.build(t)
+			resp, _ := awsSignClient(t).Handle(t.Context(), req, "ren-a")
+			require.NotNil(t, resp)
+			require.Equal(t, "credential_missing", resp.Header.Get("X-Ren-Egress"))
+		})
+	}
 }

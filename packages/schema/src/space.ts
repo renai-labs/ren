@@ -3,6 +3,7 @@ export * as Space from "./space.js"
 import { Schema } from "effect"
 import { Auth } from "./auth.js"
 import { Brain } from "./brain.js"
+import { Factory } from "./factory.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
@@ -16,19 +17,12 @@ export type MembershipID = typeof MembershipID.Type
 export const AssignmentID = Identifier.make("spp", "Space.AssignmentID")
 export type AssignmentID = typeof AssignmentID.Type
 
-export const maximumAgentOrder = 64
-
 export const Kind = Schema.Literals(["shared", "private"]).annotate({
   identifier: "Space.Kind",
   description:
     "A shared space belongs to its members. A private space belongs to its owner, who is its only member; it never changes kind.",
 })
 export type Kind = typeof Kind.Type
-
-const AgentOrder = Schema.Array(Schema.String).annotate({
-  description:
-    "The space’s factory order: agent IDs, first to last. It orders the task board’s columns and does not limit which agent holds a task.",
-})
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
@@ -46,7 +40,7 @@ export const Info = Schema.Struct({
   brainScope: Brain.Scope,
   memberCount: Schema.Int,
   membershipId: Schema.NullOr(MembershipID),
-  agentOrder: AgentOrder,
+  factory: Factory.Info,
   canUpdate: Schema.Boolean,
   canJoin: Schema.Boolean.annotate({ description: "An admin who is not a member can join this shared space." }),
   canAddMember: Schema.Boolean,
@@ -76,11 +70,7 @@ export const CreateInput = Schema.Struct({
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
-  agentOrder: Schema.optional(
-    AgentOrder.check(
-      Schema.isMaxLength(maximumAgentOrder, { message: `A factory has at most ${maximumAgentOrder} agents.` }),
-    ),
-  ),
+  factory: Schema.optional(Factory.Info),
   name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NullOr(Schema.String)),
   brainScope: Schema.optional(Brain.Scope),

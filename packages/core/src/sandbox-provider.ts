@@ -1,8 +1,10 @@
 export * as SandboxProvider from "./sandbox-provider.js"
 
+import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
-import { Context, type Duration, type Effect, Option, Redacted, Schema, type Stream } from "effect"
+import type { Space } from "@ren/schema/space"
+import { Context, type DateTime, type Duration, type Effect, Option, Redacted, Schema, type Stream } from "effect"
 
 export class Gone extends Schema.TaggedError<Gone>()("SandboxProvider.Gone", { message: Schema.String }) {}
 
@@ -30,6 +32,20 @@ export interface Lost {
   readonly generation: number
 }
 
+export interface Metered {
+  readonly id: string
+  readonly sandboxId: string
+  readonly brainId: Brain.ID
+  readonly generation: number
+  readonly organizationId: Auth.OrganizationID
+  readonly spaceId: Space.ID
+  readonly endedAt: DateTime.Utc
+  readonly durationMs: number
+  readonly vcpuMs: number
+  readonly memoryMibMs: number
+  readonly costMicroUsd: number
+}
+
 export interface Listed {
   readonly binding: Schema.Json
   readonly brainId: Brain.ID
@@ -48,10 +64,13 @@ export interface Interface {
   readonly kind: string
   // oxlint-disable-next-line ren/no-comments -- Whether this provider can send a sandbox's traffic through the egress with a proxy login (E2B BYOP, HTTPS_PROXY locally). Ren puts a brain behind the egress only when the provider can.
   readonly canEgress: boolean
+  readonly canMount: boolean
   readonly template: string | null
   readonly create: (input: {
     readonly brainId: Brain.ID
     readonly generation: number
+    readonly organizationId: Auth.OrganizationID
+    readonly spaceId: Space.ID
     readonly env: Readonly<Record<string, string>>
     readonly proxy: Option.Option<Proxy>
   }) => Effect.Effect<Created, Failed | Capacity>
@@ -65,6 +84,7 @@ export interface Interface {
   readonly hand: (binding: Schema.Json) => Effect.Effect<Hand, Failed>
   readonly lost: Stream.Stream<Lost>
   readonly list: Effect.Effect<ReadonlyArray<Listed>, Failed>
+  readonly metered: (since: Option.Option<DateTime.Utc>) => Effect.Effect<ReadonlyArray<Metered>, Failed>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SandboxProvider") {}

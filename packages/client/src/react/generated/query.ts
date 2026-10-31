@@ -27,6 +27,10 @@ import type {
   MemoryWriteInput,
   MemoryEditInput,
   MemoryDeleteInput,
+  DriveListInput,
+  DriveStartUploadInput,
+  DriveDownloadInput,
+  DriveDeleteInput,
   AgentListInput,
   AgentGetInput,
   AgentCreateInput,
@@ -114,8 +118,10 @@ import type {
   ChannelMappingRemoveInput,
   ChannelConnectChannelInstallStartInput,
   ChannelConnectChannelPlaceListInput,
+  InfraPullInput,
   InfraPlanInput,
   InfraApplyInput,
+  InsightsQueryInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -392,6 +398,42 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["memory", "delete"] as const,
             mutationFn: (input: MemoryDeleteInput) => client["memory"]["delete"](input),
+          }),
+      },
+    },
+    drive: {
+      list: {
+        queryKey: (input?: DriveListInput) =>
+          input === undefined ? (["drive", "list"] as const) : (["drive", "list", input] as const),
+        queryOptions: (input?: DriveListInput) =>
+          queryOptions({
+            queryKey: ["drive", "list", input] as const,
+            queryFn: (context) => client["drive"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      startUpload: {
+        mutationKey: () => ["drive", "startUpload"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["drive", "startUpload"] as const,
+            mutationFn: (input: DriveStartUploadInput) => client["drive"]["startUpload"](input),
+          }),
+      },
+      download: {
+        queryKey: (input?: DriveDownloadInput) =>
+          input === undefined ? (["drive", "download"] as const) : (["drive", "download", input] as const),
+        queryOptions: (input: DriveDownloadInput) =>
+          queryOptions({
+            queryKey: ["drive", "download", input] as const,
+            queryFn: (context) => client["drive"]["download"](input, { signal: context.signal }),
+          }),
+      },
+      delete: {
+        mutationKey: () => ["drive", "delete"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["drive", "delete"] as const,
+            mutationFn: (input: DriveDeleteInput) => client["drive"]["delete"](input),
           }),
       },
     },
@@ -1236,11 +1278,11 @@ export function make(client: ReturnType<typeof Ren.make>) {
     },
     infra: {
       pull: {
-        queryKey: () => ["infra", "pull"] as const,
-        queryOptions: () =>
-          queryOptions({
-            queryKey: ["infra", "pull"] as const,
-            queryFn: (context) => client["infra"]["pull"]({ signal: context.signal }),
+        mutationKey: () => ["infra", "pull"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["infra", "pull"] as const,
+            mutationFn: (input?: InfraPullInput) => client["infra"]["pull"](input),
           }),
       },
       plan: {
@@ -1257,6 +1299,17 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["infra", "apply"] as const,
             mutationFn: (input: InfraApplyInput) => client["infra"]["apply"](input),
+          }),
+      },
+    },
+    insights: {
+      query: {
+        queryKey: (input?: InsightsQueryInput) =>
+          input === undefined ? (["insights", "query"] as const) : (["insights", "query", input] as const),
+        queryOptions: (input: InsightsQueryInput) =>
+          queryOptions({
+            queryKey: ["insights", "query", input] as const,
+            queryFn: (context) => client["insights"]["query"](input, { signal: context.signal }),
           }),
       },
     },

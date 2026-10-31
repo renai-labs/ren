@@ -53,13 +53,13 @@ const challenge = async (verifier: string) =>
 
 export const startAuthorization = async (
   app: App,
-  options: { cookie?: string; prompt?: string; scope?: string } = {},
+  options: { cookie?: string; prompt?: string; scope?: string; client?: { id: string; redirectUri: string } } = {},
 ) => {
   const verifier = crypto.randomUUID() + crypto.randomUUID()
   const query = new URLSearchParams({
     response_type: "code",
-    client_id: clientId,
-    redirect_uri: redirectUri,
+    client_id: options.client?.id ?? clientId,
+    redirect_uri: options.client?.redirectUri ?? redirectUri,
     scope: options.scope ?? "openid offline_access ren",
     state: "state-1",
     code_challenge: await challenge(verifier),
@@ -101,8 +101,8 @@ export const finishAuthorization = async (
       body: new URLSearchParams({
         grant_type: "authorization_code",
         code: callback.searchParams.get("code") ?? "",
-        redirect_uri: redirectUri,
-        client_id: clientId,
+        redirect_uri: consentPage.searchParams.get("redirect_uri") ?? "",
+        client_id: consentPage.searchParams.get("client_id") ?? "",
         code_verifier: verifier,
         resource,
       }),

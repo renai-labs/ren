@@ -67,8 +67,8 @@ const owned = alias(Database.Schema.agent, "owned_agent")
 export const factoryOrder = sql<ReadonlyArray<Agent.ID>>`coalesce(
   (
     select jsonb_agg(${Database.Schema.agent.id} order by ordered.position)
-    from jsonb_array_elements_text(${Database.Schema.space.agent_order}) with ordinality as ordered(id, position)
-    inner join ${Database.Schema.agent} on ${Database.Schema.agent.id} = ordered.id
+    from jsonb_array_elements(${Database.Schema.space.factory} -> 'agents') with ordinality as ordered(entry, position)
+    inner join ${Database.Schema.agent} on ${Database.Schema.agent.id} = ordered.entry ->> 'agentId'
     where ${isUsableIn(Database.Schema.space.id, Database.Schema.space.organization_id)}
   ),
   (

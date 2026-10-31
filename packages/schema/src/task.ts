@@ -207,7 +207,10 @@ export const hasAssignee = Schema.makeFilter(
 
 export interface AssignInput extends Schema.Schema.Type<typeof AssignInput> {}
 export const AssignInput = Schema.Struct({
-  agentId: Schema.optional(Schema.NullOr(Agent.ID)).annotate({ description: "The new agent, or null for none." }),
+  agentId: Schema.optional(Schema.NullOr(Agent.ID)).annotate({
+    description:
+      "The new agent, or null for none. An agent whose start message lists handoff choices can hand off only to those agents.",
+  }),
   ownerId: Schema.optional(Schema.NullOr(Auth.UserID)).annotate({ description: "The new owner, or null for none." }),
   spaceId: Schema.optional(Space.ID).annotate({
     description:

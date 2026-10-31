@@ -1,5 +1,7 @@
 import { expect } from "bun:test"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { testEffect } from "@ren/executor/testing"
+import { GitHost } from "@ren/schema/git-host"
 import { Effect, Fiber, Layer, Ref } from "effect"
 import { TestClock } from "effect/testing"
 import { Repositories } from "../src/reference/repositories.js"
@@ -95,14 +97,25 @@ it.live("a chat starts while GitHub holds the lookup; ready waits for it and giv
     expect(chat.prepared()).toEqual([
       {
         type: "ready",
-        info: docs,
+        alias: "docs",
+        description: "Docs",
         path: `github.com/acme/docs/${commit.slice(0, 12)}`,
-        archive: { url: `${github.hosts.api}/repos/acme/docs/tarball/${commit}`, headers: {} },
+        copy: {
+          type: "archive",
+          unpack: {
+            url: `${github.hosts.api}/repos/acme/docs/tarball/${commit}`,
+            headers: {},
+            folder: ".",
+            maxBytes: EnvironmentApi.maxReferenceBytes,
+            maxFiles: EnvironmentApi.maxReferenceFiles,
+            links: "skip",
+          },
+        },
       },
       {
         type: "unavailable",
-        info: ghost,
-        unavailable: { reason: "other_host", name: ghost.repository, detail: "github.com" },
+        alias: "ghost",
+        note: `The reference ghost (acme/ghost) is not available: ${GitHost.message({ reason: "other_host", name: ghost.repository, detail: "github.com" })}.`,
       },
     ])
     expect(yield* Ref.get(changes)).toBe(1)

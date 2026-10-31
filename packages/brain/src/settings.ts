@@ -1,10 +1,11 @@
 export * as BrainSettings from "./settings.js"
 
+import { Drive } from "@ren/schema/drive"
 import { Permission } from "@ren/schema/permission"
 import { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
-import type { Settings } from "@ren/schema/settings"
+import { Settings } from "@ren/schema/settings"
 import { Array, Option, Result, Schema } from "effect"
 
 export class Unconfigured extends Schema.TaggedError<Unconfigured>()("BrainSettings.Unconfigured", {
@@ -18,6 +19,7 @@ export const Agent = Schema.Struct({
   instructions: Schema.Array(Schema.String),
   permissions: Permission.RuleList,
   model: Session.Model,
+  steps: Schema.Int,
 }).annotate({ identifier: "BrainSettings.Agent" })
 
 export interface Resolved extends Schema.Schema.Type<typeof Resolved> {}
@@ -25,6 +27,7 @@ export const Resolved = Schema.Struct({
   primary: Agent,
   subagents: Schema.Array(Agent),
   references: Reference.List,
+  drives: Schema.optionalKey(Drive.Availability),
 }).annotate({ identifier: "BrainSettings.Resolved" })
 
 export interface Chat extends Schema.Schema.Type<typeof ChatSettings> {}
@@ -47,6 +50,7 @@ export type Layers = SessionSettings.Layers
 export interface Placement {
   readonly agent: string | null
   readonly model: Option.Option<Session.Model>
+  readonly drives?: Drive.Availability | undefined
 }
 
 export type Lookup = (model: Session.Model) => Option.Option<{ readonly variants: ReadonlyArray<string> }>
@@ -97,6 +101,8 @@ export const resolve = (layers: Layers, chat: Placement, lookup: Lookup): Result
   const instructions = (all: ReadonlyArray<Settings.Info>) =>
     all.flatMap((settings) => (settings.instructions?.trim() ? [settings.instructions] : []))
   const permissions = union(own.flatMap((settings) => settings.permissions))
+  const steps = (all: ReadonlyArray<Settings.Info>) =>
+    all.findLast((settings) => Boolean(settings.steps))?.steps ?? Settings.defaultSteps
   return Result.succeed({
     primary: {
       name: primary.name,
@@ -104,6 +110,7 @@ export const resolve = (layers: Layers, chat: Placement, lookup: Lookup): Result
       instructions: instructions(own),
       permissions,
       model: model.value,
+      steps: steps(own),
     },
     subagents: layers.agents
       .filter((agent) => agent.isSubagent)
@@ -113,12 +120,14 @@ export const resolve = (layers: Layers, chat: Placement, lookup: Lookup): Result
         instructions: instructions([...shared, agent.settings]),
         permissions: union([...permissions, ...agent.settings.permissions]),
         model: Option.getOrElse(available(lookup, agent.settings.model), () => model.value),
+        steps: steps([...shared, agent.settings]),
       })),
     references: Array.fromIterable(
       new Map(
         own.flatMap((settings) => settings.references.map((reference) => [reference.alias, reference] as const)),
       ).values(),
     ).toSorted((left, right) => left.alias.localeCompare(right.alias)),
+    ...(chat.drives && { drives: chat.drives }),
   })
 }
 

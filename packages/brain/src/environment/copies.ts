@@ -1,6 +1,7 @@
 export * as EnvironmentCopies from "./copies.js"
 
 import type { EnvironmentApi } from "@ren/environment-api/environment-api"
+import type { Drive } from "@ren/schema/drive"
 import type { Session } from "@ren/schema/session"
 import { Skill } from "@ren/schema/skill"
 import { Effect, Option, Schema } from "effect"
@@ -11,10 +12,11 @@ export interface File {
   readonly bytes: Uint8Array
 }
 
-// oxlint-disable-next-line ren/no-comments -- The environment downloads an archive itself, so its bytes never pass through the brain. Both forms fill a staging folder that moves into place, so a folder that exists is complete.
+// oxlint-disable-next-line ren/no-comments -- The environment downloads an archive itself, so its bytes never pass through the brain. The archive and inline forms fill a staging folder that moves into place, so a folder that exists is complete.
 export type Copy =
   | { readonly type: "archive"; readonly unpack: Omit<EnvironmentApi.UnpackInput, "path"> }
   | { readonly type: "inline"; readonly files: ReadonlyArray<File> }
+  | { readonly type: "mount"; readonly remote: Drive.Remote; readonly access: Drive.Access }
 
 export interface Item {
   readonly path: string
@@ -35,9 +37,14 @@ export interface Interface {
 
 const isInside = Schema.is(Skill.SourceDirectory)
 
-const copyWith = (client: EnvironmentConnections.Connection["client"], item: Item) => {
+const copyWith = (connection: EnvironmentConnections.Connection, item: Item) => {
+  const client = connection.client
   const copy = item.copy
   if (copy.type === "archive") return client["files.unpack"]({ ...copy.unpack, path: item.path })
+  if (copy.type === "mount")
+    return connection.hello.mount
+      ? client["drives.mount"]({ path: item.path, remote: copy.remote, access: copy.access })
+      : Effect.fail({ message: "its environment has no rclone or no usable /dev/fuse" })
   return Effect.gen(function* () {
     const exists = yield* client["files.stat"]({ path: item.path }).pipe(
       Effect.as(true),
@@ -73,11 +80,15 @@ export const make = (connections: EnvironmentConnections.Interface, sessionId: S
           return Effect.forEach(
             items.filter((item) => !copied.paths.has(item.path)),
             (item) =>
-              copyWith(connection.client, item).pipe(
+              copyWith(connection, item).pipe(
                 Effect.as(Option.none<Failure<I>>()),
-                Effect.tap(() => Effect.sync(() => copied.paths.add(item.path))),
                 Effect.catch((error: { readonly message: string }) =>
                   Effect.succeed(Option.some({ item, message: error.message })),
+                ),
+                Effect.tap((failure) =>
+                  Effect.sync(() => {
+                    if (Option.isNone(failure) || item.copy.type === "mount") copied.paths.add(item.path)
+                  }),
                 ),
               ),
             { concurrency: 4 },

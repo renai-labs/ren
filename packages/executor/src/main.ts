@@ -13,6 +13,7 @@ HttpRouter.serve(Server.layer).pipe(
     BunHttpServer.layerConfig({
       port: Config.Port("PORT").pipe(Config.withDefault(EnvironmentApi.port)),
       hostname: Config.String("EXECUTOR_HOST").pipe(Config.withDefault("0.0.0.0")),
+      idleTimeout: Config.succeed(Server.idleTimeoutSeconds),
     }),
   ),
   Layer.launch,

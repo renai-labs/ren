@@ -4,6 +4,7 @@ import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
+import { Space } from "@ren/schema/space"
 import {
   ConfigProvider,
   DateTime,
@@ -24,8 +25,10 @@ import { BrainClient } from "../src/brain-client.js"
 import { CredentialSource } from "../src/credential-source.js"
 import { GitHubApp } from "../src/github-app.js"
 import type { Credentials } from "../src/credentials.js"
+import { Drives } from "../src/drives.js"
 import { Models } from "../src/models.js"
 import { Signer } from "../src/signer.js"
+import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 
 const key = await Effect.runPromise(Signature.generate("brain"))
@@ -71,6 +74,7 @@ const it = testEffect(
     Layer.provide(Access.layer),
     Layer.provideMerge(Layer.mergeAll(models, GitHubApp.layerNone)),
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal), Layer.provide(FetchHttpClient.layer))),
+    Layer.provideMerge(Drives.layer.pipe(Layer.provide(Access.layer))),
     Layer.provideMerge(Testing.layer),
     Layer.provide(
       ConfigProvider.layer(
@@ -79,6 +83,7 @@ const it = testEffect(
             { id: key.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.privateKey.key) },
           ]),
           REN_URL: "https://api.ren.test",
+          ...TestDrives.config,
         }),
       ),
     ),
@@ -88,7 +93,7 @@ const it = testEffect(
 const scope: Credentials.Scope = {
   organizationId: Auth.OrganizationID.make("org_01"),
   workload: { kind: "brain", id: Brain.ID.make("brn_01"), generation: 1 },
-  spaceId: Option.none(),
+  spaceId: Option.some(Space.ID.make("spc_01")),
   person: Option.none(),
 }
 

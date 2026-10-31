@@ -4,9 +4,9 @@ import { Signature } from "@ren/schema/signature"
 import { Sandbox, Template, defaultBuildLogger } from "e2b"
 import { Effect, Schema } from "effect"
 import { createHash } from "node:crypto"
-import { mkdir, mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, readlink, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
+import { dirname, join, relative, resolve } from "node:path"
 
 export const root = join(import.meta.dir, "../../..")
 
@@ -30,53 +30,35 @@ const size = { cpuCount: options.E2B_TEMPLATE_CPU ?? 2, memoryMB: options.E2B_TE
 const dockerfiles =
   options.E2B_TEMPLATE_TOOLS === "full" ? ["e2b.Dockerfile", "e2b.tools.Dockerfile"] : ["e2b.Dockerfile"]
 
+// oxlint-disable-next-line ren/no-comments -- The fields of a workspace manifest that Bun reads to load the package's files. Its dependencies count through the installed links.
 const Manifest = Schema.Struct({
   name: Schema.String,
-  dependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  type: Schema.optionalKey(Schema.String),
+  exports: Schema.optionalKey(Schema.Unknown),
+  imports: Schema.optionalKey(Schema.Unknown),
 })
 
 const Root = Schema.Struct({ packageManager: Schema.String })
 
-const listed = async (repository: string) =>
-  (await Bun.$`git ls-files --cached --others --exclude-standard`.cwd(repository).text())
-    .split("\n")
-    .filter((file) => file.length > 0)
-
-// oxlint-disable-next-line ren/no-comments -- The packages the image runs, with every workspace dependency they need at run time, at any depth (ren-v1 INV-105).
-export const closure = async (repository: string, start: ReadonlyArray<string>) => {
-  const manifests = await Promise.all(
-    (await listed(repository))
-      .filter((file) => /^packages\/[^/]+\/package\.json$/.test(file))
-      .map(async (file) => ({
-        directory: dirname(file),
-        manifest: Schema.decodeUnknownSync(Manifest)(await Bun.file(join(repository, file)).json()),
-      })),
-  )
-  const byName = new Map(manifests.map((each) => [each.manifest.name, each]))
-  const visit = (names: ReadonlyArray<string>, seen: ReadonlySet<string>): ReadonlySet<string> => {
-    const next = names.filter((each) => !seen.has(each) && byName.has(each))
-    if (next.length === 0) return seen
-    const deeper = next.flatMap((each) =>
-      Object.entries(byName.get(each)?.manifest.dependencies ?? {})
-        .filter((dependency) => dependency[1].startsWith("workspace:"))
-        .map((dependency) => dependency[0]),
-    )
-    return visit(deeper, new Set([...seen, ...next]))
-  }
-  return [...visit(start, new Set())].flatMap((each) => {
-    const found = byName.get(each)
-    return found ? [found.directory] : []
+// oxlint-disable-next-line ren/no-comments -- Follows imports at any depth (ren-v1 INV-105). A file that no entry point imports never reaches the image, so its change never rebuilds the template.
+export const sources = async (repository: string) => {
+  const build = await Bun.build({
+    entrypoints: ["packages/cell/src/bun.ts", "packages/executor/src/main.ts"].map((file) => join(repository, file)),
+    target: "bun",
+    metafile: true,
+    plugins: [
+      {
+        name: "npm",
+        setup: (builder) => {
+          builder.onResolve({ filter: /^(?!@ren\/)[^./]/ }, (args) => ({ path: args.path, external: true }))
+        },
+      },
+    ],
   })
-}
-
-export const files = async (repository: string) => {
-  const directories = await closure(repository, ["@ren/cell", "@ren/executor"])
-  return (await listed(repository)).filter(
-    (file) =>
-      ["package.json", "bun.lock", "bunfig.toml", "tsconfig.base.json"].includes(file) ||
-      /^packages\/[^/]+\/package\.json$/.test(file) ||
-      directories.some((directory) => file.startsWith(`${directory}/src/`)),
-  )
+  return Object.keys(build.metafile?.inputs ?? {})
+    .map((file) => relative(repository, resolve(file)))
+    .filter((file) => /^packages\/[^/]+\/src\//.test(file))
+    .toSorted()
 }
 
 export const hash = (entries: ReadonlyArray<{ readonly path: string; readonly content: Uint8Array }>) =>
@@ -115,10 +97,48 @@ const smoke = async (tag: string) => {
 }
 
 if (import.meta.main) {
-  const staged = await files(root)
+  const imported = await sources(root)
+  // oxlint-disable-next-line ren/no-comments -- Every workspace manifest, because `--frozen-lockfile` checks the whole lockfile.
+  const staged = [
+    ...(await Bun.$`git ls-files --cached --others --exclude-standard`.cwd(root).text())
+      .split("\n")
+      .filter(
+        (file) =>
+          ["package.json", "bun.lock", "bunfig.toml"].includes(file) || /^packages\/[^/]+\/package\.json$/.test(file),
+      ),
+    ...imported,
+  ]
+  const context = await mkdtemp(join(tmpdir(), "ren-brain-"))
+  const tree = join(context, "ren")
+  await Promise.all(
+    staged.map(async (file) => {
+      await mkdir(dirname(join(tree, file)), { recursive: true })
+      await Bun.write(join(tree, file), Bun.file(join(root, file)))
+    }),
+  )
+  // oxlint-disable-next-line ren/no-comments -- The install of e2b.Dockerfile, for the sandbox's platform. Each link names the version and peers a package resolves to, so the links change exactly when the image's dependencies do, whatever else changes in bun.lock.
+  await Bun.$`bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts --os linux --cpu x64`
+    .cwd(tree)
+    .quiet()
+  const links = await Promise.all(
+    (await Bun.$`find node_modules packages -type l`.cwd(tree).text())
+      .split("\n")
+      .filter((link) => link.length > 0)
+      .map(async (link) => `${link} -> ${await readlink(join(tree, link))}\n`),
+  )
+  const manifests = await Promise.all(
+    [...new Set(imported.map((file) => file.slice(0, file.indexOf("/src/"))))].map(async (directory) => ({
+      path: `${directory}/package.json`,
+      content: new TextEncoder().encode(
+        JSON.stringify(
+          Schema.decodeUnknownSync(Manifest)(await Bun.file(join(root, directory, "package.json")).json()),
+        ),
+      ),
+    })),
+  )
   const entries = await Promise.all(
     [
-      ...staged.map((file) => join(root, file)),
+      ...imported.map((file) => join(root, file)),
       ...dockerfiles.map((file) => join(import.meta.dir, file)),
       join(import.meta.dir, "start.sh"),
     ].map(async (path) => ({ path: path.slice(root.length + 1), content: await Bun.file(path).bytes() })),
@@ -129,6 +149,8 @@ if (import.meta.main) {
   )
   const version = hash([
     ...entries,
+    ...manifests,
+    { path: "node_modules", content: new TextEncoder().encode(links.toSorted().join("")) },
     { path: "bun", content: new TextEncoder().encode(bun) },
     { path: "size", content: new TextEncoder().encode(`${size.cpuCount}/${size.memoryMB}`) },
   ])
@@ -136,18 +158,11 @@ if (import.meta.main) {
   const dirty = (await Bun.$`git status --porcelain`.cwd(root).text()).trim().length > 0
   const tags = await Template.getTags(name).catch(() => [])
   if (tags.some((each) => each.tag === version)) {
+    await rm(context, { recursive: true, force: true })
     process.stdout.write(`${tag} exists; nothing to build\n`)
     process.exit(0)
   }
-  const context = await mkdtemp(join(tmpdir(), "ren-brain-"))
-  const tree = join(context, "ren")
-  await Promise.all(
-    staged.map(async (file) => {
-      await mkdir(dirname(join(tree, file)), { recursive: true })
-      await Bun.write(join(tree, file), Bun.file(join(root, file)))
-    }),
-  )
-  await Bun.$`tar -czf ${join(context, "ren.tar.gz")} -C ${tree} .`
+  await Bun.$`tar -czf ${join(context, "ren.tar.gz")} --exclude=node_modules -C ${tree} .`
   await rm(tree, { recursive: true, force: true })
   await Bun.write(join(context, "start.sh"), Bun.file(join(import.meta.dir, "start.sh")))
   const parts = await Promise.all(dockerfiles.map((file) => Bun.file(join(import.meta.dir, file)).text()))

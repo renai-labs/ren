@@ -61,6 +61,12 @@ const WireOp = Schema.Union([
     upstream: Schema.RedactedFromValue(Schema.String),
     placeholder: Schema.optional(Schema.String),
   }),
+  Schema.Struct({
+    op: Schema.Literal("awsSign"),
+    accessKeyId: Schema.String,
+    secretAccessKey: Schema.RedactedFromValue(Schema.String),
+    sessionToken: Schema.RedactedFromValue(Schema.String),
+  }),
 ]).annotate({ identifier: "Egress.Op" })
 
 const Refreshable = Schema.Struct({ label: Schema.String, revision: Schema.Int })

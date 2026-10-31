@@ -141,7 +141,7 @@ describe("Ren API with an MCP access token", () => {
 })
 
 describe("Ren MCP tools", () => {
-  test("lists a tool for each endpoint that is marked for Ren MCP, and no other", async () => {
+  test("lists a tool for each SDK endpoint that is not hidden from Ren MCP, and no other", async () => {
     const caller = await accessToken(app, "tools@example.com")
     const listed = await result(await modern(app, caller.token, "tools/list"))
     expect(listed.tools).toEqual(
@@ -151,9 +151,15 @@ describe("Ren MCP tools", () => {
           name: "space_get",
           inputSchema: expect.objectContaining({ required: ["idOrSlug"] }),
         }),
+        expect.objectContaining({
+          name: "space_archive",
+          annotations: expect.objectContaining({ destructiveHint: true }),
+        }),
+        expect.objectContaining({ name: "channel_mapping_create" }),
       ]),
     )
-    expect(listed.tools).not.toContainEqual(expect.objectContaining({ name: "space_archive" }))
+    expect(listed.tools).not.toContainEqual(expect.objectContaining({ name: "credential_create" }))
+    expect(listed.tools).not.toContainEqual(expect.objectContaining({ name: "sign_in_provider_list" }))
   })
 
   test("runs a tool through its endpoint as the caller, in the protocol versions before and after 2026-07-28", async () => {

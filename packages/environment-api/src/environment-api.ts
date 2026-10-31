@@ -1,5 +1,6 @@
 export * as EnvironmentApi from "./environment-api.js"
 
+import { Drive } from "@ren/schema/drive"
 import { Environment } from "@ren/schema/environment"
 import { Identifier } from "@ren/schema/identifier"
 import { Brain } from "@ren/schema/brain"
@@ -43,6 +44,9 @@ export const Hello = Schema.Struct({
     Schema.Array(Schema.String).annotate({
       description: "The shells this machine has, by absolute path. The first is its default.",
     }),
+  ),
+  mount: Schema.optionalKey(
+    Schema.Boolean.annotate({ description: "Whether this machine has rclone and a usable /dev/fuse." }),
   ),
 }).annotate({ identifier: "Executor.Hello" })
 
@@ -195,6 +199,20 @@ export const UnpackInput = Schema.Struct({
   ),
 }).annotate({ identifier: "Executor.UnpackInput" })
 
+export class MountError extends Schema.TaggedError<MountError>()("MountError", {
+  path: Schema.String,
+  message: Schema.String,
+}) {}
+
+export interface MountInput extends Schema.Schema.Type<typeof MountInput> {}
+export const MountInput = Schema.Struct({
+  path: Schema.String.annotate({
+    description: "The folder that shows the drive. A healthy mount of the same remote and access is kept.",
+  }),
+  remote: Drive.Remote,
+  access: Drive.Access,
+}).annotate({ identifier: "Executor.MountInput" })
+
 export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundError>()("ProcessNotFoundError", {
   id: ProcessID,
 }) {}
@@ -262,4 +280,5 @@ export const Rpcs = RpcGroup.make(
   }),
   Rpc.make("files.mkdir", { payload: Path, error: FileSystemError }),
   Rpc.make("files.unpack", { payload: UnpackInput, error: Schema.Union([ArchiveError, FileSystemError]) }),
+  Rpc.make("drives.mount", { payload: MountInput, error: MountError }),
 ).middleware(Authentication)

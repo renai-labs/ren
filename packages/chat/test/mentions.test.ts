@@ -11,15 +11,29 @@ const explore = Mentions.fromAgent({
 })
 const notes = Mentions.fromSkill({ id: "release-notes", name: "Release notes" })
 const plan = Mentions.fromFile({ path: "docs/plan.md", type: "file" })
+const github = Mentions.fromApp({ id: "app_github", slug: "github", name: "GitHub", description: "Code hosting" })
 
 describe("Mentions suggestions", () => {
-  test("lists agents, then skills, then files, filtering names and descriptions but not file search results", () => {
+  test("lists agents, then skills, then apps, then files, filtering names, descriptions of agents and skills, and not file search results", () => {
     expect(
-      Mentions.suggest({ agents: [general, explore], skills: [notes], files: [plan], query: "" }).map(Mentions.key),
-    ).toEqual(["agent:general", "agent:explore", "skill:release-notes", "file:docs/plan.md"])
+      Mentions.suggest({ agents: [general, explore], skills: [notes], apps: [github], files: [plan], query: "" }).map(
+        Mentions.key,
+      ),
+    ).toEqual(["agent:general", "agent:explore", "skill:release-notes", "app:app_github", "file:docs/plan.md"])
     expect(
-      Mentions.suggest({ agents: [general, explore], skills: [notes], files: [plan], query: "code" }).map(Mentions.key),
+      Mentions.suggest({
+        agents: [general, explore],
+        skills: [notes],
+        apps: [github],
+        files: [plan],
+        query: "code",
+      }).map(Mentions.key),
     ).toEqual(["agent:explore", "file:docs/plan.md"])
+    expect(
+      Mentions.suggest({ agents: [general, explore], skills: [notes], apps: [github], files: [], query: "git" }).map(
+        Mentions.key,
+      ),
+    ).toEqual(["app:app_github"])
   })
 })
 

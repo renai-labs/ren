@@ -1,4 +1,5 @@
 export { Compile } from "./compile.js"
+export { EmitCli } from "./emit-cli.js"
 export { EmitEffectImported } from "./emit-effect-imported.js"
 export { EmitPromise } from "./emit-promise.js"
 export { EmitReactQuery } from "./emit-react-query.js"

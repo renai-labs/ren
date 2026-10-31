@@ -2,7 +2,7 @@ import { PgClient } from "@effect/sql-pg"
 import { Shared } from "@ren/cell/testing"
 import { Access } from "@ren/core/access"
 import { AppRegistry } from "@ren/core/app/registry"
-import { Seed } from "@ren/core/testing"
+import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
 import { TestEnvironment } from "@ren/executor/testing"
 import { Signature } from "@ren/schema/signature"
@@ -116,6 +116,7 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     PORT: String(ports.server),
     DATABASE_URL: database.href,
     BETTER_AUTH_SECRET: "e2e-secret-do-not-use-in-production",
+    ...TestDrives.config,
     BETTER_AUTH_URL: serverURL,
     TRUSTED_ORIGINS: appOrigin,
     APP_URL: `${appOrigin}/app`,

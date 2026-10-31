@@ -63,7 +63,7 @@ export interface Candidate {
   readonly label: string
   readonly owner: OwnerKind
   readonly hosts: ReadonlyArray<string>
-  readonly inject: Credential.Inject
+  readonly inject: Credential.Inject | { readonly op: "awsSign" }
   readonly type?: Credential.Type
   readonly revision?: number | null
   readonly status?: Credential.Status
@@ -115,7 +115,10 @@ export const match = (candidates: ReadonlyArray<Candidate>, request: Request): M
   if (placeholders.length === 0) {
     const byHost = ordered.filter(
       (candidate) =>
-        candidate.inject.op !== "replace" && candidate.source !== "provider" && allowsHost(candidate, request),
+        candidate.inject.op !== "replace" &&
+        candidate.inject.op !== "awsSign" &&
+        candidate.source !== "provider" &&
+        allowsHost(candidate, request),
     )
     const chosen = [...new Map(byHost.toReversed().map((candidate) => [candidate.label, candidate])).values()]
     if (chosen.length > 1) return { ok: false, reason: "ambiguous" }
