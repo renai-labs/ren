@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { startTransition, useId, useRef, useState, ViewTransition } from "react"
+import { startTransition, useRef, useState } from "react"
 import { Attention } from "../../lib/attention.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -69,7 +69,6 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
   const navigate = useNavigate()
   const [sessionID, setSessionID] = useState(() => Session.ID.create())
   const [sent, setSent] = useState<string>()
-  const transitionName = `new-chat-${useId()}`
   const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: 100, joined: true }))
   const models = useQuery(context.api.chat.models.queryOptions({ id: sessionID }))
   const create = useMutation(context.api.session.create.mutationOptions())
@@ -121,13 +120,11 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
         <div className="mx-auto flex w-full max-w-192 flex-col gap-6 px-4 pt-14 pb-8 md:px-6">
           <Message align="end">
             <MessageContent className="max-w-5/6 items-end">
-              <ViewTransition name={transitionName} share="auto" default="none">
-                <Bubble variant="muted" align="end">
-                  <BubbleContent className="rounded-tr-lg px-4 text-base/relaxed whitespace-pre-wrap">
-                    {sent}
-                  </BubbleContent>
-                </Bubble>
-              </ViewTransition>
+              <Bubble variant="muted" align="end">
+                <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
+                  {sent}
+                </BubbleContent>
+              </Bubble>
             </MessageContent>
           </Message>
           <Working label="Starting the chat" />
@@ -245,27 +242,25 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
             </>
           }
         >
-          <ViewTransition name={transitionName} share="auto" default="none">
-            <PromptInput.Textarea
-              ref={input}
-              size="lg"
-              aria-label="Message"
-              placeholder={ComposerCopy.placeholder}
-              dir="auto"
-              autoComplete="off"
-              focusOnMount={!mobile}
-              readOnly={create.isPending}
-              value={draft.text}
-              {...suggested.textarea}
-              onChange={(event) => {
-                suggested.track(event.currentTarget.value, event.currentTarget.selectionStart)
-                change(Composer.withText(draft, event.currentTarget.value))
-              }}
-              onKeyDown={(event) => {
-                if (suggested.keyDown(pressOf(event), event.currentTarget)) event.preventDefault()
-              }}
-            />
-          </ViewTransition>
+          <PromptInput.Textarea
+            ref={input}
+            size="lg"
+            aria-label="Message"
+            placeholder={ComposerCopy.placeholder}
+            dir="auto"
+            autoComplete="off"
+            focusOnMount={!mobile}
+            readOnly={create.isPending}
+            value={draft.text}
+            {...suggested.textarea}
+            onChange={(event) => {
+              suggested.track(event.currentTarget.value, event.currentTarget.selectionStart)
+              change(Composer.withText(draft, event.currentTarget.value))
+            }}
+            onKeyDown={(event) => {
+              if (suggested.keyDown(pressOf(event), event.currentTarget)) event.preventDefault()
+            }}
+          />
         </ChatComposer>
       </div>
     </div>
