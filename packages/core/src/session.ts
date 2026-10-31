@@ -295,6 +295,7 @@ export const layer = Layer.effect(
               anyOf(Database.Schema.agent_session.origin, input.origin),
               input.status &&
                 (input.status === "busy" ? isNotNull : isNull)(Database.Schema.opencode_session.time_suspended),
+              OpenCodeStore.search(input.search),
               (input.archived ? isNotNull : isNull)(Database.Schema.agent_session.archived_at),
               input.from && gte(time, DateTime.toDateUtc(input.from)),
               input.to && lt(time, DateTime.toDateUtc(input.to)),

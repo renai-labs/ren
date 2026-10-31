@@ -758,6 +758,7 @@ type SessionListInput = {
   readonly agentId?: SessionListRequest["query"]["agentId"]
   readonly origin?: SessionListRequest["query"]["origin"]
   readonly status?: SessionListRequest["query"]["status"]
+  readonly search?: SessionListRequest["query"]["search"]
   readonly archived?: SessionListRequest["query"]["archived"]
   readonly orderBy?: SessionListRequest["query"]["orderBy"]
   readonly from?: SessionListRequest["query"]["from"]
@@ -773,6 +774,7 @@ const EndpointSessionList = (raw: RawClient["session"]) => (input: SessionListIn
       agentId: input["agentId"],
       origin: input["origin"],
       status: input["status"],
+      search: input["search"],
       archived: input["archived"],
       orderBy: input["orderBy"],
       from: input["from"],

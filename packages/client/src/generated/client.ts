@@ -1159,6 +1159,7 @@ export function make(options: ClientOptions) {
               agentId: input["agentId"],
               origin: input["origin"],
               status: input["status"],
+              search: input["search"],
               archived: input["archived"],
               orderBy: input["orderBy"],
               from: input["from"],

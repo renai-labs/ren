@@ -4765,6 +4765,19 @@
             "required": false
           },
           {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Part of the title, or of the text of a message from a person or an assistant."
+            },
+            "required": false
+          },
+          {
             "name": "archived",
             "in": "query",
             "schema": {
