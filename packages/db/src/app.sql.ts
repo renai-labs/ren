@@ -1,6 +1,7 @@
 import type { App } from "@ren/schema/app"
 import type { AppProfile } from "@ren/schema/app-profile"
 import type { Auth } from "@ren/schema/auth"
+import type { Packages } from "@ren/schema/packages"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, sql } from "drizzle-orm"
 import {
@@ -35,7 +36,7 @@ export const app = pgTable(
     description: text().notNull(),
     icon: text(),
     required_credentials: jsonb().$type<App.Definition["requiredCredentials"]>().notNull(),
-    environment: jsonb().$type<App.Environment>(),
+    environment: jsonb().$type<Packages.Setup>(),
     mcps: jsonb().$type<App.Definition["mcps"]>().notNull(),
     skills: jsonb().$type<App.Definition["skills"]>().notNull(),
     revision: integer().notNull().default(1),
