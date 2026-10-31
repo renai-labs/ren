@@ -1,8 +1,6 @@
 export * as DraftStore from "./draft-store.js"
 
 import { Result } from "effect"
-import { useEffect, useEffectEvent } from "react"
-import type { RefObject } from "react"
 import { DraftChunks } from "./draft-chunks.js"
 import type { Platform } from "./platform.js"
 
@@ -136,18 +134,4 @@ export function make(options: {
       return () => void listeners.delete(listener)
     },
   }
-}
-
-export function useElsewhere(input: {
-  readonly drafts: Platform.Drafts | undefined
-  readonly key: string
-  readonly editor: RefObject<HTMLElement | null>
-  readonly onChange: (value: string | undefined) => void
-}) {
-  const changed = useEffectEvent((key: string) => {
-    if (key !== input.key || document.activeElement === input.editor.current) return
-    input.onChange(input.drafts?.get(key))
-  })
-  const drafts = input.drafts
-  useEffect(() => drafts?.subscribe?.(changed), [drafts])
 }

@@ -4,14 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Ren</title>
+    <meta name="color-scheme" content="light dark" />
+    <style>
+      html {
+        background: #f9f9f9;
+      }
+      html.dark {
+        background: #151515;
+      }
+    </style>
     <script>
       try {
         const stored = JSON.parse(localStorage.getItem("ren.theme.v1") ?? '"dark"')
-        const preference =
-          stored === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : stored
-        const classes = { light: ["light"], girliepop: ["light", "girliepop"] }[preference] ?? ["dark"]
-        document.documentElement.classList.remove("dark")
-        document.documentElement.classList.add(...classes)
+        const dark = stored === "dark" || (stored === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
+        document.documentElement.classList.toggle("dark", dark)
+        document.documentElement.style.colorScheme = dark ? "dark" : "light"
       } catch {}
     </script>
   </head>

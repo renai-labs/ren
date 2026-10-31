@@ -1,2 +1,3 @@
 @import "@ren/ui/styles";
 @source "./**/*.{ts,tsx}";
+@source "../node_modules/streamdown/dist/*.js";

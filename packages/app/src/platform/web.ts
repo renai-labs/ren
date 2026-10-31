@@ -28,9 +28,8 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
       }),
     }),
     platform: "web",
-    version: import.meta.env.VITE_REN_VERSION ?? "dev",
     serverUrl,
-    appUrl: new URL(import.meta.env.BASE_URL, window.location.origin).href.replace(/\/$/, ""),
+    appUrl: new URL(import.meta.env.BASE_URL, window.location.origin).href.replace(/\/$/u, ""),
     authorizationQuery: new URLSearchParams(window.location.search).has("sig")
       ? window.location.search.slice(1)
       : undefined,
@@ -70,6 +69,11 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
       if (!externalProtocols.has(new URL(url).protocol)) return
       window.location.assign(url)
     },
+    blankTab: () => {
+      const tab = window.open("", "_blank")
+      if (tab) tab.opener = null
+      return tab
+    },
     notify: async (title, body) => {
       if (!("Notification" in window) || Notification.permission !== "granted") return
       if (document.visibilityState === "visible" && document.hasFocus()) return
@@ -89,16 +93,11 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
       const visibility = () => {
         if (document.visibilityState === "visible") listener("foreground")
       }
-      const pageshow = (event: PageTransitionEvent) => {
-        if (event.persisted) listener("foreground")
-      }
       const online = () => listener("online")
       document.addEventListener("visibilitychange", visibility)
-      window.addEventListener("pageshow", pageshow)
       window.addEventListener("online", online)
       return () => {
         document.removeEventListener("visibilitychange", visibility)
-        window.removeEventListener("pageshow", pageshow)
         window.removeEventListener("online", online)
       }
     },
