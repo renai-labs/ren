@@ -214,17 +214,21 @@ function useOpenSession(input: {
   }
 }
 
+function usePrompt(sessionID: Session.ID) {
+  return ChatReact.useAction(sessionID, (opened, text: string) =>
+    Effect.flatMap(SubscriptionRef.get(opened.state), (current) => {
+      const model = current.info[sessionID]?.model
+      return opened.prompt({ id: SessionMessage.ID.create(), text, ...(model && { model }) })
+    }),
+  )
+}
+
 function useRevert(input: { sessionID: Session.ID; restore: (message: Option.Option<SessionMessage.User>) => void }) {
   const [reverting, setReverting] = useState(false)
   const revert = ChatReact.useAction(input.sessionID, (opened, messageID: SessionMessage.ID) =>
     opened.revert(messageID),
   )
-  const prompt = ChatReact.useAction(input.sessionID, (opened, text: string) =>
-    Effect.flatMap(SubscriptionRef.get(opened.state), (current) => {
-      const model = current.info[input.sessionID]?.model
-      return opened.prompt({ id: SessionMessage.ID.create(), text, ...(model && { model }) })
-    }),
-  )
+  const prompt = usePrompt(input.sessionID)
   const run = (work: () => Promise<unknown>) => {
     if (reverting) return
     setReverting(true)
@@ -354,6 +358,18 @@ export function SessionChat(props: {
     setRestored((count) => count + 1)
   }
   const reverter = useRevert({ sessionID: props.sessionID, restore })
+  const prompt = usePrompt(props.sessionID)
+  const interrupt = ChatReact.useAction(props.sessionID, (opened) => opened.interrupt)
+  const admin = useQuery(Auth.canAdministerOptions(RouterContext.useRouterContext().auth)).data === true
+  const [picking, setPicking] = useState(false)
+  const send = (text: string) => void prompt(text).catch(Failure.notify("Could not send your message"))
+  const problems = {
+    admin,
+    onTryAgain: send,
+    onContinue: () => send("Continue."),
+    onChangeModel: () => setPicking(true),
+    onStop: () => void interrupt().catch(Failure.notify("Could not stop Ren")),
+  }
   const onUndo = () => void undo().then(restore, Failure.notify("Could not undo the last message"))
   const onRedo = () => void redo().catch(Failure.notify("Could not restore the undone messages"))
   const onCompact = () => void compact().catch(Failure.notify("Could not compact the chat"))
@@ -433,6 +449,7 @@ export function SessionChat(props: {
               people={people}
               apps={apps}
               filesResetAt={filesResetOf(stored.data)}
+              problems={problems}
             />
           )}
           <div className="shrink-0 px-4 pb-4 md:px-6">
@@ -467,6 +484,8 @@ export function SessionChat(props: {
                   onUndo={onUndo}
                   onRedo={onRedo}
                   onCompact={onCompact}
+                  picking={picking}
+                  onPicking={setPicking}
                   addRepositories={props.addRepositories}
                 />
               )}

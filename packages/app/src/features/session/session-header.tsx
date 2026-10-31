@@ -23,9 +23,9 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { InlineEdit } from "@ren/ui/inline-edit"
+import { Skeleton } from "@ren/ui/skeleton"
 import { Spinner } from "@ren/ui/spinner"
-import { Text } from "@ren/ui/text"
+import { IconCube, IconLock } from "@tabler/icons-react"
 import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
@@ -33,7 +33,6 @@ import { Fragment, useState } from "react"
 import { ScheduleDialog } from "../../components/schedule-dialog.js"
 import { Chat } from "../../lib/chat.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { SessionCache } from "../../lib/session-cache.js"
 import { Platform } from "../../platform/platform.js"
 import { Failure } from "./failure.js"
 
@@ -204,25 +203,34 @@ function Actions(props: {
   )
 }
 
-function Title(props: { sessionID: Session.ID; title: string; renamable: boolean }) {
-  const patch = SessionCache.usePatch(props.sessionID)
-  const rename = ChatReact.useAction(props.sessionID, (opened, title: string) => opened.rename(title))
-  if (!props.renamable)
-    return (
-      <Text purpose="label" truncation="single-line" element="h1">
-        {props.title}
-      </Text>
-    )
+function SpacePill(props: { sessionID: Session.ID }) {
+  const context = RouterContext.useRouterContext()
+  const spaceId = useQuery({
+    ...context.api.session.get.queryOptions({ idOrSlug: props.sessionID }),
+    select: (session) => session.spaceId,
+  }).data
+  const space = useQuery({
+    ...context.api.space.get.queryOptions({ idOrSlug: spaceId ?? "" }),
+    enabled: spaceId !== undefined,
+  }).data
   return (
-    <InlineEdit
-      value={props.title}
-      label="Chat title"
-      required
-      onCommit={async (next) => {
-        await rename(next)
-        patch({ title: next })
-      }}
-    />
+    <Breadcrumb className="flex h-8 w-fit items-center rounded-lg border bg-sidebar px-3">
+      <BreadcrumbList>
+        <BreadcrumbItem>
+          {space ? (
+            <BreadcrumbLink
+              className="flex items-center gap-1.5"
+              render={<Link to="/spaces/$spaceId" params={{ spaceId: space.id }} />}
+            >
+              {space.kind === "private" ? <IconLock className="size-4" /> : <IconCube className="size-4" />}
+              {space.name}
+            </BreadcrumbLink>
+          ) : (
+            <Skeleton className="h-4 w-24" />
+          )}
+        </BreadcrumbItem>
+      </BreadcrumbList>
+    </Breadcrumb>
   )
 }
 
@@ -242,7 +250,7 @@ export function SessionHeader(props: {
   return (
     <>
       <div className="min-w-0 flex-1">
-        <Title sessionID={props.sessionID} title={props.title} renamable={props.capabilities?.rename !== false} />
+        <SpacePill sessionID={props.sessionID} />
       </div>
       <RunningMenu background={props.background} root={props.sessionID} onOpen={props.onOpen} />
       <Actions

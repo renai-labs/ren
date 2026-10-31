@@ -161,8 +161,19 @@ function rowData(input: {
         input.turns.activeMessageID === row.userMessageID
           ? TimelineText.retryStatus(input.turns.turns.get(row.userMessageID) ?? [])
           : undefined,
+      provider: input.turns.turns.get(row.userMessageID)?.at(-1)?.model.providerID,
     }),
-    Error: empty,
+    Error: (row) => {
+      const assistants = input.turns.turns.get(row.userMessageID) ?? []
+      const last = assistants.at(-1)
+      const user = input.messages.get(row.userMessageID)
+      return {
+        provider: last?.model.providerID,
+        model: last ? TimelineText.modelLabel(last.model, input.modelNames) : undefined,
+        midTurn: assistants.some((message) => message.content.some((content) => content.type === "tool")),
+        prompt: user?.type === "user" ? user.text : undefined,
+      }
+    },
     TurnDivider: empty,
     CompactionQueued: empty,
     TurnGap: empty,
@@ -228,6 +239,7 @@ export function Transcript(props: {
   people?: ReadonlyMap<string, Person>
   apps?: ReadonlyArray<AppMention.App>
   filesResetAt?: DateTime.Utc | null
+  problems?: TranscriptContext.Problems
 }) {
   const messages: ReadonlyMap<string, SessionMessage.Info> = new Map(
     props.messages.map((message) => [message.id, message]),
@@ -272,6 +284,7 @@ export function Transcript(props: {
           onPending: props.onPending,
           onOpenChild: props.onOpenChild,
           onOpenSession: props.onOpenSession,
+          problems: props.problems,
         },
       }}
     >

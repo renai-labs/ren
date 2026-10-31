@@ -263,6 +263,8 @@ export function SessionComposer(props: {
   onUndo: () => void
   onRedo: () => void
   onCompact: () => void
+  picking: boolean
+  onPicking: (open: boolean) => void
   addRepositories?: ComposerRepositories.Dialog | undefined
 }) {
   const platform = Platform.usePlatform()
@@ -275,7 +277,8 @@ export function SessionComposer(props: {
   const [suggesting, setSuggesting] = useState<Suggesting>()
   const [picked, setPicked] = useState<ReadonlyArray<Mentions.Item>>([])
   const [moving, setMoving] = useState(false)
-  const [picking, setPicking] = useState(false)
+  const picking = props.picking
+  const setPicking = props.onPicking
   const input = useRef<HTMLTextAreaElement>(null)
   const latest = useRef({ draft, history })
   DraftStore.useElsewhere({

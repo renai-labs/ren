@@ -32,12 +32,12 @@ import { Initials } from "@ren/util/initials"
 import { IconClock, IconPencil, IconRestore } from "@tabler/icons-react"
 import { DateTime } from "effect"
 import { useState } from "react"
-import { Countdown } from "../../lib/countdown.js"
 import { Platform } from "../../platform/platform.js"
 import { ChannelMessageHeader, ChannelReplyMessage } from "./channel-message.js"
 import { ScheduleMessageHeader } from "./schedule-message.js"
 import { TranscriptContext } from "./transcript-context.js"
-import { Separator, TranscriptError, TranscriptNotice, TranscriptShell } from "./transcript-notice.js"
+import { Separator, TranscriptNotice, TranscriptShell } from "./transcript-notice.js"
+import { TurnFailed, TurnRetrying } from "./turn-problem.js"
 import { ToolIcons } from "./tool-icons.js"
 import { FileChanges, Note, Output, Reasoning, Step, Tool } from "./transcript-tool.js"
 
@@ -60,6 +60,10 @@ export interface RowData {
   readonly copy?: string | undefined
   readonly meta?: string | undefined
   readonly retry?: TimelineText.Retry | undefined
+  readonly provider?: string | undefined
+  readonly model?: string | undefined
+  readonly midTurn?: boolean
+  readonly prompt?: string | undefined
 }
 
 const reasoningDuration = (content: SessionMessage.Reasoning) =>
@@ -450,16 +454,39 @@ function UserMessage(props: { data: RowData }) {
   )
 }
 
-function Retry(props: { retry: TimelineText.Retry }) {
-  const remaining = Countdown.useUntil(props.retry.next)
+function ProblemRow(props: { data: RowData; row: TimelineRow.Row }) {
+  const problems = TranscriptContext.useValue().actions.problems ?? { admin: false }
+  const data = props.data
+  const prompt = data.prompt
+  const tryAgain = problems.onTryAgain
+  const handlers = {
+    onTryAgain: tryAgain && prompt ? () => tryAgain(prompt) : undefined,
+    onContinue: problems.onContinue,
+    onChangeModel: problems.onChangeModel,
+    onStop: problems.onStop,
+  }
+  const provider = data.provider ?? "the model provider"
+  if (props.row._tag === "Retry")
+    return data.retry ? (
+      <TurnRetrying
+        text={data.retry.message}
+        provider={provider}
+        next={data.retry.next}
+        attempt={data.retry.attempt}
+        handlers={handlers}
+      />
+    ) : null
+  if (props.row._tag !== "Error") return null
   return (
-    <output className="flex min-w-0 flex-col gap-1 text-sm">
-      <span className="text-foreground">{props.retry.message}</span>
-      <span className="shimmer text-muted-foreground motion-reduce:shimmer-none">
-        {`Attempt ${props.retry.attempt}, retrying `}
-        <span aria-hidden>{remaining > 0 ? `in ${remaining}s` : "now"}</span>
-      </span>
-    </output>
+    <TurnFailed
+      kind={props.row.kind}
+      text={props.row.text}
+      provider={provider}
+      model={data.model ?? "This model"}
+      midTurn={data.midTurn === true}
+      admin={problems.admin}
+      handlers={handlers}
+    />
   )
 }
 
@@ -548,9 +575,8 @@ export function TranscriptRow(props: { data: RowData; row: TimelineRow.Row }) {
     case "Thinking":
       return <Thinking content={props.data.content} />
     case "Retry":
-      return props.data.retry ? <Retry retry={props.data.retry} /> : null
     case "Error":
-      return <TranscriptError kind={row.kind} text={row.text} />
+      return <ProblemRow data={props.data} row={row} />
     case "TurnDivider":
       return <Separator label="Interrupted" />
     case "CompactionQueued":
