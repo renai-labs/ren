@@ -62,7 +62,7 @@ export function ConnectionCard(props: {
         {manage ? (
           <CardAction className="flex items-center gap-1 self-center">
             {connection.canReconnect ? (
-              <Button variant="secondary" size="xs" className="h-6.5" onClick={manage.onReconnect}>
+              <Button variant="secondary" size="sm" onClick={manage.onReconnect}>
                 Reconnect
               </Button>
             ) : null}

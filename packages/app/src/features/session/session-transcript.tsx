@@ -17,7 +17,6 @@ import { InputGroupAddon } from "@ren/ui/input-group"
 import { Markdown } from "@ren/ui/markdown"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
 import { PromptInput } from "@ren/ui/prompt-input"
-import { Time } from "@ren/ui/time"
 import {
   Trace,
   TraceCollapsible,
@@ -28,17 +27,16 @@ import {
   TraceLine,
   TraceTitle,
 } from "@ren/ui/trace"
-import { Initials } from "@ren/util/initials"
-import { IconClock, IconPencil, IconRestore, IconTool } from "@tabler/icons-react"
-import { DateTime } from "effect"
+import { IconClock, IconPencil, IconRestore } from "@tabler/icons-react"
 import { useState } from "react"
-import { Countdown } from "../../lib/countdown.js"
 import { Platform } from "../../platform/platform.js"
 import { ChannelMessageHeader, ChannelReplyMessage } from "./channel-message.js"
 import { ScheduleMessageHeader } from "./schedule-message.js"
 import { TranscriptContext } from "./transcript-context.js"
-import { Separator, TranscriptError, TranscriptNotice, TranscriptShell } from "./transcript-notice.js"
-import { FileChanges, Note, Output, Reasoning, Step, Tool } from "./transcript-tool.js"
+import { Separator, TranscriptNotice, TranscriptShell } from "./transcript-notice.js"
+import { TurnFailed, TurnRetrying } from "./turn-problem.js"
+import { UserBody } from "./user-attachments.js"
+import { Note, Reasoning, Tool } from "./transcript-tool.js"
 
 export interface Person {
   readonly name: string
@@ -51,22 +49,17 @@ export interface RowData {
   readonly streaming?: boolean
   readonly messages?: ReadonlyArray<SessionMessage.Info | undefined>
   readonly status?: ChatState.PendingStatus | undefined
-  readonly caption?: string | undefined
   readonly sender?: string | undefined
   readonly senderImage?: string | undefined
   readonly updating?: boolean
   readonly working?: boolean
   readonly copy?: string | undefined
-  readonly meta?: string | undefined
   readonly retry?: TimelineText.Retry | undefined
+  readonly provider?: string | undefined
+  readonly model?: string | undefined
+  readonly midTurn?: boolean
+  readonly prompt?: string | undefined
 }
-
-const reasoningDuration = (content: SessionMessage.Reasoning) =>
-  content.time?.completed
-    ? TimelineText.duration(
-        DateTime.toEpochMillis(content.time.completed) - DateTime.toEpochMillis(content.time.created),
-      )
-    : undefined
 
 function Response(props: { data: RowData; text: string }) {
   const platform = Platform.usePlatform()
@@ -90,8 +83,7 @@ function Response(props: { data: RowData; text: string }) {
         </Bubble>
         {write && copy !== undefined ? (
           <MessageFooter className="gap-1 px-0">
-            <CopyButton value={copy} onCopy={write} label="Copy response" size="extra-small" />
-            {props.data.meta ? <span className="tabular-nums">{props.data.meta}</span> : null}
+            <CopyButton value={copy} onCopy={write} label="Copy response" />
           </MessageFooter>
         ) : null}
       </MessageContent>
@@ -109,7 +101,6 @@ function Part(props: { data: RowData }) {
       <Reasoning
         text={content.text}
         streaming={props.data.streaming === true && !content.time?.completed}
-        duration={reasoningDuration(content)}
         open={TimelineOpen.defaultOpen(content, transcript.state.detail)}
       />
     )
@@ -151,114 +142,29 @@ const entries = (
     return content ? [{ reference, message, item: content }] : []
   })
 
-const running = (tools: ReadonlyArray<SessionMessage.Tool>) =>
-  tools.some((tool) => ToolDisplay.status(tool) === "running")
-
-const isTool = (item: ToolDisplay.GroupItem): item is SessionMessage.Tool => item.type === "tool"
-
-function RunItem(props: { item: ToolDisplay.GroupItem; entries: ReadonlyArray<Entry> }) {
-  const message = props.entries.find((candidate) => candidate.item === props.item)?.message
-  if (props.item.type === "reasoning")
+function GroupItem(props: { entry: Entry }) {
+  const transcript = TranscriptContext.useValue()
+  const item = props.entry.item
+  const message = props.entry.message
+  if (item.type === "tool")
+    return (
+      <Tool
+        tool={item}
+        view={{ root: transcript.state.root, sessionID: transcript.state.sessionID }}
+        open={transcript.state.part === item.id}
+        onOpenChild={transcript.actions.onOpenChild}
+      />
+    )
+  if (item.type === "reasoning")
     return (
       <Reasoning
-        text={props.item.text}
-        streaming={message?.type === "assistant" && !message.time.completed && !props.item.time?.completed}
-        duration={reasoningDuration(props.item)}
+        text={item.text}
+        streaming={message?.type === "assistant" && !message.time.completed && !item.time?.completed}
       />
     )
   if (message?.type === "shell") return <TranscriptShell message={message} />
   const notice = message && TimelineText.notice(message)
   return notice ? <Note title={notice.title} detail={notice.detail} /> : null
-}
-
-function Run(props: { run: ToolDisplay.Run; entries: ReadonlyArray<Entry> }) {
-  const transcript = TranscriptContext.useValue()
-  const run = props.run
-  if (run.type === "item") return <RunItem item={run.item} entries={props.entries} />
-  const first = run.tools.at(0)
-  if (run.kind === "single")
-    return first ? (
-      <Tool
-        tool={first}
-        view={{ root: transcript.state.root, sessionID: transcript.state.sessionID }}
-        open={transcript.state.part === first.id}
-        onOpenChild={transcript.actions.onOpenChild}
-      />
-    ) : null
-  if (run.kind === "file")
-    return <FileChanges tools={run.tools} open={run.tools.some((tool) => tool.id === transcript.state.part)} />
-  const names = run.tools.flatMap((tool) => ToolDisplay.subtitle(tool) ?? []).join(", ")
-  if (run.kind === "skill") return <Note title="Loaded skills" detail={names} />
-  return (
-    <Step icon={<IconTool />} title="Read" subject={names} status={running(run.tools) ? "running" : undefined}>
-      {run.tools.map((tool) => (
-        <Output
-          key={tool.id}
-          title={ToolDisplay.subtitle(tool) ?? "Output"}
-          text={ToolDisplay.output(tool) ?? "No output"}
-        />
-      ))}
-    </Step>
-  )
-}
-
-const groupTitle = (
-  group: Exclude<TimelineRow.PartGroup, { readonly type: "part" }>,
-  items: ReadonlyArray<ToolDisplay.GroupItem>,
-) => {
-  if (group.type === "context") return ToolDisplay.group(items).title
-  const subjects = items.flatMap((item) => {
-    const subject = item.type === "tool" ? ToolDisplay.subtitle(item) : undefined
-    return subject ? [subject] : []
-  })
-  return `${group.type === "read" ? "Read" : "Edited"} ${subjects.join(", ")}`
-}
-
-function GroupSteps(props: { group: Exclude<TimelineRow.PartGroup, { type: "part" }>; entries: ReadonlyArray<Entry> }) {
-  const transcript = TranscriptContext.useValue()
-  const items = props.entries.map((entry) => entry.item)
-  if (props.group.type === "file")
-    return (
-      <FileChanges
-        tools={items.filter(isTool)}
-        open={props.group.refs.some((reference) => reference.partID === transcript.state.part)}
-      />
-    )
-  return ToolDisplay.runs(items).map((run, index) => (
-    <Run
-      key={run.type === "item" ? `item:${index}` : (run.tools.at(0)?.id ?? `run:${index}`)}
-      run={run}
-      entries={props.entries}
-    />
-  ))
-}
-
-function Group(props: { data: RowData; group: Exclude<TimelineRow.PartGroup, { type: "part" }> }) {
-  const transcript = TranscriptContext.useValue()
-  const group = props.group
-  const found = entries(group.refs, props.data.messages ?? [])
-  const items = found.map((entry) => entry.item)
-  const working = props.data.working === true || running(items.filter(isTool))
-  const [choice, setChoice] = useState<{ working: boolean; open: boolean }>()
-  const revealed = group.refs.some((reference) => reference.partID === transcript.state.part)
-  const open = working || (choice?.working === working ? choice.open : revealed)
-  return (
-    <Trace>
-      <TraceCollapsible open={open} onOpenChange={(next) => setChoice({ working, open: next })}>
-        <TraceCollapsibleTrigger>
-          <TraceLine status={working ? "running" : undefined}>
-            <TraceIcon>
-              <IconClock />
-            </TraceIcon>
-            <TraceTitle>{groupTitle(group, items)}</TraceTitle>
-          </TraceLine>
-        </TraceCollapsibleTrigger>
-        <TraceCollapsibleContent className="flex flex-col gap-2">
-          <GroupSteps group={group} entries={found} />
-        </TraceCollapsibleContent>
-      </TraceCollapsible>
-    </Trace>
-  )
 }
 
 const steerable = new Set<ChatState.PendingStatus | undefined>(["starting", "steering", "stranded"])
@@ -292,11 +198,11 @@ function UserActions(props: { message: SessionMessage.User; pending: boolean; re
   const message = props.message
   if (!write && !revert) return null
   return (
-    <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100 pointer-coarse:opacity-100">
+    <span className="flex items-center gap-1">
       {!props.pending && transcript.actions.onEdit !== undefined && message.text !== "" ? (
         <Button
           variant="ghost"
-          size="icon-xs"
+          size="icon-sm"
           className="text-muted-foreground"
           aria-label="Edit message"
           disabled={transcript.state.reverting}
@@ -310,7 +216,7 @@ function UserActions(props: { message: SessionMessage.User; pending: boolean; re
       {revert ? (
         <Button
           variant="ghost"
-          size="icon-xs"
+          size="icon-sm"
           className="text-muted-foreground"
           aria-label="Revert to this message"
           disabled={transcript.state.reverting}
@@ -332,7 +238,7 @@ function PendingActions(props: { message: SessionMessage.User; updating: boolean
     <span className="flex items-center gap-1">
       <Button
         variant="ghost"
-        size="xs"
+        size="sm"
         disabled={props.updating}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => act("queue", props.message)}
@@ -341,7 +247,7 @@ function PendingActions(props: { message: SessionMessage.User; updating: boolean
       </Button>
       <Button
         variant="ghost"
-        size="xs"
+        size="sm"
         disabled={props.updating}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => act("cancel", props.message)}
@@ -358,7 +264,6 @@ function EditMessage(props: { text: string; onCancel: () => void; onSave: (text:
     <div className="flex w-full flex-col gap-1.5">
       <PromptInput.Root
         label="Edit your message"
-        layout="stacked"
         onSubmit={() => {
           if (!text.trim() || text.trim() === props.text.trim()) props.onCancel()
           else props.onSave(text.trim())
@@ -414,29 +319,30 @@ function UserMessage(props: { data: RowData }) {
       </Message>
     )
   return (
-    <Message align="end">
+    <Message align="end" className="w-auto @min-transcript:-mr-13.5">
       {props.data.sender ? (
-        <MessageAvatar className="mb-7 min-w-6">
+        <MessageAvatar className="ml-3.5">
           <Avatar size="sm" aria-hidden>
-            <AvatarImage src={props.data.senderImage} alt="" />
-            <AvatarFallback className="bg-secondary text-xs">{Initials.of(props.data.sender)}</AvatarFallback>
+            {props.data.senderImage ? <AvatarImage src={props.data.senderImage} alt="" /> : null}
+            <AvatarFallback className="bg-secondary">{props.data.sender.charAt(0)}</AvatarFallback>
           </Avatar>
         </MessageAvatar>
       ) : null}
-      <MessageContent className="max-w-5/6 items-end">
+      <MessageContent>
         {props.data.sender ? <MessageHeader className="px-0">{props.data.sender}</MessageHeader> : null}
         <ChannelMessageHeader origin={message.channel} />
         <ScheduleMessageHeader origin={message.schedule} />
-        <Bubble variant="muted" align="end">
-          <BubbleContent className="rounded-tr-lg px-4 text-base/relaxed whitespace-pre-wrap">
-            <UserText text={message.text} highlights={TimelineText.mentions(message)} apps={transcript.state.apps} />
-          </BubbleContent>
-        </Bubble>
-        <MessageFooter className="min-h-6 gap-1 px-0">
-          <span className="tabular-nums">
-            {props.data.caption ? `${props.data.caption} · ` : ""}
-            <Time value={DateTime.toEpochMillis(message.time.created)} format="time-of-day" />
-          </span>
+        <UserBody message={message}>
+          {(typed) => (
+            <Bubble variant="muted" align="end">
+              <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
+                <UserText text={typed} highlights={TimelineText.mentions(message)} apps={transcript.state.apps} />
+              </BubbleContent>
+            </Bubble>
+          )}
+        </UserBody>
+        <MessageFooter className="justify-end gap-1">
+          {pending ? <span className="px-1 text-xs text-muted-foreground">Pending</span> : null}
           <UserActions
             message={message}
             pending={pending}
@@ -450,16 +356,39 @@ function UserMessage(props: { data: RowData }) {
   )
 }
 
-function Retry(props: { retry: TimelineText.Retry }) {
-  const remaining = Countdown.useUntil(props.retry.next)
+function ProblemRow(props: { data: RowData; row: TimelineRow.Row }) {
+  const problems = TranscriptContext.useValue().actions.problems ?? { admin: false }
+  const data = props.data
+  const prompt = data.prompt
+  const tryAgain = problems.onTryAgain
+  const handlers = {
+    onTryAgain: tryAgain && prompt ? () => tryAgain(prompt) : undefined,
+    onContinue: problems.onContinue,
+    onChangeModel: problems.onChangeModel,
+    onStop: problems.onStop,
+  }
+  const provider = data.provider ?? "the model provider"
+  if (props.row._tag === "Retry")
+    return data.retry ? (
+      <TurnRetrying
+        text={data.retry.message}
+        provider={provider}
+        next={data.retry.next}
+        attempt={data.retry.attempt}
+        handlers={handlers}
+      />
+    ) : null
+  if (props.row._tag !== "Error") return null
   return (
-    <output className="flex min-w-0 flex-col gap-1 text-sm">
-      <span className="text-foreground">{props.retry.message}</span>
-      <span className="shimmer text-muted-foreground motion-reduce:shimmer-none">
-        {`Attempt ${props.retry.attempt}, retrying `}
-        <span aria-hidden>{remaining > 0 ? `in ${remaining}s` : "now"}</span>
-      </span>
-    </output>
+    <TurnFailed
+      kind={props.row.kind}
+      text={props.row.text}
+      provider={provider}
+      model={data.model ?? "This model"}
+      midTurn={data.midTurn === true}
+      admin={problems.admin}
+      handlers={handlers}
+    />
   )
 }
 
@@ -467,8 +396,6 @@ function TurnStep(props: { data: RowData; row: TimelineRow.Row }) {
   const transcript = TranscriptContext.useValue()
   const row = props.row
   const content = props.data.content
-  if (row._tag === "AssistantPart" && row.group.type !== "part")
-    return <GroupSteps group={row.group} entries={entries(row.group.refs, props.data.messages ?? [])} />
   if (row._tag !== "AssistantPart" || content?.type !== "text") return <TranscriptRow data={props.data} row={row} />
   return (
     <div data-searchable className="min-w-0">
@@ -476,6 +403,7 @@ function TurnStep(props: { data: RowData; row: TimelineRow.Row }) {
         streaming={props.data.streaming === true}
         onOpenSession={transcript.actions.onOpenSession}
         apps={transcript.state.apps}
+        className="leading-relaxed"
       >
         {content.text}
       </Markdown>
@@ -483,8 +411,36 @@ function TurnStep(props: { data: RowData; row: TimelineRow.Row }) {
   )
 }
 
+type TurnItem = { readonly row: TimelineRow.Row; readonly data: RowData }
+
+const isText = (item: TurnItem) => item.row._tag === "AssistantPart" && item.data.content?.type === "text"
+
+const runsOf = (items: ReadonlyArray<TurnItem>) =>
+  items.reduce<Array<{ key: string; text: boolean; items: Array<TurnItem> }>>((all, item) => {
+    const last = all.at(-1)
+    if (last && !last.text && !isText(item)) last.items.push(item)
+    else all.push({ key: TimelineRow.key(item.row), text: isText(item), items: [item] })
+    return all
+  }, [])
+
+function StepRun(props: { items: ReadonlyArray<TurnItem> }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      {props.items.map((item) => (
+        <div
+          key={TimelineRow.key(item.row)}
+          data-row-key={TimelineRow.key(item.row)}
+          className="flex min-w-0 flex-col gap-2 empty:hidden"
+        >
+          <TurnStep data={item.data} row={item.row} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function TurnGroup(props: {
-  rows: ReadonlyArray<{ readonly row: TimelineRow.Row; readonly data: RowData }>
+  rows: ReadonlyArray<TurnItem>
   running: boolean
   workedFor: string | undefined
   steps: number
@@ -506,14 +462,8 @@ export function TurnGroup(props: {
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="flex flex-col gap-3">
-          {props.rows.map((item) => (
-            <div
-              key={TimelineRow.key(item.row)}
-              data-row-key={TimelineRow.key(item.row)}
-              className="flex min-w-0 flex-col gap-3 empty:hidden"
-            >
-              <TurnStep data={item.data} row={item.row} />
-            </div>
+          {runsOf(props.rows).map((run) => (
+            <StepRun key={run.key} items={run.items} />
           ))}
         </TraceCollapsibleContent>
       </TraceCollapsible>
@@ -523,7 +473,9 @@ export function TurnGroup(props: {
 
 function AssistantPart(props: { data: RowData; group: TimelineRow.PartGroup }) {
   if (props.group.type === "part") return <Part data={props.data} />
-  return <Group data={props.data} group={props.group} />
+  return entries(props.group.refs, props.data.messages ?? []).map((entry) => (
+    <GroupItem key={`${entry.reference.messageID}:${entry.reference.partID}`} entry={entry} />
+  ))
 }
 
 function ShellRow(props: { message: SessionMessage.Info | undefined }) {
@@ -548,9 +500,8 @@ export function TranscriptRow(props: { data: RowData; row: TimelineRow.Row }) {
     case "Thinking":
       return <Thinking content={props.data.content} />
     case "Retry":
-      return props.data.retry ? <Retry retry={props.data.retry} /> : null
     case "Error":
-      return <TranscriptError kind={row.kind} text={row.text} />
+      return <ProblemRow data={props.data} row={row} />
     case "TurnDivider":
       return <Separator label="Interrupted" />
     case "CompactionQueued":

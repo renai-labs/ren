@@ -1,9 +1,12 @@
 import { TimelineText } from "@ren/chat"
 import type { SessionMessage } from "@ren/schema/session/message"
+import type { SessionModel } from "@ren/schema/session/model"
 import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Markdown } from "@ren/ui/markdown"
 import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
-import { IconAlertTriangle, IconCode, IconInfoCircle } from "@tabler/icons-react"
+import { IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react"
+import { ToolIcons } from "./tool-icons.js"
+import { TranscriptContext } from "./transcript-context.js"
 import { Output, Step } from "./transcript-tool.js"
 
 export function Separator(props: { label: string }) {
@@ -81,16 +84,20 @@ export function TranscriptShell(props: { message: SessionMessage.Shell }) {
   const output = message.output?.output
   return (
     <Step
-      icon={<IconCode />}
+      icon={ToolIcons.of("command")}
       title={running ? "Running" : "Ran"}
       subject={message.command}
       status={shellStatus(message)}
-      defaultOpen={Boolean(error)}
     >
-      <Output text={output ? TimelineText.shellOutput(output) : "No output"} />
-      {error ? <Output text={error} failed /> : null}
+      <Output text={output ? TimelineText.shellOutput(output) : (error ?? "No output")} failed={Boolean(error)} />
     </Step>
   )
+}
+
+function ModelSwitched(props: { model: SessionModel.Ref }) {
+  const name = TranscriptContext.useValue().state.modelNames.get(props.model.id) ?? props.model.id
+  const variant = props.model.variant && props.model.variant !== "default" ? props.model.variant : undefined
+  return <Separator label={variant ? `${name} · ${variant.charAt(0).toUpperCase()}${variant.slice(1)}` : name} />
 }
 
 export function TranscriptNotice(props: { message: SessionMessage.Info | undefined }) {
@@ -99,7 +106,7 @@ export function TranscriptNotice(props: { message: SessionMessage.Info | undefin
   if (message.type === "compaction") return <Compaction message={message} />
   const notice = TimelineText.notice(message)
   if (!notice) return null
-  if (message.type === "model-switched") return <Separator label={notice.title} />
+  if (message.type === "model-switched") return <ModelSwitched model={message.model} />
   return (
     <Marker>
       <MarkerContent>{notice.detail ? `${notice.title} · ${notice.detail}` : notice.title}</MarkerContent>

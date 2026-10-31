@@ -66,7 +66,7 @@ export function MembersPage(props: {
             onValueChange={setQuery}
             placeholder={props.tab === "members" ? "Search for a member" : "Search for an invitation"}
           />
-          <Button size="xs" className="h-6.5" onClick={() => setAdding(true)}>
+          <Button size="sm" onClick={() => setAdding(true)}>
             <Icon glyph="Plus" data-icon="inline-start" />
             Add member
           </Button>

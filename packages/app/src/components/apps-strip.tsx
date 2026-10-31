@@ -1,36 +1,22 @@
-import type { AppProfileInfo, CredentialInfo, SpaceKind } from "@ren/client"
-import { Credential } from "@ren/schema/credential"
-import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@ren/ui/avatar"
+import type { AppProfileInfo, SpaceKind } from "@ren/client"
+import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@ren/ui/dropdown-menu"
-import { Icon } from "@ren/ui/icon"
-import type { Glyph } from "@ren/ui/icon"
-import { StatusDot } from "@ren/ui/status-dot"
+import { InputGroupButton } from "@ren/ui/input-group"
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@ren/ui/popover"
+import { Separator } from "@ren/ui/separator"
 import { Initials } from "@ren/util/initials"
+import { IconApps, IconPlus } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
-import { useNavigate, useRouteContext } from "@tanstack/react-router"
+import { useRouteContext } from "@tanstack/react-router"
 import { useState } from "react"
-import type { ReactNode } from "react"
 import { RouterContext } from "../lib/router-context.js"
 import { useSignIn } from "./account-actions.js"
 import { AddAppDialog } from "./add-app-dialog.js"
 import { Apps } from "./apps.js"
-import { PasteCredentialDialog } from "./paste-credential-dialog.js"
 import { ProfileDialog } from "./profile-dialog.js"
 import { Profiles } from "./profiles.js"
 
-// oxlint-disable-next-line ren/no-comments -- profiles.md P15: the apps a chat reaches, with what is missing. ren-v1's composer menu: Apps and Credentials, each with an add entry.
+// oxlint-disable-next-line ren/no-comments -- profiles.md P15: the apps a chat reaches, each account with what is missing and a Connect button.
 export function SessionAppsStrip(props: { readonly sessionId: string }) {
   const context = RouterContext.useRouterContext()
   const session = useQuery(context.api.session.get.queryOptions({ idOrSlug: props.sessionId }))
@@ -55,107 +41,119 @@ export function SpaceAppsStrip(props: { readonly spaceId: string }) {
 type Dialogs =
   | { readonly kind: "add-app" }
   | { readonly kind: "profile"; readonly appId: string; readonly profileId?: string }
-  | { readonly kind: "credential" }
   | undefined
 
 function Strip(props: { spaceId: string; profiles: ReadonlyArray<AppProfileInfo> }) {
   const context = RouterContext.useRouterContext()
   const authed = useRouteContext({ from: "/_authed" })
-  const navigate = useNavigate()
   const catalog = Apps.useCatalog()
+  const signIn = useSignIn()
   const space = useQuery(context.api.space.get.queryOptions({ idOrSlug: props.spaceId }))
-  const credentials = useQuery(context.api.credential.list.queryOptions(Apps.page))
   const [dialog, setDialog] = useState<Dialogs>()
+  const [open, setOpen] = useState(false)
   const apps = new Map(catalog.entries.map((entry) => [entry.id, entry]))
-  const byApp = [...Map.groupBy(props.profiles, (profile) => profile.appId)]
-  const loose = (credentials.data?.items ?? []).filter(
-    (credential) => credential.owner.kind === "space" && credential.owner.spaceId === props.spaceId,
-  )
-  const gaps = props.profiles.some((profile) => Profiles.gaps(profile).length > 0)
-  const openApp = (appId: string) =>
-    void navigate({ to: "/spaces/$spaceId/apps", params: { spaceId: props.spaceId }, search: { app: appId } })
+  const rows = props.profiles.map((profile) => ({
+    profile,
+    app: apps.get(profile.appId)?.name ?? profile.appSlug,
+    icon: apps.get(profile.appId)?.icon ?? undefined,
+    gaps: Profiles.gaps(profile).map((gap) => gap.name),
+  }))
+  const stack = [...new Map(rows.map((row) => [row.app, row.icon] as const))]
+  const shown = stack.slice(0, 3)
+  const missing = rows.filter((row) => row.gaps.length > 0).length
   const target = { id: props.spaceId, name: space.data?.name ?? "this space" }
+  const connect = (profile: AppProfileInfo) => {
+    const left = profile.items.filter((item) => !item.optional && item.status !== "ok")
+    const only = left.length === 1 ? left[0] : undefined
+    if (only && "mcp" in only.item && (only.kind === "oauth" || only.kind === "provider")) signIn.start(profile, only)
+    else setDialog({ kind: "profile", appId: profile.appId, profileId: profile.id })
+  }
+  const dialogs = (
+    <StripDialogs
+      dialog={dialog}
+      space={target}
+      kind={space.data?.kind}
+      added={new Set(rows.map((row) => row.profile.appId))}
+      userId={authed.me.user.id}
+      onChange={setDialog}
+    />
+  )
+  if (rows.length === 0)
+    return (
+      <>
+        <InputGroupButton
+          size="sm"
+          className="-ml-1 font-normal text-muted-foreground"
+          onClick={() => setDialog({ kind: "add-app" })}
+        >
+          <IconApps />
+          Add apps
+        </InputGroupButton>
+        {dialogs}
+      </>
+    )
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={<Button variant="ghost" size="sm" aria-label={`Apps and credentials of ${target.name}`} />}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          render={
+            <InputGroupButton
+              size="sm"
+              className="-ml-1 font-normal"
+              aria-label={`Apps: ${stack.map((entry) => entry[0]).join(", ")}${missing ? `, ${missing} not connected` : ""}`}
+            />
+          }
         >
-          {byApp.length > 0 ? (
-            <AvatarGroup>
-              {byApp.map(([appId, group]) => {
-                const name = apps.get(appId)?.name ?? group[0]?.appSlug ?? appId
-                return (
-                  <Avatar key={appId} size="sm" className="size-5">
-                    <AvatarImage src={apps.get(appId)?.icon} alt="" />
-                    <AvatarFallback className="bg-secondary">{Initials.of(name)}</AvatarFallback>
-                  </Avatar>
-                )
-              })}
-            </AvatarGroup>
-          ) : (
-            "Connect"
-          )}
-          {gaps ? <StatusDot tone="warning" label="Not connected" /> : null}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="w-48">
-          <Submenu
-            glyph="LayoutGrid"
-            label="Apps"
-            count={byApp.length}
-            attention={gaps}
-            empty="No apps yet."
-            addLabel="Add an app"
-            onAdd={() => setDialog({ kind: "add-app" })}
-          >
-            {byApp.map(([appId, group]) => (
-              <AppMenu
-                key={appId}
-                app={apps.get(appId)}
-                profiles={group}
-                spaceId={props.spaceId}
-                onConnect={(profile) => setDialog({ kind: "profile", appId, profileId: profile.id })}
-                onNew={() => setDialog({ kind: "profile", appId })}
-                onOpen={() => openApp(appId)}
-              />
+          <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
+            {shown.map((entry) => (
+              <Avatar key={entry[0]} size="sm" className="size-5">
+                <AvatarImage src={entry[1]} alt="" />
+                <AvatarFallback className="bg-secondary">{Initials.of(entry[0])}</AvatarFallback>
+              </Avatar>
             ))}
-          </Submenu>
-          <Submenu
-            glyph="KeyRound"
-            label="Credentials"
-            count={loose.length}
-            attention={false}
-            empty="No credentials yet."
-            addLabel="Add credential"
-            onAdd={() => setDialog({ kind: "credential" })}
+            {stack.length > shown.length ? (
+              <AvatarGroupCount className="size-5 text-2xs">+{stack.length - shown.length}</AvatarGroupCount>
+            ) : null}
+          </AvatarGroup>
+        </PopoverTrigger>
+        <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
+          <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
+          {rows.map((row) => (
+            <div key={row.profile.id} className="flex items-center gap-3 rounded-sm p-2">
+              <Avatar size="sm" className="size-5">
+                <AvatarImage src={row.icon} alt="" />
+                <AvatarFallback className="bg-secondary">{Initials.of(row.app)}</AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm">
+                  {row.app} · {row.profile.name}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {row.gaps.length ? row.gaps.join(", ") : "Connected"}
+                </span>
+              </div>
+              {row.gaps.length ? (
+                <Button variant="secondary" size="sm" onClick={() => connect(row.profile)}>
+                  Connect
+                </Button>
+              ) : null}
+            </div>
+          ))}
+          <Separator className="my-1" />
+          <Button
+            variant="ghost"
+            className="justify-start gap-3 px-2 font-normal text-muted-foreground"
+            onClick={() => {
+              setOpen(false)
+              setDialog({ kind: "add-app" })
+            }}
           >
-            <DropdownMenuGroup>
-              {loose.map((credential) => (
-                <DropdownMenuItem
-                  key={credential.id}
-                  onClick={() =>
-                    void navigate({ to: "/spaces/$spaceId/credentials", params: { spaceId: props.spaceId } })
-                  }
-                >
-                  <Icon glyph="KeyRound" />
-                  <span className="min-w-0 flex-1 truncate">{credential.label}</span>
-                  <span className="max-w-1/2 shrink-0 truncate text-xs text-muted-foreground">
-                    {reachOf(credential)}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          </Submenu>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <StripDialogs
-        dialog={dialog}
-        space={target}
-        kind={space.data?.kind}
-        added={new Set(byApp.map(([appId]) => appId))}
-        userId={authed.me.user.id}
-        onChange={setDialog}
-      />
+            <IconPlus />
+            Add more apps
+          </Button>
+        </PopoverContent>
+      </Popover>
+      {dialogs}
     </>
   )
 }
@@ -188,116 +186,5 @@ function StripDialogs(props: {
         onClose={close}
       />
     )
-  if (dialog?.kind === "credential")
-    return (
-      <PasteCredentialDialog
-        title={`Add credential to ${props.space.name}`}
-        description="Every chat in this space can use it."
-        owners={[{ value: `space:${props.space.id}`, label: props.space.name, glyph: "Cube" }]}
-        userId={props.userId}
-        submitLabel="Save credential"
-        onClose={close}
-      />
-    )
   return null
-}
-
-const reachOf = (credential: CredentialInfo) =>
-  credential.hosts.includes(Credential.anyHost) ? "Any website" : credential.hosts.join(", ")
-
-function Submenu(props: {
-  glyph: Glyph
-  label: string
-  count: number
-  attention: boolean
-  empty: string
-  addLabel: string
-  onAdd: () => void
-  children: ReactNode
-}) {
-  return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger>
-        <Icon glyph={props.glyph} />
-        {props.label}
-        {props.count === 0 ? null : (
-          <span className="ml-auto flex items-center gap-2 text-muted-foreground">
-            {props.count}
-            {props.attention ? <StatusDot tone="warning" label="Not connected" /> : null}
-          </span>
-        )}
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-64">
-        {props.count === 0 ? <p className="px-2 py-1.5 text-sm text-muted-foreground">{props.empty}</p> : null}
-        {props.children}
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={props.onAdd}>
-            <Icon glyph="Plus" />
-            {props.addLabel}
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  )
-}
-
-function AppMenu(props: {
-  app: Apps.Entry | undefined
-  profiles: ReadonlyArray<AppProfileInfo>
-  spaceId: string
-  onConnect: (profile: AppProfileInfo) => void
-  onNew: () => void
-  onOpen: () => void
-}) {
-  const signIn = useSignIn()
-  const name = props.app?.name ?? props.profiles[0]?.appSlug ?? ""
-  const connect = (profile: AppProfileInfo) => {
-    const missing = profile.items.filter((item) => !item.optional && item.status !== "ok")
-    const only = missing.length === 1 ? missing[0] : undefined
-    if (only && "mcp" in only.item && (only.kind === "oauth" || only.kind === "provider")) signIn.start(profile, only)
-    else props.onConnect(profile)
-  }
-  return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger>
-        <Avatar size="sm" aria-hidden className="size-5 rounded-sm after:rounded-sm">
-          <AvatarImage src={props.app?.icon} alt="" className="m-auto size-3/4 rounded-none object-contain" />
-          <AvatarFallback className="rounded-sm">{Initials.of(name)}</AvatarFallback>
-        </Avatar>
-        <span className="min-w-0 flex-1 truncate">{name}</span>
-        {props.profiles.some((profile) => Profiles.gaps(profile).length > 0) ? (
-          <StatusDot tone="warning" label="Not connected" />
-        ) : null}
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-64">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Accounts</DropdownMenuLabel>
-          {props.profiles.map((profile) => {
-            const missing = Profiles.gaps(profile).length > 0
-            return (
-              <DropdownMenuItem key={profile.id} onClick={() => (missing ? connect(profile) : props.onOpen())}>
-                {missing ? <StatusDot tone="warning" frame="icon" /> : <Icon glyph="Check" />}
-                <span className="min-w-0 flex-1 truncate">{profile.name}</span>
-                <span className="max-w-1/2 shrink-0 truncate text-xs text-muted-foreground">
-                  {Apps.caption(profile, props.spaceId)}
-                </span>
-              </DropdownMenuItem>
-            )
-          })}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={props.onNew}>
-            <Icon glyph="Plus" />
-            New account
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={props.onOpen}>
-            <Icon glyph="ArrowUpRight" />
-            Open in space
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  )
 }

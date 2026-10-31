@@ -130,7 +130,7 @@ function AttachmentActions({ className, ...props }: React.ComponentProps<"div">)
   )
 }
 
-function AttachmentAction({ className, variant, size = "icon-xs", ...props }: React.ComponentProps<typeof Button>) {
+function AttachmentAction({ className, variant, size = "icon-sm", ...props }: React.ComponentProps<typeof Button>) {
   return (
     <Button
       data-slot="attachment-action"

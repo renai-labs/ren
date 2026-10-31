@@ -17,7 +17,7 @@ export type TaskControlPresentation = "chip" | "row" | "icon"
 const placeholders = { chip: "Due date", row: "Set due date", icon: "" }
 
 const triggers = {
-  chip: { variant: "outline", size: "xs", className: "h-7 rounded-full px-3 [&_svg]:size-3.5" },
+  chip: { variant: "outline", size: "sm", className: "h-7 rounded-full px-3 [&_svg]:size-3.5" },
   row: {
     variant: "ghost",
     size: "default",
@@ -103,11 +103,11 @@ export function TaskDueDate(props: TaskDueDateProps) {
         ) : null}
         <Separator />
         <div className="flex items-center justify-between gap-2">
-          <Button variant="ghost" size="xs" className="h-6.5" disabled={blocked} onClick={() => save(today)}>
+          <Button variant="ghost" size="sm" disabled={blocked} onClick={() => save(today)}>
             Today
           </Button>
           {value ? (
-            <Button variant="ghost" size="xs" className="h-6.5" disabled={blocked} onClick={() => save("")}>
+            <Button variant="ghost" size="sm" disabled={blocked} onClick={() => save("")}>
               Clear date
             </Button>
           ) : null}
@@ -132,7 +132,7 @@ function Trigger(
       <Button
         {...rest}
         variant="ghost"
-        size="icon-xs"
+        size="icon-sm"
         aria-label={label}
         className={composeClasses("text-muted-foreground", revealOnContainerHover)}
       >

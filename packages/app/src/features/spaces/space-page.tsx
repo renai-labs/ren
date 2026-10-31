@@ -1,13 +1,5 @@
 import type { SpaceInfo } from "@ren/client"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@ren/ui/alert"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@ren/ui/breadcrumb"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import {
   DropdownMenu,
@@ -17,91 +9,33 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Icon } from "@ren/ui/icon"
-import { Button, buttonVariants } from "@ren/ui/button"
+import { Button } from "@ren/ui/button"
 import { Page } from "@ren/ui/page"
 import { Skeleton } from "@ren/ui/skeleton"
 import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Link, useNavigate, useRouteContext } from "@tanstack/react-router"
+import { useNavigate, useRouteContext, useRouterState } from "@tanstack/react-router"
 import { useState } from "react"
 import type { ReactNode } from "react"
 import { Loader } from "../../lib/loader.js"
 import { RouterContext } from "../../lib/router-context.js"
-
-const tabLink = buttonVariants({
-  variant: "ghost",
-  className:
-    "font-normal text-muted-foreground aria-[current=page]:bg-secondary aria-[current=page]:font-medium aria-[current=page]:text-foreground",
-})
+import { SpaceSections } from "./space-sections.js"
 
 export function SpacePage(props: { spaceId: string; children: ReactNode }) {
   const context = RouterContext.useRouterContext()
   const authed = useRouteContext({ from: "/_authed" })
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
   const space = useQuery({ ...context.api.space.get.queryOptions({ idOrSlug: props.spaceId }), ...Loader.required })
   const join = useMutation(context.api["space-member"].create.mutationOptions())
-  if (!space.data)
-    return (
-      <Page.Pending
-        back={<Skeleton className="h-4 w-32" />}
-        media={<Skeleton className="size-12 rounded-lg" />}
-        description={<Skeleton className="h-4 w-64" />}
-        leading={<Skeleton className="h-8 w-96 max-w-full" />}
-      />
-    )
-  const params = { spaceId: props.spaceId }
+  if (!space.data) return <Page.Pending description={<Skeleton className="h-4 w-64" />} />
   const isMember = Boolean(space.data.membershipId)
   const userId = authed.me.user.id
+  const section = SpaceSections.of(pathname)
   return (
     <Page.Root
-      back={
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink render={<Link to="/spaces" />}>Spaces</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>{space.data.name}</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-      }
-      media={
-        <span className="flex size-12 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
-          <Icon glyph={space.data.kind === "private" ? "Lock" : "Cube"} size="extra-large" />
-        </span>
-      }
-      title={space.data.name}
-      description={space.data.description ?? undefined}
+      title={section.label}
+      description={section.description(space.data.name)}
       menu={space.data.canArchive ? <SpaceMenu space={space.data} /> : undefined}
-      leading={
-        isMember ? (
-          <nav aria-label={space.data.name} className="flex flex-wrap items-center gap-1">
-            <Link to="/spaces/$spaceId" params={params} activeOptions={{ exact: true }} className={tabLink}>
-              Overview
-            </Link>
-            <Link to="/spaces/$spaceId/members" params={params} className={tabLink}>
-              Members
-              <span className="text-muted-foreground tabular-nums">{space.data.memberCount}</span>
-            </Link>
-            <Link to="/spaces/$spaceId/apps" params={params} className={tabLink}>
-              Apps
-            </Link>
-            <Link to="/spaces/$spaceId/credentials" params={params} className={tabLink}>
-              Credentials
-            </Link>
-            <Link to="/spaces/$spaceId/channels" params={params} className={tabLink}>
-              Channels
-            </Link>
-            <Link to="/spaces/$spaceId/repositories" params={params} className={tabLink}>
-              Repositories
-            </Link>
-            <Link to="/spaces/$spaceId/factory" params={params} className={tabLink}>
-              Factory
-            </Link>
-          </nav>
-        ) : undefined
-      }
     >
       {isMember ? (
         props.children

@@ -1,6 +1,5 @@
 import type { ClientCommand } from "@ren/chat"
-import type { Session } from "@ren/schema/session"
-import { Button } from "@ren/ui/button"
+import { InputGroupButton } from "@ren/ui/input-group"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +10,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { Icon } from "@ren/ui/icon"
+import { toast } from "@ren/ui/toast"
+import { IconApps, IconGitBranch, IconPaperclip, IconPlus, IconTerminal2 } from "@tabler/icons-react"
 import { Kbd } from "@ren/ui/kbd"
 import { useState } from "react"
 import { ComposerRepositories } from "./composer-repositories.js"
@@ -22,19 +22,19 @@ export function ComposerAddMenu(props: {
   commands: ReadonlyArray<ClientCommand.Suggestion>
   onCommands: () => void
   onCommand: (command: ClientCommand.Suggestion) => void
-  onMention: () => void
-  sessionID: Session.ID
+  onMention?: (() => void) | undefined
+  spaceId: string | undefined
   addRepositories?: ComposerRepositories.Dialog | undefined
 }) {
-  const space = ComposerRepositories.useSpace(props.sessionID)
+  const canAdd = ComposerRepositories.useCanAdd(props.spaceId)
   const [adding, setAdding] = useState(false)
-  const spaceId = space.spaceId
+  const spaceId = props.spaceId
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button
+            <InputGroupButton
               variant="outline"
               size="icon-sm"
               className="rounded-full data-popup-open:bg-secondary [&_svg]:transition-transform data-popup-open:[&_svg]:rotate-45"
@@ -43,9 +43,15 @@ export function ComposerAddMenu(props: {
             />
           }
         >
-          <Icon glyph="Plus" />
+          <IconPlus />
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="w-64" finalFocus={false}>
+        <DropdownMenuContent side="top" align="start" className="w-52" finalFocus={false}>
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={() => toast.add({ title: "Files can’t be attached yet" })}>
+              <IconPaperclip className="text-muted-foreground" />
+              Attach files
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
           <RunCommand
             populated={props.populated}
             commands={props.commands}
@@ -53,16 +59,16 @@ export function ComposerAddMenu(props: {
             onCommand={props.onCommand}
           />
           <DropdownMenuGroup>
-            <DropdownMenuItem onClick={props.onMention}>
-              <Icon glyph="AtSign" />
-              Mention an agent, skill or file
+            <DropdownMenuItem disabled={!props.onMention} onClick={props.onMention}>
+              <IconApps className="text-muted-foreground" />
+              Apps
               <Kbd className="ml-auto">@</Kbd>
             </DropdownMenuItem>
             {props.addRepositories && spaceId ? (
-              <DropdownMenuItem disabled={!space.canAdd} onClick={() => setAdding(true)}>
-                <Icon glyph="GitBranch" />
+              <DropdownMenuItem disabled={!canAdd} onClick={() => setAdding(true)}>
+                <IconGitBranch className="text-muted-foreground" />
                 Repositories
-                {space.canAdd ? null : (
+                {canAdd ? null : (
                   <span className="ml-auto max-w-1/2 truncate text-muted-foreground">
                     {ComposerRepositories.notAllowed}
                   </span>
@@ -89,8 +95,8 @@ function RunCommand(props: {
     return (
       <DropdownMenuSub>
         <DropdownMenuSubTrigger>
-          <Icon glyph="Developer" />
-          Run a command
+          <IconTerminal2 className="text-muted-foreground" />
+          Commands
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="w-64">
           <DropdownMenuGroup>
@@ -107,8 +113,8 @@ function RunCommand(props: {
   return (
     <DropdownMenuGroup>
       <DropdownMenuItem disabled={props.commands.length === 0} onClick={props.onCommands}>
-        <Icon glyph="Developer" />
-        Run a command
+        <IconTerminal2 className="text-muted-foreground" />
+        Commands
         <Kbd className="ml-auto">/</Kbd>
       </DropdownMenuItem>
     </DropdownMenuGroup>

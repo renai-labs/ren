@@ -31,13 +31,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./dropdown-menu.js"
-import { InputGroup, InputGroupTextarea } from "./input-group.js"
+import { InputGroup, InputGroupButton, InputGroupTextarea } from "./input-group.js"
 import { Kbd } from "./kbd.js"
 import { Spinner } from "./spinner.js"
 
-export type Layout = "stacked" | "inline"
-
-const RootContext = createContext<{ readonly listbox: string; readonly layout: Layout } | null>(null)
+const RootContext = createContext<{ readonly listbox: string } | null>(null)
 
 function useRoot() {
   const root = use(RootContext)
@@ -45,16 +43,10 @@ function useRoot() {
   return root
 }
 
-export function Root(props: {
-  label: string
-  layout: Layout
-  onSubmit: () => void
-  className?: string
-  children: ReactNode
-}) {
+export function Root(props: { label: string; onSubmit: () => void; className?: string; children: ReactNode }) {
   const listbox = useId()
   return (
-    <RootContext value={{ listbox, layout: props.layout }}>
+    <RootContext value={{ listbox }}>
       <form
         data-slot="prompt-input"
         aria-label={props.label}
@@ -71,13 +63,10 @@ export function Root(props: {
 }
 
 export function Group(props: { className?: string; children: ReactNode }) {
-  const root = useRoot()
   return (
     <InputGroup
-      data-layout={root.layout}
       className={cn(
-        "h-auto bg-card shadow-composer transition-shadow focus-within:shadow-composer-focus has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card",
-        root.layout === "stacked" ? "rounded-xl" : "min-h-12 rounded-3xl pl-1",
+        "h-auto rounded-xl bg-card shadow-composer transition-shadow focus-within:shadow-composer-focus has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card",
         props.className,
       )}
     >
@@ -96,13 +85,10 @@ export type MentionRange = {
 function Mention(props: { mention: MentionRange; text: string }) {
   const mention = props.mention
   return (
-    <span
-      data-slot="prompt-input-mention"
-      className="relative rounded-sm bg-secondary [box-decoration-break:clone] font-medium text-foreground ring-2 ring-secondary"
-    >
+    <span data-slot="prompt-input-mention" className="relative font-medium text-ring">
       <span className="text-transparent">{props.text.slice(mention.start, mention.end - mention.label.length)}</span>
       {mention.icon ? (
-        <span className="absolute top-1/2 left-0 inline-grid size-4 -translate-y-1/2 place-items-center overflow-hidden rounded-sm text-foreground [&_img]:size-4 [&_img]:object-cover [&_svg]:size-3.5">
+        <span className="absolute top-1/2 left-0 inline-grid size-4 -translate-y-1/2 place-items-center overflow-hidden rounded-sm [&_img]:size-4 [&_img]:object-cover [&_svg]:size-3.5">
           {mention.icon}
         </span>
       ) : null}
@@ -138,12 +124,8 @@ function submitOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
   form?.requestSubmit()
 }
 
-const paddingOf = (layout: Layout, size: "default" | "lg" | undefined) =>
-  cn(
-    "text-base/relaxed md:text-sm/relaxed",
-    layout === "stacked" ? "min-h-16 px-4 pt-4 pb-2" : "min-h-0 px-2 py-3",
-    layout === "stacked" && size === "lg" && "min-h-24",
-  )
+const paddingOf = (size: "default" | "lg" | undefined) =>
+  cn("min-h-16 px-4 pt-4 pb-2 text-base/relaxed md:text-sm/relaxed", size === "lg" && "min-h-24")
 
 const suggestionAttributes = (listbox: string, active: string | undefined) => ({
   "aria-autocomplete": "list" as const,
@@ -182,7 +164,7 @@ export function Textarea(
     node.focus()
     node.setSelectionRange(node.value.length, node.value.length)
   }, [focusOnMount])
-  const padding = paddingOf(root.layout, size)
+  const padding = paddingOf(size)
   return (
     <div data-slot="prompt-input-field" className="relative flex min-w-0 flex-1 self-stretch">
       {marked ? (
@@ -212,11 +194,9 @@ export function Textarea(
           onKeyDown?.(event)
           submitOnEnter(event)
         }}
-        rows={root.layout === "inline" ? 1 : undefined}
         className={cn(
           "relative max-h-60 placeholder:text-muted-foreground disabled:cursor-not-allowed",
           padding,
-          root.layout === "inline" && !props.value && "field-sizing-fixed placeholder:truncate",
           marked && "text-transparent caret-foreground",
         )}
         {...rest}
@@ -235,6 +215,7 @@ export type Suggestion = {
 
 export function Suggestions(props: {
   label: string
+  side?: "top" | "bottom"
   items: ReadonlyArray<Suggestion>
   active: string | undefined
   onActiveChange: (value: string) => void
@@ -256,7 +237,10 @@ export function Suggestions(props: {
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the text field keeps focus and points into the options, which a <select> cannot do
       role="listbox"
       aria-label={props.label}
-      className="absolute inset-x-0 bottom-full z-50 mb-2 flex max-h-72 min-h-0 flex-col overflow-y-auto overscroll-contain rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+      className={cn(
+        "absolute inset-x-0 z-50 flex max-h-72 min-h-0 flex-col overflow-y-auto overscroll-contain rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10",
+        props.side === "bottom" ? "top-full mt-2" : "bottom-full mb-2",
+      )}
     >
       {groups.map((group) => (
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- options inside a listbox group through role="group"; an <optgroup> needs a <select>
@@ -301,7 +285,7 @@ export function Submit(props: {
 }) {
   if (props.starting)
     return (
-      <Button
+      <InputGroupButton
         type="submit"
         variant="secondary"
         size="icon-sm"
@@ -311,10 +295,10 @@ export function Submit(props: {
         className="rounded-full"
       >
         <Spinner />
-      </Button>
+      </InputGroupButton>
     )
   const stop = (variant: "default" | "secondary") => (
-    <Button
+    <InputGroupButton
       variant={variant}
       size="icon-sm"
       aria-label="Stop"
@@ -325,11 +309,11 @@ export function Submit(props: {
       }}
     >
       <IconPlayerStopFilled />
-    </Button>
+    </InputGroupButton>
   )
   if (props.running && !props.content) return stop("default")
   const send = (
-    <Button
+    <InputGroupButton
       type="submit"
       variant={props.content ? "default" : "secondary"}
       size="icon-sm"
@@ -338,7 +322,7 @@ export function Submit(props: {
       disabled={props.disabled}
     >
       <IconArrowUp />
-    </Button>
+    </InputGroupButton>
   )
   if (!props.running) return send
   return (
@@ -351,7 +335,7 @@ export function Submit(props: {
 
 export function Alternate(props: { label: string; shortcut: string; description?: string; onActivate: () => void }) {
   return (
-    <Button variant="ghost" size="xs" className="h-6.5" title={props.description} onClick={props.onActivate}>
+    <Button variant="ghost" size="sm" title={props.description} onClick={props.onActivate}>
       {props.label}
       <Kbd>{props.shortcut}</Kbd>
     </Button>

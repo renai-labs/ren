@@ -11,8 +11,8 @@ import { MessageScrollerProvider, useMessageScroller, useMessageScrollerVisibili
 import { toast } from "@ren/ui/toast"
 import { IconAlertCircle, IconRestore } from "@tabler/icons-react"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { useRouteContext } from "@tanstack/react-router"
 import { DateTime, Effect, Option, SubscriptionRef } from "effect"
-import { AsyncResult } from "effect/reactivity"
 import { useDeferredValue, useState } from "react"
 import type { ReactNode } from "react"
 import { Auth } from "../../lib/auth.js"
@@ -96,7 +96,7 @@ function SessionInteraction(props: {
           <IconRestore />
           <AlertDescription>Later messages are undone. Sending a message discards them.</AlertDescription>
           <AlertAction>
-            <Button variant="outline" size="xs" onClick={props.onRedo}>
+            <Button variant="outline" size="sm" onClick={props.onRedo}>
               Restore messages
             </Button>
           </AlertAction>
@@ -214,17 +214,21 @@ function useOpenSession(input: {
   }
 }
 
+function usePrompt(sessionID: Session.ID) {
+  return ChatReact.useAction(sessionID, (opened, text: string) =>
+    Effect.flatMap(SubscriptionRef.get(opened.state), (current) => {
+      const model = current.info[sessionID]?.model
+      return opened.prompt({ id: SessionMessage.ID.create(), text, ...(model && { model }) })
+    }),
+  )
+}
+
 function useRevert(input: { sessionID: Session.ID; restore: (message: Option.Option<SessionMessage.User>) => void }) {
   const [reverting, setReverting] = useState(false)
   const revert = ChatReact.useAction(input.sessionID, (opened, messageID: SessionMessage.ID) =>
     opened.revert(messageID),
   )
-  const prompt = ChatReact.useAction(input.sessionID, (opened, text: string) =>
-    Effect.flatMap(SubscriptionRef.get(opened.state), (current) => {
-      const model = current.info[input.sessionID]?.model
-      return opened.prompt({ id: SessionMessage.ID.create(), text, ...(model && { model }) })
-    }),
-  )
+  const prompt = usePrompt(input.sessionID)
   const run = (work: () => Promise<unknown>) => {
     if (reverting) return
     setReverting(true)
@@ -253,12 +257,17 @@ function usePeople(organizationId: string | undefined, viewer: string, messages:
     enabled: shared && organizationId !== undefined,
     select: (organization) => organization.members,
   })
-  return new Map(
-    (members.data ?? []).map((member) => [
-      member.userId,
-      { name: member.user.name || member.user.email || "Member", image: member.user.image ?? undefined },
-    ]),
-  )
+  const me = useRouteContext({ from: "/_authed" }).me.user
+  return new Map([
+    ...(members.data ?? []).map(
+      (member) =>
+        [
+          member.userId,
+          { name: member.user.name || member.user.email || "Member", image: member.user.image ?? undefined },
+        ] as const,
+    ),
+    [viewer, { name: me.name || me.email, image: me.image ?? undefined }] as const,
+  ])
 }
 
 const liveOf = (info: SessionInfo.Info | undefined, session: { readonly running: boolean }): SessionCache.Live => {
@@ -266,8 +275,11 @@ const liveOf = (info: SessionInfo.Info | undefined, session: { readonly running:
   return { title: SessionTitle.display(info.title, "") || undefined, status: session.running ? "busy" : "idle" }
 }
 
-const modelNamesOf = (models: ReturnType<typeof ChatReact.useModels>) =>
-  new Map(AsyncResult.getOrElse(models, () => []).map((model) => [model.id, model.name]))
+function useModelNames(sessionID: Session.ID) {
+  const context = RouterContext.useRouterContext()
+  const models = useQuery(context.api.chat.models.queryOptions({ id: sessionID })).data ?? []
+  return new Map(models.map((model) => [model.id, model.name]))
+}
 
 function OpenFailed(props: { onRetry: () => void }) {
   return (
@@ -335,7 +347,7 @@ export function SessionChat(props: {
   const [restored, setRestored] = useState(0)
   const finder = useFind(messages, rows)
   const reveal = finder.row ?? partTarget(rows, messages, props.part) ?? Timeline.rowFor(rows, props.message)
-  const modelNames = modelNamesOf(ChatReact.useModels(props.sessionID))
+  const modelNames = useModelNames(props.sessionID)
   const inputs = useInputActions(props.sessionID)
   const openSession = useOpenSession({
     sessionID: props.sessionID,
@@ -354,6 +366,18 @@ export function SessionChat(props: {
     setRestored((count) => count + 1)
   }
   const reverter = useRevert({ sessionID: props.sessionID, restore })
+  const prompt = usePrompt(props.sessionID)
+  const interrupt = ChatReact.useAction(props.sessionID, (opened) => opened.interrupt)
+  const admin = useQuery(Auth.canAdministerOptions(RouterContext.useRouterContext().auth)).data === true
+  const [picking, setPicking] = useState(false)
+  const send = (text: string) => void prompt(text).catch(Failure.notify("Could not send your message"))
+  const problems = {
+    admin,
+    onTryAgain: send,
+    onContinue: () => send("Continue."),
+    onChangeModel: () => setPicking(true),
+    onStop: () => void interrupt().catch(Failure.notify("Could not stop Ren")),
+  }
   const onUndo = () => void undo().then(restore, Failure.notify("Could not undo the last message"))
   const onRedo = () => void redo().catch(Failure.notify("Could not restore the undone messages"))
   const onCompact = () => void compact().catch(Failure.notify("Could not compact the chat"))
@@ -383,7 +407,10 @@ export function SessionChat(props: {
   const hidden = props.child !== undefined
   return (
     <MessageScrollerProvider autoScroll>
-      <div data-slot="chat" className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+      <div
+        data-slot="chat"
+        className="relative flex min-h-0 w-full flex-1 animate-in flex-col overflow-hidden duration-200 ease-out fade-in-0 motion-reduce:animate-none"
+      >
         <div inert={hidden} className="relative flex min-h-0 flex-1 flex-col inert:invisible">
           <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2 pl-12 md:pl-3">
             <SessionHeader
@@ -433,6 +460,7 @@ export function SessionChat(props: {
               people={people}
               apps={apps}
               filesResetAt={filesResetOf(stored.data)}
+              problems={problems}
             />
           )}
           <div className="shrink-0 px-4 pb-4 md:px-6">
@@ -467,6 +495,8 @@ export function SessionChat(props: {
                   onUndo={onUndo}
                   onRedo={onRedo}
                   onCompact={onCompact}
+                  picking={picking}
+                  onPicking={setPicking}
                   addRepositories={props.addRepositories}
                 />
               )}

@@ -8,6 +8,14 @@ import { createContext, use } from "react"
 
 export type PendingAction = "queue" | "cancel"
 
+export interface Problems {
+  readonly admin: boolean
+  readonly onTryAgain?: ((text: string) => void) | undefined
+  readonly onContinue?: (() => void) | undefined
+  readonly onChangeModel?: (() => void) | undefined
+  readonly onStop?: (() => void) | undefined
+}
+
 export interface Value {
   readonly state: {
     readonly root: Session.ID
@@ -16,6 +24,7 @@ export interface Value {
     readonly reverting: boolean
     readonly detail: TimelineDetail.Detail | undefined
     readonly apps: ReadonlyArray<AppMention.App>
+    readonly modelNames: ReadonlyMap<string, string>
   }
   readonly actions: {
     readonly onRevert: ((message: SessionMessage.User) => void) | undefined
@@ -23,6 +32,7 @@ export interface Value {
     readonly onPending: ((action: PendingAction, message: SessionMessage.User) => void) | undefined
     readonly onOpenChild: (sessionID: Session.ID) => void
     readonly onOpenSession: ((sessionID: string) => void) | undefined
+    readonly problems: Problems | undefined
   }
 }
 

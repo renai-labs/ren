@@ -1,8 +1,10 @@
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
+import { IconSearch } from "@tabler/icons-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -13,6 +15,7 @@ import {
 } from "./dropdown-menu.js"
 import { Icon } from "./icon.js"
 import { InputGroupButton } from "./input-group.js"
+import { Skeleton } from "./skeleton.js"
 import { Text } from "./text.js"
 
 export type Variant = { value: string; label: string }
@@ -21,21 +24,18 @@ export type Model = { value: string; label: string; group: string; icon?: ReactN
 
 export type Selection = { model: string; variant?: string }
 
+export type Featured = { label: string; hint: string; model: string; variant?: string }
+
 export type ModelPickerProps = {
   models: readonly Model[]
+  featured?: readonly Featured[]
   value: Selection | undefined
   onValueChange: (value: Selection) => void
   disabled?: boolean
   loading?: boolean
-  fallback?: string
   open?: boolean | undefined
   onOpenChange?: ((open: boolean) => void) | undefined
 }
-
-const defaultVariant = "default"
-
-const select = (model: Model, variant: string): Selection =>
-  variant === defaultVariant ? { model: model.value } : { model: model.value, variant }
 
 function triggerLabel(name: string | undefined, effort: string | undefined) {
   if (!name) return "Model"
@@ -44,10 +44,9 @@ function triggerLabel(name: string | undefined, effort: string | undefined) {
 }
 
 const describe = (props: ModelPickerProps, selected: Model | undefined) => {
-  if (props.loading) return { name: "Loading…", effort: undefined }
-  if (!selected?.variants.length) return { name: selected?.label ?? props.fallback, effort: undefined }
+  if (!selected?.variants.length) return { name: selected?.label, effort: undefined }
   const variant = selected.variants.find((each) => each.value === props.value?.variant)
-  return { name: selected.label, effort: variant?.label ?? "Default" }
+  return { name: selected.label, effort: variant?.label }
 }
 
 export function ModelPicker(props: ModelPickerProps) {
@@ -55,46 +54,105 @@ export function ModelPicker(props: ModelPickerProps) {
   const shown = describe(props, selected)
   const name = shown.name
   const effort = shown.effort
-  const groups = [...Map.groupBy(props.models, (model) => model.group)]
+  const [query, setQuery] = useState("")
+  const needle = query.trim().toLowerCase()
+  const matches = (model: Model) => model.label.toLowerCase().includes(needle)
+  const groups = [...Map.groupBy(props.models.filter(matches), (model) => model.group)]
+  const byValue = new Map(props.models.filter(matches).map((model) => [model.value, model]))
+  if (props.loading || !selected) return <Skeleton className="h-7 w-44 rounded-md" />
   return (
-    <DropdownMenu open={props.open} onOpenChange={(open) => props.onOpenChange?.(open)}>
+    <DropdownMenu
+      open={props.open}
+      onOpenChange={(open) => {
+        if (!open) setQuery("")
+        props.onOpenChange?.(open)
+      }}
+    >
       <DropdownMenuTrigger
-        disabled={props.disabled === true || props.loading === true || props.models.length === 0}
+        disabled={props.disabled === true}
         aria-label={triggerLabel(name, effort)}
         render={<InputGroupButton size="sm" className="max-w-72 min-w-0 pr-1.5 font-normal text-muted-foreground" />}
       >
-        <TriggerContent icon={props.loading ? undefined : selected?.icon} name={name} effort={effort} />
-        <Icon glyph="ChevronDown" data-icon="inline-end" />
+        <TriggerContent icon={selected.icon} name={name} effort={effort} />
+        <Icon glyph="ChevronDown" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-72">
-        {groups.map(([group, models]) => (
-          <DropdownMenuGroup key={group}>
-            <DropdownMenuLabel className="flex items-center gap-2">
-              {models.at(0)?.icon}
-              {group}
-            </DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={selected?.group === group ? selected.value : ""}
-              onValueChange={(value) => {
-                const model = props.models.find((item) => item.value === value)
-                if (model) props.onValueChange(select(model, defaultVariant))
-              }}
-            >
-              {models.map((model) => (
-                <Choice
-                  key={model.value}
-                  model={model}
-                  selected={model === selected}
-                  variant={props.value?.variant}
-                  effort={model === selected ? effort : undefined}
-                  onValueChange={props.onValueChange}
-                />
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuGroup>
-        ))}
+      <DropdownMenuContent side="top" align="start" className="w-80 p-0">
+        <label className="flex h-10 items-center gap-2 px-3 text-muted-foreground">
+          <IconSearch className="size-4 shrink-0" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key.length === 1 || event.key === "Backspace") event.stopPropagation()
+            }}
+            placeholder="Search models…"
+            aria-label="Search models"
+            className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground caret-foreground outline-none placeholder:text-muted-foreground focus-visible:placeholder:text-muted-foreground/60"
+          />
+        </label>
+        <div className="h-80 overflow-y-auto overscroll-contain p-1">
+          {props.featured?.length ? (
+            <FeaturedGroup featured={props.featured} byValue={byValue} onValueChange={props.onValueChange} />
+          ) : null}
+          {groups.map(([group, models]) => (
+            <DropdownMenuGroup key={group}>
+              <DropdownMenuLabel>{group}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={selected.group === group ? selected.value : ""}
+                onValueChange={(value) => {
+                  const model = props.models.find((item) => item.value === value)
+                  if (model) props.onValueChange({ model: model.value })
+                }}
+              >
+                {models.map((model) => (
+                  <Choice
+                    key={model.value}
+                    model={model}
+                    selected={model === selected}
+                    variant={props.value?.variant}
+                    onValueChange={props.onValueChange}
+                  />
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+          ))}
+          {groups.length === 0 ? (
+            <p className="px-2 py-6 text-center text-sm text-muted-foreground">No models match</p>
+          ) : null}
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function FeaturedGroup(props: {
+  featured: readonly Featured[]
+  byValue: ReadonlyMap<string, Model>
+  onValueChange: (value: Selection) => void
+}) {
+  return (
+    <DropdownMenuGroup>
+      {props.featured.flatMap((each) => {
+        const model = props.byValue.get(each.model)
+        if (!model) return []
+        return [
+          <DropdownMenuItem
+            key={each.label}
+            className="items-center gap-2.5 py-2"
+            onClick={() => props.onValueChange({ model: model.value, ...(each.variant && { variant: each.variant }) })}
+          >
+            {model.icon}
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex h-5 min-w-0 items-center gap-1.5">
+                <span className="font-medium">{each.label}</span>
+                <span className="truncate text-muted-foreground">{model.label}</span>
+              </span>
+              <span className="text-xs text-muted-foreground">{each.hint}</span>
+            </span>
+          </DropdownMenuItem>,
+        ]
+      })}
+    </DropdownMenuGroup>
   )
 }
 
@@ -125,38 +183,30 @@ function Choice(props: {
   model: Model
   selected: boolean
   variant: string | undefined
-  effort: string | undefined
   onValueChange: (value: Selection) => void
 }) {
   if (props.model.variants.length === 0)
     return (
       <DropdownMenuRadioItem value={props.model.value} closeOnClick>
+        {props.model.icon}
         {props.model.label}
       </DropdownMenuRadioItem>
     )
   return (
     <DropdownMenuSub>
-      <DropdownMenuSubTrigger className={props.selected ? "font-medium" : undefined}>
+      <DropdownMenuSubTrigger>
+        {props.model.icon}
         <span className="min-w-0 flex-1 truncate">{props.model.label}</span>
-        {props.selected ? (
-          <span className="flex shrink-0 items-center gap-1 text-xs font-normal text-muted-foreground">
-            {props.effort}
-            <Icon glyph="Check" tone="primary" />
-          </span>
-        ) : null}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="min-w-40">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Reasoning effort</DropdownMenuLabel>
           <DropdownMenuRadioGroup
-            value={props.selected ? (props.variant ?? defaultVariant) : ""}
+            value={props.selected ? (props.variant ?? "") : ""}
             onValueChange={(variant) => {
-              if (typeof variant === "string") props.onValueChange(select(props.model, variant))
+              if (typeof variant === "string") props.onValueChange({ model: props.model.value, variant })
             }}
           >
-            <DropdownMenuRadioItem value={defaultVariant} closeOnClick>
-              Default
-            </DropdownMenuRadioItem>
             {props.model.variants.map((variant) => (
               <DropdownMenuRadioItem key={variant.value} value={variant.value} closeOnClick>
                 {variant.label}

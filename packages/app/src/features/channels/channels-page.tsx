@@ -161,7 +161,7 @@ function ProviderAction(props: {
       <Link
         to="/settings/channels/$provider"
         params={{ provider: props.provider.id }}
-        className={buttonVariants({ variant: "ghost", size: "xs", className: "h-6.5 text-muted-foreground" })}
+        className={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground" })}
       >
         {label}
       </Link>
@@ -169,8 +169,8 @@ function ProviderAction(props: {
   return (
     <Button
       variant="ghost"
-      size="xs"
-      className="h-6.5 text-muted-foreground"
+      size="sm"
+      className="text-muted-foreground"
       onClick={props.install && props.attention ? props.attention.act : props.onInstall}
     >
       {label}

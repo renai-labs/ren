@@ -19,7 +19,7 @@ export function Markdown(props: {
     <div
       data-slot="markdown"
       data-size={size}
-      className={cn("min-w-0 text-foreground", size === "lg" ? "text-base" : "text-sm", props.className)}
+      className={cn("min-w-0 text-foreground", size === "lg" ? "text-base leading-[1.7]" : "text-sm", props.className)}
     >
       <Suspense fallback={<p className="whitespace-pre-wrap">{props.children}</p>}>
         <MarkdownRenderer

@@ -1,19 +1,6 @@
 import { Task } from "@ren/schema/task"
 import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@ren/ui/dropdown-menu"
 import { Field, FieldLabel } from "@ren/ui/field"
 import { Icon } from "@ren/ui/icon"
 import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
@@ -32,6 +19,7 @@ import { Schema } from "effect"
 import { PersonAvatar, SpaceAvatar } from "./task-controls.js"
 import { TaskSearch } from "./task-search.js"
 import { TaskView } from "./task-view.js"
+import { FilterMenu } from "../../components/filter-menu.js"
 
 type ViewProps = { view: TaskView.View; onChange: (view: TaskView.View) => void }
 type FilterProps = ViewProps & { options: TaskView.FilterOptions }
@@ -75,7 +63,7 @@ export function TasksToolbar(props: FilterProps) {
         placeholder="Search tasks"
         size="compact"
       />
-      <FilterMenu {...props} />
+      <TaskFilterMenu {...props} />
       <DisplayPopover view={props.view} onChange={props.onChange} />
     </>
   )
@@ -104,88 +92,36 @@ function OptionIcon(props: { property: TaskView.FilterProperty; option: TaskView
   return <Icon glyph="Bot" tone="secondary" />
 }
 
-function FilterMenu(props: FilterProps) {
-  const modified = TaskView.filterProperties.some((property) => !TaskView.isDefaultFilter(props.view.filters, property))
+function TaskFilterMenu(props: FilterProps) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="relative text-muted-foreground"
-            aria-label={modified ? "Filter tasks, filters on" : "Filter tasks"}
-          />
-        }
-      >
-        <Icon glyph="ListFilter" />
-        {modified ? (
-          <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-ring ring-2 ring-background" />
-        ) : null}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="mb-1">Properties</DropdownMenuLabel>
-          {menuProperties.map((property) => {
-            const values = props.view.filters[property]
-            return (
-              <DropdownMenuSub key={property}>
-                <DropdownMenuSubTrigger className="h-9 gap-3 px-3">
-                  {propertyGlyphs[property]}
-                  <span className="flex-1">{propertyLabels[property]}</span>
-                  <span className="text-muted-foreground">
-                    {values.length > 0 ? `${values.length} selected` : "Any"}
-                  </span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-60">
-                  <FilterOptions {...props} property={property} />
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            )
-          })}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator className="mx-0 my-2" />
-        <DropdownMenuGroup>
-          <DropdownMenuItem
-            className="h-9 gap-3 px-3"
-            disabled={!modified}
-            onClick={() => props.onChange({ ...props.view, filters: TaskSearch.defaultFilters })}
-          >
-            <Icon glyph="Restore" />
-            Reset to default
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
-function FilterOptions(props: FilterProps & { property: TaskView.FilterProperty }) {
-  const property = props.property
-  const values = props.view.filters[property]
-  if (props.options[property].length === 0)
-    return <div className="px-2 py-1.5 text-sm text-muted-foreground">No options</div>
-  return (
-    <DropdownMenuGroup>
-      {props.options[property].map((option) => (
-        <DropdownMenuCheckboxItem
-          key={option.value}
-          checked={values.includes(option.value)}
-          onCheckedChange={(checked) =>
-            props.onChange({
-              ...props.view,
-              filters: {
-                ...props.view.filters,
-                [property]: checked ? [...values, option.value] : values.filter((value) => value !== option.value),
-              },
-            })
-          }
-        >
-          <OptionIcon property={property} option={option} />
-          {option.label}
-        </DropdownMenuCheckboxItem>
-      ))}
-    </DropdownMenuGroup>
+    <FilterMenu
+      label="Filter tasks"
+      properties={menuProperties.map((property) => ({
+        key: property,
+        label: propertyLabels[property],
+        icon: propertyGlyphs[property],
+        options: props.options[property].map((option) => ({
+          value: option.value,
+          label: option.label,
+          icon: <OptionIcon property={property} option={option} />,
+        })),
+      }))}
+      values={props.view.filters}
+      modified={TaskView.filterProperties.some((property) => !TaskView.isDefaultFilter(props.view.filters, property))}
+      onToggle={(change) => {
+        const property = menuProperties.find((each) => each === change.key)
+        if (!property) return
+        const values = props.view.filters[property]
+        props.onChange({
+          ...props.view,
+          filters: {
+            ...props.view.filters,
+            [property]: change.checked ? [...values, change.value] : values.filter((each) => each !== change.value),
+          },
+        })
+      }}
+      onReset={() => props.onChange({ ...props.view, filters: TaskSearch.defaultFilters })}
+    />
   )
 }
 
@@ -342,8 +278,8 @@ function PropertyToggles(props: ViewProps) {
             <Button
               key={property}
               variant={shown ? "secondary" : "outline"}
-              size="xs"
-              className="h-6.5 rounded-full"
+              size="sm"
+              className="rounded-full"
               aria-pressed={shown}
               onClick={() =>
                 props.onChange({
@@ -386,7 +322,7 @@ export function ActiveFilters(props: FilterProps) {
               </Text>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 className="size-5 rounded-full text-muted-foreground"
                 aria-label={`Remove ${propertyLabels[property]} filter: ${option.label}`}
                 onClick={() =>
@@ -407,8 +343,8 @@ export function ActiveFilters(props: FilterProps) {
       })}
       <Button
         variant="ghost"
-        size="xs"
-        className="h-6.5 text-muted-foreground"
+        size="sm"
+        className="text-muted-foreground"
         onClick={() => props.onChange({ ...props.view, filters: TaskSearch.defaultFilters })}
       >
         Clear filters

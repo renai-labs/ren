@@ -2,6 +2,7 @@ import { createFileRoute, redirect, useRouterState } from "@tanstack/react-route
 import { Effect, Schema } from "effect"
 import { NewChat } from "../../../features/session/new-chat.js"
 import { Loader } from "../../../lib/loader.js"
+import { addRepositories } from "./-add-repositories.js"
 
 export const Route = createFileRoute("/_authed/_shell/")({
   validateSearch: Schema.toStandardSchemaV1(
@@ -31,6 +32,6 @@ export const Route = createFileRoute("/_authed/_shell/")({
 
 function NewChatRoute() {
   const context = Route.useRouteContext()
-  const visit = useRouterState({ select: (state) => state.location.state.__TSR_key })
-  return <NewChat key={visit} userId={context.me.user.id} />
+  const visit = useRouterState({ select: (state) => (state.resolvedLocation ?? state.location).state.__TSR_key })
+  return <NewChat key={visit} userId={context.me.user.id} addRepositories={addRepositories} />
 }
