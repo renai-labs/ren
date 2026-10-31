@@ -5,6 +5,7 @@ import { Auth } from "./auth.js"
 import { AppIdentity } from "./app/identity.js"
 import { Credential } from "./credential.js"
 import { Mcp } from "./mcp.js"
+import { Packages } from "./packages.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
 import { Skill } from "./skill.js"
@@ -14,34 +15,10 @@ import { Webhook } from "./webhook.js"
 export const ID = AppIdentity.ID
 export type ID = typeof ID.Type
 
-const packageList = (title: string, example: string) =>
-  Schema.optionalKey(Schema.Array(Schema.NonEmptyString).annotate({ title, examples: [[example]] }))
-
-export interface Packages extends Schema.Schema.Type<typeof Packages> {}
-export const Packages = Schema.Struct({
-  apt: packageList("APT packages", "ffmpeg"),
-  npm: packageList("npm packages", "typescript"),
-  pip: packageList("pip packages", "requests"),
-  go: packageList("Go modules", "golang.org/x/tools/gopls@latest"),
-}).annotate({ identifier: "App.Packages", title: "Packages", description: "One per line." })
-
-export interface Environment extends Schema.Schema.Type<typeof Environment> {}
-export const Environment = Schema.Struct({
-  packages: Packages.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
-  buildCommands: Schema.Array(Schema.NonEmptyString.check(Schema.isMaxLength(4096)))
-    .check(Schema.isMaxLength(50))
-    .annotate({
-      title: "Build commands",
-      description: "Run in order after the packages. One per line.",
-      examples: [["corepack enable"]],
-    })
-    .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
-}).annotate({ identifier: "App.Environment" })
-
 export interface Definition extends Schema.Schema.Type<typeof Definition> {}
 export const Definition = Schema.Struct({
   requiredCredentials: Schema.Array(Credential.Requirement).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
-  environment: Schema.optionalKey(Environment),
+  environment: Schema.optionalKey(Packages.Setup),
   skills: Schema.Record(Primitive.Slug, Skill.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   mcps: Schema.Record(Primitive.Slug, Mcp.Declaration)
     .check(
@@ -103,7 +80,7 @@ export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
   ...Declaration.fields,
   icon: Schema.optional(Primitive.HttpsUrl),
-  environment: Schema.optional(Environment),
+  environment: Schema.optional(Packages.Setup),
   slug: Primitive.Slug,
   ownerSpaceId: Space.ID,
 }).annotate({ identifier: "App.CreateInput" })
@@ -111,7 +88,7 @@ export const CreateInput = Schema.Struct({
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
   ...Definition.fields,
-  environment: Schema.optional(Environment),
+  environment: Schema.optional(Packages.Setup),
   name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NonEmptyString),
   icon: Schema.optional(Schema.NullOr(Primitive.HttpsUrl)),

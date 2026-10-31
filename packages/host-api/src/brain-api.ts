@@ -1,6 +1,7 @@
 import { Brain } from "@ren/schema/brain"
 import { Bundle } from "@ren/schema/bundle"
 import { Hand } from "@ren/schema/hand"
+import { Packages } from "@ren/schema/packages"
 import { Session } from "@ren/schema/session"
 import { Schema, Struct } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
@@ -45,18 +46,12 @@ export const State = Schema.Struct({
   }),
 }).annotate({ identifier: "Brain.State" })
 
-// oxlint-disable-next-line ren/no-comments -- A command that changes a running machine in place, as root or as the machine's user.
-export interface Step extends Schema.Schema.Type<typeof Step> {}
-export const Step = Schema.Struct({ command: Schema.String, user: Schema.Literals(["root", "user"]) }).annotate({
-  identifier: "Brain.Step",
-})
-
 export const UpdateBody = Schema.Struct({
   bundles: Schema.Array(Bundle.Download).annotate({
     description: "The current bundles, the dependencies first, each with a link that downloads it.",
   }),
   steps: Schema.optionalKey(
-    Schema.Array(Step).annotate({
+    Schema.Array(Packages.Step).annotate({
       description:
         "Commands that bring the machine to its template’s new config in place, in order: package installs and build commands. They run before the bundles unpack.",
     }),

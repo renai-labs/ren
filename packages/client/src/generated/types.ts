@@ -98,7 +98,7 @@ export type CredentialOAuthApp = { kind: "oauth_app"; name: string; description?
 
 export type CredentialOption = { label: string; value: string; hint?: string }
 
-export type AppPackages = { apt?: Array<string>; npm?: Array<string>; pip?: Array<string>; go?: Array<string> }
+export type PackagesInfo = { apt?: Array<string>; npm?: Array<string>; pip?: Array<string>; go?: Array<string> }
 
 export type CredentialEnvName = string
 
@@ -616,7 +616,7 @@ export type CredentialSecret = { kind: "secret"; name: CredentialFieldName; desc
 
 export type CredentialWhen = { name: CredentialFieldName; op: "eq" | "neq"; value: string }
 
-export type AppEnvironment = { packages?: AppPackages; buildCommands?: Array<string> }
+export type PackagesSetup = { packages?: PackagesInfo; buildCommands?: Array<string> }
 
 export type CredentialName = CredentialEnvName | CredentialFieldName
 
@@ -1789,7 +1789,7 @@ export type AppInfo = {
   description: string
   icon: string | null
   requiredCredentials?: Array<CredentialRequirement>
-  environment?: AppEnvironment
+  environment?: PackagesSetup
   skills: { [x: PrimitiveSlug]: SkillInfo }
   mcps: { [x: PrimitiveSlug]: McpInfo }
   dependsOn?: Array<PrimitiveSlug>
@@ -1809,7 +1809,7 @@ export type InfraPulledApp = {
   dependsOn?: Array<PrimitiveSlug>
   webhooks?: { [x: PrimitiveSlug]: WebhookPreset }
   icon?: string
-  environment?: AppEnvironment
+  environment?: PackagesSetup
 }
 
 export type SessionMessageContent = SessionMessageText | SessionMessageReasoning | SessionMessageTool
