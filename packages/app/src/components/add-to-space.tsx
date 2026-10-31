@@ -1,6 +1,19 @@
-import type { AppProfileInfo, SpaceInfo } from "@ren/client"
+import { useState } from "react"
+import type { AppProfileInfo } from "@ren/client"
+import { useMutation } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
+import { IconCheck, IconChevronDown, IconCube, IconPlus } from "@tabler/icons-react"
+import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@ren/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,114 +22,103 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { Icon } from "@ren/ui/icon"
-import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@ren/ui/item"
-import { Spinner } from "@ren/ui/spinner"
-import { toast } from "@ren/ui/toast"
-import { useMutation } from "@tanstack/react-query"
-import { useNavigate } from "@tanstack/react-router"
-import { Fragment, useState } from "react"
+import { Row, Rows } from "./page.js"
+import { useCatalog } from "../lib/use-catalog.js"
+import { useSpaces } from "../lib/use-spaces.js"
+import { errorMessage } from "../lib/errors.js"
+import { listsSpace, reach, type CatalogApp } from "../lib/apps.js"
 import { RouterContext } from "../lib/router-context.js"
-import { Apps } from "./apps.js"
 
-type Target = Pick<SpaceInfo, "id" | "name">
+type App = CatalogApp
+type AppProfile = AppProfileInfo
 
-// oxlint-disable-next-line ren/no-comments -- A space uses an app by reaching one of its profiles: add the space to a shared profile, or create one named after the space.
-function useAddition(props: {
-  app: Apps.Entry
-  profiles: ReadonlyArray<AppProfileInfo>
-  onAdded: (profileId: string) => void
-}) {
-  const context = RouterContext.useRouterContext()
-  const create = useMutation(context.api["app-profile"].create.mutationOptions())
-  const access = useMutation(context.api["app-profile"].access.mutationOptions())
+type Target = { id: string; name: string }
+
+export type Added = (added: { app: App; profileId?: string | undefined; space: Target }) => void
+
+export function useAddition(app: App, onAdded: Added) {
+  const { api } = RouterContext.useRouterContext()
   const [choosing, setChoosing] = useState<Target>()
-  const shared = props.profiles.filter((profile) => profile.kind === "shared")
-  const done = (profileId: string) => {
+  const catalog = useCatalog()
+  const access = useMutation({ ...api["app-profile"].access.mutationOptions() })
+  const shared = catalog.profilesOf(app.id).filter((profile) => profile.kind === "shared")
+  const done = (profileId: string | undefined, space: Target) => {
     setChoosing(undefined)
-    props.onAdded(profileId)
-  }
-  const failed = (error: Error) =>
-    toast.add({ type: "error", title: `Couldn’t add ${props.app.name}`, description: error.message })
-  const createFor = (space: Target) =>
-    create.mutate(
+    if (!profileId) {
+      onAdded({ app, space })
+      return
+    }
+    access.mutate(
+      { id: profileId, add: [space.id] },
       {
-        appId: props.app.id,
-        name: space.name,
-        slug: Apps.freeSlug(
-          space.name,
-          props.profiles.map((profile) => profile.slug),
-        ),
-        kind: "shared",
-        spaceIds: [space.id],
+        onSuccess: () => {
+          toast.success(`${app.name} added to ${space.name}`)
+          onAdded({ app, profileId, space })
+        },
+        onError: (error) => toast.error(`Couldn’t add ${app.name}`, { description: errorMessage(error) }),
       },
-      { onSuccess: (created) => done(created.id), onError: failed },
     )
-  const addTo = (profile: AppProfileInfo, space: Target) =>
-    access.mutate({ id: profile.id, add: [space.id] }, { onSuccess: () => done(profile.id), onError: failed })
+  }
   return {
-    add: (space: Target) => (shared.length > 0 ? setChoosing(space) : createFor(space)),
-    pending: create.isPending || access.isPending,
+    add: (space: Target) => (shared.length > 0 ? setChoosing(space) : done(undefined, space)),
     dialog: choosing ? (
       <ChooseProfile
-        app={props.app}
+        app={app}
         space={choosing}
         shared={shared}
-        pending={create.isPending || access.isPending}
-        onUse={(profile) => addTo(profile, choosing)}
-        onCreate={() => createFor(choosing)}
+        onUse={(profile) => done(profile.id, choosing)}
+        onCreate={() => done(undefined, choosing)}
         onClose={() => setChoosing(undefined)}
       />
     ) : null,
   }
 }
 
-export function AddToSpace(props: {
-  app: Apps.Entry
-  profiles: ReadonlyArray<AppProfileInfo>
-  spaces: ReadonlyArray<SpaceInfo>
-  appearance?: "primary" | "secondary"
-  onAdded: (profileId: string) => void
-}) {
+export function AddToSpace(props: { app: App; primary?: boolean; onAdded: Added }) {
   const navigate = useNavigate()
-  const addition = useAddition(props)
+  const addition = useAddition(props.app, props.onAdded)
+  const profiles = useCatalog().profilesOf(props.app.id)
+  const yourSpaces = useSpaces().joined
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <Button
-              variant={props.appearance === "primary" ? "default" : "outline"}
-              size={props.appearance === "primary" ? "default" : "xs"}
-              className={props.appearance === "primary" ? undefined : "h-6.5"}
-              disabled={addition.pending}
+              variant={props.primary ? "default" : "ghost"}
+              size={props.primary ? "default" : "icon"}
+              className={props.primary ? undefined : "text-muted-foreground"}
               aria-label={`Add ${props.app.name} to a space`}
             />
           }
         >
-          {addition.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
-          Add to space
-          <Icon glyph="ChevronDown" data-icon="inline-end" />
+          {props.primary ? (
+            <>
+              Add to space
+              <IconChevronDown />
+            </>
+          ) : (
+            <IconPlus />
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuGroup>
             <DropdownMenuLabel>Your spaces</DropdownMenuLabel>
-            {props.spaces.map((space) => {
-              const added = props.profiles.some((profile) => Apps.lists(profile, space))
+            {yourSpaces.map((space) => {
+              const added = profiles.some((profile) => listsSpace(profile, space.id))
               return (
                 <DropdownMenuItem
                   key={space.id}
                   onClick={() =>
                     added
                       ? void navigate({
-                          to: "/spaces/$spaceId/apps",
+                          to: "/spaces/$spaceId",
                           params: { spaceId: space.id },
-                          search: { app: props.app.id },
                         })
                       : addition.add(space)
                   }
                 >
-                  <Icon glyph={added ? "Check" : "Cube"} />
+                  {added ? <IconCheck /> : <IconCube />}
                   {space.name}
                 </DropdownMenuItem>
               )
@@ -129,44 +131,11 @@ export function AddToSpace(props: {
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- The same for one space, as the composer's Add an app dialog offers it.
-export function AddHere(props: {
-  app: Apps.Entry
-  profiles: ReadonlyArray<AppProfileInfo>
-  space: Target
-  onAdded: (profileId: string) => void
-}) {
-  const addition = useAddition(props)
-  if (props.profiles.some((profile) => Apps.lists(profile, props.space)))
-    return (
-      <Button variant="ghost" size="xs" className="h-6.5" disabled>
-        <Icon glyph="Check" data-icon="inline-start" />
-        Added
-      </Button>
-    )
-  return (
-    <>
-      <Button
-        variant="outline"
-        size="xs"
-        className="h-6.5"
-        disabled={addition.pending}
-        onClick={() => addition.add(props.space)}
-      >
-        {addition.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
-        Add
-      </Button>
-      {addition.dialog}
-    </>
-  )
-}
-
 function ChooseProfile(props: {
-  app: Apps.Entry
+  app: App
   space: Target
-  shared: ReadonlyArray<AppProfileInfo>
-  pending: boolean
-  onUse: (profile: AppProfileInfo) => void
+  shared: ReadonlyArray<AppProfile>
+  onUse: (profile: AppProfile) => void
   onCreate: () => void
   onClose: () => void
 }) {
@@ -174,49 +143,35 @@ function ChooseProfile(props: {
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !props.pending) props.onClose()
+        if (!open) props.onClose()
       }}
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{`Add ${props.app.name} to ${props.space.name}`}</DialogTitle>
+          <DialogTitle>
+            Add {props.app.name} to {props.space.name}
+          </DialogTitle>
           <DialogDescription>Use an account already connected, or connect a new one for this space.</DialogDescription>
         </DialogHeader>
-        <ItemGroup aria-label="Accounts" className="gap-0 rounded-xl border bg-card">
-          {props.shared.map((profile) => (
-            <Fragment key={profile.id}>
-              <Item render={<li />} className="min-h-14 gap-x-6 gap-y-2 px-4 py-3">
-                <ItemContent>
-                  <ItemTitle className="leading-5">{profile.name}</ItemTitle>
-                  <ItemDescription className="text-xs">{Apps.reach(profile)}</ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    className="h-6.5"
-                    disabled={props.pending}
-                    onClick={() => props.onUse(profile)}
-                  >
-                    Use
-                  </Button>
-                </ItemActions>
-              </Item>
-              <ItemSeparator className="my-0" />
-            </Fragment>
-          ))}
-          <Item render={<li />} className="min-h-14 gap-x-6 gap-y-2 px-4 py-3">
-            <ItemContent>
-              <ItemTitle className="leading-5">{`New account for ${props.space.name}`}</ItemTitle>
-              <ItemDescription className="text-xs">Only this space uses it.</ItemDescription>
-            </ItemContent>
-            <ItemActions>
-              <Button size="xs" className="h-6.5" disabled={props.pending} onClick={props.onCreate}>
+        <Rows>
+          {[
+            ...props.shared.map((profile) => (
+              <Row key={profile.id} title={profile.name} description={reach(profile)}>
+                <Button variant="outline" size="sm" onClick={() => props.onUse(profile)}>
+                  Use
+                </Button>
+              </Row>
+            )),
+            <Row key="new" title={`New account for ${props.space.name}`} description="Only this space uses it.">
+              <Button size="sm" onClick={props.onCreate}>
                 Create
               </Button>
-            </ItemActions>
-          </Item>
-        </ItemGroup>
+            </Row>,
+          ]}
+        </Rows>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
