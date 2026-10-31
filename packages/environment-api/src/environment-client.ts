@@ -19,6 +19,7 @@ const answerWithinFor: Readonly<Record<string, Duration.Duration>> = {
   "files.unpack": Duration.minutes(10),
   "drives.mount": Duration.minutes(1),
   "drives.refresh": Duration.minutes(1),
+  "setup.run": Duration.minutes(15),
 } satisfies Partial<Record<RpcGroup.Rpcs<typeof EnvironmentApi.Rpcs>["_tag"], Duration.Duration>>
 
 const isUnauthorizedResponse = (error: unknown) =>

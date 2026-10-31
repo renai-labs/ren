@@ -24,12 +24,14 @@ import {
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { constants } from "node:fs"
 import { access, mkdir, open, realpath } from "node:fs/promises"
-import { dirname, resolve } from "node:path"
+import { tmpdir } from "node:os"
+import { dirname, join, resolve } from "node:path"
 import manifest from "../package.json"
 import { Executor } from "./executor.js"
 import { SandboxArchive } from "./sandbox/archive.js"
 import { SandboxDrives } from "./sandbox/drives.js"
 import { SandboxFiles } from "./sandbox/files.js"
+import { SandboxSetup } from "./sandbox/setup.js"
 import { OutputLog } from "./sandbox/output-log.js"
 
 const exitedLimitBytes = 64 * 1024 * 1024
@@ -67,6 +69,7 @@ export const layer = Layer.effect(
       environmentId: Config.schema(Environment.ID, ExecutorVariables.environmentId),
       workspaceDirectory: Config.String(workspaceVariable).pipe(Config.withDefault(process.cwd())),
       shell: Config.option(Config.String("SHELL")),
+      setupDirectory: Config.String("EXECUTOR_SETUP_DIRECTORY").pipe(Config.withDefault(join(tmpdir(), "ren-setup"))),
     })
     const workspace = yield* Effect.promise(() => realpath(resolve(config.workspaceDirectory)))
     const shells = yield* Effect.filter(
@@ -283,6 +286,7 @@ export const layer = Layer.effect(
       ...SandboxFiles.make(workspace),
       unpack: SandboxArchive.unpack(workspace),
       ...SandboxDrives.make(workspace),
+      setup: SandboxSetup.make({ spawner, workspace, directory: config.setupDirectory }),
     })
   }),
 )

@@ -76,6 +76,9 @@ export interface Interface {
   ) => Effect.Effect<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError>
   readonly mount: (input: EnvironmentApi.MountInput) => Effect.Effect<void, EnvironmentApi.MountError>
   readonly refresh: (input: EnvironmentApi.RefreshInput) => Effect.Effect<void, EnvironmentApi.MountError>
+  readonly setup: (
+    entries: ReadonlyArray<EnvironmentApi.SetupEntry>,
+  ) => Effect.Effect<void, EnvironmentApi.SetupFailedError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/executor/Executor") {}
