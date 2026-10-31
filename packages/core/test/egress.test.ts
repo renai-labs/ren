@@ -22,6 +22,7 @@ import { CredentialRefresh } from "../src/credential-refresh.js"
 import { CredentialSource } from "../src/credential-source.js"
 import { Credentials } from "../src/credentials.js"
 import { Drives } from "../src/drives.js"
+import { Integrations } from "../src/integrations.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { Egress } from "../src/egress.js"
 import { EgressControl } from "../src/egress-control.js"
@@ -159,6 +160,7 @@ const it = testEffect(
         models,
         PersonCredentials.layer,
         Drives.layer,
+        Integrations.layer,
       ),
     ),
     Layer.provideMerge(

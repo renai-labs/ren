@@ -34,6 +34,12 @@ export const execution = (
     dependsOn: [...new Set(definition.dependsOn)].toSorted(),
   })
 
+// oxlint-disable-next-line ren/no-comments -- Only a registry app declares a managed MCP (integrations spec, decision 1): an org could otherwise send Ren's integrations token to a server of its own choice.
+export const refuseManaged = (mcps: App.Definition["mcps"]) =>
+  Object.values(mcps).some((mcp) => mcp.transport.type === "managed")
+    ? Effect.fail(new Primitive.Invalid({ message: "Only a registry app can declare a managed MCP." }))
+    : Effect.void
+
 export const dependencies = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   access: Access.Interface,

@@ -31,7 +31,6 @@ import { Integrations } from "./integrations.js"
 import { McpProvider } from "./mcp-provider.js"
 import { Models } from "./models.js"
 import { SessionPolicy } from "./session/policy.js"
-import { Signer } from "./signer.js"
 
 export type Value =
   | { readonly type: "key"; readonly value: Redacted.Redacted }
@@ -149,10 +148,6 @@ const ttlUntil = (expiresAtMillis: number, now: number) =>
 const ren = "REN"
 const models = "MODELS"
 const person = Models.personLabel
-const integrations = Integrations.label
-
-// oxlint-disable-next-line ren/no-comments -- One hour, so a retired generation's token stops soon after its sandbox (integrations spec §7.2).
-const integrationsLifetime = Duration.hours(1)
 
 // oxlint-disable-next-line ren/no-comments -- Ren mints REN, MODELS, PERSON (space members only, AC4), DRIVE (a brain's space and org drives, read-only) and INTEGRATIONS (a brain in a space, for the managed MCPs); one mint at a time per workload (C29).
 export const layerMinted = Layer.effect(
@@ -164,10 +159,8 @@ export const layerMinted = Layer.effect(
     const access = yield* Access.Service
     const github = yield* GitHubApp.Service
     const drives = yield* Drives.Service
-    const signer = yield* Signer.Service
+    const integrations = yield* Integrations.Service
     const renHost = new URL(brains.renUrl).hostname
-    const integrationsHost = Option.map(yield* Integrations.url, (url) => url.hostname)
-    if (Option.isSome(integrationsHost)) yield* signer.publicKeys("ren-integrations").pipe(Effect.orDie)
 
     const Key = Schema.fromJsonString(
       Schema.Struct({
@@ -218,20 +211,19 @@ export const layerMinted = Layer.effect(
           if (found.workload.kind !== "brain" || !found.spaceId)
             return yield* Effect.die(new Error("Only a brain in a space gets INTEGRATIONS"))
           const mintedAt = yield* Clock.currentTimeMillis
-          const exp = Math.floor((mintedAt + Duration.toMillis(integrationsLifetime)) / 1000)
-          const token = yield* signer.sign("ren-integrations", {
-            org: found.organizationId,
-            space: found.spaceId,
-            brain: found.workload.id,
-            gen: found.workload.generation,
-            exp,
+          const minted = yield* integrations.token({
+            organizationId: found.organizationId,
+            spaceId: found.spaceId,
+            brain: found.workload,
           })
-          return { token, exp, mintedAt }
+          return { ...minted, mintedAt }
         }),
       {
         capacity: 10_000,
         timeToLive: (exit) =>
-          Exit.isSuccess(exit) ? ttlUntil(exit.value.exp * 1000, exit.value.mintedAt) : Duration.zero,
+          Exit.isSuccess(exit)
+            ? ttlUntil(DateTime.toEpochMillis(exit.value.expiresAt), exit.value.mintedAt)
+            : Duration.zero,
       },
     )
 
@@ -307,8 +299,8 @@ export const layerMinted = Layer.effect(
             ),
           ),
         ]
-        const integrationHosts = Option.isSome(scope.spaceId) ? Option.toArray(integrationsHost) : []
-        const personHosts = [...modelHosts, ...integrationHosts]
+        const integrationsHost = Option.filter(integrations.host, () => Option.isSome(scope.spaceId))
+        const personHosts = [...modelHosts, ...Option.toArray(integrationsHost)]
         const drive = Option.match(scope.spaceId, {
           onNone: (): ReadonlyArray<Credentials.Candidate> => [],
           onSome: (): ReadonlyArray<Credentials.Candidate> => [
@@ -348,15 +340,20 @@ export const layerMinted = Layer.effect(
               },
             ]
           }),
-          ...integrationHosts.map((host): Credentials.Candidate => ({
-            id: `minted:${integrations}`,
-            source: "minted",
-            label: integrations,
-            owner: "workload",
-            hosts: [host],
-            inject: { op: "replace", in: ["header"] },
-            revision: 0,
-          })),
+          ...Option.match(integrationsHost, {
+            onNone: (): ReadonlyArray<Credentials.Candidate> => [],
+            onSome: (host): ReadonlyArray<Credentials.Candidate> => [
+              {
+                id: `minted:${Integrations.label}`,
+                source: "minted",
+                label: Integrations.label,
+                owner: "workload",
+                hosts: [host],
+                inject: { op: "replace", in: ["header"] },
+                revision: 0,
+              },
+            ],
+          }),
           ...(personHosts.length === 0
             ? []
             : [
@@ -471,7 +468,7 @@ export const layerMinted = Layer.effect(
             }),
           } satisfies Sourced)
         }
-        if (candidate.label === integrations) {
+        if (candidate.label === Integrations.label) {
           const minted = yield* Cache.get(integrationTokens, keyOf(scope)).pipe(
             Effect.mapError(
               () => new Unavailable({ label: candidate.label, message: "Ren could not sign the integrations token." }),
@@ -479,7 +476,7 @@ export const layerMinted = Layer.effect(
           )
           return Option.some({
             value: { type: "key", value: Redacted.make(minted.token) },
-            expiresAt: DateTime.makeUnsafe(minted.exp * 1000),
+            expiresAt: minted.expiresAt,
           } satisfies Sourced)
         }
         const granted = yield* cachedGrant(scope).pipe(
@@ -505,7 +502,7 @@ export const layerMinted = Layer.effect(
           return
         }
         if (candidate.label === ren) return yield* Cache.invalidate(hostTokens, keyOf(scope))
-        if (candidate.label === integrations) return yield* Cache.invalidate(integrationTokens, keyOf(scope))
+        if (candidate.label === Integrations.label) return yield* Cache.invalidate(integrationTokens, keyOf(scope))
         yield* Cache.invalidate(modelGrants, keyOf(scope, yield* grants.revision))
       }),
     })

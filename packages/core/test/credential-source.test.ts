@@ -26,6 +26,7 @@ import { CredentialSource } from "../src/credential-source.js"
 import { GitHubApp } from "../src/github-app.js"
 import type { Credentials } from "../src/credentials.js"
 import { Drives } from "../src/drives.js"
+import { Integrations } from "../src/integrations.js"
 import { Models } from "../src/models.js"
 import { Signer } from "../src/signer.js"
 import { TestDrives } from "./lib/drives.js"
@@ -79,6 +80,7 @@ const it = testEffect(
     Layer.provide(Access.layer),
     Layer.provideMerge(Layer.mergeAll(models, GitHubApp.layerNone)),
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(FetchHttpClient.layer))),
+    Layer.provideMerge(Integrations.layer),
     Layer.provideMerge(Signer.layerLocal),
     Layer.provideMerge(Drives.layer.pipe(Layer.provide(Access.layer))),
     Layer.provideMerge(Testing.layer),
@@ -207,7 +209,7 @@ describe("CredentialSource.layerMinted", () => {
           Effect.flatMap((other) => other.candidates(scope, [])),
           Effect.provide(
             Layer.fresh(CredentialSource.layerMinted).pipe(
-              Layer.provide(Access.layer),
+              Layer.provide([Access.layer, Layer.fresh(Integrations.layer)]),
               Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({}))),
             ),
           ),

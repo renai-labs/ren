@@ -9,6 +9,7 @@ import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
+import { Integrations } from "@ren/core/integrations"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
@@ -89,6 +90,7 @@ HttpRouter.serve(Routes.layer).pipe(
     ChaosModels.layer,
     RenInference.layerConfig.pipe(Layer.provide([Signer.layerLocal, Access.layer])),
     Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
+    Integrations.layer.pipe(Layer.provide(Signer.layerLocal)),
   ]),
   Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal, GitHubApp.layerNone, SlackApp.layerNone)),
   Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),

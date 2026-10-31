@@ -23,7 +23,7 @@ export const select = (input: {
     const replaces = transport.replaces
     if (replaces && input.resolved.some((entry) => entry.appId === candidate.appId && entry.slug === replaces))
       return []
-    return [{ candidate, server: transport.server }]
+    return [{ candidate, route: transport.server }]
   })
   const leftOut = (reason: AppCatalog.Unavailable["reason"]) => ({
     mcps: input.resolved,
@@ -34,7 +34,7 @@ export const select = (input: {
       reason,
     })),
   })
-  if (Option.isNone(input.integrationsUrl)) return leftOut("managed")
+  if (Option.isNone(input.integrationsUrl)) return leftOut("integrations")
   if (!input.egress) return leftOut("egress")
   const base = input.integrationsUrl.value.href.replace(/\/$/u, "")
   return {
@@ -45,7 +45,7 @@ export const select = (input: {
           server: ProfileLabel.serverOf(each.candidate.slug),
           profile: null,
           label: Integrations.label,
-          url: `${base}/${each.server}/mcp`,
+          url: `${base}/${each.route}/mcp`,
         }),
       ),
     ],

@@ -6,6 +6,7 @@ import { CredentialRefresh } from "@ren/core/credential-refresh"
 import { CredentialSource } from "@ren/core/credential-source"
 import { Credentials } from "@ren/core/credentials"
 import { Drives } from "@ren/core/drives"
+import { Integrations } from "@ren/core/integrations"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { Egress } from "@ren/core/egress"
 import { EgressControl } from "@ren/core/egress-control"
@@ -157,6 +158,7 @@ const ren = () => {
         Models.layerNone,
         GitHubApp.layer,
         Drives.layer,
+        Integrations.layer,
       ),
     ),
     Layer.provideMerge(

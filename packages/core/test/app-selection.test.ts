@@ -61,7 +61,7 @@ describe("AppSelection.select", () => {
       unavailable: [{ appSlug: "kernel", mcp: "kernel-managed", profile: null, reason }],
     })
     expect([select({ integrationsUrl: Option.none() }), select({ egress: false })]).toEqual([
-      unavailable("managed"),
+      unavailable("integrations"),
       unavailable("egress"),
     ])
   })

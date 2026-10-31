@@ -68,11 +68,11 @@ export const Unavailable = Schema.Struct({
   appSlug: Primitive.Slug,
   mcp: Primitive.Slug,
   profile: Schema.NullOr(Primitive.Name).annotate({ description: "The profile’s display name." }),
-  reason: Schema.Literals(["provider", "egress", "managed"]),
+  reason: Schema.Literals(["provider", "egress", "integrations"]),
 }).annotate({
   identifier: "AppCatalog.Unavailable",
   description:
-    "An MCP that Ren leaves out: its provider is not set up on this Ren, the brain cannot reach credentials, or this Ren has no managed MCPs.",
+    "An MCP that Ren leaves out: its provider is not set up on this Ren, the brain cannot reach credentials, or this Ren has no integrations service.",
 })
 
 export interface Catalog extends Schema.Schema.Type<typeof Catalog> {}
