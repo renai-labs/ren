@@ -1,6 +1,5 @@
 import type { ClientCommand } from "@ren/chat"
-import type { Session } from "@ren/schema/session"
-import { Button } from "@ren/ui/button"
+import { InputGroupButton } from "@ren/ui/input-group"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,18 +23,18 @@ export function ComposerAddMenu(props: {
   onCommands: () => void
   onCommand: (command: ClientCommand.Suggestion) => void
   onMention?: (() => void) | undefined
-  sessionID: Session.ID
+  spaceId: string | undefined
   addRepositories?: ComposerRepositories.Dialog | undefined
 }) {
-  const space = ComposerRepositories.useSpace(props.sessionID)
+  const canAdd = ComposerRepositories.useCanAdd(props.spaceId)
   const [adding, setAdding] = useState(false)
-  const spaceId = space.spaceId
+  const spaceId = props.spaceId
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button
+            <InputGroupButton
               variant="outline"
               size="icon-sm"
               className="rounded-full data-popup-open:bg-secondary [&_svg]:transition-transform data-popup-open:[&_svg]:rotate-45"
@@ -66,10 +65,10 @@ export function ComposerAddMenu(props: {
               <Kbd className="ml-auto">@</Kbd>
             </DropdownMenuItem>
             {props.addRepositories && spaceId ? (
-              <DropdownMenuItem disabled={!space.canAdd} onClick={() => setAdding(true)}>
+              <DropdownMenuItem disabled={!canAdd} onClick={() => setAdding(true)}>
                 <IconGitBranch className="text-muted-foreground" />
                 Repositories
-                {space.canAdd ? null : (
+                {canAdd ? null : (
                   <span className="ml-auto max-w-1/2 truncate text-muted-foreground">
                     {ComposerRepositories.notAllowed}
                   </span>

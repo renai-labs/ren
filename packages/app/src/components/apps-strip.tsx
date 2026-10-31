@@ -1,6 +1,7 @@
 import type { AppProfileInfo, SpaceKind } from "@ren/client"
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
+import { InputGroupButton } from "@ren/ui/input-group"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@ren/ui/popover"
 import { Separator } from "@ren/ui/separator"
 import { Initials } from "@ren/util/initials"
@@ -80,15 +81,14 @@ function Strip(props: { spaceId: string; profiles: ReadonlyArray<AppProfileInfo>
   if (rows.length === 0)
     return (
       <>
-        <Button
-          variant="ghost"
+        <InputGroupButton
           size="sm"
           className="-ml-1 font-normal text-muted-foreground"
           onClick={() => setDialog({ kind: "add-app" })}
         >
           <IconApps />
           Add apps
-        </Button>
+        </InputGroupButton>
         {dialogs}
       </>
     )
@@ -97,8 +97,7 @@ function Strip(props: { spaceId: string; profiles: ReadonlyArray<AppProfileInfo>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           render={
-            <Button
-              variant="ghost"
+            <InputGroupButton
               size="sm"
               className="-ml-1 font-normal"
               aria-label={`Apps: ${stack.map((entry) => entry[0]).join(", ")}${missing ? `, ${missing} not connected` : ""}`}

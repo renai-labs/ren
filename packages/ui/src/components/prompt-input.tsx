@@ -31,7 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./dropdown-menu.js"
-import { InputGroup, InputGroupTextarea } from "./input-group.js"
+import { InputGroup, InputGroupButton, InputGroupTextarea } from "./input-group.js"
 import { Kbd } from "./kbd.js"
 import { Spinner } from "./spinner.js"
 
@@ -85,13 +85,10 @@ export type MentionRange = {
 function Mention(props: { mention: MentionRange; text: string }) {
   const mention = props.mention
   return (
-    <span
-      data-slot="prompt-input-mention"
-      className="relative rounded-sm bg-secondary [box-decoration-break:clone] font-medium text-foreground ring-2 ring-secondary"
-    >
+    <span data-slot="prompt-input-mention" className="relative font-medium text-ring">
       <span className="text-transparent">{props.text.slice(mention.start, mention.end - mention.label.length)}</span>
       {mention.icon ? (
-        <span className="absolute top-1/2 left-0 inline-grid size-4 -translate-y-1/2 place-items-center overflow-hidden rounded-sm text-foreground [&_img]:size-4 [&_img]:object-cover [&_svg]:size-3.5">
+        <span className="absolute top-1/2 left-0 inline-grid size-4 -translate-y-1/2 place-items-center overflow-hidden rounded-sm [&_img]:size-4 [&_img]:object-cover [&_svg]:size-3.5">
           {mention.icon}
         </span>
       ) : null}
@@ -218,6 +215,7 @@ export type Suggestion = {
 
 export function Suggestions(props: {
   label: string
+  side?: "top" | "bottom"
   items: ReadonlyArray<Suggestion>
   active: string | undefined
   onActiveChange: (value: string) => void
@@ -239,7 +237,10 @@ export function Suggestions(props: {
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the text field keeps focus and points into the options, which a <select> cannot do
       role="listbox"
       aria-label={props.label}
-      className="absolute inset-x-0 bottom-full z-50 mb-2 flex max-h-72 min-h-0 flex-col overflow-y-auto overscroll-contain rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+      className={cn(
+        "absolute inset-x-0 z-50 flex max-h-72 min-h-0 flex-col overflow-y-auto overscroll-contain rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10",
+        props.side === "bottom" ? "top-full mt-2" : "bottom-full mb-2",
+      )}
     >
       {groups.map((group) => (
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- options inside a listbox group through role="group"; an <optgroup> needs a <select>
@@ -284,7 +285,7 @@ export function Submit(props: {
 }) {
   if (props.starting)
     return (
-      <Button
+      <InputGroupButton
         type="submit"
         variant="secondary"
         size="icon-sm"
@@ -294,10 +295,10 @@ export function Submit(props: {
         className="rounded-full"
       >
         <Spinner />
-      </Button>
+      </InputGroupButton>
     )
   const stop = (variant: "default" | "secondary") => (
-    <Button
+    <InputGroupButton
       variant={variant}
       size="icon-sm"
       aria-label="Stop"
@@ -308,11 +309,11 @@ export function Submit(props: {
       }}
     >
       <IconPlayerStopFilled />
-    </Button>
+    </InputGroupButton>
   )
   if (props.running && !props.content) return stop("default")
   const send = (
-    <Button
+    <InputGroupButton
       type="submit"
       variant={props.content ? "default" : "secondary"}
       size="icon-sm"
@@ -321,7 +322,7 @@ export function Submit(props: {
       disabled={props.disabled}
     >
       <IconArrowUp />
-    </Button>
+    </InputGroupButton>
   )
   if (!props.running) return send
   return (

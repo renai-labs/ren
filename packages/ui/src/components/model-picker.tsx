@@ -74,7 +74,7 @@ export function ModelPicker(props: ModelPickerProps) {
         render={<InputGroupButton size="sm" className="max-w-72 min-w-0 pr-1.5 font-normal text-muted-foreground" />}
       >
         <TriggerContent icon={props.loading ? undefined : selected?.icon} name={name} effort={effort} />
-        <Icon glyph="ChevronDown" data-icon="inline-end" />
+        <Icon glyph="ChevronDown" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-80 p-0">
         <label className="flex h-10 items-center gap-2 px-3 text-muted-foreground">

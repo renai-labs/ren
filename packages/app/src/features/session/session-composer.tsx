@@ -7,20 +7,20 @@ import type { SessionInbox } from "@ren/schema/session/inbox"
 import type { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
-import { AppMention } from "@ren/ui/app-mention"
 import { PromptInput } from "@ren/ui/prompt-input"
 import { toast } from "@ren/ui/toast"
-import { IconFile, IconGhost, IconSparkles, IconTerminal2 } from "@tabler/icons-react"
 import { Effect, Predicate, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
+import { useQuery } from "@tanstack/react-query"
 import { useRef, useState } from "react"
-import type { KeyboardEvent, ReactNode } from "react"
+import type { ReactNode } from "react"
 import { Attention } from "../../lib/attention.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Debounce } from "../../lib/debounce.js"
 import { DraftStore } from "../../platform/draft-store.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { Platform } from "../../platform/platform.js"
+import { RouterContext } from "../../lib/router-context.js"
 import { Viewport } from "../../platform/viewport.js"
 import { SessionAppsStrip } from "../../components/apps-strip.js"
 import { ChatComposer } from "./chat-composer.js"
@@ -29,6 +29,7 @@ import { Failure } from "./failure.js"
 import { ComposerAddMenu } from "./composer-add-menu.js"
 import type { ComposerRepositories } from "./composer-repositories.js"
 import { ComposerStatus } from "./composer-status.js"
+import { type Catalog, pressOf, useSuggesting, useSuggestions } from "./composer-suggestions.js"
 import type { ChatView } from "./chat-view.js"
 import { ComposerKeys } from "./composer-keys.js"
 import { ComposerModelPicker } from "./composer-model-picker.js"
@@ -36,7 +37,6 @@ import { ComposerQueue } from "./composer-queue.js"
 import { SessionApps } from "./session-apps.js"
 import { SessionDrafts } from "./session-drafts.js"
 
-const trailingSpace = /\s$/
 const fileSearchDelay = 150
 
 const known = (state: ChatState.State, sessionID: Session.ID, id: SessionMessage.ID) =>
@@ -45,16 +45,6 @@ const known = (state: ChatState.State, sessionID: Session.ID, id: SessionMessage
 
 const listed = <A,>(result: AsyncResult.AsyncResult<ReadonlyArray<A>, unknown>) =>
   AsyncResult.isSuccess(result) ? result.value : []
-
-const press = (event: KeyboardEvent<HTMLTextAreaElement>): ComposerKeys.Press => ({
-  key: event.key,
-  metaKey: event.metaKey,
-  ctrlKey: event.ctrlKey,
-  shiftKey: event.shiftKey,
-  altKey: event.altKey,
-  repeat: event.repeat,
-  isComposing: event.nativeEvent.isComposing,
-})
 
 const clientCommands = (
   info: SessionInfo.Info | undefined,
@@ -77,61 +67,13 @@ const sessionStatus = (info: SessionInfo.Info | undefined, session: { readonly r
   picker: info?.capabilities.model !== false,
 })
 
-const mentionIcons: Readonly<Record<Exclude<Mentions.Kind, "app">, ReactNode>> = {
-  agent: <IconGhost />,
-  skill: <IconSparkles />,
-  file: <IconFile />,
-}
-
-const mentionGroups: Readonly<Record<Mentions.Kind, string>> = {
-  agent: "Agents",
-  skill: "Skills",
-  file: "Files",
-  app: "Apps",
-}
-
-const iconOf = (item: Mentions.Item, apps: ReadonlyMap<string, SessionApps.App>) =>
-  item.kind === "app" ? (
-    <AppMention.Logo name={item.label} icon={apps.get(item.id)?.icon ?? null} className="size-4" />
-  ) : (
-    mentionIcons[item.kind]
-  )
-
-const commandSuggestions = (commands: ReadonlyArray<ClientCommand.Suggestion>): ReadonlyArray<PromptInput.Suggestion> =>
-  commands.map((item) => ({
-    value: item.value,
-    group: "Commands",
-    label: `/${item.trigger}`,
-    description: item.description,
-    icon: <IconTerminal2 />,
-  }))
-
-const mentionSuggestions = (
-  items: ReadonlyArray<Mentions.Item>,
-  apps: ReadonlyMap<string, SessionApps.App>,
-): ReadonlyArray<PromptInput.Suggestion> =>
-  items.map((item) => ({
-    value: Mentions.key(item),
-    group: mentionGroups[item.kind],
-    label: item.label,
-    description: item.description,
-    icon: iconOf(item, apps),
-  }))
-
-const commandQuery = (trigger: Composer.Trigger | undefined) => (trigger?.kind === "command" ? trigger.query : "")
-
 const startingOf = (notice: ChatView.Notice | undefined) => notice?._tag === "Starting"
 
 // oxlint-disable-next-line ren/no-comments -- While the sandbox starts the composer is read-only and always shows the rotating line; other notices give way to a draft.
 const shownNotice = (notice: ChatView.Notice | undefined, draft: Composer.Draft) =>
   notice && (startingOf(notice) || !draft.text) ? notice : undefined
 
-interface Suggesting {
-  readonly trigger: Composer.Trigger
-  readonly active?: string
-}
-
-function useMentionCatalog(sessionID: Session.ID, query: string) {
+function useMentionCatalog(sessionID: Session.ID, query: string): Catalog {
   const searched = Debounce.useDebouncedValue(query, fileSearchDelay)
   const found = listed(ChatReact.useFiles({ root: sessionID, query: searched, type: "file" }))
   const apps = SessionApps.useMentionable()
@@ -141,37 +83,6 @@ function useMentionCatalog(sessionID: Session.ID, query: string) {
     agents: SessionCatalog.mentionable(listed(ChatReact.useAgents(sessionID))).map(Mentions.fromAgent),
     skills: Composer.offeredSkills(listed(ChatReact.useSkills(sessionID))).map(Mentions.fromSkill),
     files: searched && query ? found.map(Mentions.fromFile) : [],
-  }
-}
-
-function useSuggestions(input: {
-  sessionID: Session.ID
-  commands: boolean
-  client: ReadonlyArray<ClientCommand.Command>
-  suggesting: Suggesting | undefined
-  picked: ReadonlyArray<Mentions.Item>
-}) {
-  const trigger = input.suggesting?.trigger
-  const query = trigger?.kind === "mention" ? trigger.query : undefined
-  const catalog = useMentionCatalog(input.sessionID, query ?? "")
-  const listedCommands = Composer.offeredCommands(listed(ChatReact.useCommands(input.sessionID)))
-  const commands = input.commands ? listedCommands : []
-  const runnable = ClientCommand.suggestions(input.client, commands, commandQuery(trigger))
-  const mentionable = query === undefined ? [] : Mentions.suggest({ ...catalog, query })
-  const suggestions =
-    trigger?.kind === "command" ? commandSuggestions(runnable) : mentionSuggestions(mentionable, catalog.byId)
-  const ids = suggestions.map((item) => item.value)
-  return {
-    trigger,
-    label: trigger?.kind === "command" ? "Commands" : "Mentions",
-    commands,
-    runnable,
-    mentionable,
-    suggestions,
-    ids,
-    active: Composer.activeSuggestion(ids, input.suggesting?.active),
-    catalog: [...catalog.agents, ...catalog.skills, ...catalog.apps, ...input.picked],
-    apps: catalog.byId,
   }
 }
 
@@ -274,8 +185,12 @@ export function SessionComposer(props: {
   const [draft, setDraft] = useState(() => Composer.decode(platform.drafts?.get(key)))
   const [history, setHistory] = useState(() => ComposerHistory.decode(platform.drafts?.get(SessionDrafts.history)))
   const [browsing, setBrowsing] = useState(ComposerHistory.idle)
-  const [suggesting, setSuggesting] = useState<Suggesting>()
-  const [picked, setPicked] = useState<ReadonlyArray<Mentions.Item>>([])
+  const query = useSuggesting()
+  const context = RouterContext.useRouterContext()
+  const spaceId = useQuery({
+    ...context.api.session.get.queryOptions({ idOrSlug: props.sessionID }),
+    select: (session) => session.spaceId,
+  }).data
   const [moving, setMoving] = useState(false)
   const picking = props.picking
   const setPicking = props.onPicking
@@ -314,15 +229,24 @@ export function SessionComposer(props: {
   const notice = shownNotice(props.notice, draft)
   const unavailable = props.unavailable || startingOf(props.notice)
   const readOnly = unavailable || moving
+  const catalog = useMentionCatalog(props.sessionID, query.mention ?? "")
+  const listedCommands = Composer.offeredCommands(listed(ChatReact.useCommands(props.sessionID)))
+  const offered = status.commands ? listedCommands : []
   const suggested = useSuggestions({
-    sessionID: props.sessionID,
-    commands: status.commands,
+    state: query,
+    catalog,
+    offered,
     client: clientCommands(props.info, { prompted: props.prompted, reverted: props.reverted }),
-    suggesting,
-    picked,
+    text: draft.text,
+    readOnly,
+    field: input,
+    onText: (text) => {
+      setBrowsing(ComposerHistory.idle)
+      change(Composer.withText(latest.current.draft, text))
+    },
+    onClient: (id) => runClient(id),
   })
-  const tokens = Mentions.tokens(draft.text, suggested.catalog)
-  const resolve = (text: string) => Mentions.resolve(text, Mentions.tokens(text, suggested.catalog))
+  const resolve = suggested.resolve
 
   const change = (next: Composer.Draft) => {
     latest.current.draft = next
@@ -382,10 +306,10 @@ export function SessionComposer(props: {
     }
     Attention.ask(platform)
     const id = submission.retry ?? SessionMessage.ID.create()
-    const slash = Composer.slash(submission.text, suggested.commands)
+    const slash = Composer.slash(submission.text, offered)
     remember(ComposerHistory.prepend(history, submission.sent))
     setBrowsing(ComposerHistory.idle)
-    setSuggesting(undefined)
+    suggested.close()
     change(submission.next)
     if (mobile) input.current?.blur()
     const failure = (title: string) => (error: unknown) => {
@@ -410,9 +334,8 @@ export function SessionComposer(props: {
     return true
   }
   const retype = (text: string, cursor: number) => {
-    const trigger = Composer.trigger(text, cursor)
+    suggested.track(text, cursor)
     setBrowsing(ComposerHistory.idle)
-    setSuggesting(trigger && { trigger })
     change(Composer.withText(draft, text))
     void typing()
   }
@@ -428,78 +351,15 @@ export function SessionComposer(props: {
   const addMenu = (
     <ComposerAddMenu
       disabled={readOnly}
-      sessionID={props.sessionID}
+      spaceId={spaceId}
       addRepositories={props.addRepositories}
       populated={content}
       commands={suggested.runnable}
-      onCommands={() => {
-        setSuggesting({ trigger: { kind: "command", query: "" } })
-        change(Composer.withText(draft, "/"))
-        caret(1, "/")
-      }}
-      onCommand={(found) => {
-        if (found.client) return runClient(found.client)
-        const text = `/${found.trigger} ${draft.text.trim()}`
-        change(Composer.withText(draft, text))
-        caret(text.length, text)
-      }}
-      onMention={() => {
-        const cursor = input.current?.selectionStart ?? draft.text.length
-        const before = draft.text.slice(0, cursor)
-        const inserted = Composer.insert(draft.text, before === "" || trailingSpace.test(before) ? "@" : " @", cursor)
-        retype(inserted.text, inserted.cursor)
-        caret(inserted.cursor, inserted.text)
-      }}
+      onCommands={suggested.openCommands}
+      onCommand={suggested.runCommand}
+      onMention={suggested.mention}
     />
   )
-  const choose = (value: string) => {
-    const trigger = suggested.trigger
-    setSuggesting(undefined)
-    setBrowsing(ComposerHistory.idle)
-    if (trigger?.kind === "command") {
-      const found = suggested.runnable.find((item) => item.value === value)
-      if (found?.client) {
-        change(Composer.withText(draft, ""))
-        runClient(found.client)
-        return
-      }
-      const text = `/${found?.trigger ?? value} `
-      change(Composer.withText(draft, text))
-      caret(text.length, text)
-      return
-    }
-    const item = suggested.mentionable.find((entry) => Mentions.key(entry) === value)
-    if (!item || !trigger) return
-    const inserted = Mentions.insert(
-      draft.text,
-      item,
-      trigger.start,
-      input.current?.selectionStart ?? draft.text.length,
-    )
-    if (item.kind === "file") setPicked((current) => [...current, item])
-    change(Composer.withText(draft, inserted.text))
-    caret(inserted.cursor, inserted.text)
-  }
-  const pick = (pressed: ComposerKeys.Press) => {
-    const key = suggested.ids.length > 0 ? Composer.suggestionKey(pressed, suggested.ids, suggested.active) : undefined
-    if (key?.type === "close") setSuggesting(undefined)
-    if (key?.type === "move") setSuggesting((current) => current && { ...current, active: key.active })
-    if (key?.type === "select") choose(key.id)
-    return key !== undefined
-  }
-  const unmention = (node: HTMLTextAreaElement, pressed: string) => {
-    const removed = readOnly
-      ? undefined
-      : Mentions.remove(draft.text, tokens, {
-          key: pressed,
-          selectionStart: node.selectionStart,
-          selectionEnd: node.selectionEnd,
-        })
-    if (!removed) return false
-    retype(removed.text, removed.cursor)
-    caret(removed.cursor, removed.text)
-    return true
-  }
   const act = (intent: ComposerKeys.Intent | undefined, node: HTMLTextAreaElement) => {
     if (intent === "model") return false
     if (intent === "up" || intent === "down") return browse(node, intent)
@@ -563,17 +423,7 @@ export function SessionComposer(props: {
     <ChatComposer
       label="Message Ren"
       onSubmit={() => submit(false)}
-      suggestions={
-        suggested.suggestions.length > 0 ? (
-          <PromptInput.Suggestions
-            label={suggested.label}
-            items={suggested.suggestions}
-            active={suggested.active}
-            onActiveChange={(value) => setSuggesting((current) => current && { ...current, active: value })}
-            onSelect={choose}
-          />
-        ) : undefined
-      }
+      suggestions={suggested.panel}
       queue={
         <ComposerQueue sessionID={props.sessionID} queued={queued} running={running} moving={moving} onMove={move} />
       }
@@ -607,14 +457,7 @@ export function SessionComposer(props: {
         placeholder={props.notice ? "" : hint}
         readOnly={readOnly}
         value={draft.text}
-        mentions={tokens.map((token) => ({
-          start: token.start,
-          end: token.end,
-          label: token.item.label,
-          icon: iconOf(token.item, suggested.apps),
-        }))}
-        suggesting={suggested.suggestions.length > 0}
-        activeSuggestion={suggested.active}
+        {...suggested.textarea}
         onChange={(event) => {
           retype(event.currentTarget.value, event.currentTarget.selectionStart)
         }}
@@ -631,13 +474,9 @@ export function SessionComposer(props: {
           else change(Composer.addPasted(draft, { id: SessionMessage.ID.create(), text }))
         }}
         onKeyDown={(event) => {
-          const pressed = press(event)
+          const pressed = pressOf(event)
           const node = event.currentTarget
-          if (
-            pick(pressed) ||
-            unmention(node, event.key) ||
-            act(ComposerKeys.intent(pressed, { running: stoppable }), node)
-          )
+          if (suggested.keyDown(pressed, node) || act(ComposerKeys.intent(pressed, { running: stoppable }), node))
             event.preventDefault()
         }}
       />

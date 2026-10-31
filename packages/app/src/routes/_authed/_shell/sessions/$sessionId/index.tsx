@@ -4,8 +4,8 @@ import { createFileRoute, lazyRouteComponent } from "@tanstack/react-router"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Effect, Schema } from "effect"
-import { lazy, Suspense } from "react"
 import { RouteError } from "../../../../../components/error-page.js"
+import { addRepositories } from "../../-add-repositories.js"
 import { Loader } from "../../../../../lib/loader.js"
 import { Seed } from "../../../../../lib/seed.js"
 import { SessionList } from "../../../../../lib/session-list.js"
@@ -48,20 +48,6 @@ export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
 
 const SessionPage = lazyRouteComponent(() => import("../../../../../features/session/session-page.js"), "SessionPage")
 
-const AddRepositories = lazy(() =>
-  import("../../../../../features/spaces/add-repositories-dialog.js").then((module) => ({
-    default: module.SpaceAddRepositories,
-  })),
-)
-
 function SessionRoute() {
-  return (
-    <SessionPage
-      addRepositories={(props) => (
-        <Suspense fallback={null}>
-          <AddRepositories spaceId={props.spaceId} onClose={props.onClose} />
-        </Suspense>
-      )}
-    />
-  )
+  return <SessionPage addRepositories={addRepositories} />
 }

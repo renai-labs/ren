@@ -1,6 +1,5 @@
 export * as ComposerRepositories from "./composer-repositories.js"
 
-import type { Session } from "@ren/schema/session"
 import { useQuery } from "@tanstack/react-query"
 import type { ReactNode } from "react"
 import { RouterContext } from "../../lib/router-context.js"
@@ -10,16 +9,13 @@ export type Dialog = (props: { readonly spaceId: string; readonly onClose: () =>
 
 export const notAllowed = "Only people who can change this space’s settings can add repositories."
 
-export function useSpace(sessionID: Session.ID) {
+export function useCanAdd(spaceId: string | undefined) {
   const context = RouterContext.useRouterContext()
-  const spaceId = useQuery({
-    ...context.api.session.get.queryOptions({ idOrSlug: sessionID }),
-    select: (session) => session.spaceId,
-  }).data
-  const canAdd = useQuery({
-    ...context.api["space-settings"].get.queryOptions({ idOrSlug: spaceId ?? "" }),
-    enabled: spaceId !== undefined,
-    select: (settings) => settings.canUpdate,
-  }).data
-  return { spaceId, canAdd: canAdd === true }
+  return (
+    useQuery({
+      ...context.api["space-settings"].get.queryOptions({ idOrSlug: spaceId ?? "" }),
+      enabled: spaceId !== undefined,
+      select: (settings) => settings.canUpdate,
+    }).data === true
+  )
 }

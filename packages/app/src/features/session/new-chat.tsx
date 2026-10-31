@@ -1,4 +1,4 @@
-import { Composer, ComposerHistory } from "@ren/chat"
+import { Composer, ComposerHistory, Mentions } from "@ren/chat"
 import { Session } from "@ren/schema/session"
 import { SessionModel } from "@ren/schema/session/model"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -18,7 +18,11 @@ import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
 import { Failure } from "./failure.js"
+import { ComposerAddMenu } from "./composer-add-menu.js"
 import { ComposerModelPicker } from "./composer-model-picker.js"
+import type { ComposerRepositories } from "./composer-repositories.js"
+import { pressOf, useSuggesting, useSuggestions } from "./composer-suggestions.js"
+import { SessionApps } from "./session-apps.js"
 import { SpaceAppsStrip } from "../../components/apps-strip.js"
 import { ChatComposer } from "./chat-composer.js"
 import { ComposerCopy } from "./composer-copy.js"
@@ -60,7 +64,7 @@ function useDefaultModel(input: {
   ])
 }
 
-export function NewChat(props: { userId: string }) {
+export function NewChat(props: { userId: string; addRepositories: ComposerRepositories.Dialog }) {
   const context = RouterContext.useRouterContext()
   const navigate = useNavigate()
   const [sessionID, setSessionID] = useState(() => Session.ID.create())
@@ -80,6 +84,26 @@ export function NewChat(props: { userId: string }) {
   const spaceId = chosen ?? options.at(0)?.value
   const list = models.data ?? []
   const model = useDefaultModel({ spaceId, list, draft: draft.model })
+  const mentionable = SessionApps.useMentionable()
+  const query = useSuggesting()
+  const suggested = useSuggestions({
+    state: query,
+    catalog: {
+      byId: new Map(mentionable.map((app) => [app.id, app])),
+      apps: mentionable.map(Mentions.fromApp),
+      agents: [],
+      skills: [],
+      files: [],
+    },
+    offered: [],
+    client: [],
+    text: draft.text,
+    readOnly: create.isPending,
+    field: input,
+    onText: (next) => change(Composer.withText(draft, next)),
+    onClient: () => undefined,
+    side: "bottom",
+  })
   const text = draft.text.trim()
   const change = (next: Composer.Draft) => {
     if (spaceId && next.text.trim() && !prepared.current.has(spaceId)) {
@@ -144,11 +168,24 @@ export function NewChat(props: { userId: string }) {
               </SelectContent>
             </Select>
           }
+          suggestions={suggested.panel}
+          addMenu={
+            <ComposerAddMenu
+              disabled={create.isPending}
+              spaceId={spaceId}
+              addRepositories={props.addRepositories}
+              populated={Boolean(text)}
+              commands={suggested.runnable}
+              onCommands={suggested.openCommands}
+              onCommand={suggested.runCommand}
+              onMention={suggested.mention}
+            />
+          }
           apps={spaceId ? <SpaceAppsStrip spaceId={spaceId} /> : null}
           onSubmit={() => {
             if (!text || !spaceId || create.isPending) return
             Attention.ask(platform)
-            const message = { id: SessionMessage.ID.create(), text }
+            const message = { id: SessionMessage.ID.create(), text: suggested.resolve(text).text }
             SessionDrafts.keepPending(platform.drafts, sessionID, message)
             startTransition(() => setSent(text))
             create.mutate(
@@ -219,7 +256,14 @@ export function NewChat(props: { userId: string }) {
               focusOnMount={!mobile}
               readOnly={create.isPending}
               value={draft.text}
-              onChange={(event) => change(Composer.withText(draft, event.currentTarget.value))}
+              {...suggested.textarea}
+              onChange={(event) => {
+                suggested.track(event.currentTarget.value, event.currentTarget.selectionStart)
+                change(Composer.withText(draft, event.currentTarget.value))
+              }}
+              onKeyDown={(event) => {
+                if (suggested.keyDown(pressOf(event), event.currentTarget)) event.preventDefault()
+              }}
             />
           </ViewTransition>
         </ChatComposer>
