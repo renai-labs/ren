@@ -84,6 +84,36 @@ it.live("the catalog: server and label per profile, private first; a no-auth MCP
 )
 
 it.live(
+  "a bundle in a space lists every app it includes, each after the apps it depends on, with its environment",
+  () =>
+    Effect.gen(function* () {
+      const organizationId = yield* Seed.organization()
+      const ana = yield* ProfilesFixture.user(organizationId, "Ana", "admin")
+      const sales = yield* ProfilesFixture.space(ana, "Sales")
+      yield* ProfilesFixture.app(ana, ana.personal, "tools", {
+        environment: { packages: { apt: ["jq"] }, buildCommands: [] },
+      })
+      yield* ProfilesFixture.app(ana, ana.personal, "docs", {
+        mcps: { search: ProfilesFixture.remote("Search", { type: "none" }) },
+        dependsOn: ["tools"],
+        environment: { packages: {}, buildCommands: ["docs-index --init"] },
+      })
+      const suite = yield* ProfilesFixture.app(ana, ana.personal, "suite", {
+        skills: { guide: Seed.skill("Guide") },
+        dependsOn: ["docs"],
+        environment: { packages: { npm: ["typescript"] }, buildCommands: [] },
+      })
+      yield* ProfilesFixture.profile(ana, { appId: suite.id, slug: "all", kind: "shared", spaceIds: [sales] })
+      const found = yield* ProfilesFixture.catalog(organizationId, sales)
+      expect(found.catalog.apps.map((entry) => [entry.appSlug, entry.environment])).toEqual([
+        ["tools", { packages: { apt: ["jq"] }, buildCommands: [] }],
+        ["docs", { packages: {}, buildCommands: ["docs-index --init"] }],
+        ["suite", { packages: { npm: ["typescript"] }, buildCommands: [] }],
+      ])
+    }),
+)
+
+it.live(
   "each mutation of §11 changes the fingerprint of the spaces it reaches, and clears the egress cache where the table says so; members and other spaces never change a reach (private-spaces rule 17)",
   () =>
     Effect.gen(function* () {
