@@ -1,8 +1,18 @@
 import { SessionModel } from "@ren/schema/session/model"
 import { ModelPicker } from "@ren/ui/model-picker"
-import { ServiceAvatar } from "../../components/service-avatar.js"
 
 const providers: Readonly<Record<string, string>> = { anthropic: "Anthropic", openai: "OpenAI" }
+
+const logos: Readonly<Record<string, string>> = {
+  anthropic: `${import.meta.env.BASE_URL}icons/claude.png`,
+  openai: `${import.meta.env.BASE_URL}icons/chatgpt.png`,
+}
+
+function ProviderMark(props: { provider: string }) {
+  const logo = logos[props.provider]
+  if (!logo) return null
+  return <img src={logo} alt="" aria-hidden draggable={false} className="size-4 shrink-0 rounded-sm object-cover" />
+}
 
 const efforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
 
@@ -77,7 +87,7 @@ export function ComposerModelPicker(props: {
         value: SessionModel.key(model),
         label: model.name,
         group: providers[model.providerID] ?? model.providerID,
-        icon: <ServiceAvatar slug={model.providerID} />,
+        icon: <ProviderMark provider={model.providerID} />,
         variants: model.variants
           .map((variant) => variant.id)
           .toSorted((a, b) => rank(a) - rank(b))
