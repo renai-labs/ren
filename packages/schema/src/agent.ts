@@ -1,14 +1,14 @@
 export * as Agent from "./agent.js"
 
 import { Effect, Schema, Struct } from "effect"
+import { AgentIdentity } from "./agent/identity.js"
 import { Auth } from "./auth.js"
-import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
 import { Settings } from "./settings.js"
 import { Space } from "./space.js"
 
-export const ID = Identifier.make("agt", "Agent.ID")
+export const ID = AgentIdentity.ID
 export type ID = typeof ID.Type
 
 export const Name = Primitive.Slug.annotate({ identifier: "Agent.Name" })
