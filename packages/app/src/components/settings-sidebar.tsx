@@ -47,7 +47,7 @@ export function SettingsSidebar() {
         <div className="mb-1 flex h-9 items-center">
           <SidebarToggle />
         </div>
-        <SidebarMenu className="gap-1">
+        <SidebarMenu>
           <SidebarItem label="Back to app" glyph="ArrowLeft" render={<Link to="/" />} />
         </SidebarMenu>
         <InputGroup className="h-9 border-transparent bg-muted group-data-[collapsible=icon]:hidden">
@@ -82,7 +82,7 @@ export function SettingsSidebar() {
         {sections.map((section) => (
           <SidebarGroup key={section.label} className="px-0 pb-4">
             <SidebarGroupLabel className="mb-1 text-sm text-sidebar-foreground">{section.label}</SidebarGroupLabel>
-            <SidebarMenu className="gap-1">
+            <SidebarMenu>
               {section.items.map((item) => (
                 <SidebarItem
                   key={item.to}

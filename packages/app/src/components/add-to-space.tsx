@@ -145,12 +145,7 @@ export function AddHere(props: {
     )
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-                disabled={addition.pending}
-        onClick={() => addition.add(props.space)}
-      >
+      <Button variant="outline" size="sm" disabled={addition.pending} onClick={() => addition.add(props.space)}>
         {addition.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
         Add
       </Button>
@@ -189,12 +184,7 @@ function ChooseProfile(props: {
                   <ItemDescription className="text-xs">{Apps.reach(profile)}</ItemDescription>
                 </ItemContent>
                 <ItemActions>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                                        disabled={props.pending}
-                    onClick={() => props.onUse(profile)}
-                  >
+                  <Button variant="outline" size="sm" disabled={props.pending} onClick={() => props.onUse(profile)}>
                     Use
                   </Button>
                 </ItemActions>

@@ -246,12 +246,7 @@ function SignInRow(props: { item: AppProfileItem; waiting: boolean; pending: boo
       media={ok ? <Icon glyph="Check" tone="success" /> : undefined}
     >
       {props.item.status === "unavailable" ? null : (
-        <Button
-          variant={ok ? "outline" : "default"}
-          size="sm"
-                    disabled={props.pending}
-          onClick={props.onSignIn}
-        >
+        <Button variant={ok ? "outline" : "default"} size="sm" disabled={props.pending} onClick={props.onSignIn}>
           {props.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           {ok ? "Reconnect" : `Sign in with ${props.item.name}`}
         </Button>

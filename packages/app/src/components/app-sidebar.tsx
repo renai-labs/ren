@@ -1,7 +1,6 @@
 import { Icon } from "@ren/ui/icon"
 import type { Glyph } from "@ren/ui/icon"
 import { Kbd } from "@ren/ui/kbd"
-import { Logotype } from "@ren/ui/logotype"
 import {
   Sidebar,
   SidebarContent,
@@ -21,15 +20,19 @@ import { Pathname } from "@ren/util/pathname"
 import { Viewport } from "../platform/viewport.js"
 import { SidebarItem, SidebarToggle } from "./app-shell.js"
 
-const pages: ReadonlyArray<{ to: "/spaces" | "/tasks" | "/schedules" | "/marketplace"; label: string; glyph: Glyph }> =
-  [
-    { to: "/spaces", label: "Spaces", glyph: "Cube" },
-    { to: "/tasks", label: "Tasks", glyph: "Checklist" },
-    { to: "/schedules", label: "Schedules", glyph: "Clock" },
-    { to: "/marketplace", label: "Marketplace", glyph: "LayoutGrid" },
-  ]
+const pages: ReadonlyArray<{ to: "/tasks" | "/schedules" | "/marketplace"; label: string; glyph: Glyph }> = [
+  { to: "/tasks", label: "Tasks", glyph: "Checklist" },
+  { to: "/schedules", label: "Schedules", glyph: "Clock" },
+  { to: "/marketplace", label: "Marketplace", glyph: "LayoutGrid" },
+]
 
-export function AppSidebar(props: { onSearch: () => void; chats: ReactNode; footer: ReactNode }) {
+export function AppSidebar(props: {
+  onSearch: () => void
+  spaces: ReactNode
+  chats: ReactNode
+  chatsAction: ReactNode
+  footer: ReactNode
+}) {
   const pathname = useRouterState({ select: (state) => Pathname.trimTrailingSlashes(state.location.pathname) })
   const sidebar = useSidebar()
   const dismiss = () => sidebar.setOpenMobile(false)
@@ -45,7 +48,6 @@ export function AppSidebar(props: { onSearch: () => void; chats: ReactNode; foot
             onClick={dismiss}
             className="flex flex-1 items-center gap-2 rounded-md text-foreground outline-hidden group-data-[collapsible=icon]:hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           >
-            <Logotype label="" />
             <span className="font-medium">Ren</span>
           </Link>
           <SidebarToggle />
@@ -53,7 +55,7 @@ export function AppSidebar(props: { onSearch: () => void; chats: ReactNode; foot
       </SidebarHeader>
       <SidebarContent className="overflow-hidden">
         <SidebarGroup className="shrink-0 px-0">
-          <SidebarMenu className="gap-1">
+          <SidebarMenu>
             <SidebarItem
               label="New chat"
               glyph="Compose"
@@ -71,6 +73,7 @@ export function AppSidebar(props: { onSearch: () => void; chats: ReactNode; foot
                 </SidebarMenuBadge>
               }
             />
+            {props.spaces}
             {pages.map((page) => (
               <SidebarItem
                 key={page.to}
@@ -84,6 +87,7 @@ export function AppSidebar(props: { onSearch: () => void; chats: ReactNode; foot
         </SidebarGroup>
         <SidebarGroup className="min-h-0 flex-1 px-0 pb-0 group-data-[collapsible=icon]:hidden">
           <SidebarGroupLabel className="shrink-0 text-sm text-sidebar-foreground">Chats</SidebarGroupLabel>
+          <div className="absolute top-2.5 right-9 flex">{props.chatsAction}</div>
           <SidebarGroupAction
             title="New chat"
             aria-label="New chat"
@@ -93,7 +97,7 @@ export function AppSidebar(props: { onSearch: () => void; chats: ReactNode; foot
             <Icon glyph="Plus" />
           </SidebarGroupAction>
           <SidebarGroupContent className="min-h-0 flex-1 scroll-fade-b overflow-y-auto overscroll-contain pb-2">
-            <SidebarMenu className="gap-1">{props.chats}</SidebarMenu>
+            <SidebarMenu>{props.chats}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

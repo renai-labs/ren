@@ -385,7 +385,7 @@ function ConnectButton(props: { visible: boolean; label: string; pending: boolea
       onClick={props.onClick}
       variant="outline"
       size="sm"
-          >
+    >
       {props.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
       {props.pending ? "Opening…" : "Connect"}
     </Button>
