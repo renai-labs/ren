@@ -112,17 +112,6 @@ export function CredentialSheet(props: {
                 className="font-mono"
               />
             </Field>
-            <Field orientation="horizontal">
-              <Switch id="credential-any-host" checked={anyHost} onCheckedChange={setAnyHost} />
-              <FieldLabel htmlFor="credential-any-host">Use on any website</FieldLabel>
-            </Field>
-            {anyHost ? null : (
-              <Field>
-                <FieldLabel htmlFor="credential-hosts">Websites</FieldLabel>
-                <Input id="credential-hosts" name="hosts" required placeholder="api.stripe.com" />
-                <FieldDescription>Ren adds the key only to requests to these hosts.</FieldDescription>
-              </Field>
-            )}
             {props.owners.length > 1 ? (
               <Field>
                 <FieldLabel>Who can use it</FieldLabel>
@@ -142,6 +131,17 @@ export function CredentialSheet(props: {
                 </Select>
               </Field>
             ) : null}
+            <Field orientation="horizontal">
+              <Switch id="credential-any-host" checked={anyHost} onCheckedChange={setAnyHost} />
+              <FieldLabel htmlFor="credential-any-host">Use on any website</FieldLabel>
+            </Field>
+            {anyHost ? null : (
+              <Field>
+                <FieldLabel htmlFor="credential-hosts">Websites</FieldLabel>
+                <Input id="credential-hosts" name="hosts" required placeholder="api.stripe.com" />
+                <FieldDescription>Ren adds the key only to requests to these hosts.</FieldDescription>
+              </Field>
+            )}
             {error ? <FieldError>{error}</FieldError> : null}
           </FieldGroup>
           <SheetFooter>

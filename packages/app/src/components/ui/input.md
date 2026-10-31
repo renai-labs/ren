@@ -5,6 +5,7 @@ Generated with `shadcn add input` (style `base-nova`, Base UI).
 ## Changes to the component
 
 - 12px side padding instead of 10px, no tinted fill, and no focus glow: focus shows a 1px blue border only.
+- Fields sit on Ren bg-secondary (#1F1F1F, `bg-card`) instead of a transparent fill.
 
 Props, parts and names are still shadcn's.
 

@@ -5,6 +5,7 @@ Generated with `shadcn add switch` (style `base-nova`, Base UI).
 ## Changes to the component
 
 - It transitions only colors and shadow instead of `transition-all` (`emil-design-eng`).
+- On is Ren blue: the track uses `ring` (#268bff) instead of `primary`, with a white thumb, so every switch matches the Scheduled table.
 
 Props, parts and names are still shadcn's.
 

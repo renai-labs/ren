@@ -4,7 +4,9 @@ Generated with `shadcn add table` (style `base-nova`, Base UI).
 
 ## Changes to the component
 
-None. The code in `table.tsx` is exactly what the shadcn CLI generated. Its props, parts and names are shadcn's.
+- The header row has no hover highlight (`[&_tr]:hover:bg-transparent` on `TableHeader`); only body rows light up.
+
+Props, parts and names are still shadcn's.
 
 ## What looks different, and why
 

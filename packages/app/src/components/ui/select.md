@@ -7,6 +7,7 @@ Generated with `shadcn add select` (style `base-nova`, Base UI).
 - The trigger shows a down chevron instead of the up-and-down selector, has 12px side padding, no tinted fill and no focus glow (a 1px blue border only).
 - The popup opens below the trigger instead of over it (`alignItemWithTrigger` defaults to false).
 - Items and group labels match the menu's: 32px items with 8px padding and 4px corners.
+- Fields sit on Ren bg-secondary (#1F1F1F, `bg-card`) instead of a transparent fill.
 
 Props, parts and names are still shadcn's.
 

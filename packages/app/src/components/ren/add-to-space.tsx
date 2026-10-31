@@ -35,7 +35,7 @@ type Target = { id: string; name: string }
 
 export type Added = (added: { app: App; profileId?: string | undefined; space: Target }) => void
 
-function useAddition(app: App, onAdded: Added) {
+export function useAddition(app: App, onAdded: Added) {
   const [choosing, setChoosing] = useState<Target>()
   const catalog = useCatalog()
   const access = useMutation({ ...api["app-profile"].access.mutationOptions(), meta: { invalidates: profileQueries } })

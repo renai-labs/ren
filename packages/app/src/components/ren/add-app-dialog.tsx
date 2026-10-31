@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { IconPlus, IconSearch } from "@tabler/icons-react"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -10,9 +10,39 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
-import { AddHere, type Added } from "@/components/ren/add-to-space"
+import { useAddition, type Added } from "@/components/ren/add-to-space"
 import { AppRow } from "@/components/ren/app-list"
 import { useCatalog } from "@/hooks/use-catalog"
+import { cn } from "@/lib/utils"
+
+type CatalogApp = ReturnType<typeof useCatalog>["apps"][number]
+
+function AddAppRow(props: { app: CatalogApp; space: { id: string; name: string }; onAdded: Added }) {
+  const addition = useAddition(props.app, props.onAdded)
+  return (
+    <>
+      <AppRow
+        compact
+        name={props.app.name}
+        icon={props.app.icon}
+        caption={props.app.description}
+        onOpen={() => addition.add(props.space)}
+        action={
+          <span
+            aria-hidden
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon" }),
+              "pointer-events-none text-muted-foreground",
+            )}
+          >
+            <IconPlus />
+          </span>
+        }
+      />
+      {addition.dialog}
+    </>
+  )
+}
 
 const matches = (app: { name: string; description: string }, query: string) =>
   `${app.name} ${app.description}`.toLowerCase().includes(query.trim().toLowerCase())
@@ -72,22 +102,14 @@ export function AddAppDialog(props: {
             </p>
           ) : null}
           {found.map((app) => (
-            <AppRow
+            <AddAppRow
               key={app.id}
-              compact
-              name={app.name}
-              icon={app.icon}
-              caption={app.description}
-              action={
-                <AddHere
-                  app={app}
-                  space={props.space}
-                  onAdded={(added) => {
-                    setOpen(false)
-                    props.onAdded(added)
-                  }}
-                />
-              }
+              app={app}
+              space={props.space}
+              onAdded={(added) => {
+                setOpen(false)
+                props.onAdded(added)
+              }}
             />
           ))}
         </div>

@@ -5,6 +5,7 @@ Generated with `shadcn add input-group` (style `base-nova`, Base UI).
 ## Changes to the component
 
 - No focus glow or blue border when its control has focus; Ren's composer keeps its border.
+- Fields sit on Ren bg-secondary (#1F1F1F, `bg-card`) instead of a transparent fill.
 
 Props, parts and names are still shadcn's.
 

@@ -122,8 +122,9 @@ export function MarketplacePage() {
             title="Accounts"
             profiles={profilesOf(app.id)}
             caption={audience}
+            onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, edit: true })}
             action={(each) => (
-              <Button variant="outline" size="sm" onClick={() => setProfile({ appId: each.appId, profileId: each.id })}>
+              <Button size="sm" onClick={() => setProfile({ appId: each.appId, profileId: each.id })}>
                 {connectLabel(each) ?? "Open"}
               </Button>
             )}

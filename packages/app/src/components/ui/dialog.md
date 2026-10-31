@@ -9,6 +9,7 @@ Generated with `shadcn add dialog` (style `base-nova`, Base UI).
 - The close button sits 12px from the corner and is muted.
 - The title is 16px on a 24px line; the header has 4px between title and description.
 - The footer has no fill: a top border, 12px by 16px padding, and Cancel on the left with the main action on the right (`justify-between`).
+- The panel uses Ren bg-primary (#151515, `bg-background`) instead of `popover`, so fields (#1F1F1F) stand out on it.
 
 Props, parts and names are still shadcn's.
 

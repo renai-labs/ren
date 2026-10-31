@@ -92,13 +92,19 @@ export function SpaceAppsTab() {
             <AccountList
               title="Accounts"
               actions={
-                <Button size="sm" onClick={() => page.setProfile({ appId: app.id, from: page.from })}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => page.setProfile({ appId: app.id, from: page.from })}
+                >
                   <IconPlus />
-                  New
+                  New account
                 </Button>
               }
               profiles={page.here}
               caption={(each) => caption(each, space.id)}
+              onOpen={(each) => page.setProfile({ appId: each.appId, profileId: each.id, from: page.from, edit: true })}
               action={(each) => (
                 <AccountActions
                   profile={each}

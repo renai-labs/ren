@@ -126,7 +126,15 @@ function RepositoriesDialog(props: { spaceId: string; onClose: () => void }) {
 
 function AppsStrip(props: { spaceId: string }) {
   const catalog = useCatalog()
-  const spaceName = useSpaces().spaceName
+  const spaces = useSpaces()
+  const spaceName = spaces.spaceName
+  const space = spaces.spaces.find((each) => each.id === props.spaceId)
+  const from = {
+    spaceId: props.spaceId,
+    name: spaceName(props.spaceId),
+    members: space?.memberCount ?? 1,
+    private: space?.kind === "private",
+  }
   const [connecting, setConnecting] = useState<ProfileTarget>()
   const [open, setOpen] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -151,7 +159,7 @@ function AppsStrip(props: { spaceId: string }) {
       <AddAppDialog
         space={{ id: props.spaceId, name: spaceName(props.spaceId) }}
         added={new Set(profiles.map((profile) => profile.appId))}
-        onAdded={(added) => setConnecting({ appId: added.app.id, profileId: added.profileId })}
+        onAdded={(added) => setConnecting({ appId: added.app.id, profileId: added.profileId, from })}
         open={adding}
         onOpenChange={setAdding}
       />
@@ -214,7 +222,7 @@ function AppsStrip(props: { spaceId: string }) {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setConnecting({ appId: profile.appId, profileId: profile.id })}
+                  onClick={() => setConnecting({ appId: profile.appId, profileId: profile.id, from })}
                 >
                   Connect
                 </Button>

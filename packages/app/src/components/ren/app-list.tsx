@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { IconBolt, IconRosetteDiscountCheckFilled, IconUser, IconUsers } from "@tabler/icons-react"
+import { IconBolt, IconChevronRight, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/ui/avatar"
@@ -93,7 +93,11 @@ export function AppRow(props: {
         </ItemTitle>
         <ItemDescription className={cn("line-clamp-1", props.compact && "text-xs")}>{props.caption}</ItemDescription>
       </ItemContent>
-      {props.action ? <ItemActions className="relative">{props.action}</ItemActions> : null}
+      {props.action ? (
+        <ItemActions className="pointer-events-none relative [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
+          {props.action}
+        </ItemActions>
+      ) : null}
     </Item>
   )
 }
@@ -278,27 +282,70 @@ export function AccountList(props: {
   empty?: string
   caption: (profile: AppProfile) => string
   action: (profile: AppProfile) => ReactNode
+  onOpen?: ((profile: AppProfile) => void) | undefined
 }) {
   if (props.profiles.length === 0 && !props.actions) return null
   return (
-    <SheetSection title={props.title} actions={props.actions}>
+    <section className="flex flex-col gap-3">
+      <div className="flex min-h-6.5 items-center justify-between gap-2">
+        <h3 className="text-base font-medium">
+          {props.title}
+          {props.profiles.length > 0 ? (
+            <span className="ml-1.5 text-muted-foreground tabular-nums">{props.profiles.length}</span>
+          ) : null}
+        </h3>
+        {props.actions}
+      </div>
       {props.profiles.length === 0 ? (
         <p className="text-sm text-muted-foreground">{props.empty ?? "No accounts yet"}</p>
       ) : (
-        <div className="flex flex-col gap-5">
-          {props.profiles.map((profile) => (
-            <Entry
-              key={profile.id}
-              media={<Tile icon={profile.kind === "private" ? <IconUser /> : <IconUsers />} />}
-              title={profile.name}
-              badge={gaps(profile).length > 0 ? <AttentionDot /> : undefined}
-              description={props.caption(profile)}
-            >
-              {props.action(profile)}
-            </Entry>
-          ))}
+        <div className="-mx-3 flex flex-col gap-1">
+          {props.profiles.map((profile) => {
+            const missing = gaps(profile).length > 0
+            const open = props.onOpen
+            return (
+              <div
+                key={profile.id}
+                className="group/row relative flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 ease-out has-[[data-slot=account-open]:hover]:bg-muted"
+              >
+                <span
+                  aria-hidden
+                  className={cn("size-2 shrink-0 rounded-full", missing ? "bg-chart-3" : "bg-chart-2")}
+                />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  {open ? (
+                    <button
+                      type="button"
+                      data-slot="account-open"
+                      onClick={() => open(profile)}
+                      className="truncate text-left text-sm outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+                    >
+                      {profile.name}
+                    </button>
+                  ) : (
+                    <span className="truncate text-sm">{profile.name}</span>
+                  )}
+                  <span className="truncate text-xs text-muted-foreground">
+                    {missing ? `Not connected · ${props.caption(profile)}` : props.caption(profile)}
+                  </span>
+                </div>
+                <div
+                  className={cn(
+                    "relative flex shrink-0 items-center gap-1",
+                    open &&
+                      "transition-opacity duration-150 ease-out group-focus-within/row:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100",
+                  )}
+                >
+                  {props.action(profile)}
+                </div>
+                {open && !missing ? (
+                  <IconChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out group-hover/row:translate-x-0.5" />
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       )}
-    </SheetSection>
+    </section>
   )
 }

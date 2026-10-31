@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { IconBuilding, IconChevronDown, IconCube, IconDots, IconKey, IconRefresh, IconTrash } from "@tabler/icons-react"
+import { IconBuilding, IconChevronDown, IconCube, IconDots, IconTrash } from "@tabler/icons-react"
 import type { AppProfileInfo } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -32,15 +32,12 @@ export function AccountActions(props: {
   const startSignIn = (item: AppProfile["items"][number]) => signIn.start(props.profile.id, item)
   const items = props.profile.items.filter((item) => item.status !== "unavailable")
   const missing = items.filter((item) => !item.optional && item.status !== "ok")
-  const connected = items.filter((item) => signsIn(item) && item.status === "ok")
-  const pasted = items.some((item) => !signsIn(item))
   const first = missing.at(0)
   const remove = props.onRemove
   return (
     <>
       {first ? (
         <Button
-          variant="outline"
           size="sm"
           disabled={signIn.pending}
           onClick={() => (missing.length === 1 && signsIn(first) ? startSignIn(first) : props.onOpen())}
@@ -48,7 +45,7 @@ export function AccountActions(props: {
           {missing.length === 1 ? "Connect" : `Connect ${missing.length}`}
         </Button>
       ) : null}
-      {connected.length > 0 || pasted || remove ? (
+      {remove ? (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -64,38 +61,21 @@ export function AccountActions(props: {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuGroup>
-              {connected.map((item) => (
-                <DropdownMenuItem key={item.label} onClick={() => startSignIn(item)}>
-                  <IconRefresh />
-                  {connected.length === 1 ? "Reconnect" : `Reconnect ${item.name}`}
-                </DropdownMenuItem>
-              ))}
-              {pasted ? (
-                <DropdownMenuItem onClick={props.onOpen}>
-                  <IconKey />
-                  Manage keys
-                </DropdownMenuItem>
-              ) : null}
-              {remove ? (
-                <>
-                  {connected.length > 0 || pasted ? <DropdownMenuSeparator /> : null}
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() =>
-                      isLastSpace(props.profile)
-                        ? setConfirming({
-                            title: `Remove ${props.profile.name}?`,
-                            description: lastSpaceWarning(props.profile),
-                            action: "Remove and delete",
-                          })
-                        : void remove()
-                    }
-                  >
-                    <IconTrash />
-                    Remove from space
-                  </DropdownMenuItem>
-                </>
-              ) : null}
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() =>
+                  isLastSpace(props.profile)
+                    ? setConfirming({
+                        title: `Remove ${props.profile.name}?`,
+                        description: lastSpaceWarning(props.profile),
+                        action: "Remove and delete",
+                      })
+                    : void remove()
+                }
+              >
+                <IconTrash />
+                Remove from space
+              </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>

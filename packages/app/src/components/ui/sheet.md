@@ -8,6 +8,7 @@ Generated with `shadcn add sheet` (style `base-nova`, Base UI).
 - A right-side sheet is 560px wide with 12px rounded left corners, as Ren's drawers.
 - The close button is muted; the header has no bottom padding and 4px between title and description.
 - The footer matches the dialog's: a top border, 12px by 16px padding, Cancel left and the main action right.
+- The panel uses Ren bg-primary (#151515, `bg-background`) instead of `popover`, so fields (#1F1F1F) stand out on it.
 
 Props, parts and names are still shadcn's.
 

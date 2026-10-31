@@ -4,7 +4,7 @@ import { getRouteApi } from "@tanstack/react-router"
 import { IconPlus } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Tabs } from "@/components/ui/tabs"
-import { AccountAccess, AccountActions } from "@/components/ren/account-actions"
+import { AccountActions } from "@/components/ren/account-actions"
 import { AccountList, AppSheet } from "@/components/ren/app-list"
 import { AppsTable } from "@/components/ren/apps-table"
 import { CredentialSheet, ownerOptions } from "@/components/ren/credential-sheet"
@@ -64,7 +64,7 @@ export function CredentialsSettingsPage() {
   return (
     <Page
       title="Credentials"
-      description="The app accounts and keys your organization’s chats use."
+      description="App accounts and keys you can use."
       leading={
         <Tabs value={page.tab} onValueChange={(value: string) => page.openTab(value)}>
           <PageTabsList>
@@ -140,18 +140,21 @@ function OrgApps() {
           <AccountList
             title="Accounts"
             actions={
-              <Button size="sm" onClick={() => setProfile({ appId: app.id })}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => setProfile({ appId: app.id })}
+              >
                 <IconPlus />
-                New
+                New account
               </Button>
             }
             profiles={catalog.profilesOf(app.id)}
             caption={reach}
+            onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, edit: true })}
             action={(each) => (
-              <>
-                <AccountAccess profile={each} />
-                <AccountActions profile={each} onOpen={() => setProfile({ appId: each.appId, profileId: each.id })} />
-              </>
+              <AccountActions profile={each} onOpen={() => setProfile({ appId: each.appId, profileId: each.id })} />
             )}
           />
         ) : null}
