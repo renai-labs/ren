@@ -4,6 +4,7 @@ import { Effect, Schema, Struct } from "effect"
 import { AgentIdentity } from "./agent/identity.js"
 import { Auth } from "./auth.js"
 import { ChannelOrigin } from "./channel-origin.js"
+import { Drive } from "./drive.js"
 import { EnvironmentTemplate } from "./environment-template.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
@@ -50,15 +51,36 @@ export const fileBytes = (url: string) => {
     : encoder.encode(data.replaceAll(/%[a-f0-9]{2}/giu, "x")).length
 }
 
-export interface File extends Schema.Schema.Type<typeof File> {}
-export const File = Schema.Struct({
+export const maxDriveFiles = 10
+
+export interface InlineFile extends Schema.Schema.Type<typeof InlineFile> {}
+export const InlineFile = Schema.Struct({
   url: Schema.String.check(
     Schema.isPattern(/^data:[a-z]+\/[a-z0-9.+-]+(;[^,]*)?,/iu),
     Schema.isMaxLength(maxBodyBytes),
     Schema.makeFilter((url) => fileBytes(url) <= maxFileBytes || "a file is at most 10 MB"),
   ),
   name: Schema.optionalKey(Schema.String),
-}).annotate({ identifier: "Session.File" })
+}).annotate({ identifier: "Session.InlineFile", description: "A file in the message itself, as a `data:` URL." })
+
+export interface DriveFile extends Schema.Schema.Type<typeof DriveFile> {}
+export const DriveFile = Schema.Struct({
+  path: Drive.Path.annotate({
+    description:
+      "The file’s path in the drive of the chat’s space, uploaded with `drive.startUpload`, such as `chats/<sessionId>/uploads/<messageId>/report.zip`.",
+  }),
+  name: Schema.NonEmptyString,
+}).annotate({
+  identifier: "Session.DriveFile",
+  description: "A file in the drive of the chat’s space. The chat reads it on its environment.",
+})
+
+export const DriveFiles = Schema.Array(DriveFile).check(Schema.isMaxLength(maxDriveFiles))
+
+export const File = Schema.Union([InlineFile, DriveFile]).annotate({ identifier: "Session.File" })
+export type File = typeof File.Type
+
+export const isInline = Schema.is(InlineFile)
 
 export interface Prompt extends Schema.Schema.Type<typeof Prompt> {}
 export const Prompt = Schema.Struct({
@@ -67,7 +89,7 @@ export const Prompt = Schema.Struct({
     Schema.Array(File).check(
       Schema.makeFilter(
         (files) =>
-          files.reduce((bytes, file) => bytes + fileBytes(file.url), 0) <= maxFileBytes ||
+          files.filter(isInline).reduce((bytes, file) => bytes + fileBytes(file.url), 0) <= maxFileBytes ||
           "a message's files total at most 10 MB",
       ),
     ),
@@ -220,6 +242,7 @@ export interface FirstMessage extends Schema.Schema.Type<typeof FirstMessage> {}
 export const FirstMessage = Schema.Struct({
   id: SessionMessage.ID,
   text: Schema.NonEmptyString,
+  files: Schema.optionalKey(DriveFiles),
 }).annotate({ identifier: "Session.FirstMessage" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}

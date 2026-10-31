@@ -349,7 +349,7 @@ export const layer = Layer.effect(
           ...(input.message && {
             initialMessage: {
               messageId: Session.MessageID.make(input.message.id),
-              prompt: { text: input.message.text },
+              prompt: { text: input.message.text, ...(input.message.files && { files: input.message.files }) },
               sender: { userId: actor.userId, memberId: yield* memberOf(actor) },
             },
           }),
@@ -429,7 +429,7 @@ export const layer = Layer.effect(
               ...start,
               initialMessage: {
                 messageId: Session.MessageID.make(message.id),
-                prompt: { text: message.text },
+                prompt: { text: message.text, ...(message.files && { files: message.files }) },
                 sender: { userId: actor.userId, memberId: yield* memberOf(actor) },
               },
             },

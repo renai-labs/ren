@@ -1786,8 +1786,21 @@ export type DriveStartUploadInput = {
 export type DriveStartUploadOutput = WriteResultUpload
 
 export type DriveDownloadInput = {
-  readonly spaceId?: { readonly spaceId?: string | undefined; readonly path: string }["spaceId"]
-  readonly path: { readonly spaceId?: string | undefined; readonly path: string }["path"]
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly path: string
+    readonly disposition?: ("attachment" | "inline") | undefined
+  }["spaceId"]
+  readonly path: {
+    readonly spaceId?: string | undefined
+    readonly path: string
+    readonly disposition?: ("attachment" | "inline") | undefined
+  }["path"]
+  readonly disposition?: {
+    readonly spaceId?: string | undefined
+    readonly path: string
+    readonly disposition?: ("attachment" | "inline") | undefined
+  }["disposition"]
 }
 
 export type DriveDownloadOutput = DriveLink
@@ -5501,77 +5514,87 @@ export type SessionCreateInput = {
   readonly id: {
     readonly id: string
     readonly spaceId: string
-    readonly message?: { readonly id: string; readonly text: string } | undefined
-    readonly defaultModels?:
-      | {
-          readonly image_generation?: { readonly providerId: string; readonly modelId: string }
-          readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
-          readonly decisions?: { readonly providerId: string; readonly modelId: string }
-          readonly search?: { readonly providerId: string; readonly modelId: string }
-          readonly video_generation?: { readonly providerId: string; readonly modelId: string }
-        }
-      | undefined
-    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+    readonly message?: {
+      readonly id: string
+      readonly text: string
+      readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }>
+    } | null
+    readonly defaultModels?: {
+      readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+      readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+      readonly decisions?: { readonly providerId: string; readonly modelId: string }
+      readonly search?: { readonly providerId: string; readonly modelId: string }
+      readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+    } | null
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
   }["id"]
   readonly spaceId: {
     readonly id: string
     readonly spaceId: string
-    readonly message?: { readonly id: string; readonly text: string } | undefined
-    readonly defaultModels?:
-      | {
-          readonly image_generation?: { readonly providerId: string; readonly modelId: string }
-          readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
-          readonly decisions?: { readonly providerId: string; readonly modelId: string }
-          readonly search?: { readonly providerId: string; readonly modelId: string }
-          readonly video_generation?: { readonly providerId: string; readonly modelId: string }
-        }
-      | undefined
-    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+    readonly message?: {
+      readonly id: string
+      readonly text: string
+      readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }>
+    } | null
+    readonly defaultModels?: {
+      readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+      readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+      readonly decisions?: { readonly providerId: string; readonly modelId: string }
+      readonly search?: { readonly providerId: string; readonly modelId: string }
+      readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+    } | null
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
   }["spaceId"]
   readonly message?: {
     readonly id: string
     readonly spaceId: string
-    readonly message?: { readonly id: string; readonly text: string } | undefined
-    readonly defaultModels?:
-      | {
-          readonly image_generation?: { readonly providerId: string; readonly modelId: string }
-          readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
-          readonly decisions?: { readonly providerId: string; readonly modelId: string }
-          readonly search?: { readonly providerId: string; readonly modelId: string }
-          readonly video_generation?: { readonly providerId: string; readonly modelId: string }
-        }
-      | undefined
-    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+    readonly message?: {
+      readonly id: string
+      readonly text: string
+      readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }>
+    } | null
+    readonly defaultModels?: {
+      readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+      readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+      readonly decisions?: { readonly providerId: string; readonly modelId: string }
+      readonly search?: { readonly providerId: string; readonly modelId: string }
+      readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+    } | null
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
   }["message"]
   readonly defaultModels?: {
     readonly id: string
     readonly spaceId: string
-    readonly message?: { readonly id: string; readonly text: string } | undefined
-    readonly defaultModels?:
-      | {
-          readonly image_generation?: { readonly providerId: string; readonly modelId: string }
-          readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
-          readonly decisions?: { readonly providerId: string; readonly modelId: string }
-          readonly search?: { readonly providerId: string; readonly modelId: string }
-          readonly video_generation?: { readonly providerId: string; readonly modelId: string }
-        }
-      | undefined
-    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+    readonly message?: {
+      readonly id: string
+      readonly text: string
+      readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }>
+    } | null
+    readonly defaultModels?: {
+      readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+      readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+      readonly decisions?: { readonly providerId: string; readonly modelId: string }
+      readonly search?: { readonly providerId: string; readonly modelId: string }
+      readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+    } | null
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
   }["defaultModels"]
   readonly model?: {
     readonly id: string
     readonly spaceId: string
-    readonly message?: { readonly id: string; readonly text: string } | undefined
-    readonly defaultModels?:
-      | {
-          readonly image_generation?: { readonly providerId: string; readonly modelId: string }
-          readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
-          readonly decisions?: { readonly providerId: string; readonly modelId: string }
-          readonly search?: { readonly providerId: string; readonly modelId: string }
-          readonly video_generation?: { readonly providerId: string; readonly modelId: string }
-        }
-      | undefined
-    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+    readonly message?: {
+      readonly id: string
+      readonly text: string
+      readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }>
+    } | null
+    readonly defaultModels?: {
+      readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+      readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+      readonly decisions?: { readonly providerId: string; readonly modelId: string }
+      readonly search?: { readonly providerId: string; readonly modelId: string }
+      readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+    } | null
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
   }["model"]
 }
 
@@ -5598,7 +5621,13 @@ export type ChatMessagesOutput = SessionMessagePage
 
 export type ChatRetryInput = {
   readonly id: { readonly id: string }["id"]
-  readonly message?: { readonly message?: { readonly id: string; readonly text: string } | undefined }["message"]
+  readonly message?: {
+    readonly message?: {
+      readonly id: string
+      readonly text: string
+      readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }>
+    } | null
+  }["message"]
 }
 
 export type ChatRetryOutput = void

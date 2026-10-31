@@ -377,11 +377,12 @@ type DriveDownloadRequest = Parameters<RawClient["drive"]["drive.download"]>[0]
 type DriveDownloadInput = {
   readonly spaceId?: DriveDownloadRequest["query"]["spaceId"]
   readonly path: DriveDownloadRequest["query"]["path"]
+  readonly disposition?: DriveDownloadRequest["query"]["disposition"]
 }
 const EndpointDriveDownload = (raw: RawClient["drive"]) => (input: DriveDownloadInput) =>
-  raw["drive.download"]({ query: { spaceId: input["spaceId"], path: input["path"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+  raw["drive.download"]({
+    query: { spaceId: input["spaceId"], path: input["path"], disposition: input["disposition"] },
+  }).pipe(Effect.mapError(mapClientError))
 
 type DriveDeleteRequest = Parameters<RawClient["drive"]["drive.delete"]>[0]
 type DriveDeleteInput = {

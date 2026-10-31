@@ -81,6 +81,7 @@ type SessionPromptInput = {
   readonly text: SessionPromptRequest["payload"]["text"]
   readonly delivery: SessionPromptRequest["payload"]["delivery"]
   readonly resume?: SessionPromptRequest["payload"]["resume"]
+  readonly files?: SessionPromptRequest["payload"]["files"]
   readonly agents?: SessionPromptRequest["payload"]["agents"]
   readonly skills?: SessionPromptRequest["payload"]["skills"]
 }
@@ -92,6 +93,7 @@ const EndpointSessionPrompt = (raw: RawClient["session"]) => (input: SessionProm
       text: input["text"],
       delivery: input["delivery"],
       resume: input["resume"],
+      files: input["files"],
       agents: input["agents"],
       skills: input["skills"],
     },

@@ -2359,6 +2359,14 @@
               "$ref": "#/components/schemas/Drive.PathEncoded"
             },
             "required": true
+          },
+          {
+            "name": "disposition",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Drive.Disposition"
+            },
+            "required": false
           }
         ],
         "security": [
@@ -13764,6 +13772,11 @@
         "required": ["name", "op", "value"],
         "additionalProperties": false
       },
+      "Drive.Disposition": {
+        "type": "string",
+        "enum": ["attachment", "inline"],
+        "description": "Defaults to `attachment`."
+      },
       "Drive.File": {
         "type": "object",
         "properties": {
@@ -17744,6 +17757,21 @@
         "required": ["id", "spaceId"],
         "additionalProperties": false
       },
+      "Session.DriveFile": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "$ref": "#/components/schemas/Drive.PathEncoded"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["path", "name"],
+        "additionalProperties": false,
+        "description": "A file in the drive of the chat’s space. The chat reads it on its environment."
+      },
       "Session.FailedAccess": {
         "type": "object",
         "properties": {
@@ -17767,6 +17795,13 @@
           "text": {
             "type": "string",
             "minLength": 1
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session.DriveFile"
+            },
+            "maxItems": 10
           }
         },
         "required": ["id", "text"],

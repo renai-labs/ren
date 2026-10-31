@@ -1085,109 +1085,106 @@ export type SessionPromptInput = {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
-    readonly resume?: boolean | undefined
-    readonly agents?:
-      | ReadonlyArray<{
-          readonly name: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
-    readonly skills?:
-      | ReadonlyArray<{
-          readonly id: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
+    readonly resume?: boolean | null
+    readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly agents?: ReadonlyArray<{
+      readonly name: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
+    readonly skills?: ReadonlyArray<{
+      readonly id: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
   }["id"]
   readonly text: {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
-    readonly resume?: boolean | undefined
-    readonly agents?:
-      | ReadonlyArray<{
-          readonly name: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
-    readonly skills?:
-      | ReadonlyArray<{
-          readonly id: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
+    readonly resume?: boolean | null
+    readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly agents?: ReadonlyArray<{
+      readonly name: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
+    readonly skills?: ReadonlyArray<{
+      readonly id: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
   }["text"]
   readonly delivery: {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
-    readonly resume?: boolean | undefined
-    readonly agents?:
-      | ReadonlyArray<{
-          readonly name: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
-    readonly skills?:
-      | ReadonlyArray<{
-          readonly id: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
+    readonly resume?: boolean | null
+    readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly agents?: ReadonlyArray<{
+      readonly name: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
+    readonly skills?: ReadonlyArray<{
+      readonly id: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
   }["delivery"]
   readonly resume?: {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
-    readonly resume?: boolean | undefined
-    readonly agents?:
-      | ReadonlyArray<{
-          readonly name: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
-    readonly skills?:
-      | ReadonlyArray<{
-          readonly id: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
+    readonly resume?: boolean | null
+    readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly agents?: ReadonlyArray<{
+      readonly name: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
+    readonly skills?: ReadonlyArray<{
+      readonly id: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
   }["resume"]
+  readonly files?: {
+    readonly id: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly resume?: boolean | null
+    readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly agents?: ReadonlyArray<{
+      readonly name: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
+    readonly skills?: ReadonlyArray<{
+      readonly id: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
+  }["files"]
   readonly agents?: {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
-    readonly resume?: boolean | undefined
-    readonly agents?:
-      | ReadonlyArray<{
-          readonly name: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
-    readonly skills?:
-      | ReadonlyArray<{
-          readonly id: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
+    readonly resume?: boolean | null
+    readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly agents?: ReadonlyArray<{
+      readonly name: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
+    readonly skills?: ReadonlyArray<{
+      readonly id: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
   }["agents"]
   readonly skills?: {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
-    readonly resume?: boolean | undefined
-    readonly agents?:
-      | ReadonlyArray<{
-          readonly name: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
-    readonly skills?:
-      | ReadonlyArray<{
-          readonly id: string
-          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-        }>
-      | undefined
+    readonly resume?: boolean | null
+    readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly agents?: ReadonlyArray<{
+      readonly name: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
+    readonly skills?: ReadonlyArray<{
+      readonly id: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
   }["skills"]
 }
 

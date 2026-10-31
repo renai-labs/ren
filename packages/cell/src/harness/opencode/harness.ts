@@ -16,7 +16,7 @@ import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
 import type { PullMemory } from "@ren/host-api/ren-host-api"
-import { Model, type SendInput } from "@ren/schema/session"
+import { isInline, Model, type SendInput } from "@ren/schema/session"
 import {
   Clock,
   DateTime,
@@ -377,7 +377,7 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
       sessionID,
       id: messageID,
       text: input.prompt.text,
-      files: input.prompt.files?.map((file) => ({ uri: file.url, name: file.name })),
+      files: input.prompt.files?.filter(isInline).map((file) => ({ uri: file.url, name: file.name })),
       delivery: input.delivery,
       metadata: {
         userID: input.sender.userId,
