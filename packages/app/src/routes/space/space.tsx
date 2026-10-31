@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { Page } from "@/components/ren/page"
 import { RowMenu } from "@/components/ren/row-menu"
+import { isSoftwareFactory } from "@/factory/lib/real"
 import { api, errorMessage } from "@/lib/api"
 import { useSpace } from "@/routes/space/use-space"
 
@@ -28,8 +29,10 @@ function useSpaceLayout() {
   const navigate = useNavigate()
   const archive = useMutation(api.space.archive.mutationOptions())
   const tab = useLocation({ select: (location) => location.pathname.split("/").at(3) ?? "overview" })
+  const factory = (tab === "overview" || tab === "kanban") && isSoftwareFactory(space)
   return {
     space,
+    factory,
     section: sections[tab] ?? sections.overview,
     archive: () =>
       archive.mutateAsync(
@@ -48,6 +51,12 @@ function useSpaceLayout() {
 export function SpaceLayout() {
   const page = useSpaceLayout()
   const space = page.space
+  if (page.factory)
+    return (
+      <div className="flex min-h-0 w-full flex-1 flex-col px-8 pt-2">
+        <Outlet />
+      </div>
+    )
   return (
     <Page
       title={page.section?.title ?? space.name}

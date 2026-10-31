@@ -1,0 +1,173 @@
+import type { LabelName } from "./types"
+
+export type Area = keyof typeof AREAS
+
+export type Template = { title: string; label: LabelName; area: Area }
+
+export const AREAS = {
+  webhooks: {
+    files: ["webhook-client.ts", "retry.ts", "src/webhook/deliver.ts", "signature.ts", "webhook.test.ts"],
+    tests: "webhook",
+  },
+  billing: {
+    files: ["src/proration.ts", "invoice.ts", "stripe-sync.ts", "src/billing/seats.ts", "credit-balance.ts"],
+    tests: "billing",
+  },
+  auth: { files: ["session.ts", "oauth-callback.ts", "src/auth/tokens.ts", "members.ts", "invite.ts"], tests: "auth" },
+  search: { files: ["src/search/index.ts", "ranker.ts", "query-parser.ts", "embeddings.ts"], tests: "search" },
+  web: {
+    files: ["nav.tsx", "sidebar.tsx", "routes/settings.tsx", "kanban-card.tsx", "use-shortcuts.ts"],
+    tests: "web",
+  },
+  qa: { files: ["browser-session.ts", "upload-token.ts", "e2e/login.spec.ts", "qa-runner.ts"], tests: "qa" },
+  infra: { files: ["socket-pool.ts", "keep-alive.ts", "queue-worker.ts", "health.ts", "deploy.yml"], tests: "infra" },
+  docs: { files: ["api-reference.mdx", "quickstart.mdx", "webhooks.mdx", "cli.mdx", "changelog.mdx"], tests: "docs" },
+  monitoring: { files: ["posthog.ts", "release-monitor.ts", "alerts.ts", "slo.ts"], tests: "monitoring" },
+  cli: { files: ["cli/auth.ts", "cli/login.ts", "cli/config.ts", "cli/index.ts"], tests: "cli" },
+} as const
+
+export const TEMPLATES: Template[] = [
+  { title: "Retry with jitter", label: "api", area: "webhooks" },
+  { title: "Partition invoices", label: "billing", area: "billing" },
+  { title: "Credit balance API", label: "feature", area: "billing" },
+  { title: "Keep-alive to 25s", label: "api", area: "infra" },
+  { title: "Prorate seat changes", label: "billing", area: "billing" },
+  { title: "Seat limit checks", label: "bug", area: "billing" },
+  { title: "Quickstart for CLI auth", label: "docs", area: "docs" },
+  { title: "Nav link audit", label: "web", area: "web" },
+  { title: "Member permissions", label: "feature", area: "auth" },
+  { title: "Idle socket test", label: "api", area: "infra" },
+  { title: "Billing smoke", label: "billing", area: "billing" },
+  { title: "VIP ticket routing", label: "feature", area: "webhooks" },
+  { title: "Escalation digest", label: "web", area: "web" },
+  { title: "Lower keep-alive", label: "api", area: "infra" },
+  { title: "Connect PostHog on Monitoring", label: "ren-fix", area: "monitoring" },
+  { title: "Flaky login e2e on Safari", label: "bug", area: "qa" },
+  { title: "Add QA upload token", label: "ren-fix", area: "qa" },
+  { title: "Null check in webhook retry", label: "bug", area: "webhooks" },
+  { title: "Export invoices as CSV", label: "feature", area: "billing" },
+  { title: "Save QA browser sign-in", label: "ren-improve", area: "qa" },
+  { title: "Cache repo index between runs", label: "ren-improve", area: "infra" },
+  { title: "Sign webhook payloads with v2 keys", label: "api", area: "webhooks" },
+  { title: "Dedupe webhook deliveries", label: "bug", area: "webhooks" },
+  { title: "Webhook delivery log", label: "feature", area: "webhooks" },
+  { title: "Backfill missed Stripe events", label: "billing", area: "billing" },
+  { title: "Tax IDs on invoices", label: "billing", area: "billing" },
+  { title: "Refund partial credits", label: "billing", area: "billing" },
+  { title: "Usage alerts at 80%", label: "feature", area: "billing" },
+  { title: "Annual plan switch", label: "billing", area: "billing" },
+  { title: "Fix rounding on metered seats", label: "bug", area: "billing" },
+  { title: "Invite links expire after 7d", label: "feature", area: "auth" },
+  { title: "SSO domain capture", label: "feature", area: "auth" },
+  { title: "Rotate session tokens", label: "api", area: "auth" },
+  { title: "Owner can’t remove admin", label: "bug", area: "auth" },
+  { title: "Rate limit login attempts", label: "api", area: "auth" },
+  { title: "Magic link for guests", label: "feature", area: "auth" },
+  { title: "Search ranks archived tasks", label: "bug", area: "search" },
+  { title: "Typo-tolerant search", label: "feature", area: "search" },
+  { title: "Index PR descriptions", label: "feature", area: "search" },
+  { title: "Speed up /search p95", label: "perf", area: "search" },
+  { title: "Filter search by label", label: "feature", area: "search" },
+  { title: "Embeddings batch size", label: "perf", area: "search" },
+  { title: "Keyboard shortcut sheet", label: "web", area: "web" },
+  { title: "Empty state for tasks", label: "web", area: "web" },
+  { title: "Settings page jumps on save", label: "bug", area: "web" },
+  { title: "Dark mode chart colors", label: "web", area: "web" },
+  { title: "Sidebar collapse persists", label: "web", area: "web" },
+  { title: "Breadcrumbs on task page", label: "web", area: "web" },
+  { title: "Toast stacks on retry", label: "bug", area: "web" },
+  { title: "Drag to reorder pins", label: "feature", area: "web" },
+  { title: "Timezone in activity feed", label: "bug", area: "web" },
+  { title: "Paste images into comments", label: "feature", area: "web" },
+  { title: "Bulk archive tasks", label: "feature", area: "web" },
+  { title: "Retry QA on network blip", label: "ren-improve", area: "qa" },
+  { title: "Seed QA accounts per run", label: "ren-fix", area: "qa" },
+  { title: "Screenshot diff threshold", label: "ren-improve", area: "qa" },
+  { title: "Record video on failure", label: "ren-improve", area: "qa" },
+  { title: "Checkout e2e on Firefox", label: "bug", area: "qa" },
+  { title: "Graceful worker shutdown", label: "api", area: "infra" },
+  { title: "Queue lag alert", label: "perf", area: "infra" },
+  { title: "Connection pool sizing", label: "perf", area: "infra" },
+  { title: "Health check on /ready", label: "api", area: "infra" },
+  { title: "Pin Node to 22.11", label: "infra", area: "infra" },
+  { title: "Trim Docker image", label: "infra", area: "infra" },
+  { title: "Canary deploys for api", label: "infra", area: "infra" },
+  { title: "Retry S3 uploads", label: "api", area: "infra" },
+  { title: "v2.4 API reference", label: "docs", area: "docs" },
+  { title: "Webhook signing guide", label: "docs", area: "docs" },
+  { title: "Changelog for June", label: "docs", area: "docs" },
+  { title: "Billing FAQ", label: "docs", area: "docs" },
+  { title: "Migrate examples to SDK v3", label: "docs", area: "docs" },
+  { title: "Alert on release regressions", label: "ren-improve", area: "monitoring" },
+  { title: "SLO dashboard for webhooks", label: "feature", area: "monitoring" },
+  { title: "Tag errors with release", label: "ren-fix", area: "monitoring" },
+  { title: "Mute flapping alerts", label: "ren-improve", area: "monitoring" },
+  { title: "CLI login on headless boxes", label: "feature", area: "cli" },
+  { title: "CLI config profiles", label: "feature", area: "cli" },
+  { title: "CLI exits 0 on auth error", label: "bug", area: "cli" },
+  { title: "Shell completions", label: "feature", area: "cli" },
+  { title: "Progress bar for uploads", label: "web", area: "cli" },
+  { title: "Read replicas for reports", label: "perf", area: "infra" },
+  { title: "Slow invoice PDF render", label: "perf", area: "billing" },
+  { title: "Duplicate charge on retry", label: "bug", area: "billing" },
+  { title: "Coupon stacking rules", label: "billing", area: "billing" },
+  { title: "Team usage breakdown", label: "feature", area: "billing" },
+  { title: "Audit log export", label: "feature", area: "auth" },
+  { title: "SCIM deprovisioning", label: "feature", area: "auth" },
+  { title: "2FA recovery codes", label: "feature", area: "auth" },
+  { title: "Webhook replay button", label: "feature", area: "webhooks" },
+  { title: "Timeout on slow endpoints", label: "api", area: "webhooks" },
+  { title: "Batch webhook events", label: "perf", area: "webhooks" },
+  { title: "Validate webhook URLs", label: "bug", area: "webhooks" },
+  { title: "Saved searches", label: "feature", area: "search" },
+  { title: "Highlight matches", label: "web", area: "search" },
+  { title: "Reindex on label rename", label: "bug", area: "search" },
+  { title: "Explain plan on cold cache", label: "ren-improve", area: "search" },
+  { title: "Pagination cursor drift", label: "bug", area: "search" },
+  { title: "Idempotency keys on POST", label: "api", area: "webhooks" },
+  { title: "ETag on task list", label: "perf", area: "web" },
+  { title: "Expose rate-limit headers", label: "api", area: "infra" },
+  { title: "Hide archived projects", label: "web", area: "web" },
+  { title: "Plan picks stale branch", label: "ren-fix", area: "infra" },
+  { title: "Shorter review prompts", label: "ren-improve", area: "infra" },
+  { title: "Reuse sandboxes across QA", label: "ren-improve", area: "qa" },
+]
+
+export const ALERTS = [
+  { title: "p95 /search +38%", label: "perf", area: "search", channel: "#eng" },
+  { title: "5xx spike on /webhooks", label: "api", area: "webhooks", channel: "#eng" },
+  { title: "Queue lag over 2m", label: "perf", area: "infra", channel: "#eng" },
+  { title: "Memory creeping on api-3", label: "perf", area: "infra", channel: "#eng" },
+  { title: "Auth callback errors up", label: "bug", area: "auth", channel: "#support" },
+  { title: "Invoice emails bouncing", label: "billing", area: "billing", channel: "#support" },
+] as const satisfies ReadonlyArray<{ title: string; label: LabelName; area: Area; channel: string }>
+
+export const INCIDENTS = [
+  { title: "Staging is down", summary: "release-monitor has failed health checks" },
+  { title: "Webhooks failing in prod", summary: "delivery success dropped below 95%" },
+  { title: "Checkout returns 502", summary: "billing-api is failing health checks" },
+] as const
+
+export const JOBS = [
+  {
+    title: "Release monitoring",
+    label: "ops",
+    area: "monitoring",
+    hours: [0, 4, 8, 12, 16, 20],
+    minutes: { min: 6, max: 18 },
+  },
+  { title: "Docs maintenance", label: "docs", area: "docs", hours: [1], minutes: { min: 15, max: 40 } },
+  { title: "Agent dreaming", label: "memory", area: "monitoring", hours: [3], minutes: { min: 10, max: 25 } },
+] as const satisfies ReadonlyArray<{
+  title: string
+  label: LabelName
+  area: Area
+  hours: readonly number[]
+  minutes: { min: number; max: number }
+}>
+
+export const HALLUCINATIONS = [
+  "Build cited a helper that doesn’t exist. Review caught it.",
+  "Build imported a package that isn’t installed. Review caught it.",
+  "Plan referenced an endpoint that was removed. Review caught it.",
+] as const

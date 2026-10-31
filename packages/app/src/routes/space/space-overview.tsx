@@ -3,6 +3,8 @@ import { toast } from "sonner"
 import { EditableText } from "@/components/ren/editable-text"
 import { Row, Rows } from "@/components/ren/page"
 import { api, errorMessage } from "@/lib/api"
+import { FactoryDashboard } from "@/factory/factory-view"
+import { isSoftwareFactory } from "@/factory/lib/real"
 import { useSpace } from "@/routes/space/use-space"
 
 function useSpaceOverview() {
@@ -25,6 +27,7 @@ function useSpaceOverview() {
 
 export function SpaceOverviewTab() {
   const page = useSpaceOverview()
+  if (isSoftwareFactory(page.space)) return <FactoryDashboard space={page.space} />
   return (
     <Rows>
       {[

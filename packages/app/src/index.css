@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
+@import "./factory/factory.css";
 @source "../node_modules/streamdown/dist/*.js";
 
 @font-face {

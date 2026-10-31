@@ -297,6 +297,12 @@ const spaceCredentialsRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/space/space-credentials"), "SpaceCredentialsTab"),
 })
 
+const spaceKanbanRoute = createRoute({
+  getParentRoute: () => spaceRoute,
+  path: "kanban",
+  component: lazyRouteComponent(() => import("@/routes/space/space-kanban"), "SpaceKanbanTab"),
+})
+
 const spaceFactoryRoute = createRoute({
   getParentRoute: () => spaceRoute,
   path: "factory",
@@ -553,6 +559,7 @@ const routeTree = rootRoute.addChildren([
         spaceOverviewRoute,
         spaceMembersRoute,
         spaceCredentialsRoute,
+        spaceKanbanRoute,
         spaceFactoryRoute,
         spaceAppsRoute,
         spaceRepositoriesRoute,

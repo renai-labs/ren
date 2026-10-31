@@ -11,11 +11,18 @@ function useSpaceFactory() {
   const queryClient = useQueryClient()
   const agents = useQuery(spaceAgentsOptions(space.id))
   const update = useMutation(api.space.update.mutationOptions())
-  const order = space.agentOrder
+  const order = space.factory.agents.map((entry) => entry.agentId)
   const list = agents.data?.items ?? []
-  const save = (agentOrder: ReadonlyArray<string>) =>
+  const entries = new Map(space.factory.agents.map((entry) => [entry.agentId, entry]))
+  const save = (ids: ReadonlyArray<string>) =>
     update.mutate(
-      { id: space.id, agentOrder: [...agentOrder] },
+      {
+        id: space.id,
+        factory: {
+          ...(space.factory.maxHandoffs && { maxHandoffs: space.factory.maxHandoffs }),
+          agents: ids.map((id) => entries.get(id) ?? { agentId: id }),
+        },
+      },
       {
         onSuccess: (updated) =>
           queryClient.setQueryData(api.space.get.queryOptions({ idOrSlug: space.id }).queryKey, updated),

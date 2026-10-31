@@ -1,0 +1,311 @@
+@utility factory {
+  --f-bg-primary: #151515;
+  --f-bg-secondary: #1f1f1f;
+  --f-bg-tertiary: #101010;
+  --f-fill-1: rgb(255 255 255 / 4%);
+  --f-fill-2: rgb(255 255 255 / 8%);
+  --f-fill-strong: rgb(255 255 255 / 14%);
+  --f-text-1: #f1f1f1;
+  --f-text-2: #a3a3a3;
+  --f-ink: #d4d4d4;
+  --f-bg-hover: #232323;
+  --f-border-1: rgb(255 255 255 / 8%);
+  --f-border-2: #777;
+  --f-accent: #268bff;
+  --f-success: #53c878;
+  --f-warning: #e0a33a;
+  --f-light-success: #197735;
+  --f-light-warning: #8a5700;
+  --f-light-text-2: #5d5d5d;
+
+  --f-plan: #a496e6;
+  --f-build: #8ea8d8;
+  --f-review: #7fb7b5;
+  --f-qa: #86be9a;
+  --f-release: #9a9a9a;
+  --f-monitor: #c9b27c;
+  --f-human: #7a7a7a;
+
+  --f-amber: #d2ae6e;
+  --f-teal: #7fb7b5;
+  --f-green: #86be9a;
+  --f-red: #e08c8c;
+  --f-live: #e5534b;
+
+  --f-linear: #5e6ad2;
+  --f-sentry: #9e86ff;
+  --f-slack-red: #e01e5a;
+  --f-slack-blue: #36c5f0;
+  --f-slack-green: #2eb67d;
+  --f-slack-yellow: #ecb22e;
+
+  --f-grid-0: rgb(255 255 255 / 6%);
+  --f-grid-1: #1c3a27;
+  --f-grid-2: #22623a;
+  --f-grid-3: #33985a;
+  --f-grid-4: #53c878;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  font-family: "SF Pro Variable", sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--f-text-1);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+@utility t-2xs {
+  font-size: 10px;
+  line-height: 14px;
+}
+
+@utility t-xs {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+@utility t-13 {
+  font-size: 13px;
+  line-height: 16px;
+}
+
+@utility t-sm {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+@utility t-base {
+  font-size: 16px;
+  line-height: 24px;
+}
+
+@utility w-reg {
+  font-weight: 400;
+  font-variation-settings: "wght" 400;
+}
+
+@utility w-med {
+  font-weight: 500;
+  font-variation-settings: "wght" 500;
+}
+
+@utility w-semi {
+  font-weight: 600;
+  font-variation-settings: "wght" 600;
+}
+
+@utility tnum {
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
+@utility f-card {
+  transition: background-color 150ms ease;
+  border-radius: 10px;
+  background: var(--f-bg-secondary);
+  box-shadow:
+    var(--f-fill-1) 0 1px 0 inset,
+    rgb(20 20 20 / 50%) 0 1px 2px,
+    var(--f-border-1) 0 0 0 1px;
+
+  @media (hover: hover) and (pointer: fine) {
+    &[role="link"]:hover {
+      background: var(--f-bg-hover);
+    }
+  }
+}
+
+@utility f-ring {
+  background: var(--f-fill-1);
+  box-shadow: var(--f-border-1) 0 0 0 1px inset;
+}
+
+@utility f-press {
+  transition:
+    transform 100ms var(--ease-out),
+    background-color 150ms ease;
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &:active:not(:disabled) {
+      transform: none;
+    }
+  }
+}
+
+@utility f-press-ring {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      background: var(--f-fill-2);
+    }
+  }
+}
+
+@utility f-press-strong {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      background: rgb(255 255 255 / 20%);
+    }
+  }
+}
+
+@utility f-press-fill {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      background: rgb(255 255 255 / 12%);
+    }
+  }
+}
+
+@keyframes f-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@utility f-fade-in {
+  animation: f-fade-in 200ms var(--ease-out);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 150ms;
+  }
+}
+
+@utility f-menu {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
+
+  &[data-starting-style] {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  &[data-ending-style] {
+    opacity: 0;
+    transform: scale(0.97);
+    transition-duration: 100ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &[data-starting-style],
+    &[data-ending-style] {
+      transform: none;
+    }
+  }
+}
+
+@utility f-scroll {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility f-lattice {
+  --f-lattice-rest: 0.25;
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+@utility f-lattice-cell {
+  position: absolute;
+  background: var(--f-text-2);
+  opacity: var(--f-lattice-rest);
+}
+
+.f-lattice[data-variant="S1"] .f-lattice-cell,
+.f-lattice[data-variant="S2"] .f-lattice-cell {
+  animation: f-orb-wave 1.7s cubic-bezier(0.66, 0, 0.34, 1) infinite both;
+}
+
+.f-lattice[data-variant="S4"] .f-lattice-cell {
+  animation: f-orb-wave 1.6s cubic-bezier(0.66, 0, 0.34, 1) infinite both;
+}
+
+.f-lattice[data-variant="S3"] .f-lattice-cell,
+.f-lattice[data-variant="S5"] .f-lattice-cell {
+  animation: f-orb-comet 1.7s cubic-bezier(0.22, 1, 0.36, 1) infinite both;
+}
+
+.f-lattice[data-variant="S3"] .f-lattice-cell[data-still],
+.f-lattice[data-variant="S5"] .f-lattice-cell[data-still] {
+  animation: none;
+  opacity: 0.12;
+}
+
+.factory[data-paused] .f-lattice-cell {
+  animation: none;
+}
+
+.factory[data-paused] .f-lattice-cell[data-lit] {
+  opacity: 0.9;
+}
+
+.factory[data-paused] .f-lattice-cell[data-mid] {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f-lattice-cell {
+    animation: none !important;
+  }
+
+  .f-lattice-cell[data-lit] {
+    opacity: 0.9 !important;
+  }
+
+  .f-lattice-cell[data-mid] {
+    opacity: 0.45 !important;
+  }
+}
+
+@keyframes f-orb-wave {
+  0% {
+    opacity: var(--f-lattice-rest);
+    transform: scale(1);
+    animation-timing-function: cubic-bezier(0.66, 0, 0.34, 1);
+  }
+
+  28% {
+    opacity: 0.9;
+    transform: scale(1.12);
+    animation-timing-function: cubic-bezier(0.66, 0, 0.34, 1);
+  }
+
+  56%,
+  100% {
+    opacity: var(--f-lattice-rest);
+    transform: scale(1);
+  }
+}
+
+@keyframes f-orb-comet {
+  0% {
+    opacity: 0.9;
+    transform: scale(1.12);
+    animation-timing-function: linear;
+  }
+
+  45%,
+  100% {
+    opacity: var(--f-lattice-rest);
+    transform: scale(1);
+  }
+}

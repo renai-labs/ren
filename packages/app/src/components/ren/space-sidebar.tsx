@@ -10,6 +10,7 @@ import {
   IconGitBranch,
   IconKey,
   IconLayoutDashboard,
+  IconLayoutKanban,
   IconLock,
   IconSelector,
   IconUsers,
@@ -36,11 +37,13 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { sidebarRow } from "@/components/ren/app-sidebar"
+import { isSoftwareFactory } from "@/factory/lib/real"
 import { useSpaces } from "@/hooks/use-spaces"
 import { api } from "@/lib/api"
 
 const spaceSections = [
   { value: "overview", label: "Overview", icon: IconLayoutDashboard, to: "/spaces/$spaceId" },
+  { value: "kanban", label: "Kanban", icon: IconLayoutKanban, to: "/spaces/$spaceId/kanban" },
   { value: "members", label: "Members", icon: IconUsers, to: "/spaces/$spaceId/members" },
   { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
   { value: "repositories", label: "Repositories", icon: IconGitBranch, to: "/spaces/$spaceId/repositories" },
@@ -95,7 +98,11 @@ export function SpaceSidebar(props: { spaceId: string }) {
                   <DropdownMenuLabel>Spaces</DropdownMenuLabel>
                   <DropdownMenuRadioGroup
                     value={space.id}
-                    onValueChange={(spaceId: string) => void navigate({ to: section.to, params: { spaceId } })}
+                    onValueChange={(spaceId: string) => {
+                      const target = spaces.find((each) => each.id === spaceId)
+                      const kanban = section.value === "kanban" && !(target && isSoftwareFactory(target))
+                      void navigate({ to: kanban ? "/spaces/$spaceId" : section.to, params: { spaceId } })
+                    }}
                   >
                     {spaces.map((each) => (
                       <DropdownMenuRadioItem key={each.id} value={each.id}>
@@ -116,6 +123,7 @@ export function SpaceSidebar(props: { spaceId: string }) {
             <SidebarMenu className="gap-px">
               {spaceSections
                 .filter((each) => each.value !== "members" || space.kind !== "private")
+                .filter((each) => each.value !== "kanban" || isSoftwareFactory(space))
                 .map((each) => (
                   <SidebarMenuItem key={each.value}>
                     <SidebarMenuButton
