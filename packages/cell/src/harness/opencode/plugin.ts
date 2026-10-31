@@ -483,8 +483,24 @@ export const make = (
           apps: (yield* Ref.get(applied)).apps,
           onPrompt: Effect.flatten(Ref.get(refreshSkills)),
         })
-        // oxlint-disable-next-line ren/no-comments -- R53: one record of copies for the chat's references and skills.
-        const copySources: Array<() => ReadonlyArray<OpenCodeCopies.Item>> = [skills.items]
+        // oxlint-disable-next-line ren/no-comments -- R53: one record of copies for the chat's apps' setup, references and skills.
+        const copySources: Array<() => ReadonlyArray<OpenCodeCopies.Item>> = [
+          () =>
+            Option.match(
+              Option.flatMap(Ref.getUnsafe(applied).apps, (info) => HandCopies.setupOf(info.catalog.apps)),
+              {
+                onNone: () => [],
+                onSome: (item) => [
+                  {
+                    path: item.path,
+                    copy: item.copy,
+                    note: (message: string) => `${message}. The next turn sets it up again.`,
+                  },
+                ],
+              },
+            ),
+          skills.items,
+        ]
         yield* OpenCodeCopies.make({
           context,
           copies,

@@ -171,6 +171,29 @@ it.live("a mount on an environment that cannot mount fails at once, and is tried
   }),
 )
 
+it.live("a setup that fails keeps its failure until the next turn, then runs again", () =>
+  Effect.gen(function* () {
+    const session = yield* copiesOf()
+    const log = join(workspace, `${crypto.randomUUID()}.log`)
+    const ready = join(workspace, crypto.randomUUID())
+    const command = `echo run >> ${log}; test -e ${ready} || { echo not ready >&2; exit 4; }`
+    const item: HandCopies.Item = {
+      path: "setup:flaky",
+      copy: {
+        type: "setup",
+        entries: [{ key: crypto.randomUUID(), name: "flaky", steps: [{ command, user: "user" }] }],
+      },
+    }
+    const failed = [{ item, message: `Setup of flaky failed: ${command} exited with 4: not ready` }]
+    expect(yield* session.copies.ensure([item])).toEqual(failed)
+    expect(yield* session.copies.ensure([item])).toEqual(failed)
+    yield* Effect.promise(() => Bun.write(ready, ""))
+    yield* session.copies.turnStarted
+    expect(yield* session.copies.ensure([item])).toEqual([])
+    expect(yield* read(log)).toBe("run\nrun\n")
+  }),
+)
+
 it.live("a copy that a chat deletes comes back after turnStarted and for a new generation, not before", () =>
   Effect.gen(function* () {
     const session = yield* copiesOf()
