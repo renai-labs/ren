@@ -59,7 +59,7 @@ const objects = (ast: SchemaAST.AST): ReadonlyArray<SchemaAST.Objects> => {
   return SchemaAST.isUnion(ast) ? ast.types.flatMap(objects) : []
 }
 
-const accepts = (schema: Schema.Top | undefined, name: string, value: string) => {
+const accepts = (schema: Schema.Top | undefined, name: string, value: unknown) => {
   const property = schema
     ? objects(SchemaAST.toType(schema.ast))
         .flatMap((object) => object.propertySignatures)
@@ -162,9 +162,13 @@ export const run = <
       Effect.all(
         Record.map(values ?? {}, (value, name): Effect.Effect<Value, unknown> => {
           const lookup = input.lookups?.[name]
-          const text = Option.filter(plain(value), Predicate.isString)
-          if (!lookup || Option.isNone(text) || accepts(schema, name, text.value)) return Effect.succeed(value)
-          return lookup(client, text.value)
+          const found = plain(value)
+          if (!lookup || Option.isNone(found)) return Effect.succeed(value)
+          const one = (item: Scalar, sample: unknown) =>
+            typeof item !== "string" || accepts(schema, name, sample) ? Effect.succeed(item) : lookup(client, item)
+          return typeof found.value === "object"
+            ? Effect.forEach(found.value, (item) => one(item, [item]))
+            : one(found.value, found.value)
         }),
       )
     const params = yield* decode(
