@@ -9,6 +9,9 @@ proxy:
   # Development reaches local upstreams (LiteLLM, Ren). Production keeps the
   # default deny list and adds the private ranges (README C25).
   upstream_deny_cidrs: []
+  # A server that answers after 30 s, the default, gets 502. Streamed answers
+  # send their headers at once.
+  upstream_response_header_timeout: "5m"
 tls:
   ca_cert: "/certs/mitm-ca.pem"
   ca_key: "/certs/mitm-ca.key"
