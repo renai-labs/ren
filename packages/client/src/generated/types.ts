@@ -93,6 +93,8 @@ export type AgentMembershipID = string
 
 export type SessionID = string
 
+export type SessionOrigin = "chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github"
+
 export type SessionHarness = "opencode"
 
 export type SessionStatus = "idle" | "busy"
@@ -412,6 +414,7 @@ export type SessionInfo = {
   id: SessionID
   spaceId: SpaceID
   createdBy: AuthUserID
+  origin: SessionOrigin
   harness: SessionHarness
   title: string | null
   status: SessionStatus

@@ -78,6 +78,7 @@ const toInfo = (row: Row): Session.Info => ({
   id: row.session.id,
   spaceId: row.session.space_id,
   createdBy: row.session.created_by,
+  origin: row.session.origin,
   harness: row.session.harness,
   title: row.opencode?.title ?? null,
   status: row.opencode?.timeSuspended ? "busy" : "idle",
@@ -326,7 +327,10 @@ export const layer = Layer.effect(
           }),
         }
         yield* sessions
-          .create({ organizationId: actor.organizationId, spaceId: input.spaceId, createdBy: actor.userId }, start)
+          .create(
+            { organizationId: actor.organizationId, spaceId: input.spaceId, createdBy: actor.userId, origin: "chat" },
+            start,
+          )
           .pipe(
             Effect.catchTag("SessionRunner.AlreadyExists", () =>
               Effect.gen(function* () {

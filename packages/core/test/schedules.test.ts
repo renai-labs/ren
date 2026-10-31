@@ -58,6 +58,7 @@ const runner = Layer.effect(
       organizationId: Auth.OrganizationID.create(),
       spaceId: Space.ID.create(),
       createdBy: Auth.UserID.create(),
+      origin: "schedule" as const,
     }
     const unavailable = new BrainHost.BrainUnavailable({ cause: new Error("The brain is starting") })
     const rejected = new Brains.BrainRejectedError({ message: "The brain is starting." })
@@ -88,6 +89,7 @@ const runner = Layer.effect(
               organizationId: owner.organizationId,
               spaceId: owner.spaceId,
               createdBy: owner.createdBy,
+              origin: owner.origin,
               brainId: Brain.ofSession(sessionId),
               parentId: null,
               harness: "opencode",

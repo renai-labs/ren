@@ -155,11 +155,24 @@ export const HostState = Schema.Struct({
 export const Status = Schema.Literals(["idle", "busy"]).annotate({ identifier: "Session.Status" })
 export type Status = typeof Status.Type
 
+export const Origin = Schema.Literals([
+  "chat",
+  "task",
+  "schedule",
+  "webhook",
+  ...ChannelOrigin.Provider.literals,
+]).annotate({
+  identifier: "Session.Origin",
+  description: "What started the chat: a person in a chat, a task, a schedule, a webhook or a channel.",
+})
+export type Origin = typeof Origin.Type
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
   spaceId: Space.ID,
   createdBy: Auth.UserID,
+  origin: Origin,
   harness: Harness,
   title: Schema.NullOr(Schema.String),
   status: Status,

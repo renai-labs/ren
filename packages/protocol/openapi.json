@@ -17528,6 +17528,9 @@
           "createdBy": {
             "$ref": "#/components/schemas/Auth.UserID"
           },
+          "origin": {
+            "$ref": "#/components/schemas/Session.Origin"
+          },
           "harness": {
             "$ref": "#/components/schemas/Session.Harness"
           },
@@ -17579,6 +17582,7 @@
           "id",
           "spaceId",
           "createdBy",
+          "origin",
           "harness",
           "title",
           "status",
@@ -17608,6 +17612,11 @@
         },
         "required": ["endpointId", "modelId"],
         "additionalProperties": false
+      },
+      "Session.Origin": {
+        "type": "string",
+        "enum": ["chat", "task", "schedule", "webhook", "slack", "linear", "github"],
+        "description": "What started the chat: a person in a chat, a task, a schedule, a webhook or a channel."
       },
       "Session.Page": {
         "type": "object",

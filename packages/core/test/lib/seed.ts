@@ -98,7 +98,7 @@ export const owner = Effect.fnUntraced(function* () {
   const memberId = yield* member(organizationId, creator.id, "owner")
   const spaceId = yield* space(organizationId)
   yield* join(spaceId, creator.id)
-  return { organizationId, spaceId, createdBy: creator.id, memberId }
+  return { organizationId, spaceId, createdBy: creator.id, memberId, origin: "chat" as const }
 })
 
 export const ren = Effect.fnUntraced(function* (input: { readonly instructions?: string } = {}) {

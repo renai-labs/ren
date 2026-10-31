@@ -1,0 +1,1 @@
+ALTER TABLE "agent_session" ADD COLUMN "origin" text DEFAULT 'chat' NOT NULL;

@@ -144,6 +144,7 @@ export const layer = Layer.effect(
                   organization_id: parent.organization_id,
                   space_id: parent.space_id,
                   created_by: parent.created_by,
+                  origin: parent.origin,
                   parent_id: parent.id,
                   root_id: parent.root_id,
                   brain_id: parent.brain_id,

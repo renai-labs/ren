@@ -430,7 +430,7 @@ export const layer = Layer.effect(
       const isGlobal = Option.match(agent, { onNone: () => true, onSome: (found) => found.isGlobal })
       yield* runner
         .create(
-          { organizationId: row.organization_id, spaceId: row.space_id, createdBy: row.owner_id },
+          { organizationId: row.organization_id, spaceId: row.space_id, createdBy: row.owner_id, origin: "schedule" },
           {
             sessionId: current.session_id,
             harness: Session.defaultHarness,

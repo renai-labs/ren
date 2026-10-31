@@ -48,6 +48,7 @@ export const agent_session = pgTable(
     agent_id: text()
       .$type<Agent.ID>()
       .references(() => agent.id, { onDelete: "set null" }),
+    origin: text().$type<Session.Origin>().notNull().default("chat"),
     brain_id: text()
       .$type<Brain.ID>()
       .notNull()
