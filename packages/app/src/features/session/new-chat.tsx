@@ -2,16 +2,14 @@ import { Composer, ComposerHistory, Mentions } from "@ren/chat"
 import { Session } from "@ren/schema/session"
 import { SessionModel } from "@ren/schema/session/model"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Icon } from "@ren/ui/icon"
 import { Logotype } from "@ren/ui/logotype"
-import { Message, MessageContent } from "@ren/ui/message"
 import { PromptInput } from "@ren/ui/prompt-input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { startTransition, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import { Attention } from "../../lib/attention.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -27,7 +25,6 @@ import { SpaceAppsStrip } from "../../components/apps-strip.js"
 import { ChatComposer } from "./chat-composer.js"
 import { ComposerCopy } from "./composer-copy.js"
 import { SessionDrafts } from "./session-drafts.js"
-import { Working } from "./transcript-notice.js"
 
 // oxlint-disable-next-line ren/no-comments -- With no listed pick the chat uses the space's default model, or the first listed model, and sends it.
 const listed = (
@@ -68,7 +65,6 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
   const context = RouterContext.useRouterContext()
   const navigate = useNavigate()
   const [sessionID, setSessionID] = useState(() => Session.ID.create())
-  const [sent, setSent] = useState<string>()
   const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: 100, joined: true }))
   const models = useQuery(context.api.chat.models.queryOptions({ id: sessionID }))
   const create = useMutation(context.api.session.create.mutationOptions())
@@ -77,6 +73,7 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
   const platform = Platform.usePlatform()
   const mobile = Viewport.useMobile()
   const input = useRef<HTMLTextAreaElement>(null)
+  const [starting, setStarting] = useState(false)
   const [draft, setDraft] = useState(() => Composer.decode(platform.drafts?.get(SessionDrafts.fresh)))
   const [chosen, setChosen] = useState<string>()
   const options = (spaces.data?.items ?? []).map((space) => ({ value: space.id, label: space.name }))
@@ -97,7 +94,7 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
     offered: [],
     client: [],
     text: draft.text,
-    readOnly: create.isPending,
+    readOnly: starting,
     field: input,
     onText: (next) => change(Composer.withText(draft, next)),
     onClient: () => undefined,
@@ -114,29 +111,15 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
     if (encoded) platform.drafts?.set(SessionDrafts.fresh, encoded)
     else platform.drafts?.remove(SessionDrafts.fresh)
   }
-  if (sent !== undefined)
-    return (
-      <div data-slot="chat" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="mx-auto flex w-full max-w-192 flex-col gap-6 px-4 pt-14 pb-8 md:px-6">
-          <Message align="end">
-            <MessageContent className="max-w-5/6 items-end">
-              <Bubble variant="muted" align="end">
-                <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
-                  {sent}
-                </BubbleContent>
-              </Bubble>
-            </MessageContent>
-          </Message>
-          <Working label="Starting the chat" />
-        </div>
-      </div>
-    )
   return (
     <div data-slot="chat" className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-4 md:px-6">
       <span aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <Logotype size="display" tone="watermark" drawing="outline" label="" />
       </span>
-      <div className="relative flex w-full max-w-192 flex-col">
+      <div
+        aria-busy={starting}
+        className="relative flex w-full max-w-192 flex-col transition-opacity duration-200 ease-out aria-busy:opacity-60"
+      >
         <ChatComposer
           label="Start a chat"
           header={
@@ -144,7 +127,7 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
               items={[{ value: null, label: "Choose a space" }, ...options]}
               value={spaceId ?? null}
               onValueChange={(next) => next && setChosen(next)}
-              disabled={create.isPending}
+              disabled={starting}
             >
               <SelectTrigger
                 aria-label="Space"
@@ -168,7 +151,7 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
           suggestions={suggested.panel}
           addMenu={
             <ComposerAddMenu
-              disabled={create.isPending}
+              disabled={starting}
               spaceId={spaceId}
               addRepositories={props.addRepositories}
               populated={Boolean(text)}
@@ -180,16 +163,15 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
           }
           apps={spaceId ? <SpaceAppsStrip spaceId={spaceId} /> : null}
           onSubmit={() => {
-            if (!text || !spaceId || create.isPending) return
+            if (!text || !spaceId || starting) return
+            setStarting(true)
             Attention.ask(platform)
             const message = { id: SessionMessage.ID.create(), text: suggested.resolve(text).text }
             SessionDrafts.keepPending(platform.drafts, sessionID, message)
-            startTransition(() => setSent(text))
             create.mutate(
               { id: sessionID, spaceId, message, ...(model && { model }) },
               {
                 onSuccess: () => {
-                  platform.drafts?.remove(SessionDrafts.fresh)
                   platform.drafts?.set(
                     SessionDrafts.history,
                     ComposerHistory.encode(
@@ -202,11 +184,15 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
                   void import("../../lib/chat.js")
                     .then((loaded) => loaded.Chat.forUser(platform, props.userId).atoms.handoff(sessionID, message))
                     .finally(() => {
-                      void navigate({ to: "/sessions/$sessionId", params: { sessionId: sessionID } })
+                      void navigate({
+                        to: "/sessions/$sessionId",
+                        params: { sessionId: sessionID },
+                        viewTransition: true,
+                      }).then(() => platform.drafts?.remove(SessionDrafts.fresh))
                     })
                 },
                 onError: (error) => {
-                  startTransition(() => setSent(undefined))
+                  setStarting(false)
                   setSessionID(Session.ID.create())
                   toast.add({
                     type: "error",
@@ -224,7 +210,7 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
                   models={list}
                   selected={model}
                   loading={models.isPending}
-                  disabled={create.isPending}
+                  disabled={starting}
                   onChange={(picked) => {
                     ChatPreferences.model.write(platform.storage, picked)
                     change(Composer.withModel(draft, picked))
@@ -235,7 +221,7 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
               <PromptInput.Submit
                 running={false}
                 content={Boolean(text)}
-                starting={create.isPending}
+                starting={starting}
                 disabled={!text || !spaceId}
                 onStop={() => undefined}
               />
@@ -250,7 +236,7 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
             dir="auto"
             autoComplete="off"
             focusOnMount={!mobile}
-            readOnly={create.isPending}
+            readOnly={starting}
             value={draft.text}
             {...suggested.textarea}
             onChange={(event) => {

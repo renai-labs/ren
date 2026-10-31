@@ -32,6 +32,6 @@ export const Route = createFileRoute("/_authed/_shell/")({
 
 function NewChatRoute() {
   const context = Route.useRouteContext()
-  const visit = useRouterState({ select: (state) => state.location.state.__TSR_key })
+  const visit = useRouterState({ select: (state) => (state.resolvedLocation ?? state.location).state.__TSR_key })
   return <NewChat key={visit} userId={context.me.user.id} addRepositories={addRepositories} />
 }
