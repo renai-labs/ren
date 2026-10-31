@@ -351,7 +351,7 @@ export function Submit(props: {
 
 export function Alternate(props: { label: string; shortcut: string; description?: string; onActivate: () => void }) {
   return (
-    <Button variant="ghost" size="xs" className="h-6.5" title={props.description} onClick={props.onActivate}>
+    <Button variant="ghost" size="sm" title={props.description} onClick={props.onActivate}>
       {props.label}
       <Kbd>{props.shortcut}</Kbd>
     </Button>

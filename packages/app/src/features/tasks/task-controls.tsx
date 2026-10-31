@@ -47,9 +47,9 @@ const selectTriggers = {
 }
 
 const buttonTriggers = {
-  chip: { variant: "outline", size: "xs", className: "h-7 gap-2 rounded-full px-3" },
+  chip: { variant: "outline", size: "sm", className: "h-7 gap-2 rounded-full px-3" },
   row: { variant: "ghost", size: "default", className: "-ml-2 h-8 w-fit justify-start gap-2 px-2 font-normal" },
-  icon: { variant: "ghost", size: "icon-xs", className: "rounded-full text-muted-foreground" },
+  icon: { variant: "ghost", size: "icon-sm", className: "rounded-full text-muted-foreground" },
 } as const
 
 const subject = (task: Values) => task.title || "new task"
@@ -259,7 +259,7 @@ function AssignFooter(props: { saving: Saving | null; onRetry: (saving: Saving) 
     <InlineNote
       tone="danger"
       action={
-        <Button variant="ghost" size="xs" onClick={() => props.onRetry(saving)}>
+        <Button variant="ghost" size="sm" onClick={() => props.onRetry(saving)}>
           Retry
         </Button>
       }

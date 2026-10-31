@@ -281,7 +281,7 @@ export function Preferences(props: {
       {props.organization ? <LeaveOrganization organization={props.organization} /> : null}
       <Page.Section title="Security" frame="divided">
         <Setting title="Password">
-          <Button variant="outline" size="xs" className="h-6.5" onClick={() => setChangingPassword(true)}>
+          <Button variant="outline" size="sm" onClick={() => setChangingPassword(true)}>
             Change
           </Button>
         </Setting>

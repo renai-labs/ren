@@ -104,8 +104,8 @@ export function ConnectAccount(props: { profileId: string; onClose: () => void }
         </div>
         <Button
           variant="ghost"
-          size="xs"
-          className="h-6.5 text-muted-foreground"
+          size="sm"
+          className="text-muted-foreground"
           onClick={() => setEditing((current) => !current)}
         >
           {editing ? "Back" : "Edit"}
@@ -233,7 +233,7 @@ function SignInRow(props: { item: AppProfileItem; waiting: boolean; pending: boo
   if (props.waiting)
     return (
       <Row title={props.item.name} description={`Waiting for ${props.item.name}…`} media={<Spinner />}>
-        <Button variant="ghost" size="xs" className="h-6.5 text-muted-foreground" onClick={props.onSignIn}>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onSignIn}>
           Open again
         </Button>
       </Row>
@@ -248,9 +248,8 @@ function SignInRow(props: { item: AppProfileItem; waiting: boolean; pending: boo
       {props.item.status === "unavailable" ? null : (
         <Button
           variant={ok ? "outline" : "default"}
-          size="xs"
-          className="h-6.5"
-          disabled={props.pending}
+          size="sm"
+                    disabled={props.pending}
           onClick={props.onSignIn}
         >
           {props.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
@@ -289,7 +288,7 @@ function KeyRow(props: { profileId: string; item: AppProfileItem; field: string 
   if (props.item.status === "ok" && !replacing)
     return (
       <Row title={props.item.name} description="Saved" media={<Icon glyph="Check" tone="success" />}>
-        <Button variant="outline" size="xs" className="h-6.5" onClick={() => setReplacing(true)}>
+        <Button variant="outline" size="sm" onClick={() => setReplacing(true)}>
           Replace
         </Button>
       </Row>

@@ -342,8 +342,8 @@ function PropertyToggles(props: ViewProps) {
             <Button
               key={property}
               variant={shown ? "secondary" : "outline"}
-              size="xs"
-              className="h-6.5 rounded-full"
+              size="sm"
+              className="rounded-full"
               aria-pressed={shown}
               onClick={() =>
                 props.onChange({
@@ -386,7 +386,7 @@ export function ActiveFilters(props: FilterProps) {
               </Text>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 className="size-5 rounded-full text-muted-foreground"
                 aria-label={`Remove ${propertyLabels[property]} filter: ${option.label}`}
                 onClick={() =>
@@ -407,8 +407,8 @@ export function ActiveFilters(props: FilterProps) {
       })}
       <Button
         variant="ghost"
-        size="xs"
-        className="h-6.5 text-muted-foreground"
+        size="sm"
+        className="text-muted-foreground"
         onClick={() => props.onChange({ ...props.view, filters: TaskSearch.defaultFilters })}
       >
         Clear filters

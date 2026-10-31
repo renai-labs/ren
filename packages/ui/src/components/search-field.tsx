@@ -37,7 +37,7 @@ const groupVariants = cva("", {
   },
 })
 
-const iconSizes = { small: "icon-sm", compact: "icon-sm", medium: "icon", large: "icon-lg" } as const
+const iconSizes = { small: "icon-sm", compact: "icon-sm", medium: "icon", large: "icon" } as const
 
 export function Root(props: RootProps) {
   return <Field {...props} />
@@ -85,7 +85,7 @@ function Field(props: RootProps & { focusOnMount?: boolean; onFocus?: () => void
       {props.value ? (
         <InputGroupAddon align="inline-end">
           <InputGroupButton
-            size="icon-xs"
+            size="icon-sm"
             aria-label="Clear search"
             className="rounded-full text-muted-foreground"
             onMouseDown={(event) => event.preventDefault()}

@@ -132,7 +132,7 @@ function RepositoriesSection(props: {
           </Text>
           <Button
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
             aria-label={`Remove ${reference.alias}`}
             onClick={() => props.onRemove(reference)}
           >

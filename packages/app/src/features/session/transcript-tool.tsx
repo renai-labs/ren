@@ -354,7 +354,7 @@ function Subagent(props: { view: ChatAtoms.View; tool: SessionMessage.Tool; onOp
       <Step icon={<IconGhost />} title={subagentTitle(card)} subject={card.description ?? card.title} status="error">
         <Output text={error} failed />
         {child ? (
-          <Button variant="link" size="xs" className="self-start px-0" onClick={() => props.onOpen(child)}>
+          <Button variant="link" size="sm" className="self-start px-0" onClick={() => props.onOpen(child)}>
             Open subagent
           </Button>
         ) : null}

@@ -163,7 +163,7 @@ function SpacePicker(props: {
       trigger={
         <Button
           variant="outline"
-          size="xs"
+          size="sm"
           className="h-7 rounded-full px-3 font-normal text-foreground"
           disabled={props.disabled}
           aria-label={`Space: ${space?.name ?? "none"}`}

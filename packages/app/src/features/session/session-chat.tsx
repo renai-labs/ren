@@ -96,7 +96,7 @@ function SessionInteraction(props: {
           <IconRestore />
           <AlertDescription>Later messages are undone. Sending a message discards them.</AlertDescription>
           <AlertAction>
-            <Button variant="outline" size="xs" onClick={props.onRedo}>
+            <Button variant="outline" size="sm" onClick={props.onRedo}>
               Restore messages
             </Button>
           </AlertAction>

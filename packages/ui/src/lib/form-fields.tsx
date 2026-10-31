@@ -135,7 +135,7 @@ function Heading(props: {
             render={
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 aria-label={`About ${props.label.toLowerCase()}`}
                 className="rounded-full text-muted-foreground"
               />
@@ -243,7 +243,7 @@ export function BoundPasswordField(props: FrameProps & PasswordFieldProps) {
         />
         <InputGroupAddon align="inline-end">
           <InputGroupButton
-            size="icon-xs"
+            size="icon-sm"
             aria-label={revealed ? "Hide password" : "Show password"}
             aria-pressed={revealed}
             disabled={props.disabled}

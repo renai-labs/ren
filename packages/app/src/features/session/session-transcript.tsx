@@ -296,7 +296,7 @@ function UserActions(props: { message: SessionMessage.User; pending: boolean; re
       {!props.pending && transcript.actions.onEdit !== undefined && message.text !== "" ? (
         <Button
           variant="ghost"
-          size="icon-xs"
+          size="icon-sm"
           className="text-muted-foreground"
           aria-label="Edit message"
           disabled={transcript.state.reverting}
@@ -310,7 +310,7 @@ function UserActions(props: { message: SessionMessage.User; pending: boolean; re
       {revert ? (
         <Button
           variant="ghost"
-          size="icon-xs"
+          size="icon-sm"
           className="text-muted-foreground"
           aria-label="Revert to this message"
           disabled={transcript.state.reverting}
@@ -332,7 +332,7 @@ function PendingActions(props: { message: SessionMessage.User; updating: boolean
     <span className="flex items-center gap-1">
       <Button
         variant="ghost"
-        size="xs"
+        size="sm"
         disabled={props.updating}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => act("queue", props.message)}
@@ -341,7 +341,7 @@ function PendingActions(props: { message: SessionMessage.User; updating: boolean
       </Button>
       <Button
         variant="ghost"
-        size="xs"
+        size="sm"
         disabled={props.updating}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => act("cancel", props.message)}

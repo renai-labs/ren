@@ -51,9 +51,8 @@ export function AccountAccess(props: { profile: AppProfileInfo; spaces: Readonly
           render={
             <Button
               variant="outline"
-              size="xs"
-              className="h-6.5"
-              disabled={access.isPending}
+              size="sm"
+                            disabled={access.isPending}
               aria-label={`Spaces that use ${props.profile.name}`}
             />
           }

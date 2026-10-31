@@ -10,7 +10,7 @@ export function ComposerStatus(props: { notice: ChatView.Notice; retrying: boole
         <span className="truncate text-destructive">
           {props.notice.reason.split("\n")[0]?.trim() || "The sandbox failed to start."}
         </span>
-        <Button variant="link" size="xs" className="h-auto px-0" disabled={props.retrying} onClick={props.onRetry}>
+        <Button variant="link" size="sm" className="h-auto px-0" disabled={props.retrying} onClick={props.onRetry}>
           {props.retrying ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           Retry
         </Button>

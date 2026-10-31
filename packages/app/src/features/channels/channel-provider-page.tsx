@@ -42,7 +42,7 @@ export function ChannelProviderPage(props: {
       back={
         <Link
           to="/settings/channels"
-          className={buttonVariants({ variant: "ghost", size: "xs", className: "h-6.5 text-muted-foreground" })}
+          className={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground" })}
         >
           <Icon glyph="ArrowLeft" data-icon="inline-start" />
           Back to channels
@@ -52,7 +52,7 @@ export function ChannelProviderPage(props: {
       title={provider.title}
       menu={
         install ? (
-          <Button variant="outline" size="xs" className="h-6.5" onClick={() => setResetting(true)}>
+          <Button variant="outline" size="sm" onClick={() => setResetting(true)}>
             <Icon glyph="Unplug" data-icon="inline-start" />
             Reset mappings
           </Button>

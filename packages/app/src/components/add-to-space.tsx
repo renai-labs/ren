@@ -87,8 +87,7 @@ export function AddToSpace(props: {
           render={
             <Button
               variant={props.appearance === "primary" ? "default" : "outline"}
-              size={props.appearance === "primary" ? "default" : "xs"}
-              className={props.appearance === "primary" ? undefined : "h-6.5"}
+              size={props.appearance === "primary" ? "default" : "sm"}
               disabled={addition.pending}
               aria-label={`Add ${props.app.name} to a space`}
             />
@@ -139,7 +138,7 @@ export function AddHere(props: {
   const addition = useAddition(props)
   if (props.profiles.some((profile) => Apps.lists(profile, props.space)))
     return (
-      <Button variant="ghost" size="xs" className="h-6.5" disabled>
+      <Button variant="ghost" size="sm" disabled>
         <Icon glyph="Check" data-icon="inline-start" />
         Added
       </Button>
@@ -148,9 +147,8 @@ export function AddHere(props: {
     <>
       <Button
         variant="outline"
-        size="xs"
-        className="h-6.5"
-        disabled={addition.pending}
+        size="sm"
+                disabled={addition.pending}
         onClick={() => addition.add(props.space)}
       >
         {addition.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
@@ -193,9 +191,8 @@ function ChooseProfile(props: {
                 <ItemActions>
                   <Button
                     variant="outline"
-                    size="xs"
-                    className="h-6.5"
-                    disabled={props.pending}
+                    size="sm"
+                                        disabled={props.pending}
                     onClick={() => props.onUse(profile)}
                   >
                     Use
@@ -211,7 +208,7 @@ function ChooseProfile(props: {
               <ItemDescription className="text-xs">Only this space uses it.</ItemDescription>
             </ItemContent>
             <ItemActions>
-              <Button size="xs" className="h-6.5" disabled={props.pending} onClick={props.onCreate}>
+              <Button size="sm" disabled={props.pending} onClick={props.onCreate}>
                 Create
               </Button>
             </ItemActions>

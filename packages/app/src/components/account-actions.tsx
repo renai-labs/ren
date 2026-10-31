@@ -60,7 +60,7 @@ export function AccountActions(props: {
   return (
     <>
       {first ? (
-        <Button variant="outline" size="xs" className="h-6.5" disabled={signIn.pending} onClick={connect}>
+        <Button variant="outline" size="sm" disabled={signIn.pending} onClick={connect}>
           {signIn.pending ? <Spinner aria-hidden data-icon="inline-start" /> : null}
           {missing.length === 1 ? "Connect" : `Connect ${missing.length}`}
         </Button>

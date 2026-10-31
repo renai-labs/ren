@@ -7,11 +7,11 @@ type CopyStatus = "idle" | "copied" | "failed"
 export type CopyButtonSize = "extra-small" | "compact" | "small" | "medium" | "large"
 
 const sizes = {
-  "extra-small": "icon-xs",
+  "extra-small": "icon-sm",
   compact: "icon-sm",
   small: "icon-sm",
   medium: "icon",
-  large: "icon-lg",
+  large: "icon",
 } as const
 
 export function CopyButton(props: {

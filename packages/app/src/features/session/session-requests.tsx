@@ -49,7 +49,7 @@ function Source(props: {
       <div className="flex min-w-0 items-center gap-2 px-1 text-xs text-muted-foreground">
         <IconGhost className="size-4 shrink-0" />
         <span className="truncate">{props.title} needs your input</span>
-        <Button variant="ghost" size="xs" className="ml-auto" onClick={() => props.onOpen(props.sessionID)}>
+        <Button variant="ghost" size="sm" className="ml-auto" onClick={() => props.onOpen(props.sessionID)}>
           Open subagent
         </Button>
       </div>

@@ -80,7 +80,7 @@ function CodeBlockActions({ className, ...props }: React.ComponentProps<"div">) 
 function CodeBlockCopyButton({
   value,
   variant = "ghost",
-  size = "icon-xs",
+  size = "icon-sm",
   className,
   onClick,
   ...props

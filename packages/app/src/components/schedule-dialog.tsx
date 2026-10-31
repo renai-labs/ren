@@ -219,7 +219,7 @@ function RunsLink(props: { scheduleId: string }) {
     <Link
       to="/schedules/$scheduleId"
       params={{ scheduleId: props.scheduleId }}
-      className={buttonVariants({ variant: "ghost", size: "xs", className: "h-6.5 text-muted-foreground" })}
+      className={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground" })}
     >
       View runs
     </Link>
