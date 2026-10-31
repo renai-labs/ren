@@ -120,9 +120,6 @@ const mentionSuggestions = (
 
 const commandQuery = (trigger: Composer.Trigger | undefined) => (trigger?.kind === "command" ? trigger.query : "")
 
-const layoutOf = (draft: Composer.Draft, state: { readonly grown: boolean }): PromptInput.Layout =>
-  state.grown || draft.text.includes("\n") || draft.pasted.length > 0 ? "stacked" : "inline"
-
 const startingOf = (notice: ChatView.Notice | undefined) => notice?._tag === "Starting"
 
 // oxlint-disable-next-line ren/no-comments -- While the sandbox starts the composer is read-only and always shows the rotating line; other notices give way to a draft.
@@ -279,7 +276,6 @@ export function SessionComposer(props: {
   const [picked, setPicked] = useState<ReadonlyArray<Mentions.Item>>([])
   const [moving, setMoving] = useState(false)
   const [picking, setPicking] = useState(false)
-  const [grown, setGrown] = useState(false)
   const input = useRef<HTMLTextAreaElement>(null)
   const latest = useRef({ draft, history })
   DraftStore.useElsewhere({
@@ -387,7 +383,6 @@ export function SessionComposer(props: {
     remember(ComposerHistory.prepend(history, submission.sent))
     setBrowsing(ComposerHistory.idle)
     setSuggesting(undefined)
-    setGrown(false)
     change(submission.next)
     if (mobile) input.current?.blur()
     const failure = (title: string) => (error: unknown) => {
@@ -413,7 +408,6 @@ export function SessionComposer(props: {
   }
   const retype = (text: string, cursor: number) => {
     const trigger = Composer.trigger(text, cursor)
-    if (!text) setGrown(false)
     setBrowsing(ComposerHistory.idle)
     setSuggesting(trigger && { trigger })
     change(Composer.withText(draft, text))
@@ -529,7 +523,6 @@ export function SessionComposer(props: {
     if (Keyboard.isPrintable(event) && !props.unavailable) input.current?.focus()
   })
 
-  const layout = layoutOf(draft, { grown })
   const hint = running ? "Also list who reviewed each one" : ComposerCopy.placeholder
   const controls = (
     <Controls
@@ -566,7 +559,6 @@ export function SessionComposer(props: {
   return (
     <ChatComposer
       label="Message Ren"
-      layout={layout}
       onSubmit={() => submit(false)}
       suggestions={
         suggested.suggestions.length > 0 ? (
@@ -621,7 +613,6 @@ export function SessionComposer(props: {
         suggesting={suggested.suggestions.length > 0}
         activeSuggestion={suggested.active}
         onChange={(event) => {
-          if (layout === "inline" && event.currentTarget.scrollHeight > 60) setGrown(true)
           retype(event.currentTarget.value, event.currentTarget.selectionStart)
         }}
         onPaste={(event) => {

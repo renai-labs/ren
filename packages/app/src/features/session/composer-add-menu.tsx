@@ -54,13 +54,13 @@ export function ComposerAddMenu(props: {
           />
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={props.onMention}>
-              <Icon glyph="AtSign" />
+              <Icon glyph="AtSign" tone="secondary" />
               Mention an agent, skill or file
               <Kbd className="ml-auto">@</Kbd>
             </DropdownMenuItem>
             {props.addRepositories && spaceId ? (
               <DropdownMenuItem disabled={!space.canAdd} onClick={() => setAdding(true)}>
-                <Icon glyph="GitBranch" />
+                <Icon glyph="GitBranch" tone="secondary" />
                 Repositories
                 {space.canAdd ? null : (
                   <span className="ml-auto max-w-1/2 truncate text-muted-foreground">
@@ -89,7 +89,7 @@ function RunCommand(props: {
     return (
       <DropdownMenuSub>
         <DropdownMenuSubTrigger>
-          <Icon glyph="Developer" />
+          <Icon glyph="Developer" tone="secondary" />
           Run a command
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="w-64">
@@ -107,7 +107,7 @@ function RunCommand(props: {
   return (
     <DropdownMenuGroup>
       <DropdownMenuItem disabled={props.commands.length === 0} onClick={props.onCommands}>
-        <Icon glyph="Developer" />
+        <Icon glyph="Developer" tone="secondary" />
         Run a command
         <Kbd className="ml-auto">/</Kbd>
       </DropdownMenuItem>

@@ -35,9 +35,7 @@ import { InputGroup, InputGroupTextarea } from "./input-group.js"
 import { Kbd } from "./kbd.js"
 import { Spinner } from "./spinner.js"
 
-export type Layout = "stacked" | "inline"
-
-const RootContext = createContext<{ readonly listbox: string; readonly layout: Layout } | null>(null)
+const RootContext = createContext<{ readonly listbox: string } | null>(null)
 
 function useRoot() {
   const root = use(RootContext)
@@ -45,16 +43,10 @@ function useRoot() {
   return root
 }
 
-export function Root(props: {
-  label: string
-  layout: Layout
-  onSubmit: () => void
-  className?: string
-  children: ReactNode
-}) {
+export function Root(props: { label: string; onSubmit: () => void; className?: string; children: ReactNode }) {
   const listbox = useId()
   return (
-    <RootContext value={{ listbox, layout: props.layout }}>
+    <RootContext value={{ listbox }}>
       <form
         data-slot="prompt-input"
         aria-label={props.label}
@@ -71,13 +63,10 @@ export function Root(props: {
 }
 
 export function Group(props: { className?: string; children: ReactNode }) {
-  const root = useRoot()
   return (
     <InputGroup
-      data-layout={root.layout}
       className={cn(
-        "h-auto bg-card shadow-composer transition-shadow focus-within:shadow-composer-focus has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card",
-        root.layout === "stacked" ? "rounded-xl" : "min-h-12 rounded-3xl pl-1",
+        "h-auto rounded-xl bg-card shadow-composer transition-shadow focus-within:shadow-composer-focus has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card",
         props.className,
       )}
     >
@@ -138,12 +127,8 @@ function submitOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
   form?.requestSubmit()
 }
 
-const paddingOf = (layout: Layout, size: "default" | "lg" | undefined) =>
-  cn(
-    "text-base/relaxed md:text-sm/relaxed",
-    layout === "stacked" ? "min-h-16 px-4 pt-4 pb-2" : "min-h-0 px-2 py-3",
-    layout === "stacked" && size === "lg" && "min-h-24",
-  )
+const paddingOf = (size: "default" | "lg" | undefined) =>
+  cn("min-h-16 px-4 pt-4 pb-2 text-base/relaxed md:text-sm/relaxed", size === "lg" && "min-h-24")
 
 const suggestionAttributes = (listbox: string, active: string | undefined) => ({
   "aria-autocomplete": "list" as const,
@@ -182,7 +167,7 @@ export function Textarea(
     node.focus()
     node.setSelectionRange(node.value.length, node.value.length)
   }, [focusOnMount])
-  const padding = paddingOf(root.layout, size)
+  const padding = paddingOf(size)
   return (
     <div data-slot="prompt-input-field" className="relative flex min-w-0 flex-1 self-stretch">
       {marked ? (
@@ -212,11 +197,9 @@ export function Textarea(
           onKeyDown?.(event)
           submitOnEnter(event)
         }}
-        rows={root.layout === "inline" ? 1 : undefined}
         className={cn(
           "relative max-h-60 placeholder:text-muted-foreground disabled:cursor-not-allowed",
           padding,
-          root.layout === "inline" && !props.value && "field-sizing-fixed placeholder:truncate",
           marked && "text-transparent caret-foreground",
         )}
         {...rest}

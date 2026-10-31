@@ -89,7 +89,6 @@ export function NewChat(props: { userId: string }) {
       <div className="relative flex w-full max-w-192 flex-col">
         <ChatComposer
           label="Start a chat"
-          layout="stacked"
           header={
             <Select
               items={[{ value: null, label: "Choose a space" }, ...options]}

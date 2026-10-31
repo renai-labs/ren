@@ -3,7 +3,8 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Markdown } from "@ren/ui/markdown"
 import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
-import { IconAlertTriangle, IconCode, IconInfoCircle } from "@tabler/icons-react"
+import { IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react"
+import { ToolIcons } from "./tool-icons.js"
 import { Output, Step } from "./transcript-tool.js"
 
 export function Separator(props: { label: string }) {
@@ -81,7 +82,7 @@ export function TranscriptShell(props: { message: SessionMessage.Shell }) {
   const output = message.output?.output
   return (
     <Step
-      icon={<IconCode />}
+      icon={ToolIcons.of("command")}
       title={running ? "Running" : "Ran"}
       subject={message.command}
       status={shellStatus(message)}

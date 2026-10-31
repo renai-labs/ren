@@ -19,32 +19,11 @@ import {
   TraceLine,
   TraceTitle,
 } from "@ren/ui/trace"
-import {
-  IconBrain,
-  IconChevronRight,
-  IconCode,
-  IconExternalLink,
-  IconFileText,
-  IconGhost,
-  IconInfoCircle,
-  IconPencil,
-  IconSearch,
-  IconTool,
-  IconWorld,
-} from "@tabler/icons-react"
+import { IconBrain, IconChevronRight, IconExternalLink, IconInfoCircle } from "@tabler/icons-react"
 import { AsyncResult } from "effect/reactivity"
 import type { ReactNode } from "react"
 import { ChatView } from "./chat-view.js"
-
-const toolIcons: Readonly<Record<ToolDisplay.Kind, ReactNode>> = {
-  command: <IconCode />,
-  file: <IconFileText />,
-  edit: <IconPencil />,
-  search: <IconSearch />,
-  web: <IconWorld />,
-  agent: <IconGhost />,
-  tool: <IconTool />,
-}
+import { ToolIcons } from "./tool-icons.js"
 
 type Status = "running" | "error" | undefined
 
@@ -175,7 +154,7 @@ export function FileChanges(props: { tools: ReadonlyArray<SessionMessage.Tool>; 
   const deletions = groups.reduce((total, group) => total + group.deletions, 0)
   return (
     <Step
-      icon={<IconPencil />}
+      icon={ToolIcons.of("edit")}
       title={groups.length === 1 ? changeLabel[first.type] : `Edited ${groups.length} files`}
       subject={groups.length === 1 ? first.path : undefined}
       detail={`+${additions} −${deletions}`}
@@ -271,7 +250,7 @@ function ToolRow(props: {
   return (
     <>
       <Step
-        icon={toolIcons[ToolDisplay.kind(tool)]}
+        icon={ToolIcons.of(ToolDisplay.kind(tool))}
         title={ToolDisplay.label(tool)}
         subject={subjectOf(tool)}
         detail={failed && error ? ToolDisplay.errorSummary(tool.name, error) : undefined}
@@ -351,7 +330,12 @@ function Subagent(props: { view: ChatAtoms.View; tool: SessionMessage.Tool; onOp
   const error = status === "error" ? (ToolDisplay.error(props.tool) ?? ToolDisplay.output(props.tool)) : undefined
   if (error)
     return (
-      <Step icon={<IconGhost />} title={subagentTitle(card)} subject={card.description ?? card.title} status="error">
+      <Step
+        icon={ToolIcons.of("agent")}
+        title={subagentTitle(card)}
+        subject={card.description ?? card.title}
+        status="error"
+      >
         <Output text={error} failed />
         {child ? (
           <Button variant="link" size="sm" className="self-start px-0" onClick={() => props.onOpen(child)}>
@@ -364,7 +348,7 @@ function Subagent(props: { view: ChatAtoms.View; tool: SessionMessage.Tool; onOp
     <Trace data-testid="message-subagent-task">
       <Opener onOpen={child ? () => props.onOpen(child) : undefined}>
         <TraceLine status={status}>
-          <TraceIcon>{status === "running" ? <Spinner /> : <IconGhost />}</TraceIcon>
+          <TraceIcon>{status === "running" ? <Spinner /> : ToolIcons.of("agent")}</TraceIcon>
           <TraceTitle className="shrink-0">{subagentTitle(card)}</TraceTitle>
           <TraceDescription className="min-w-0 shrink truncate">
             {[card.title, card.description].filter(Boolean).join(" · ")}

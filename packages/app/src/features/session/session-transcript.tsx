@@ -29,7 +29,7 @@ import {
   TraceTitle,
 } from "@ren/ui/trace"
 import { Initials } from "@ren/util/initials"
-import { IconClock, IconPencil, IconRestore, IconTool } from "@tabler/icons-react"
+import { IconClock, IconPencil, IconRestore } from "@tabler/icons-react"
 import { DateTime } from "effect"
 import { useState } from "react"
 import { Countdown } from "../../lib/countdown.js"
@@ -38,6 +38,7 @@ import { ChannelMessageHeader, ChannelReplyMessage } from "./channel-message.js"
 import { ScheduleMessageHeader } from "./schedule-message.js"
 import { TranscriptContext } from "./transcript-context.js"
 import { Separator, TranscriptError, TranscriptNotice, TranscriptShell } from "./transcript-notice.js"
+import { ToolIcons } from "./tool-icons.js"
 import { FileChanges, Note, Output, Reasoning, Step, Tool } from "./transcript-tool.js"
 
 export interface Person {
@@ -190,7 +191,7 @@ function Run(props: { run: ToolDisplay.Run; entries: ReadonlyArray<Entry> }) {
   const names = run.tools.flatMap((tool) => ToolDisplay.subtitle(tool) ?? []).join(", ")
   if (run.kind === "skill") return <Note title="Loaded skills" detail={names} />
   return (
-    <Step icon={<IconTool />} title="Read" subject={names} status={running(run.tools) ? "running" : undefined}>
+    <Step icon={ToolIcons.of("file")} title="Read" subject={names} status={running(run.tools) ? "running" : undefined}>
       {run.tools.map((tool) => (
         <Output
           key={tool.id}
@@ -358,7 +359,6 @@ function EditMessage(props: { text: string; onCancel: () => void; onSave: (text:
     <div className="flex w-full flex-col gap-1.5">
       <PromptInput.Root
         label="Edit your message"
-        layout="stacked"
         onSubmit={() => {
           if (!text.trim() || text.trim() === props.text.trim()) props.onCancel()
           else props.onSave(text.trim())
@@ -428,7 +428,7 @@ function UserMessage(props: { data: RowData }) {
         <ChannelMessageHeader origin={message.channel} />
         <ScheduleMessageHeader origin={message.schedule} />
         <Bubble variant="muted" align="end">
-          <BubbleContent className="rounded-tr-lg px-4 text-base/relaxed whitespace-pre-wrap">
+          <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
             <UserText text={message.text} highlights={TimelineText.mentions(message)} apps={transcript.state.apps} />
           </BubbleContent>
         </Bubble>
