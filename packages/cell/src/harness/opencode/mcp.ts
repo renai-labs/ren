@@ -2,13 +2,13 @@ export * as OpenCodeMcp from "./mcp.js"
 
 import type { Plugin } from "@opencode/plugin/effect"
 import { Mcp } from "@opencode/schema/mcp"
+import { AppMcp } from "@ren/brain/app-mcp"
+import { UsageClaims } from "@ren/brain/usage-claims"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
-import { Credential } from "@ren/schema/credential"
 import { Models } from "@ren/schema/models"
-import { Usage } from "@ren/schema/usage"
 import { Clock, Duration, Effect, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
 import { HostToken } from "../../host-token.js"
 import { OpenCodeChat } from "./chat.js"
@@ -22,7 +22,7 @@ export interface RenAccess {
 }
 
 export interface Ren extends RenAccess {
-  readonly lastSender: (sessionId: string) => Effect.Effect<Option.Option<OpenCodeChat.Speaker>>
+  readonly lastSpeaker: (sessionId: string) => Effect.Effect<Option.Option<OpenCodeChat.Speaker>>
 }
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 waits 30 seconds for each of startup and tools/list when a server declares no timeout.
@@ -47,23 +47,9 @@ const catalogOf = (apps: Option.Option<AppCatalog.Info>) => Option.map(apps, (in
 const entries = (apps: Option.Option<AppCatalog.Info>): ReadonlyArray<AppCatalog.McpEntry> =>
   Option.match(catalogOf(apps), { onNone: () => [], onSome: (catalog) => catalog.mcps })
 
-// oxlint-disable-next-line ren/no-comments -- §6.4 rule 3: a sign-in sends its token as a Bearer placeholder, a header MCP its pasted field in the declared header. A basic credential needs no placeholder: the egress sets its header by host. A managed MCP sends the integrations placeholder and its caller (integrations spec §5.1).
-const headersOf = (
-  entry: AppCatalog.McpEntry,
-  caller: Readonly<Record<string, string>>,
-): Readonly<Record<string, string>> | undefined => {
-  const auth = entry.declaration.auth
-  if (!entry.label) return undefined
-  if (entry.declaration.transport.type === "managed")
-    return { Authorization: `Bearer ${Credential.placeholder(entry.label)}`, ...caller }
-  if (auth.type === "oauth") return { Authorization: `Bearer ${Credential.placeholder(entry.label)}` }
-  if (auth.type === "header") return { [auth.name]: Credential.placeholder(entry.label, auth.credential) }
-  return undefined
-}
-
 interface Options {
   readonly local: boolean
-  readonly caller: Readonly<Record<string, string>>
+  readonly speakerHeaders: Readonly<Record<string, string>>
 }
 
 const configOf = (entry: AppCatalog.McpEntry, options: Options): Option.Option<Mcp.RemoteConfig | Mcp.LocalConfig> => {
@@ -83,12 +69,16 @@ const configOf = (entry: AppCatalog.McpEntry, options: Options): Option.Option<M
       }),
     )
   }
-  const url = transport.type === "remote" ? transport.url : entry.url
-  if (!url) return Option.none()
-  const headers = headersOf(entry, options.caller)
-  return Option.some(
-    new Mcp.RemoteConfig({ type: "remote", url, oauth: false, ...(headers && { headers }), ...timeout }),
-  )
+  return Option.map(AppMcp.remoteOf(entry), (remote) => {
+    const headers = { ...remote.headers, ...(remote.sendsSpeaker && options.speakerHeaders) }
+    return new Mcp.RemoteConfig({
+      type: "remote",
+      url: remote.url,
+      oauth: false,
+      ...(Object.keys(headers).length > 0 && { headers }),
+      ...timeout,
+    })
+  })
 }
 
 export const servers = (apps: Option.Option<AppCatalog.Info>, options: Options): ReadonlyArray<Server> =>
@@ -110,18 +100,13 @@ const namespace = (name: string) => name.replaceAll(/[^A-Za-z0-9_-]/gu, "_")
 
 // oxlint-disable-next-line ren/no-comments -- HR20: the profile of a server goes into the description of its tool namespace; OpenCode sends a change of the tool catalog as a short message, so the system prompt and its cache stay.
 const namespaces = (apps: Option.Option<AppCatalog.Info>, options: { readonly local: boolean }) =>
-  entries(apps).flatMap((entry) => {
-    if (entry.declaration.transport.type === "managed")
-      return [{ name: namespace(entry.server), description: `${entry.declaration.name}, paid with Ren credits` }]
-    return entry.profile && (options.local || entry.declaration.transport.type !== "local")
-      ? [
-          {
-            name: namespace(entry.server),
-            description: `${entry.declaration.name} for the profile “${entry.profile.name}”`,
-          },
-        ]
-      : []
-  })
+  entries(apps).flatMap((entry) =>
+    options.local || entry.declaration.transport.type !== "local"
+      ? Option.toArray(
+          Option.map(AppMcp.descriptionOf(entry), (description) => ({ name: namespace(entry.server), description })),
+        )
+      : [],
+  )
 
 // oxlint-disable-next-line ren/no-comments -- §6.4 rule 9 (P47): the env keys of each app's profiles, from the catalog only and in its order, so one catalog gives the same bytes (INV-34).
 export const notes = (apps: Option.Option<AppCatalog.Info>) =>
@@ -177,7 +162,7 @@ export const make = Effect.fnUntraced(function* (input: {
   const local = { local: input.hasEnvironment }
   const latest = yield* Ref.make(input.apps)
   const channels = yield* Ref.make(input.channels)
-  const sender = yield* Ref.make(Option.none<OpenCodeChat.Speaker>())
+  const speaker = yield* Ref.make(Option.none<OpenCodeChat.Speaker>())
   const presented = yield* Ref.make(Option.none<string>())
   const tokenOf = (ren: Ren) =>
     Effect.gen(function* () {
@@ -194,7 +179,7 @@ export const make = Effect.fnUntraced(function* (input: {
     const address = yield* input.ren.value.address
     const token = yield* tokenOf(input.ren.value)
     if (Option.isNone(address) || Option.isNone(token)) return []
-    const user = yield* Ref.get(sender)
+    const current = yield* Ref.get(speaker)
     const headers = {
       Authorization: `Bearer ${token.value}`,
       [HostMcp.sessionHeader]: input.sessionId,
@@ -207,7 +192,7 @@ export const make = Effect.fnUntraced(function* (input: {
           type: "remote",
           url: `${base}${HostMcp.path}`,
           oauth: false,
-          headers: { ...headers, ...(Option.isSome(user) && { [HostMcp.userHeader]: user.value.userID }) },
+          headers: { ...headers, ...(Option.isSome(current) && { [HostMcp.userHeader]: current.value.userID }) },
         }),
         within: 2 * openCodeTimeout,
       },
@@ -223,18 +208,21 @@ export const make = Effect.fnUntraced(function* (input: {
       })),
     ]
   })
-  // oxlint-disable-next-line ren/no-comments -- integrations spec §5.1: a managed server names its chat and its sender, as a model call does; the egress puts in the integrations token and checks the member.
-  const caller = Effect.map(Ref.get(sender), (user) => {
-    const member = Option.flatMap(user, (speaker) => Option.fromUndefinedOr(speaker.memberID))
-    return {
-      [Usage.headers.rootSession]: input.sessionId,
-      ...(Option.isSome(member) && { [Models.personHeader]: Models.personPlaceholder(member.value) }),
-    }
-  })
+  // oxlint-disable-next-line ren/no-comments -- integrations spec §5.1: a managed server names its chat and its speaker, as a model call does; the egress puts in the integrations token and checks the member.
+  const speakerHeaders = Effect.map(Ref.get(speaker), (current) =>
+    UsageClaims.speakerHeaders({
+      rootSession: input.sessionId,
+      ...Option.match(
+        Option.flatMap(current, (found) => Option.fromUndefinedOr(found.memberID)),
+        { onNone: () => ({}), onSome: (memberID) => ({ member: Models.personPlaceholder(memberID) }) },
+      ),
+    }),
+  )
   const desired = (apps: Option.Option<AppCatalog.Info>) =>
-    Effect.gen(function* (): Effect.fn.Return<ReadonlyArray<Server>> {
-      return [...servers(apps, { ...local, caller: yield* caller }), ...(yield* renServers)]
-    })
+    Effect.zipWith(speakerHeaders, renServers, (headers, ren): ReadonlyArray<Server> => [
+      ...servers(apps, { ...local, speakerHeaders: headers }),
+      ...ren,
+    ])
   const applied = yield* Ref.make(yield* desired(input.apps))
   const skipped = yield* Ref.make<ReadonlySet<string>>(new Set())
   const retries = yield* FiberHandle.make<void>()
@@ -337,19 +325,19 @@ export const make = Effect.fnUntraced(function* (input: {
       )
       .pipe(Effect.withErrorReporting, Effect.forkScoped({ startImmediately: true }))
   }
-  // oxlint-disable-next-line ren/no-comments -- A turn calls Ren MCP and the managed servers as its sender: when the sender changes, the prompt waits for their new headers, so no step runs as the previous sender. Other changes reload in the background (HR19).
+  // oxlint-disable-next-line ren/no-comments -- A turn calls Ren MCP and the servers that send their speaker as its speaker: when the speaker changes, the prompt waits for their new headers, so no step runs as the previous speaker. Other changes reload in the background (HR19).
   yield* input.context.session.hook("prompt", (event) =>
     Effect.gen(function* () {
       const named = OpenCodeChat.speakerOf(event.metadata)
-      if (Option.isSome(named)) yield* Ref.set(sender, named)
-      else if (Option.isNone(yield* Ref.get(sender)) && Option.isSome(input.ren))
-        yield* Ref.set(sender, yield* input.ren.value.lastSender(input.sessionId))
+      if (Option.isSome(named)) yield* Ref.set(speaker, named)
+      else if (Option.isNone(yield* Ref.get(speaker)) && Option.isSome(input.ren))
+        yield* Ref.set(speaker, yield* input.ren.value.lastSpeaker(input.sessionId))
       const before = yield* changed
       if (Option.isSome(before)) {
-        const managed = entries(Ref.getUnsafe(latest))
-          .filter((entry) => entry.declaration.transport.type === "managed")
+        const sendingSpeaker = entries(Ref.getUnsafe(latest))
+          .filter((entry) => Option.exists(AppMcp.remoteOf(entry), (remote) => remote.sendsSpeaker))
           .map((entry) => entry.server)
-        yield* reload(before.value, [renServer, ...managed]).pipe(Effect.andThen(watchIfDown))
+        yield* reload(before.value, [renServer, ...sendingSpeaker]).pipe(Effect.andThen(watchIfDown))
       }
       if ((yield* down).length) yield* retry
     }),

@@ -32,7 +32,9 @@ const Managed = Schema.Struct({
     }),
   ),
 }).annotate({ description: "An MCP that Ren runs on its own provider account, paid with Ren credits." })
-export const Transport = Schema.Union([Remote, Local, Provider, Managed]).annotate({ identifier: "Mcp.Transport" })
+export const Transport = Schema.Union([Remote, Local, Provider, Managed])
+  .annotate({ identifier: "Mcp.Transport" })
+  .pipe(Schema.toTaggedUnion("type"))
 export type Transport = typeof Transport.Type
 
 const NoAuth = Schema.Struct({ type: Schema.Literal("none") })

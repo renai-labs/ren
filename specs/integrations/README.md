@@ -163,7 +163,7 @@ The push exists for `credential`, `app_profile`, `app_profile_space` and `app_pr
 
 1. `schema/src/mcp.ts`: `Mcp.Transport` gets `{ type: "managed", server: Primitive.Slug, replaces?: Primitive.Slug }`, in `Transport` and in `Info`. `Declaration` checks: a managed MCP has `auth: none`.
 2. `schema/src/app.ts`: `Definition` checks: `replaces` names an MCP of the same app whose auth is not `none`. The schema checks run at registry sync and at the API.
-3. `schema/src/app-catalog.ts`: `Unavailable.reason` gets `managed`. The description of `McpEntry.url` covers a managed MCP.
+3. `schema/src/app-catalog.ts`: `Unavailable.reason` gets `integrations`. The description of `McpEntry.url` covers a managed MCP.
 4. `schema/src/usage.ts`: `Usage.ApiCall` (`data`: `mcp`, optional `tool`, `upstream`, `units` as a record, `latency_ms`), and `Usage.ApiCallEvent`: the shared fields. `Usage.Event` and `Usage.Batch` (`usage.ts:103`) accept it. Run `bun run generate` (`protocol/usage-ingest.openapi.json`).
 
 **Core**
@@ -183,7 +183,7 @@ The push exists for `credential`, `app_profile`, `app_profile_space` and `app_pr
    | Rule | Condition                                                     | Result                                                                                                     |
    | ---- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
    | 1    | An entry of `resolved` has the candidate's app and `replaces` | Leave out the candidate.                                                                                   |
-   | 2    | Else, `integrationsUrl` is none                               | Leave it out. `unavailable`, reason `managed`.                                                             |
+   | 2    | Else, `integrationsUrl` is none                               | Leave it out. `unavailable`, reason `integrations`.                                                        |
    | 3    | Else, `egress` is false (a cell host)                         | Leave it out. `unavailable`, reason `egress`.                                                              |
    | 4    | Else                                                          | Add it: server = MCP slug, `profile` null, `label` `INTEGRATIONS`, `url` `<integrationsUrl>/<server>/mcp`. |
 

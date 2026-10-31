@@ -102,13 +102,13 @@ it.effect("a local entry runs with its declared env and the profile's placeholde
         profile: { slug: "acme", name: "Acme client" },
       },
     ])
-    const rendered = OpenCodeMcp.servers(Option.some(catalog), { local: true, caller: {} })
+    const rendered = OpenCodeMcp.servers(Option.some(catalog), { local: true, speakerHeaders: {} })
     expect(rendered.map((server) => [server.name, server.config])).toMatchObject([
       ["sheets__acme", { type: "local", environment: { MODE: "read", SHEETS_KEY: "ren:SHEETS_KEY__ACME" } }],
       ["crm__acme", { type: "remote", headers: { "X-Api-Key": "ren:MCP_CRM__ACME.apiKey" } }],
     ])
     expect(
-      OpenCodeMcp.servers(Option.some(catalog), { local: false, caller: {} }).map((server) => server.name),
+      OpenCodeMcp.servers(Option.some(catalog), { local: false, speakerHeaders: {} }).map((server) => server.name),
     ).toEqual(["crm__acme"])
   }),
 )
