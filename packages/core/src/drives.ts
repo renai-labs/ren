@@ -48,7 +48,7 @@ export interface Interface {
   ) => Effect.Effect<WriteResult.Upload, Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid | Unavailable>
   readonly download: (
     actor: Actor.Info,
-    input: Drive.PathInput,
+    input: Drive.DownloadInput,
   ) => Effect.Effect<Drive.Link, Primitive.NotFound | Primitive.Forbidden | Unavailable>
   readonly delete: (
     actor: Actor.Info,
@@ -242,7 +242,7 @@ export const layer = Layer.effect(
         )
         return { uploadId: input.path, uploadUrl: post.url, fields: post.fields, expiresAt }
       }),
-      download: Effect.fn("Drives.download")(function* (actor: Actor.Info, input: Drive.PathInput) {
+      download: Effect.fn("Drives.download")(function* (actor: Actor.Info, input: Drive.DownloadInput) {
         const key = `${yield* prefix(actor, input.spaceId, DrivePolicy.actions.read)}${input.path}`
         if (!(yield* exists(key))) return yield* missing(input.path)
         const name = input.path.split("/").at(-1) ?? input.path
@@ -253,7 +253,9 @@ export const layer = Layer.effect(
             new GetObjectCommand({
               Bucket: bucket,
               Key: key,
-              ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
+              ResponseContentDisposition: `${input.disposition ?? "attachment"}; filename*=UTF-8''${encodeURIComponent(name)}`,
+              // oxlint-disable-next-line ren/no-comments -- An upload from the browser stores no type, and the browser shows a file only with its type.
+              ...(input.disposition === "inline" && { ResponseContentType: Bun.file(name).type }),
             }),
             { expiresIn: lifetime },
           ),

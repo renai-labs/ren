@@ -1,6 +1,7 @@
 export * as Drive from "./drive.js"
 
-import { Schema, SchemaTransformation } from "effect"
+import { Option, Schema, SchemaTransformation } from "effect"
+import { Mime } from "effect/http"
 import { Space } from "./space.js"
 
 const encoder = new TextEncoder()
@@ -74,6 +75,19 @@ export const Listing = Schema.Struct({
 export interface PathInput extends Schema.Schema.Type<typeof PathInput> {}
 export const PathInput = Schema.Struct({ ...scope, path: Path }).annotate({ identifier: "Drive.PathInput" })
 
+export const Disposition = Schema.Literals(["attachment", "inline"]).annotate({
+  identifier: "Drive.Disposition",
+  description: "`attachment`: the browser saves the file. `inline`: the browser shows it, such as a PDF in a frame.",
+})
+export type Disposition = typeof Disposition.Type
+
+export interface DownloadInput extends Schema.Schema.Type<typeof DownloadInput> {}
+export const DownloadInput = Schema.Struct({
+  ...scope,
+  path: Path,
+  disposition: Schema.optional(Disposition.annotate({ description: "Defaults to `attachment`." })),
+}).annotate({ identifier: "Drive.DownloadInput" })
+
 export interface StartUploadInput extends Schema.Schema.Type<typeof StartUploadInput> {}
 export const StartUploadInput = Schema.Struct({
   ...scope,
@@ -140,3 +154,9 @@ export const Availability = Schema.Union([
     "The drives of one chat, which Ren decides from its environment: the mounts, or why the chat gets none. The brain notes the reason to the agent.",
 })
 export type Availability = typeof Availability.Type
+
+export const uploadsOf = (sessionId: string, messageId: string) => `chats/${sessionId}/uploads/${messageId}`
+
+export const outputsOf = (sessionId: string) => `chats/${sessionId}/outputs`
+
+export const typeOf = (name: string) => Option.getOrElse(Mime.getType(name), () => "application/octet-stream")

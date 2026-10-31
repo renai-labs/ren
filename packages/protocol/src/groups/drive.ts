@@ -38,7 +38,7 @@ export const DriveGroup = HttpApiGroup.make("drive")
   )
   .add(
     HttpApiEndpoint.get("drive.download", "/drive/file", {
-      query: Drive.PathInput,
+      query: Drive.DownloadInput,
       success: Drive.Link,
       error: [NotFoundError, ForbiddenError, UnavailableError],
     }).annotateMerge(

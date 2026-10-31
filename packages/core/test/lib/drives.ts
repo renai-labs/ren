@@ -30,5 +30,10 @@ export const post = (upload: Pick<WriteResult.Upload, "uploadUrl" | "fields">, b
 export const download = (url: string) =>
   Effect.promise(async () => {
     const response = await fetch(url)
-    return { text: await response.text(), uploadedBy: response.headers.get("x-amz-meta-uploaded-by") }
+    return {
+      text: await response.text(),
+      uploadedBy: response.headers.get("x-amz-meta-uploaded-by"),
+      disposition: response.headers.get("content-disposition"),
+      type: response.headers.get("content-type"),
+    }
   })

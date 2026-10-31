@@ -41,7 +41,16 @@ describe("Drives", () => {
         const reports = yield* drives.list(found.ada, { spaceId, folder: "reports" })
         expect(reports.files.map((file) => file.path)).toEqual(["reports/q3.txt"])
         const link = yield* drives.download(found.ada, { spaceId, path: "reports/q3.txt" })
-        expect(yield* TestDrives.download(link.url)).toEqual({ text: "third", uploadedBy: found.ada.userId })
+        expect(yield* TestDrives.download(link.url)).toMatchObject({
+          text: "third",
+          uploadedBy: found.ada.userId,
+          disposition: "attachment; filename*=UTF-8''q3.txt",
+        })
+        const shown = yield* drives.download(found.ada, { spaceId, path: "reports/q3.txt", disposition: "inline" })
+        expect(yield* TestDrives.download(shown.url)).toMatchObject({
+          disposition: "inline; filename*=UTF-8''q3.txt",
+          type: "text/plain;charset=utf-8",
+        })
         yield* drives.delete(found.ada, { spaceId, path: "reports/q3.txt" })
         expect((yield* drives.list(found.ada, { spaceId })).folders).toEqual([])
         expect((yield* Effect.flip(drives.download(found.ada, { spaceId, path: "reports/q3.txt" })))._tag).toBe(

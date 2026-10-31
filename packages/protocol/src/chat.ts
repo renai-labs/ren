@@ -43,6 +43,10 @@ export const PromptInput = Schema.Struct({
     description:
       "With `false`, the message waits in the inbox and does not start a turn on an idle session, so a client can put queued messages back in another order. Defaults to `true`.",
   }),
+  files: Schema.optional(Session.DriveFiles).annotate({
+    description:
+      "Files that the message attaches, uploaded to the space’s drive with `drive.startUpload`. A file that is not in the drive is refused.",
+  }),
   ...mentions,
 }).annotate({ identifier: "Chat.PromptInput" })
 

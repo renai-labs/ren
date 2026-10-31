@@ -746,6 +746,10 @@ export const DriveDownload = {
     Argument.withDescription("A file’s path inside its drive, such as `reports/q3.pdf`."),
   ),
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  disposition: Flag.Literals("disposition", ["attachment", "inline"]).pipe(
+    Flag.optional,
+    Flag.withDescription("Defaults to `attachment`."),
+  ),
 }
 
 export const DriveDelete = {

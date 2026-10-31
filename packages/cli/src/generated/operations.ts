@@ -1596,8 +1596,8 @@ export const DriveDownload = (input: Command.Command.Config.Infer<typeof Command
   Operation.run(
     ClientApi.groups["drive"].endpoints["drive.download"],
     {
-      query: { path: input["path"], spaceId: input["spaceId"] },
-      labels: { path: "<path>", spaceId: "--space" },
+      query: { path: input["path"], spaceId: input["spaceId"], disposition: input["disposition"] },
+      labels: { path: "<path>", spaceId: "--space", disposition: "--disposition" },
       lookups: {
         spaceId: (client, value) =>
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),

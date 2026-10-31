@@ -735,7 +735,7 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/drive/file`,
-            query: { spaceId: input["spaceId"], path: input["path"] },
+            query: { spaceId: input["spaceId"], path: input["path"], disposition: input["disposition"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 503],
             empty: false,
