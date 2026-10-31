@@ -11,6 +11,7 @@ import { MessageScrollerProvider, useMessageScroller, useMessageScrollerVisibili
 import { toast } from "@ren/ui/toast"
 import { IconAlertCircle, IconRestore } from "@tabler/icons-react"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { useRouteContext } from "@tanstack/react-router"
 import { DateTime, Effect, Option, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useDeferredValue, useState } from "react"
@@ -257,12 +258,17 @@ function usePeople(organizationId: string | undefined, viewer: string, messages:
     enabled: shared && organizationId !== undefined,
     select: (organization) => organization.members,
   })
-  return new Map(
-    (members.data ?? []).map((member) => [
-      member.userId,
-      { name: member.user.name || member.user.email || "Member", image: member.user.image ?? undefined },
-    ]),
-  )
+  const me = useRouteContext({ from: "/_authed" }).me.user
+  return new Map([
+    ...(members.data ?? []).map(
+      (member) =>
+        [
+          member.userId,
+          { name: member.user.name || member.user.email || "Member", image: member.user.image ?? undefined },
+        ] as const,
+    ),
+    [viewer, { name: me.name || me.email, image: me.image ?? undefined }] as const,
+  ])
 }
 
 const liveOf = (info: SessionInfo.Info | undefined, session: { readonly running: boolean }): SessionCache.Live => {

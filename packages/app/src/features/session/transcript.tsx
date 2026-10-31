@@ -111,8 +111,8 @@ function rowData(input: {
       const message = input.messages.get(row.userMessageID)
       const context = contexts.get(row.userMessageID)
       const status = input.statuses.get(row.userMessageID)
-      const senderID = message?.type === "user" ? message.sender?.userId : undefined
-      const sender = senderID && senderID !== input.viewer ? (input.people.get(senderID) ?? member) : undefined
+      const senderID = message?.type === "user" ? (message.sender?.userId ?? input.viewer) : undefined
+      const sender = senderID ? (input.people.get(senderID) ?? member) : undefined
       return {
         message,
         status,

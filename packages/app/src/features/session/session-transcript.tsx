@@ -38,6 +38,7 @@ import { ScheduleMessageHeader } from "./schedule-message.js"
 import { TranscriptContext } from "./transcript-context.js"
 import { Separator, TranscriptNotice, TranscriptShell } from "./transcript-notice.js"
 import { TurnFailed, TurnRetrying } from "./turn-problem.js"
+import { UserBody } from "./user-attachments.js"
 import { ToolIcons } from "./tool-icons.js"
 import { FileChanges, Note, Output, Reasoning, Step, Tool } from "./transcript-tool.js"
 
@@ -431,11 +432,15 @@ function UserMessage(props: { data: RowData }) {
         {props.data.sender ? <MessageHeader className="px-0">{props.data.sender}</MessageHeader> : null}
         <ChannelMessageHeader origin={message.channel} />
         <ScheduleMessageHeader origin={message.schedule} />
-        <Bubble variant="muted" align="end">
-          <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
-            <UserText text={message.text} highlights={TimelineText.mentions(message)} apps={transcript.state.apps} />
-          </BubbleContent>
-        </Bubble>
+        <UserBody message={message}>
+          {(typed) => (
+            <Bubble variant="muted" align="end">
+              <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
+                <UserText text={typed} highlights={TimelineText.mentions(message)} apps={transcript.state.apps} />
+              </BubbleContent>
+            </Bubble>
+          )}
+        </UserBody>
         <MessageFooter className="min-h-6 gap-1 px-0">
           <span className="tabular-nums">
             {props.data.caption ? `${props.data.caption} · ` : ""}
