@@ -83,6 +83,28 @@ it.live("the catalog: server and label per profile, private first; a no-auth MCP
   }),
 )
 
+it.live("the catalog lists an app after the apps it depends on, each with its environment", () =>
+  Effect.gen(function* () {
+    const organizationId = yield* Seed.organization()
+    const ana = yield* ProfilesFixture.user(organizationId, "Ana", "admin")
+    const sales = yield* ProfilesFixture.space(ana, "Sales")
+    yield* ProfilesFixture.app(ana, ana.personal, "tools", {
+      environment: { packages: { apt: ["jq"] }, buildCommands: [] },
+    })
+    const docs = yield* ProfilesFixture.app(ana, ana.personal, "docs", {
+      mcps: { search: ProfilesFixture.remote("Search", { type: "none" }) },
+      dependsOn: ["tools"],
+      environment: { packages: {}, buildCommands: ["docs-index --init"] },
+    })
+    yield* ProfilesFixture.profile(ana, { appId: docs.id, slug: "all", kind: "shared", spaceIds: [sales] })
+    const found = yield* ProfilesFixture.catalog(organizationId, sales)
+    expect(found.catalog.apps.map((entry) => [entry.appSlug, entry.environment])).toEqual([
+      ["tools", { packages: { apt: ["jq"] }, buildCommands: [] }],
+      ["docs", { packages: {}, buildCommands: ["docs-index --init"] }],
+    ])
+  }),
+)
+
 it.live(
   "each mutation of §11 changes the fingerprint of the spaces it reaches, and clears the egress cache where the table says so; members and other spaces never change a reach (private-spaces rule 17)",
   () =>
