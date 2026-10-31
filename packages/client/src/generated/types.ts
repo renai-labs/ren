@@ -5189,6 +5189,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined
@@ -5204,6 +5205,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined
@@ -5219,6 +5221,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined
@@ -5234,6 +5237,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined
@@ -5249,6 +5253,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined
@@ -5256,6 +5261,22 @@ export type SessionListInput = {
     readonly page: number
     readonly pageSize: number
   }["status"]
+  readonly search?: {
+    readonly spaceId?: ReadonlyArray<string> | undefined
+    readonly createdBy?: ReadonlyArray<string> | undefined
+    readonly agentId?: ReadonlyArray<string> | undefined
+    readonly origin?:
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | undefined
+    readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
+    readonly archived?: boolean | undefined
+    readonly orderBy?: ("updated" | "created") | undefined
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["search"]
   readonly archived?: {
     readonly spaceId?: ReadonlyArray<string> | undefined
     readonly createdBy?: ReadonlyArray<string> | undefined
@@ -5264,6 +5285,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined
@@ -5279,6 +5301,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined
@@ -5294,6 +5317,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined
@@ -5309,6 +5333,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined
@@ -5324,6 +5349,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined
@@ -5339,6 +5365,7 @@ export type SessionListInput = {
       | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
+    readonly search?: string | undefined
     readonly archived?: boolean | undefined
     readonly orderBy?: ("updated" | "created") | undefined
     readonly from?: string | undefined

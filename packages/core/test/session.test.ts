@@ -185,7 +185,41 @@ describe("Session", () => {
     }),
   )
 
-  it.live("the list reads an index for the chats of a person and of a space", () =>
+  it.live("search finds a chat by its title or by the text of a person's or an assistant's message, as typed", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const owner = yield* Seed.owner()
+      const titled = yield* chat(owner, "2026-01-01", {}, { title: "Quarterly plan_v2" })
+      yield* chat(owner, "2026-01-01", {}, { title: "plan-v2 draft" })
+      const asked = yield* chat(owner, "2026-01-02")
+      const answered = yield* chat(owner, "2026-01-03")
+      const removed = yield* chat(owner, "2026-01-04")
+      const message = (sessionId: Session.ID, type: string, data: object) => ({
+        id: SessionMessage.ID.create(),
+        session_id: sessionId,
+        type,
+        seq: 0,
+        data: JSON.stringify(data),
+      })
+      yield* database.db.insert(Database.Schema.opencode_message).values([
+        message(asked, "user", { text: "Why did the deploy fail?" }),
+        message(answered, "assistant", {
+          content: [
+            { type: "text", text: "The DEPLOY is fixed" },
+            { type: "tool", output: "quarterly" },
+          ],
+        }),
+        { ...message(removed, "user", { text: "deploy it" }), removed_at: new Date() },
+      ])
+      const actor = actorOf(owner)
+      expect((yield* listed(actor, { search: "quarterly" })).ids).toEqual([titled])
+      expect((yield* listed(actor, { search: "deploy" })).ids).toEqual([answered, asked])
+      expect((yield* listed(actor, { search: "plan_v2" })).ids).toEqual([titled])
+      expect((yield* listed(actor, { search: "plan%v2" })).ids).toEqual([])
+    }),
+  )
+
+  it.live("the list reads an index for the chats of a person and of a space, and for the messages it searches", () =>
     Effect.gen(function* () {
       const sessions = yield* Session.Service
       const sql = yield* SqlClient.SqlClient
@@ -212,6 +246,7 @@ describe("Session", () => {
       })
       expect(yield* indexes({})).toContain("agent_session_created_by_created_at_idx")
       expect(yield* indexes({ spaceId: [owner.spaceId] })).toContain("agent_session_space_id_created_at_idx")
+      expect(yield* indexes({ search: "deploy" })).toContain("opencode_message_session_id_seq_idx")
     }),
   )
 

@@ -198,6 +198,9 @@ export const ListInput = Schema.Struct({
   agentId: Schema.optional(Schema.Array(AgentIdentity.ID)),
   origin: Schema.optional(Schema.Array(Origin)),
   status: Schema.optional(Status),
+  search: Schema.optional(Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(200))).annotate({
+    description: "Part of the title, or of the text of a message from a person or an assistant.",
+  }),
   archived: Schema.optional(Schema.Boolean).annotate({
     description: "Only archived chats. Without it, only chats not archived.",
   }),

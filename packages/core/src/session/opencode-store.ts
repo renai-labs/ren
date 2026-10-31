@@ -3,7 +3,7 @@ export * as OpenCodeStore from "./opencode-store.js"
 import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
 import type { Session } from "@ren/schema/session"
-import { and, asc, desc, eq, getColumns, inArray, isNull, or, sql } from "drizzle-orm"
+import { and, asc, desc, eq, getColumns, ilike, inArray, isNull, or, sql } from "drizzle-orm"
 import type { PgTable } from "drizzle-orm/pg-core"
 import { Effect, Option, Record, Struct } from "effect"
 
@@ -22,6 +22,25 @@ export const summary = {
   timeSuspended: Database.Schema.opencode_session.time_suspended,
   outcome: Database.Schema.opencode_session.idle_outcome,
   updatedAt: Database.Schema.opencode_session.time_updated,
+}
+
+export const search = (text: string | undefined) => {
+  if (!text) return
+  const pattern = `%${text.replaceAll(/[\\%_]/gu, "\\$&")}%`
+  return or(
+    ilike(Database.Schema.opencode_session.title, pattern),
+    sql`exists (
+      select 1 from ${Database.Schema.opencode_message}
+      where ${Database.Schema.opencode_message.session_id} = ${Database.Schema.agent_session.id}
+        and ${Database.Schema.opencode_message.removed_at} is null
+        and (case ${Database.Schema.opencode_message.type}
+          when 'user' then ${Database.Schema.opencode_message.data}::jsonb ->> 'text'
+          when 'assistant' then jsonb_path_query_array(
+            ${Database.Schema.opencode_message.data}::jsonb, '$.content[*] ? (@.type == "text").text'
+          )::text
+        end) ilike ${pattern}
+    )`,
+  )
 }
 
 export const writeMessages = Effect.fnUntraced(function* (

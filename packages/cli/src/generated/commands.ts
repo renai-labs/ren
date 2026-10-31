@@ -278,6 +278,10 @@ export const SessionList = {
     Flag.withDescription("Separate values with commas."),
   ),
   status: Flag.Literals("status", ["idle", "busy"]).pipe(Flag.optional),
+  search: Flag.String("search").pipe(
+    Flag.optional,
+    Flag.withDescription("Part of the title, or of the text of a message from a person or an assistant."),
+  ),
   archived: Flag.Boolean("archived").pipe(Flag.optional, Flag.withDescription("Only archived chats.")),
   orderBy: Flag.Literals("order-by", ["updated", "created"]).pipe(
     Flag.optional,
