@@ -187,7 +187,6 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
                       void navigate({
                         to: "/sessions/$sessionId",
                         params: { sessionId: sessionID },
-                        viewTransition: true,
                       }).then(() => platform.drafts?.remove(SessionDrafts.fresh))
                     })
                 },
@@ -222,7 +221,7 @@ export function NewChat(props: { userId: string; addRepositories: ComposerReposi
                 running={false}
                 content={Boolean(text)}
                 starting={starting}
-                disabled={!text || !spaceId}
+                disabled={!spaceId}
                 onStop={() => undefined}
               />
             </>

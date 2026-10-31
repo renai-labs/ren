@@ -88,10 +88,8 @@ export function TranscriptShell(props: { message: SessionMessage.Shell }) {
       title={running ? "Running" : "Ran"}
       subject={message.command}
       status={shellStatus(message)}
-      defaultOpen={Boolean(error)}
     >
-      <Output text={output ? TimelineText.shellOutput(output) : "No output"} />
-      {error ? <Output text={error} failed /> : null}
+      <Output text={output ? TimelineText.shellOutput(output) : (error ?? "No output")} failed={Boolean(error)} />
     </Step>
   )
 }

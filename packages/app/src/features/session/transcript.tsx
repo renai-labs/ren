@@ -284,7 +284,11 @@ export function Transcript(props: {
                     scrollAnchor={block.row._tag === "UserMessage"}
                     data-row-key={block.key}
                     aria-busy={busyOf([block.row], turns) || undefined}
-                    className="flex flex-col gap-6 empty:hidden"
+                    className={
+                      block.row._tag === "UserMessage"
+                        ? "flex flex-col gap-6 empty:hidden @min-transcript:-mr-13.5 @min-transcript:pr-13.5"
+                        : "flex flex-col gap-6 empty:hidden"
+                    }
                   >
                     <Row row={block.row} data={data(block.row)} reset={block.row === reset.before} />
                   </MessageScrollerItem>

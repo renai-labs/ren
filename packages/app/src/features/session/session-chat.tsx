@@ -407,7 +407,10 @@ export function SessionChat(props: {
   const hidden = props.child !== undefined
   return (
     <MessageScrollerProvider autoScroll>
-      <div data-slot="chat" className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+      <div
+        data-slot="chat"
+        className="relative flex min-h-0 w-full flex-1 animate-in flex-col overflow-hidden duration-200 ease-out fade-in-0 motion-reduce:animate-none"
+      >
         <div inert={hidden} className="relative flex min-h-0 flex-1 flex-col inert:invisible">
           <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2 pl-12 md:pl-3">
             <SessionHeader

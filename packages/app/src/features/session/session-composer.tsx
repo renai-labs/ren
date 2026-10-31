@@ -152,7 +152,7 @@ function Controls(props: {
       <PromptInput.Submit
         running={props.stoppable}
         content={props.content}
-        disabled={!props.content || props.unavailable}
+        disabled={props.unavailable}
         onStop={props.onStop}
       />
     </>

@@ -28,7 +28,6 @@ import {
   TraceTitle,
 } from "@ren/ui/trace"
 import { IconClock, IconPencil, IconRestore } from "@tabler/icons-react"
-import { DateTime } from "effect"
 import { useState } from "react"
 import { Platform } from "../../platform/platform.js"
 import { ChannelMessageHeader, ChannelReplyMessage } from "./channel-message.js"
@@ -37,8 +36,7 @@ import { TranscriptContext } from "./transcript-context.js"
 import { Separator, TranscriptNotice, TranscriptShell } from "./transcript-notice.js"
 import { TurnFailed, TurnRetrying } from "./turn-problem.js"
 import { UserBody } from "./user-attachments.js"
-import { ToolIcons } from "./tool-icons.js"
-import { FileChanges, Note, Output, Reasoning, Step, Tool } from "./transcript-tool.js"
+import { Note, Reasoning, Tool } from "./transcript-tool.js"
 
 export interface Person {
   readonly name: string
@@ -63,13 +61,6 @@ export interface RowData {
   readonly prompt?: string | undefined
 }
 
-const reasoningDuration = (content: SessionMessage.Reasoning) =>
-  content.time?.completed
-    ? TimelineText.duration(
-        DateTime.toEpochMillis(content.time.completed) - DateTime.toEpochMillis(content.time.created),
-      )
-    : undefined
-
 function Response(props: { data: RowData; text: string }) {
   const platform = Platform.usePlatform()
   const transcript = TranscriptContext.useValue()
@@ -92,7 +83,7 @@ function Response(props: { data: RowData; text: string }) {
         </Bubble>
         {write && copy !== undefined ? (
           <MessageFooter className="gap-1 px-0">
-            <CopyButton value={copy} onCopy={write} label="Copy response" size="extra-small" />
+            <CopyButton value={copy} onCopy={write} label="Copy response" />
           </MessageFooter>
         ) : null}
       </MessageContent>
@@ -110,7 +101,6 @@ function Part(props: { data: RowData }) {
       <Reasoning
         text={content.text}
         streaming={props.data.streaming === true && !content.time?.completed}
-        duration={reasoningDuration(content)}
         open={TimelineOpen.defaultOpen(content, transcript.state.detail)}
       />
     )
@@ -152,114 +142,29 @@ const entries = (
     return content ? [{ reference, message, item: content }] : []
   })
 
-const running = (tools: ReadonlyArray<SessionMessage.Tool>) =>
-  tools.some((tool) => ToolDisplay.status(tool) === "running")
-
-const isTool = (item: ToolDisplay.GroupItem): item is SessionMessage.Tool => item.type === "tool"
-
-function RunItem(props: { item: ToolDisplay.GroupItem; entries: ReadonlyArray<Entry> }) {
-  const message = props.entries.find((candidate) => candidate.item === props.item)?.message
-  if (props.item.type === "reasoning")
+function GroupItem(props: { entry: Entry }) {
+  const transcript = TranscriptContext.useValue()
+  const item = props.entry.item
+  const message = props.entry.message
+  if (item.type === "tool")
+    return (
+      <Tool
+        tool={item}
+        view={{ root: transcript.state.root, sessionID: transcript.state.sessionID }}
+        open={transcript.state.part === item.id}
+        onOpenChild={transcript.actions.onOpenChild}
+      />
+    )
+  if (item.type === "reasoning")
     return (
       <Reasoning
-        text={props.item.text}
-        streaming={message?.type === "assistant" && !message.time.completed && !props.item.time?.completed}
-        duration={reasoningDuration(props.item)}
+        text={item.text}
+        streaming={message?.type === "assistant" && !message.time.completed && !item.time?.completed}
       />
     )
   if (message?.type === "shell") return <TranscriptShell message={message} />
   const notice = message && TimelineText.notice(message)
   return notice ? <Note title={notice.title} detail={notice.detail} /> : null
-}
-
-function Run(props: { run: ToolDisplay.Run; entries: ReadonlyArray<Entry> }) {
-  const transcript = TranscriptContext.useValue()
-  const run = props.run
-  if (run.type === "item") return <RunItem item={run.item} entries={props.entries} />
-  const first = run.tools.at(0)
-  if (run.kind === "single")
-    return first ? (
-      <Tool
-        tool={first}
-        view={{ root: transcript.state.root, sessionID: transcript.state.sessionID }}
-        open={transcript.state.part === first.id}
-        onOpenChild={transcript.actions.onOpenChild}
-      />
-    ) : null
-  if (run.kind === "file")
-    return <FileChanges tools={run.tools} open={run.tools.some((tool) => tool.id === transcript.state.part)} />
-  const names = run.tools.flatMap((tool) => ToolDisplay.subtitle(tool) ?? []).join(", ")
-  if (run.kind === "skill") return <Note title="Loaded skills" detail={names} />
-  return (
-    <Step icon={ToolIcons.of("file")} title="Read" subject={names} status={running(run.tools) ? "running" : undefined}>
-      {run.tools.map((tool) => (
-        <Output
-          key={tool.id}
-          title={ToolDisplay.subtitle(tool) ?? "Output"}
-          text={ToolDisplay.output(tool) ?? "No output"}
-        />
-      ))}
-    </Step>
-  )
-}
-
-const groupTitle = (
-  group: Exclude<TimelineRow.PartGroup, { readonly type: "part" }>,
-  items: ReadonlyArray<ToolDisplay.GroupItem>,
-) => {
-  if (group.type === "context") return ToolDisplay.group(items).title
-  const subjects = items.flatMap((item) => {
-    const subject = item.type === "tool" ? ToolDisplay.subtitle(item) : undefined
-    return subject ? [subject] : []
-  })
-  return `${group.type === "read" ? "Read" : "Edited"} ${subjects.join(", ")}`
-}
-
-function GroupSteps(props: { group: Exclude<TimelineRow.PartGroup, { type: "part" }>; entries: ReadonlyArray<Entry> }) {
-  const transcript = TranscriptContext.useValue()
-  const items = props.entries.map((entry) => entry.item)
-  if (props.group.type === "file")
-    return (
-      <FileChanges
-        tools={items.filter(isTool)}
-        open={props.group.refs.some((reference) => reference.partID === transcript.state.part)}
-      />
-    )
-  return ToolDisplay.runs(items).map((run, index) => (
-    <Run
-      key={run.type === "item" ? `item:${index}` : (run.tools.at(0)?.id ?? `run:${index}`)}
-      run={run}
-      entries={props.entries}
-    />
-  ))
-}
-
-function Group(props: { data: RowData; group: Exclude<TimelineRow.PartGroup, { type: "part" }> }) {
-  const transcript = TranscriptContext.useValue()
-  const group = props.group
-  const found = entries(group.refs, props.data.messages ?? [])
-  const items = found.map((entry) => entry.item)
-  const working = props.data.working === true || running(items.filter(isTool))
-  const [choice, setChoice] = useState<{ working: boolean; open: boolean }>()
-  const revealed = group.refs.some((reference) => reference.partID === transcript.state.part)
-  const open = working || (choice?.working === working ? choice.open : revealed)
-  return (
-    <Trace>
-      <TraceCollapsible open={open} onOpenChange={(next) => setChoice({ working, open: next })}>
-        <TraceCollapsibleTrigger>
-          <TraceLine status={working ? "running" : undefined}>
-            <TraceIcon>
-              <IconClock />
-            </TraceIcon>
-            <TraceTitle>{groupTitle(group, items)}</TraceTitle>
-          </TraceLine>
-        </TraceCollapsibleTrigger>
-        <TraceCollapsibleContent className="flex flex-col gap-2">
-          <GroupSteps group={group} entries={found} />
-        </TraceCollapsibleContent>
-      </TraceCollapsible>
-    </Trace>
-  )
 }
 
 const steerable = new Set<ChatState.PendingStatus | undefined>(["starting", "steering", "stranded"])
@@ -491,8 +396,6 @@ function TurnStep(props: { data: RowData; row: TimelineRow.Row }) {
   const transcript = TranscriptContext.useValue()
   const row = props.row
   const content = props.data.content
-  if (row._tag === "AssistantPart" && row.group.type !== "part")
-    return <GroupSteps group={row.group} entries={entries(row.group.refs, props.data.messages ?? [])} />
   if (row._tag !== "AssistantPart" || content?.type !== "text") return <TranscriptRow data={props.data} row={row} />
   return (
     <div data-searchable className="min-w-0">
@@ -500,6 +403,7 @@ function TurnStep(props: { data: RowData; row: TimelineRow.Row }) {
         streaming={props.data.streaming === true}
         onOpenSession={transcript.actions.onOpenSession}
         apps={transcript.state.apps}
+        className="leading-relaxed"
       >
         {content.text}
       </Markdown>
@@ -507,8 +411,36 @@ function TurnStep(props: { data: RowData; row: TimelineRow.Row }) {
   )
 }
 
+type TurnItem = { readonly row: TimelineRow.Row; readonly data: RowData }
+
+const isText = (item: TurnItem) => item.row._tag === "AssistantPart" && item.data.content?.type === "text"
+
+const runsOf = (items: ReadonlyArray<TurnItem>) =>
+  items.reduce<Array<{ key: string; text: boolean; items: Array<TurnItem> }>>((all, item) => {
+    const last = all.at(-1)
+    if (last && !last.text && !isText(item)) last.items.push(item)
+    else all.push({ key: TimelineRow.key(item.row), text: isText(item), items: [item] })
+    return all
+  }, [])
+
+function StepRun(props: { items: ReadonlyArray<TurnItem> }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      {props.items.map((item) => (
+        <div
+          key={TimelineRow.key(item.row)}
+          data-row-key={TimelineRow.key(item.row)}
+          className="flex min-w-0 flex-col gap-2 empty:hidden"
+        >
+          <TurnStep data={item.data} row={item.row} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function TurnGroup(props: {
-  rows: ReadonlyArray<{ readonly row: TimelineRow.Row; readonly data: RowData }>
+  rows: ReadonlyArray<TurnItem>
   running: boolean
   workedFor: string | undefined
   steps: number
@@ -530,14 +462,8 @@ export function TurnGroup(props: {
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="flex flex-col gap-3">
-          {props.rows.map((item) => (
-            <div
-              key={TimelineRow.key(item.row)}
-              data-row-key={TimelineRow.key(item.row)}
-              className="flex min-w-0 flex-col gap-3 empty:hidden"
-            >
-              <TurnStep data={item.data} row={item.row} />
-            </div>
+          {runsOf(props.rows).map((run) => (
+            <StepRun key={run.key} items={run.items} />
           ))}
         </TraceCollapsibleContent>
       </TraceCollapsible>
@@ -547,7 +473,9 @@ export function TurnGroup(props: {
 
 function AssistantPart(props: { data: RowData; group: TimelineRow.PartGroup }) {
   if (props.group.type === "part") return <Part data={props.data} />
-  return <Group data={props.data} group={props.group} />
+  return entries(props.group.refs, props.data.messages ?? []).map((entry) => (
+    <GroupItem key={`${entry.reference.messageID}:${entry.reference.partID}`} entry={entry} />
+  ))
 }
 
 function ShellRow(props: { message: SessionMessage.Info | undefined }) {
