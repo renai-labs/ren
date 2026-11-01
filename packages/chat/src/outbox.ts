@@ -16,6 +16,7 @@ export interface Prompt {
   readonly delivery: SessionInbox.Delivery
   readonly sender?: SessionMessage.Sender
   readonly agents?: ReadonlyArray<SessionMessage.AgentAttachment>
+  readonly uploads?: ReadonlyArray<SessionMessage.DriveFile>
 }
 
 // oxlint-disable-next-line ren/no-comments -- A message the brain has not accepted yet, as the host keeps it in browser storage per chat (E118).
@@ -28,6 +29,7 @@ export const Kept = Schema.Struct({
   skills: Schema.optionalKey(
     Schema.Array(Schema.Struct({ id: Schema.String, mention: Schema.optionalKey(SessionMessage.Mention) })),
   ),
+  files: Schema.optionalKey(Schema.Array(SessionMessage.DriveFile)),
 })
 
 export const isFresh = (state: ChatState.State, sessionID: string, id: string) =>
@@ -48,6 +50,7 @@ export const admit = (state: ChatState.State, prompt: Prompt, now: DateTime.Utc)
         text: prompt.text,
         ...(prompt.sender && { sender: prompt.sender }),
         ...(prompt.agents && { agents: prompt.agents }),
+        ...(prompt.uploads && { uploads: prompt.uploads }),
       },
     },
   )
@@ -61,6 +64,7 @@ export const handoff = (state: ChatState.State, prompt: Prompt, now: DateTime.Ut
     type: "user",
     text: prompt.text,
     ...(prompt.sender && { sender: prompt.sender }),
+    ...(prompt.uploads && { uploads: prompt.uploads }),
     time: { created: now },
   })
 }

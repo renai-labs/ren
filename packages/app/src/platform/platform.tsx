@@ -25,6 +25,11 @@ interface Base {
   readonly notify: (title: string, body?: string) => Promise<void>
   readonly requestNotifications?: () => Promise<boolean>
   readonly fetch?: typeof globalThis.fetch
+  readonly upload?: (
+    form: { readonly uploadUrl: string; readonly fields: Readonly<Record<string, string>> },
+    file: Blob,
+    signal: AbortSignal,
+  ) => Promise<void>
   readonly writeClipboardText?: (text: string) => Promise<void>
   readonly authorizationQuery?: string | undefined
   readonly onLifecycle?: (listener: (event: "foreground" | "online") => void) => () => void

@@ -26,11 +26,12 @@ export function HomePage() {
   const navigate = useNavigate()
   const spaces = useSpaces().joined
   const [remembered, setRemembered] = useState(() => ChatPreferences.homeSpace.read(platform.storage))
-  const spaceId = spaces.find((space) => space.id === remembered)?.id ?? spaces.at(0)?.id
-  const [sessionId, setSessionId] = useState(() => Session.ID.create())
   const kept = Drafts.useDraft(Drafts.fresh)
   const draft = kept.draft
   const setDraft = kept.set
+  const spaceId = draft.chat?.spaceId ?? spaces.find((space) => space.id === remembered)?.id ?? spaces.at(0)?.id
+  const [createdId, setCreatedId] = useState(() => Session.ID.create())
+  const sessionId = draft.chat?.sessionId ?? createdId
   const [sent, setSent] = useState<Composer.Draft>()
   const models = useModels(sessionId)
   const [saved, setSaved] = useState(() => ChatPreferences.model.read(platform.storage))
@@ -60,19 +61,32 @@ export function HomePage() {
   const send = () => {
     const trimmed = Composer.message(draft).trim()
     if (!trimmed || !spaceId || create.isPending) return
-    const message = { id: SessionMessage.ID.create(), text: mentions.resolve(trimmed).text }
+    const files = Composer.files(draft)
+    const message = {
+      id: Composer.messageID(draft) ?? SessionMessage.ID.create(),
+      text: mentions.resolve(trimmed).text,
+      ...(files.length > 0 && { files: files.map((file) => ({ path: file.path, name: file.name })) }),
+    }
     setSent(draft)
     create.mutate(
       { id: sessionId, spaceId, message, ...(model && { model }) },
       {
         onSuccess: () => {
           setDraft(Composer.empty)
-          handoff(platform, me.user.id, sessionId, message)
+          handoff(platform, me.user.id, sessionId, {
+            id: message.id,
+            text: message.text,
+            ...(files.length > 0 && { files }),
+          })
           void navigate({ to: "/sessions/$sessionId", params: { sessionId } })
         },
         onError: (error) => {
           setSent(undefined)
-          setSessionId(Session.ID.create())
+          const next = Session.ID.create()
+          setCreatedId(next)
+          kept.update((current) =>
+            current.chat ? Composer.withChat(current, { spaceId: current.chat.spaceId, sessionId: next }) : current,
+          )
           toast.error("Could not start the chat", { description: errorMessage(error) })
         },
       },
@@ -88,7 +102,12 @@ export function HomePage() {
       </div>
       <div className="relative flex w-full max-w-3xl flex-col gap-2">
         <div className="relative flex flex-col gap-2">
-          <WorkingIn spaces={spaces} spaceId={spaceId} disabled={starting} onChange={chooseSpace} />
+          <WorkingIn
+            spaces={spaces}
+            spaceId={spaceId}
+            disabled={starting || Boolean(draft.chat)}
+            onChange={chooseSpace}
+          />
           <PromptInput
             placement="home"
             spaceId={spaceId}
@@ -96,6 +115,17 @@ export function HomePage() {
             onChange={type}
             onSubmit={send}
             sending={starting}
+            files={{
+              sessionId,
+              spaceId,
+              update: (change) =>
+                kept.update((current) => {
+                  const next = change(current)
+                  return Composer.files(next).length > 0 && spaceId && !next.chat
+                    ? Composer.withChat(next, { sessionId, spaceId })
+                    : next
+                }),
+            }}
             suggest={suggest}
             model={
               <ModelPicker

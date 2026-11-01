@@ -44,7 +44,7 @@ services:
         for bucket in ren-drives ren-drives-test; do
         aws s3api create-bucket --bucket $$bucket >/dev/null 2>&1;
         aws s3api put-bucket-cors --bucket $$bucket --cors-configuration
-        '{"CORSRules":[{"AllowedOrigins":["http://localhost:5173"],"AllowedMethods":["GET","POST"],"AllowedHeaders":["*"]}]}';
+        '{"CORSRules":[{"AllowedOrigins":["http://localhost:5173","http://127.0.0.1:4011"],"AllowedMethods":["GET","POST"],"AllowedHeaders":["*"]}]}';
         done
 
   celld:

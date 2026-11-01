@@ -1,10 +1,11 @@
-import { DateTime } from "effect"
+import { DateTime, Option } from "effect"
 import { useState, type ReactNode } from "react"
 import {
   ChannelReply,
   ChatState,
   PatchFiles,
   Projection,
+  ShownFile,
   TimelineRow,
   TimelineText,
   ToolDisplay,
@@ -63,6 +64,7 @@ import {
   TraceLine,
   TraceTitle,
 } from "@ren/ui/trace"
+import { DriveFileCards } from "./attachments.js"
 import { Markdown } from "./markdown.js"
 import { toolIcons } from "./tool-icons.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
@@ -83,6 +85,7 @@ interface Person {
 
 export interface TranscriptProps {
   readonly view: ChatAtoms.View
+  readonly spaceId?: string | undefined
   readonly messages: ReadonlyArray<SessionMessage.Info>
   readonly rows: ReadonlyArray<TimelineRow.Row>
   readonly activeMessageID: string | undefined
@@ -129,6 +132,7 @@ type Block =
       readonly streaming: boolean
     }
   | { readonly kind: "reply"; readonly key: string; readonly tool: SessionMessage.Tool }
+  | { readonly kind: "file"; readonly key: string; readonly file: SessionMessage.DriveFile }
   | { readonly kind: "row"; readonly key: string; readonly row: TimelineRow.Row }
 
 const streaming = (message: SessionMessage.Info | undefined) => message?.type === "assistant" && !message.time.completed
@@ -176,7 +180,8 @@ function partBlock(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessag
     }
   if (content?.type === "tool" && ChannelReply.shown(content))
     return { kind: "reply", key: TimelineRow.key(row), tool: content }
-  return undefined
+  const shown = content?.type === "tool" ? Option.getOrUndefined(ShownFile.of(content)) : undefined
+  return shown && { kind: "file", key: TimelineRow.key(row), file: shown }
 }
 
 function pushSteps(blocks: Block[], key: string, turn: string, steps: Step[]) {
@@ -369,12 +374,14 @@ function ScheduleOrigin(props: { schedule: NonNullable<SessionMessage.User["sche
   )
 }
 
-function UserBody(props: { message: SessionMessage.User }) {
+function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined }) {
   const parts = splitPasted(props.message.text)
   const apps = useCatalog().apps
   const files = props.message.files ?? []
+  const uploads = props.message.uploads ?? []
   return (
     <>
+      {uploads.length > 0 ? <DriveFileCards spaceId={props.spaceId} files={uploads} className="justify-end" /> : null}
       {files.length > 0 ? <FileChips files={files} /> : null}
       {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
       {parts.typed ? (
@@ -410,6 +417,7 @@ function UserFooter(props: { text: string; pending: boolean; onEdit?: (() => voi
 
 function UserMessage(props: {
   message: SessionMessage.User
+  spaceId: string | undefined
   person: Person
   pending: boolean
   editing: boolean
@@ -433,7 +441,7 @@ function UserMessage(props: {
           <EditPrompt text={props.message.text} onCancel={props.onCancel} onSave={props.onSave} />
         ) : (
           <>
-            <UserBody message={props.message} />
+            <UserBody message={props.message} spaceId={props.spaceId} />
             <UserFooter text={props.message.text} pending={props.pending} onEdit={props.onEdit} />
           </>
         )}
@@ -967,6 +975,7 @@ function UserBlock(props: {
   return (
     <UserMessage
       message={message}
+      spaceId={transcript.spaceId}
       person={person}
       pending={pending}
       editing={props.editing}
@@ -1040,6 +1049,14 @@ function BlockView(props: {
   if (block.kind === "answer")
     return <AnswerBlock text={block.text} streaming={block.streaming} copy={props.copyOf(block.turn, block.key)} />
   if (block.kind === "reply") return <ChannelReplyMessage tool={block.tool} />
+  if (block.kind === "file")
+    return (
+      <Message>
+        <MessageContent>
+          <DriveFileCards spaceId={props.transcript.spaceId} files={[block.file]} />
+        </MessageContent>
+      </Message>
+    )
   return <SystemRow row={block.row} context={props.context} />
 }
 

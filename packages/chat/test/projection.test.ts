@@ -665,6 +665,33 @@ describe("current session timeline rows", () => {
     ])
   })
 
+  test("shows a file the agent showed as its own row between grouped tools, and groups one still running", () => {
+    const file = { path: "chats/ses_1/outputs/report.pdf", name: "report.pdf", mime: "application/pdf", size: 3 }
+    const result = Projection.project({
+      messages: [
+        user("msg_user"),
+        assistant(
+          "msg_assistant",
+          [
+            tool("tool_read", "read", "completed"),
+            tool("tool_show", "show_file", "completed", { path: "report.pdf" }, { file, truncated: false }),
+            tool("tool_grep", "grep", "completed"),
+            tool("tool_showing", "show_file", "running", { path: "chart.png" }),
+          ],
+          { time: { created: at(2) } },
+        ),
+      ],
+      busy: false,
+      reasoning: "hidden",
+    })
+
+    expect(groups(result.rows).map((group) => [group.type, group.key])).toEqual([
+      ["context", "context:msg_assistant:tool_read"],
+      ["part", "part:msg_assistant:tool_show"],
+      ["context", "context:msg_assistant:tool_grep"],
+    ])
+  })
+
   test("keeps reads that load files outside context groups", () => {
     const result = Projection.project({
       messages: [

@@ -32,8 +32,8 @@ import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } fr
 import { Kbd } from "@ren/ui/kbd"
 import { Separator } from "@ren/ui/separator"
 import { Command, CommandGroup, CommandItem, CommandList } from "@ren/ui/command"
-import { useAttachments } from "../../lib/use-attachments.js"
-import { AttachmentChips, DropOverlay } from "./attachments.js"
+import { useUploads, type Target } from "../../lib/use-uploads.js"
+import { DropOverlay, UploadChips } from "./attachments.js"
 import { MentionOverlay } from "@ren/ui/mention-overlay"
 import { AppIcon } from "../../components/app-icon.js"
 import { Button } from "@ren/ui/button"
@@ -42,6 +42,7 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Input } from "@ren/ui/input"
@@ -79,8 +80,11 @@ function AddMenu(props: {
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={props.onAttach}>
             <IconPaperclip />
-            Attach files
+            Upload attachment
           </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
           <DropdownMenuItem onClick={() => props.onInsert("/")}>
             <IconTerminal2 />
             Commands
@@ -471,21 +475,28 @@ export function PromptInput(props: {
   onStop?: (() => void) | undefined
   sending?: boolean | undefined
   suggest?: Suggest | undefined
+  files: Target
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
   const [repositories, setRepositories] = useState(false)
-  const attachments = useAttachments()
-  const picker = useRef<HTMLInputElement>(null)
   const draft = props.value
+  const uploads = useUploads(props.files, draft)
+  const picker = useRef<HTMLInputElement>(null)
   const text = draft.text
   const blank = Composer.isBlank(draft)
   const state = composerState(props, { blank })
   const booting = state.booting
+  const uploading = uploads.uploads.length > 0
   const change = (next: Composer.Draft) => props.onChange(next)
+  const attach = (files: ReadonlyArray<File>) => {
+    if (!props.sending) uploads.add(files)
+  }
   const submit = () => {
     if (props.sending || booting) return
-    if (attachments.files.length > 0) {
-      toast("Remove the attached files to send", { description: "Ren can’t receive files in chat yet." })
+    if (uploading) {
+      toast("Wait for the files to upload", {
+        description: "Send the message once every file is uploaded, or remove the ones that failed.",
+      })
       return
     }
     if (blank) {
@@ -501,7 +512,7 @@ export function PromptInput(props: {
       blank={blank}
       stop={state.stop}
       sending={state.sending}
-      booting={booting || attachments.files.length > 0}
+      booting={booting || uploading}
       onClick={submit}
     />
   )
@@ -529,18 +540,26 @@ export function PromptInput(props: {
   return (
     <div className="relative flex flex-col gap-2">
       {suggest ? <SuggestionMenu suggest={suggest} below={home} onChoose={choose} /> : null}
-      <DropOverlay onFiles={attachments.add} />
+      <DropOverlay onFiles={attach} />
       <Input
         ref={picker}
         type="file"
         multiple
         hidden
         onChange={(event) => {
-          attachments.add([...(event.target.files ?? [])])
+          attach([...(event.target.files ?? [])])
           event.target.value = ""
         }}
       />
-      <AttachmentChips files={attachments.files} onRemove={attachments.remove} />
+      <UploadChips
+        spaceId={props.files.spaceId}
+        files={Composer.files(draft)}
+        uploads={uploads.uploads}
+        disabled={props.sending}
+        onRetry={uploads.retry}
+        onCancel={uploads.cancel}
+        onRemove={uploads.remove}
+      />
       {draft.pasted.length > 0 ? (
         <PastedBlocks
           pasted={draft.pasted}
@@ -576,7 +595,12 @@ export function PromptInput(props: {
             )
             if (kind === "text") return
             event.preventDefault()
-            if (kind === "attachment") attachments.add([...data.files])
+            if (kind === "attachment")
+              attach(
+                data.files.length > 0
+                  ? [...data.files]
+                  : [...data.items].flatMap((item) => (item.kind === "file" ? (item.getAsFile() ?? []) : [])),
+              )
             else change(Composer.addPasted(draft, { id: SessionMessage.ID.create(), text: pasted }))
           }}
           ref={textarea}

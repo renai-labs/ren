@@ -160,7 +160,8 @@ export function useChat(
   const info = state.info[root]
   const running = ChatState.activity(state, root) === "running"
   const title = sessionTitle(info?.title ?? stored.data?.title)
-  const spaceName = useSpaces().spaceName(stored.data?.spaceId)
+  const spaceId = stored.data?.spaceId
+  const spaceName = useSpaces().spaceName(spaceId)
   const members = useMembers().members
   const models = ChatReact.useModels(root)
   const modelList = AsyncResult.isSuccess(models) ? models.value : []
@@ -211,7 +212,7 @@ export function useChat(
     root,
     child,
     title,
-    spaceId: stored.data?.spaceId,
+    spaceId,
     spaceName,
     viewer: viewerOf(me.user),
     expanded,
@@ -246,6 +247,7 @@ export function useChat(
     retrying: restart.isPending,
     draft,
     setDraft,
+    files: { sessionId: root, spaceId, update: kept.update },
     suggest: suggestions.suggest,
     models: modelList,
     modelsLoading: AsyncResult.isInitial(models),
@@ -258,15 +260,17 @@ export function useChat(
     send: () => {
       const text = Composer.message(draft).trim()
       if (!text) return
-      const id = Composer.retryID(draft) ?? SessionMessage.ID.create()
+      const id = Composer.messageID(draft) ?? SessionMessage.ID.create()
       const sent = draft
       void platform.requestNotifications?.()
       setDraft(Composer.empty)
       const followUp = ChatPreferences.followUp.read(platform.storage)
       const selection = { delivery: running ? followUp : ("steer" as const), ...(model && { model }) }
-      void suggestions.run({ id, text, ...selection }, prompt).catch((error: unknown) => {
+      void suggestions.run({ id, text, ...selection, files: Composer.files(draft) }, prompt).catch((error: unknown) => {
         kept.update((current) => Composer.restore(current, sent, id))
-        toast.error("Could not send your message", { description: `${errorMessage(error)} Your draft has been kept.` })
+        toast.error("Could not send your message", {
+          description: `${errorMessage(error)} Your draft has been kept.`,
+        })
       })
     },
     resend: (text: string) =>
