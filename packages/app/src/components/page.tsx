@@ -165,7 +165,7 @@ export function Row(props: {
         </ItemTitle>
         {props.description ? <ItemDescription className="text-xs">{props.description}</ItemDescription> : null}
       </ItemContent>
-      {props.children ? <ItemActions>{props.children}</ItemActions> : null}
+      {props.children ? <ItemActions className="max-w-full min-w-0">{props.children}</ItemActions> : null}
     </Item>
   )
 }
