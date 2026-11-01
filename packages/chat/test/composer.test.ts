@@ -63,6 +63,35 @@ describe("Composer draft", () => {
     expect(Composer.retryID(restored)).toBeUndefined()
   })
 
+  test("keeps a draft's uploaded files and message ID across a reload, also with no text; removing the last file lets a new chat's draft change space", () => {
+    const file = { path: "chats/ses_1/uploads/msg_1/plan.pdf", name: "plan.pdf", mime: "application/pdf", size: 3 }
+    const attached = Composer.withFile(
+      {
+        ...draft(""),
+        messageId: SessionMessage.ID.make("msg_1"),
+        chat: { sessionId: Session.ID.make("ses_1"), spaceId: "spc_1" },
+      },
+      file,
+    )
+    const reloaded = Composer.decode(Composer.encode(attached))
+    expect(reloaded).toEqual(attached)
+    expect(Composer.messageID(reloaded)).toBe(SessionMessage.ID.make("msg_1"))
+    expect(Composer.withoutFile(reloaded, file.path)).toEqual({
+      ...draft(""),
+      messageId: SessionMessage.ID.make("msg_1"),
+    })
+  })
+
+  test("a failed send with files comes back with them, and reuses its message ID only while the text is unchanged", () => {
+    const file = { path: "chats/ses_1/uploads/msg_1/plan.pdf", name: "plan.pdf", mime: "application/pdf", size: 3 }
+    const sent = Composer.withFile({ ...draft("Read this"), messageId: SessionMessage.ID.make("msg_1") }, file)
+    const failed = Composer.restore(Composer.empty, sent, SessionMessage.ID.make("msg_1"))
+    expect(Composer.files(failed)).toEqual([file])
+    expect(Composer.messageID(failed)).toBe(SessionMessage.ID.make("msg_1"))
+    expect(Composer.messageID({ ...failed, text: "Read this now" })).toBeUndefined()
+    expect(Composer.files(Composer.restore(draft("Follow-up"), sent, SessionMessage.ID.make("msg_1")))).toEqual([file])
+  })
+
   test("undo puts a queued prompt into an empty draft, or after the draft's text", () => {
     expect(Composer.append(draft(""), "Queued").text).toBe("Queued")
     expect(Composer.append(draft("Draft"), "Queued").text).toBe("Draft\n\nQueued")

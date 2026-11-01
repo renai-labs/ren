@@ -115,6 +115,7 @@ export type Boot =
 export interface Handoff {
   readonly id: SessionMessage.ID
   readonly text: string
+  readonly files?: ReadonlyArray<SessionMessage.DriveFile>
 }
 
 type Client = Effect.Success<ReturnType<typeof Ren.make>>
@@ -126,6 +127,7 @@ export interface Mentions {
 
 export interface PromptInput extends Mentions {
   readonly text: string
+  readonly files?: ReadonlyArray<SessionMessage.DriveFile>
   readonly delivery?: SessionInbox.Delivery
   readonly id?: SessionMessage.ID
   readonly model?: SessionModel.Ref
@@ -185,6 +187,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             id: handoff.id,
             text: handoff.text,
             delivery: "steer",
+            ...(handoff.files && { uploads: handoff.files }),
             ...(options.sender && { sender: options.sender }),
           },
           yield* DateTime.now,
@@ -596,6 +599,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const prompt = Effect.fnUntraced(function* (input: PromptInput) {
     const id = input.id ?? SessionMessage.ID.create()
+    const files = input.files?.length ? input.files : undefined
     const delivery = input.delivery ?? "steer"
     const now = yield* DateTime.now
     const fresh = Outbox.isFresh(yield* SubscriptionRef.get(state), root, id)
@@ -609,6 +613,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
           delivery,
           ...(options.sender && { sender: options.sender }),
           ...(input.agents && { agents: input.agents }),
+          ...(files && { uploads: files }),
         },
         now,
       ),
@@ -621,6 +626,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         delivery,
         ...(input.agents && { agents: input.agents }),
         ...(input.skills && { skills: input.skills }),
+        ...(files && { files }),
       },
     ])
     yield* connection.wake
@@ -635,6 +641,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
           ...(input.resume === false && { resume: false }),
           ...(input.agents && { agents: input.agents }),
           ...(input.skills && { skills: input.skills }),
+          ...(files && { files: files.map((file) => ({ path: file.path, name: file.name })) }),
         })
       }).pipe(
         Effect.tapError((error) =>
@@ -730,6 +737,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
                   delivery: "queue",
                   resume: false,
                   ...(item.payload.agents && { agents: item.payload.agents }),
+                  ...(item.payload.uploads && {
+                    files: item.payload.uploads.map((file) => ({ path: file.path, name: file.name })),
+                  }),
                   ...(item.payload.skills && {
                     skills: item.payload.skills.map((skill) => ({
                       id: skill.id,

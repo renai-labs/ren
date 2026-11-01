@@ -2,11 +2,12 @@ export * as Composer from "./composer.js"
 
 // oxlint-disable typescript/no-misused-spread -- drafts are plain readonly structs; Struct.assign would widen the optional keys these updates keep
 
+import { Session } from "@ren/schema/session"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
-import { Option, Schema } from "effect"
+import { Option, Schema, Struct } from "effect"
 import { ClientCommand } from "./client-command.js"
 
 export interface Pasted extends Schema.Schema.Type<typeof Pasted> {}
@@ -18,6 +19,9 @@ export const Draft = Schema.Struct({
   pasted: Schema.Array(Pasted),
   retry: Schema.optionalKey(Schema.Struct({ id: SessionMessage.ID, text: Schema.String })),
   model: Schema.optionalKey(SessionModel.Ref),
+  messageId: Schema.optionalKey(SessionMessage.ID),
+  files: Schema.optionalKey(Schema.Array(SessionMessage.DriveFile)),
+  chat: Schema.optionalKey(Schema.Struct({ sessionId: Session.ID, spaceId: Schema.String })),
 })
 
 export const empty: Draft = { text: "", pasted: [] }
@@ -31,20 +35,46 @@ export const message = (draft: Pick<Draft, "text" | "pasted">) =>
 
 export const isBlank = (draft: Pick<Draft, "text" | "pasted">) => message(draft) === ""
 
+export const files = (draft: Draft) => draft.files ?? []
+
 export const decode = (raw: string | undefined): Draft => Option.getOrElse(decodeStored(raw), () => empty)
 
-export const encode = (draft: Draft) => (isBlank(draft) && !draft.model ? undefined : encodeStored(draft))
+export const encode = (draft: Draft) =>
+  isBlank(draft) && !draft.model && files(draft).length === 0 ? undefined : encodeStored(draft)
 
 export const retryID = (draft: Draft) =>
   draft.retry && draft.retry.text === message(draft) ? draft.retry.id : undefined
 
+export const messageID = (draft: Draft) => (draft.retry ? retryID(draft) : draft.messageId)
+
 export const restore = (current: Draft, sent: Draft, id: SessionMessage.ID): Draft => {
-  if (isBlank(current)) return { ...sent, retry: { id, text: message(sent) } }
+  if (isBlank(current) && files(current).length === 0) return { ...sent, retry: { id, text: message(sent) } }
+  const merged = [...files(sent), ...files(current)]
+  const messageId = current.messageId ?? sent.messageId
+  const chat = current.chat ?? sent.chat
   return {
     ...current,
     text: [sent.text, current.text].filter((item) => item.trim().length > 0).join("\n\n"),
     pasted: [...sent.pasted, ...current.pasted],
+    ...(merged.length > 0 && { files: merged }),
+    ...(messageId && { messageId }),
+    ...(chat && { chat }),
   }
+}
+
+export const withFile = (draft: Draft, file: SessionMessage.DriveFile): Draft => ({
+  ...draft,
+  files: [...files(draft).filter((item) => item.path !== file.path), file],
+})
+
+export const withMessageID = (draft: Draft, messageId: SessionMessage.ID): Draft =>
+  draft.messageId ? draft : { ...draft, messageId }
+
+export const withChat = (draft: Draft, chat: NonNullable<Draft["chat"]>): Draft => ({ ...draft, chat })
+
+export const withoutFile = (draft: Draft, path: string): Draft => {
+  const kept = files(draft).filter((item) => item.path !== path)
+  return kept.length > 0 ? { ...draft, files: kept } : Struct.omit(draft, ["files", "chat"])
 }
 
 export const append = (draft: Draft, text: string): Draft => {
@@ -100,7 +130,11 @@ export interface Queued {
 export const queued = (items: ReadonlyArray<SessionInbox.Info>): ReadonlyArray<Queued> =>
   items
     .filter((item): item is SessionInbox.User => item.type === "user" && item.delivery === "queue")
-    .map((item) => ({ id: item.id, text: item.payload.text, attachments: item.payload.files?.length ?? 0 }))
+    .map((item) => ({
+      id: item.id,
+      text: item.payload.text,
+      attachments: (item.payload.files?.length ?? 0) + (item.payload.uploads?.length ?? 0),
+    }))
 
 const sameModel = (left: SessionModel.Ref, right: SessionModel.Ref | undefined) =>
   Boolean(right) && SessionModel.key(left) === SessionModel.key(right ?? left) && left.variant === right?.variant

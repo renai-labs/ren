@@ -38,6 +38,13 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
         globalThis.fetch(input, { ...init, credentials: "include" }),
       globalThis.fetch,
     ),
+    upload: async (form, file, signal) => {
+      const body = new FormData()
+      for (const [name, value] of Object.entries(form.fields)) body.append(name, value)
+      body.append("file", file)
+      const response = await globalThis.fetch(form.uploadUrl, { method: "POST", body, signal })
+      if (!response.ok) throw new Error(`The upload failed (${response.status}).`)
+    },
     storage: {
       get: (key) => localStorage.getItem(prefix + key) ?? undefined,
       set: (key, value) => localStorage.setItem(prefix + key, value),

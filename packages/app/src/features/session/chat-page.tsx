@@ -29,6 +29,7 @@ function ChatThread(props: { chat: Chat }) {
       <Transcript
         key={chat.view.sessionID}
         view={chat.view}
+        spaceId={chat.spaceId}
         messages={chat.messages}
         rows={chat.rows}
         activeMessageID={chat.activeMessageID}
@@ -92,6 +93,7 @@ function ChatComposer(props: { chat: Chat; picking: boolean; onPickingChange: (o
           spaceId={chat.spaceId}
           value={chat.draft}
           onChange={chat.setDraft}
+          files={chat.files}
           onSubmit={chat.send}
           boot={chat.bootStatus}
           onRetry={chat.retry}
