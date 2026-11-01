@@ -1,7 +1,6 @@
 export * as SlackApp from "./slack-app.js"
 
 import type { Auth } from "@ren/schema/auth"
-import { Session } from "@ren/schema/session"
 import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { ChannelSecrets } from "./channel-secrets.js"
@@ -40,6 +39,8 @@ export const botScopes = [
   "users:read.email",
   "users.profile:read",
 ]
+
+export const maxFileBytes = 32 * 1024 * 1024
 
 const timeLimit = "10 seconds"
 
@@ -142,8 +143,8 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
               Stream.runFoldEffect(
                 () => ({ size: 0, chunks: new Array<Uint8Array>() }),
                 (body, chunk) => {
-                  if (body.size + chunk.byteLength > Session.maxFileBytes)
-                    return Effect.fail(new Failed({ message: "Slack file exceeds the 10 MB limit" }))
+                  if (body.size + chunk.byteLength > maxFileBytes)
+                    return Effect.fail(new Failed({ message: "Slack file exceeds the 32 MiB limit" }))
                   body.size += chunk.byteLength
                   body.chunks.push(chunk)
                   return Effect.succeed(body)

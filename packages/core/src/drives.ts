@@ -6,8 +6,10 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  PutObjectCommand,
   S3Client,
   S3ServiceException,
+  type _Object,
 } from "@aws-sdk/client-s3"
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts"
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post"
@@ -19,7 +21,7 @@ import type { Drive } from "@ren/schema/drive"
 import type { Space } from "@ren/schema/space"
 import type { WriteResult } from "@ren/schema/write-result"
 import { and, eq, isNull, lt } from "drizzle-orm"
-import { ByteSize, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { ByteSize, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { DrivePolicy } from "./drives/policy.js"
@@ -35,6 +37,11 @@ export interface Keys {
   readonly secretAccessKey: Redacted.Redacted
   readonly sessionToken: Redacted.Redacted
   readonly expiresAt: DateTime.Utc
+}
+
+export interface Owner {
+  readonly organizationId: Auth.OrganizationID
+  readonly spaceId: Space.ID
 }
 
 export interface Interface {
@@ -54,6 +61,9 @@ export interface Interface {
     actor: Actor.Info,
     input: Drive.PathInput,
   ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden | Unavailable>
+  readonly put: (owner: Owner, path: string, body: Uint8Array, type: string) => Effect.Effect<void, Unavailable>
+  readonly files: (owner: Owner, folder: string) => Effect.Effect<ReadonlyArray<Drive.File>, Unavailable>
+  readonly read: (owner: Owner, path: string) => Effect.Effect<Uint8Array, Primitive.NotFound | Unavailable>
   readonly sweep: (archivedBefore: Date) => Effect.Effect<void>
   readonly availability: (
     owner: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
@@ -91,6 +101,19 @@ const isStatus = (status: number) => (error: Unavailable) =>
   error.cause instanceof S3ServiceException && error.cause.$metadata.httpStatusCode === status
 
 const missing = (path: string) => new Primitive.NotFound({ message: `The drive has no file ${path}.` })
+
+const filesOf = (root: string, objects: ReadonlyArray<_Object> | undefined): ReadonlyArray<Drive.File> =>
+  (objects ?? []).flatMap((object) =>
+    object.Key
+      ? [
+          {
+            path: object.Key.slice(root.length),
+            size: object.Size ?? 0,
+            modifiedAt: DateTime.fromDateUnsafe(object.LastModified ?? new Date(0)),
+          },
+        ]
+      : [],
+  )
 
 export const layer = Layer.effect(
   Service,
@@ -209,17 +232,7 @@ export const layer = Layer.effect(
           folders: (listed.CommonPrefixes ?? []).flatMap((common) =>
             common.Prefix ? [common.Prefix.slice(root.length, -1)] : [],
           ),
-          files: (listed.Contents ?? []).flatMap((object) =>
-            object.Key && object.Key !== folder
-              ? [
-                  {
-                    path: object.Key.slice(root.length),
-                    size: object.Size ?? 0,
-                    modifiedAt: DateTime.fromDateUnsafe(object.LastModified ?? new Date(0)),
-                  },
-                ]
-              : [],
-          ),
+          files: filesOf(root, listed.Contents).filter((file) => `${root}${file.path}` !== folder),
           cursor: listed.NextContinuationToken ?? null,
         }
       }),
@@ -260,6 +273,42 @@ export const layer = Layer.effect(
           ),
         )
         return { url, expiresAt }
+      }),
+      put: Effect.fn("Drives.put")(function* (owner: Owner, path: string, body: Uint8Array, type: string) {
+        yield* send((signal) =>
+          s3.send(
+            new PutObjectCommand({ Bucket: bucket, Key: `${prefixOf(owner)}${path}`, Body: body, ContentType: type }),
+            { abortSignal: signal },
+          ),
+        )
+      }),
+      files: Effect.fn("Drives.files")(function* (owner: Owner, folder: string) {
+        const root = prefixOf(owner)
+        const pages = yield* Stream.paginate("", (cursor) =>
+          send((signal) =>
+            s3.send(
+              new ListObjectsV2Command({
+                Bucket: bucket,
+                Prefix: `${root}${folder}/`,
+                ...(cursor && { ContinuationToken: cursor }),
+              }),
+              { abortSignal: signal },
+            ),
+          ).pipe(
+            Effect.map(
+              (listed) => [filesOf(root, listed.Contents), Option.fromNullishOr(listed.NextContinuationToken)] as const,
+            ),
+          ),
+        ).pipe(Stream.runCollect)
+        return pages.flat()
+      }),
+      read: Effect.fn("Drives.read")(function* (owner: Owner, path: string) {
+        const object = yield* send((signal) =>
+          s3.send(new GetObjectCommand({ Bucket: bucket, Key: `${prefixOf(owner)}${path}` }), { abortSignal: signal }),
+        ).pipe(Effect.catchIf(isStatus(404), () => Effect.fail(missing(path))))
+        const body = object.Body
+        if (!body) return yield* missing(path)
+        return yield* send(() => body.transformToByteArray())
       }),
       delete: Effect.fn("Drives.delete")(function* (actor: Actor.Info, input: Drive.PathInput) {
         const key = `${yield* prefix(actor, input.spaceId, DrivePolicy.actions.write)}${input.path}`

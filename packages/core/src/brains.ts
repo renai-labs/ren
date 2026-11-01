@@ -239,7 +239,7 @@ export const layer = Layer.effect(
     })
 
     const validatePrompt = Effect.fn("Brains.validatePrompt")(function* (prompt: Session.Prompt) {
-      const inline = (prompt.files ?? []).filter(Session.isInline)
+      const inline = [...(prompt.files ?? []).filter(Session.isInline), ...(prompt.fallback ?? [])]
       const large = inline.find((file) =>
         ByteSize.isGreaterThan(ByteSize.bytes(Session.fileBytes(file.url)), config.maxFileSize),
       )
@@ -247,7 +247,9 @@ export const layer = Layer.effect(
         return yield* new BrainRejectedError({
           message: `${large.name ?? "A file"} is larger than ${ByteSize.format(config.maxFileSize, { system: "decimal" })}`,
         })
-      if (inline.reduce((bytes, file) => bytes + Session.fileBytes(file.url), 0) > Session.maxFileBytes)
+      if (
+        [prompt.files ?? [], prompt.fallback ?? []].some((files) => Session.inlineBytes(files) > Session.maxFileBytes)
+      )
         return yield* new BrainRejectedError({ message: "A message’s files total more than 10 MB" })
     })
 

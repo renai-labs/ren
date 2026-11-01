@@ -4,15 +4,18 @@ import { Observability } from "@ren/schema/observability"
 import { Database } from "@ren/db/database"
 import type { Agent } from "@ren/schema/agent"
 import { Channel } from "@ren/schema/channel"
+import { Drive } from "@ren/schema/drive"
 import { Session } from "@ren/schema/session"
+import { FileName } from "@ren/util/file-name"
 import { and, eq, sql } from "drizzle-orm"
-import { Context, Effect, Layer, Option, Result, Schema, Struct } from "effect"
+import { Context, Effect, Layer, Option, Result, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainHost } from "./brain-host.js"
 import { ChannelInstalls } from "./channel-installs.js"
 import { ChannelNotice } from "./channel-notice.js"
 import { ChannelProvider } from "./channel-provider.js"
 import { ChannelRoute } from "./channel-route.js"
+import { Drives } from "./drives.js"
 import { DurableRunner } from "./durable-runner.js"
 import { SessionRunner } from "./session/runner.js"
 import { Task } from "./task.js"
@@ -42,6 +45,8 @@ class Stopped extends Schema.TaggedError<Stopped>()("Channels.Stopped", {
 
 type Message = Omit<Session.SendInput, "sessionId" | "delivery">
 
+type MessageFor = (sessionId: Session.ID) => Effect.Effect<Message>
+
 const filesAtOnce = 4
 
 const mimeType = /^[a-z]+\/[a-z0-9.+-]+$/iu
@@ -60,10 +65,11 @@ export const layer = Layer.effect(
     const brainHost = yield* BrainHost.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const tasks = yield* Task.Service
+    const drives = yield* Drives.Service
     const thread = Database.Schema.channel_thread
     const install = Database.Schema.channel_install
 
-    const prompt = Effect.fnUntraced(function* (provider: ChannelProvider.Provider, event: Channel.Event) {
+    const fetchFiles = Effect.fnUntraced(function* (provider: ChannelProvider.Provider, event: Channel.Event) {
       const fetched = yield* Effect.forEach(
         event.files,
         (file) =>
@@ -74,27 +80,79 @@ export const layer = Layer.effect(
           ),
         { concurrency: filesAtOnce },
       )
-      const kept = fetched.reduce(
-        (sum, each) => {
-          if (Option.isNone(each.bytes)) {
-            sum.notes.push(`(${each.file.name} could not be read.)`)
-            return sum
-          }
-          const mime = mimeType.test(each.file.mime) ? each.file.mime : "application/octet-stream"
-          const url = `data:${mime};base64,${base64(each.bytes.value)}`
+      const taken = new Set<string>()
+      return {
+        notes: fetched.flatMap((each) => (Option.isNone(each.bytes) ? [`(${each.file.name} could not be read.)`] : [])),
+        files: fetched.flatMap((each) => {
+          if (Option.isNone(each.bytes)) return []
+          const name = FileName.free(each.file.name, taken)
+          taken.add(name)
+          return [
+            {
+              name,
+              mime: mimeType.test(each.file.mime) ? each.file.mime : "application/octet-stream",
+              bytes: each.bytes.value,
+            },
+          ]
+        }),
+      }
+    })
+
+    type Fetched = Effect.Success<ReturnType<typeof fetchFiles>>
+
+    const prompt = Effect.fnUntraced(function* (
+      route: ChannelRoute.Route,
+      fetched: Fetched,
+      sessionId: Session.ID,
+      messageId: Session.MessageID,
+    ) {
+      const text = (lines: ReadonlyArray<string>) => {
+        const joined = [route.text, ...fetched.notes, ...lines].filter((line) => line.length > 0).join("\n")
+        return joined.length > 0 ? joined : "(no text)"
+      }
+      const copies = fetched.files.reduce(
+        (sum, file) => {
+          const url = `data:${file.mime};base64,${base64(file.bytes)}`
           const bytes = Session.fileBytes(url)
           if (sum.bytes + bytes > Session.maxFileBytes)
-            sum.notes.push(`(${each.file.name} is not attached: a message’s files total at most 10 MB.)`)
+            sum.skipped.push(`(${file.name} is not attached: a message’s files total at most 10 MB.)`)
           else {
             sum.bytes += bytes
-            sum.files.push({ url, name: each.file.name })
+            sum.files.push({ url, name: file.name })
           }
           return sum
         },
-        { bytes: 0, files: new Array<Session.File>(), notes: new Array<string>() },
+        { bytes: 0, files: new Array<Session.InlineFile>(), skipped: new Array<string>() },
       )
-      const text = [event.text, ...kept.notes].filter((line) => line.length > 0).join("\n")
-      return { text: text.length > 0 ? text : "(no text)", ...(kept.files.length > 0 && { files: kept.files }) }
+      if (fetched.files.length === 0) return { text: text([]) } satisfies Session.Prompt
+      const owner = {
+        organizationId: route.organizationId,
+        spaceId: yield* runner.get(sessionId).pipe(
+          Effect.map((session) => session.spaceId),
+          Effect.orElseSucceed(() => route.spaceId),
+        ),
+      }
+      const folder = Drive.uploadsOf(sessionId, messageId)
+      const placed = yield* Effect.forEach(
+        fetched.files,
+        (file) => drives.put(owner, `${folder}/${file.name}`, file.bytes, file.mime),
+        { concurrency: filesAtOnce, discard: true },
+      ).pipe(
+        Effect.as(true),
+        Effect.catchTag("Drives.Unavailable", (error) =>
+          Effect.logWarning("Channel files could not be put in the space’s drive", error).pipe(Effect.as(false)),
+        ),
+      )
+      if (!placed)
+        return {
+          text: text(copies.skipped),
+          ...(copies.files.length > 0 && { files: copies.files }),
+        } satisfies Session.Prompt
+      return {
+        text: text([]),
+        files: fetched.files.map((file) => ({ path: `${folder}/${file.name}`, name: file.name })),
+        ...(copies.files.length > 0 && { fallback: copies.files }),
+      } satisfies Session.Prompt
     })
 
     const claim = Effect.fnUntraced(function* (route: ChannelRoute.Route, event: Channel.Event, sessionId: Session.ID) {
@@ -174,13 +232,14 @@ export const layer = Layer.effect(
       task: NonNullable<ChannelRoute.Route["task"]>,
       route: ChannelRoute.Route,
       event: Channel.Event,
-      message: Message,
+      messageFor: MessageFor,
       newSessionId: Session.ID,
     ) {
       yield* Effect.annotateCurrentSpan("taskId", task.id)
       const handoff = (error: { readonly message: string }) =>
         new Stopped({ reason: "task_handoff", message: `Task ${task.id}: ${error.message}` })
       const sessionId = task.sessionId ?? newSessionId
+      const message = yield* messageFor(sessionId)
       const initial = task.sessionId
         ? message
         : {
@@ -318,10 +377,11 @@ export const layer = Layer.effect(
     const routeThread = Effect.fnUntraced(function* (
       route: ChannelRoute.Route,
       event: Channel.Event,
-      message: Message,
+      messageFor: MessageFor,
       sessionId: Session.ID,
     ) {
       const claimed = yield* claim(route, event, sessionId)
+      const message = yield* messageFor(claimed.sessionId)
       yield* database.db
         .update(thread)
         .set({
@@ -380,9 +440,9 @@ export const layer = Layer.effect(
         Effect.tapError((error) => Effect.logWarning(`The ${event.provider} thread context could not be read`, error)),
         Effect.orElseSucceed(Option.none<string>),
       )
-      const message = {
+      const fetched = yield* fetchFiles(found.value, event)
+      const base = {
         messageId: payload.messageId,
-        prompt: yield* prompt(found.value, Struct.evolve(event, { text: () => route.text })),
         sender: { userId: route.senderUserId },
         channel: {
           provider: event.provider,
@@ -394,8 +454,10 @@ export const layer = Layer.effect(
           ...(trigger && { trigger: trigger.title }),
         },
       }
-      if (route.task) return yield* routeTask(route.task, route, event, message, payload.sessionId)
-      yield* routeThread(route, event, message, payload.sessionId)
+      const messageFor = (sessionId: Session.ID) =>
+        Effect.map(prompt(route, fetched, sessionId, payload.messageId), (built) => ({ ...base, prompt: built }))
+      if (route.task) return yield* routeTask(route.task, route, event, messageFor, payload.sessionId)
+      yield* routeThread(route, event, messageFor, payload.sessionId)
     })
 
     yield* DurableRunner.register(EventRun, (payload) =>

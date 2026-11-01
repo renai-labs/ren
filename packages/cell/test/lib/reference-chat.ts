@@ -89,12 +89,12 @@ export const open = Effect.fnUntraced(function* (
     })
   yield* memory.set(sessionId, yield* accessOf(1))
   yield* harness.start({ sessionId, harness: "opencode", interactive: false, directory })
-  const turn = (script: StubModel.Script, calls = 2) =>
+  const turn = (script: StubModel.Script, calls = 2, prompt: Omit<Session.Prompt, "text"> = {}) =>
     harness
       .send({
         sessionId,
         messageId: Session.MessageID.create(),
-        prompt: { text: `${script.marker} go` },
+        prompt: { ...prompt, text: `${script.marker} go` },
         delivery: "steer",
         sender: { userId: "user_1" },
       })

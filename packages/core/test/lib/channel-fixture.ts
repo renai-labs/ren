@@ -39,10 +39,12 @@ import { PersonCredentials } from "../../src/person-credentials.js"
 import { ChannelRoute } from "../../src/channel-route.js"
 import { Channels } from "../../src/channels.js"
 import { DurableRunner } from "../../src/durable-runner.js"
+import { Drives } from "../../src/drives.js"
 import { Models } from "../../src/models.js"
 import { SessionRunner } from "../../src/session/runner.js"
 import { SessionSync } from "../../src/session-sync.js"
 import { Task } from "../../src/task.js"
+import { TestDrives } from "./drives.js"
 import { Host } from "./host.js"
 
 const secret = "channel-test-secret"
@@ -342,6 +344,7 @@ const core = (held: boolean) =>
         BrainRegistry.layer,
         ChannelProvider.layer(providers),
         Access.layer,
+        Drives.layer.pipe(Layer.provide(Access.layer), Layer.provide(TestDrives.layer)),
         Layer.mergeAll(PersonCredentials.layer, ChannelSecrets.layer).pipe(
           Layer.provide(Layer.mergeAll(Envelope.layerLocal, EgressControl.layerNone)),
         ),

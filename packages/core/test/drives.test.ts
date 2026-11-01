@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
 import { Agent } from "@ren/schema/agent"
 import { Session } from "@ren/schema/session"
-import { Effect, Layer } from "effect"
+import { DateTime, Effect, Layer } from "effect"
 import { Access } from "../src/access.js"
 import type { Actor } from "../src/actor.js"
 import { Drives } from "../src/drives.js"
@@ -57,6 +57,33 @@ describe("Drives", () => {
           "Primitive.NotFound",
         )
         expect((yield* drives.list(found.ada, {})).files).toEqual([])
+      }),
+  )
+
+  it.live(
+    "Ren puts a file in a space's drive with no size limit, lists every file under a folder with its time, and reads one back",
+    () =>
+      Effect.gen(function* () {
+        const drives = yield* Drives.Service
+        const found = yield* ownerActor
+        const owner = { organizationId: found.owner.organizationId, spaceId: found.owner.spaceId }
+        const before = yield* DateTime.now
+        const path = "chats/ses_1/uploads/msg_1/trace.log"
+        const body = new Uint8Array(TestDrives.maxFileBytes + 1).fill(97)
+        yield* drives.put(owner, path, body, "text/plain")
+        yield* drives.put(owner, "chats/ses_2/uploads/msg_1/other.txt", new Uint8Array(1), "text/plain")
+        const listed = yield* drives.files(owner, "chats/ses_1")
+        expect(listed.map((file) => [file.path, file.size])).toEqual([[path, body.length]])
+        expect(
+          DateTime.isGreaterThanOrEqualTo(listed[0]?.modifiedAt ?? before, DateTime.subtract(before, { seconds: 5 })),
+        ).toBe(true)
+        expect(yield* drives.read(owner, path)).toEqual(body)
+        expect((yield* Effect.flip(drives.read(owner, "chats/ses_1/missing.txt")))._tag).toBe("Primitive.NotFound")
+        expect(
+          (yield* drives.list(found.ada, { spaceId: owner.spaceId, folder: "chats/ses_1/uploads/msg_1" })).files.map(
+            (file) => file.path,
+          ),
+        ).toEqual([path])
       }),
   )
 

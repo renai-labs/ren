@@ -84,18 +84,21 @@ export const isInline = Schema.is(InlineFile)
 
 export const isDriveFile = Schema.is(DriveFile)
 
+export const inlineBytes = (files: ReadonlyArray<File>) =>
+  files.filter(isInline).reduce((bytes, file) => bytes + fileBytes(file.url), 0)
+
+const withinTotal = Schema.makeFilter(
+  (files: ReadonlyArray<File>) => inlineBytes(files) <= maxFileBytes || "a message’s files total at most 10 MB",
+)
+
 export interface Prompt extends Schema.Schema.Type<typeof Prompt> {}
 export const Prompt = Schema.Struct({
   text: Schema.NonEmptyString,
-  files: Schema.optionalKey(
-    Schema.Array(File).check(
-      Schema.makeFilter(
-        (files) =>
-          files.filter(isInline).reduce((bytes, file) => bytes + fileBytes(file.url), 0) <= maxFileBytes ||
-          "a message's files total at most 10 MB",
-      ),
-    ),
-  ),
+  files: Schema.optionalKey(Schema.Array(File).check(withinTotal)),
+  fallback: Schema.optionalKey(Schema.Array(InlineFile).check(withinTotal)).annotate({
+    description:
+      "Inline copies of the message’s drive files, for a chat that cannot read the drive. Ren sets them for the files it puts in the drive itself, such as a Slack message’s.",
+  }),
 }).annotate({ identifier: "Session.Prompt" })
 
 export interface Sender extends Schema.Schema.Type<typeof Sender> {}
