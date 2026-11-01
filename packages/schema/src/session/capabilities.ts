@@ -33,6 +33,6 @@ export const of = (harness: Session.Harness): Info =>
       shell: true,
       commands: true,
       rename: true,
-      files: false,
+      files: true,
     },
   })[harness]

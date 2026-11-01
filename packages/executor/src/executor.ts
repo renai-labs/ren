@@ -63,6 +63,13 @@ export interface Interface {
     from: string,
     to: string,
   ) => Effect.Effect<void, EnvironmentApi.FileNotFoundError | EnvironmentApi.FileSystemError>
+  readonly copy: (
+    from: string,
+    to: string,
+  ) => Effect.Effect<
+    void,
+    EnvironmentApi.FileNotFoundError | EnvironmentApi.WrongKindError | EnvironmentApi.FileSystemError
+  >
   readonly mkdir: (path: string) => Effect.Effect<void, EnvironmentApi.FileSystemError>
   readonly unpack: (
     input: EnvironmentApi.UnpackInput,

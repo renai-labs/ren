@@ -229,6 +229,7 @@ it.live("a chat whose environment cannot mount gets a note and no drive referenc
       "The drives of this space and organization are not available in this chat: its environment cannot mount them.",
     )
     expect(call.system).not.toContain("drive:space")
+    expect(call.tools).not.toContain("show_file")
   }),
 )
 
@@ -242,7 +243,7 @@ it.live(
       const unmounted = yield* open(github, [docsOf(github)], { type: "unavailable", reason: "no_mount" })
       expect(yield* Effect.flip(unmounted.prompt([file]))).toMatchObject({
         _tag: "Harness.Rejected",
-        message: "This chat cannot read files of the space’s drive: its environment cannot mount them.",
+        message: "This chat cannot use the space’s drive: its environment cannot mount them.",
       })
       const homeless = yield* open(github, [docsOf(github)], mounts)
       yield* homeless.forget
@@ -267,6 +268,7 @@ it.live(
       const call = yield* chat.tool("shell", { command: "echo hi" })
       expect(call.system).toContain(join(drivesRoot, "space"))
       expect(call.system).toContain("The space’s files")
+      expect(call.tools).toContain("show_file")
       expect(result(call)).toContain("The reference drive:space is not on the environment:")
       const write = (path: string) => chat.tool("write", { path, content: "x" }).pipe(Effect.map(result))
       expect(yield* write(join(drivesRoot, "org", "notes.md"))).toContain("is in a read-only drive")

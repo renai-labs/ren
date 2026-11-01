@@ -10,6 +10,7 @@ import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { EnvironmentCopies } from "@ren/brain/environment/copies"
 import { DriveFiles } from "@ren/brain/reference/drive-files"
+import type { EnvironmentClient } from "@ren/environment-api/environment-client"
 import { Drives } from "@ren/brain/reference/drives"
 import { BrainSettings } from "@ren/brain/settings"
 import { UsageClaims } from "@ren/brain/usage-claims"
@@ -41,7 +42,7 @@ import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { OpenCodeModelTools } from "./model-tools.js"
 import { OpenCodeSearch } from "./search-provider.js"
-import { basename } from "node:path"
+import { basename, resolve } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
@@ -473,6 +474,47 @@ export const make = (
           })
           copySources.push(references.items)
           const spaceDrive = `${Environment.sharedDirectoryOf({ directory: folder })}/${Drives.root}/space`
+          const onSpaceDrive = <A>(use: (client: EnvironmentClient.Client) => Effect.Effect<A, DriveFiles.Refused>) =>
+            Effect.gen(function* () {
+              const drive = references.items().find((item) => item.path === spaceDrive)
+              if (Option.isNone(copies) || Option.isNone(connections) || !drive) {
+                const drives = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives
+                return yield* new DriveFiles.Refused({
+                  message: `This chat cannot use the space’s drive: ${drives?.type === "unavailable" ? Drives.reasons[drives.reason] : "it has no environment that mounts it"}.`,
+                })
+              }
+              const failure = (yield* copies.value.ensure([drive])).at(0)
+              if (failure)
+                return yield* new DriveFiles.Refused({
+                  message: `The space’s drive is not on the environment: ${failure.message}`,
+                })
+              return yield* connections.value.connect(Session.ID.make(sessionId)).pipe(
+                Effect.mapError((error) => new DriveFiles.Refused({ message: error.message })),
+                Effect.flatMap((connection) => use(connection.client)),
+                Effect.scoped,
+              )
+            })
+          yield* tool.transform((editor) => {
+            if (!hasEnvironment || Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives?.type !== "mounts")
+              return
+            editor.add({
+              name: "show_file",
+              description:
+                "Show a file to the person as a card in the chat, which they can preview and download. Use it for each file you made for them, such as a report, a chart or a spreadsheet. The file is copied to the chat’s outputs in the space’s drive, and a file of the same name there is replaced.",
+              input: Schema.Struct({
+                path: Schema.NonEmptyString.annotate({ description: "The path of the file on the environment." }),
+              }),
+              output: SessionMessage.DriveFile,
+              options: { codemode: false },
+              execute: (args) =>
+                onSpaceDrive((client) =>
+                  DriveFiles.show(client, spaceDrive, sessionId, resolve(folder, args.path)),
+                ).pipe(
+                  Effect.map((output) => ({ output })),
+                  Effect.mapError((error) => new Tool.Error({ message: error.message })),
+                ),
+            })
+          })
           yield* context.session.hook("context", (event) =>
             Effect.sync(() => {
               event.messages = event.messages.map((message) => {
@@ -550,29 +592,13 @@ export const make = (
           )
           turns.ended.push((sessionID) => Effect.flatMap(Ref.get(shared.turnEnded), (ended) => ended(sessionID)))
           const instance: Instance = {
-            reload: Effect.all([context.agent.reload(), references.refresh], { discard: true }),
+            reload: Effect.all([context.agent.reload(), references.refresh, tool.reload()], { discard: true }),
             session: context.session,
             installed,
             attach: (files) =>
-              Effect.gen(function* () {
-                const drive = references.items().find((item) => item.path === spaceDrive)
-                if (Option.isNone(copies) || Option.isNone(connections) || !drive) {
-                  const drives = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives
-                  return yield* new Harness.Rejected({
-                    message: `This chat cannot read files of the space’s drive: ${drives?.type === "unavailable" ? Drives.reasons[drives.reason] : "it has no environment that mounts it"}.`,
-                  })
-                }
-                const failure = (yield* copies.value.ensure([drive])).at(0)
-                if (failure)
-                  return yield* new Harness.Rejected({
-                    message: `The space’s drive is not on the environment: ${failure.message}`,
-                  })
-                return yield* connections.value.connect(Session.ID.make(sessionId)).pipe(
-                  Effect.flatMap((connection) => DriveFiles.attach(connection.client, spaceDrive, files)),
-                  Effect.scoped,
-                  Effect.mapError((error) => new Harness.Rejected({ message: error.message })),
-                )
-              }),
+              onSpaceDrive((client) => DriveFiles.attach(client, spaceDrive, files)).pipe(
+                Effect.mapError((error) => new Harness.Rejected({ message: error.message })),
+              ),
           }
           yield* Ref.update(shared.instances, (all) => new Map([...all, [sessionId, instance]]))
           yield* Effect.addFinalizer(() =>

@@ -2,7 +2,7 @@ import { describe, expect, setDefaultTimeout } from "bun:test"
 import { TestGitHub } from "@ren/brain/testing"
 import { DriveEnvironment, testEffect } from "@ren/executor/testing"
 import type { Drive } from "@ren/schema/drive"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Schedule } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ReferenceChat } from "./lib/reference-chat.js"
 import { Shared } from "./lib/shared.js"
@@ -34,23 +34,30 @@ const drives: Drive.Availability = {
 
 const uploads = "chats/ses_1/uploads"
 
+const open = Effect.gen(function* () {
+  const environment = yield* DriveEnvironment.start
+  const github = yield* TestGitHub.make({ repo: `docs-${crypto.randomUUID().slice(0, 8)}` })
+  const chat = yield* ReferenceChat.open(
+    {
+      url: environment.url,
+      environmentId: environment.environmentId,
+      directoryOf: (sessionId) => `/tmp/chats/${sessionId}`,
+    },
+    github,
+    [],
+    drives,
+  )
+  return { environment, chat }
+})
+
 describe.skipIf(!DriveEnvironment.hasDocker)("drive files", () => {
   it.live(
     "the first message of a chat connects its environment and mounts the drive, then attaches files that the browser put there a moment before: the model reads a text file and gets the path of every file",
     () =>
       Effect.gen(function* () {
-        const environment = yield* DriveEnvironment.start
-        const github = yield* TestGitHub.make({ repo: `docs-${crypto.randomUUID().slice(0, 8)}` })
-        const chat = yield* ReferenceChat.open(
-          {
-            url: environment.url,
-            environmentId: environment.environmentId,
-            directoryOf: (sessionId) => `/tmp/chats/${sessionId}`,
-          },
-          github,
-          [],
-          drives,
-        )
+        const opened = yield* open
+        const environment = opened.environment
+        const chat = opened.chat
         const space = "/tmp/chats/.ren/drives/space"
         const put = (path: string, text: string) => environment.put(`org_1/drives/spaces/spc_1/${path}`, text)
         const ask = (files: ReadonlyArray<{ readonly path: string; readonly name: string }>) =>
@@ -76,8 +83,8 @@ describe.skipIf(!DriveEnvironment.hasDocker)("drive files", () => {
         expect(onEnvironment()).toBe("connected\n1")
         expect(first).toContain("ship on friday")
         expect(first).not.toContain("not really a zip")
-        expect(first).toContain(`plan.txt (text/plain, 0.0 MB) at ${space}/${uploads}/msg_1/plan.txt`)
-        expect(first).toContain(`report.zip (application/zip, 0.0 MB) at ${space}/${uploads}/msg_1/report.zip`)
+        expect(first).toContain(`plan.txt (text/plain, 15 B) at ${space}/${uploads}/msg_1/plan.txt`)
+        expect(first).toContain(`report.zip (application/zip, 17 B) at ${space}/${uploads}/msg_1/report.zip`)
         const sent = (yield* chat.messages).data.find((message) => message.type === "user")
         expect(sent?.type === "user" && sent.metadata).toMatchObject({
           files: [
@@ -95,5 +102,24 @@ describe.skipIf(!DriveEnvironment.hasDocker)("drive files", () => {
           message: `gone.pdf is not in the space’s drive at ${uploads}/msg_3/gone.pdf`,
         })
       }),
+  )
+
+  it.live("show_file puts a file the agent made in the chat's outputs in the drive, and gives its drive path", () =>
+    Effect.gen(function* () {
+      const opened = yield* open
+      const chat = opened.chat
+      yield* chat.tool("write", { path: `/tmp/chats/${chat.sessionId}/report.md`, content: "q3 numbers" })
+      const path = `chats/${chat.sessionId}/outputs/report.md`
+      const result = JSON.stringify(
+        (yield* chat.tool("show_file", { path: "report.md" })).body.messages.findLast(
+          (message) => message.role === "tool",
+        )?.content ?? "",
+      )
+      expect(result).toContain(path)
+      const uploaded = Effect.try(() =>
+        opened.environment.exec(`cat /tmp/s3/drives/org_1/drives/spaces/spc_1/${path}`),
+      ).pipe(Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }))
+      expect(yield* uploaded).toBe("q3 numbers")
+    }),
   )
 })
