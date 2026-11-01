@@ -3,6 +3,7 @@ import { IconPencil } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Input } from "@ren/ui/input"
 import { Spinner } from "@ren/ui/spinner"
+import { Textarea } from "@ren/ui/textarea"
 import { cn } from "cn"
 
 export function EditableText(props: {
@@ -11,19 +12,25 @@ export function EditableText(props: {
   placeholder?: string | undefined
   required?: boolean | undefined
   readOnly?: boolean | undefined
+  multiline?: boolean | undefined
   className?: string | undefined
   onCommit: (value: string) => Promise<unknown>
 }) {
   const [draft, setDraft] = useState<string>()
   const [saving, setSaving] = useState(false)
+  const text = props.multiline ? "line-clamp-3 break-words whitespace-pre-wrap" : "truncate"
   if (props.readOnly)
     return (
-      <span className={cn("text-sm", !props.value && "text-muted-foreground")}>{props.value || props.placeholder}</span>
+      <span className={cn("min-w-0 text-sm", text, !props.value && "text-muted-foreground")}>
+        {props.value || props.placeholder}
+      </span>
     )
   if (draft === undefined)
     return (
-      <span className={cn("flex min-w-0 items-center gap-1 text-sm", props.className)}>
-        <span className={cn("truncate", !props.value && "text-muted-foreground")}>
+      <span
+        className={cn("flex min-w-0 gap-1 text-sm", props.multiline ? "items-start" : "items-center", props.className)}
+      >
+        <span className={cn(text, props.multiline && "py-1", !props.value && "text-muted-foreground")}>
           {props.value || props.placeholder}
         </span>
         <Button
@@ -48,6 +55,26 @@ export function EditableText(props: {
       setSaving(false)
     }
   }
+  if (props.multiline)
+    return (
+      <Textarea
+        // oxlint-disable-next-line jsx-a11y/no-autofocus -- the field opens because the person asked to edit
+        autoFocus
+        aria-label={props.label}
+        placeholder={props.placeholder}
+        value={draft}
+        className={cn("max-h-48 w-3xl max-w-full", props.className)}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        onBlur={() => void commit()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault()
+            event.currentTarget.blur()
+          }
+          if (event.key === "Escape") setDraft(undefined)
+        }}
+      />
+    )
   return (
     <Input
       // oxlint-disable-next-line jsx-a11y/no-autofocus -- the field opens because the person asked to edit

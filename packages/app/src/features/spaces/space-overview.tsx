@@ -40,6 +40,7 @@ export function SpaceOverviewTab() {
             value={space.description ?? ""}
             placeholder="No description"
             label="space description"
+            multiline
             readOnly={!space.canUpdate}
             onCommit={(description) => save({ description: description || null })}
           />
