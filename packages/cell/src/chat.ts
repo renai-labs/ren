@@ -336,6 +336,7 @@ const handlers = Layer.mergeAll(
             }).pipe(
               notFound,
               conflict,
+              rejected,
               Observability.Trace.chatPrompt,
               Effect.annotateSpans("ren.session.id", request.params.sessionID),
             ),

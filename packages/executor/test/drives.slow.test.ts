@@ -1,86 +1,16 @@
 import { describe, expect } from "bun:test"
-import { EnvironmentClient } from "@ren/environment-api/environment-client"
-import { EnvironmentToken } from "@ren/environment-api/environment-token"
-import { ExecutorVariables } from "@ren/environment-api/executor-variables"
-import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
-import { Effect, Layer, Schedule } from "effect"
+import { Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
+import { DriveEnvironment } from "./lib/drive-environment.js"
 import { testEffect } from "./lib/effect.js"
-import { Image } from "./lib/image.js"
-import { TestEnvironment } from "./lib/test-environment.js"
-
-const hasDocker = Bun.spawnSync(["docker", "info"], { stdout: "ignore", stderr: "ignore" }).exitCode === 0
 
 const it = testEffect(FetchHttpClient.layer.pipe(Layer.orDie))
 
-const docker = (args: ReadonlyArray<string>) => {
-  const result = Bun.spawnSync(["docker", ...args])
-  if (result.exitCode !== 0) throw new Error(`docker ${args.at(0) ?? ""}: ${result.stderr.toString()}`)
-  return result.stdout.toString().trim()
-}
+const remote = DriveEnvironment.remote
 
-const remote = (placeholder: string, prefix = "org_1/drives/org/") => ({
-  type: "s3" as const,
-  bucket: "drives",
-  prefix,
-  region: "us-east-1",
-  endpoint: "http://127.0.0.1:9100",
-  placeholder,
-})
+const started = DriveEnvironment.start
 
-const started = Effect.gen(function* () {
-  const image = yield* Effect.promise(Image.buildMounting)
-  const environmentId = Environment.ID.create()
-  const variables = ExecutorVariables.make(environmentId, [TestEnvironment.keys.publicKey])
-  const container = docker([
-    "run",
-    "--detach",
-    "--publish",
-    "127.0.0.1::4100",
-    "--device",
-    "/dev/fuse",
-    "--cap-add",
-    "SYS_ADMIN",
-    "--security-opt",
-    "apparmor=unconfined",
-    ...Object.keys(variables).flatMap((name) => ["--env", `${name}=${variables[name] ?? ""}`]),
-    image,
-  ])
-  yield* Effect.addFinalizer(() => Effect.sync(() => docker(["rm", "--force", container])))
-  const exec = (script: string) => docker(["exec", container, "sh", "-c", script])
-  exec(
-    "mkdir -p /tmp/s3/drives/org_1/drives/org /tmp/s3/drives/org_1/drives/spaces/spc_1 && echo 'from the drive' > /tmp/s3/drives/org_1/drives/org/notes.txt",
-  )
-  docker([
-    "exec",
-    "--detach",
-    container,
-    "rclone",
-    "serve",
-    "s3",
-    "/tmp/s3",
-    "--addr",
-    "127.0.0.1:9100",
-    "--auth-key",
-    "drive-key,drive-key",
-  ])
-  const token = yield* EnvironmentToken.sign(TestEnvironment.keys.privateKey, {
-    environment: environmentId,
-    brain: Brain.ID.create(),
-    exp: Math.floor(Date.now() / 1000) + 600,
-  })
-  const client = yield* EnvironmentClient.make({
-    url: new URL(`http://${docker(["port", container, "4100/tcp"]).split("\n").at(0) ?? ""}`),
-    token: Effect.succeed(token),
-  })
-  const hello = yield* client["executor.hello"]().pipe(
-    Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 100 }),
-  )
-  return { exec, client, hello }
-})
-
-describe.skipIf(!hasDocker)("drives.mount", () => {
+describe.skipIf(!DriveEnvironment.hasDocker)("drives.mount", () => {
   it.live(
     "mounts a drive once however often it is asked, even while rclone is slow, mounts it again after rclone dies, and fails with rclone's error when the keys are refused or with the error of a folder it cannot make",
     () =>
@@ -157,10 +87,7 @@ describe.skipIf(!hasDocker)("drives.mount", () => {
       Effect.gen(function* () {
         const environment = yield* started
         const client = environment.client
-        const put = (key: string, text: string) =>
-          environment.exec(
-            `echo ${text} | rclone rcat --s3-no-check-bucket --s3-provider Minio --s3-region us-east-1 --s3-endpoint http://127.0.0.1:9100 --s3-force-path-style --s3-access-key-id drive-key --s3-secret-access-key drive-key :s3:drives/org_1/drives/spaces/spc_1/${key}`,
-          )
+        const put = (key: string, text: string) => environment.put(`org_1/drives/spaces/spc_1/${key}`, text)
         const read = (path: string) =>
           client["files.read"]({ path: `/tmp/drives/space/${path}` }).pipe(
             Effect.map((result) => new TextDecoder().decode(result.bytes)),

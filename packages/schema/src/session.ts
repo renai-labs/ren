@@ -82,6 +82,8 @@ export type File = typeof File.Type
 
 export const isInline = Schema.is(InlineFile)
 
+export const isDriveFile = Schema.is(DriveFile)
+
 export interface Prompt extends Schema.Schema.Type<typeof Prompt> {}
 export const Prompt = Schema.Struct({
   text: Schema.NonEmptyString,

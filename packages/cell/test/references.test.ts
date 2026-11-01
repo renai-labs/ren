@@ -1,26 +1,14 @@
 import { expect, setDefaultTimeout } from "bun:test"
-import { SessionID } from "@opencode/schema/session-id"
-import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { TestAccess, TestGitHub } from "@ren/brain/testing"
+import { TestGitHub } from "@ren/brain/testing"
 import { TestEnvironment, testEffect } from "@ren/executor/testing"
-import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import type { Drive } from "@ren/schema/drive"
 import type { Reference } from "@ren/schema/reference"
-import { Session } from "@ren/schema/session"
-import { Context, Effect, Fiber, Layer, Option } from "effect"
-import { FetchHttpClient, HttpServer } from "effect/http"
+import { Effect, Fiber } from "effect"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ChatSettings } from "../src/chat-settings.js"
-import { GitSources } from "../src/git-sources.js"
-import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
-import { OpenCodeServer } from "../src/harness/opencode/server.js"
-import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
-import { ModelsTest } from "./lib/models.js"
-import { TestSettings } from "./lib/settings.js"
+import { ReferenceChat } from "./lib/reference-chat.js"
 import { Shared } from "./lib/shared.js"
 import type { StubModel } from "./lib/stub-model.js"
 
@@ -37,93 +25,15 @@ const pathOf = (github: TestGitHub.Instance, commit: string) =>
 
 const fresh = () => TestGitHub.make({ repo: `docs-${crypto.randomUUID().slice(0, 8)}` })
 
-const open = Effect.fnUntraced(function* (
-  github: TestGitHub.Instance,
-  references: ReadonlyArray<Reference.Info>,
-  drives?: Drive.Availability,
-) {
-  const sessionId = Session.ID.create()
-  const context = yield* Layer.build(TestAccess.memory(new Map()))
-  const memory = Context.get(context, TestAccess.Memory)
-  const environments = Context.get(
-    yield* Layer.build(
-      EnvironmentConnections.layer.pipe(
-        Layer.provide(Layer.succeedContext(context)),
-        Layer.provide(FetchHttpClient.layer),
-      ),
+const open = (github: TestGitHub.Instance, references: ReadonlyArray<Reference.Info>, drives?: Drive.Availability) =>
+  Effect.flatMap(TestEnvironment.url, (url) =>
+    ReferenceChat.open(
+      { url, environmentId, directoryOf: (sessionId) => join(workspace, sessionId) },
+      github,
+      references,
+      drives,
     ),
-    EnvironmentConnections.Service,
   )
-  const settings = Context.get(
-    yield* Layer.build(ChatSettings.layer.pipe(Layer.provide(ModelsTest.storage()))),
-    ChatSettings.Service,
-  )
-  yield* settings.save(
-    TestSettings.layers({ ren: { references } }),
-    drives ? [{ id: sessionId, agent: null, archived: false, drives }] : [],
-  )
-  const endpoints = Shared.access(undefined, stub.url).endpoints
-  const host = yield* OpenCodeServer.make(
-    (replacements) =>
-      createEmbeddedRoutes(
-        {
-          database: { path: ":memory:" },
-          config: { project: false, content: Shared.vars(stub.url).OPENCODE_CONFIG },
-          models: { fetch: false },
-          fs: { filewatcher: false, fff: false },
-        },
-        [...replacements, ...RenWorkspaceDriver.replacements(environments)],
-      ).pipe(Layer.provide(HttpServer.layerServices)),
-    endpoints,
-    () => Effect.succeedNone,
-    Option.some(environments),
-    {
-      saved: Option.some(settings.saved),
-      directoryOf: (sessionId) => join(workspace, sessionId),
-      sources: yield* GitSources.make({ github: Effect.succeed(github.hosts), references: { refresh: 0, retry: 0 } }),
-    },
-  )
-  const harness = yield* OpenCodeHarness.make(host, endpoints, Option.some(settings))
-  const accessOf = (generation: number) =>
-    Effect.flatMap(TestEnvironment.url, (url) =>
-      TestEnvironment.access({
-        url,
-        environmentId,
-        brain: Brain.ofSession(sessionId),
-        directory: join(workspace, sessionId),
-        generation,
-      }),
-    )
-  yield* memory.set(sessionId, yield* accessOf(1))
-  yield* harness.start({ sessionId, harness: "opencode", interactive: false, directory: join(workspace, sessionId) })
-  const turn = (script: StubModel.Script, calls = 2) =>
-    harness
-      .send({
-        sessionId,
-        messageId: Session.MessageID.create(),
-        prompt: { text: `${script.marker} go` },
-        delivery: "steer",
-        sender: { userId: "user_1" },
-      })
-      .pipe(
-        Effect.andThen(Effect.promise(() => script.called(calls))),
-        Effect.tap(() => host.client.session.wait({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie)),
-      )
-  return {
-    turn,
-    tool: (name: string, input: unknown) => turn(stub.script({ tool: { name, input } })),
-    replace: (generation: number) => Effect.flatMap(accessOf(generation), (access) => memory.set(sessionId, access)),
-    read: host.client.session.get({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
-    pull: (next: ReadonlyArray<Reference.Info>) =>
-      Effect.gen(function* () {
-        yield* settings.save(TestSettings.layers({ ren: { references: next } }), [])
-        yield* harness.configure({
-          settings: { layers: yield* settings.layers, chats: [{ id: sessionId, agent: null, archived: false }] },
-        })
-        yield* Shared.appsSettled(harness)
-      }),
-  }
-})
 
 const result = (call: StubModel.Call) =>
   JSON.stringify(call.body.messages.findLast((message) => message.role === "tool")?.content ?? "")
@@ -320,6 +230,31 @@ it.live("a chat whose environment cannot mount gets a note and no drive referenc
     )
     expect(call.system).not.toContain("drive:space")
   }),
+)
+
+it.live(
+  "a message that attaches a drive file is refused with the reason when the chat has no drives, Ren gives it no environment, or its drive does not mount, and is not sent",
+  () =>
+    Effect.gen(function* () {
+      const github = yield* fresh()
+      yield* github.commit({ "guide.md": "Use the docs." })
+      const file = { path: "chats/ses_1/uploads/msg_1/a.txt", name: "a.txt" }
+      const unmounted = yield* open(github, [docsOf(github)], { type: "unavailable", reason: "no_mount" })
+      expect(yield* Effect.flip(unmounted.prompt([file]))).toMatchObject({
+        _tag: "Harness.Rejected",
+        message: "This chat cannot read files of the space’s drive: its environment cannot mount them.",
+      })
+      const homeless = yield* open(github, [docsOf(github)], mounts)
+      yield* homeless.forget
+      const unplaced = yield* Effect.flip(homeless.prompt([file]))
+      expect(unplaced._tag).toBe("Harness.Rejected")
+      expect(unplaced.message).toContain("The space’s drive is not on the environment: No access to an environment")
+      const failing = yield* open(github, [docsOf(github)], mounts)
+      const refused = yield* Effect.flip(failing.prompt([file]))
+      expect(refused._tag).toBe("Harness.Rejected")
+      expect(refused.message).toContain("The space’s drive is not on the environment:")
+      expect((yield* failing.messages).data.filter((message) => message.type === "user")).toEqual([])
+    }),
 )
 
 it.live(

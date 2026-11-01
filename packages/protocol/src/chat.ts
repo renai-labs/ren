@@ -239,7 +239,7 @@ export const SessionGroup = HttpApiGroup.make("session")
       params,
       payload: PromptInput,
       success: Accepted,
-      error: [NotFoundError, ConflictError],
+      error: [NotFoundError, ConflictError, InvalidRequestError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "session.prompt",

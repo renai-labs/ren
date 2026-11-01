@@ -15,6 +15,7 @@ import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
 import { OpenCodeEvents } from "./events.js"
 import { Translate } from "@ren/opencode-transcript/translate"
+import { OpenCodeAttachments } from "./attachments.js"
 
 const capabilities = SessionCapabilities.of("opencode")
 
@@ -49,7 +50,16 @@ const readAll = <A, B>(items: ReadonlyArray<A>, translate: (item: A) => Option.O
 export const make = (
   host: Pick<
     OpenCodeServer.Instance,
-    "fetch" | "client" | "shells" | "agents" | "skills" | "commands" | "findFiles" | "webSearchProviders"
+    | "fetch"
+    | "client"
+    | "shells"
+    | "agents"
+    | "skills"
+    | "commands"
+    | "findFiles"
+    | "webSearchProviders"
+    | "activate"
+    | "chats"
   >,
 ): Harness.Chat => {
   const api = host.client
@@ -162,28 +172,40 @@ export const make = (
         Effect.flatMap((forms) => readAll(forms, Translate.form)),
       ),
     prompt: (sessionId, prompt) =>
-      api.session
-        .prompt({
-          sessionID: SessionID.make(sessionId),
-          id: SessionMessage.ID.make(prompt.id),
-          text: prompt.text,
-          delivery: prompt.delivery,
-          ...(Predicate.isBoolean(prompt.resume) && { resume: prompt.resume }),
-          ...(prompt.agents && { agents: prompt.agents }),
-          ...(prompt.skills && { skills: prompt.skills.map((skill) => ({ ...skill, id: Skill.ID.make(skill.id) })) }),
-          ...Option.match(prompt.sender, {
-            onNone: () => ({}),
-            onSome: (sender) => ({
-              metadata: {
-                userID: sender.userId,
-                ...(sender.memberId && { memberID: sender.memberId }),
-                ...(sender.name && { userName: sender.name }),
-              },
-            }),
-          }),
-        })
+      OpenCodeAttachments.prompt(host, sessionId, prompt.files ?? [])
         .pipe(
-          Effect.catchTags({ ...located, ConflictError: conflict }, Effect.die),
+          Effect.flatMap((attachments) => {
+            const metadata = {
+              ...attachments.metadata,
+              ...Option.match(prompt.sender, {
+                onNone: () => ({}),
+                onSome: (sender) => ({
+                  userID: sender.userId,
+                  ...(sender.memberId && { memberID: sender.memberId }),
+                  ...(sender.name && { userName: sender.name }),
+                }),
+              }),
+            }
+            return api.session
+              .prompt({
+                sessionID: SessionID.make(sessionId),
+                id: SessionMessage.ID.make(prompt.id),
+                text: prompt.text,
+                delivery: prompt.delivery,
+                ...(Predicate.isBoolean(prompt.resume) && { resume: prompt.resume }),
+                ...(attachments.files.length > 0 && { files: attachments.files }),
+                ...(prompt.agents && { agents: prompt.agents }),
+                ...(prompt.skills && {
+                  skills: prompt.skills.map((skill) => ({ ...skill, id: Skill.ID.make(skill.id) })),
+                }),
+                ...(Object.keys(metadata).length > 0 && { metadata }),
+              })
+              .pipe(
+                Effect.catchTags({ ...located, ConflictError: conflict, InvalidRequestError: rejected }, Effect.die),
+              )
+          }),
+        )
+        .pipe(
           Effect.asVoid,
           Effect.catchTag("Harness.Conflict", (error) =>
             Effect.gen(function* () {

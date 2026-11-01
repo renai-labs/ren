@@ -47,6 +47,7 @@ interface Prompt extends Mentions {
   readonly text: string
   readonly delivery: SessionInbox.Delivery
   readonly resume?: boolean | undefined
+  readonly files?: ReadonlyArray<Session.DriveFile> | undefined
   readonly sender: Option.Option<Sender>
 }
 
@@ -79,7 +80,7 @@ export interface Chat {
   readonly inbox: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionInbox.Info>, NotFound>
   readonly permissions: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Permission.Request>, NotFound>
   readonly forms: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Form.Info>, NotFound>
-  readonly prompt: (sessionId: Session.ID, prompt: Prompt) => Effect.Effect<void, NotFound | Conflict>
+  readonly prompt: (sessionId: Session.ID, prompt: Prompt) => Effect.Effect<void, NotFound | Conflict | Rejected>
   readonly compact: (
     sessionId: Session.ID,
     id: SessionMessage.ID,

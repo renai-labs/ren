@@ -51,6 +51,14 @@ export const FileAttachment = Schema.Struct({
   mention: Schema.optionalKey(Mention),
 }).annotate({ identifier: "SessionMessage.FileAttachment" })
 
+export interface DriveFile extends Schema.Schema.Type<typeof DriveFile> {}
+export const DriveFile = Schema.Struct({
+  path: Schema.String.annotate({ description: "The file’s path in the drive of the chat’s space." }),
+  name: Schema.String,
+  mime: Schema.String,
+  size: Schema.Int,
+}).annotate({ identifier: "SessionMessage.DriveFile", description: "A file of the drive that a message attaches." })
+
 export interface AgentAttachment extends Schema.Schema.Type<typeof AgentAttachment> {}
 export const AgentAttachment = Schema.Struct({
   name: Schema.String,
