@@ -6,7 +6,7 @@ import type { References } from "./references.js"
 
 export const root = "drives"
 
-const reasons: Record<Drive.UnavailableReason, string> = {
+export const reasons: Record<Drive.UnavailableReason, string> = {
   no_mount: "its environment cannot mount them",
   no_egress: "its environment is not behind Ren’s egress, which signs their requests",
 }

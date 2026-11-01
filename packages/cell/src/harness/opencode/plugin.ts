@@ -9,6 +9,8 @@ import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { EnvironmentCopies } from "@ren/brain/environment/copies"
+import { DriveFiles } from "@ren/brain/reference/drive-files"
+import { Drives } from "@ren/brain/reference/drives"
 import { BrainSettings } from "@ren/brain/settings"
 import { UsageClaims } from "@ren/brain/usage-claims"
 import { HostMcp } from "@ren/host-api/host-mcp"
@@ -17,7 +19,9 @@ import { AppCatalog } from "@ren/schema/app-catalog"
 import { Models } from "@ren/schema/models"
 import { Channel } from "@ren/schema/channel"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
+import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
+import { SessionMessage } from "@ren/schema/session/message"
 import {
   Clock,
   Deferred,
@@ -32,7 +36,7 @@ import {
   Stream,
   Struct,
 } from "effect"
-import type { Harness } from "../harness.js"
+import { Harness } from "../harness.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { OpenCodeModelTools } from "./model-tools.js"
@@ -92,7 +96,12 @@ interface Instance {
   readonly reload: Effect.Effect<void>
   readonly session: Plugin.Context["session"]
   readonly installed: Ref.Ref<Option.Option<Chat>>
+  readonly attach: (
+    files: ReadonlyArray<Session.DriveFile>,
+  ) => Effect.Effect<ReadonlyArray<DriveFiles.Attached>, Harness.Rejected>
 }
+
+const attachedOf = Schema.decodeUnknownOption(Schema.Struct({ files: Schema.Array(SessionMessage.DriveFile) }))
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2 ends a turn with an execution event and does not publish session.idle.
 const turnEnded = (event: { readonly type: string; readonly data: unknown }) =>
@@ -463,6 +472,20 @@ export const make = (
             drives: () => Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives,
           })
           copySources.push(references.items)
+          const spaceDrive = `${Environment.sharedDirectoryOf({ directory: folder })}/${Drives.root}/space`
+          yield* context.session.hook("context", (event) =>
+            Effect.sync(() => {
+              event.messages = event.messages.map((message) => {
+                const attached =
+                  message.role === "user" ? Option.getOrUndefined(attachedOf(message.metadata)) : undefined
+                if (!attached?.files.length) return message
+                return Message.make({
+                  ...Struct.omit(message, ["content"]),
+                  content: [...message.content, Message.text(`\n\n${DriveFiles.note(spaceDrive, attached.files)}`)],
+                })
+              })
+            }),
+          )
           yield* context.session.hook("context", (event) =>
             Effect.sync(() => {
               const agent = Option.getOrUndefined(agentOf(event.agent))
@@ -526,10 +549,30 @@ export const make = (
             Effect.flatMap(Ref.get(shared.turnStarted), (started) => started(event.sessionID)),
           )
           turns.ended.push((sessionID) => Effect.flatMap(Ref.get(shared.turnEnded), (ended) => ended(sessionID)))
-          const instance = {
+          const instance: Instance = {
             reload: Effect.all([context.agent.reload(), references.refresh], { discard: true }),
             session: context.session,
             installed,
+            attach: (files) =>
+              Effect.gen(function* () {
+                const drive = references.items().find((item) => item.path === spaceDrive)
+                if (Option.isNone(copies) || Option.isNone(connections) || !drive) {
+                  const drives = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives
+                  return yield* new Harness.Rejected({
+                    message: `This chat cannot read files of the space’s drive: ${drives?.type === "unavailable" ? Drives.reasons[drives.reason] : "it has no environment that mounts it"}.`,
+                  })
+                }
+                const failure = (yield* copies.value.ensure([drive])).at(0)
+                if (failure)
+                  return yield* new Harness.Rejected({
+                    message: `The space’s drive is not on the environment: ${failure.message}`,
+                  })
+                return yield* connections.value.connect(Session.ID.make(sessionId)).pipe(
+                  Effect.flatMap((connection) => DriveFiles.attach(connection.client, spaceDrive, files)),
+                  Effect.scoped,
+                  Effect.mapError((error) => new Harness.Rejected({ message: error.message })),
+                )
+              }),
           }
           yield* Ref.update(shared.instances, (all) => new Map([...all, [sessionId, instance]]))
           yield* Effect.addFinalizer(() =>

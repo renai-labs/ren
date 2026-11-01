@@ -16,7 +16,7 @@ import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
 import type { PullMemory } from "@ren/host-api/ren-host-api"
-import { isInline, Model, type SendInput } from "@ren/schema/session"
+import { Model, type SendInput } from "@ren/schema/session"
 import {
   Clock,
   DateTime,
@@ -48,6 +48,7 @@ import { ModelRefresh } from "../../model-refresh.js"
 import { Inference } from "../../inference.js"
 import { RenAddress } from "../../ren-address.js"
 import { Harness } from "../harness.js"
+import { OpenCodeAttachments } from "./attachments.js"
 import { OpenCodeChat } from "./chat.js"
 import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
 import type { OpenCodeMcp } from "./mcp.js"
@@ -336,17 +337,32 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   yield* Effect.forEach(changes.remove, (key) => client.session.instructions.entry.remove({ sessionID, key }), {
     discard: true,
   }).pipe(Effect.orDie)
-  if (input.initialMessage)
-    yield* send(client, {
-      ...input.initialMessage,
-      sessionId: input.sessionId,
-    }).pipe(Effect.catchTag("SessionNotStartedError", Effect.die))
+  if (input.initialMessage) {
+    const initial = { ...input.initialMessage, sessionId: input.sessionId }
+    yield* attach(server, initial).pipe(
+      Effect.flatMap((attachments) => send(client, initial, attachments)),
+      Effect.catchTag("SessionNotStartedError", Effect.die),
+    )
+  }
   return { sessionId: input.sessionId, harness: "opencode" as const }
 })
+
+const attach = (
+  server: Pick<OpenCodeServer.Instance, "activate" | "chats">,
+  input: Pick<SendInput, "sessionId" | "prompt">,
+) =>
+  OpenCodeAttachments.prompt(server, input.sessionId, input.prompt.files ?? []).pipe(
+    Effect.catchTags({
+      "Harness.NotFound": () =>
+        Effect.fail(new SessionNotStartedError({ message: `Session ${input.sessionId} has not been started` })),
+      "Harness.Rejected": (error) => Effect.fail(rejected(error)),
+    }),
+  )
 
 const send = Effect.fn("OpenCodeHarness.send")(function* (
   client: OpenCodeClient,
   input: Omit<SendInput, "delivery"> & { readonly delivery?: SendInput["delivery"] },
+  attachments: OpenCodeAttachments.Prepared,
 ) {
   const sessionID = Session.ID.make(input.sessionId)
   const session = yield* findSession(client, sessionID)
@@ -377,9 +393,10 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
       sessionID,
       id: messageID,
       text: input.prompt.text,
-      files: input.prompt.files?.filter(isInline).map((file) => ({ uri: file.url, name: file.name })),
+      ...(attachments.files.length > 0 && { files: attachments.files }),
       delivery: input.delivery,
       metadata: {
+        ...attachments.metadata,
         userID: input.sender.userId,
         ...(input.sender.memberId && { memberID: input.sender.memberId }),
         ...(input.channel && { channel: input.channel }),
@@ -633,7 +650,10 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           mutations.withPermit(Effect.suspend(() => start(client, server, settings, input, state.modelCatalogs))),
         ),
       ),
-    send: (input: SendInput) => mutations.withPermit(send(client, input)),
+    send: (input: SendInput) =>
+      attach(server, input).pipe(
+        Effect.flatMap((attachments) => mutations.withPermit(send(client, input, attachments))),
+      ),
     transcript: {
       drop: (chat) =>
         mutations.withPermit(client.session.remove({ sessionID: Session.ID.make(chat) }).pipe(Effect.ignore)),

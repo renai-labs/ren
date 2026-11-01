@@ -254,7 +254,6 @@ export const layer = Layer.effect(
               Bucket: bucket,
               Key: key,
               ResponseContentDisposition: `${input.disposition ?? "attachment"}; filename*=UTF-8''${encodeURIComponent(name)}`,
-              // oxlint-disable-next-line ren/no-comments -- An upload from the browser stores no type, and the browser shows a file only with its type.
               ...(input.disposition === "inline" && { ResponseContentType: Bun.file(name).type }),
             }),
             { expiresIn: lifetime },
