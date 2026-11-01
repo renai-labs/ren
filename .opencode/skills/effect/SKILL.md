@@ -7,7 +7,7 @@ description: Work with Effect v4 TypeScript code in this repo
 
 Ren uses Effect v4 for services, schemas, HTTP APIs, database access and tests.
 
-## Source of truth
+## Source of truth [IMPORTANT]
 
 Use the vendored Effect v4 source, not memory or older Effect v2/v3 examples.
 
