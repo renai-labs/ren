@@ -59,6 +59,14 @@ export const DriveFile = Schema.Struct({
   size: Schema.Int,
 }).annotate({ identifier: "SessionMessage.DriveFile", description: "A file of the drive that a message attaches." })
 
+export const showFileTool = "show_file"
+
+export interface ShownFile extends Schema.Schema.Type<typeof ShownFile> {}
+export const ShownFile = Schema.Struct({ file: DriveFile }).annotate({
+  identifier: "SessionMessage.ShownFile",
+  description: `The \`metadata\` of a completed \`${showFileTool}\` tool part: the file the agent showed, in the space’s drive.`,
+})
+
 export interface AgentAttachment extends Schema.Schema.Type<typeof AgentAttachment> {}
 export const AgentAttachment = Schema.Struct({
   name: Schema.String,
@@ -76,6 +84,9 @@ export const SkillAttachment = Schema.Struct({
 export const promptFields = {
   text: Schema.String,
   files: Schema.optionalKey(Schema.Array(FileAttachment)),
+  uploads: Schema.optionalKey(Schema.Array(DriveFile)).annotate({
+    description: "Files of the space’s drive that the message attached. Get a link to each with `drive.download`.",
+  }),
   agents: Schema.optionalKey(Schema.Array(AgentAttachment)),
   skills: Schema.optionalKey(Schema.Array(SkillAttachment)),
 }

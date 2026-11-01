@@ -28,6 +28,8 @@ export type SessionMessageFileSource = { type: "inline" } | { type: "uri"; uri: 
 
 export type SessionMessageMention = { start: number; end: number; text: string }
 
+export type SessionMessageDriveFile = { path: string; name: string; mime: string; size: number }
+
 export type SessionMessageSender = { userId: string }
 
 export type SessionInboxDelivery = "steer" | "queue"
@@ -750,6 +752,7 @@ export type SessionCatalogFile = { path: string; type: SessionCatalogFileType }
 export type SessionInboxUserPayload = {
   text: string
   files?: Array<SessionMessageFileAttachment>
+  uploads?: Array<SessionMessageDriveFile>
   agents?: Array<SessionMessageAgentAttachment>
   skills?: Array<SessionMessageSkillAttachment>
   sender?: SessionMessageSender
@@ -856,6 +859,7 @@ export type SessionMessageUser = {
   time: { created: number }
   text: string
   files?: Array<SessionMessageFileAttachment>
+  uploads?: Array<SessionMessageDriveFile>
   agents?: Array<SessionMessageAgentAttachment>
   skills?: Array<SessionMessageSkillAttachment>
   type: "user"

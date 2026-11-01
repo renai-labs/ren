@@ -33,16 +33,31 @@ const decodeChannel = Schema.decodeUnknownOption(FromChannel)
 const FromSchedule = Schema.Struct({ metadata: Schema.Struct({ schedule: ScheduleOrigin.Info }) })
 const decodeSchedule = Schema.decodeUnknownOption(FromSchedule)
 
+const WithUploads = Schema.Struct({ metadata: Schema.Struct({ files: Schema.Array(SessionMessage.DriveFile) }) })
+const decodeUploads = Schema.decodeUnknownOption(WithUploads)
+
+const isNamedList = Schema.is(Schema.Array(Schema.Struct({ name: Schema.optionalKey(Schema.String) })))
+
+const withoutUploads = (files: unknown, uploads: ReadonlyArray<SessionMessage.DriveFile>) =>
+  isNamedList(files) ? files.filter((file) => !uploads.some((upload) => upload.name === file.name)) : files
+
 const withMetadata = (value: unknown): unknown => {
   if (!Predicate.isObject(value)) return value
   const sender = decodeUserID(value)
   const channel = decodeChannel(value)
   const schedule = decodeSchedule(value)
+  const uploads = decodeUploads(value)
   return {
     ...value,
     ...(Option.isSome(sender) && { sender: { userId: sender.value.metadata.userID } }),
     ...(Option.isSome(channel) && { channel: channel.value.metadata.channel }),
     ...(Option.isSome(schedule) && { schedule: schedule.value.metadata.schedule }),
+    ...(Option.isSome(uploads) && {
+      uploads: uploads.value.metadata.files,
+      ...(Predicate.hasProperty(value, "files") && {
+        files: withoutUploads(value.files, uploads.value.metadata.files),
+      }),
+    }),
   }
 }
 

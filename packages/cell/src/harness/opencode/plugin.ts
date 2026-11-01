@@ -498,7 +498,7 @@ export const make = (
             if (!hasEnvironment || Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives?.type !== "mounts")
               return
             editor.add({
-              name: "show_file",
+              name: SessionMessage.showFileTool,
               description:
                 "Show a file to the person as a card in the chat, which they can preview and download. Use it for each file you made for them, such as a report, a chart or a spreadsheet. The file is copied to the chat’s outputs in the space’s drive, and a file of the same name there is replaced.",
               input: Schema.Struct({
@@ -510,7 +510,7 @@ export const make = (
                 onSpaceDrive((client) =>
                   DriveFiles.show(client, spaceDrive, sessionId, resolve(folder, args.path)),
                 ).pipe(
-                  Effect.map((output) => ({ output })),
+                  Effect.map((file) => ({ output: file, metadata: { file } })),
                   Effect.mapError((error) => new Tool.Error({ message: error.message })),
                 ),
             })

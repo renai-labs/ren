@@ -115,6 +115,7 @@ export const open = Effect.fnUntraced(function* (
       }),
     wait: host.client.session.wait({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
     messages: host.client.message.list({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
+    transcript: harness.chat.messages(sessionId, {}).pipe(Effect.orDie),
     tool: (name: string, input: unknown) => turn(stub.script({ tool: { name, input } })),
     replace: (generation: number) => Effect.flatMap(accessOf(generation), (access) => memory.set(sessionId, access)),
     forget: memory.remove(sessionId),
