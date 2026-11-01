@@ -2,6 +2,7 @@ import { describe, expect, setDefaultTimeout } from "bun:test"
 import { TestGitHub } from "@ren/brain/testing"
 import { DriveEnvironment, testEffect } from "@ren/executor/testing"
 import type { Drive } from "@ren/schema/drive"
+import { SessionMessage } from "@ren/schema/session/message"
 import { Effect, Layer, Schedule } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ReferenceChat } from "./lib/reference-chat.js"
@@ -52,7 +53,7 @@ const open = Effect.gen(function* () {
 
 describe.skipIf(!DriveEnvironment.hasDocker)("drive files", () => {
   it.live(
-    "the first message of a chat connects its environment and mounts the drive, then attaches files that the browser put there a moment before: the model reads a text file and gets the path of every file",
+    "the first message of a chat connects its environment and mounts the drive, then attaches files that the browser put there a moment before: the model reads a text file and gets the path of every file, and the transcript gives them as uploads",
     () =>
       Effect.gen(function* () {
         const opened = yield* open
@@ -85,13 +86,12 @@ describe.skipIf(!DriveEnvironment.hasDocker)("drive files", () => {
         expect(first).not.toContain("not really a zip")
         expect(first).toContain(`plan.txt (text/plain, 15 B) at ${space}/${uploads}/msg_1/plan.txt`)
         expect(first).toContain(`report.zip (application/zip, 17 B) at ${space}/${uploads}/msg_1/report.zip`)
-        const sent = (yield* chat.messages).data.find((message) => message.type === "user")
-        expect(sent?.type === "user" && sent.metadata).toMatchObject({
-          files: [
-            { path: `${uploads}/msg_1/plan.txt`, name: "plan.txt", mime: "text/plain", size: 15 },
-            { path: `${uploads}/msg_1/report.zip`, name: "report.zip", mime: "application/zip", size: 17 },
-          ],
-        })
+        const sent = (yield* chat.transcript).items.find((message) => message.type === "user")
+        expect(sent?.type === "user" && sent.uploads).toEqual([
+          { path: `${uploads}/msg_1/plan.txt`, name: "plan.txt", mime: "text/plain", size: 15 },
+          { path: `${uploads}/msg_1/report.zip`, name: "report.zip", mime: "application/zip", size: 17 },
+        ])
+        expect(sent?.type === "user" && sent.files).toEqual([])
 
         put(`${uploads}/msg_2/later.md`, "uploaded just now")
         expect(yield* ask([{ path: `${uploads}/msg_2/later.md`, name: "later.md" }])).toContain("uploaded just now")
@@ -104,22 +104,30 @@ describe.skipIf(!DriveEnvironment.hasDocker)("drive files", () => {
       }),
   )
 
-  it.live("show_file puts a file the agent made in the chat's outputs in the drive, and gives its drive path", () =>
-    Effect.gen(function* () {
-      const opened = yield* open
-      const chat = opened.chat
-      yield* chat.tool("write", { path: `/tmp/chats/${chat.sessionId}/report.md`, content: "q3 numbers" })
-      const path = `chats/${chat.sessionId}/outputs/report.md`
-      const result = JSON.stringify(
-        (yield* chat.tool("show_file", { path: "report.md" })).body.messages.findLast(
-          (message) => message.role === "tool",
-        )?.content ?? "",
-      )
-      expect(result).toContain(path)
-      const uploaded = Effect.try(() =>
-        opened.environment.exec(`cat /tmp/s3/drives/org_1/drives/spaces/spc_1/${path}`),
-      ).pipe(Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }))
-      expect(yield* uploaded).toBe("q3 numbers")
-    }),
+  it.live(
+    "show_file puts a file the agent made in the chat's outputs in the drive, and the transcript gives the file for a card",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* open
+        const chat = opened.chat
+        yield* chat.tool("write", { path: `/tmp/chats/${chat.sessionId}/report.md`, content: "q3 numbers" })
+        const path = `chats/${chat.sessionId}/outputs/report.md`
+        const result = JSON.stringify(
+          (yield* chat.tool("show_file", { path: "report.md" })).body.messages.findLast(
+            (message) => message.role === "tool",
+          )?.content ?? "",
+        )
+        expect(result).toContain(path)
+        const shown = (yield* chat.transcript).items
+          .flatMap((message) => (message.type === "assistant" ? message.content : []))
+          .find((part) => part.type === "tool" && part.name === SessionMessage.showFileTool)
+        expect(shown?.type === "tool" && shown.state.status === "completed" && shown.state.metadata).toMatchObject({
+          file: { path, name: "report.md", mime: "text/markdown", size: 10 },
+        })
+        const uploaded = Effect.try(() =>
+          opened.environment.exec(`cat /tmp/s3/drives/org_1/drives/spaces/spc_1/${path}`),
+        ).pipe(Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }))
+        expect(yield* uploaded).toBe("q3 numbers")
+      }),
   )
 })

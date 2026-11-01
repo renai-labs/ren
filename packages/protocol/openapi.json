@@ -18366,6 +18366,29 @@
           }
         ]
       },
+      "SessionMessage.DriveFile": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "The file’s path in the drive of the chat’s space."
+          },
+          "name": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["path", "name", "mime", "size"],
+        "additionalProperties": false,
+        "description": "A file of the drive that a message attaches."
+      },
       "SessionMessage.FileAttachment": {
         "type": "object",
         "properties": {
@@ -19108,6 +19131,13 @@
             "items": {
               "$ref": "#/components/schemas/SessionMessage.FileAttachment"
             }
+          },
+          "uploads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionMessage.DriveFile"
+            },
+            "description": "Files of the space’s drive that the message attached. Get a link to each with `drive.download`."
           },
           "agents": {
             "type": "array",
