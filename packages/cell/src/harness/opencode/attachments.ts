@@ -21,7 +21,7 @@ export const prompt = Effect.fn("OpenCodeAttachments.prompt")(function* (
     onNone: () => Effect.succeed(undefined),
     onSome: (chats) => Effect.map(Ref.get(chats.instances), (all) => all.get(sessionId)),
   })
-  if (!instance) return yield* new Harness.Rejected({ message: "This chat cannot read files of the space’s drive." })
+  if (!instance) return yield* new Harness.Rejected({ message: "This chat cannot use the space’s drive." })
   const attached = yield* instance.attach(drive)
   return {
     files: [

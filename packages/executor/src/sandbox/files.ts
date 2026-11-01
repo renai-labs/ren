@@ -2,7 +2,7 @@ export * as SandboxFiles from "./files.js"
 
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Effect } from "effect"
-import { lstat, mkdir, open, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
+import { copyFile, lstat, mkdir, open, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { basename, dirname, join, resolve } from "node:path"
 
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
@@ -102,6 +102,14 @@ export const make = (workspace: string) => {
         Effect.catchTag("FileNotFoundError", () => Effect.succeed(path(to))),
       )
       yield* attempt(from, () => rename(path(from), destination))
+    }),
+    copy: Effect.fn("Executor.copy")(function* (from: string, to: string) {
+      const info = yield* fileInfo(from, { followLink: true })
+      if (info.type !== "file") return yield* new EnvironmentApi.WrongKindError({ path: from, actual: info.type })
+      yield* attempt(to, async () => {
+        await mkdir(dirname(path(to)), { recursive: true })
+        await copyFile(path(from), path(to))
+      })
     }),
     mkdir: Effect.fn("Executor.mkdir")((value: string) =>
       attempt(value, () => mkdir(path(value), { recursive: true }).then(() => undefined)),

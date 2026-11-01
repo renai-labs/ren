@@ -8,6 +8,7 @@ import { FetchHttpClient } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
+import type { EnvironmentClient } from "@ren/environment-api/environment-client"
 import { EnvironmentConnections } from "../src/environment/connections.js"
 import { DriveFiles } from "../src/reference/drive-files.js"
 import { TestAccess } from "./lib/access.js"
@@ -50,13 +51,17 @@ const driveOf = Effect.fnUntraced(function* (files: Readonly<Record<string, stri
     ),
     EnvironmentConnections.Service,
   )
+  const connected = <A, E>(use: (client: EnvironmentClient.Client) => Effect.Effect<A, E>) =>
+    connections.connect(sessionId).pipe(
+      Effect.flatMap((connection) => use(connection.client)),
+      Effect.scoped,
+    )
   return {
     root,
+    sessionId,
     attach: (attached: ReadonlyArray<Session.DriveFile>) =>
-      connections.connect(sessionId).pipe(
-        Effect.flatMap((connection) => DriveFiles.attach(connection.client, root, attached)),
-        Effect.scoped,
-      ),
+      connected((client) => DriveFiles.attach(client, root, attached)),
+    show: (source: string) => connected((client) => DriveFiles.show(client, root, sessionId, source)),
   }
 })
 
@@ -109,4 +114,22 @@ it.live("a file that is not in the drive refuses the message, with its name", ()
     expect(refused).toMatchObject({ _tag: "DriveFiles.Refused" })
     expect(refused.message).toContain("gone.pdf")
   }),
+)
+
+it.live(
+  "show copies a file into the chat's outputs in the drive and gives its drive path; a file already there stays, a missing one is refused",
+  () =>
+    Effect.gen(function* () {
+      const drive = yield* driveOf({})
+      const made = join(workspace, drive.sessionId, "report.pdf")
+      yield* Effect.promise(() => Bun.write(made, pdf(10)))
+      const shown = yield* drive.show(made)
+      const path = `chats/${drive.sessionId}/outputs/report.pdf`
+      expect(shown).toEqual({ path, name: "report.pdf", mime: "application/pdf", size: 19 })
+      expect(yield* Effect.promise(() => Bun.file(join(drive.root, path)).bytes())).toEqual(pdf(10))
+      expect(yield* drive.show(join(drive.root, path))).toEqual(shown)
+      const missing = yield* Effect.flip(drive.show(join(workspace, drive.sessionId, "gone.png")))
+      expect(missing).toMatchObject({ _tag: "DriveFiles.Refused" })
+      expect(missing.message).toContain("gone.png")
+    }),
 )

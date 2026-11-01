@@ -2,10 +2,10 @@ export * as DriveFiles from "./drive-files.js"
 
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import type { EnvironmentClient } from "@ren/environment-api/environment-client"
+import { Drive } from "@ren/schema/drive"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Option, Schema } from "effect"
-import { Mime } from "effect/http"
+import { ByteSize, Effect, Option, Schema } from "effect"
 
 export class Refused extends Schema.TaggedError<Refused>()("DriveFiles.Refused", { message: Schema.String }) {}
 
@@ -58,7 +58,7 @@ export const attach = Effect.fn("DriveFiles.attach")(function* (
         const info = yield* client["files.stat"]({ path }).pipe(Effect.mapError(failed))
         if (info.type !== "file")
           return yield* new Refused({ message: `${file.name} is not a file in the space’s drive at ${file.path}` })
-        const mime = Option.getOrElse(Mime.getType(file.path), () => "application/octet-stream")
+        const mime = Drive.typeOf(file.path)
         const size = info.sizeBytes
         const bytes =
           size <= Session.maxFileBytes && (mime.startsWith("text/") || readable.has(mime))
@@ -70,10 +70,33 @@ export const attach = Effect.fn("DriveFiles.attach")(function* (
   )
 })
 
+export const show = Effect.fn("DriveFiles.show")(function* (
+  client: EnvironmentClient.Client,
+  root: string,
+  sessionId: string,
+  source: string,
+) {
+  const name = source.slice(source.lastIndexOf("/") + 1)
+  const path = `${Drive.outputsOf(sessionId)}/${name}`
+  const target = `${root}/${path}`
+  const reasons: Readonly<Record<string, string>> = {
+    FileNotFoundError: `${source} does not exist`,
+    WrongKindError: `${source} is not a file`,
+  }
+  const failed = (error: { readonly _tag: string; readonly message?: string }) =>
+    new Refused({
+      message: reasons[error._tag] ?? `${source} could not be put in the space’s drive: ${error.message ?? error._tag}`,
+    })
+  if (source !== target) yield* client["files.copy"]({ from: source, to: target }).pipe(Effect.mapError(failed))
+  const info = yield* client["files.stat"]({ path: target }).pipe(Effect.mapError(failed))
+  return { path, name, mime: Drive.typeOf(path), size: info.sizeBytes } satisfies SessionMessage.DriveFile
+})
+
 export const note = (root: string, files: ReadonlyArray<SessionMessage.DriveFile>) =>
   [
     "The person attached these files. Each one is in the space’s drive, on the environment:",
     ...files.map(
-      (file) => `- ${file.name} (${file.mime}, ${(file.size / 1_000_000).toFixed(1)} MB) at ${root}/${file.path}`,
+      (file) =>
+        `- ${file.name} (${file.mime}, ${ByteSize.format(ByteSize.bytes(file.size), { system: "decimal", precision: 1 })}) at ${root}/${file.path}`,
     ),
   ].join("\n")

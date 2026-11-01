@@ -286,6 +286,10 @@ export const Rpcs = RpcGroup.make(
     payload: { from: Schema.String, to: Schema.String },
     error: Schema.Union([FileNotFoundError, FileSystemError]),
   }),
+  Rpc.make("files.copy", {
+    payload: { from: Schema.String, to: Schema.String },
+    error: Schema.Union([FileNotFoundError, WrongKindError, FileSystemError]),
+  }),
   Rpc.make("files.mkdir", { payload: Path, error: FileSystemError }),
   Rpc.make("files.unpack", { payload: UnpackInput, error: Schema.Union([ArchiveError, FileSystemError]) }),
   Rpc.make("drives.mount", { payload: MountInput, error: MountError }),
