@@ -234,7 +234,7 @@ it.live("a chat whose environment cannot mount gets a note and no drive referenc
 )
 
 it.live(
-  "a message that attaches a drive file is refused with the reason when the chat has no drives, Ren gives it no environment, or its drive does not mount, and is not sent",
+  "a message that attaches a drive file is refused with the reason when the chat has no drives, Ren gives it no environment, or its drive does not mount, and is not sent; with inline copies it goes with them",
   () =>
     Effect.gen(function* () {
       const github = yield* fresh()
@@ -245,6 +245,14 @@ it.live(
         _tag: "Harness.Rejected",
         message: "This chat cannot use the space’s drive: its environment cannot mount them.",
       })
+      const copied = yield* unmounted.turn(stub.script({ reply: "Read it." }), 1, {
+        files: [file, { path: "chats/ses_1/uploads/msg_1/b.zip", name: "b.zip" }],
+        fallback: [{ url: "data:text/plain;base64,c2hpcCBvbiBmcmlkYXk=", name: "a.txt" }],
+      })
+      expect(JSON.stringify(copied.body.messages)).toContain("ship on friday")
+      expect(JSON.stringify(copied.body.messages)).toContain(
+        "(b.zip is in the space’s drive, which this chat cannot read.)",
+      )
       const homeless = yield* open(github, [docsOf(github)], mounts)
       yield* homeless.forget
       const unplaced = yield* Effect.flip(homeless.prompt([file]))

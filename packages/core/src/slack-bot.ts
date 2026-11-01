@@ -4,12 +4,14 @@ import { Database } from "@ren/db/database"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import type { Auth } from "@ren/schema/auth"
 import { Channel } from "@ren/schema/channel"
+import { Drive } from "@ren/schema/drive"
 import type { Space } from "@ren/schema/space"
 import { and, desc, eq, isNotNull } from "drizzle-orm"
-import { Context, Effect, Layer, Option, type Redacted, Schedule, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, Option, type Redacted, Schedule, Schema } from "effect"
 import type { Actor } from "./actor.js"
 import { ChannelInstallQueries } from "./channel-install/queries.js"
 import { ChannelProvider } from "./channel-provider.js"
+import { Drives } from "./drives.js"
 import { Slack } from "./channel-provider/slack.js"
 import { SlackApp } from "./slack-app.js"
 
@@ -142,6 +144,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const slack = yield* SlackApp.Service
     const registry = yield* ChannelProvider.Registry
+    const drives = yield* Drives.Service
     const thread = Database.Schema.channel_thread
     const spaces = Database.Schema.space
     const accounts = Database.Schema.account
@@ -217,6 +220,40 @@ export const layer = Layer.effect(
       return { channelId: answer.channel ?? input.channelId, ts: answer.ts }
     })
 
+    const upload = Effect.fnUntraced(function* (
+      connection: Connection,
+      input: {
+        readonly channelId: string
+        readonly threadTs?: string | undefined
+        readonly filename: string
+        readonly bytes: Uint8Array
+        readonly title?: string | undefined
+      },
+    ) {
+      const target = yield* connection.client.post(
+        "files.getUploadURLExternal",
+        { filename: input.filename, length: input.bytes.length },
+        UploadUrl,
+        connection.token,
+      )
+      yield* connection.client.upload(target.upload_url, input.bytes)
+      yield* connection.client.post(
+        "files.completeUploadExternal",
+        {
+          files: [{ id: target.file_id, title: input.title ?? input.filename }],
+          channel_id: input.channelId,
+          ...(input.threadTs && { thread_ts: input.threadTs }),
+        },
+        Ok,
+        connection.token,
+      )
+    })
+
+    const ownerOf = (connection: Connection) => ({
+      organizationId: connection.actor.organizationId,
+      spaceId: connection.actor.agent.spaceId,
+    })
+
     const replyToCurrentThread = Effect.fnUntraced(function* (connection: Connection, text: string) {
       const latest = (yield* database.db
         .select()
@@ -249,6 +286,26 @@ export const layer = Layer.effect(
               Effect.fail(new Refused({ message: `Slack refused the reply: ${error.message}` })),
           }),
         )
+      const since = DateTime.fromDateUnsafe(latest.last_reply_at ?? latest.created_at)
+      const outputs = yield* drives
+        .files(ownerOf(connection), Drive.outputsOf(connection.actor.agent.sessionId))
+        .pipe(Effect.orElseSucceed((): ReadonlyArray<Drive.File> => []))
+      yield* Effect.forEach(
+        outputs.filter((file) => DateTime.isGreaterThan(file.modifiedAt, since)),
+        (file) =>
+          drives.read(ownerOf(connection), file.path).pipe(
+            Effect.flatMap((bytes) =>
+              upload(connection, {
+                channelId: latest.thread.slice(0, latest.thread.indexOf(":")),
+                threadTs: latest.thread.slice(latest.thread.indexOf(":") + 1),
+                filename: file.path.slice(file.path.lastIndexOf("/") + 1),
+                bytes,
+              }),
+            ),
+            Effect.catchCause((cause) => Effect.logWarning(`${file.path} could not be uploaded to Slack`, cause)),
+          ),
+        { discard: true },
+      )
       yield* database.db
         .update(thread)
         .set({ last_reply_at: new Date() })
@@ -273,7 +330,7 @@ export const layer = Layer.effect(
         {
           input: Schema.Struct({ text: Text }),
           description:
-            "Reply to the Slack thread that started this session. Ren posts it in the thread’s channel. Fails if this session did not come from Slack.",
+            "Reply to the Slack thread that started this session. Ren posts it in the thread’s channel, then uploads to the thread every file you showed with show_file since your last reply. Fails if this session did not come from Slack.",
         },
         (connection, input) => replyToCurrentThread(connection, input.text),
       ),
@@ -305,32 +362,47 @@ export const layer = Layer.effect(
           input: Schema.Struct({
             channelId: ChannelId,
             threadTs: Schema.optionalKey(Ts),
-            filename: Schema.NonEmptyString.annotate({ description: "File name, e.g. report.md" }),
-            content: Schema.String.annotate({ description: "The file’s text" }),
+            filename: Schema.optionalKey(
+              Schema.NonEmptyString.annotate({
+                description: "File name, e.g. report.md. With path, defaults to the file’s name in the drive.",
+              }),
+            ),
+            content: Schema.optionalKey(Schema.String.annotate({ description: "The file’s text" })),
+            path: Schema.optionalKey(
+              Schema.NonEmptyString.annotate({
+                description:
+                  "A file in the space’s drive, such as the path show_file returned. Use it for an image, a PDF or any file that is not text.",
+              }),
+            ),
             title: Schema.optionalKey(Schema.String),
           }),
-          description: "Upload a text file to a Slack channel or thread as the bot.",
+          description:
+            "Upload a file to a Slack channel or thread as the bot: text you pass as content, or a file of the space’s drive by its path.",
         },
         Effect.fnUntraced(function* (connection, input) {
           yield* reachable(connection, input.channelId)
-          const bytes = new TextEncoder().encode(input.content)
-          const target = yield* connection.client.post(
-            "files.getUploadURLExternal",
-            { filename: input.filename, length: bytes.length },
-            UploadUrl,
-            connection.token,
-          )
-          yield* connection.client.upload(target.upload_url, bytes)
-          yield* connection.client.post(
-            "files.completeUploadExternal",
-            {
-              files: [{ id: target.file_id, title: input.title ?? input.filename }],
-              channel_id: input.channelId,
-              ...(input.threadTs && { thread_ts: input.threadTs }),
-            },
-            Ok,
-            connection.token,
-          )
+          const path = input.path
+          if (!path && !("content" in input))
+            return yield* new Refused({ message: "upload_file needs content or path." })
+          const bytes = path
+            ? yield* drives.read(ownerOf(connection), path).pipe(
+                Effect.catchTags({
+                  "Primitive.NotFound": () =>
+                    Effect.fail(new Refused({ message: `The space’s drive has no file ${path}.` })),
+                  "Drives.Unavailable": () =>
+                    Effect.fail(new Refused({ message: `The space’s drive did not answer, so ${path} was not read.` })),
+                }),
+              )
+            : new TextEncoder().encode(input.content)
+          const filename = input.filename ?? path?.slice(path.lastIndexOf("/") + 1)
+          if (!filename) return yield* new Refused({ message: "upload_file needs a filename with content." })
+          yield* upload(connection, {
+            channelId: input.channelId,
+            threadTs: input.threadTs,
+            filename,
+            bytes,
+            title: input.title,
+          })
           return { ok: true }
         }),
       ),

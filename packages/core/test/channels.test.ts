@@ -15,6 +15,7 @@ import { ChannelMappings } from "../src/channel-mappings.js"
 import { ChannelRoute } from "../src/channel-route.js"
 import { ChannelTurns } from "../src/channel-turns.js"
 import { Channels } from "../src/channels.js"
+import { Drives } from "../src/drives.js"
 import { Task } from "../src/task.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
 import { testEffect } from "./lib/effect.js"
@@ -39,6 +40,22 @@ const sessionsOf = (owner: { readonly organizationId: Auth.OrganizationID }) =>
       .select({ id: Database.Schema.agent_session.id, archivedAt: Database.Schema.agent_session.archived_at })
       .from(Database.Schema.agent_session)
       .where(eq(Database.Schema.agent_session.organization_id, owner.organizationId)),
+  )
+
+const ownerOf = (sessionId: Session.ID) =>
+  Effect.flatMap(Database.Service, (database) =>
+    database.db
+      .select({
+        organizationId: Database.Schema.agent_session.organization_id,
+        spaceId: Database.Schema.agent_session.space_id,
+      })
+      .from(Database.Schema.agent_session)
+      .where(eq(Database.Schema.agent_session.id, sessionId))
+      .pipe(
+        Effect.orDie,
+        Effect.flatMap((rows) => Effect.fromNullishOr(rows.at(0))),
+        Effect.orDie,
+      ),
   )
 
 const started = Effect.fnUntraced(function* (owner: Effect.Success<typeof routed>["owner"]) {
@@ -304,27 +321,39 @@ describe("Channels", () => {
     }),
   )
 
-  it.live("a file that cannot be read is dropped with a note, and the message goes on", () =>
-    Effect.gen(function* () {
-      const found = ChannelFixture.event((yield* routed).install, {
-        files: [
-          { url: "bytes:3", name: "notes.txt", mime: "text/plain" },
-          { url: "missing", name: "screenshot.png", mime: "image/png" },
-        ],
-      })
-      yield* ChannelFixture.receive(ChannelFixture.delivery(found))
-      expect(yield* ChannelFixture.accepted(1)).toMatchObject([
-        {
-          prompt: {
-            text: `${found.text}\n(screenshot.png could not be read.)`,
-            files: [{ url: "data:text/plain;base64,YWFh", name: "notes.txt" }],
-          },
-        },
-      ])
-    }),
+  it.live(
+    "a channel file goes to the space's drive under its chat and message, and reaches the brain by its path with an inline copy; a file that cannot be read is dropped with a note",
+    () =>
+      Effect.gen(function* () {
+        const found = ChannelFixture.event((yield* routed).install, {
+          files: [
+            { url: "bytes:3", name: "notes.txt", mime: "text/plain" },
+            { url: "missing", name: "screenshot.png", mime: "image/png" },
+            { url: "bytes:2", name: "notes.txt", mime: "text/plain" },
+          ],
+        })
+        yield* ChannelFixture.receive(ChannelFixture.delivery(found))
+        const sent = (yield* ChannelFixture.accepted(1)).at(0)
+        const folder = `chats/${sent?.sessionId}/uploads/${sent?.messageId}`
+        expect(sent?.prompt).toEqual({
+          text: `${found.text}\n(screenshot.png could not be read.)`,
+          files: [
+            { path: `${folder}/notes.txt`, name: "notes.txt" },
+            { path: `${folder}/notes (2).txt`, name: "notes (2).txt" },
+          ],
+          fallback: [
+            { url: "data:text/plain;base64,YWFh", name: "notes.txt" },
+            { url: "data:text/plain;base64,YWE=", name: "notes (2).txt" },
+          ],
+        })
+        const owner = yield* ownerOf(sent?.sessionId ?? Session.ID.create())
+        const drives = yield* Drives.Service
+        expect(new TextDecoder().decode(yield* drives.read(owner, `${folder}/notes.txt`))).toBe("aaa")
+        expect(new TextDecoder().decode(yield* drives.read(owner, `${folder}/notes (2).txt`))).toBe("aa")
+      }),
   )
 
-  it.live("files over 10 MB in total: the file that passes the limit is skipped with a note", () =>
+  it.live("every file goes to the drive, and the inline copies stop at 10 MB in total", () =>
     Effect.gen(function* () {
       const found = ChannelFixture.event((yield* routed).install, {
         files: [
@@ -335,10 +364,9 @@ describe("Channels", () => {
       })
       yield* ChannelFixture.receive(ChannelFixture.delivery(found))
       const accepted = yield* ChannelFixture.accepted(1)
-      expect(accepted[0]?.prompt.text).toBe(
-        `${found.text}\n(second.bin is not attached: a message’s files total at most 10 MB.)`,
-      )
-      expect(accepted[0]?.prompt.files?.map((file) => file.name)).toEqual(["first.bin", "third.txt"])
+      expect(accepted[0]?.prompt.text).toBe(found.text)
+      expect(accepted[0]?.prompt.files?.map((file) => file.name)).toEqual(["first.bin", "second.bin", "third.txt"])
+      expect(accepted[0]?.prompt.fallback?.map((file) => file.name)).toEqual(["first.bin", "third.txt"])
     }),
   )
 })

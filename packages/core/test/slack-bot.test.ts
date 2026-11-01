@@ -12,12 +12,15 @@ import { and, eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Layer, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import type { Actor } from "../src/actor.js"
+import { Access } from "../src/access.js"
 import { ChannelProvider } from "../src/channel-provider.js"
 import { Slack } from "../src/channel-provider/slack.js"
 import { ChannelSecrets } from "../src/channel-secrets.js"
+import { Drives } from "../src/drives.js"
 import { Envelope } from "../src/envelope.js"
 import { SlackApp } from "../src/slack-app.js"
 import { SlackBot } from "../src/slack-bot.js"
+import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 import { SlackServer } from "./lib/slack-server.js"
@@ -27,6 +30,7 @@ afterAll(() => slack.stop())
 
 const it = testEffect(
   SlackBot.layer.pipe(
+    Layer.provideMerge(Drives.layer.pipe(Layer.provide(Access.layer), Layer.provide(TestDrives.layer))),
     Layer.provideMerge(ChannelProvider.layer(Effect.all([Slack.provider]))),
     Layer.provideMerge(SlackApp.layer),
     Layer.provideMerge(ChannelSecrets.layer),
@@ -172,6 +176,54 @@ describe("SlackBot", () => {
         )).message,
       ).toBe("This session did not come from Slack.")
     }),
+  )
+
+  it.live(
+    "a reply to the session's thread uploads the files the agent showed since its last reply into the thread, as ren-v1 did; upload_file posts a drive file",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const bot = yield* SlackBot.Service
+        const drives = yield* Drives.Service
+        const owner = yield* Seed.owner()
+        const install = yield* installed(owner.organizationId)
+        const sessionId = yield* Seed.session(owner)
+        yield* database.db.insert(Database.Schema.channel_thread).values({
+          id: Channel.ThreadID.create(),
+          organization_id: owner.organizationId,
+          provider: "slack",
+          install: install.workspace,
+          thread: "C07:1712.33",
+          session_id: sessionId,
+          place_name: "eng",
+          last_message: "1712.40",
+          last_message_at: new Date(),
+          created_at: new Date(Date.now() - 60_000),
+        })
+        const chart = `chats/${sessionId}/outputs/chart.png`
+        yield* drives.put(owner, chart, new TextEncoder().encode("png bytes"), "image/png")
+        const uploads = slack.uploads.size
+        const completed = () => slack.posted.filter((post) => post.method === "files.completeUploadExternal")
+        yield* bot.call(asAgent(owner, sessionId), "reply_to_current_thread", { text: "Here is the chart." })
+        expect(slack.uploads.size).toBe(uploads + 1)
+        expect([...slack.uploads.values()].at(-1)).toBe("png bytes")
+        expect(completed().at(-1)?.params).toMatchObject({ channel_id: "C07", thread_ts: "1712.33" })
+        expect(completed().at(-1)?.params.files).toContain('"title":"chart.png"')
+        yield* bot.call(asAgent(owner, sessionId), "reply_to_current_thread", { text: "Anything else?" })
+        expect(slack.uploads.size).toBe(uploads + 1)
+
+        yield* bot.call(asAgent(owner, sessionId), "upload_file", { channelId: "C09", path: chart })
+        expect([...slack.uploads.values()].at(-1)).toBe("png bytes")
+        expect(completed().at(-1)?.params).toMatchObject({ channel_id: "C09" })
+        expect(
+          (yield* Effect.flip(
+            bot.call(asAgent(owner, sessionId), "upload_file", { channelId: "C09", path: "chats/gone.png" }),
+          )).message,
+        ).toBe("The space’s drive has no file chats/gone.png.")
+        expect(
+          (yield* Effect.flip(bot.call(asAgent(owner, sessionId), "upload_file", { channelId: "C09" }))).message,
+        ).toContain("content or path")
+      }),
   )
 
   it.live(

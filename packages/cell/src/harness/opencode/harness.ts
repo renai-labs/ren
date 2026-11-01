@@ -351,7 +351,7 @@ const attach = (
   server: Pick<OpenCodeServer.Instance, "activate" | "chats">,
   input: Pick<SendInput, "sessionId" | "prompt">,
 ) =>
-  OpenCodeAttachments.prompt(server, input.sessionId, input.prompt.files ?? []).pipe(
+  OpenCodeAttachments.prompt(server, input.sessionId, input.prompt.files ?? [], input.prompt.fallback).pipe(
     Effect.catchTags({
       "Harness.NotFound": () =>
         Effect.fail(new SessionNotStartedError({ message: `Session ${input.sessionId} has not been started` })),
@@ -392,7 +392,7 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
     .prompt({
       sessionID,
       id: messageID,
-      text: input.prompt.text,
+      text: [input.prompt.text, ...attachments.notes].join("\n"),
       ...(attachments.files.length > 0 && { files: attachments.files }),
       delivery: input.delivery,
       metadata: {

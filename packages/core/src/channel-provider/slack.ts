@@ -1,7 +1,6 @@
 export * as Slack from "./slack.js"
 
 import type { Channel } from "@ren/schema/channel"
-import { Session } from "@ren/schema/session"
 import type { TaskLink } from "@ren/schema/task-link"
 import { Clock, Effect, Option, Redacted, Schema, Stream, Struct } from "effect"
 import { createHmac, timingSafeEqual } from "node:crypto"
@@ -326,9 +325,9 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
         })
       }),
     fetchFile: Effect.fn("Slack.fetchFile")(function* (install, file) {
-      if ((file.size ?? 0) > Session.maxFileBytes)
+      if ((file.size ?? 0) > SlackApp.maxFileBytes)
         return yield* new ChannelProvider.FileUnavailable({
-          message: `Slack file ${file.name} exceeds the 10 MB limit`,
+          message: `Slack file ${file.name} exceeds the 32 MiB limit`,
         })
       const url = URL.parse(file.url)
       if (!url || !fileHosts.has(url.hostname))

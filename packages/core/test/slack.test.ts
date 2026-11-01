@@ -3,7 +3,6 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
-import { Session } from "@ren/schema/session"
 import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChannelProvider } from "../src/channel-provider.js"
@@ -335,10 +334,10 @@ describe("Slack", () => {
       const file = { url: `${slack.url}/files/F2`, name: "large.log", mime: "text/plain" }
       slack.files.set("F2", "small")
       expect(
-        yield* Effect.flip(slackProvider.fetchFile(found.workspace, { ...file, size: Session.maxFileBytes + 1 })),
+        yield* Effect.flip(slackProvider.fetchFile(found.workspace, { ...file, size: SlackApp.maxFileBytes + 1 })),
       ).toMatchObject({
         _tag: "ChannelProvider.FileUnavailable",
-        message: "Slack file large.log exceeds the 10 MB limit",
+        message: "Slack file large.log exceeds the 32 MiB limit",
       })
     }),
   )
@@ -348,10 +347,10 @@ describe("Slack", () => {
       const slackProvider = yield* provider
       const found = yield* installed()
       const file = { url: `${slack.url}/files/F2`, name: "large.log", mime: "text/plain" }
-      slack.files.set("F2", "x".repeat(Session.maxFileBytes + 1))
+      slack.files.set("F2", "x".repeat(SlackApp.maxFileBytes + 1))
       expect(yield* Effect.flip(slackProvider.fetchFile(found.workspace, { ...file, size: 1 }))).toMatchObject({
         _tag: "ChannelProvider.FileUnavailable",
-        message: "Slack file exceeds the 10 MB limit",
+        message: "Slack file exceeds the 32 MiB limit",
       })
       slack.files.delete("F2")
     }),
