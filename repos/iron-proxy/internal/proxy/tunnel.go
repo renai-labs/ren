@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/binary"
@@ -15,6 +16,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -404,6 +406,18 @@ func (p *Proxy) serveTunnelWithReader(clientConn net.Conn, br *bufio.Reader, tar
 func (p *Proxy) serveTunnelTLS(clientConn net.Conn, target string, tunnelInfo *transform.TunnelInfo) error {
 	if p.tlsMode == config.TLSModeSNIOnly {
 		return p.serveSNIPassthrough(clientConn)
+	}
+
+	// Ren: fork change 12.
+	if len(p.passthroughHosts) > 0 {
+		sni, peeked, err := peekSNI(clientConn, sniPeekTimeout)
+		if err != nil {
+			return fmt.Errorf("peek sni for %s: %w", target, err)
+		}
+		clientConn = newPeekedConn(clientConn, bufio.NewReader(io.MultiReader(bytes.NewReader(peeked), clientConn)))
+		if _, ok := p.passthroughHosts[strings.ToLower(sni)]; ok {
+			return p.serveSNIPassthrough(clientConn)
+		}
 	}
 
 	tlsConn := tls.Server(clientConn, &tls.Config{

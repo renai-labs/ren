@@ -34,7 +34,9 @@ chown -R root:ren-egress /etc/ren-egress
 chmod 0750 /etc/ren-egress /etc/ren-egress/certs
 chmod 0640 /etc/ren-egress/certs/*.pem
 
-cat >/etc/ren-egress/config.yaml <<'YAML'
+passthrough=$(printf '%s' "$secret" | jq -r '[.passthrough_hosts // [] | .[] | strings] | if length > 0 then "  passthrough_hosts: \(tojson)" else "" end')
+
+cat >/etc/ren-egress/config.yaml <<YAML
 dns:
   enabled: false
 proxy:
@@ -60,6 +62,7 @@ proxy:
 tls:
   ca_cert: "/etc/ren-egress/certs/mitm_ca_cert.pem"
   ca_key: "/etc/ren-egress/certs/mitm_ca_key.pem"
+$passthrough
 metrics:
   listen: "127.0.0.1:19090"
 log:
