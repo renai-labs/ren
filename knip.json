@@ -9,9 +9,6 @@
     "packages/*": {
       "entry": ["test/**/*.test.{ts,tsx}", "script/**/*.ts"]
     },
-    "packages/app": {
-      "entry": ["src/loading-preview.tsx"]
-    },
     "packages/cell": {
       "entry": [
         "src/worker.ts",
