@@ -14,6 +14,19 @@ if [ -s "$home/.ren/egress-ca.pem" ]; then
   cat /etc/ssl/certs/ca-certificates.crt "$home/.ren/egress-ca.pem" >"$bundle"
   export SSL_CERT_FILE="$bundle" REQUESTS_CA_BUNDLE="$bundle" NODE_EXTRA_CA_CERTS="$bundle" \
     CURL_CA_BUNDLE="$bundle" GIT_SSL_CAINFO="$bundle" AWS_CA_BUNDLE="$bundle"
+  # Docker reads only the system store and Chromium only its NSS store. The full template has both.
+  if sudo -n true 2>/dev/null; then
+    sudo cp "$home/.ren/egress-ca.pem" /usr/local/share/ca-certificates/ren-egress.crt || true
+    sudo update-ca-certificates >/dev/null 2>&1 || true
+    if sudo systemctl is-active --quiet docker 2>/dev/null; then sudo systemctl restart docker || true; fi
+  fi
+  if command -v certutil >/dev/null 2>&1; then
+    nssdb="sql:$home/.pki/nssdb"
+    mkdir -p "$home/.pki/nssdb"
+    [ -f "$home/.pki/nssdb/cert9.db" ] || certutil -d "$nssdb" -N --empty-password || true
+    certutil -d "$nssdb" -D -n ren-egress >/dev/null 2>&1 || true
+    certutil -d "$nssdb" -A -t "C,," -n ren-egress -i "$home/.ren/egress-ca.pem" || true
+  fi
 fi
 (
   export PORT="${EXECUTOR_PORT:-4100}" EXECUTOR_HOST=127.0.0.1 EXECUTOR_WORKSPACE="$home/workspace"
