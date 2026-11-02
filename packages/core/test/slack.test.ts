@@ -418,7 +418,7 @@ describe("Slack", () => {
   )
 
   it.live(
-    "received adds 👀, done keeps it and failed swaps it for ❌; a reaction Slack already has or lacks is no error",
+    "received adds 👀, done swaps it for ✅ and failed swaps it for ❌; a reaction Slack already has or lacks is no error",
     () =>
       Effect.gen(function* () {
         const slackProvider = yield* provider
@@ -431,6 +431,8 @@ describe("Slack", () => {
         const reaction = (name: string) => ({ channel: "C07", timestamp: "1712.40", name })
         expect(slack.posted.slice(start).map((each) => [each.method, each.params])).toEqual([
           ["reactions.add", reaction("eyes")],
+          ["reactions.remove", reaction("eyes")],
+          ["reactions.add", reaction("white_check_mark")],
           ["reactions.remove", reaction("eyes")],
           ["reactions.add", reaction("x")],
         ])
