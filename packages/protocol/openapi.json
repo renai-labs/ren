@@ -20509,7 +20509,7 @@
             "additionalProperties": false
           }
         ],
-        "description": "Turn human review on, with the reason a person must act, or off, with a person’s decision. Only a person turns it off."
+        "description": "Turn human review on, with the reason a person must act, or off, with a person’s decision. An agent turns it off only to record the decision of the person it acts for."
       },
       "Task.SessionState": {
         "type": "string",

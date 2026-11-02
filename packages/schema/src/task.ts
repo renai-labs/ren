@@ -253,7 +253,7 @@ export const ReviewInput = Schema.Union([
 ]).annotate({
   identifier: "Task.ReviewInput",
   description:
-    "Turn human review on, with the reason a person must act, or off, with a person’s decision. Only a person turns it off.",
+    "Turn human review on, with the reason a person must act, or off, with a person’s decision. An agent turns it off only to record the decision of the person it acts for.",
 })
 export type ReviewInput = typeof ReviewInput.Type
 
