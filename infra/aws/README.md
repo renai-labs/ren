@@ -45,7 +45,7 @@ terraform plan -out=plan && terraform apply plan
 | Secret          | Keys                                                                                                   |
 | --------------- | ------------------------------------------------------------------------------------------------------ |
 | `<name>/server` | Each key in `server_secret_keys`. PEM values (`EGRESS_*`, `NODE_EXTRA_CA_CERTS`) become files at start |
-| `<name>/egress` | `ca_cert`, `cert`, `key` (mTLS with the server), `mitm_ca_cert`, `mitm_ca_key` (the sandbox CA)        |
+| `<name>/egress` | `ca_cert`, `cert`, `key` (mTLS with the server), `mitm_ca_cert`, `mitm_ca_key` (the sandbox CA); optional `passthrough_hosts`, a JSON array of host names whose tunnels the egress does not decrypt        |
 | `<name>/deploy` | `E2B_API_KEY`, for the template build; `POSTHOG_CLI_API_KEY`, for the app's source maps (optional)     |
 
 The mTLS certificates: one CA signs a server certificate for `server.<name>.internal` and an egress certificate for `egress.<name>.internal`, both with `serverAuth` and `clientAuth`. The sandbox CA is separate. `repos/iron-proxy/script/certificates.ts` shows the commands.

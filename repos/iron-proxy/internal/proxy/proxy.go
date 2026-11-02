@@ -56,6 +56,8 @@ type Proxy struct {
 	responseRetryHandler *responseretry.Handler
 	logger               *slog.Logger
 	ren                  *ren.Client
+	// Ren: fork change 12.
+	passthroughHosts map[string]struct{}
 
 	// shutdownCtx is canceled by Shutdown to unblock in-flight TCP-passthrough
 	// connections that would otherwise sit on blocking Reads.
@@ -104,6 +106,8 @@ type Options struct {
 	// Ren, when non-nil, makes every tunnel authenticate with a proxy login
 	// that Ren checks, and runs Ren's resolve on every request (Ren fork).
 	Ren *ren.Client
+	// Ren: fork change 12.
+	PassthroughHosts []string
 }
 
 // New creates a new Proxy. In TLSModeMITM, certCache must be non-nil. In
@@ -133,8 +137,13 @@ func New(opts Options) *Proxy {
 		responseRetryHandler: opts.ResponseRetryHandler,
 		logger:               opts.Logger,
 		ren:                  opts.Ren,
+		passthroughHosts:     make(map[string]struct{}, len(opts.PassthroughHosts)),
 		shutdownCtx:          shutdownCtx,
 		shutdownCancel:       shutdownCancel,
+	}
+
+	for _, host := range opts.PassthroughHosts {
+		p.passthroughHosts[strings.ToLower(host)] = struct{}{}
 	}
 
 	p.httpServer = &http.Server{

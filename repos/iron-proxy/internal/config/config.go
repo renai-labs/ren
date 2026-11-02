@@ -148,6 +148,8 @@ type TLS struct {
 	CAKey               string `yaml:"ca_key"`
 	CertCacheSize       int    `yaml:"cert_cache_size"`
 	LeafCertExpiryHours int    `yaml:"leaf_cert_expiry_hours"`
+	// Ren: fork change 12.
+	PassthroughHosts []string `yaml:"passthrough_hosts"`
 }
 
 // TLS mode values.
