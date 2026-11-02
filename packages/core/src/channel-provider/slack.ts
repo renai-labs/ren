@@ -408,7 +408,6 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
         .pipe(Effect.mapError(delivery))
     }),
     progress: Effect.fn("Slack.progress")(function* (target, status) {
-      if (status === "done") return
       const token = yield* tokenOf(target.install)
       const react = (method: "reactions.add" | "reactions.remove", name: string) =>
         app
@@ -420,7 +419,7 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
           )
       if (status === "received") return yield* react("reactions.add", "eyes")
       yield* react("reactions.remove", "eyes")
-      yield* react("reactions.add", "x")
+      yield* react("reactions.add", status === "done" ? "white_check_mark" : "x")
     }),
     email: (install, sender) =>
       tokenOf(install).pipe(
