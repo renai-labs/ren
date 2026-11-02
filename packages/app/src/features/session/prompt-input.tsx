@@ -28,14 +28,14 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@ren/ui/attachment"
-import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@ren/ui/avatar"
+import { AvatarGroup, AvatarGroupCount } from "@ren/ui/avatar"
 import { Kbd } from "@ren/ui/kbd"
 import { Separator } from "@ren/ui/separator"
 import { Command, CommandGroup, CommandItem, CommandList } from "@ren/ui/command"
 import { useUploads, type Target } from "../../lib/use-uploads.js"
 import { DropOverlay, UploadChips } from "./attachments.js"
 import { MentionOverlay } from "@ren/ui/mention-overlay"
-import { AppIcon } from "../../components/app-icon.js"
+import { AppAvatar, AppIcon } from "../../components/app-icon.js"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -199,10 +199,7 @@ function AppsStrip(props: { spaceId: string }) {
         >
           <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
             {shown.map(([app, icon]) => (
-              <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
-                <AvatarImage src={icon} alt="" />
-                <AvatarFallback className="bg-secondary">{app.charAt(0)}</AvatarFallback>
-              </Avatar>
+              <AppAvatar key={app} icon={icon} size="sm" className="data-[size=sm]:size-5" />
             ))}
             {apps.length > shown.length ? (
               <AvatarGroupCount className="size-5 text-2xs group-has-data-[size=sm]/avatar-group:size-5">
@@ -215,10 +212,7 @@ function AppsStrip(props: { spaceId: string }) {
           <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
           {profiles.map((profile) => (
             <div key={profile.id} className="flex items-center gap-3 rounded-sm p-2">
-              <Avatar size="sm" className="data-[size=sm]:size-5">
-                <AvatarImage src={profile.icon} alt="" />
-                <AvatarFallback className="bg-secondary">{profile.app.charAt(0)}</AvatarFallback>
-              </Avatar>
+              <AppAvatar icon={profile.icon} size="sm" className="data-[size=sm]:size-5" />
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm">
                   {profile.app} · {profile.name}
@@ -370,7 +364,7 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
               {item.kind === "command" ? (
                 <IconTerminal2 />
               ) : (
-                <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm bg-transparent" />
+                <AppIcon icon={item.icon} size="sm" className="size-4 rounded-sm" />
               )}
               <span className="min-w-0 flex-1 truncate">
                 <span className="font-medium text-foreground">{item.label}</span>

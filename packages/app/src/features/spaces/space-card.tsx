@@ -1,5 +1,5 @@
 import { Loading } from "@ren/ui/loading"
-import { useState } from "react"
+import { Fragment, useState, type ReactNode } from "react"
 import type { SpaceInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
@@ -8,6 +8,7 @@ import { toast } from "@ren/ui/sonner"
 import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { SpaceCardFrame } from "../../components/space-card-frame.js"
+import { AppAvatar } from "../../components/app-icon.js"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +28,7 @@ function Stack(props: {
   label: string
   items: ReadonlyArray<{ id: string; name: string; image?: string | null | undefined }>
   total: number
+  avatar: (item: { name: string; image?: string | null | undefined }) => ReactNode
 }) {
   const shown = props.items.slice(0, 3)
   if (shown.length === 0) return null
@@ -34,10 +36,7 @@ function Stack(props: {
     <span className="flex items-center gap-1.5" aria-label={props.label}>
       <AvatarGroup className="-space-x-1 *:data-[slot=avatar]:ring-card">
         {shown.map((item) => (
-          <Avatar key={item.id} size="sm" title={item.name}>
-            {item.image ? <AvatarImage src={item.image} alt="" /> : null}
-            <AvatarFallback>{initials(item.name)}</AvatarFallback>
-          </Avatar>
+          <Fragment key={item.id}>{props.avatar(item)}</Fragment>
         ))}
       </AvatarGroup>
       {props.total > shown.length ? <span>+{props.total - shown.length}</span> : null}
@@ -169,6 +168,12 @@ export function SpaceCard(props: { space: SpaceInfo }) {
               label={plural(space.memberCount, "member")}
               items={people.isLoading ? [{ id: "sample-member", name: "Team member" }] : members}
               total={space.memberCount}
+              avatar={(item) => (
+                <Avatar size="sm" title={item.name}>
+                  {item.image ? <AvatarImage src={item.image} alt="" /> : null}
+                  <AvatarFallback>{initials(item.name)}</AvatarFallback>
+                </Avatar>
+              )}
             />
           </Loading>
         )
@@ -179,6 +184,7 @@ export function SpaceCard(props: { space: SpaceInfo }) {
             label={plural(apps.length, "app")}
             items={appsLoading ? [{ id: "sample-app", name: "Team app" }] : apps}
             total={apps.length}
+            avatar={(item) => <AppAvatar icon={item.image} size="sm" title={item.name} />}
           />
         </Loading>
       }

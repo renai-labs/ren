@@ -18,7 +18,7 @@ const accounts = (count: number) => (count === 1 ? "1 account" : `${count} accou
 function AppName(props: { app: App; accounts: number; onOpen: () => void }) {
   return (
     <span className="flex min-w-0 items-center gap-3">
-      <AppIcon name={props.app.name} icon={props.app.icon} />
+      <AppIcon icon={props.app.icon} />
       <span className="flex min-w-0 flex-col">
         <Button
           variant="link"

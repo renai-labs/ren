@@ -223,9 +223,8 @@ function Screen(props: {
         <EmptyHeader className="max-w-xs gap-3">
           <EmptyMedia className="mb-3">
             <AppIcon
-              name={props.app.name}
               icon={props.app.icon}
-              className="size-20 rounded-[--spacing(5.5)] text-3xl shadow-sm ring-1 ring-foreground/10"
+              className="size-20 rounded-[--spacing(5.5)] shadow-sm ring-1 ring-foreground/10"
             />
           </EmptyMedia>
           <DialogTitle className="text-2xl/8 font-semibold tracking-heading">{props.title}</DialogTitle>
@@ -416,7 +415,7 @@ function DependenciesField(props: { profile: AppProfile }) {
             .map((option) => ({ value: option.id, label: option.name }))
           return (
             <div key={each.appId} className="flex items-center gap-3">
-              <AppIcon name={name} icon={app?.icon} size="sm" className="size-6 rounded-md text-xs" />
+              <AppIcon icon={app?.icon} size="sm" className="size-6 rounded-md" />
               <span className="flex-1 truncate text-base font-medium">{name}</span>
               <Select
                 items={options}
