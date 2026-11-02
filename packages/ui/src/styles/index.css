@@ -29,6 +29,10 @@
   --input: rgba(0, 0, 0, 0.08);
   --ring: #0065cc;
 
+  --avatar-from: #b5b5b5;
+  --avatar-to: #555555;
+  --avatar-foreground: #ffffff;
+
   --chart-1: #0065cc;
   --chart-2: #197735;
   --chart-3: #8a5700;
@@ -95,6 +99,7 @@
 @theme inline {
   --font-sans: "SF Pro Variable", ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
+  --font-avatar: ui-rounded, "SF Pro Rounded", "SF Pro Variable", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
   --radius-sm: 4px;
@@ -137,6 +142,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-avatar-from: var(--avatar-from);
+  --color-avatar-to: var(--avatar-to);
+  --color-avatar-foreground: var(--avatar-foreground);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

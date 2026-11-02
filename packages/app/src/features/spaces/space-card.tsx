@@ -31,15 +31,15 @@ function Stack(props: {
   if (shown.length === 0) return null
   return (
     <span className="flex items-center gap-1.5" aria-label={props.label}>
-      <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card">
+      <AvatarGroup className="-space-x-1 *:data-[slot=avatar]:ring-card">
         {shown.map((item) => (
-          <Avatar key={item.id} size="sm" className="data-[size=sm]:size-5">
+          <Avatar key={item.id} size="sm" title={item.name}>
             {item.image ? <AvatarImage src={item.image} alt="" /> : null}
-            <AvatarFallback className="bg-secondary text-2xs">{initials(item.name)}</AvatarFallback>
+            <AvatarFallback>{initials(item.name)}</AvatarFallback>
           </Avatar>
         ))}
       </AvatarGroup>
-      {props.total > shown.length ? <span>+{props.total - shown.length} more</span> : null}
+      {props.total > shown.length ? <span>+{props.total - shown.length}</span> : null}
     </span>
   )
 }
@@ -159,11 +159,13 @@ export function SpaceCard(props: { space: SpaceInfo }) {
         </span>
         <SpaceMenu space={space} />
       </div>
-      <div className="flex h-5 items-center gap-4 text-xs text-muted-foreground tabular-nums">
+      <div className="flex min-h-6 items-center gap-4 text-xs text-muted-foreground tabular-nums">
         {space.kind === "private" ? null : (
           <Stack label={plural(space.memberCount, "member")} items={members} total={space.memberCount} />
         )}
-        <Stack label={plural(apps.length, "app")} items={apps} total={apps.length} />
+        <div className="ml-auto">
+          <Stack label={plural(apps.length, "app")} items={apps} total={apps.length} />
+        </div>
       </div>
     </Card>
   )
