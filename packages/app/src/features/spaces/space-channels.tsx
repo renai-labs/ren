@@ -2,7 +2,7 @@ import { useState } from "react"
 import type { ChannelInstallInfo, ChannelMappingCreateInput, ChannelMappingInfo } from "@ren/client"
 import { useMutation, useQueries, useSuspenseQuery, type UseQueryResult } from "@tanstack/react-query"
 import { getRouteApi, Link } from "@tanstack/react-router"
-import { IconAt, IconPlus } from "@tabler/icons-react"
+import { IconAt, IconLinkOff, IconPlus } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Checkbox } from "@ren/ui/checkbox"
@@ -117,6 +117,7 @@ export function SpaceChannelsTab() {
                         items={[
                           {
                             label: "Unlink",
+                            icon: IconLinkOff,
                             onSelect: () => unlink(mapping),
                             confirm: {
                               title: `Unlink ${name}?`,

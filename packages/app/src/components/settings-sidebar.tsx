@@ -15,17 +15,13 @@ import { Kbd } from "@ren/ui/kbd"
 import {
   Sidebar,
   SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInput,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
 } from "@ren/ui/sidebar"
-import { sidebarRow } from "./app-sidebar.js"
+import { Footer, Header, Section, sidebarRow } from "./sidebar-parts.js"
 import { canAdministerOptions } from "../lib/auth.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Keyboard } from "../platform/keyboard.js"
@@ -59,7 +55,7 @@ function SettingsMenu(props: {
   section: string | undefined
 }) {
   return (
-    <SidebarMenu className="gap-px">
+    <SidebarMenu className="gap-1">
       {props.items.map((item) => (
         <SidebarMenuItem key={item.id}>
           <SidebarMenuButton className={sidebarRow} isActive={props.section === item.id} render={<Link to={item.to} />}>
@@ -72,7 +68,7 @@ function SettingsMenu(props: {
   )
 }
 
-export function SettingsSidebar() {
+export function SettingsSidebar(props: { onSearch: () => void }) {
   const { auth } = RouterContext.useRouterContext()
   const admin = useQuery(canAdministerOptions(auth)).data === true
   const section = useLocation({ select: (location) => location.pathname.split("/").at(2) })
@@ -96,11 +92,9 @@ export function SettingsSidebar() {
     .filter((group) => group.items.length > 0)
   return (
     <Sidebar variant="inset">
-      <SidebarHeader className="gap-1 px-0 pt-0">
-        <div className="mb-2 flex h-7 items-center">
-          <SidebarTrigger />
-        </div>
-        <SidebarMenu className="gap-px">
+      <SidebarHeader className="gap-0 p-0">
+        <Header onSearch={props.onSearch} />
+        <SidebarMenu className="gap-1 px-0.5">
           <SidebarMenuItem>
             <SidebarMenuButton className={sidebarRow} render={<Link to="/" />}>
               <IconArrowLeft />
@@ -108,7 +102,7 @@ export function SettingsSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="relative">
+        <div className="relative mx-0.5 mt-2">
           <IconSearch className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <SidebarInput
             ref={search}
@@ -123,14 +117,12 @@ export function SettingsSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {sections.map((group) => (
-          <SidebarGroup key={group.label} className="px-0 pb-4">
-            <SidebarGroupLabel className="font-medium text-muted-foreground">{group.label}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SettingsMenu items={group.items} section={section} />
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <Section key={group.label} label={group.label} className="shrink-0">
+            <SettingsMenu items={group.items} section={section} />
+          </Section>
         ))}
       </SidebarContent>
+      <Footer />
     </Sidebar>
   )
 }

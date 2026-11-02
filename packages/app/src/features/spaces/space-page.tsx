@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query"
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router"
+import { IconArchive } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Page } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
@@ -50,6 +51,7 @@ export function SpaceLayout() {
             items={[
               {
                 label: "Archive space",
+                icon: IconArchive,
                 onSelect: () =>
                   archive.mutateAsync(
                     { id: space.id },

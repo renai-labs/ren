@@ -8,7 +8,7 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import {
   IconApps,
   IconArrowUp,
-  IconGitBranch,
+  IconBrandGit,
   IconClipboardText,
   IconPaperclip,
   IconLoader2,
@@ -97,7 +97,7 @@ function AddMenu(props: {
           </DropdownMenuItem>
           {props.onRepositories ? (
             <DropdownMenuItem onClick={props.onRepositories}>
-              <IconGitBranch />
+              <IconBrandGit />
               Repositories
             </DropdownMenuItem>
           ) : null}

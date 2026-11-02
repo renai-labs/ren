@@ -18,9 +18,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { Field, FieldGroup, FieldLabel } from "@ren/ui/field"
-import { Input } from "@ren/ui/input"
-import { Textarea } from "@ren/ui/textarea"
 import { FilterMenu, passes, type Filters } from "../../components/filter-menu.js"
 import { ExpandableSearch } from "../../components/expandable-search.js"
 import { Page, SkeletonCards } from "../../components/page.js"
@@ -28,7 +25,7 @@ import { ListPagination } from "../../components/list-pagination.js"
 import { Spinner } from "@ren/ui/spinner"
 import { pageSize, pickerPageSize, currentPage } from "../../lib/pagination.js"
 import { cn } from "cn"
-import { formText } from "../../lib/format.js"
+import { NewSpaceDialog } from "../../components/new-space-dialog.js"
 import { SpaceCard } from "./space-card.js"
 import { useState } from "react"
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
@@ -60,26 +57,12 @@ export function SpacesPage() {
     enabled: dialog === "join",
     select: (data) => data.items.filter((space) => space.membershipId === null),
   })
-  const create = useMutation(api.space.create.mutationOptions())
   const join = useMutation(api["space-member"].create.mutationOptions())
   const spaces = list.data?.items
   const total = list.data?.total ?? 0
   const stale = list.isPlaceholderData
   const joinableLoading = joinable.isPending
-  const creating = create.isPending
   const joining = join.isPending
-  const createSpace = (input: { name: string; description: string }) =>
-    create.mutate(
-      { name: input.name, ...(input.description && { description: input.description }) },
-      {
-        onSuccess: (space) => {
-          setDialog(null)
-          toast.success(`Created ${space.name}`)
-          void navigate({ to: "/spaces/$spaceId", params: { spaceId: space.id } })
-        },
-        onError: (error) => toast.error("Could not create the space", { description: errorMessage(error) }),
-      },
-    )
   const joinSpace = (spaceId: string, name: string) =>
     join.mutate(
       { payload: { spaceId, userId: me.user.id } },
@@ -138,12 +121,7 @@ export function SpacesPage() {
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-          <NewSpaceDialog
-            open={dialog === "create"}
-            pending={creating}
-            onOpenChange={(open) => setDialog(open ? "create" : null)}
-            onCreate={(name, description) => createSpace({ name, description })}
-          />
+          <NewSpaceDialog open={dialog === "create"} onOpenChange={(open) => setDialog(open ? "create" : null)} />
           <JoinSpaceDialog
             open={dialog === "join"}
             spaces={joinable.data ?? []}
@@ -172,57 +150,6 @@ export function SpacesPage() {
           ))}
       </div>
     </Page>
-  )
-}
-
-function NewSpaceDialog(props: {
-  open: boolean
-  pending: boolean
-  onOpenChange: (open: boolean) => void
-  onCreate: (name: string, description: string) => void
-}) {
-  return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent>
-        <form
-          className="contents"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const form = new FormData(event.currentTarget)
-            props.onCreate(formText(form, "name").trim(), formText(form, "description").trim())
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>New space</DialogTitle>
-            <DialogDescription>You join it as its first member.</DialogDescription>
-          </DialogHeader>
-          <FieldGroup className="gap-4">
-            <Field>
-              <FieldLabel htmlFor="space-name">Name</FieldLabel>
-              <Input id="space-name" name="name" required placeholder="My space" />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="space-description">
-                Description
-                <span className="text-xs font-normal text-muted-foreground">Optional</span>
-              </FieldLabel>
-              <Textarea
-                id="space-description"
-                name="description"
-                placeholder="What does this space work on?"
-                className="min-h-20"
-              />
-            </Field>
-          </FieldGroup>
-          <DialogFooter className="sm:justify-end">
-            <Button type="submit" disabled={props.pending}>
-              {props.pending ? <Spinner data-icon="inline-start" /> : null}
-              Create space
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   )
 }
 

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react"
-import { IconArrowDown, IconArrowUp } from "@tabler/icons-react"
+import { IconArrowDown, IconArrowUp, IconUserMinus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import type { Confirmation } from "./confirm-dialog.js"
@@ -71,6 +71,7 @@ export function MembersTable<Row extends MemberRow>(props: {
                         items={[
                           {
                             label: "Remove",
+                            icon: IconUserMinus,
                             confirm: confirmation,
                             onSelect: () => props.onRemove?.(row),
                           },

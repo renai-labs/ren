@@ -3,7 +3,7 @@ import type { ReferenceInfo } from "@ren/client"
 import { Reference } from "@ren/schema/reference"
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
-import { IconGitBranch, IconPlus } from "@tabler/icons-react"
+import { IconExternalLink, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react"
 import { Schema } from "effect"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
@@ -25,6 +25,8 @@ import { ListPagination } from "../../components/list-pagination.js"
 import { TableCard, TableEmpty } from "../../components/page.js"
 import { AddRepositoriesDialog } from "../../components/add-repositories-dialog.js"
 import { RowMenu } from "../../components/row-menu.js"
+import { GitHubMark } from "../../components/brand-marks.js"
+import { Platform } from "../../platform/platform.js"
 import { errorMessage } from "../../lib/errors.js"
 import { pageSize, currentPage, pageCount } from "../../lib/pagination.js"
 import { formText } from "../../lib/format.js"
@@ -38,13 +40,28 @@ const isBranch = Schema.is(Reference.Branch)
 
 const route = getRouteApi("/_authed/_shell/spaces/$spaceId/repositories")
 
-function RepositoryName(props: { reference: ReferenceInfo }) {
+function RepositoryName(props: { reference: ReferenceInfo; onEdit?: (() => void) | undefined }) {
+  const name = Repositories.nameOf(props.reference.repository)
   return (
     <span className="flex min-w-0 items-center gap-2.5">
-      <IconGitBranch className="size-4 shrink-0 text-muted-foreground" />
-      <span className="truncate" title={props.reference.repository}>
-        {Repositories.nameOf(props.reference.repository)}
-      </span>
+      <GitHubMark className="size-4 shrink-0" />
+      {props.onEdit ? (
+        <Button
+          variant="link"
+          className="block h-auto max-w-full truncate rounded-sm p-0 text-left font-normal text-foreground hover:no-underline focus-visible:underline"
+          title={props.reference.repository}
+          onClick={(event) => {
+            event.stopPropagation()
+            props.onEdit?.()
+          }}
+        >
+          {name}
+        </Button>
+      ) : (
+        <span className="truncate" title={props.reference.repository}>
+          {name}
+        </span>
+      )}
       {props.reference.branch ? (
         <span className="shrink-0 font-mono text-xs text-muted-foreground">{props.reference.branch}</span>
       ) : null}
@@ -61,6 +78,7 @@ function problemOf(next: ReferenceInfo) {
 export function SpaceRepositoriesTab() {
   const { api } = RouterContext.useRouterContext()
   const space = useSpace()
+  const platform = Platform.usePlatform()
   const params = route.useParams()
   const search = route.useSearch()
   const settings = useSuspenseQuery(api["space-settings"].get.queryOptions({ idOrSlug: params.spaceId })).data
@@ -115,7 +133,7 @@ export function SpaceRepositoriesTab() {
             <TableRow>
               <TableHead>Repository</TableHead>
               <TableHead className="w-2/5">Description</TableHead>
-              {canUpdate ? <TableHead className="w-15" /> : null}
+              <TableHead className="w-15" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -127,32 +145,44 @@ export function SpaceRepositoriesTab() {
               </TableEmpty>
             ) : null}
             {visible.map((reference) => (
-              <TableRow key={reference.alias}>
+              <TableRow
+                key={reference.alias}
+                className={canUpdate ? "cursor-pointer" : undefined}
+                onClick={canUpdate ? () => open(reference) : undefined}
+              >
                 <TableCell>
-                  <RepositoryName reference={reference} />
+                  <RepositoryName reference={reference} onEdit={canUpdate ? () => open(reference) : undefined} />
                 </TableCell>
                 <TableCell className="truncate text-muted-foreground" title={reference.description}>
                   {reference.description}
                 </TableCell>
-                {canUpdate ? (
-                  <TableCell>
-                    <RowMenu
-                      label={`${Repositories.nameOf(reference.repository)} actions`}
-                      items={[
-                        { label: "Edit", onSelect: () => open(reference) },
-                        {
-                          label: "Remove",
-                          onSelect: () => remove(reference),
-                          confirm: {
-                            title: `Remove ${Repositories.nameOf(reference.repository)}?`,
-                            description: "Chats in this space stop reading it.",
-                            action: "Remove",
-                          },
-                        },
-                      ]}
-                    />
-                  </TableCell>
-                ) : null}
+                <TableCell onClick={(event) => event.stopPropagation()}>
+                  <RowMenu
+                    label={`${Repositories.nameOf(reference.repository)} actions`}
+                    items={[
+                      {
+                        label: "Open",
+                        icon: IconExternalLink,
+                        onSelect: () => platform.openExternal(reference.repository),
+                      },
+                      ...(canUpdate
+                        ? [
+                            { label: "Edit", icon: IconPencil, onSelect: () => open(reference) },
+                            {
+                              label: "Remove",
+                              icon: IconTrash,
+                              onSelect: () => remove(reference),
+                              confirm: {
+                                title: `Remove ${Repositories.nameOf(reference.repository)}?`,
+                                description: "Chats in this space stop reading it.",
+                                action: "Remove",
+                              },
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
