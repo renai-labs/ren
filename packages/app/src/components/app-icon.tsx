@@ -45,7 +45,7 @@ export function AppAvatar(props: {
 }) {
   return (
     <Avatar size={props.size ?? "default"} title={props.title} className={props.className}>
-      {props.icon ? <AvatarImage src={props.icon} alt="" className="bg-white" /> : null}
+      {props.icon ? <AvatarImage src={props.icon} alt="" className="bg-white object-contain" /> : null}
       <AvatarFallback className="bg-secondary bg-none text-muted-foreground">
         <IconApps className="size-3/5" />
       </AvatarFallback>
