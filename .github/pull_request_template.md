@@ -1,24 +1,21 @@
 ### Issue for this PR
 
-Closes #
-
-### Type of change
-
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Refactor / code improvement
-- [ ] Documentation
-- [ ] Chore / tooling
+Closes renai-labs/ren#
 
 ### What does this PR do?
 
-Describe the problem, the change, and why it works. If you are unsure why it works, say so.
+The problem, the change, and why it works, in plain words. If you are not sure why it works, say so.
 
 ### How did you verify your code works?
 
-### Screenshots / recordings
+What ran, and what did not.
 
-_If this is a UI change, include a screenshot or recording._
+### Before / after
+
+Only for a change people see, or a motion that text cannot show: proof of the final state.
+
+<!-- qa-evidence:start -->
+<!-- qa-evidence:end -->
 
 ### Checklist
 
