@@ -11,6 +11,7 @@
   "license": "UNLICENSED",
   "exports": {
     "./styles": "./src/styles/index.css",
+    "./styles/fonts": "./src/styles/fonts.css",
     "./factory-model": "./src/lib/factory/model.ts",
     "./*": "./src/components/*.tsx"
   },
