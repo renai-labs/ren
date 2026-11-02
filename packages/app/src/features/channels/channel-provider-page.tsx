@@ -13,7 +13,7 @@ import { ChannelMark } from "../../components/channel-mark.js"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ExpandableSearch } from "../../components/expandable-search.js"
-import { Page, SkeletonRows } from "../../components/page.js"
+import { Page, SkeletonRows, SkeletonTable } from "../../components/page.js"
 import { errorMessage } from "../../lib/errors.js"
 import { Loader } from "../../lib/loader.js"
 import { Channels } from "../../lib/channels.js"
@@ -171,7 +171,9 @@ function MappingList(props: {
     <>
       <div className="flex flex-col gap-3">
         <MappingToolbar spaces={spaces.data ?? []} disabled={editableSpaces.length === 0} provider={props.provider} />
-        {mappings.isPending ? <SkeletonRows /> : null}
+        {mappings.isPending ? (
+          <SkeletonTable columns={["Channel", "Space", "Status", ""]} label="Loading mappings" />
+        ) : null}
         {mappings.isError ? (
           <Alert variant="destructive">
             <IconAlertCircle />
@@ -351,7 +353,7 @@ function AddMappingDialog(props: {
             </Button>
           </p>
         ) : null}
-        {places.isPending ? <SkeletonRows count={4} /> : null}
+        {places.isPending ? <SkeletonRows count={4} label="Loading channels" /> : null}
         {places.isSuccess ? (
           <Command>
             <CommandInput

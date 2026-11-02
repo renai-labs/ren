@@ -1,12 +1,13 @@
+import { Loading } from "@ren/ui/loading"
 import { useState } from "react"
 import type { SpaceInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { IconArchive, IconCube, IconDots, IconLock, IconMessage } from "@tabler/icons-react"
+import { IconArchive, IconDots } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
-import { Card } from "@ren/ui/card"
+import { SpaceCardFrame } from "../../components/space-card-frame.js"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -123,13 +124,17 @@ function SpaceMenu(props: { space: SpaceInfo }) {
 export function SpaceCard(props: { space: SpaceInfo }) {
   const { api } = RouterContext.useRouterContext()
   const space = props.space
-  const chats = useQuery(api.session.list.queryOptions({ spaceId: [space.id], page: 1, pageSize: 1 }))
+  const chats = useQuery({
+    ...api.session.list.queryOptions({ spaceId: [space.id], page: 1, pageSize: 1 }),
+    select: (page) => page.total,
+  })
   const reach = useQuery({ ...api["app-profile-reach"].space.profiles.queryOptions({ id: space.id }), retry: false })
   const people = useQuery({
     ...api["space-member"].list.queryOptions({ spaceId: space.id, status: "active", page: 1, pageSize: 3 }),
     enabled: space.kind !== "private" && space.membershipId !== null,
   })
   const catalog = useCatalog()
+  const appsLoading = reach.isPending || catalog.loading
   const apps = [...new Set((reach.data?.profiles ?? []).map((profile) => profile.appId))].map((appId) => ({
     id: appId,
     name: catalog.appOf(appId)?.name ?? appId,
@@ -138,35 +143,45 @@ export function SpaceCard(props: { space: SpaceInfo }) {
   const members = (people.data?.items ?? []).flatMap((member) =>
     member.status === "active" ? [{ id: member.id, name: member.name, image: member.image }] : [],
   )
-  const Icon = space.kind === "private" ? IconLock : IconCube
   return (
-    <Card className="relative gap-6 border p-5 shadow-soft ring-0 transition-[background-color,scale] duration-150 ease-out hover:bg-muted/40 active:scale-[0.99] motion-reduce:active:scale-100">
-      <div className="flex items-start gap-3">
-        <Icon className="mt-0.5 size-6 shrink-0 text-muted-foreground" strokeWidth={1.5} />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <Link
-            to="/spaces/$spaceId"
-            params={{ spaceId: space.id }}
-            className="truncate text-md/5 font-medium tracking-snug outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
-          >
-            {space.name}
-          </Link>
-          <span className="line-clamp-2 text-sm text-muted-foreground">{space.description || "No description"}</span>
-        </div>
-        <span className="flex h-6 shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums [&_svg]:size-3.5">
-          <IconMessage />
-          {plural(chats.data?.total ?? 0, "chat")}
-        </span>
-        <SpaceMenu space={space} />
-      </div>
-      <div className="flex min-h-6 items-center gap-4 text-xs text-muted-foreground tabular-nums">
-        {space.kind === "private" ? null : (
-          <Stack label={plural(space.memberCount, "member")} items={members} total={space.memberCount} />
-        )}
-        <div className="ml-auto">
-          <Stack label={plural(apps.length, "app")} items={apps} total={apps.length} />
-        </div>
-      </div>
-    </Card>
+    <SpaceCardFrame
+      title={
+        <Link
+          to="/spaces/$spaceId"
+          params={{ spaceId: space.id }}
+          className="truncate text-md/5 font-medium tracking-snug outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+        >
+          {space.name}
+        </Link>
+      }
+      description={space.description ?? ""}
+      private={space.kind === "private"}
+      chats={
+        <Loading loading={chats.isPending} label="Loading chat count">
+          <span>{plural(chats.data ?? 0, "chat")}</span>
+        </Loading>
+      }
+      menu={<SpaceMenu space={space} />}
+      members={
+        space.kind === "private" ? null : (
+          <Loading loading={people.isLoading} label="Loading space members">
+            <Stack
+              label={plural(space.memberCount, "member")}
+              items={people.isLoading ? [{ id: "sample-member", name: "Team member" }] : members}
+              total={space.memberCount}
+            />
+          </Loading>
+        )
+      }
+      apps={
+        <Loading loading={appsLoading} label="Loading space apps">
+          <Stack
+            label={plural(apps.length, "app")}
+            items={appsLoading ? [{ id: "sample-app", name: "Team app" }] : apps}
+            total={apps.length}
+          />
+        </Loading>
+      }
+    />
   )
 }

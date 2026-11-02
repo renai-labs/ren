@@ -13,5 +13,6 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/repositori
       ),
     )
   },
+  wrapInSuspense: false,
   component: SpaceRepositoriesTab,
 })

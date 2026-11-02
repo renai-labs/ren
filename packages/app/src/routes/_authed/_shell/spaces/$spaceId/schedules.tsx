@@ -21,5 +21,6 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/schedules"
       ),
     )
   },
+  wrapInSuspense: false,
   component: SpaceSchedulesTab,
 })

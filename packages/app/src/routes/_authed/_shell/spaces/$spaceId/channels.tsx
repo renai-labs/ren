@@ -15,5 +15,6 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/channels")
       options.context.queryClient.query(Channels.installsOptions(options.context.api)),
     )
   },
+  wrapInSuspense: false,
   component: SpaceChannelsTab,
 })

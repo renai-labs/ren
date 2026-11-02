@@ -7,7 +7,7 @@ import { ConfirmDialog } from "./confirm-dialog.js"
 import { EmptyState } from "./empty-state.js"
 import { ExpandableSearch } from "./expandable-search.js"
 import { FilterMenu, type FilterProperty } from "./filter-menu.js"
-import { SkeletonRows, TableCard } from "./page.js"
+import { SkeletonTable, TableCard } from "./page.js"
 import { RowMenu } from "./row-menu.js"
 import { ScheduleSheet } from "./schedule-sheet.js"
 import type { Schedules } from "../lib/use-schedules.js"
@@ -122,7 +122,9 @@ export function ScheduleGrid(props: { list: Schedules }) {
   const empty = schedules?.length === 0
   return (
     <>
-      {schedules ? null : <SkeletonRows count={4} />}
+      {schedules ? null : (
+        <SkeletonTable columns={["Name", "Frequency", "Next run", "Status", ""]} label="Loading schedules" />
+      )}
       {empty && list.filtered ? (
         <EmptyState title="No matching schedules">Try a different search or filter.</EmptyState>
       ) : null}

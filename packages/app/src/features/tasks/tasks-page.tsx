@@ -24,7 +24,8 @@ import { Button } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { ExpandableSearch } from "../../components/expandable-search.js"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
-import { Page, SkeletonRows } from "../../components/page.js"
+import { TasksSkeleton } from "../../components/route-skeleton.js"
+import { Page } from "../../components/page.js"
 import { NewTaskDialog } from "../../components/new-task-dialog.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
 import { FilterChips, FilterMenu, type Filters } from "../../components/filter-menu.js"
@@ -226,7 +227,7 @@ function TaskGroups(props: {
   const agents = useAgents()
   const members = useMembers()
   const groups = props.groups
-  if (props.loading) return <SkeletonRows />
+  if (props.loading) return <TasksSkeleton />
   if (groups.length === 0 && props.filtered)
     return (
       <EmptyState

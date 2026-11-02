@@ -70,6 +70,7 @@ import { toolIcons } from "./tool-icons.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
 import { useSubagentCard } from "./chat-view.js"
 import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
+import { MessagesSkeleton } from "../../components/chat-skeleton.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ImageLightbox } from "../../components/image-lightbox.js"
 import { withAppMentions } from "@ren/ui/app-mention"
@@ -95,6 +96,7 @@ export interface TranscriptProps {
   readonly viewer: Person & { readonly id: string }
   readonly people: ReadonlyMap<string, Person>
   readonly more: boolean
+  readonly loading?: boolean | undefined
   readonly loadingHistory: boolean
   readonly onLoadMore: () => void
   readonly onOpenChild: (sessionID: Session.ID) => void
@@ -1062,13 +1064,7 @@ function BlockView(props: {
 
 function History(props: { loading: boolean; onLoadMore: () => void }) {
   if (!props.loading) return <LoadEarlier onVisible={props.onLoadMore} />
-  return (
-    <Marker variant="separator">
-      <MarkerIcon>
-        <Spinner />
-      </MarkerIcon>
-    </Marker>
-  )
+  return <MessagesSkeleton label="Loading earlier messages" />
 }
 
 function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMessage.Info>): Context {
@@ -1109,7 +1105,8 @@ export function Transcript(props: TranscriptProps) {
   }
   const copyOf = (turn: string, key: string) =>
     lastAnswer.get(turn) === key && activeTurn !== turn ? TimelineText.copyText(turns.get(turn) ?? [])?.text : undefined
-  const empty = props.empty && blocks.length === 0 && !props.busy && !props.more && !props.loadingHistory
+  const empty =
+    props.empty && blocks.length === 0 && !props.busy && !props.more && !props.loadingHistory && !props.loading
   return (
     <MessageScrollerProvider autoScroll>
       <MessageScroller className="@container flex-1">
@@ -1119,8 +1116,16 @@ export function Transcript(props: TranscriptProps) {
         >
           <MessageScrollerContent className="relative mx-auto w-full max-w-3xl p-6">
             {props.more ? (
-              <MessageScrollerItem messageId="history" className="absolute inset-x-6 top-1">
+              <MessageScrollerItem
+                messageId="history"
+                className={props.loadingHistory ? "mb-6" : "absolute inset-x-6 top-1"}
+              >
                 <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} />
+              </MessageScrollerItem>
+            ) : null}
+            {props.loading ? (
+              <MessageScrollerItem messageId="loading">
+                <MessagesSkeleton />
               </MessageScrollerItem>
             ) : null}
             {blocks.map((block) => (

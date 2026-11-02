@@ -19,5 +19,6 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/members")(
       ),
     )
   },
+  wrapInSuspense: false,
   component: SpaceMembersTab,
 })

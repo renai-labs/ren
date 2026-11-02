@@ -1,3 +1,4 @@
+import { Loading } from "@ren/ui/loading"
 import type { SpaceInfo } from "@ren/client"
 import { FactoryAnalytics } from "@ren/ui/factory-analytics"
 import { FactoryBoard } from "@ren/ui/factory-board"
@@ -13,7 +14,9 @@ export function FactoryDashboard(props: { space: SpaceInfo }) {
   const factory = useFactory(props.space)
   return (
     <div className="flex min-h-150 flex-1 flex-col">
-      <FactoryAnalytics world={factory.world} analytics={factory.analytics} />
+      <Loading loading={factory.loading} label="Loading factory analytics" className="flex flex-1 flex-col">
+        <FactoryAnalytics world={factory.world} analytics={factory.analytics} />
+      </Loading>
     </div>
   )
 }
@@ -24,19 +27,21 @@ export function FactoryKanban(props: { space: SpaceInfo }) {
   const [stacks, setStacks] = useState(() => stacksPreference.read(platform.storage))
   return (
     <div className="-mx-8 flex min-h-150 flex-1 flex-col">
-      <FactoryBoard
-        world={factory.world}
-        spend={factory.spend}
-        onAct={factory.act}
-        onOpen={factory.open}
-        startAt="backlog"
-        stacks={stacks}
-        onStackChange={(stage, options) => {
-          const next = { ...stacks, [stage]: options.expanded }
-          stacksPreference.write(platform.storage, next)
-          setStacks(next)
-        }}
-      />
+      <Loading loading={factory.loading} label="Loading task board" className="flex flex-1 flex-col">
+        <FactoryBoard
+          world={factory.world}
+          spend={factory.spend}
+          onAct={factory.act}
+          onOpen={factory.open}
+          startAt="backlog"
+          stacks={stacks}
+          onStackChange={(stage, options) => {
+            const next = { ...stacks, [stage]: options.expanded }
+            stacksPreference.write(platform.storage, next)
+            setStacks(next)
+          }}
+        />
+      </Loading>
     </div>
   )
 }

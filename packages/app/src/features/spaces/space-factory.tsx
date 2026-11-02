@@ -46,7 +46,12 @@ export function SpaceFactoryTab() {
   const disabled = !space.canUpdate || update.isPending
   const remove = (id: string) => save(order.filter((candidate) => candidate !== id))
   const add = (id: string) => save([...order, id])
-  if (loading) return <SkeletonRows count={3} />
+  if (loading)
+    return (
+      <Section title="Factory order" description="Agents in the order the task board shows them.">
+        <SkeletonRows count={3} label="Loading agents" />
+      </Section>
+    )
   return (
     <div className="flex flex-col gap-8">
       <Section title="Factory order" description="Agents in the order the task board shows them.">

@@ -1,3 +1,4 @@
+import { Loading } from "@ren/ui/loading"
 import type { ReactNode } from "react"
 import { IconBolt, IconChevronRight, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
@@ -48,6 +49,27 @@ function AppGrid(props: { label: string; children: ReactNode }) {
     >
       {props.children}
     </div>
+  )
+}
+
+export function AppListingSkeleton() {
+  return (
+    <Loading label="Loading apps">
+      <AppSection title="Browse apps">
+        {Array.from({ length: 6 }, (_, index) => (
+          <AppRow
+            key={index}
+            name="Team app"
+            caption="Tools for your team’s work"
+            action={
+              <Button variant="outline" size="sm">
+                Add
+              </Button>
+            }
+          />
+        ))}
+      </AppSection>
+    </Loading>
   )
 }
 

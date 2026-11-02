@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { Field, FieldLabel } from "@ren/ui/field"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
-import { Skeleton } from "@ren/ui/skeleton"
+import { Loading } from "@ren/ui/loading"
 import { Spinner } from "@ren/ui/spinner"
 import { AuthLayout, FormError } from "../../components/auth-layout.js"
 import { consentOrganizationHeader, oauthClientOptions, organizationsOptions, sessionOptions } from "../../lib/auth.js"
@@ -107,7 +107,11 @@ export function ConsentPage() {
   return (
     <AuthLayout
       title={
-        client.isPending ? <Skeleton className="mx-auto h-6 w-48" /> : `Allow ${clientInfo.clientName} to use Ren?`
+        client.isPending ? (
+          <Loading label="Loading application">Allow this application to use Ren?</Loading>
+        ) : (
+          `Allow ${clientInfo.clientName} to use Ren?`
+        )
       }
       description={`${clientInfo.clientName} will act as you, ${session?.user.email ?? ""}, in ${organizationName ?? "the organization you choose"}. It can see and change your spaces, agents, chats and tasks.`}
     >

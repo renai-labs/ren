@@ -1,3 +1,4 @@
+import { AppListingSkeleton } from "../../../components/app-list.js"
 import { createFileRoute } from "@tanstack/react-router"
 import { PageSkeleton } from "../../../components/page.js"
 import { MarketplacePage } from "../../../features/apps/marketplace-page.js"
@@ -24,7 +25,9 @@ function MarketplaceSkeleton() {
   return (
     <PageSkeleton
       title="Marketplace"
-      description="Add an app to a space, then connect its accounts. Every chat in the space can use it."
-    />
+      description="Apps give Ren new tools. Add one to a space and every chat there can use it."
+    >
+      <AppListingSkeleton />
+    </PageSkeleton>
   )
 }

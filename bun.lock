@@ -472,6 +472,7 @@
         "react-day-picker": "catalog:",
         "shadcn": "catalog:",
         "shiki": "catalog:",
+        "skullet": "catalog:",
         "sonner": "catalog:",
         "tailwindcss": "catalog:",
         "tw-animate-css": "catalog:",
@@ -593,6 +594,7 @@
     "shadcn": "4.22.1",
     "sharp": "0.34.5",
     "shiki": "4.5.0",
+    "skullet": "0.0.3",
     "sonner": "2.0.8",
     "streamdown": "2.7.0",
     "tailwind-merge": "3.7.0",
@@ -3072,6 +3074,8 @@
     "sigstore": ["sigstore@4.1.1", "", { "dependencies": { "@sigstore/bundle": "^4.0.0", "@sigstore/core": "^3.2.1", "@sigstore/protobuf-specs": "^0.5.0", "@sigstore/sign": "^4.1.1", "@sigstore/tuf": "^4.0.2", "@sigstore/verify": "^3.1.1" } }, "sha512-endqECJkfhozrXMK5ngu/UAA0xVcVEFdnHJCElGaExypjW+HK5i6zu3NteLoaX/iFbRUbC3+DjttQs0GARr+5w=="],
 
     "sisteransi": ["sisteransi@1.0.5", "", {}, "sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg=="],
+
+    "skullet": ["skullet@0.0.3", "", { "peerDependencies": { "react": ">=18", "react-dom": ">=18", "svelte": ">=5", "vue": ">=3" }, "optionalPeers": ["react", "react-dom", "svelte", "vue"] }, "sha512-YPKHasYQxuZTQ6Tf6ap61lseIjdAklQlScg48HMKJW/AiGg8HaVdbfzg5XW/j6OdRuJbITpwsG5vJ8LAapmMJA=="],
 
     "slackify-markdown": ["slackify-markdown@5.0.0", "", { "dependencies": { "mdast-util-to-markdown": "^2.1.2", "remark-gfm": "^4.0.0", "remark-parse": "^11.0.0", "remark-stringify": "^11.0.0", "unified": "^11.0.5", "unist-util-remove": "^4.0.0", "unist-util-visit": "^5.0.0" } }, "sha512-jTWvwjOYGAqS0NNyhTm+9H8S0/tux2anPEwyeIBCayH14jGHIrN70yj4afUYP2zq54aUwEFkASdXytjO/5GA+A=="],
 

@@ -29,6 +29,7 @@ export function useView(root: Session.ID, child: Session.ID | undefined) {
     state,
     viewed,
     projection,
+    loading: state.messages[viewed] === undefined && !AsyncResult.isFailure(session.state),
     messages: ChatState.messages(state, viewed),
     rows: projection?.rows ?? noRows,
     running: ChatState.activity(state, viewed) === "running",

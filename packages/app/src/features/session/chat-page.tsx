@@ -4,7 +4,6 @@ import { IconArrowLeft, IconCube, IconLayoutSidebarRight, IconRestore } from "@t
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList } from "@ren/ui/breadcrumb"
 import { Button } from "@ren/ui/button"
-import { Skeleton } from "@ren/ui/skeleton"
 import { Queue } from "./queue.js"
 import { WorkspacePanel } from "./workspace-panel.js"
 import { ChatActions } from "./chat-actions.js"
@@ -39,6 +38,7 @@ function ChatThread(props: { chat: Chat }) {
         viewer={chat.viewer}
         people={chat.people}
         more={chat.more}
+        loading={chat.loading && chat.rows.length === 0}
         loadingHistory={chat.loadingHistory}
         onLoadMore={chat.loadMore}
         onOpenChild={(id) => chat.openChild(id)}
@@ -140,7 +140,10 @@ function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => vo
                   {chat.spaceName}
                 </BreadcrumbLink>
               ) : (
-                <Skeleton className="h-4 w-24" />
+                <span className="flex items-center gap-1.5">
+                  <IconCube className="size-4" />
+                  Chat
+                </span>
               )}
             </BreadcrumbItem>
           </BreadcrumbList>

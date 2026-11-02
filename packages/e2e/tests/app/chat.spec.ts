@@ -1,9 +1,49 @@
 import { expect, test } from "@playwright/test"
-import { createOrganization } from "../lib/servers.js"
+import { Session } from "@ren/schema/session"
+import { Schema } from "effect"
+import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
 
 test.describe.configure({ timeout: 90_000 })
+
+test("chat placeholders remain until the first message page arrives", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  const listed = await page.request.get(`${serverURL}/spaces?page=1&pageSize=25`)
+  expect(listed.ok()).toBe(true)
+  const spaces = Schema.decodeUnknownSync(Schema.Struct({ items: Schema.Array(Schema.Struct({ id: Schema.String })) }))(
+    await listed.json(),
+  )
+  const sessionId = Session.ID.create()
+  const created = await page.request.post(`${serverURL}/sessions`, {
+    headers: { origin: appOrigin },
+    data: { id: sessionId, spaceId: spaces.items[0]?.id },
+  })
+  expect(created.ok()).toBe(true)
+  const held = Promise.withResolvers<void>()
+  const requested = Promise.withResolvers<void>()
+  await page.route(
+    (url) =>
+      url.pathname === `/chat/session/${sessionId}/message` || url.pathname === `/sessions/${sessionId}/messages`,
+    async (route) => {
+      requested.resolve()
+      await held.promise
+      await route.continue()
+    },
+  )
+  try {
+    await page.goto(`/app/sessions/${sessionId}`)
+    await requested.promise
+    await expect(page.getByRole("button", { name: "Open panel", exact: true })).toBeVisible()
+    await expect(page.getByRole("status", { name: "Loading messages", exact: true })).toBeVisible()
+    await expect(page.getByText("Help me with this task.", { exact: true })).toBeHidden()
+    await page.screenshot({ path: test.info().outputPath("chat-loading-dark.png") })
+  } finally {
+    held.resolve()
+  }
+  await expect(page.getByRole("status", { name: "Loading messages", exact: true })).toHaveCount(0)
+  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible()
+})
 
 test("a member starts a chat, follows the reply, sends again, mentions an agent and finds the chat in the sidebar", async ({
   page,
