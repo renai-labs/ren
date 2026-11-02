@@ -79,8 +79,8 @@ export function AppsTable(props: {
                   <RowMenu
                     label={`${app.name} actions`}
                     items={[
-                      { label: "Open", icon: <IconArrowUpRight />, onSelect: () => props.onOpen(app.id) },
-                      { label: "New account", icon: <IconUserPlus />, onSelect: () => props.onNew(app.id) },
+                      { label: "Open", icon: IconArrowUpRight, onSelect: () => props.onOpen(app.id) },
+                      { label: "New account", icon: IconUserPlus, onSelect: () => props.onNew(app.id) },
                     ]}
                   />
                 </TableCell>

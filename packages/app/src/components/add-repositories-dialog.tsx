@@ -2,7 +2,6 @@ import { useState } from "react"
 import type { ReferenceInfo } from "@ren/client"
 import { useQuery, type UseQueryResult } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { IconBrandGithub } from "@tabler/icons-react"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Checkbox } from "@ren/ui/checkbox"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
@@ -19,6 +18,7 @@ import { FieldError } from "@ren/ui/field"
 import { Spinner } from "@ren/ui/spinner"
 import { errorMessage } from "../lib/errors.js"
 import { Repositories } from "../lib/repositories.js"
+import { GitHubMark } from "./brand-marks.js"
 import { EmptyState } from "./empty-state.js"
 import { RouterContext } from "../lib/router-context.js"
 
@@ -98,6 +98,7 @@ export function AddRepositoriesDialog(props: {
                         aria-hidden
                         className="pointer-events-none"
                       />
+                      <GitHubMark className="size-4 shrink-0" />
                       <span className="truncate">{repository.name}</span>
                     </CommandItem>
                   ))}
@@ -113,7 +114,7 @@ export function AddRepositoriesDialog(props: {
                 params={{ provider: "github" }}
                 className={buttonVariants({ variant: "outline" })}
               >
-                <IconBrandGithub data-icon="inline-start" />
+                <GitHubMark data-icon="inline-start" />
                 Connect GitHub
               </Link>
             }

@@ -8,7 +8,7 @@ import {
   IconBuildingFactory2,
   IconClock,
   IconCube,
-  IconGitBranch,
+  IconBrandGit,
   IconKey,
   IconLayoutDashboard,
   IconLayoutKanban,
@@ -35,9 +35,8 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
 } from "@ren/ui/sidebar"
-import { sidebarRow } from "./app-sidebar.js"
+import { Footer, Header, sidebarRow } from "./sidebar-parts.js"
 import { isSoftwareFactory } from "../lib/factory.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
@@ -47,7 +46,7 @@ const spaceSections = [
   { value: "kanban", label: "Kanban", icon: IconLayoutKanban, to: "/spaces/$spaceId/kanban" },
   { value: "members", label: "Members", icon: IconUsers, to: "/spaces/$spaceId/members" },
   { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
-  { value: "repositories", label: "Repositories", icon: IconGitBranch, to: "/spaces/$spaceId/repositories" },
+  { value: "repositories", label: "Repositories", icon: IconBrandGit, to: "/spaces/$spaceId/repositories" },
   { value: "channels", label: "Mentions", icon: IconAt, to: "/spaces/$spaceId/channels" },
   { value: "credentials", label: "Keys", icon: IconKey, to: "/spaces/$spaceId/credentials" },
   { value: "schedules", label: "Scheduled", icon: IconClock, to: "/spaces/$spaceId/schedules" },
@@ -70,12 +69,16 @@ function SpaceSwitcher(props: { space: SpaceInfo; section: (typeof spaceSections
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <SidebarMenuButton size="lg" className="h-10" aria-label={`Switch space (current: ${props.space.name})`} />
+          <SidebarMenuButton
+            size="lg"
+            className={sidebarRow}
+            aria-label={`Switch space (current: ${props.space.name})`}
+          />
         }
       >
-        <SpaceIcon kind={props.space.kind} className="size-4.5 text-sidebar-accent-foreground" />
-        <span className="flex-1 truncate font-medium text-sidebar-accent-foreground">{props.space.name}</span>
-        <IconSelector className="text-sidebar-foreground/70" />
+        <SpaceIcon kind={props.space.kind} className="size-4.5" />
+        <span className="flex-1 truncate">{props.space.name}</span>
+        <IconSelector className="text-sidebar-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-(--anchor-width) min-w-56">
         <DropdownMenuGroup>
@@ -103,7 +106,7 @@ function SpaceSwitcher(props: { space: SpaceInfo; section: (typeof spaceSections
 
 function SpaceNav(props: { space: SpaceInfo; current: SpaceSection }) {
   return (
-    <SidebarMenu className="gap-px">
+    <SidebarMenu className="gap-1">
       {spaceSections
         .filter((each) => each.value !== "members" || props.space.kind !== "private")
         .filter((each) => each.value !== "kanban" || isSoftwareFactory(props.space))
@@ -118,7 +121,7 @@ function SpaceNav(props: { space: SpaceInfo; current: SpaceSection }) {
               <span>{each.label}</span>
             </SidebarMenuButton>
             {each.value === "members" ? (
-              <SidebarMenuBadge className="peer-data-[size=default]/menu-button:top-1.5">
+              <SidebarMenuBadge className="peer-data-[size=default]/menu-button:top-2">
                 {props.space.memberCount}
               </SidebarMenuBadge>
             ) : null}
@@ -128,7 +131,7 @@ function SpaceNav(props: { space: SpaceInfo; current: SpaceSection }) {
   )
 }
 
-export function SpaceSidebar(props: { spaceId: string }) {
+export function SpaceSidebar(props: { spaceId: string; onSearch: () => void }) {
   const { api } = RouterContext.useRouterContext()
   const path = useLocation({ select: (location) => location.pathname })
   const space = useSuspenseQuery(api.space.get.queryOptions({ idOrSlug: props.spaceId })).data
@@ -136,11 +139,9 @@ export function SpaceSidebar(props: { spaceId: string }) {
   const section = spaceSections.find((each) => each.value === current) ?? spaceSections[0]
   return (
     <Sidebar variant="inset">
-      <SidebarHeader className="gap-1 px-0 pt-0">
-        <div className="mb-2 flex h-7 items-center">
-          <SidebarTrigger />
-        </div>
-        <SidebarMenu className="gap-px">
+      <SidebarHeader className="gap-0 p-0">
+        <Header onSearch={props.onSearch} />
+        <SidebarMenu className="gap-1 px-0.5">
           <SidebarMenuItem>
             <SidebarMenuButton className={sidebarRow} render={<Link to="/spaces" />}>
               <IconArrowLeft />
@@ -153,12 +154,13 @@ export function SpaceSidebar(props: { spaceId: string }) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup className="px-0">
+        <SidebarGroup className="px-0.5 pt-5">
           <SidebarGroupContent>
             <SpaceNav space={space} current={current} />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <Footer />
     </Sidebar>
   )
 }

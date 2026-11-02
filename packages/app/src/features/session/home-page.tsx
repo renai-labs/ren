@@ -5,7 +5,7 @@ import { WorkingIn } from "./working-in.js"
 import { useState } from "react"
 import { Composer } from "@ren/chat"
 import { useMutation } from "@tanstack/react-query"
-import { useNavigate } from "@tanstack/react-router"
+import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
@@ -20,16 +20,20 @@ import { Drafts } from "../../lib/drafts.js"
 import { useMentionSuggestions } from "./use-composer-suggestions.js"
 import { RouterContext } from "../../lib/router-context.js"
 
+const route = getRouteApi("/_authed/_shell/")
+
 export function HomePage() {
   const { api, platform } = RouterContext.useRouterContext()
   const me = useMe()
   const navigate = useNavigate()
   const spaces = useSpaces().joined
+  const search = route.useSearch()
   const [remembered, setRemembered] = useState(() => ChatPreferences.homeSpace.read(platform.storage))
-  const kept = Drafts.useDraft(Drafts.fresh)
+  const kept = Drafts.useDraft(search.spaceId ? `new.space.${search.spaceId}` : Drafts.fresh)
   const draft = kept.draft
   const setDraft = kept.set
-  const spaceId = draft.chat?.spaceId ?? spaces.find((space) => space.id === remembered)?.id ?? spaces.at(0)?.id
+  const spaceId =
+    draft.chat?.spaceId ?? spaces.find((space) => space.id === (search.spaceId ?? remembered))?.id ?? spaces.at(0)?.id
   const [createdId, setCreatedId] = useState(() => Session.ID.create())
   const sessionId = draft.chat?.sessionId ?? createdId
   const [sent, setSent] = useState<Composer.Draft>()
@@ -46,6 +50,7 @@ export function HomePage() {
   const chooseSpace = (next: string) => {
     ChatPreferences.homeSpace.write(platform.storage, next)
     setRemembered(next)
+    void navigate({ to: "/", search: { spaceId: next } })
   }
   const chooseModel = (next: SessionModel.Ref) => {
     ChatPreferences.model.write(platform.storage, next)

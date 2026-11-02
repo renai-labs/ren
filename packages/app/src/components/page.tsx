@@ -156,8 +156,12 @@ export function Row(props: {
   children?: ReactNode | undefined
 }) {
   return (
-    <Item render={props.render} className="min-h-14 gap-x-6 gap-y-2 px-4 py-3">
-      {props.media ? <ItemMedia>{props.media}</ItemMedia> : null}
+    <Item render={props.render} className="min-h-14 gap-x-4 gap-y-2 px-4 py-3">
+      {props.media ? (
+        <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
+          {props.media}
+        </ItemMedia>
+      ) : null}
       <ItemContent>
         <ItemTitle className="leading-5">
           {props.title}

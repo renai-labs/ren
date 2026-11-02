@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
-import { IconPlus, IconSearch, IconShield } from "@tabler/icons-react"
+import { IconBan, IconMailForward, IconPlus, IconSearch, IconShield } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import {
@@ -311,9 +311,10 @@ export function MembersSettingsPage() {
                       <RowMenu
                         label="Invitation actions"
                         items={[
-                          { label: "Resend", onSelect: () => resend(invite.email, invite.role) },
+                          { label: "Resend", icon: IconMailForward, onSelect: () => resend(invite.email, invite.role) },
                           {
                             label: "Revoke",
+                            icon: IconBan,
                             onSelect: () => revoke(invite.id, invite.email),
                             confirm: {
                               title: "Revoke invitation?",

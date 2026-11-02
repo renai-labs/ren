@@ -1,14 +1,7 @@
 import { useEffect, useId, useState, type ComponentProps, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Channel } from "@ren/schema/channel"
-import {
-  IconAlertCircle,
-  IconBrandGithub,
-  IconBrandSlack,
-  IconChevronLeft,
-  IconEye,
-  IconEyeOff,
-} from "@tabler/icons-react"
+import { IconAlertCircle, IconChevronLeft, IconEye, IconEyeOff } from "@tabler/icons-react"
 import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { Link } from "@ren/ui/link"
@@ -16,6 +9,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@ren/ui/field"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@ren/ui/input-group"
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@ren/ui/input-otp"
 import { Spinner } from "@ren/ui/spinner"
+import { GitHubMark, SlackMark } from "./brand-marks.js"
 import { destinationHref, type AuthFailure, type Destination } from "../lib/auth.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
@@ -151,7 +145,7 @@ export function GoogleButton(props: { destination: Destination }) {
   )
 }
 
-const socialIcons = { github: IconBrandGithub, slack: IconBrandSlack } as const
+const socialIcons = { github: GitHubMark, slack: SlackMark } as const
 
 export function SocialButton(props: { provider: "github" | "slack"; destination: Destination }) {
   const { api, auth } = RouterContext.useRouterContext()

@@ -1,5 +1,5 @@
-import { Fragment, useState, type ReactNode } from "react"
-import { IconDots } from "@tabler/icons-react"
+import { Fragment, useState } from "react"
+import { IconDots, type Icon } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -13,12 +13,17 @@ import { ConfirmDialog, type Confirmation } from "./confirm-dialog.js"
 
 export interface RowMenuItem {
   readonly label: string
-  readonly icon?: ReactNode | undefined
+  readonly icon: Icon
   readonly onSelect: () => void | Promise<unknown>
   readonly confirm?: Confirmation | undefined
 }
 
-export function RowMenu(props: { label: string; items: ReadonlyArray<RowMenuItem>; className?: string | undefined }) {
+export function RowMenu(props: {
+  label: string
+  items: ReadonlyArray<RowMenuItem>
+  className?: string | undefined
+  side?: "top" | "right" | "bottom" | "left"
+}) {
   const [confirming, setConfirming] = useState<RowMenuItem>()
   if (props.items.length === 0) return null
   return (
@@ -36,7 +41,7 @@ export function RowMenu(props: { label: string; items: ReadonlyArray<RowMenuItem
         >
           <IconDots />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuContent side={props.side ?? "bottom"} align="end" className="w-44">
           <DropdownMenuGroup>
             {props.items.map((item, index) => (
               <Fragment key={item.label}>
@@ -45,7 +50,7 @@ export function RowMenu(props: { label: string; items: ReadonlyArray<RowMenuItem
                   variant={item.confirm ? "destructive" : "default"}
                   onClick={() => (item.confirm ? setConfirming(item) : void item.onSelect())}
                 >
-                  {item.icon}
+                  <item.icon />
                   {item.label}
                 </DropdownMenuItem>
               </Fragment>

@@ -106,8 +106,8 @@ function ScheduleRow(props: { list: Schedules; schedule: ScheduleInfo }) {
             label={`${schedule.name} actions`}
             className="flex text-muted-foreground"
             items={[
-              { label: "Edit", icon: <IconPencil />, onSelect: () => list.edit(schedule) },
-              { label: "Delete", icon: <IconTrash />, onSelect: () => list.setDeleting(schedule) },
+              { label: "Edit", icon: IconPencil, onSelect: () => list.edit(schedule) },
+              { label: "Delete", icon: IconTrash, onSelect: () => list.setDeleting(schedule) },
             ]}
           />
         </span>

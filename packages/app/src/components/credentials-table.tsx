@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react"
 import type { CredentialInfo } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
+import { IconArrowsExchange, IconCopy, IconRefresh, IconTrash } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
@@ -206,14 +207,25 @@ export function CredentialsTable(props: {
                     label={`${credential.label} actions`}
                     items={[
                       ...(canCopy(credential)
-                        ? [{ label: "Rotate", onSelect: () => setEditing({ kind: "rotate", credential }) }]
+                        ? [
+                            {
+                              label: "Rotate",
+                              icon: IconRefresh,
+                              onSelect: () => setEditing({ kind: "rotate", credential }),
+                            },
+                          ]
                         : []),
-                      { label: "Move", onSelect: () => setEditing({ kind: "move", credential }) },
+                      {
+                        label: "Move",
+                        icon: IconArrowsExchange,
+                        onSelect: () => setEditing({ kind: "move", credential }),
+                      },
                       ...(canCopy(credential)
-                        ? [{ label: "Copy", onSelect: () => setEditing({ kind: "copy", credential }) }]
+                        ? [{ label: "Copy", icon: IconCopy, onSelect: () => setEditing({ kind: "copy", credential }) }]
                         : []),
                       {
                         label: "Delete",
+                        icon: IconTrash,
                         onSelect: () =>
                           remove.mutateAsync(
                             { id: credential.id },

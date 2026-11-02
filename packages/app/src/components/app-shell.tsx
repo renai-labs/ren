@@ -31,8 +31,8 @@ function SidebarOpen() {
 
 function ShellSidebar(props: { path: string; onSearch: () => void }) {
   const spaceId = /^\/spaces\/([^/]+)/u.exec(props.path)?.[1]
-  if (spaceId !== undefined) return <SpaceSidebar spaceId={spaceId} />
-  if (/^\/settings(?:\/|$)/u.test(props.path)) return <SettingsSidebar />
+  if (spaceId !== undefined) return <SpaceSidebar spaceId={spaceId} onSearch={props.onSearch} />
+  if (/^\/settings(?:\/|$)/u.test(props.path)) return <SettingsSidebar onSearch={props.onSearch} />
   return <AppSidebar onSearch={props.onSearch} />
 }
 
