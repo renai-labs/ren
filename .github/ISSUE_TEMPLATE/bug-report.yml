@@ -29,6 +29,8 @@ body:
         - SDK / client
         - Web app
         - Docs site
+        - Inference (model gateway)
+        - Integrations
         - Other
     validations:
       required: true
