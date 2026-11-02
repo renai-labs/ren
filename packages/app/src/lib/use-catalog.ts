@@ -1,22 +1,31 @@
 import { useQuery } from "@tanstack/react-query"
-import { pickerPageSize } from "./pagination.js"
+import { allPages } from "./pagination.js"
 import { fromApp, fromRegistry } from "./apps.js"
 import { RouterContext } from "./router-context.js"
 
+const allKey = (resource: "app" | "app-registry" | "app-profile") => [resource, "all"] as const
+
 export function useCatalog() {
-  const { api } = RouterContext.useRouterContext()
-  const apps = useQuery(api.app.list.queryOptions({ page: 1, pageSize: pickerPageSize }))
-  const registry = useQuery(api["app-registry"].list.queryOptions({ page: 1, pageSize: pickerPageSize }))
+  const { client } = RouterContext.useRouterContext()
+  const apps = useQuery({
+    queryKey: allKey("app"),
+    queryFn: (context) => allPages((page) => client.app.list(page, { signal: context.signal })),
+  })
+  const registry = useQuery({
+    queryKey: allKey("app-registry"),
+    queryFn: (context) => allPages((page) => client["app-registry"].list(page, { signal: context.signal })),
+  })
   const profiles = useQuery({
-    ...api["app-profile"].list.queryOptions({ page: 1, pageSize: pickerPageSize }),
+    queryKey: allKey("app-profile"),
+    queryFn: (context) => allPages((page) => client["app-profile"].list(page, { signal: context.signal })),
     refetchOnWindowFocus: "always",
   })
-  const own = (apps.data?.items ?? []).map(fromApp)
-  const listed = (registry.data?.items ?? []).map(fromRegistry)
+  const own = (apps.data ?? []).map(fromApp)
+  const listed = (registry.data ?? []).map(fromRegistry)
   const ownById = new Map(own.map((app) => [app.id, app]))
   const listedIds = new Set(listed.map((app) => app.id))
   const catalog = [...listed.map((app) => ownById.get(app.id) ?? app), ...own.filter((app) => !listedIds.has(app.id))]
-  const all = profiles.data?.items ?? []
+  const all = profiles.data ?? []
   return {
     loading: apps.isPending || registry.isPending || profiles.isPending,
     apps: catalog,

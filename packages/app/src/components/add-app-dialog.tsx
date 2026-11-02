@@ -1,14 +1,22 @@
 import { useState } from "react"
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
 import { IconPlus, IconSearch } from "@tabler/icons-react"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
+import { Loading } from "@ren/ui/loading"
 import { useAddition, type Added } from "./add-to-space.js"
 import { AppRow } from "./app-list.js"
+import { LoadMore } from "./load-more.js"
+import { fromRegistry, type CatalogApp } from "../lib/apps.js"
+import { RouterContext } from "../lib/router-context.js"
 import { useCatalog } from "../lib/use-catalog.js"
+import { useDebouncedValue } from "../lib/use-debounced-value.js"
 import { cn } from "cn"
 
-type CatalogApp = ReturnType<typeof useCatalog>["apps"][number]
+const registryPageSize = 50
+
+const registryPagesKey = (query: string) => ["app-registry", "pages", { pageSize: registryPageSize, query }] as const
 
 function AddAppRow(props: { app: CatalogApp; space: { id: string; name: string }; onAdded: Added }) {
   const addition = useAddition(props.app, props.onAdded)
@@ -40,8 +48,8 @@ function AddAppRow(props: { app: CatalogApp; space: { id: string; name: string }
 const matches = (app: { name: string; description: string }, query: string) =>
   `${app.name} ${app.description}`.toLowerCase().includes(query.trim().toLowerCase())
 
-function emptyText(catalog: { readonly loading: boolean }, query: string, space: string) {
-  if (catalog.loading) return "Loading apps…"
+function emptyText(list: { readonly loading: boolean }, query: string, space: string) {
+  if (list.loading) return "Loading apps…"
   if (query) return `Nothing matches “${query.trim()}”`
   return `${space} has every app`
 }
@@ -57,8 +65,30 @@ export function AddAppDialog(props: {
   const open = props.open ?? ownOpen
   const setOpen = props.onOpenChange ?? setOwnOpen
   const [query, setQuery] = useState("")
+  const needle = useDebouncedValue(query.trim(), 250)
+  const { client } = RouterContext.useRouterContext()
   const catalog = useCatalog()
-  const found = catalog.apps.filter((app) => !props.added.has(app.id) && matches(app, query))
+  const registry = useInfiniteQuery({
+    queryKey: registryPagesKey(needle),
+    queryFn: (context) =>
+      client["app-registry"].list(
+        { page: context.pageParam, pageSize: registryPageSize, ...(needle && { query: needle }) },
+        { signal: context.signal },
+      ),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page * last.pageSize < last.total ? last.page + 1 : undefined),
+    placeholderData: keepPreviousData,
+    enabled: open,
+  })
+  const listed = (registry.data?.pages.flatMap((page) => page.items) ?? []).map(
+    (app) => catalog.appOf(app.id) ?? fromRegistry(app),
+  )
+  const listedIds = new Set(listed.map((app) => app.id))
+  const custom =
+    registry.isSuccess && !registry.hasNextPage
+      ? catalog.apps.filter((app) => app.source === "custom" && !listedIds.has(app.id) && matches(app, needle))
+      : []
+  const found = [...listed, ...custom].filter((app) => !props.added.has(app.id))
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {props.open === undefined ? (
@@ -93,7 +123,7 @@ export function AddAppDialog(props: {
         >
           {found.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
-              {emptyText(catalog, query, props.space.name)}
+              {emptyText({ loading: registry.isPending || registry.hasNextPage }, needle, props.space.name)}
             </p>
           ) : null}
           {found.map((app) => (
@@ -107,6 +137,20 @@ export function AddAppDialog(props: {
               }}
             />
           ))}
+          {registry.isFetchingNextPage ? (
+            <Loading label="Loading more apps">
+              {Array.from({ length: 3 }, (_, index) => (
+                <AppRow key={index} compact name="Team app" caption="Tools for your team’s work" />
+              ))}
+            </Loading>
+          ) : null}
+          {registry.hasNextPage ? (
+            <LoadMore
+              onVisible={() => {
+                if (!registry.isFetching) void registry.fetchNextPage()
+              }}
+            />
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

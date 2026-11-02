@@ -61,6 +61,7 @@ import { NewSpaceDialog } from "./new-space-dialog.js"
 import { RowMenu } from "./row-menu.js"
 import { errorMessage } from "../lib/errors.js"
 import { formText } from "../lib/format.js"
+import { LoadMore } from "./load-more.js"
 import { Logomark } from "./logomark.js"
 import { PersonAvatar } from "./person-avatar.js"
 import { organizationsOptions } from "../lib/auth.js"
@@ -503,26 +504,6 @@ function ChatStatus(props: { sessionId: string; busy: boolean }) {
   )
 }
 
-function LoadMore(props: { onVisible: () => void }) {
-  return (
-    <li
-      aria-hidden
-      className="h-px"
-      ref={(node) => {
-        if (!node) return
-        const observer = new IntersectionObserver(
-          (entries) => {
-            if (entries.some((entry) => entry.isIntersecting)) props.onVisible()
-          },
-          { rootMargin: "240px 0px" },
-        )
-        observer.observe(node)
-        return () => observer.disconnect()
-      }}
-    />
-  )
-}
-
 export function useChatFilters() {
   const spaces = useSpaces().spaces
   const [filters, setFilters] = useState<Filters>({})
@@ -583,11 +564,13 @@ export function ChatsList(props: { path: string; filters: Filters }) {
           </SidebarMenuItem>
         ))}
         {chatPages.hasNextPage ? (
-          <LoadMore
-            onVisible={() => {
-              if (!chatPages.isFetchingNextPage) void chatPages.fetchNextPage()
-            }}
-          />
+          <li aria-hidden>
+            <LoadMore
+              onVisible={() => {
+                if (!chatPages.isFetchingNextPage) void chatPages.fetchNextPage()
+              }}
+            />
+          </li>
         ) : null}
         {chatPages.isFetchingNextPage ? (
           <li>

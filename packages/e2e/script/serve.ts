@@ -97,6 +97,15 @@ await Effect.runPromise(
             },
             listing: { body: "Answers questions from library docs.", categories: { roles: ["engineer"] } },
           },
+          ...Array.from({ length: 110 }, (_, index) => {
+            const number = String(index + 1).padStart(3, "0")
+            return {
+              slug: `e2e-filler-${number}`,
+              name: `Filler ${number}`,
+              description: `Placeholder app ${number} for paging`,
+              listing: {},
+            }
+          }),
         ],
       }),
     )

@@ -25,3 +25,18 @@ export function pageSlots(page: number, pages: number, siblings = 1): ReadonlyAr
 
 export const lastPageAfterRemoval = (page: number, total: number, size: number, removed = 1) =>
   Math.min(page, pageCount(Math.max(0, total - removed), size))
+
+export async function allPages<Item>(
+  list: (input: {
+    page: number
+    pageSize: number
+  }) => Promise<{ readonly items: ReadonlyArray<Item>; readonly total: number }>,
+) {
+  const first = await list({ page: 1, pageSize: pickerPageSize })
+  const rest = await Promise.all(
+    Array.from({ length: pageCount(first.total, pickerPageSize) - 1 }, (_, index) =>
+      list({ page: index + 2, pageSize: pickerPageSize }),
+    ),
+  )
+  return [first, ...rest].flatMap((page) => page.items)
+}
