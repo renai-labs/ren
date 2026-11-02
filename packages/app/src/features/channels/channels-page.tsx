@@ -22,7 +22,7 @@ export function ChannelsSettingsPage() {
     })),
   }))
   return (
-    <Page title="@Ren" description="Invoke Ren from where your team already works.">
+    <Page title="@mentions" description="Invoke Ren from where your team already works.">
       {sections.map((section) => (
         <Section key={section.title} title={section.title} description={section.description}>
           <Rows>
@@ -30,7 +30,7 @@ export function ChannelsSettingsPage() {
               <Row
                 key={row.provider.id}
                 title={row.provider.title}
-                media={<ChannelMark provider={row.provider.id} className="size-7" />}
+                media={<ChannelMark provider={row.provider.id} className="size-6" />}
                 description={
                   row.installed ? <span className="text-chart-2">Connected</span> : connectionText(row.offered)
                 }
@@ -42,7 +42,7 @@ export function ChannelsSettingsPage() {
               >
                 {row.installed || row.offered ? (
                   <span className="flex items-center gap-1 text-muted-foreground">
-                    {row.installed ? "Configure" : `Connect ${row.provider.title}`}
+                    {row.installed ? "Configure" : null}
                     <IconChevronRight className="size-4" />
                   </span>
                 ) : null}
