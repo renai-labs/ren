@@ -3,7 +3,6 @@ import { createFileRoute, notFound, redirect } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { ChannelProviderPage } from "../../../../../features/channels/channel-provider-page.js"
 import { errorMessage } from "../../../../../lib/errors.js"
-import { pickerPageSize } from "../../../../../lib/pagination.js"
 import { Channels } from "../../../../../lib/channels.js"
 import { Loader } from "../../../../../lib/loader.js"
 
@@ -20,6 +19,12 @@ export const Route = createFileRoute("/_authed/_shell/settings/channels/$provide
       installed: Schema.optional(Schema.String),
       error: Schema.optional(Schema.String),
       connect: Schema.optional(Schema.Boolean),
+      edit: Schema.optional(Schema.String),
+      add: Schema.optional(Schema.Boolean),
+      place: Schema.optional(Schema.String),
+      q: Schema.optional(Schema.String),
+      page: Schema.optional(Schema.Number),
+      spaces: Schema.optional(Schema.Array(Schema.String)),
     }),
   ),
   loaderDeps: (options) => ({ connect: options.search.connect === true }),
@@ -28,7 +33,7 @@ export const Route = createFileRoute("/_authed/_shell/settings/channels/$provide
     const params = options.params
     Loader.start(
       queryClient.query(options.context.api["channel-connect"]["channel-provider"].list.queryOptions()),
-      queryClient.query(options.context.api.space.list.queryOptions({ page: 1, pageSize: pickerPageSize })),
+      queryClient.query(Channels.spacesOptions(options.context.client)),
     )
     if (!options.deps.connect) {
       Loader.start(queryClient.query(Channels.installsOptions(options.context.api)))
