@@ -13,7 +13,8 @@ export const path = HostMcp.channelPath("slack")
 const instructions = [
   "Slack tools for the Slack workspace connected to this Ren space. Each tool acts as Ren's Slack bot.",
   "Answer the Slack thread that started this session with reply_to_current_thread.",
-  "To share a file you made, show it with show_file before you reply: the reply uploads it to the thread.",
+  "Write two or three sentences, the answer first, in Markdown, never Slack mrkdwn.",
+  "Put longer output in a file: show it with show_file before you reply, and the reply uploads it to the thread.",
 ].join(" ")
 
 const ObjectSchema = Schema.Union([
