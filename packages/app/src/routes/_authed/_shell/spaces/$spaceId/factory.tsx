@@ -5,5 +5,6 @@ import { Routing } from "../../../../../lib/routing.js"
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/factory")({
   head: () => ({ meta: [{ title: "Factory · Space · Ren" }] }),
   validateSearch: Routing.PageSearch,
+  wrapInSuspense: false,
   component: SpaceFactoryTab,
 })

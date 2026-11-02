@@ -1,5 +1,9 @@
-import { Skeleton } from "@ren/ui/skeleton"
-import { TableCell, TableRow } from "@ren/ui/table"
+import { Loading } from "@ren/ui/loading"
+import { Button } from "@ren/ui/button"
+import { Avatar, AvatarFallback } from "@ren/ui/avatar"
+import { SpaceCardFrame } from "./space-card-frame.js"
+import { IconDots } from "@tabler/icons-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Fragment, type ComponentProps, type ReactElement, type ReactNode } from "react"
 import {
   Item,
@@ -174,23 +178,95 @@ export function Row(props: {
   )
 }
 
-export function SkeletonRows(props: { count?: number | undefined }) {
+export function SkeletonRows(props: { count?: number | undefined; label?: string | undefined }) {
   return (
-    <div className="flex flex-col gap-2" aria-hidden>
-      {Array.from({ length: props.count ?? 8 }, (_, index) => (
-        <Skeleton key={index} className="h-9 w-full" />
-      ))}
-    </div>
+    <Loading label={props.label}>
+      <Rows>
+        {Array.from({ length: props.count ?? 4 }, (_, index) => (
+          <Row key={index} title="Loading item" description="Details for this item">
+            <span className="text-sm text-muted-foreground">Item value</span>
+          </Row>
+        ))}
+      </Rows>
+    </Loading>
   )
 }
 
-export function SkeletonCards(props: { count?: number | undefined; columns?: 2 | 3 | undefined }) {
+export function SkeletonTable(props: {
+  columns: ReadonlyArray<string>
+  count?: number | undefined
+  label?: string | undefined
+  toolbar?: boolean | undefined
+}) {
+  const table = (
+    <Loading label={props.label}>
+      <TableCard>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {props.columns.map((column) => (
+                <TableHead key={column}>{column}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: props.count ?? 4 }, (_, index) => (
+              <TableRow key={index}>
+                {props.columns.map((column) => (
+                  <TableCell key={column}>
+                    <span>{column === props.columns[0] ? "Loading item" : "Item details"}</span>
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableCard>
+    </Loading>
+  )
+  if (props.toolbar)
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="min-h-8" />
+        {table}
+      </div>
+    )
+  return table
+}
+
+export function SkeletonCards(props: {
+  count?: number | undefined
+  columns?: 2 | 3 | undefined
+  label?: string | undefined
+}) {
   return (
-    <div className={cn("mt-4 grid gap-4 sm:grid-cols-2", props.columns === 3 && "lg:grid-cols-3")} aria-hidden>
-      {Array.from({ length: props.count ?? (props.columns === 3 ? 6 : 4) }, (_, index) => (
-        <Skeleton key={index} className={cn("w-full rounded-xl", props.columns === 3 ? "h-53.75" : "h-50.5")} />
-      ))}
-    </div>
+    <Loading label={props.label ?? "Loading spaces"}>
+      <div className={cn("mt-4 grid gap-4 sm:grid-cols-2", props.columns === 3 && "lg:grid-cols-3")}>
+        {Array.from({ length: props.count ?? 4 }, (_, index) => (
+          <SpaceCardFrame
+            key={index}
+            title={<span className="truncate text-md/5 font-medium tracking-snug">Team space</span>}
+            description="A shared space for your team."
+            chats="0 chats"
+            menu={
+              <Button variant="ghost" size="icon-sm" aria-label="Space actions">
+                <IconDots />
+              </Button>
+            }
+            members={
+              <Avatar size="sm">
+                <AvatarFallback>TM</AvatarFallback>
+              </Avatar>
+            }
+            apps={
+              <Avatar size="sm">
+                <AvatarFallback>AP</AvatarFallback>
+              </Avatar>
+            }
+          />
+        ))}
+      </div>
+    </Loading>
   )
 }
 
@@ -200,11 +276,16 @@ export function PageSkeleton(props: {
   width?: "column" | "full" | undefined
   body?: "rows" | "cards" | undefined
   columns?: 2 | 3 | undefined
+  children?: ReactNode | undefined
 }) {
   return (
-    <Page title={props.title ?? ""} description={props.description} width={props.width}>
-      <output className="sr-only">Loading</output>
-      {props.body === "cards" ? <SkeletonCards columns={props.columns} /> : <SkeletonRows />}
+    <Page
+      title={props.title ?? ""}
+      description={props.description}
+      width={props.width}
+      actions={<div className="min-h-8" />}
+    >
+      {props.children ?? (props.body === "cards" ? <SkeletonCards columns={props.columns} /> : <SkeletonRows />)}
     </Page>
   )
 }

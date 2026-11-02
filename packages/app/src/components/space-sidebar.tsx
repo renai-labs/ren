@@ -1,5 +1,5 @@
 import type { SpaceInfo } from "@ren/client"
-import { useSuspenseQuery } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import {
   IconApps,
@@ -40,6 +40,7 @@ import { Footer, Header, sidebarRow } from "./sidebar-parts.js"
 import { isSoftwareFactory } from "../lib/factory.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
+import { Seed } from "../lib/seed.js"
 
 const spaceSections = [
   { value: "overview", label: "Overview", icon: IconLayoutDashboard, to: "/spaces/$spaceId" },
@@ -62,7 +63,11 @@ function SpaceIcon(props: { kind: string; className?: string | undefined }) {
   return props.kind === "private" ? <IconLock className={props.className} /> : <IconCube className={props.className} />
 }
 
-function SpaceSwitcher(props: { space: SpaceInfo; section: (typeof spaceSections)[number] }) {
+function SpaceSwitcher(props: {
+  spaceId: string
+  space: SpaceInfo | undefined
+  section: (typeof spaceSections)[number]
+}) {
   const navigate = useNavigate()
   const spaces = useSpaces().spaces
   return (
@@ -72,19 +77,19 @@ function SpaceSwitcher(props: { space: SpaceInfo; section: (typeof spaceSections
           <SidebarMenuButton
             size="lg"
             className={sidebarRow}
-            aria-label={`Switch space (current: ${props.space.name})`}
+            aria-label={`Switch space (current: ${props.space?.name ?? "Space"})`}
           />
         }
       >
-        <SpaceIcon kind={props.space.kind} className="size-4.5" />
-        <span className="flex-1 truncate">{props.space.name}</span>
+        <SpaceIcon kind={props.space?.kind ?? "shared"} className="size-4.5" />
+        <span className="flex-1 truncate">{props.space?.name ?? "Space"}</span>
         <IconSelector className="text-sidebar-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-(--anchor-width) min-w-56">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Spaces</DropdownMenuLabel>
           <DropdownMenuRadioGroup
-            value={props.space.id}
+            value={props.spaceId}
             onValueChange={(spaceId: string) => {
               const target = spaces.find((each) => each.id === spaceId)
               const kanban = props.section.value === "kanban" && !(target && isSoftwareFactory(target))
@@ -104,23 +109,23 @@ function SpaceSwitcher(props: { space: SpaceInfo; section: (typeof spaceSections
   )
 }
 
-function SpaceNav(props: { space: SpaceInfo; current: SpaceSection }) {
+function SpaceNav(props: { spaceId: string; space: SpaceInfo | undefined; current: SpaceSection }) {
   return (
     <SidebarMenu className="gap-1">
       {spaceSections
-        .filter((each) => each.value !== "members" || props.space.kind !== "private")
-        .filter((each) => each.value !== "kanban" || isSoftwareFactory(props.space))
+        .filter((each) => each.value !== "members" || props.space?.kind !== "private")
+        .filter((each) => each.value !== "kanban" || (props.space && isSoftwareFactory(props.space)))
         .map((each) => (
           <SidebarMenuItem key={each.value}>
             <SidebarMenuButton
               className={sidebarRow}
               isActive={props.current === each.value}
-              render={<Link to={each.to} params={{ spaceId: props.space.id }} />}
+              render={<Link to={each.to} params={{ spaceId: props.spaceId }} />}
             >
               <each.icon />
               <span>{each.label}</span>
             </SidebarMenuButton>
-            {each.value === "members" ? (
+            {each.value === "members" && props.space ? (
               <SidebarMenuBadge className="peer-data-[size=default]/menu-button:top-2">
                 {props.space.memberCount}
               </SidebarMenuBadge>
@@ -132,9 +137,12 @@ function SpaceNav(props: { space: SpaceInfo; current: SpaceSection }) {
 }
 
 export function SpaceSidebar(props: { spaceId: string; onSearch: () => void }) {
-  const { api } = RouterContext.useRouterContext()
+  const { api, queryClient } = RouterContext.useRouterContext()
   const path = useLocation({ select: (location) => location.pathname })
-  const space = useSuspenseQuery(api.space.get.queryOptions({ idOrSlug: props.spaceId })).data
+  const space = useQuery({
+    ...api.space.get.queryOptions({ idOrSlug: props.spaceId }),
+    ...Seed.fromList<SpaceInfo>(queryClient, [api.space.list.queryKey()], props.spaceId),
+  }).data
   const current = spaceSectionOf(path)
   const section = spaceSections.find((each) => each.value === current) ?? spaceSections[0]
   return (
@@ -149,14 +157,14 @@ export function SpaceSidebar(props: { spaceId: string; onSearch: () => void }) {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SpaceSwitcher space={space} section={section} />
+            <SpaceSwitcher spaceId={props.spaceId} space={space} section={section} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup className="px-0.5 pt-5">
           <SidebarGroupContent>
-            <SpaceNav space={space} current={current} />
+            <SpaceNav spaceId={props.spaceId} space={space} current={current} />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

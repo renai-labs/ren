@@ -1,3 +1,4 @@
+import { SkeletonRows } from "./page.js"
 import { useState, type ReactNode } from "react"
 import type { AppProfileInfo, AppProfileItem } from "@ren/client"
 import { Credential } from "@ren/schema/credential"
@@ -176,7 +177,7 @@ function ProfileStep(props: {
   if (!profile)
     return (
       <Screen app={app} title={app.name} description={app.description} action={null}>
-        <Spinner className="text-muted-foreground" />
+        <SkeletonRows count={2} label="Loading account" />
       </Screen>
     )
   if (profile.items.every((item) => item.optional || item.status === "ok") && !props.replacing)

@@ -23,7 +23,7 @@ import {
 import { CredentialSheet } from "../../components/credential-sheet.js"
 import { CredentialsTable } from "../../components/credentials-table.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { Row, Rows, SkeletonRows } from "../../components/page.js"
+import { Row, Rows, SkeletonTable } from "../../components/page.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { useMe } from "../../lib/use-me.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
@@ -110,7 +110,7 @@ export function SpaceCredentialsTab() {
         )}
       </div>
       {loading ? (
-        <SkeletonRows count={3} />
+        <SkeletonTable columns={["Key", "Hosts", "Owner", ""]} count={3} label="Loading keys" />
       ) : (
         <CredentialsTable
           credentials={here}

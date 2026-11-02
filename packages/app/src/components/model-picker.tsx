@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { InputGroupButton } from "@ren/ui/input-group"
-import { Skeleton } from "@ren/ui/skeleton"
+import { Loading } from "@ren/ui/loading"
 import { MenuSearch } from "./menu-search.js"
 import { ProviderMark } from "./provider-mark.js"
 import { modelKey } from "../lib/format.js"
@@ -259,7 +259,15 @@ export function ModelPicker(props: {
   onOpenChange?: ((open: boolean) => void) | undefined
 }) {
   const picker = usePicker(props.models, props.value, props.onChange)
-  if (props.loading) return <Skeleton className="ml-auto h-7 w-44 rounded-md" />
+  if (props.loading)
+    return (
+      <Loading label="Loading models" className="ml-auto">
+        <InputGroupButton disabled>
+          Choose model
+          <IconChevronDown />
+        </InputGroupButton>
+      </Loading>
+    )
   if (!picker) return null
   const shared = { picker, disabled: props.disabled, open: props.open, onOpenChange: props.onOpenChange }
   return <ClassicLook {...shared} />

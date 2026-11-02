@@ -1,7 +1,8 @@
 import { RegistryContext } from "@effect/atom-react"
 import { ChatReact } from "@ren/chat/react"
 import { Outlet, useLocation } from "@tanstack/react-router"
-import { useState } from "react"
+import { Suspense, useState } from "react"
+import { RouteSkeleton } from "./route-skeleton.js"
 import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@ren/ui/sidebar"
 import { AppSidebar } from "./app-sidebar.js"
 import { NewTaskDialog, useNewTaskShortcut } from "./new-task-dialog.js"
@@ -56,7 +57,9 @@ export function AppShell() {
               data-slot="page-scroll"
               className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
             >
-              <Outlet />
+              <Suspense fallback={<RouteSkeleton />}>
+                <Outlet />
+              </Suspense>
             </div>
           </SidebarInset>
           <SearchDialog open={searching} onOpenChange={setSearching} />

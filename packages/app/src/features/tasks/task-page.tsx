@@ -1,3 +1,4 @@
+import { SkeletonRows } from "../../components/page.js"
 import { useState, type ReactNode } from "react"
 import type { TaskInfo, TaskUpdateInput } from "@ren/client"
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query"
@@ -349,16 +350,24 @@ function ReviewBanner(props: { task: TaskInfo }) {
 function Subtasks(props: { task: TaskInfo }) {
   const { api } = RouterContext.useRouterContext()
   const task = props.task
-  const subtasks =
-    useQuery({
-      ...api.task.list.queryOptions({ parentId: task.id, includeDone: true, page: 1, pageSize: pickerPageSize }),
-      refetchInterval: refreshEvery,
-    }).data?.items ?? []
+  const listed = useQuery({
+    ...api.task.list.queryOptions({ parentId: task.id, includeDone: true, page: 1, pageSize: pickerPageSize }),
+    refetchInterval: refreshEvery,
+  })
+  const subtasks = listed.data?.items ?? []
+  const total = task.subtasks?.total ?? 0
+  if (listed.isPending && total > 0)
+    return (
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium">Subtasks</h2>
+        <SkeletonRows count={Math.min(total, 3)} label="Loading subtasks" />
+      </section>
+    )
   if (subtasks.length === 0) return null
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium">
-        Subtasks · {task.subtasks?.done ?? 0} of {task.subtasks?.total ?? subtasks.length} done
+        Subtasks · {task.subtasks?.done ?? 0} of {total || subtasks.length} done
       </h2>
       {subtasks.map((subtask) => (
         <Link

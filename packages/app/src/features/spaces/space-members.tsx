@@ -18,6 +18,7 @@ import {
 import { Field, FieldLabel } from "@ren/ui/field"
 import { Spinner } from "@ren/ui/spinner"
 import { ListPagination } from "../../components/list-pagination.js"
+import { SkeletonTable } from "../../components/page.js"
 import { MembersTable } from "../../components/members-table.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
 import { StatusBadge } from "../../components/status-badge.js"
@@ -207,42 +208,46 @@ export function SpaceMembersTab() {
           />
         ) : null}
       </div>
-      <MembersTable
-        rows={rows.filter((row) => `${row.name} ${row.email}`.toLowerCase().includes(needle))}
-        stale={stale}
-        column={{
-          heading: "Status",
-          cell: (row) =>
-            row.pending ? (
-              <StatusBadge tone="neutral">Pending</StatusBadge>
-            ) : (
-              <StatusBadge tone="ok">Active</StatusBadge>
-            ),
-        }}
-        remove={(row) =>
-          row.you || !space.canRemoveMember
-            ? undefined
-            : {
-                title: `Remove ${row.name} from ${space.name}?`,
-                description: "They lose access to this space’s chats, apps and keys.",
-                action: "Remove",
-              }
-        }
-        onRemove={(row: { id: string; name: string }) =>
-          remove.mutateAsync(
-            { id: row.id },
-            {
-              onSuccess: () => {
-                toast.success(`${row.name} removed`)
-                const next = lastPageAfterRemoval(page, total, pageSize)
-                if (next !== page) void navigate({ search: (previous) => ({ ...previous, page: next }) })
+      {members.isPending ? (
+        <SkeletonTable columns={["Name", "Email", "Status", ""]} label="Loading members" />
+      ) : (
+        <MembersTable
+          rows={rows.filter((row) => `${row.name} ${row.email}`.toLowerCase().includes(needle))}
+          stale={stale}
+          column={{
+            heading: "Status",
+            cell: (row) =>
+              row.pending ? (
+                <StatusBadge tone="neutral">Pending</StatusBadge>
+              ) : (
+                <StatusBadge tone="ok">Active</StatusBadge>
+              ),
+          }}
+          remove={(row) =>
+            row.you || !space.canRemoveMember
+              ? undefined
+              : {
+                  title: `Remove ${row.name} from ${space.name}?`,
+                  description: "They lose access to this space’s chats, apps and keys.",
+                  action: "Remove",
+                }
+          }
+          onRemove={(row: { id: string; name: string }) =>
+            remove.mutateAsync(
+              { id: row.id },
+              {
+                onSuccess: () => {
+                  toast.success(`${row.name} removed`)
+                  const next = lastPageAfterRemoval(page, total, pageSize)
+                  if (next !== page) void navigate({ search: (previous) => ({ ...previous, page: next }) })
+                },
+                onError: (error) => toast.error("Could not remove the member", { description: errorMessage(error) }),
               },
-              onError: (error) => toast.error("Could not remove the member", { description: errorMessage(error) }),
-            },
-          )
-        }
-        empty={query ? `Nothing matches “${query.trim()}”` : "No members"}
-      />
+            )
+          }
+          empty={query ? `Nothing matches “${query.trim()}”` : "No members"}
+        />
+      )}
       <div className="flex items-center justify-between gap-4 empty:hidden">
         <ListPagination page={page} pageSize={pageSize} total={total} noun="member" />
       </div>

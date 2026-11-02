@@ -1,4 +1,4 @@
-import { Skeleton } from "@ren/ui/skeleton"
+import { Loading } from "@ren/ui/loading"
 import { EmptyState } from "../../components/empty-state.js"
 import { useState } from "react"
 import type { RenInferenceConnection } from "@ren/client"
@@ -65,28 +65,35 @@ function SubscriptionList(props: {
   onRename: (id: string, label: string) => Promise<unknown>
   onRemove: (connection: ProviderConnection) => void
 }) {
-  if (props.loading)
-    return (
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Skeleton className="h-32 rounded-xl" />
-        <Skeleton className="h-32 rounded-xl" />
-      </div>
-    )
-  if (props.rows.length === 0)
+  if (!props.loading && props.rows.length === 0)
     return <NoSubscriptions product={props.product} unavailable={props.unavailable} onConnect={props.onConnect} />
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      {props.rows.map((connection, index) => (
-        <SubscriptionCard
-          key={connection.id}
-          connection={connection}
-          index={index}
-          onReconnect={() => props.onReconnect(connection)}
-          onRename={(label) => props.onRename(connection.id, label)}
-          onRemove={() => props.onRemove(connection)}
-        />
-      ))}
-    </div>
+    <Loading loading={props.loading} label="Loading subscriptions">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {(props.loading
+          ? Array.from({ length: 2 }, (_, index) => ({
+              id: `sample-${index}`,
+              label: "Team subscription",
+              providerName: props.product,
+              iconUrl: "",
+              status: { tone: "ok" as const, label: "Connected" },
+              canManage: false,
+              canReconnect: false,
+              meters: [],
+            }))
+          : props.rows
+        ).map((connection, index) => (
+          <SubscriptionCard
+            key={connection.id}
+            connection={connection}
+            index={index}
+            onReconnect={() => props.onReconnect(connection)}
+            onRename={(label) => props.onRename(connection.id, label)}
+            onRemove={() => props.onRemove(connection)}
+          />
+        ))}
+      </div>
+    </Loading>
   )
 }
 

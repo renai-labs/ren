@@ -10,7 +10,7 @@ import { AppsTable } from "../../components/apps-table.js"
 import { CredentialSheet, ownerOptions } from "../../components/credential-sheet.js"
 import { CredentialsTable } from "../../components/credentials-table.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { Page, PageTabsList, PageTabsTrigger, SkeletonRows } from "../../components/page.js"
+import { Page, PageTabsList, PageTabsTrigger, SkeletonTable } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { useCatalog } from "../../lib/use-catalog.js"
@@ -96,7 +96,7 @@ function CredentialKeys() {
           empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
         />
       ) : (
-        <SkeletonRows count={4} />
+        <SkeletonTable columns={["Key", "Hosts", "Owner", ""]} label="Loading keys" />
       )}
       <CredentialSheet
         open={adding}
@@ -119,7 +119,7 @@ function OrgApps() {
   const [profile, setProfile] = useState<ProfileTarget>()
   const used = catalog.apps.filter((app) => catalog.profilesOf(app.id).length > 0)
   const app = opened ? catalog.appOf(opened) : undefined
-  if (catalog.loading) return <SkeletonRows count={4} />
+  if (catalog.loading) return <SkeletonTable columns={["App", "Used in", "Status", ""]} label="Loading apps" />
   return (
     <>
       <AppsTable

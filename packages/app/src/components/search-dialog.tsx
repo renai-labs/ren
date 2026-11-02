@@ -1,3 +1,4 @@
+import { Loading } from "@ren/ui/loading"
 import { useState } from "react"
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
@@ -65,6 +66,15 @@ function ChatResults(props: {
   const listed = needle
     ? (found.data?.items ?? [])
     : (recent.data?.pages.flatMap((page) => page.items) ?? []).slice(0, props.limit)
+  if ((needle ? found.isPending : recent.isPending) && listed.length === 0)
+    return (
+      <Loading label="Loading chats">
+        <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
+          <IconMessage className="size-4" />
+          <span>Recent conversation</span>
+        </div>
+      </Loading>
+    )
   if (listed.length === 0) return null
   return (
     <CommandGroup heading={needle ? "Chats" : "Recent chats"}>

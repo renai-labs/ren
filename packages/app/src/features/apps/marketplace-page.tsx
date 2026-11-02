@@ -1,3 +1,4 @@
+import { AppListingSkeleton } from "../../components/app-list.js"
 import { useState, type ReactNode } from "react"
 import { EmptyState } from "../../components/empty-state.js"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
@@ -6,7 +7,7 @@ import { Button } from "@ren/ui/button"
 import { AddToSpace, type Added } from "../../components/add-to-space.js"
 import { AccountList, AppRow, AppSection, AppSheet, SeeAllRow } from "../../components/app-list.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
-import { Page, SkeletonRows } from "../../components/page.js"
+import { Page } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ListPagination } from "../../components/list-pagination.js"
 import { useCatalog } from "../../lib/use-catalog.js"
@@ -144,7 +145,7 @@ export function MarketplacePage() {
       footer={<ListPagination page={page} pageSize={pageSize} total={registry.data?.total ?? 0} noun="app" />}
     >
       {registry.isPending || catalog.loading ? (
-        <SkeletonRows count={6} />
+        <AppListingSkeleton />
       ) : (
         <AppListing
           inUse={usedApps.filter((each) => matches(each, query))}

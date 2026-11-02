@@ -1,3 +1,4 @@
+import { Loading } from "@ren/ui/loading"
 import { cn } from "cn"
 import { useState } from "react"
 import type { TaskActivityInfo, TaskActor, TaskEventInfo } from "@ren/client"
@@ -247,6 +248,18 @@ export function TaskActivity(props: { taskId: string }) {
   return (
     <section className="flex flex-col gap-5">
       <h2 className="text-md font-semibold">Activity</h2>
+      {activity.isPending ? (
+        <Loading label="Loading task activity">
+          <Trace>
+            <TraceLine>
+              <TraceIcon>
+                <IconGhost />
+              </TraceIcon>
+              <TraceTitle>Task activity</TraceTitle>
+            </TraceLine>
+          </Trace>
+        </Loading>
+      ) : null}
       <div className="flex flex-col gap-4">
         {blocksOf(activity.data ?? []).map((block) =>
           block.kind === "events" ? (

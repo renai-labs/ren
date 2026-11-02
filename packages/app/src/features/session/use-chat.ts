@@ -228,6 +228,7 @@ export function useChat(
     people: new Map(members.map((member) => [member.id, { name: member.name, image: member.image }])),
     modelNames: new Map(modelList.map((each) => [each.id, each.name])),
     more: ChatState.more(state, view.viewed),
+    loading: view.loading,
     loadingHistory: ChatState.loadingHistory(state, view.viewed),
     childTitle: child && childTitle(state, child),
     requests: {

@@ -7,7 +7,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+[skullet-reveal].flex > [skullet-pane] {
+  display: flex;
+  flex: 1;
+  flex-direction: inherit;
+  min-width: 0;
+  min-height: 0;
+}
+
 :root {
+  --skullet-base: var(--muted);
+  --skullet-highlight: var(--accent);
+  --skullet-radius: var(--radius);
+  --skullet-animation: pulse;
   color-scheme: light;
 
   --background: #f9f9f9;

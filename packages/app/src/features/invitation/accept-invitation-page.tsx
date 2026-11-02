@@ -1,3 +1,4 @@
+import { AuthSkeleton } from "../../components/auth-skeleton.js"
 import { useState } from "react"
 import type { InvitationPreview } from "@ren/client"
 import { useQuery } from "@tanstack/react-query"
@@ -153,11 +154,7 @@ export function AcceptInvitationPage() {
   }
   const home = () => void navigate({ to: "/" })
   if (preview.isPending && id !== "")
-    return (
-      <AuthLayout title="Loading invitation…" description="">
-        {null}
-      </AuthLayout>
-    )
+    return <AuthSkeleton title="Join your team" fields={[]} action="Accept invitation" />
   if (preview.isError || id === "")
     return (
       <AuthLayout

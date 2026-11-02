@@ -9,7 +9,6 @@ import { Button } from "#components/button"
 import { Input } from "#components/input"
 import { Separator } from "#components/separator"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "#components/sheet"
-import { Skeleton } from "#components/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "#components/tooltip"
 import { IconLayoutSidebar } from "@tabler/icons-react"
 
@@ -533,29 +532,6 @@ function SidebarMenuBadge({ className, ...props }: React.ComponentProps<"div">) 
   )
 }
 
-function SidebarMenuSkeleton({
-  className,
-  showIcon = false,
-  ...props
-}: React.ComponentProps<"div"> & {
-  showIcon?: boolean
-}) {
-  // oxlint-disable-next-line react/hook-use-state -- the width is picked once, between 50% and 90%, and never changes
-  const [width] = React.useState(() => `${Math.floor(Math.random() * 40) + 50}%`)
-
-  return (
-    <div
-      data-slot="sidebar-menu-skeleton"
-      data-sidebar="menu-skeleton"
-      className={cn("flex h-8 items-center gap-2 rounded-md px-2", className)}
-      {...props}
-    >
-      {showIcon ? <Skeleton className="size-4 rounded-md" data-sidebar="menu-skeleton-icon" /> : null}
-      <Skeleton className="h-4 flex-1" data-sidebar="menu-skeleton-text" style={{ maxWidth: width }} />
-    </div>
-  )
-}
-
 function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
   return (
     <ul
@@ -629,7 +605,6 @@ export {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSkeleton,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,

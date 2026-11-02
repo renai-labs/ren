@@ -4,13 +4,14 @@ import { ClientError, Ren } from "@ren/client"
 import { RenQuery } from "@ren/client/react"
 import { hashKey, MutationCache, QueryClient } from "@tanstack/react-query"
 import { createRouter } from "@tanstack/react-router"
-import { PageSkeleton } from "../components/page.js"
+import { RouteSkeleton } from "../components/route-skeleton.js"
 import { RouteError } from "../components/route-error.js"
 import type { Platform } from "../platform/platform.js"
 import { routeTree } from "../route-tree.gen.js"
 import { Auth } from "./auth.js"
 import { OAuthSearch } from "./oauth-search.js"
 import { ProductEvents } from "./product-events.js"
+import { pickerPageSize } from "./pagination.js"
 
 export interface Context {
   readonly platform: Platform.Info
@@ -51,7 +52,14 @@ export function make(platform: Platform.Info) {
       },
     }),
   })
-  queryClient.setQueryDefaults(api.me.get.queryKey().slice(0, 1), { staleTime: Number.POSITIVE_INFINITY })
+  queryClient.setQueryDefaults(api.me.get.queryKey().slice(0, 1), {
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
+  })
+  queryClient.setQueryDefaults(api.space.list.queryKey({ page: 1, pageSize: pickerPageSize }), {
+    gcTime: Number.POSITIVE_INFINITY,
+  })
+  queryClient.setQueryDefaults(Auth.authKeys.canAdminister(), { gcTime: Number.POSITIVE_INFINITY })
   queryClient.setQueryDefaults(api["organization-settings"].get.queryKey(), { staleTime: Number.POSITIVE_INFINITY })
   queryClient.setQueryDefaults(api.chat.models.queryKey(), { staleTime: 10 * 60_000 })
   queryClient.setQueryDefaults(api.task.list.queryKey().slice(0, 1), { staleTime: 30_000 })
@@ -87,7 +95,7 @@ export function make(platform: Platform.Info) {
     defaultPreloadStaleTime: 0,
     defaultPendingMs: 1000,
     defaultPendingMinMs: 500,
-    defaultPendingComponent: PageSkeleton,
+    defaultPendingComponent: RouteSkeleton,
     defaultErrorComponent: RouteError,
     scrollRestoration: true,
     parseSearch: OAuthSearch.parse,

@@ -9,7 +9,7 @@ import { AccountActions } from "../../components/account-actions.js"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { AccountList, AppSheet } from "../../components/app-list.js"
 import { AppsTable } from "../../components/apps-table.js"
-import { SkeletonRows } from "../../components/page.js"
+import { SkeletonTable } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { useCatalog } from "../../lib/use-catalog.js"
 import { errorMessage } from "../../lib/errors.js"
@@ -111,7 +111,7 @@ export function SpaceAppsTab() {
         />
       </div>
       {reach.isPending || catalog.loading ? (
-        <SkeletonRows count={3} />
+        <SkeletonTable columns={["App", "Used in", "Status", ""]} count={3} label="Loading apps" />
       ) : (
         <AppsTable rows={rows} empty="No apps" onOpen={setOpened} onNew={(appId) => setProfile({ appId, from })} />
       )}

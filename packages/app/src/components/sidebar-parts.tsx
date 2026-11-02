@@ -51,7 +51,6 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSkeleton,
   SidebarTrigger,
 } from "@ren/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
@@ -164,7 +163,11 @@ function SpaceChats(props: { space: SpaceInfo; path: string }) {
   return (
     <section aria-label={`Chats in ${props.space.name}`}>
       <SidebarMenu className="gap-px">
-        {chats.isPending ? <SidebarMenuSkeleton className="h-9" /> : null}
+        {chats.isPending ? (
+          <li>
+            <output className="block py-2 pr-2 pl-9 text-sm text-muted-foreground">Loading chats…</output>
+          </li>
+        ) : null}
         {chats.isError ? (
           <SidebarMenuItem>
             <SidebarMenuButton className={cn(sidebarRow, "pl-8.5")} onClick={() => void chats.refetch()}>
@@ -586,13 +589,11 @@ export function ChatsList(props: { path: string; filters: Filters }) {
             }}
           />
         ) : null}
-        {chatPages.isFetchingNextPage
-          ? Array.from({ length: 3 }, (_, index) => (
-              <SidebarMenuItem key={`loading-${index}`}>
-                <SidebarMenuSkeleton className="h-9" />
-              </SidebarMenuItem>
-            ))
-          : null}
+        {chatPages.isFetchingNextPage ? (
+          <li>
+            <output className="block px-2.25 py-2 text-sm text-muted-foreground">Loading more chats…</output>
+          </li>
+        ) : null}
       </SidebarMenu>
     </SidebarGroupContent>
   )

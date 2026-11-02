@@ -9,6 +9,28 @@ import {
   uniqueEmail,
 } from "../lib/servers.js"
 
+test("space placeholders stay inaccessible until the real list arrives", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.addInitScript(() => localStorage.setItem("theme.v1", JSON.stringify("light")))
+  await page.goto("/app/")
+  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible()
+  const held = Promise.withResolvers<void>()
+  await page.route(/\/spaces\?.*pageSize=25/, async (route) => {
+    await held.promise
+    await route.continue()
+  })
+  try {
+    await page.getByRole("link", { name: "All spaces", exact: true }).click()
+    await expect(page.getByRole("status", { name: "Loading spaces" })).toBeVisible()
+    await expect(page.getByRole("link", { name: "General Space", exact: true })).toHaveCount(0)
+    await page.screenshot({ path: test.info().outputPath("spaces-loading-light.png") })
+  } finally {
+    held.resolve()
+  }
+  await expect(page.getByRole("status", { name: "Loading spaces" })).toHaveCount(0)
+  await expect(page.getByRole("link", { name: "General Space", exact: true })).toBeVisible()
+})
+
 test("a new organization starts with a protected shared space and a personal space", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await page.goto("/app/")
