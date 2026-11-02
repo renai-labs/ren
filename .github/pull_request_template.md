@@ -14,9 +14,6 @@ What ran, and what did not.
 
 Only for a change people see, or a motion that text cannot show: proof of the final state.
 
-<!-- qa-evidence:start -->
-<!-- qa-evidence:end -->
-
 ### Checklist
 
 - [ ] I regenerated and committed generated files if the API contract changed
