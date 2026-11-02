@@ -43,7 +43,7 @@ export function NewSpaceDialog(props: { open: boolean; onOpenChange: (open: bool
           <FieldGroup className="gap-4">
             <Field>
               <FieldLabel htmlFor="space-name">Name</FieldLabel>
-              <Input id="space-name" name="name" required placeholder="My space" />
+              <Input id="space-name" name="title" required placeholder="Support team" />
             </Field>
             <Field>
               <FieldLabel htmlFor="space-description">
