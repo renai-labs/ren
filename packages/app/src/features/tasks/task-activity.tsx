@@ -117,9 +117,7 @@ function ActorMark(props: { actor: TaskActor; names: Names }) {
   return (
     <Avatar size="sm" className="data-[size=sm]:size-4">
       {image ? <AvatarImage src={image} alt="" /> : null}
-      <AvatarFallback className="bg-secondary text-2xs">
-        {props.names.actor(props.actor).charAt(0).toUpperCase()}
-      </AvatarFallback>
+      <AvatarFallback className="text-2xs">{props.names.actor(props.actor).charAt(0).toUpperCase()}</AvatarFallback>
     </Avatar>
   )
 }

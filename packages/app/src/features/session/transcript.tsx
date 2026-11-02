@@ -430,7 +430,7 @@ function UserMessage(props: {
       <MessageAvatar className="ml-3.5">
         <Avatar size="sm">
           {props.person.image ? <AvatarImage src={props.person.image} alt="" /> : null}
-          <AvatarFallback className="bg-secondary">{props.person.name.charAt(0)}</AvatarFallback>
+          <AvatarFallback>{props.person.name.charAt(0)}</AvatarFallback>
         </Avatar>
       </MessageAvatar>
       <MessageContent className={props.editing ? "w-full" : undefined}>
