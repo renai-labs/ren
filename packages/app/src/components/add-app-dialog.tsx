@@ -54,6 +54,61 @@ function emptyText(list: { readonly loading: boolean }, query: string, space: st
   return `${space} has every app`
 }
 
+function useRegistryPages(query: string, options: { enabled: boolean }) {
+  const { client } = RouterContext.useRouterContext()
+  return useInfiniteQuery({
+    queryKey: registryPagesKey(query),
+    queryFn: (context) =>
+      client["app-registry"].list(
+        { page: context.pageParam, pageSize: registryPageSize, ...(query && { query }) },
+        { signal: context.signal },
+      ),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page * last.pageSize < last.total ? last.page + 1 : undefined),
+    placeholderData: keepPreviousData,
+    enabled: options.enabled,
+  })
+}
+
+function NextPage(props: { registry: ReturnType<typeof useRegistryPages> }) {
+  const registry = props.registry
+  if (registry.isError)
+    return (
+      <div role="alert" className="flex items-center justify-center gap-3 py-4 text-sm text-muted-foreground">
+        {registry.isFetchNextPageError ? "Couldn’t load more apps" : "Couldn’t load apps"}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={registry.isFetching}
+          onClick={() => {
+            if (registry.isFetchNextPageError) void registry.fetchNextPage()
+            else void registry.refetch()
+          }}
+        >
+          Retry
+        </Button>
+      </div>
+    )
+  return (
+    <>
+      {registry.isFetchingNextPage ? (
+        <Loading label="Loading more apps">
+          {Array.from({ length: 3 }, (_, index) => (
+            <AppRow key={index} compact name="Team app" caption="Tools for your team’s work" />
+          ))}
+        </Loading>
+      ) : null}
+      {registry.hasNextPage ? (
+        <LoadMore
+          onVisible={() => {
+            if (!registry.isFetching) void registry.fetchNextPage()
+          }}
+        />
+      ) : null}
+    </>
+  )
+}
+
 export function AddAppDialog(props: {
   space: { id: string; name: string }
   added: ReadonlySet<string>
@@ -66,20 +121,8 @@ export function AddAppDialog(props: {
   const setOpen = props.onOpenChange ?? setOwnOpen
   const [query, setQuery] = useState("")
   const needle = useDebouncedValue(query.trim(), 250)
-  const { client } = RouterContext.useRouterContext()
   const catalog = useCatalog()
-  const registry = useInfiniteQuery({
-    queryKey: registryPagesKey(needle),
-    queryFn: (context) =>
-      client["app-registry"].list(
-        { page: context.pageParam, pageSize: registryPageSize, ...(needle && { query: needle }) },
-        { signal: context.signal },
-      ),
-    initialPageParam: 1,
-    getNextPageParam: (last) => (last.page * last.pageSize < last.total ? last.page + 1 : undefined),
-    placeholderData: keepPreviousData,
-    enabled: open,
-  })
+  const registry = useRegistryPages(needle, { enabled: open })
   const listed = (registry.data?.pages.flatMap((page) => page.items) ?? []).map(
     (app) => catalog.appOf(app.id) ?? fromRegistry(app),
   )
@@ -121,7 +164,7 @@ export function AddAppDialog(props: {
           aria-label="Apps"
           className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-4"
         >
-          {found.length === 0 ? (
+          {found.length === 0 && !registry.isError ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
               {emptyText({ loading: registry.isPending || registry.hasNextPage }, needle, props.space.name)}
             </p>
@@ -137,20 +180,7 @@ export function AddAppDialog(props: {
               }}
             />
           ))}
-          {registry.isFetchingNextPage ? (
-            <Loading label="Loading more apps">
-              {Array.from({ length: 3 }, (_, index) => (
-                <AppRow key={index} compact name="Team app" caption="Tools for your team’s work" />
-              ))}
-            </Loading>
-          ) : null}
-          {registry.hasNextPage ? (
-            <LoadMore
-              onVisible={() => {
-                if (!registry.isFetching) void registry.fetchNextPage()
-              }}
-            />
-          ) : null}
+          <NextPage registry={registry} />
         </div>
       </DialogContent>
     </Dialog>
