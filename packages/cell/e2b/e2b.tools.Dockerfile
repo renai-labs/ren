@@ -5,9 +5,9 @@
 
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends \
-    sudo build-essential golang-go python3 python3-pip python3-venv sqlite3 unzip jq \
-    ffmpeg docker.io docker-compose \
-    xvfb xdg-utils chromium libgtk-3-0 libnss3 libgbm1 libasound2 \
+    sudo build-essential python3 python3-pip python3-venv sqlite3 unzip jq \
+    ffmpeg docker.io docker-cli docker-compose \
+    xvfb xdg-utils chromium libgtk-3-0 libnss3 libnss3-tools libgbm1 libasound2 \
   && rm -rf /var/lib/apt/lists/* \
   && ln -sf /usr/bin/python3 /usr/local/bin/python
 
@@ -16,6 +16,13 @@ RUN curl -fsSL -o /tmp/node.tar.gz https://nodejs.org/dist/v24.22.1/node-v24.22.
   && tar -xzf /tmp/node.tar.gz -C /usr/local --strip-components=1 --no-same-owner \
   && rm -f /tmp/node.tar.gz \
   && test "$(node --version)" = "v24.22.1"
+
+RUN curl -fsSL -o /tmp/go.tar.gz https://go.dev/dl/go1.27.3.linux-amd64.tar.gz \
+  && echo "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40  /tmp/go.tar.gz" | sha256sum -c - \
+  && tar -xzf /tmp/go.tar.gz -C /usr/local \
+  && rm -f /tmp/go.tar.gz \
+  && ln -sf /usr/local/go/bin/go /usr/local/go/bin/gofmt /usr/local/bin/ \
+  && test "$(go env GOVERSION)" = "go1.27.3"
 
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
