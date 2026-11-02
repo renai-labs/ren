@@ -598,7 +598,7 @@ export function ChatsList(props: { path: string; filters: Filters }) {
   )
 }
 
-export function UserRow() {
+function UserRow() {
   const { auth, platform, queryClient } = RouterContext.useRouterContext()
   const navigate = useNavigate()
   const me = useMe()
@@ -704,7 +704,7 @@ export function UserRow() {
   )
 }
 
-export function HelpAndSettings() {
+function HelpAndSettings() {
   const platform = Platform.usePlatform()
   return (
     <div className="flex shrink-0">
