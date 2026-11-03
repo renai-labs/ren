@@ -6,6 +6,7 @@ import {
   TimelineText,
   ToolDisplay,
   ToolState,
+  TranscriptBlocks,
   type ChatAtoms,
 } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
@@ -38,7 +39,6 @@ import {
 } from "@ren/ui/trace"
 import { Markdown } from "../../components/markdown.js"
 import { toolIcons } from "./tool-icons.js"
-import { useSubagentCard } from "./chat-view.js"
 import { ImageThumbnail } from "../../components/image-set.js"
 import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
@@ -47,7 +47,6 @@ import { InlineFile } from "./file-chip.js"
 import { DiffFile } from "./diff-file.js"
 import { OpenPanel } from "./open-panel.js"
 import { workspacePath } from "./workspace-edits.js"
-import { TranscriptBlocks } from "./transcript-blocks.js"
 
 function Output(props: { text: string; failed?: boolean | undefined; quotable?: string | undefined }) {
   return (
@@ -283,7 +282,7 @@ function LiveShell(props: { tool: SessionMessage.Tool; shellID: Shell.ID }) {
   )
 }
 
-type Card = ReturnType<typeof useSubagentCard>
+type Card = ReturnType<typeof ChatReact.useSubagentCard>
 
 function subagentTitle(card: Card) {
   if (card.needsInput) return "Needs your input"
@@ -327,7 +326,7 @@ function Opener(props: { label: string; onOpen: (() => void) | undefined; childr
 
 function SubagentStep(props: { tool: SessionMessage.Tool }) {
   const timeline = useTimeline()
-  const card = useSubagentCard(timeline.view, props.tool)
+  const card = ChatReact.useSubagentCard(timeline.view, props.tool)
   const state = subagentState(card, props.tool)
   const child = state.child
   const open = child ? () => timeline.onOpenChild(child) : undefined

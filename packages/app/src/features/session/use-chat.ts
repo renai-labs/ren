@@ -1,13 +1,23 @@
+import { Seed, SessionPages } from "@ren/client/react"
 import { useState } from "react"
 import { useAtomRefresh } from "@effect/atom-react"
-import { ChatState, ClientCommand, Composer, SessionTasks, type ChatSession, type Family } from "@ren/chat"
+import {
+  ChatState,
+  ClientCommand,
+  Composer,
+  SessionLive,
+  SessionTasks,
+  SessionTitle,
+  type ChatSession,
+  type Family,
+} from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import type { SessionInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Effect, Option, SubscriptionRef } from "effect"
+import { Option } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { toast } from "@ren/ui/sonner"
 import { Preference } from "../../lib/preference.js"
@@ -20,28 +30,13 @@ import { useModels } from "../../lib/use-models.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useComposerSuggestions } from "./use-composer-suggestions.js"
-import { childTitle, notificationsOf, useView } from "./chat-view.js"
-import { Seed } from "../../lib/seed.js"
-import { sessionKeys, useChatCacheBridge } from "../../lib/chat.js"
-import { sessionTitle } from "../../lib/sessions.js"
+import { notificationsOf } from "./chat-view.js"
 import { Notify } from "../../lib/notify.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Drafts } from "../../lib/drafts.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { useShellHistory } from "../../lib/use-shell-history.js"
-
-const statusesOf = (state: ChatState.State, sessionID: Session.ID): ReadonlyMap<string, ChatState.PendingStatus> =>
-  new Map(
-    ChatState.pending(state, sessionID).flatMap((item) => {
-      const status = item.type === "user" ? ChatState.pendingStatus(state, sessionID, item.id) : undefined
-      return status ? [[item.id, status] as const] : []
-    }),
-  )
-
-const known = (state: ChatState.State, sessionID: Session.ID, id: SessionMessage.ID) =>
-  ChatState.messages(state, sessionID).some((message) => message.id === id) ||
-  ChatState.pending(state, sessionID).some((item) => item.id === id)
 
 export interface WorkspaceCommands {
   readonly openTerminal: () => void
@@ -160,17 +155,6 @@ const capabilitiesOf = (info: { readonly capabilities: SessionInfo["capabilities
   canReadFiles: info?.capabilities.files === true,
 })
 
-const bridgeOf = (
-  info: { readonly title?: string | null | undefined } | undefined,
-  state: { readonly running: boolean },
-) =>
-  info
-    ? {
-        title: sessionTitle(info.title, "") || undefined,
-        status: state.running ? ("busy" as const) : ("idle" as const),
-      }
-    : {}
-
 const viewerOf = (user: {
   readonly id: string
   readonly name: string
@@ -223,16 +207,20 @@ export function useChat(
   const child = childOf(options, localChild)
   const stored = useQuery({
     ...api.session.get.queryOptions({ idOrSlug: params.sessionId }),
-    ...Seed.fromList<SessionInfo>(queryClient, [api.session.list.queryKey(), sessionKeys.infinite()], params.sessionId),
+    ...Seed.fromList<SessionInfo>(
+      queryClient,
+      [api.session.list.queryKey(), SessionPages.keys.all()],
+      params.sessionId,
+    ),
   })
   const detail = Preference.usePreference(ChatPreferences.timelineDetail)
   const fold = Preference.usePreference(ChatPreferences.foldTurns)
   const backgroundActivity = Preference.usePreference(ChatPreferences.backgroundActivity)
-  const view = useView(root, child, detail)
+  const view = ChatReact.useView(root, child, detail)
   const state = view.state
   const info = state.info[root]
   const running = ChatState.activity(state, root) === "running"
-  const title = sessionTitle(info?.title ?? stored.data?.title)
+  const title = SessionTitle.display(info?.title ?? stored.data?.title)
   const spaceId = stored.data?.spaceId
   const spaceName = useSpaces().spaceName(spaceId)
   const members = useMembers().members
@@ -250,16 +238,7 @@ export function useChat(
   const abilities = capabilitiesOf(info)
   const boot = AsyncResult.getOrElse(view.session.boot, () => undefined)
   const connection = AsyncResult.getOrElse(view.session.status, () => undefined)
-  const prompt = ChatReact.useAction(root, (opened, request: ChatSession.PromptInput) =>
-    opened.prompt(request).pipe(
-      Effect.retry({ times: 1 }),
-      Effect.catch((error) =>
-        Effect.flatMap(SubscriptionRef.get(opened.state), (current) =>
-          request.id && known(current, root, request.id) ? Effect.void : Effect.fail(error),
-        ),
-      ),
-    ),
-  )
+  const prompt = ChatReact.usePrompt(root)
   const runShell = ChatReact.useAction(root, (opened, command: string) => opened.runShell(command))
   const shellHistory = useShellHistory()
   const retryMessage = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.retryMessage(id))
@@ -290,7 +269,7 @@ export function useChat(
   const foldMessages = Preference.usePreference(ChatPreferences.foldMessages)
   const blocked = Boolean(view.permission ?? view.form)
   Notify.useChatNotifications({ root, title, running, ...notificationsOf(state, root) })
-  useChatCacheBridge(root, bridgeOf(info, { running }))
+  SessionPages.useLive(api, root, SessionLive.of(state, root))
 
   const model = pickModel(modelList, [saved, info?.model])
   const suggestions = useChatSuggestions({
@@ -335,13 +314,13 @@ export function useChat(
     background: backgroundWork,
     backgroundActivity,
     working: view.working,
-    statuses: statusesOf(state, view.viewed),
+    statuses: ChatState.pendingStatuses(state, view.viewed),
     people: new Map(members.map((member) => [member.id, { name: member.name, image: member.image }])),
     modelNames: new Map(modelList.map((each) => [each.id, each.name])),
     more: ChatState.more(state, view.viewed),
     loading: view.loading,
     loadingHistory: ChatState.loadingHistory(state, view.viewed),
-    childTitle: child && childTitle(state, child),
+    childTitle: child && SessionTitle.child(state, child),
     requests: {
       permission: view.permission,
       permissionTitle: view.permissionTitle,

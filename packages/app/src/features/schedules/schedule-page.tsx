@@ -1,3 +1,4 @@
+import { Seed } from "@ren/client/react"
 import { useState } from "react"
 import type { ScheduleInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -13,7 +14,6 @@ import { errorMessage } from "../../lib/errors.js"
 import { Loader } from "../../lib/loader.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { describe, localTimeZone, runColumns, statusOf } from "../../lib/schedules.js"
-import { Seed } from "../../lib/seed.js"
 import { useNow } from "../../lib/use-now.js"
 import { ScheduleRuns } from "./schedule-runs.js"
 

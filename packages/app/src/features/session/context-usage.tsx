@@ -1,3 +1,4 @@
+import type { ChatReact } from "@ren/chat/react"
 import { useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@ren/ui/button"
@@ -5,7 +6,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { cn } from "cn"
 import { formatCount, formatMicroUsd, formatTokens } from "../../lib/format.js"
 import { RouterContext } from "../../lib/router-context.js"
-import type { ContextUsage as Usage } from "./chat-view.js"
 
 const amberFrom = 70
 const redFrom = 90
@@ -80,7 +80,7 @@ function Cost(props: { sessionId: string; open: boolean }) {
 
 export function ContextUsage(props: {
   sessionId: string
-  usage: Usage | undefined
+  usage: ChatReact.ContextUsage | undefined
   onCompact: (() => void) | undefined
 }) {
   const [open, setOpen] = useState(false)

@@ -1,3 +1,4 @@
+import { Seed } from "@ren/client/react"
 import { Fragment, lazy, Suspense, useState } from "react"
 import {
   IconArchive,
@@ -46,7 +47,6 @@ import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { fromRegistry, isBundle, listsSpace, statusOf, type CatalogApp, type Status } from "../../lib/apps.js"
 import { ReducedMotion } from "../../lib/reduced-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { Seed } from "../../lib/seed.js"
 import { ShareRequest } from "./share-request.js"
 
 const route = getRouteApi("/_authed/_shell/apps/$appId/")

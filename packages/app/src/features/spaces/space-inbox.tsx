@@ -1,3 +1,6 @@
+import { SessionTitle } from "@ren/chat"
+import { SessionPages } from "@ren/client/react"
+import { RelativeTime } from "@ren/util/relative-time"
 import type { SessionInfo } from "@ren/client"
 import { IconCircle, IconHandStop, IconPlus, IconProgress } from "@tabler/icons-react"
 import { keepPreviousData, useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query"
@@ -6,7 +9,7 @@ import { Loading } from "@ren/ui/loading"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Tabs } from "@ren/ui/tabs"
 import { buttonVariants } from "@ren/ui/button"
-import { formatDateTime, formatRelative } from "@ren/ui/time"
+import { formatDateTime } from "@ren/ui/time"
 import { cn } from "cn"
 import { LoadMore } from "../../components/load-more.js"
 import {
@@ -21,14 +24,7 @@ import {
 } from "../../components/page.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
 import { RouterContext } from "../../lib/router-context.js"
-import {
-  inboxColumns,
-  origins,
-  ownChats,
-  sessionTitle,
-  sidebarSessionsOptions,
-  useChatAttention,
-} from "../../lib/sessions.js"
+import { inboxColumns, origins, useChatAttention } from "../../lib/sessions.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
@@ -75,10 +71,10 @@ function ChatRow(props: { chat: SessionInfo; agent: string; now: number }) {
             to="/sessions/$sessionId"
             params={{ sessionId: chat.id }}
             onClick={(event) => event.stopPropagation()}
-            title={sessionTitle(chat.title)}
+            title={SessionTitle.display(chat.title)}
             className="block min-w-0 truncate rounded-sm text-foreground outline-none focus-visible:underline"
           >
-            {sessionTitle(chat.title)}
+            {SessionTitle.display(chat.title)}
           </Link>
           <ChatState chat={chat} />
         </span>
@@ -101,7 +97,7 @@ function ChatRow(props: { chat: SessionInfo; agent: string; now: number }) {
         ) : null}
       </TableCell>
       <TableCell className="text-muted-foreground tabular-nums" title={formatDateTime(chat.updatedAt)}>
-        {formatRelative(chat.updatedAt, props.now)}
+        {RelativeTime.format(chat.updatedAt, props.now)}
       </TableCell>
     </TableRow>
   )
@@ -118,7 +114,7 @@ export function SpaceInbox(props: { mine: boolean; onMineChange: (mine: boolean)
     agentId === null ? "Ren" : (agents.find((agent) => agent.id === agentId)?.name ?? "Archived agent")
   const shapeId = useShapeId("inbox")
   const list = useInfiniteQuery({
-    ...sidebarSessionsOptions(client, { spaceId: [space.id], ...(props.mine && ownChats(me.user.id)) }),
+    ...SessionPages.options(client, { spaceId: [space.id], ...(props.mine && SessionPages.own(me.user.id)) }),
     placeholderData: keepPreviousData,
   })
   const chats = list.data?.pages.flatMap((page) => page.items)

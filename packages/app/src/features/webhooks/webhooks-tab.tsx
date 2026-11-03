@@ -1,3 +1,4 @@
+import { RelativeTime } from "@ren/util/relative-time"
 import { useState } from "react"
 import type { AppInfo, WebhookInfo } from "@ren/client"
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query"
@@ -14,7 +15,6 @@ import { Spinner } from "@ren/ui/spinner"
 import { Switch } from "@ren/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Textarea } from "@ren/ui/textarea"
-import { formatRelative } from "@ren/ui/time"
 import { EmptyState } from "../../components/empty-state.js"
 import { SpaceField } from "../../components/space-field.js"
 import { PageActions, TableCard, TableSample, useShapeId } from "../../components/page.js"
@@ -37,7 +37,7 @@ function LastRequest(props: { webhook: WebhookInfo; now: number }) {
   if (!last) return <span className="text-muted-foreground">—</span>
   return (
     <span className="text-muted-foreground">
-      {formatRelative(last.receivedAt, props.now)} · {Webhooks.outcomes[last.outcome].label.toLowerCase()}
+      {RelativeTime.format(last.receivedAt, props.now)} · {Webhooks.outcomes[last.outcome].label.toLowerCase()}
       {last.broken ? " · broken" : ""}
     </span>
   )

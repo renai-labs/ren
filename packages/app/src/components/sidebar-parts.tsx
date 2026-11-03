@@ -1,4 +1,6 @@
 import type { SpaceInfo } from "@ren/client"
+import { SessionTitle } from "@ren/chat"
+import { SessionPages } from "@ren/client/react"
 import { useState, type ReactNode } from "react"
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
@@ -71,15 +73,7 @@ import { organizationsOptions } from "../lib/auth.js"
 import { resetSession } from "../lib/chat.js"
 import { initials } from "../lib/format.js"
 import { docsUrl, founderCallUrl } from "../lib/links.js"
-import {
-  isOrigin,
-  origins,
-  ownChats,
-  sessionTitle,
-  sidebarSessionsOptions,
-  useChatAttention,
-  type SessionFilter,
-} from "../lib/sessions.js"
+import { isOrigin, origins, useChatAttention } from "../lib/sessions.js"
 import { Preference } from "../lib/preference.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
@@ -360,12 +354,12 @@ const startOfDayAgo = (daysAgo: number) =>
     ),
   ).toISOString()
 
-const chatFilter = (filters: Filters, userId: string): SessionFilter => {
+const chatFilter = (filters: Filters, userId: string): SessionPages.Filter => {
   const status = filters.status?.length === 1 ? filters.status.at(0) : undefined
   const updated = (["today", "week", "month"] as const).find((key) => key === filters.updated?.at(0))
   const origin = (filters.origin ?? []).filter(isOrigin)
   return {
-    ...ownChats(userId),
+    ...SessionPages.own(userId),
     ...(filters.space?.length && { spaceId: filters.space }),
     ...((status === "idle" || status === "busy") && { status }),
     ...(origin.length > 0 && { origin }),
@@ -467,7 +461,7 @@ export function ChatsList(props: { path: string; filters: Filters; filtered: boo
   const { client } = RouterContext.useRouterContext()
   const me = useMe()
   const chatPages = useInfiniteQuery({
-    ...sidebarSessionsOptions(client, chatFilter(props.filters, me.user.id)),
+    ...SessionPages.options(client, chatFilter(props.filters, me.user.id)),
     placeholderData: keepPreviousData,
   })
   const chats = chatPages.data?.pages.flatMap((page) => page.items) ?? []
@@ -486,7 +480,7 @@ export function ChatsList(props: { path: string; filters: Filters; filtered: boo
               isActive={props.path === `/sessions/${chat.id}`}
               render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
             >
-              <span>{sessionTitle(chat.title)}</span>
+              <span>{SessionTitle.display(chat.title)}</span>
             </SidebarMenuButton>
             <ChatStatus sessionId={chat.id} busy={chat.status === "busy"} />
           </SidebarMenuItem>

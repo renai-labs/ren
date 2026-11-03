@@ -1,4 +1,7 @@
 import { Loading } from "@ren/ui/loading"
+import { SessionTitle } from "@ren/chat"
+import { SessionPages } from "@ren/client/react"
+import { RelativeTime } from "@ren/util/relative-time"
 import { useState } from "react"
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
@@ -26,9 +29,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/d
 import { settingsSections } from "./settings-sidebar.js"
 import { canAdministerOptions } from "../lib/auth.js"
 import { pickerPageSize } from "../lib/pagination.js"
-import { formatRelative } from "@ren/ui/time"
 import { docsUrl, founderCallUrl } from "../lib/links.js"
-import { ownChats, sessionTitle, sidebarSessionsOptions } from "../lib/sessions.js"
 import { useDebouncedValue } from "../lib/use-debounced-value.js"
 import { useMe } from "../lib/use-me.js"
 import { RouterContext } from "../lib/router-context.js"
@@ -43,7 +44,7 @@ function ChatResults(props: {
   const { api, client } = RouterContext.useRouterContext()
   const me = useMe()
   const needle = useDebouncedValue(props.query.trim(), 250)
-  const recent = useInfiniteQuery(sidebarSessionsOptions(client, ownChats(me.user.id)))
+  const recent = useInfiniteQuery(SessionPages.options(client, SessionPages.own(me.user.id)))
   const found = useQuery({
     ...api.session.list.queryOptions({ search: needle, page: 1, pageSize: 20 }),
     enabled: needle !== "",
@@ -67,15 +68,15 @@ function ChatResults(props: {
       {listed.map((chat) => (
         <CommandItem
           key={chat.id}
-          value={`chat ${chat.id} ${sessionTitle(chat.title)}`}
+          value={`chat ${chat.id} ${SessionTitle.display(chat.title)}`}
           {...(needle && { keywords: [props.query] })}
           onSelect={() => props.onOpen(chat.id)}
         >
           <IconMessage />
-          <span className="truncate">{sessionTitle(chat.title)}</span>
+          <span className="truncate">{SessionTitle.display(chat.title)}</span>
           <CommandShortcut className="flex shrink-0 gap-2 tracking-normal">
             <span className="max-w-40 truncate">{props.spaceName(chat.spaceId)}</span>
-            <span className="tabular-nums">{formatRelative(chat.updatedAt)}</span>
+            <span className="tabular-nums">{RelativeTime.format(chat.updatedAt)}</span>
           </CommandShortcut>
         </CommandItem>
       ))}

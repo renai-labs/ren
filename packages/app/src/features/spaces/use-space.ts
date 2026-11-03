@@ -1,10 +1,10 @@
+import { Seed } from "@ren/client/react"
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import type { SettingsInfo, SpaceInfo } from "@ren/client"
 import { toast } from "@ren/ui/sonner"
 import { errorMessage } from "../../lib/errors.js"
 import { pickerPageSize } from "../../lib/pagination.js"
-import { Seed } from "../../lib/seed.js"
 import { RouterContext } from "../../lib/router-context.js"
 import type { Runtime } from "../../lib/runtime.js"
 

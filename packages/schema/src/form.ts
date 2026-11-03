@@ -125,3 +125,18 @@ export type Answer = typeof Answer.Type
 
 export interface Reply extends Schema.Schema.Type<typeof Reply> {}
 export const Reply = Schema.Struct({ answer: Answer }).annotate({ identifier: "Form.Reply" })
+
+export type Question = StringField | MultiselectField
+
+export const isQuestion = (field: Field): field is Question => field.type === "string" || field.type === "multiselect"
+
+export const answer = (form: Info, values: (key: string) => ReadonlyArray<unknown>): Answer =>
+  Object.fromEntries(
+    form.fields.filter(isQuestion).flatMap((field) => {
+      const picked = values(field.key).flatMap((value) =>
+        typeof value === "string" && value.trim() ? [value.trim()] : [],
+      )
+      if (picked.length === 0) return []
+      return [[field.key, field.type === "multiselect" ? picked : (picked.at(0) ?? "")]]
+    }),
+  )

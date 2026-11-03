@@ -1,8 +1,8 @@
+import { Seed } from "@ren/client/react"
 import type { AppInfo, AppRegistryInfo } from "@ren/client"
 import { useQueries, useQuery } from "@tanstack/react-query"
 import { fromApp, fromRegistry, type CatalogApp } from "./apps.js"
 import { RouterContext } from "./router-context.js"
-import { Seed } from "./seed.js"
 
 export function useApps(idsOrSlugs: ReadonlyArray<string>) {
   const { api, queryClient } = RouterContext.useRouterContext()

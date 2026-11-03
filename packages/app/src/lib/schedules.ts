@@ -1,3 +1,4 @@
+import { RelativeTime } from "@ren/util/relative-time"
 import type {
   ScheduleInfo,
   ScheduleListInput,
@@ -8,7 +9,7 @@ import type {
 } from "@ren/client"
 import { IconAlertTriangle, IconCircleCheck, IconMinus, IconProgress, type Icon } from "@tabler/icons-react"
 import { Cron, DateTime, Option, Result, Schema } from "effect"
-import { civilDate, formatInZone, formatRelative, localTimeZone, timeZones } from "@ren/ui/time"
+import { civilDate, formatInZone, localTimeZone, timeZones } from "@ren/ui/time"
 
 const ScheduleSearchSchema = Schema.Struct({
   filters: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))),
@@ -259,7 +260,7 @@ const pauseWords = {
 export const statusOf = (schedule: ScheduleInfo, now: number) => {
   if (schedule.status === "paused") return pauseWords[schedule.pausedReason ?? "user"]
   if (schedule.status === "ended" || !schedule.nextRunAt) return "Expired"
-  return `Next run ${formatRelative(schedule.nextRunAt, now)}`
+  return `Next run ${RelativeTime.format(schedule.nextRunAt, now)}`
 }
 
 export const nameOf = (message: string) =>

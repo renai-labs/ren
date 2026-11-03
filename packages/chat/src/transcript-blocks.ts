@@ -1,8 +1,13 @@
 export * as TranscriptBlocks from "./transcript-blocks.js"
 
-import { Option } from "effect"
-import { AppConnect, ChannelReply, Projection, ShownFile, TimelineRow, ToolDisplay } from "@ren/chat"
 import type { SessionMessage } from "@ren/schema/session/message"
+import { Option } from "effect"
+import { AppConnect } from "./app-connect.js"
+import { ChannelReply } from "./channel-reply.js"
+import { Projection } from "./projection.js"
+import { ShownFile } from "./shown-file.js"
+import { TimelineRow } from "./timeline-row.js"
+import { ToolDisplay } from "./tool-display.js"
 
 export type Step =
   | {
@@ -164,7 +169,7 @@ export function withEmptyReplies(
     return all
   }, [])
   return spans.flatMap((span) => {
-    const user = span[0]
+    const user = span.at(0)
     if (user?.kind !== "user" || user.message.id === activeTurn) return span
     const assistants = turns.get(user.message.id) ?? []
     if (assistants.length === 0 || assistants.some((message) => !message.time.completed)) return span
