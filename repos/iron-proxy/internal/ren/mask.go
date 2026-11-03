@@ -57,7 +57,8 @@ func (a *Applied) replace(text string) string {
 
 // Mask hides each injected value that comes back in the response headers
 // and in a body of at most maxBodyBytes. A stream (server-sent events) or a
-// larger or encoded body passes unchanged (README §6.3 rule 11).
+// larger or encoded body passes unchanged (README §6.3 rule 11). An answer
+// with no body, such as one to HEAD, keeps its Content-Length.
 func (a *Applied) Mask(resp *http.Response) {
 	if a == nil || len(a.masks) == 0 {
 		return
@@ -68,7 +69,8 @@ func (a *Applied) Mask(resp *http.Response) {
 		}
 	}
 	encoded := resp.Header.Get("Content-Encoding") != "" && !strings.EqualFold(resp.Header.Get("Content-Encoding"), "identity")
-	if resp.Body == nil || encoded || strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") || resp.ContentLength > maxBodyBytes {
+	bodyless := resp.Body == nil || resp.Body == http.NoBody || (resp.Request != nil && resp.Request.Method == http.MethodHead)
+	if bodyless || encoded || strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") || resp.ContentLength > maxBodyBytes {
 		return
 	}
 	prefix, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes+1))

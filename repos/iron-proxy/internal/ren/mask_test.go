@@ -60,6 +60,26 @@ func TestMaskLeavesAStreamUnread(t *testing.T) {
 	require.Equal(t, "data: sk-ant-secret\n\n", string(body), "a stream is not buffered to mask it (README §6.3 rule 11)")
 }
 
+func TestMaskKeepsTheLengthOfAHeadAnswer(t *testing.T) {
+	client, h, _ := newClient(t)
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", Inject: []Op{
+		{Op: "setHeader", Name: "Authorization", Value: "Bearer tok_secret_2"},
+	}})
+	req := newRequest(t, "HEAD", "https://drive.example.com/bucket/report.md", nil, "")
+	req.Host = "drive.example.com"
+	_, applied := client.Handle(t.Context(), req, "ren-a")
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		Header:        http.Header{"Content-Length": {"43"}},
+		Body:          http.NoBody,
+		ContentLength: 43,
+		Request:       req,
+	}
+	applied.Mask(resp)
+	require.Equal(t, int64(43), resp.ContentLength, "a HEAD answer has no body, and its length is the object's (rclone deletes an upload whose HEAD says 0)")
+	require.Equal(t, "43", resp.Header.Get("Content-Length"))
+}
+
 func TestMaskHidesTheAWSKeysThatComeBack(t *testing.T) {
 	client, h, _ := newClient(t)
 	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", Inject: []Op{
