@@ -12,6 +12,7 @@
     "packages/site/.astro/",
     "packages/client/src/react/generated/",
     "packages/cli/src/generated/",
-    "packages/app/src/route-tree.gen.ts"
+    "packages/app/src/route-tree.gen.ts",
+    "packages/mobile/src/uniwind-types.d.ts"
   ]
 }

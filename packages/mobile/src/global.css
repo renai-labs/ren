@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@import "uniwind";
+@import "./theme.gen.css";
+
+@layer theme {
+  :root {
+    @variant ios {
+      --font-sans: "System";
+      --font-mono: "IBM Plex Mono";
+    }
+    @variant android {
+      --font-sans: "Inter";
+      --font-mono: "IBM Plex Mono";
+    }
+  }
+}
