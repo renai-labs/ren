@@ -1,7 +1,7 @@
 id: no-render-props
 language: Tsx
 message: >-
-  This is a render prop. Pass children or compose compound parts. Keep a render prop only when the parent hands data back (for example a virtualized row), and suppress with a reason.
+  This is a render prop. Pass children or compose compound parts. Keep a render prop only when the parent hands data back (for example a virtualized row), and suppress with a reason. React Native lists' `renderItem` is allowed.
 severity: error
 rule:
   any:
@@ -13,3 +13,7 @@ rule:
       has:
         kind: property_identifier
         regex: ^render[A-Z]
+      not:
+        has:
+          kind: property_identifier
+          regex: ^renderItem$
