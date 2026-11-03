@@ -1,0 +1,48 @@
+{
+  "cli": {
+    "version": ">= 18.4.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "bun": "1.4.2",
+      "node": "24.8.0",
+      "env": {
+        "EXPO_UNSTABLE_METRO_OPTIMIZE_GRAPH": "1",
+        "EXPO_UNSTABLE_TREE_SHAKING": "1"
+      }
+    },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development"
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "environment": "preview"
+    },
+    "internal": {
+      "extends": "base",
+      "distribution": "internal",
+      "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_REN_URL": "https://api.v2.useren.ai",
+        "EXPO_PUBLIC_REN_APP_URL": "https://v2.useren.ai/app"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "extends": "base",
+      "autoIncrement": true,
+      "environment": "production"
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

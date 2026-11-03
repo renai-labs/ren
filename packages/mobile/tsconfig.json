@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "types": ["bun", "expo/types"],
+    "customConditions": ["react-native"],
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.ts-dist/tsbuildinfo"
+  },
+  "include": ["index.ts", "src", "script", "metro.config.ts", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "references": [
+    {
+      "path": "../chat/tsconfig.src.json"
+    },
+    {
+      "path": "../client/tsconfig.src.json"
+    },
+    {
+      "path": "../schema/tsconfig.src.json"
+    },
+    {
+      "path": "../util/tsconfig.src.json"
+    }
+  ]
+}
