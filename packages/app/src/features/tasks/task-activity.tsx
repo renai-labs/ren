@@ -1,4 +1,5 @@
 import { Loading } from "@ren/ui/loading"
+import { RelativeTime } from "@ren/util/relative-time"
 import { cn } from "cn"
 import { useState } from "react"
 import type { TaskActivityInfo, TaskActor, TaskEventInfo } from "@ren/client"
@@ -25,7 +26,7 @@ import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@ren/ui/input-group"
 import { toast } from "@ren/ui/sonner"
-import { formatDateTime, formatRelative } from "@ren/ui/time"
+import { formatDateTime } from "@ren/ui/time"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Item, ItemHeader } from "@ren/ui/item"
 import { Button } from "@ren/ui/button"
@@ -139,7 +140,7 @@ const eventNote = (event: TaskEventInfo) => {
 
 const when = (at: string) => (
   <time dateTime={at} title={formatDateTime(at)}>
-    {formatRelative(at)}
+    {RelativeTime.format(at)}
   </time>
 )
 

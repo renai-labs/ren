@@ -1,3 +1,4 @@
+import { AuthError } from "@ren/client"
 import { Link, getRouteApi, useNavigate } from "@tanstack/react-router"
 import { IconMail } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
@@ -14,7 +15,6 @@ import {
   SocialButton,
 } from "../../components/auth-layout.js"
 import { useState } from "react"
-import { describeAuthError } from "../../lib/auth.js"
 import { useCompleteAuth } from "./use-complete-auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -54,7 +54,7 @@ export function LoginPage() {
       return
     }
     setPending(null)
-    const failure = describeAuthError(result.error)
+    const failure = AuthError.describe(result.error)
     if (failure.code === "EMAIL_NOT_VERIFIED") {
       await navigate({ to: "/verify-email", search: { ...destination, email } })
       return
@@ -70,17 +70,17 @@ export function LoginPage() {
       setStep("code")
       return
     }
-    setError(describeAuthError(result.error).message)
+    setError(AuthError.describe(result.error).message)
   }
   const verifyCode = async (otp: string) => {
     const result = await auth.signIn.emailOtp({ email, otp })
-    if (result.error !== null) return describeAuthError(result.error)
+    if (result.error !== null) return AuthError.describe(result.error)
     await completeAuth()
     return
   }
   const resendCode = async () => {
     const result = await auth.emailOtp.sendVerificationOtp({ email, type: "sign-in" })
-    return result.error === null ? undefined : describeAuthError(result.error)
+    return result.error === null ? undefined : AuthError.describe(result.error)
   }
   if (step === "code")
     return (

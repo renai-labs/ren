@@ -1,3 +1,4 @@
+import { RelativeTime } from "@ren/util/relative-time"
 import { useState } from "react"
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { IconPlus } from "@tabler/icons-react"
@@ -19,7 +20,7 @@ import {
 import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Tabs } from "@ren/ui/tabs"
-import { formatDateTime, formatRelative } from "@ren/ui/time"
+import { formatDateTime } from "@ren/ui/time"
 import { LoadMore } from "../../components/load-more.js"
 import { PageActions, PageTabsList, PageTabsTrigger, TableCard, TableEmpty, useShapeId } from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
@@ -183,7 +184,7 @@ function RequestRow(props: { request: SpaceJoinRequestInfo; space: SpaceInfo }) 
       </TableCell>
       <TableCell className="text-muted-foreground tabular-nums">
         <time dateTime={request.createdAt} title={formatDateTime(request.createdAt)}>
-          {formatRelative(request.createdAt)}
+          {RelativeTime.format(request.createdAt)}
         </time>
       </TableCell>
       <TableCell>

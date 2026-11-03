@@ -19,6 +19,7 @@ import {
   TimelineDetail,
   TimelineRow,
   TimelineText,
+  TranscriptBlocks,
   type ChatAtoms,
 } from "@ren/chat"
 import { cn } from "cn"
@@ -54,7 +55,6 @@ import { EmptyState } from "../../components/empty-state.js"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { useMentionedApps } from "../../lib/use-app.js"
 import { SmoothMarkdown, StepRuns, Steps, StepsProvider } from "./steps.js"
-import { TranscriptBlocks } from "./transcript-blocks.js"
 import { CopyButton, UserMessage, type Person } from "./user-message.js"
 
 export interface TranscriptHandle {

@@ -1,3 +1,4 @@
+import { Seed } from "@ren/client/react"
 import type { SpaceInfo } from "@ren/client"
 import { cn } from "cn"
 import { useQuery } from "@tanstack/react-query"
@@ -50,7 +51,6 @@ import { Preference } from "../lib/preference.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
-import { Seed } from "../lib/seed.js"
 
 const spaceGroups = [
   {

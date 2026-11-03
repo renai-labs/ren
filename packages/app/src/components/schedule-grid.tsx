@@ -1,3 +1,4 @@
+import { RelativeTime } from "@ren/util/relative-time"
 import type { ScheduleInfo } from "@ren/client"
 import {
   IconActivity,
@@ -23,7 +24,6 @@ import { RowMenu } from "./row-menu.js"
 import { ScheduleSheet } from "./schedule-sheet.js"
 import type { Schedules } from "../lib/use-schedules.js"
 import { Link } from "@tanstack/react-router"
-import { formatRelative } from "@ren/ui/time"
 import { describe, runStatuses, statusOf } from "../lib/schedules.js"
 import { cn } from "cn"
 
@@ -66,11 +66,11 @@ export function ScheduleToolbar(props: { list: Schedules }) {
 }
 
 const nextRun = (schedule: ScheduleInfo, now: number) =>
-  schedule.status === "active" && schedule.nextRunAt ? formatRelative(schedule.nextRunAt, now) : "—"
+  schedule.status === "active" && schedule.nextRunAt ? RelativeTime.format(schedule.nextRunAt, now) : "—"
 
 const lastRun = (schedule: ScheduleInfo, now: number) =>
   schedule.lastRun
-    ? `${formatRelative(schedule.lastRun.scheduledAt, now)} · ${runStatuses[schedule.lastRun.status].label.toLowerCase()}`
+    ? `${RelativeTime.format(schedule.lastRun.scheduledAt, now)} · ${runStatuses[schedule.lastRun.status].label.toLowerCase()}`
     : "—"
 
 function stateLabel(schedule: ScheduleInfo, now: number) {

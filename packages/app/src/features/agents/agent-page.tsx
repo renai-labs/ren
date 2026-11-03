@@ -1,3 +1,4 @@
+import { Seed } from "@ren/client/react"
 import { createContext, use, useRef, useState, type ReactNode } from "react"
 import type { AgentInfo, SettingsInfo } from "@ren/client"
 import { Agent } from "@ren/schema/agent"
@@ -24,7 +25,6 @@ import { RowMenu } from "../../components/row-menu.js"
 import { Agents } from "../../lib/agents.js"
 import { errorMessage, errorStatus } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { Seed } from "../../lib/seed.js"
 import { useMe } from "../../lib/use-me.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 

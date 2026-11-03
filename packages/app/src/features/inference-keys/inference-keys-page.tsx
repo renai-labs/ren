@@ -1,3 +1,4 @@
+import { RelativeTime } from "@ren/util/relative-time"
 import { useState } from "react"
 import type { RenInferenceKey, RenInferenceKeyStatus, RenInferenceKeyUsage } from "@ren/client"
 import type { RenInference } from "@ren/schema/ren-inference"
@@ -10,7 +11,7 @@ import { formatUsd } from "@ren/ui/format"
 import { toast } from "@ren/ui/sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Tabs } from "@ren/ui/tabs"
-import { formatRelative, formatShortDate } from "@ren/ui/time"
+import { formatShortDate } from "@ren/ui/time"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { cn } from "cn"
 import { EmptyState } from "../../components/empty-state.js"
@@ -65,7 +66,7 @@ function Expires(props: { expiresAt: string | null; now: number }) {
     return <span className="text-muted-foreground">{formatShortDate(props.expiresAt)}</span>
   return (
     <span title={formatShortDate(props.expiresAt)} className="text-muted-foreground">
-      {formatRelative(props.expiresAt, props.now)}
+      {RelativeTime.format(props.expiresAt, props.now)}
     </span>
   )
 }
@@ -155,7 +156,7 @@ function KeyRow(props: {
         <TableCell className="truncate text-muted-foreground">{props.owner}</TableCell>
       )}
       <TableCell className="text-muted-foreground">
-        {key.lastUsedAt ? formatRelative(key.lastUsedAt, props.now) : "Never used"}
+        {key.lastUsedAt ? RelativeTime.format(key.lastUsedAt, props.now) : "Never used"}
       </TableCell>
       <TableCell>
         <Expires expiresAt={key.expiresAt} now={props.now} />

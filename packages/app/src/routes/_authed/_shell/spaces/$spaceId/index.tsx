@@ -1,8 +1,8 @@
+import { SessionPages } from "@ren/client/react"
 import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { SpaceInbox } from "../../../../../features/spaces/space-inbox.js"
 import { Loader } from "../../../../../lib/loader.js"
-import { ownChats, sidebarSessionsOptions } from "../../../../../lib/sessions.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/")({
   head: () => ({ meta: [{ title: "Inbox · Space · Ren" }] }),
@@ -11,9 +11,9 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/")({
   loader: (options) => {
     Loader.start(
       options.context.queryClient.infiniteQuery(
-        sidebarSessionsOptions(options.context.client, {
+        SessionPages.options(options.context.client, {
           spaceId: [options.params.spaceId],
-          ...(options.deps.mine && ownChats(options.context.me.user.id)),
+          ...(options.deps.mine && SessionPages.own(options.context.me.user.id)),
         }),
       ),
     )
