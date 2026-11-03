@@ -144,6 +144,8 @@ const decodeTitle = Schema.decodeUnknownOption(Schema.Struct({ title: Schema.Str
 
 const cut = (text: string, limit: number) => (text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}…`)
 
+const count = (amount: number, one: string, many = `${one}s`) => `${amount} ${amount === 1 ? one : many}`
+
 const distinct = (names: ReadonlyArray<string>) => {
   const taken = new Set<string>()
   return names.map((name) => {
@@ -163,8 +165,8 @@ const changesOf = (title: string, labels: ReadonlyArray<string>, fitted: Readonl
   const renamed = labels.filter((label, index) => fitted[index] !== cut(label, labelLimit)).length
   return [
     ...(title.length > titleLimit ? [`Cut the title to ${titleLimit} characters.`] : []),
-    ...(cuts > 0 ? [`Cut ${cuts} labels to ${labelLimit} characters.`] : []),
-    ...(renamed > 0 ? [`Numbered ${renamed} labels that had the same name.`] : []),
+    ...(cuts > 0 ? [`Cut ${count(cuts, "label")} to ${labelLimit} characters.`] : []),
+    ...(renamed > 0 ? [`Numbered ${count(renamed, "label")} that had the same name.`] : []),
   ]
 }
 
@@ -186,7 +188,7 @@ const checkPie = (title: string, chart: Extract<Channel.Chart, { readonly type: 
           { label: "Other", value: rest.reduce((sum, segment) => sum + segment.value, 0) },
         ]
   const labels = segments.map((segment) => segment.label)
-  const fitted = labels.map((label) => cut(label, labelLimit))
+  const fitted = distinct(labels)
   return {
     title,
     chart: {
@@ -197,7 +199,7 @@ const checkPie = (title: string, chart: Extract<Channel.Chart, { readonly type: 
     changes: [
       ...changesOf(chart.title, labels, fitted),
       ...(positive.length < chart.segments.length
-        ? [`Left out ${chart.segments.length - positive.length} slices with a value of 0 or less.`]
+        ? [`Left out ${count(chart.segments.length - positive.length, "slice")} with a value of 0 or less.`]
         : []),
       ...(positive.length > pieSlices ? [`Merged the ${rest.length} smallest slices into Other.`] : []),
     ],
@@ -212,10 +214,11 @@ const checkSeries = (title: string, chart: Exclude<Channel.Chart, { readonly typ
   if (uneven)
     return {
       title,
-      reason: `Series ${uneven.name} has ${uneven.values.length} values for ${chart.categories.length} categories.`,
+      reason: `Series ${uneven.name} has ${count(uneven.values.length, "value")} for ${count(chart.categories.length, "category", "categories")}.`,
     }
   const categories = distinct(chart.categories)
   const names = distinct(chart.series.map((series) => series.name))
+  const axisCuts = [chart.xLabel, chart.yLabel].filter((label) => label && label.length > titleLimit).length
   return {
     title,
     chart: {
@@ -226,18 +229,22 @@ const checkSeries = (title: string, chart: Exclude<Channel.Chart, { readonly typ
       ...(chart.xLabel && { xLabel: cut(chart.xLabel, titleLimit) }),
       ...(chart.yLabel && { yLabel: cut(chart.yLabel, titleLimit) }),
     },
-    changes: changesOf(
-      chart.title,
-      [...chart.categories, ...chart.series.map((series) => series.name)],
-      [...categories, ...names],
-    ),
+    changes: [
+      ...changesOf(
+        chart.title,
+        [...chart.categories, ...chart.series.map((series) => series.name)],
+        [...categories, ...names],
+      ),
+      ...(axisCuts > 0 ? [`Cut ${count(axisCuts, "axis title")} to ${titleLimit} characters.`] : []),
+    ],
   }
 }
 
 const check = (input: unknown): Checked => {
   const title = Option.match(decodeTitle(input), { onNone: () => "Untitled chart", onSome: (found) => found.title })
   const decoded = decodeChart(input)
-  if (Result.isFailure(decoded)) return { title, reason: `It is not a valid chart: ${decoded.failure.message}` }
+  if (Result.isFailure(decoded))
+    return { title, reason: `It is not a valid chart: ${decoded.failure.message.replaceAll(/\s*\n\s*/gu, " ")}` }
   return decoded.success.type === "pie" ? checkPie(title, decoded.success) : checkSeries(title, decoded.success)
 }
 
