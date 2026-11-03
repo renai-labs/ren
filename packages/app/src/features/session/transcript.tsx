@@ -1,6 +1,7 @@
 import { DateTime, Option } from "effect"
 import { useState, type ReactNode } from "react"
 import {
+  AppConnect,
   ChannelReply,
   ChatState,
   PatchFiles,
@@ -13,6 +14,7 @@ import {
   type ChatAtoms,
 } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
+import { AppConnectCard } from "./app-connect.js"
 import { Link } from "@tanstack/react-router"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
@@ -135,6 +137,7 @@ type Block =
     }
   | { readonly kind: "reply"; readonly key: string; readonly tool: SessionMessage.Tool }
   | { readonly kind: "file"; readonly key: string; readonly file: SessionMessage.DriveFile }
+  | { readonly kind: "connect"; readonly key: string; readonly appId: string; readonly spaceId: string }
   | { readonly kind: "row"; readonly key: string; readonly row: TimelineRow.Row }
 
 const streaming = (message: SessionMessage.Info | undefined) => message?.type === "assistant" && !message.time.completed
@@ -180,10 +183,15 @@ function partBlock(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessag
       text: content.text,
       streaming: streaming(message),
     }
-  if (content?.type === "tool" && ChannelReply.shown(content))
-    return { kind: "reply", key: TimelineRow.key(row), tool: content }
-  const shown = content?.type === "tool" ? Option.getOrUndefined(ShownFile.of(content)) : undefined
-  return shown && { kind: "file", key: TimelineRow.key(row), file: shown }
+  return content?.type === "tool" ? toolBlock(content, TimelineRow.key(row)) : undefined
+}
+
+function toolBlock(content: SessionMessage.Tool, key: string): Block | undefined {
+  if (ChannelReply.shown(content)) return { kind: "reply", key, tool: content }
+  const connect = Option.getOrUndefined(AppConnect.of(content))
+  if (connect) return { kind: "connect", key, ...connect }
+  const shown = Option.getOrUndefined(ShownFile.of(content))
+  return shown && { kind: "file", key, file: shown }
 }
 
 function pushSteps(blocks: Block[], key: string, turn: string, steps: Step[]) {
@@ -1051,6 +1059,14 @@ function BlockView(props: {
   if (block.kind === "answer")
     return <AnswerBlock text={block.text} streaming={block.streaming} copy={props.copyOf(block.turn, block.key)} />
   if (block.kind === "reply") return <ChannelReplyMessage tool={block.tool} />
+  if (block.kind === "connect")
+    return (
+      <Message>
+        <MessageContent>
+          <AppConnectCard appId={block.appId} spaceId={block.spaceId} />
+        </MessageContent>
+      </Message>
+    )
   if (block.kind === "file")
     return (
       <Message>
