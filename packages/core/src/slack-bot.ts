@@ -62,6 +62,11 @@ const Charts = Schema.optionalKey(
 
 const UncheckedCharts = Schema.optionalKey(Schema.Array(Schema.Unknown))
 
+const withCharts = <Fields extends Schema.Struct.Fields>(fields: Fields) => ({
+  input: Schema.Struct({ ...fields, charts: UncheckedCharts }),
+  shown: Schema.Struct({ ...fields, charts: Charts }),
+})
+
 const Limit = Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 200 })))
 
 const Cursor = Schema.optionalKey(Schema.String.annotate({ description: "The nextCursor of the previous page" }))
@@ -355,8 +360,7 @@ export const layer = Layer.effect(
       define(
         "reply_to_current_thread",
         {
-          input: Schema.Struct({ text: Text, charts: UncheckedCharts }),
-          shown: Schema.Struct({ text: Text, charts: Charts }),
+          ...withCharts({ text: Text }),
           description:
             "Reply to the Slack thread that started this session. Ren posts it in the thread’s channel, then uploads to the thread every file you showed with show_file since your last reply. Fails if this session did not come from Slack.",
         },
@@ -365,8 +369,7 @@ export const layer = Layer.effect(
       define(
         "post_new_message",
         {
-          input: Schema.Struct({ channelId: ChannelId, text: Text, charts: UncheckedCharts }),
-          shown: Schema.Struct({ channelId: ChannelId, text: Text, charts: Charts }),
+          ...withCharts({ channelId: ChannelId, text: Text }),
           description:
             "Post a new message to a Slack channel as the bot. To reply inside an existing thread, use reply_in_thread instead. A reply in the new thread continues this session.",
         },
@@ -375,17 +378,10 @@ export const layer = Layer.effect(
       define(
         "reply_in_thread",
         {
-          input: Schema.Struct({
+          ...withCharts({
             channelId: ChannelId,
             threadTs: Ts.annotate({ description: "Timestamp of the thread’s root message" }),
             text: Text,
-            charts: UncheckedCharts,
-          }),
-          shown: Schema.Struct({
-            channelId: ChannelId,
-            threadTs: Ts.annotate({ description: "Timestamp of the thread’s root message" }),
-            text: Text,
-            charts: Charts,
           }),
           description:
             "Reply to an existing Slack thread as the bot. Needs the channelId and the thread’s root timestamp (threadTs). A reply in that thread continues this session.",

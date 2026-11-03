@@ -15,7 +15,7 @@ const instructions = [
   "Answer the Slack thread that started this session with reply_to_current_thread.",
   "Write two or three sentences, the answer first, in Markdown, never Slack mrkdwn.",
   "Put longer output in a file: show it with show_file before you reply, and the reply uploads it to the thread.",
-  "Put a numeric comparison in charts: Ren posts each as a native Slack chart under the text.",
+  "Put a numeric comparison in charts (at most 2): Ren posts each as a native Slack chart under the text.",
 ].join(" ")
 
 const ObjectSchema = Schema.Union([

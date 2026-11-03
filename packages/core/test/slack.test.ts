@@ -519,8 +519,41 @@ describe("Slack", () => {
         reason: "Cut 4 labels to 20 characters. Numbered 2 labels that had the same name.",
       },
     ])
-    const titled = Slack.repair([{ type: "pie", title: "t".repeat(60), segments: [{ label: "a", value: 1 }] }])
-    expect(titled.charts.at(0)?.chart.title).toBe(`${"t".repeat(49)}…`)
+    const pie = Slack.repair([
+      {
+        type: "pie",
+        title: "t".repeat(60),
+        segments: [
+          { label: `${long} A`, value: 1 },
+          { label: `${long} B`, value: 2 },
+        ],
+      },
+    ])
+    expect(pie.charts.map((each) => each.chart)).toEqual([
+      {
+        type: "pie",
+        title: `${"t".repeat(49)}…`,
+        segments: [
+          { label: "Strawberry Rhubarb…", value: 1 },
+          { label: "Strawberry Rhubar… 2", value: 2 },
+        ],
+      },
+    ])
+    expect(pie.report.repaired.at(0)?.reason).toBe(
+      "Cut the title to 50 characters. Cut 2 labels to 20 characters. Numbered 1 label that had the same name.",
+    )
+    const axes = Slack.repair([
+      {
+        type: "bar",
+        title: "Axes",
+        categories: ["a"],
+        series: [{ name: "s", values: [1] }],
+        xLabel: "x".repeat(51),
+        yLabel: "y".repeat(51),
+      },
+    ])
+    expect(axes.charts.at(0)?.chart).toMatchObject({ xLabel: `${"x".repeat(49)}…`, yLabel: `${"y".repeat(49)}…` })
+    expect(axes.report.repaired).toEqual([{ title: "Axes", reason: "Cut 2 axis titles to 50 characters." }])
   })
 
   test("a pie leaves out slices of 0 or less, and over 12 slices keeps the 11 largest and adds Other", () => {
@@ -538,7 +571,7 @@ describe("Slack", () => {
       ],
     })
     expect(repaired.report.repaired.at(0)?.reason).toBe(
-      "Left out 1 slices with a value of 0 or less. Merged the 3 smallest slices into Other.",
+      "Left out 1 slice with a value of 0 or less. Merged the 3 smallest slices into Other.",
     )
   })
 
@@ -566,13 +599,14 @@ describe("Slack", () => {
     expect(repaired.charts.map((each) => each.title)).toEqual(["First", "Second"])
     expect(repaired.report.sent).toBe(2)
     expect(repaired.report.dropped.map((each) => [each.title, each.reason.split(":").at(0)])).toEqual([
-      ["Uneven", "Series s has 1 values for 2 categories."],
+      ["Uneven", "Series s has 1 value for 2 categories."],
       ["Too wide", "It has more than 20 categories."],
       ["Empty", "It has no data."],
       ["Not a number", "It is not a valid chart"],
       ["Unknown type", "It is not a valid chart"],
       ["Third", "Slack shows at most 2 charts in a message."],
     ])
+    expect(repaired.report.dropped.filter((each) => each.reason.includes("\n"))).toEqual([])
   })
 
   it.live(
