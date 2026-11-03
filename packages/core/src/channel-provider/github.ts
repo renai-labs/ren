@@ -310,6 +310,7 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
           },
         ),
       )
+      return Option.none()
     }),
     progress: Effect.fn("GitHub.progress")(
       function* (target, status) {

@@ -140,13 +140,16 @@ const provider = Effect.gen(function* () {
       ),
     send: (target, text) =>
       Effect.suspend(
-        (): Effect.Effect<void, ChannelProvider.PlaceGone | ChannelProvider.Unavailable | ChannelProvider.Rejected> => {
+        (): Effect.Effect<
+          Option.Option<Channel.ChartReport>,
+          ChannelProvider.PlaceGone | ChannelProvider.Unavailable | ChannelProvider.Rejected
+        > => {
           outbox.attempts.push(text)
           if (text === "gone") return Effect.fail(new ChannelProvider.PlaceGone({ message: "channel_not_found" }))
           if (text === "down") return Effect.fail(new ChannelProvider.Unavailable({ message: "Slack is down" }))
           if (text === "refused") return Effect.fail(new ChannelProvider.Rejected({ message: "msg_too_long" }))
           outbox.sent.push({ target, text })
-          return Effect.void
+          return Effect.succeedNone
         },
       ),
     progress: (target, status) => Effect.sync(() => void outbox.progress.push({ message: target.message, status })),

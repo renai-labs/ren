@@ -77,7 +77,11 @@ export interface Provider {
   readonly fetchFile: (install: string, file: Channel.FileRef) => Effect.Effect<Uint8Array, FileUnavailable>
   readonly context: (event: Channel.Event) => Effect.Effect<Option.Option<string>, Unavailable>
   readonly linkOf: (event: Channel.Event) => Option.Option<TaskLink.Ref>
-  readonly send: (target: Target, text: string) => Effect.Effect<void, PlaceGone | Unavailable | Rejected>
+  readonly send: (
+    target: Target,
+    text: string,
+    charts?: ReadonlyArray<unknown>,
+  ) => Effect.Effect<Option.Option<Channel.ChartReport>, PlaceGone | Unavailable | Rejected>
   readonly progress: (target: Target, status: Status) => Effect.Effect<void, Unavailable>
   readonly email: (
     install: string,

@@ -97,10 +97,51 @@ export const Parsed = Schema.Union([
 ]).annotate({ identifier: "Channel.Parsed" })
 export type Parsed = typeof Parsed.Type
 
+const Label = Schema.String.annotate({ description: "At most 20 characters" })
+
+const AxisTitle = Schema.optionalKey(Schema.String.annotate({ description: "At most 50 characters" }))
+
+export const Chart = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("pie"),
+    title: Schema.String.annotate({ description: "At most 50 characters" }),
+    segments: Schema.Array(Schema.Struct({ label: Label, value: Schema.Finite })).annotate({
+      description: "1 to 12 slices, each with a value above 0",
+    }),
+  }),
+  Schema.Struct({
+    type: Schema.Literals(["bar", "area", "line"]),
+    title: Schema.String.annotate({ description: "At most 50 characters" }),
+    categories: Schema.Array(Label).annotate({ description: "The x-axis, 1 to 20 categories, in order" }),
+    series: Schema.Array(
+      Schema.Struct({
+        name: Label,
+        values: Schema.Array(Schema.Finite).annotate({ description: "One value for each category, in order" }),
+      }),
+    ).annotate({ description: "1 to 12 series with distinct names" }),
+    xLabel: AxisTitle,
+    yLabel: AxisTitle,
+  }),
+]).annotate({ identifier: "Channel.Chart", description: "A native chart that Ren posts under the text." })
+export type Chart = typeof Chart.Type
+
+export interface ChartNote extends Schema.Schema.Type<typeof ChartNote> {}
+export const ChartNote = Schema.Struct({ title: Schema.String, reason: Schema.String }).annotate({
+  identifier: "Channel.ChartNote",
+})
+
+export interface ChartReport extends Schema.Schema.Type<typeof ChartReport> {}
+export const ChartReport = Schema.Struct({
+  sent: Schema.Int.annotate({ description: "The charts that the reply shows." }),
+  repaired: Schema.Array(ChartNote).annotate({ description: "Charts that Ren changed to fit Slack, and how." }),
+  dropped: Schema.Array(ChartNote).annotate({ description: "Charts that the reply does not show, and why." }),
+}).annotate({ identifier: "Channel.ChartReport" })
+
 export interface Sent extends Schema.Schema.Type<typeof Sent> {}
 export const Sent = Schema.Struct({
   provider: Provider,
   place: Schema.String.annotate({ description: "The channel, project or repository that the reply went to." }),
+  charts: Schema.optionalKey(ChartReport),
 }).annotate({ identifier: "Channel.Sent" })
 
 export const FailureReason = Schema.Literals([

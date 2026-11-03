@@ -53,6 +53,15 @@ const Ts = Schema.NonEmptyString.annotate({ description: "Slack message timestam
 
 const Text = Schema.NonEmptyString.annotate({ description: "Message body; Markdown is converted for Slack" })
 
+const Charts = Schema.optionalKey(
+  Schema.Array(Channel.Chart).annotate({
+    description:
+      "Native Slack charts under the text, at most 2. Ren repairs a chart that does not fit Slack, or leaves it out and says why.",
+  }),
+)
+
+const UncheckedCharts = Schema.optionalKey(Schema.Array(Schema.Unknown))
+
 const Limit = Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 200 })))
 
 const Cursor = Schema.optionalKey(Schema.String.annotate({ description: "The nextCursor of the previous page" }))
@@ -124,12 +133,12 @@ const userOf = (member: typeof Member.Type) => ({
 
 const define = <A>(
   name: string,
-  options: { readonly input: Schema.Codec<A, unknown>; readonly description: string },
+  options: { readonly input: Schema.Codec<A, unknown>; readonly shown?: Schema.Top; readonly description: string },
   run: (connection: Connection, input: A) => Effect.Effect<unknown, Refused | SlackApp.Failed>,
 ): Defined => ({
   name,
   description: options.description,
-  input: options.input,
+  input: options.shown ?? options.input,
   posts: posting.includes(name),
   run: (connection, args) =>
     Schema.decodeUnknownEffect(options.input)(args).pipe(
@@ -203,21 +212,28 @@ export const layer = Layer.effect(
 
     const post = Effect.fnUntraced(function* (
       connection: Connection,
-      input: { readonly channelId: string; readonly threadTs?: string; readonly text: string },
+      input: {
+        readonly channelId: string
+        readonly threadTs?: string
+        readonly text: string
+        readonly charts?: ReadonlyArray<unknown>
+      },
     ) {
       yield* reachable(connection, input.channelId)
-      const answer = yield* connection.client.post(
-        "chat.postMessage",
-        {
-          channel: input.channelId,
-          ...(input.threadTs && { thread_ts: input.threadTs }),
-          ...Slack.message(input.text),
-        },
-        Posted,
-        connection.token,
+      const sent = yield* Slack.post(input.text, input.charts ?? [], (payload) =>
+        connection.client.post(
+          "chat.postMessage",
+          { channel: input.channelId, ...(input.threadTs && { thread_ts: input.threadTs }), ...payload },
+          Posted,
+          connection.token,
+        ),
       )
-      yield* bind(connection, input.channelId, input.threadTs ?? answer.ts)
-      return { channelId: answer.channel ?? input.channelId, ts: answer.ts }
+      yield* bind(connection, input.channelId, input.threadTs ?? sent.answer.ts)
+      return {
+        channelId: sent.answer.channel ?? input.channelId,
+        ts: sent.answer.ts,
+        ...Option.match(sent.charts, { onNone: () => ({}), onSome: (charts) => ({ charts }) }),
+      }
     })
 
     const upload = Effect.fnUntraced(function* (
@@ -254,7 +270,10 @@ export const layer = Layer.effect(
       spaceId: connection.actor.agent.spaceId,
     })
 
-    const replyToCurrentThread = Effect.fnUntraced(function* (connection: Connection, text: string) {
+    const replyToCurrentThread = Effect.fnUntraced(function* (
+      connection: Connection,
+      input: { readonly text: string; readonly charts?: ReadonlyArray<unknown> },
+    ) {
       const latest = (yield* database.db
         .select()
         .from(thread)
@@ -267,8 +286,12 @@ export const layer = Layer.effect(
       const provider = registry.get("slack")
       if (Option.isNone(provider)) return yield* new Refused({ message: "Slack is not set up on this Ren server." })
       const place = latest.place_name ?? latest.thread
-      yield* provider.value
-        .send({ install: latest.install, place, thread: latest.thread, message: latest.last_message ?? "" }, text)
+      const charts = yield* provider.value
+        .send(
+          { install: latest.install, place, thread: latest.thread, message: latest.last_message ?? "" },
+          input.text,
+          input.charts,
+        )
         .pipe(
           Effect.retry({
             while: (error) => error._tag === "ChannelProvider.Unavailable",
@@ -311,7 +334,11 @@ export const layer = Layer.effect(
         .set({ last_reply_at: new Date() })
         .where(eq(thread.id, latest.id))
         .pipe(Effect.orDie)
-      return { provider: "slack", place } satisfies Channel.Sent
+      return {
+        provider: "slack",
+        place,
+        ...Option.match(charts, { onNone: () => ({}), onSome: (report) => ({ charts: report }) }),
+      } satisfies Channel.Sent
     })
 
     const renUserOf = (connection: Connection, slackUserId: string) =>
@@ -328,16 +355,18 @@ export const layer = Layer.effect(
       define(
         "reply_to_current_thread",
         {
-          input: Schema.Struct({ text: Text }),
+          input: Schema.Struct({ text: Text, charts: UncheckedCharts }),
+          shown: Schema.Struct({ text: Text, charts: Charts }),
           description:
             "Reply to the Slack thread that started this session. Ren posts it in the thread’s channel, then uploads to the thread every file you showed with show_file since your last reply. Fails if this session did not come from Slack.",
         },
-        (connection, input) => replyToCurrentThread(connection, input.text),
+        replyToCurrentThread,
       ),
       define(
         "post_new_message",
         {
-          input: Schema.Struct({ channelId: ChannelId, text: Text }),
+          input: Schema.Struct({ channelId: ChannelId, text: Text, charts: UncheckedCharts }),
+          shown: Schema.Struct({ channelId: ChannelId, text: Text, charts: Charts }),
           description:
             "Post a new message to a Slack channel as the bot. To reply inside an existing thread, use reply_in_thread instead. A reply in the new thread continues this session.",
         },
@@ -350,6 +379,13 @@ export const layer = Layer.effect(
             channelId: ChannelId,
             threadTs: Ts.annotate({ description: "Timestamp of the thread’s root message" }),
             text: Text,
+            charts: UncheckedCharts,
+          }),
+          shown: Schema.Struct({
+            channelId: ChannelId,
+            threadTs: Ts.annotate({ description: "Timestamp of the thread’s root message" }),
+            text: Text,
+            charts: Charts,
           }),
           description:
             "Reply to an existing Slack thread as the bot. Needs the channelId and the thread’s root timestamp (threadTs). A reply in that thread continues this session.",

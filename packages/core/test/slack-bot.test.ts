@@ -170,6 +170,25 @@ describe("SlackBot", () => {
           blocks: JSON.stringify([{ type: "markdown", text: "Done." }]),
         },
       })
+      const pie = { type: "pie", title: "Models", segments: [{ label: "Opus", value: 3 }] }
+      expect(
+        yield* bot.call(asAgent(owner, sessionId), "reply_to_current_thread", {
+          text: "Here are the models.",
+          charts: [pie, { title: "Broken", type: "pie" }],
+        }),
+      ).toEqual({
+        provider: "slack",
+        place: "eng",
+        charts: {
+          sent: 1,
+          repaired: [],
+          dropped: [{ title: "Broken", reason: expect.stringContaining("It is not a valid chart:") }],
+        },
+      })
+      expect(slack.posted.at(-1)?.params.blocks).toContain('"type":"data_visualization"')
+      expect(
+        yield* bot.call(asAgent(owner, sessionId), "post_new_message", { channelId: "C09", text: "Hi", charts: [pie] }),
+      ).toMatchObject({ channelId: "C09", charts: { sent: 1 } })
       expect(
         (yield* Effect.flip(
           bot.call(asAgent(owner, yield* Seed.session(owner)), "reply_to_current_thread", { text: "Done." }),
