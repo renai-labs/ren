@@ -4,7 +4,7 @@ import { Link, useLocation } from "@tanstack/react-router"
 import {
   IconAdjustmentsHorizontal,
   IconArrowLeft,
-  IconAt,
+  IconMessagesFilled,
   IconBuilding,
   IconKey,
   IconSearch,
@@ -20,6 +20,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
 } from "@ren/ui/sidebar"
 import { Footer, Header, Section, sidebarRow } from "./sidebar-parts.js"
 import { canAdministerOptions } from "../lib/auth.js"
@@ -45,7 +46,7 @@ export const settingsSections = [
       { id: "general", to: "/settings/general", label: "General", icon: IconBuilding, admin: true },
       { id: "members", to: "/settings/members", label: "Members", icon: IconUsers, admin: true },
       { id: "providers", to: "/settings/providers", label: "Providers", icon: IconServer },
-      { id: "channels", to: "/settings/channels", label: "Mentions", icon: IconAt },
+      { id: "channels", to: "/settings/channels", label: "Channels", icon: IconMessagesFilled },
     ],
   },
 ] as const
@@ -58,7 +59,12 @@ function SettingsMenu(props: {
     <SidebarMenu className="gap-1">
       {props.items.map((item) => (
         <SidebarMenuItem key={item.id}>
-          <SidebarMenuButton className={sidebarRow} isActive={props.section === item.id} render={<Link to={item.to} />}>
+          <SidebarMenuButton
+            className={sidebarRow}
+            isActive={props.section === item.id}
+            tooltip={item.label}
+            render={<Link to={item.to} />}
+          >
             <item.icon />
             <span>{item.label}</span>
           </SidebarMenuButton>
@@ -91,18 +97,18 @@ export function SettingsSidebar(props: { onSearch: () => void }) {
     }))
     .filter((group) => group.items.length > 0)
   return (
-    <Sidebar variant="inset">
+    <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader className="gap-0 p-0">
         <Header onSearch={props.onSearch} />
         <SidebarMenu className="gap-1 px-0.5">
           <SidebarMenuItem>
-            <SidebarMenuButton className={sidebarRow} render={<Link to="/" />}>
+            <SidebarMenuButton className={sidebarRow} tooltip="Back to app" render={<Link to="/" />}>
               <IconArrowLeft />
               <span>Back to app</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="relative mx-0.5 mt-2">
+        <div className="relative mx-0.5 mt-2 group-data-[collapsible=icon]:hidden">
           <IconSearch className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <SidebarInput
             ref={search}
@@ -123,6 +129,7 @@ export function SettingsSidebar(props: { onSearch: () => void }) {
         ))}
       </SidebarContent>
       <Footer />
+      <SidebarRail />
     </Sidebar>
   )
 }

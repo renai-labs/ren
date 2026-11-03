@@ -16,7 +16,7 @@ export function MentionLogo(props: { name: string; icon: string | null; classNam
       src={props.icon}
       alt=""
       draggable={false}
-      className={cn("inline-block size-[1.25em] rounded-sm object-cover", props.className)}
+      className={cn("inline-block size-[1.25em] rounded-sm bg-white object-contain p-[0.12em]", props.className)}
     />
   ) : (
     <span

@@ -1,3 +1,11 @@
 @import "@ren/ui/styles";
+@import "streamdown/styles.css";
 @source "./**/*.{ts,tsx}";
 @source "../node_modules/streamdown/dist/*.js";
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sd-animate],
+  [data-sd-animate-marker]::marker {
+    animation: none;
+  }
+}

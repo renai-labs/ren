@@ -1,5 +1,5 @@
 import { useState, type ComponentType } from "react"
-import { IconFilter2, IconRestore, IconX } from "@tabler/icons-react"
+import { IconCircleDashed, IconCube, IconFilter2, IconLock, IconRestore, IconX } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -34,6 +34,13 @@ export type FilterProperty = {
 
 export type Filters = Record<string, string[]>
 
+export const spaceOptions = (spaces: ReadonlyArray<{ id: string; name: string; kind?: string | undefined }>) =>
+  spaces.map((space) => ({
+    value: space.id,
+    label: space.name,
+    icon: space.kind === "private" ? IconLock : IconCube,
+  }))
+
 const row = "h-9 gap-3 px-3 data-highlighted:[&_svg]:text-foreground! data-popup-open:[&_svg]:text-foreground!"
 const marked = "h-9 gap-2 pr-3 pl-8 *:data-[slot$=indicator]:right-auto *:data-[slot$=indicator]:left-2"
 
@@ -56,7 +63,7 @@ export function FilterMenu(props: {
             size={sidebar ? "icon-sm" : "icon"}
             className={
               sidebar
-                ? "relative size-5 rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg:not([class*='size-'])]:size-4"
+                ? "relative size-5 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg:not([class*='size-'])]:size-4"
                 : "relative text-muted-foreground"
             }
             aria-label={active ? `${props.label}, filters on` : props.label}
@@ -89,16 +96,7 @@ export function FilterMenu(props: {
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent sideOffset={2} className={props.noun ? "w-60" : "w-48"}>
                   {property.single ? (
-                    <DropdownMenuRadioGroup
-                      value={selected[0] ?? ""}
-                      onValueChange={(value: string) => set(value ? [value] : [])}
-                    >
-                      {[{ value: "", label: property.any }, ...property.options].map((option) => (
-                        <DropdownMenuRadioItem key={option.value} value={option.value} className={marked}>
-                          {option.label}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
+                    <RadioOptions property={property} selected={selected} onChange={set} />
                   ) : (
                     <CheckboxOptions property={property} selected={selected} onChange={set} noun={props.noun} />
                   )}
@@ -116,6 +114,30 @@ export function FilterMenu(props: {
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function RadioOptions(props: { property: FilterProperty; selected: string[]; onChange: (values: string[]) => void }) {
+  const property = props.property
+  return (
+    <DropdownMenuRadioGroup
+      value={props.selected[0] ?? ""}
+      onValueChange={(value: string) => props.onChange(value ? [value] : [])}
+    >
+      {[
+        {
+          value: "",
+          label: property.any,
+          icon: property.options.some((option) => option.icon) ? IconCircleDashed : undefined,
+        },
+        ...property.options,
+      ].map((option) => (
+        <DropdownMenuRadioItem key={option.value} value={option.value} className={marked}>
+          {option.icon ? <option.icon /> : null}
+          <span className="flex-1 truncate">{option.label}</span>
+        </DropdownMenuRadioItem>
+      ))}
+    </DropdownMenuRadioGroup>
   )
 }
 

@@ -1,9 +1,10 @@
 import { RegistryContext } from "@effect/atom-react"
 import { ChatReact } from "@ren/chat/react"
-import { Outlet, useLocation } from "@tanstack/react-router"
+import { Outlet } from "@tanstack/react-router"
 import { Suspense, useState } from "react"
 import { RouteSkeleton } from "./route-skeleton.js"
 import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@ren/ui/sidebar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { AppSidebar } from "./app-sidebar.js"
 import { NewTaskDialog, useNewTaskShortcut } from "./new-task-dialog.js"
 import { SearchDialog } from "./search-dialog.js"
@@ -11,8 +12,10 @@ import { SettingsSidebar } from "./settings-sidebar.js"
 import { SpaceSidebar } from "./space-sidebar.js"
 import { useMe } from "../lib/use-me.js"
 import { chatFor } from "../lib/chat.js"
+import { Routing } from "../lib/routing.js"
 import { Keyboard } from "../platform/keyboard.js"
 import { Platform } from "../platform/platform.js"
+import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 
 const insetClass = "h-svh overflow-hidden md:h-[calc(100svh-1rem)] md:shadow-none md:inset-ring md:inset-ring-border"
 
@@ -26,8 +29,13 @@ function useSearchShortcut(onToggle: () => void) {
 
 function SidebarOpen() {
   const sidebar = useSidebar()
-  if (!sidebar.isMobile && sidebar.state === "expanded") return null
-  return <SidebarTrigger className="absolute top-2 left-2 z-20 text-muted-foreground" />
+  if (!sidebar.isMobile) return null
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<SidebarTrigger className="absolute top-2 left-2 z-20 text-muted-foreground" />} />
+      <TooltipContent side="right">Expand sidebar</TooltipContent>
+    </Tooltip>
+  )
 }
 
 function ShellSidebar(props: { path: string; onSearch: () => void }) {
@@ -43,13 +51,20 @@ export function AppShell() {
   const chat = chatFor(platform, me.user.id)
   const [searching, setSearching] = useState(false)
   const [creatingTask, setCreatingTask] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(() => SidebarPreferences.open.read(platform.storage))
   useSearchShortcut(() => setSearching((current) => !current))
   useNewTaskShortcut(() => setCreatingTask(true))
-  const path = useLocation({ select: (location) => location.pathname })
+  const path = Routing.useRenderedPath()
   return (
     <RegistryContext value={chat.registry}>
       <ChatReact.Provider atoms={chat.atoms}>
-        <SidebarProvider>
+        <SidebarProvider
+          open={sidebarOpen}
+          onOpenChange={(next) => {
+            SidebarPreferences.open.write(platform.storage, next)
+            setSidebarOpen(next)
+          }}
+        >
           <ShellSidebar path={path} onSearch={() => setSearching(true)} />
           <SidebarInset className={insetClass}>
             <SidebarOpen />

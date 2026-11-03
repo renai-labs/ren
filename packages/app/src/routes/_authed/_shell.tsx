@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { AppBoot } from "../../components/app-boot.js"
 import { AppShell } from "../../components/app-shell.js"
 import { pickerPageSize } from "../../lib/pagination.js"
+import { canAdministerOptions } from "../../lib/auth.js"
 import { Loader } from "../../lib/loader.js"
 import { ownChats, sidebarSessionsOptions } from "../../lib/sessions.js"
 
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/_authed/_shell")({
       options.context.queryClient.query(
         options.context.api.space.list.queryOptions({ page: 1, pageSize: pickerPageSize }),
       ),
+      options.context.queryClient.query(canAdministerOptions(options.context.auth)),
     )
   },
   pendingComponent: AppBoot,

@@ -1,6 +1,6 @@
 export * as Routing from "./routing.js"
 
-import { redirect } from "@tanstack/react-router"
+import { redirect, useMatches } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { sessionOptions } from "./auth.js"
 import type { Runtime } from "./runtime.js"
@@ -16,6 +16,9 @@ export const PageSearch = Schema.toStandardSchemaV1(Schema.Struct({ page: Schema
 export const AppSearch = Schema.toStandardSchemaV1(
   Schema.Struct({ page: Schema.optional(Schema.Number), app: Schema.optional(Schema.String) }),
 )
+
+export const useRenderedPath = () =>
+  useMatches({ select: (matches) => matches.at(-1)?.pathname.replace(/(.)\/$/u, "$1") ?? "/" })
 
 const safeRedirect = (path: string | undefined) =>
   path?.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\") ? path : undefined

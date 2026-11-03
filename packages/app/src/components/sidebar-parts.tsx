@@ -9,20 +9,34 @@ import { cn } from "cn"
 import {
   IconActivity,
   IconArchive,
-  IconPencil,
-  IconListSearch,
   IconBook,
+  IconBrandGithubFilled,
+  IconBrandSlack,
   IconCalendar,
+  IconCalendarEvent,
+  IconCalendarMonth,
+  IconCalendarWeek,
   IconChevronRight,
+  IconCircle,
+  IconClock,
   IconCube,
   IconHelpCircle,
+  IconLayoutGridFilled,
   IconLock,
   IconLogout,
+  IconMessageCircle,
+  IconPencil,
+  IconPin,
+  IconPinnedOff,
   IconPlus,
+  IconProgress,
   IconRoute,
   IconSearch,
   IconSelector,
   IconSettings,
+  IconSubtask,
+  IconTicket,
+  IconWebhook,
   type Icon,
 } from "@tabler/icons-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
@@ -51,12 +65,11 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
 } from "@ren/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { ConfirmDialog } from "./confirm-dialog.js"
 import { CreateOrganizationDialog } from "./create-organization-dialog.js"
-import { FilterMenu, type FilterProperty, type Filters } from "./filter-menu.js"
+import { FilterMenu, spaceOptions, type FilterProperty, type Filters } from "./filter-menu.js"
 import { NewSpaceDialog } from "./new-space-dialog.js"
 import { RowMenu } from "./row-menu.js"
 import { errorMessage } from "../lib/errors.js"
@@ -74,41 +87,59 @@ import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
 
 export const sidebarRow =
-  "h-9 gap-1 rounded-md p-1.5 text-sm font-normal text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground/80 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-normal data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground [&>svg]:m-0.75 [&_svg]:size-4.5"
+  "[&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground data-active:[&_svg]:text-sidebar-accent-foreground h-9 gap-1 rounded-md p-1.5 text-sm font-normal text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground/80 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-normal data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:m-0.75 [&_svg]:size-4.5"
 
 const iconButton =
-  "size-8 text-sidebar-foreground hover:bg-sidebar-accent active:not-aria-[haspopup]:scale-100 [&_svg]:size-4.5"
+  "size-8 text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent active:not-aria-[haspopup]:scale-100 group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:[&_svg]:size-5 [&_svg]:size-4.5"
 
 const shortcut = /Mac|iPhone|iPad/u.test(navigator.userAgent) ? "⌘K" : "Ctrl+K"
 
-const shownSpaces = 3
-
 export function Header(props: { onSearch: () => void }) {
   return (
-    <div className="mt-1 mb-3.5 flex items-center px-1">
-      <Link to="/" aria-label="Home" className={buttonVariants({ variant: "ghost", className: iconButton })}>
+    <div className="mt-1 mb-3.5 flex items-center px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1 group-data-[collapsible=icon]:px-0.5">
+      <span
+        aria-hidden
+        className="flex size-8 shrink-0 items-center justify-center text-sidebar-foreground group-data-[collapsible=icon]:size-9"
+      >
         <Logomark className="size-4.5" />
-      </Link>
-      <span className="flex-1" />
+      </span>
+      <span className="flex-1 group-data-[collapsible=icon]:hidden" />
       <Tooltip>
         <TooltipTrigger
-          render={<Button variant="ghost" className={iconButton} aria-label="Search" onClick={props.onSearch} />}
+          render={
+            <Button
+              variant="ghost"
+              className={cn(iconButton, "group-data-[collapsible=icon]:hidden")}
+              aria-label="Search"
+              onClick={props.onSearch}
+            />
+          }
         >
-          <IconSearch />
+          <IconSearch data-weight="heavy" />
         </TooltipTrigger>
         <TooltipContent>
           Search <Kbd>{shortcut}</Kbd>
         </TooltipContent>
       </Tooltip>
-      <SidebarTrigger className={iconButton} />
     </div>
   )
 }
 
-export function NavRow(props: { to: string; label: string; icon: Icon; active: boolean }) {
+export function NavRow(props: {
+  to: string
+  label: string
+  icon: Icon
+  active: boolean
+  className?: string | undefined
+}) {
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton className={sidebarRow} isActive={props.active} render={<Link to={props.to} />}>
+    <SidebarMenuItem className={props.className}>
+      <SidebarMenuButton
+        className={sidebarRow}
+        isActive={props.active}
+        tooltip={props.label}
+        render={<Link to={props.to} />}
+      >
         <props.icon />
         <span>{props.label}</span>
       </SidebarMenuButton>
@@ -125,8 +156,8 @@ export function Section(props: {
   children: ReactNode
 }) {
   return (
-    <SidebarGroup className={cn("px-0.5 pt-5 pb-0", props.className)}>
-      <div className="group/section flex h-6 shrink-0 items-center pr-1 pb-1 pl-2.25">
+    <SidebarGroup className={cn("px-0.5 pt-5 pb-0 group-data-[collapsible=icon]:pt-3", props.className)}>
+      <div className="group/section flex h-6 shrink-0 items-center pr-1 pb-1 pl-2.25 group-data-[collapsible=icon]:hidden">
         {props.onToggle ? (
           <Button
             variant="ghost"
@@ -152,60 +183,6 @@ export function Section(props: {
       </div>
       {props.open === false ? null : props.children}
     </SidebarGroup>
-  )
-}
-
-function SpaceChats(props: { space: SpaceInfo; path: string }) {
-  const { client } = RouterContext.useRouterContext()
-  const [shown, setShown] = useState(5)
-  const chats = useInfiniteQuery(sidebarSessionsOptions(client, { spaceId: [props.space.id] }))
-  const items = chats.data?.pages.flatMap((page) => page.items) ?? []
-  return (
-    <section aria-label={`Chats in ${props.space.name}`}>
-      <SidebarMenu className="gap-px">
-        {chats.isPending ? (
-          <li>
-            <output className="block py-2 pr-2 pl-9 text-sm text-muted-foreground">Loading chats…</output>
-          </li>
-        ) : null}
-        {chats.isError ? (
-          <SidebarMenuItem>
-            <SidebarMenuButton className={cn(sidebarRow, "pl-8.5")} onClick={() => void chats.refetch()}>
-              Retry loading chats
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ) : null}
-        {chats.isSuccess && items.length === 0 ? (
-          <li className="py-2 pr-2 pl-9 text-sm text-sidebar-foreground">No chats yet</li>
-        ) : null}
-        {items.slice(0, shown).map((chat) => (
-          <SidebarMenuItem key={chat.id}>
-            <SidebarMenuButton
-              className={cn(sidebarRow, "pl-8.5 group-has-data-[sidebar=menu-badge]/menu-item:pr-7")}
-              isActive={props.path === `/sessions/${chat.id}`}
-              render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
-            >
-              <span>{sessionTitle(chat.title)}</span>
-            </SidebarMenuButton>
-            <ChatStatus sessionId={chat.id} busy={chat.status === "busy"} />
-          </SidebarMenuItem>
-        ))}
-        {items.length > shown || chats.hasNextPage ? (
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className={cn(sidebarRow, "pl-8.5 font-medium text-sidebar-foreground")}
-              disabled={chats.isFetchingNextPage}
-              onClick={() => {
-                if (items.length <= shown) void chats.fetchNextPage()
-                setShown((count) => count + 5)
-              }}
-            >
-              <span>Show more</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ) : null}
-      </SidebarMenu>
-    </section>
   )
 }
 
@@ -248,33 +225,39 @@ function RenameSpaceDialog(props: { space: SpaceInfo; open: boolean; onOpenChang
   )
 }
 
-function SpaceEntry(props: { space: SpaceInfo; path: string }) {
+export function SpaceEntry(props: {
+  space: SpaceInfo
+  path: string
+  pinned: boolean
+  onPin: (pinned: boolean) => void
+}) {
   const { api } = RouterContext.useRouterContext()
   const navigate = useNavigate()
-  const [open, setOpen] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const archive = useMutation(api.space.archive.mutationOptions())
   return (
     <SidebarMenuItem>
       <div
         data-active={props.path.startsWith(`/spaces/${props.space.id}`) || undefined}
-        className="group/space flex items-center rounded-md hover:bg-sidebar-accent has-focus-visible:ring-2 has-focus-visible:ring-sidebar-ring data-active:bg-sidebar-accent"
+        className="group/space relative flex items-center rounded-md hover:bg-sidebar-accent has-focus-visible:ring-2 has-focus-visible:ring-sidebar-ring data-active:bg-sidebar-accent"
       >
         <SidebarMenuButton
           className={cn(
             sidebarRow,
-            "min-w-0 flex-1 gap-2 py-1.5 pr-1 pl-1.5 hover:bg-transparent focus-visible:ring-0 active:bg-transparent data-active:bg-transparent data-active:hover:bg-transparent",
+            "min-w-0 flex-1 gap-2 py-1.5 pl-1.5 hover:bg-transparent focus-visible:ring-0 active:bg-transparent data-active:bg-transparent data-active:hover:bg-transparent",
+            props.space.membershipId === null
+              ? "pr-8 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-8 pointer-fine:group-hover/space:pr-8 pointer-fine:group-has-data-popup-open/space:pr-8"
+              : "pr-15 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-15 pointer-fine:group-hover/space:pr-15 pointer-fine:group-has-data-popup-open/space:pr-15",
           )}
-          aria-expanded={open}
           isActive={props.path.startsWith(`/spaces/${props.space.id}`)}
-          onClick={() => setOpen((current) => !current)}
+          render={<Link to="/spaces/$spaceId" params={{ spaceId: props.space.id }} />}
         >
           <span className="flex size-6 shrink-0 items-center justify-center text-current">
             {props.space.kind === "private" ? <IconLock /> : <IconCube />}
           </span>
-          <span>{props.space.name}</span>
+          <span className="min-w-0 flex-1 truncate">{props.space.name}</span>
         </SidebarMenuButton>
-        <span className="flex shrink-0 items-center pr-1 group-focus-within/space:opacity-100 group-hover/space:opacity-100 has-data-popup-open:opacity-100 md:opacity-0">
+        <span className="absolute inset-y-0 right-0 flex items-center pr-1 transition-opacity duration-150 ease-out pointer-fine:opacity-0 pointer-fine:group-focus-within/space:opacity-100 pointer-fine:group-hover/space:opacity-100 pointer-fine:has-data-popup-open:opacity-100">
           {props.space.membershipId !== null ? (
             <Link
               to="/"
@@ -284,17 +267,20 @@ function SpaceEntry(props: { space: SpaceInfo; path: string }) {
                 variant: "ghost",
                 size: "icon-sm",
                 className:
-                  "text-sidebar-foreground hover:bg-transparent focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent",
+                  "text-sidebar-foreground/55 hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent",
               })}
             >
-              <IconPlus />
+              <IconPlus data-weight="heavy" />
             </Link>
           ) : null}
           <RowMenu
             side="right"
-            className="text-sidebar-foreground hover:bg-transparent focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent"
+            className="text-sidebar-foreground/55 hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent"
             label={`${props.space.name} actions`}
             items={[
+              props.pinned
+                ? { label: "Unpin from sidebar", icon: IconPinnedOff, onSelect: () => props.onPin(false) }
+                : { label: "Pin to sidebar", icon: IconPin, onSelect: () => props.onPin(true) },
               ...(props.space.canUpdate
                 ? [{ label: "Rename", icon: IconPencil, onSelect: () => setRenaming(true) }]
                 : []),
@@ -329,42 +315,8 @@ function SpaceEntry(props: { space: SpaceInfo; path: string }) {
           />
         </span>
       </div>
-      {open ? <SpaceChats space={props.space} path={props.path} /> : null}
       <RenameSpaceDialog space={props.space} open={renaming} onOpenChange={setRenaming} />
     </SidebarMenuItem>
-  )
-}
-
-export function SpacesList(props: { path: string }) {
-  const spaces = useSpaces().spaces
-  const [creating, setCreating] = useState(false)
-  return (
-    <section aria-label="Sidebar spaces">
-      <SidebarMenu className="gap-px">
-        {spaces.slice(0, shownSpaces).map((space) => (
-          <SpaceEntry key={space.id} space={space} path={props.path} />
-        ))}
-        {spaces.length === 0 ? (
-          <SidebarMenuItem>
-            <SidebarMenuButton className={cn(sidebarRow, "text-sidebar-foreground")} onClick={() => setCreating(true)}>
-              <IconPlus />
-              <span>Add space</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ) : null}
-        {spaces.length > shownSpaces ? (
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className={cn(sidebarRow, "px-2 font-medium text-sidebar-foreground")}
-              render={<Link to="/spaces" />}
-            >
-              <span>See all</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ) : null}
-      </SidebarMenu>
-      <NewSpaceDialog open={creating} onOpenChange={setCreating} />
-    </section>
   )
 }
 
@@ -382,12 +334,13 @@ export function SpacesActions() {
               className={buttonVariants({
                 variant: "ghost",
                 size: "icon-sm",
-                className: "text-sidebar-foreground active:not-aria-[haspopup]:scale-100",
+                className:
+                  "text-sidebar-foreground/55 hover:text-sidebar-foreground active:not-aria-[haspopup]:scale-100",
               })}
             />
           }
         >
-          <IconListSearch />
+          <IconLayoutGridFilled />
         </TooltipTrigger>
         <TooltipContent>All spaces</TooltipContent>
       </Tooltip>
@@ -399,12 +352,12 @@ export function SpacesActions() {
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Add space"
-                className="text-sidebar-foreground active:not-aria-[haspopup]:scale-100"
+                className="text-sidebar-foreground/55 hover:text-sidebar-foreground active:not-aria-[haspopup]:scale-100"
                 onClick={() => setCreating(true)}
               />
             }
           >
-            <IconPlus />
+            <IconPlus data-weight="heavy" />
           </TooltipTrigger>
           <TooltipContent>Add space</TooltipContent>
         </Tooltip>
@@ -417,13 +370,13 @@ export function SpacesActions() {
 const days = { today: 0, week: 7, month: 30 } as const
 
 const origins = [
-  { value: "chat", label: "Chat" },
-  { value: "task", label: "Task" },
-  { value: "schedule", label: "Schedule" },
-  { value: "slack", label: "Slack" },
-  { value: "linear", label: "Linear" },
-  { value: "github", label: "GitHub" },
-  { value: "webhook", label: "Webhook" },
+  { value: "chat", label: "Chat", icon: IconMessageCircle },
+  { value: "task", label: "Task", icon: IconSubtask },
+  { value: "schedule", label: "Schedule", icon: IconClock },
+  { value: "slack", label: "Slack", icon: IconBrandSlack },
+  { value: "linear", label: "Linear", icon: IconTicket },
+  { value: "github", label: "GitHub", icon: IconBrandGithubFilled },
+  { value: "webhook", label: "Webhook", icon: IconWebhook },
 ] as const
 
 type Origin = (typeof origins)[number]["value"]
@@ -449,13 +402,15 @@ const chatFilter = (filters: Filters, userId: string): SessionFilter => {
   }
 }
 
-const chatProperties = (spaces: ReadonlyArray<{ id: string; name: string }>): FilterProperty[] => [
+const chatProperties = (
+  spaces: ReadonlyArray<{ id: string; name: string; kind?: string | undefined }>,
+): FilterProperty[] => [
   {
     key: "space",
     label: "Space",
     any: "All spaces",
     icon: IconCube,
-    options: spaces.map((space) => ({ value: space.id, label: space.name })),
+    options: spaceOptions(spaces),
   },
   {
     key: "status",
@@ -463,8 +418,8 @@ const chatProperties = (spaces: ReadonlyArray<{ id: string; name: string }>): Fi
     any: "Any",
     icon: IconActivity,
     options: [
-      { value: "busy", label: "Working" },
-      { value: "idle", label: "Idle" },
+      { value: "busy", label: "Working", icon: IconProgress },
+      { value: "idle", label: "Idle", icon: IconCircle },
     ],
   },
   { key: "origin", label: "Started from", any: "Anywhere", icon: IconRoute, options: [...origins] },
@@ -475,9 +430,9 @@ const chatProperties = (spaces: ReadonlyArray<{ id: string; name: string }>): Fi
     icon: IconCalendar,
     single: true,
     options: [
-      { value: "today", label: "Today" },
-      { value: "week", label: "Past 7 days" },
-      { value: "month", label: "Past 30 days" },
+      { value: "today", label: "Today", icon: IconCalendarEvent },
+      { value: "week", label: "Past 7 days", icon: IconCalendarWeek },
+      { value: "month", label: "Past 30 days", icon: IconCalendarMonth },
     ],
   },
 ]
@@ -529,26 +484,13 @@ export function useChatFilters() {
   return {
     filters,
     actions: (
-      <>
-        <FilterMenu
-          label="Filter chats"
-          trigger="sidebar"
-          properties={chatProperties(spaces)}
-          value={filters}
-          onChange={setFilters}
-        />
-        <Link
-          to="/"
-          aria-label="New chat"
-          className={buttonVariants({
-            variant: "ghost",
-            size: "icon-sm",
-            className: "text-sidebar-foreground active:not-aria-[haspopup]:scale-100",
-          })}
-        >
-          <IconPlus />
-        </Link>
-      </>
+      <FilterMenu
+        label="Filter chats"
+        trigger="sidebar"
+        properties={chatProperties(spaces)}
+        value={filters}
+        onChange={setFilters}
+      />
     ),
   }
 }
@@ -632,7 +574,9 @@ function UserRow() {
         <DropdownMenuTrigger
           render={
             <SidebarMenuButton
-              className="h-10 min-w-0 flex-1 gap-1.5 rounded-md py-1.5 pr-2 pl-1.5 hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent"
+              size="lg"
+              className="h-10 min-w-0 flex-1 gap-1.5 rounded-md py-1.5 pr-2 pl-1.5 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent"
+              tooltip={`${userName} · ${me.organization.name}`}
               aria-label={`Switch organization (current: ${me.organization.name})`}
             />
           }
@@ -641,11 +585,11 @@ function UserRow() {
             {me.user.image ? <AvatarImage src={me.user.image} alt="" /> : null}
             <AvatarFallback className="text-xs">{initials(userName)}</AvatarFallback>
           </Avatar>
-          <span className="flex min-w-0 flex-1 flex-col text-start leading-tight">
+          <span className="flex min-w-0 flex-1 flex-col text-start leading-tight group-data-[collapsible=icon]:hidden">
             <span className="truncate text-sm font-medium tracking-tight text-sidebar-foreground">{userName}</span>
             <span className="truncate text-xs text-sidebar-foreground/80">{me.organization.name}</span>
           </span>
-          <IconSelector className="text-sidebar-foreground" />
+          <IconSelector className="text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-60">
           <div className="relative p-1">
@@ -666,7 +610,7 @@ function UserRow() {
             <DropdownMenuRadioGroup value={me.organization.id} onValueChange={(value: string) => void switchTo(value)}>
               {matchingOrganizations.map((organization) => (
                 <DropdownMenuRadioItem key={organization.id} value={organization.id}>
-                  <PersonAvatar name={organization.name} />
+                  <PersonAvatar name={organization.name} image={organization.logo ?? undefined} />
                   {organization.name}
                 </DropdownMenuRadioItem>
               ))}
@@ -708,7 +652,7 @@ function UserRow() {
 function HelpAndSettings() {
   const platform = Platform.usePlatform()
   return (
-    <div className="flex shrink-0">
+    <div className="flex shrink-0 group-data-[collapsible=icon]:hidden">
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="ghost" className={iconButton} aria-label="Help" />}>
           <IconHelpCircle />
@@ -740,7 +684,14 @@ function HelpAndSettings() {
 export function Footer() {
   return (
     <SidebarFooter className="gap-1 px-0.5 pt-2 pb-0">
-      <SidebarMenu>
+      <SidebarMenu className="group-data-[collapsible=icon]:gap-1">
+        <NavRow
+          to="/settings/preferences"
+          label="Settings"
+          icon={IconSettings}
+          active={false}
+          className="hidden group-data-[collapsible=icon]:block"
+        />
         <SidebarMenuItem className="flex items-center gap-0.5">
           <UserRow />
           <HelpAndSettings />
