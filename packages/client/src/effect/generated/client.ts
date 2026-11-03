@@ -691,10 +691,22 @@ const EndpointAppProfileReachSpaceProfiles =
   (raw: RawClient["app-profile-reach"]) => (input: AppProfileReachSpaceProfilesInput) =>
     raw["space.profiles"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+type AppProfileReachAppConnectRequest = Parameters<RawClient["app-profile-reach"]["app.connect"]>[0]
+type AppProfileReachAppConnectInput = {
+  readonly app: AppProfileReachAppConnectRequest["params"]["app"]
+  readonly spaceId?: AppProfileReachAppConnectRequest["query"]["spaceId"]
+}
+const EndpointAppProfileReachAppConnect =
+  (raw: RawClient["app-profile-reach"]) => (input: AppProfileReachAppConnectInput) =>
+    raw["app.connect"]({ params: { app: input["app"] }, query: { spaceId: input["spaceId"] } }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
 const adaptGroupAppProfileReach = (raw: RawClient["app-profile-reach"]) => ({
   "app-profile": { delete: EndpointAppProfileReachAppProfileDelete(raw) },
   session: { profiles: EndpointAppProfileReachSessionProfiles(raw) },
   space: { profiles: EndpointAppProfileReachSpaceProfiles(raw) },
+  app: { connect: EndpointAppProfileReachAppConnect(raw) },
 })
 
 type AppRegistryListRequest = Parameters<RawClient["app-registry"]["app-registry.list"]>[0]

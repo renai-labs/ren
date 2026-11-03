@@ -1144,6 +1144,8 @@ export type AppProfilePage = { items: Array<AppProfileInfo>; page: number; pageS
 
 export type AppProfileReach = { profiles: Array<AppProfileInfo> }
 
+export type AppProfileConnect = { appId: AppID; spaceId: SpaceID; profiles: Array<AppProfileInfo> }
+
 export type McpInfo = {
   name: string
   description: string
@@ -5238,6 +5240,13 @@ export type AppProfileReachSessionProfilesOutput = AppProfileReach
 export type AppProfileReachSpaceProfilesInput = { readonly id: { readonly id: string }["id"] }
 
 export type AppProfileReachSpaceProfilesOutput = AppProfileReach
+
+export type AppProfileReachAppConnectInput = {
+  readonly app: { readonly app: string }["app"]
+  readonly spaceId?: { readonly spaceId?: string | undefined }["spaceId"]
+}
+
+export type AppProfileReachAppConnectOutput = AppProfileConnect
 
 export type AppRegistryListInput = {
   readonly query?: {
