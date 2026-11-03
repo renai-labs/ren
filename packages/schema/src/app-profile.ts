@@ -158,6 +158,16 @@ export const Reach = Schema.Struct({ profiles: Schema.Array(Info) }).annotate({
   description: "The profiles that a chat reaches, with their gaps.",
 })
 
+export interface Connect extends Schema.Schema.Type<typeof Connect> {}
+export const Connect = Schema.Struct({
+  appId: AppIdentity.ID,
+  spaceId: Space.ID,
+  profiles: Schema.Array(Info),
+}).annotate({
+  identifier: "AppProfile.Connect",
+  description: "An app a chat asks the person to connect: its space and the space’s profiles of it, with their gaps.",
+})
+
 export const definition = Primitive.define({
   name: "app-profile",
   plural: "app-profiles",

@@ -53,6 +53,7 @@ import type {
   AppProfileReachAppProfileDeleteInput,
   AppProfileReachSessionProfilesInput,
   AppProfileReachSpaceProfilesInput,
+  AppProfileReachAppConnectInput,
   AppRegistryListInput,
   AppRegistryGetInput,
   AgentMembershipListInput,
@@ -637,6 +638,19 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryOptions({
               queryKey: ["app-profile-reach", "space", "profiles", input] as const,
               queryFn: (context) => client["app-profile-reach"]["space"]["profiles"](input, { signal: context.signal }),
+            }),
+        },
+      },
+      app: {
+        connect: {
+          queryKey: (input?: AppProfileReachAppConnectInput) =>
+            input === undefined
+              ? (["app-profile-reach", "app", "connect"] as const)
+              : (["app-profile-reach", "app", "connect", input] as const),
+          queryOptions: (input: AppProfileReachAppConnectInput) =>
+            queryOptions({
+              queryKey: ["app-profile-reach", "app", "connect", input] as const,
+              queryFn: (context) => client["app-profile-reach"]["app"]["connect"](input, { signal: context.signal }),
             }),
         },
       },

@@ -1,6 +1,7 @@
 import { AppProfile } from "@ren/schema/app-profile"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
+import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { ConflictError, ForbiddenError, NotFoundError } from "../errors.js"
 import { Exposure } from "../exposure.js"
@@ -80,6 +81,21 @@ export const AppProfileReachGroup = HttpApiGroup.make("app-profile-reach")
         identifier: "space.profiles",
         summary: "List the profiles a new chat reaches",
         description: "Return the app profiles a new chat of the caller in this space can use, with their gaps.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("app.connect", "/apps/:app/connect", {
+      params: { app: Schema.String },
+      query: { spaceId: Schema.optional(Space.ID) },
+      success: AppProfile.Connect,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "app.connect",
+        summary: "Ask the person to connect an app",
+        description:
+          "Offer the person a Connect button for an app (ID or slug) in a space; an agent’s space is the default. Call it when you need an app the space cannot use yet, ask them in a few words to connect it, then end your turn. A profile with no gaps means the app is ready.",
       }),
     ),
   )

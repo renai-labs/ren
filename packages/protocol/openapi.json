@@ -4313,6 +4313,82 @@
         "summary": "List the profiles a new chat reaches"
       }
     },
+    "/apps/{app}/connect": {
+      "get": {
+        "tags": ["app-profile-reach"],
+        "operationId": "app.connect",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An app a chat asks the person to connect: its space and the space’s profiles of it, with their gaps.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppProfile.Connect"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Offer the person a Connect button for an app (ID or slug) in a space; an agent’s space is the default. Call it when you need an app the space cannot use yet, ask them in a few words to connect it, then end your turn. A profile with no gaps means the app is ready.",
+        "summary": "Ask the person to connect an app"
+      }
+    },
     "/app-registry": {
       "get": {
         "tags": ["app-registry"],
@@ -11439,6 +11515,26 @@
           }
         },
         "additionalProperties": false
+      },
+      "AppProfile.Connect": {
+        "type": "object",
+        "properties": {
+          "appId": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.Info"
+            }
+          }
+        },
+        "required": ["appId", "spaceId", "profiles"],
+        "additionalProperties": false,
+        "description": "An app a chat asks the person to connect: its space and the space’s profiles of it, with their gaps."
       },
       "AppProfile.CreateInput": {
         "type": "object",

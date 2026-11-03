@@ -10,6 +10,7 @@ import { Context, Effect, Layer, Option } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { AppProfiles } from "./app/profiles.js"
+import { AppQueries } from "./app/queries.js"
 import { Credentials } from "./credentials.js"
 import { Primitive } from "./primitive.js"
 import { SessionPolicy } from "./session/policy.js"
@@ -19,6 +20,11 @@ import { SpaceQueries } from "./space/queries.js"
 export interface Interface {
   readonly forSession: (actor: Actor.Info, sessionId: Session.ID) => Effect.Effect<AppProfile.Reach, Primitive.NotFound>
   readonly forSpace: (actor: Actor.Info, spaceId: Space.ID) => Effect.Effect<AppProfile.Reach, Primitive.NotFound>
+  readonly forApp: (
+    actor: Actor.Info,
+    app: string,
+    spaceId: Option.Option<Space.ID>,
+  ) => Effect.Effect<AppProfile.Connect, Primitive.NotFound>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/CredentialRequirements") {}
@@ -64,12 +70,25 @@ export const layer = Layer.effect(
       } satisfies AppProfile.Reach
     })
 
+    const forSpace = Effect.fn("CredentialRequirements.forSpace")(function* (actor: Actor.Info, spaceId: Space.ID) {
+      yield* space(actor, spaceId, (found) =>
+        access.isAllowed({ actor, action: SpacePolicy.actions.reach, resource: SpacePolicy.resource(found) }),
+      )
+      return yield* reach(actor, { organizationId: actor.organizationId, spaceId: Option.some(spaceId) })
+    })
+
     return Service.of({
-      forSpace: Effect.fn("CredentialRequirements.forSpace")(function* (actor, spaceId) {
-        yield* space(actor, spaceId, (found) =>
-          access.isAllowed({ actor, action: SpacePolicy.actions.reach, resource: SpacePolicy.resource(found) }),
-        )
-        return yield* reach(actor, { organizationId: actor.organizationId, spaceId: Option.some(spaceId) })
+      forSpace,
+      forApp: Effect.fn("CredentialRequirements.forApp")(function* (actor, app, spaceId) {
+        const target = Option.orElse(spaceId, () => Option.fromNullishOr(actor.agent?.spaceId))
+        if (Option.isNone(target)) return yield* new Primitive.NotFound({ message: "Pass the space to connect in." })
+        const found = yield* database.transaction((transaction) => AppQueries.find(transaction, access, actor, app))
+        const reached = yield* forSpace(actor, target.value)
+        return {
+          appId: found.app.id,
+          spaceId: target.value,
+          profiles: reached.profiles.filter((profile) => profile.appId === found.app.id),
+        } satisfies AppProfile.Connect
       }),
       forSession: Effect.fn("CredentialRequirements.forSession")(function* (actor, sessionId) {
         const chat = (yield* database.db
