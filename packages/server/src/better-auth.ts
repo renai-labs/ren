@@ -2,6 +2,7 @@ export * as BetterAuth from "./better-auth.js"
 
 import { cimd } from "@better-auth/cimd"
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
+import { expo } from "@better-auth/expo"
 import { mcp } from "@better-auth/mcp"
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
 import { Mailer } from "@ren/core/mailer"
@@ -84,6 +85,8 @@ const ids = new Map<string, () => string>([
 export const mcpScope = "ren"
 
 export const organizationClaim = "ren_org"
+
+const mobileOrigin = "ren://"
 
 const ActiveOrganization = Schema.Struct({ activeOrganizationId: Schema.String })
 
@@ -302,7 +305,7 @@ export const make = (input: Input) => {
       "/email-otp/request-email-change",
       "/email-otp/change-email",
     ],
-    trustedOrigins: [...input.trustedOrigins],
+    trustedOrigins: [...input.trustedOrigins, mobileOrigin],
     database: (options) => {
       const adapter = drizzleAdapter(input.database, { provider: "pg", schema: Database.Schema })(options)
       return {
@@ -360,6 +363,7 @@ export const make = (input: Input) => {
     },
     plugins: [
       bearer(),
+      expo(),
       emailCodes(input),
       organizationPlugin,
       jwt({ disableSettingJwtHeader: true }),

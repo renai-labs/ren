@@ -1,6 +1,6 @@
 # @ren/app
 
-The product SPA and its web host, built from shadcn's components in `@ren/ui`. Desktop and mobile hosts will import it through a dedicated entry point and supply their own `Platform`. Load the `react`, `interface` and `shadcn` skills before writing components.
+The product SPA and its web host, built from shadcn's components in `@ren/ui`. A desktop host will import it through a dedicated entry point and supply its own `Platform`. The mobile app (`packages/mobile`) has native screens and shares Ren's packages, not this one: logic it needs moves out of `src/` into the package that owns it. Load the `react`, `interface` and `shadcn` skills before writing components.
 
 ## Structure
 

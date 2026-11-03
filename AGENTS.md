@@ -40,9 +40,10 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 - `brain` holds brain code that is the same on every host and every harness: how a brain reaches its environment. It depends only on `schema` and `environment-api`.
 - `opencode-transcript` translates OpenCode rows and types into the Chat API types. It depends only on `schema`, `@opencode/schema` and `@opencode/core/session/info`. `cell` and `server` use it; `core` never imports it.
 - `client` may depend only on `schema` and `protocol`. `chat` builds on `client`, `schema` and `protocol` and is the live chat runtime for every client platform. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `chat`, `schema`, `ui` and `util`, and uses `better-auth/client` for auth flows.
+- `mobile` is the iOS and Android app (Expo). It builds on `client`, `chat`, `schema` and `util`, never on `app` or `ui`: logic both apps need moves into the package that owns it.
 - `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`.
 - `telemetry` is how a process sends telemetry: OTLP export from the standard `OTEL_*` variables, and PostHog's error reporter in `posthog.ts`, the only module that knows a telemetry vendor. It imports nothing from Ren. `core`, `server`, `cell` and `executor` use it; only a process's main file provides `PostHog.layer`.
-- `client`, `chat`, `sdk`, `cli`, `app` and `ui` never import `core`, `db`, `server`, `host-api` or `environment-api`.
+- `client`, `chat`, `sdk`, `cli`, `app`, `mobile` and `ui` never import `core`, `db`, `server`, `host-api` or `environment-api`.
 - `httpapi-codegen` stays independent of every Ren package.
 - `repos/` holds read-only copies of external repositories. Prefer their patterns over memory or web search. Do not edit or import them. The one exception is `repos/iron-proxy`, Ren's egress: a subtree of iron-proxy (Go) that Ren builds on and edits, and a workspace (`@ren/egress`). See `repos/iron-proxy/AGENTS.md`.
 

@@ -1,0 +1,20 @@
+appId: ai.ren.app
+---
+- runFlow: launch.yaml
+- tapOn: New chat
+- tapOn: Message
+- inputText: Reply with only the word pong.
+- tapOn: Send
+- extendedWaitUntil:
+    visible: pong
+    timeout: 180000
+- tapOn: Message
+- inputText: Now reply with only the word ping.
+- tapOn: Send
+- extendedWaitUntil:
+    visible: ping
+    timeout: 180000
+- back
+- extendedWaitUntil:
+    visible: Chats
+    timeout: 10000
