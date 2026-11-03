@@ -1,4 +1,4 @@
-import { afterAll, describe, expect } from "bun:test"
+import { afterAll, describe, expect, test } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Channel } from "@ren/schema/channel"
@@ -416,6 +416,164 @@ describe("Slack", () => {
         expect(gone).toMatchObject({ _tag: "ChannelProvider.PlaceGone" })
       }),
   )
+
+  it.live(
+    "charts post as data_visualization blocks after the text; when Slack refuses the blocks, the text goes alone and the charts are reported dropped",
+    () =>
+      Effect.gen(function* () {
+        const slackProvider = yield* provider
+        const found = yield* installed()
+        const target = { install: found.workspace, place: "eng", thread: "C07:1712.33", message: "1712.40" }
+        const charts = [
+          {
+            type: "bar",
+            title: "Sessions per week",
+            categories: ["Plan", "Build"],
+            series: [{ name: "Sessions", values: [42, 31] }],
+            xLabel: "Agent",
+          },
+          { type: "pie", title: "Models", segments: [{ label: "Opus", value: 3 }] },
+        ]
+        expect(yield* slackProvider.send(target, "Weekly sessions", charts)).toEqual(
+          Option.some({ sent: 2, repaired: [], dropped: [] }),
+        )
+        expect(slack.posted.at(-1)?.params.blocks).toBe(
+          JSON.stringify([
+            { type: "markdown", text: "Weekly sessions" },
+            {
+              type: "data_visualization",
+              title: "Sessions per week",
+              chart: {
+                type: "bar",
+                series: [
+                  {
+                    name: "Sessions",
+                    data: [
+                      { label: "Plan", value: 42 },
+                      { label: "Build", value: 31 },
+                    ],
+                  },
+                ],
+                axis_config: { categories: ["Plan", "Build"], x_label: "Agent" },
+              },
+            },
+            {
+              type: "data_visualization",
+              title: "Models",
+              chart: { type: "pie", segments: [{ label: "Opus", value: 3 }] },
+            },
+          ]),
+        )
+        const start = slack.posted.length
+        slack.options.chartError = "invalid_blocks"
+        const refused = yield* slackProvider.send(target, "Weekly sessions", charts)
+        slack.options.chartError = undefined
+        expect(refused).toEqual(
+          Option.some({
+            sent: 0,
+            repaired: [],
+            dropped: [
+              { title: "Sessions per week", reason: "Slack refused it: invalid_blocks." },
+              { title: "Models", reason: "Slack refused it: invalid_blocks." },
+            ],
+          }),
+        )
+        expect(slack.posted.slice(start).map((each) => each.params.blocks)).toEqual([
+          expect.stringContaining("data_visualization"),
+          JSON.stringify([{ type: "markdown", text: "Weekly sessions" }]),
+        ])
+        expect(yield* slackProvider.send(target, "No charts", [])).toEqual(Option.none())
+        expect(slack.posted.at(-1)?.params.blocks).toBe(JSON.stringify([{ type: "markdown", text: "No charts" }]))
+      }),
+  )
+
+  test("a chart is cut to Slack's limits with …, and names that become equal are numbered", () => {
+    const long = "Strawberry Rhubarb Pie"
+    const repaired = Slack.repair([
+      {
+        type: "line",
+        title: "Weekly sales of every pie in the shop, by flavour",
+        categories: [`${long} A`, `${long} B`, "Key Lime"],
+        series: [
+          { name: `${long} online`, values: [1, 2, 3] },
+          { name: `${long} in store`, values: [4, 5, 6] },
+        ],
+        yLabel: "Sales",
+      },
+    ])
+    expect(repaired.charts.map((each) => each.chart)).toEqual([
+      {
+        type: "line",
+        title: "Weekly sales of every pie in the shop, by flavour",
+        categories: ["Strawberry Rhubarb…", "Strawberry Rhubar… 2", "Key Lime"],
+        series: [
+          { name: "Strawberry Rhubarb…", values: [1, 2, 3] },
+          { name: "Strawberry Rhubar… 2", values: [4, 5, 6] },
+        ],
+        yLabel: "Sales",
+      },
+    ])
+    expect(repaired.report.repaired).toEqual([
+      {
+        title: "Weekly sales of every pie in the shop, by flavour",
+        reason: "Cut 4 labels to 20 characters. Numbered 2 labels that had the same name.",
+      },
+    ])
+    const titled = Slack.repair([{ type: "pie", title: "t".repeat(60), segments: [{ label: "a", value: 1 }] }])
+    expect(titled.charts.at(0)?.chart.title).toBe(`${"t".repeat(49)}…`)
+  })
+
+  test("a pie leaves out slices of 0 or less, and over 12 slices keeps the 11 largest and adds Other", () => {
+    const segments = [
+      { label: "none", value: 0 },
+      ...Array.from({ length: 14 }, (_, index) => ({ label: `s${index + 1}`, value: index + 1 })),
+    ]
+    const repaired = Slack.repair([{ type: "pie", title: "Share", segments }])
+    expect(repaired.charts.at(0)?.chart).toEqual({
+      type: "pie",
+      title: "Share",
+      segments: [
+        ...Array.from({ length: 11 }, (_, index) => ({ label: `s${index + 4}`, value: index + 4 })),
+        { label: "Other", value: 6 },
+      ],
+    })
+    expect(repaired.report.repaired.at(0)?.reason).toBe(
+      "Left out 1 slices with a value of 0 or less. Merged the 3 smallest slices into Other.",
+    )
+  })
+
+  test("a chart Ren cannot fix is dropped with its reason, and only the first 2 valid charts are sent", () => {
+    const bar = (title: string, values: ReadonlyArray<unknown>, categories = ["a", "b"]) => ({
+      type: "bar",
+      title,
+      categories,
+      series: [{ name: "s", values }],
+    })
+    const repaired = Slack.repair([
+      bar("Uneven", [1]),
+      bar(
+        "Too wide",
+        Array.from({ length: 21 }, () => 1),
+        Array.from({ length: 21 }, (_, index) => `c${index}`),
+      ),
+      bar("Empty", [], []),
+      bar("Not a number", [1, "two"]),
+      { type: "radar", title: "Unknown type" },
+      bar("First", [1, 2]),
+      bar("Second", [1, 2]),
+      bar("Third", [1, 2]),
+    ])
+    expect(repaired.charts.map((each) => each.title)).toEqual(["First", "Second"])
+    expect(repaired.report.sent).toBe(2)
+    expect(repaired.report.dropped.map((each) => [each.title, each.reason.split(":").at(0)])).toEqual([
+      ["Uneven", "Series s has 1 values for 2 categories."],
+      ["Too wide", "It has more than 20 categories."],
+      ["Empty", "It has no data."],
+      ["Not a number", "It is not a valid chart"],
+      ["Unknown type", "It is not a valid chart"],
+      ["Third", "Slack shows at most 2 charts in a message."],
+    ])
+  })
 
   it.live(
     "received adds 👀, done swaps it for ✅ and failed swaps it for ❌; a reaction Slack already has or lacks is no error",

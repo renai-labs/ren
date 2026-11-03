@@ -1,8 +1,8 @@
 export * as Slack from "./slack.js"
 
-import type { Channel } from "@ren/schema/channel"
+import { Channel } from "@ren/schema/channel"
 import type { TaskLink } from "@ren/schema/task-link"
-import { Clock, Effect, Option, Redacted, Schema, Stream, Struct } from "effect"
+import { Clock, Effect, Option, Redacted, Result, Schema, Stream, Struct } from "effect"
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { slackifyMarkdown } from "slackify-markdown"
 import { ChannelProvider } from "../channel-provider.js"
@@ -124,7 +124,207 @@ export const blocks = (text: string) => {
   return sections(fallback(trimmed)).map((part) => ({ type: "section", text: { type: "mrkdwn", text: part } }))
 }
 
-export const message = (text: string) => ({ text: fallback(text), blocks: blocks(text) })
+const titleLimit = 50
+
+const labelLimit = 20
+
+const chartsPerMessage = 2
+
+const pieSlices = 12
+
+const seriesLimit = 12
+
+const categoryLimit = 20
+
+const chartErrors = new Set(["invalid_blocks", "invalid_blocks_format", "msg_blocks_too_long"])
+
+const decodeChart = Schema.decodeUnknownResult(Channel.Chart)
+
+const decodeTitle = Schema.decodeUnknownOption(Schema.Struct({ title: Schema.String }))
+
+const cut = (text: string, limit: number) => (text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}…`)
+
+const distinct = (names: ReadonlyArray<string>) => {
+  const taken = new Set<string>()
+  return names.map((name) => {
+    const unique = (count: number): string => {
+      const suffix = count === 1 ? "" : ` ${count}`
+      const candidate = `${cut(name, labelLimit - suffix.length)}${suffix}`
+      return taken.has(candidate) ? unique(count + 1) : candidate
+    }
+    const found = unique(1)
+    taken.add(found)
+    return found
+  })
+}
+
+const changesOf = (title: string, labels: ReadonlyArray<string>, fitted: ReadonlyArray<string>) => {
+  const cuts = labels.filter((label) => label.length > labelLimit).length
+  const renamed = labels.filter((label, index) => fitted[index] !== cut(label, labelLimit)).length
+  return [
+    ...(title.length > titleLimit ? [`Cut the title to ${titleLimit} characters.`] : []),
+    ...(cuts > 0 ? [`Cut ${cuts} labels to ${labelLimit} characters.`] : []),
+    ...(renamed > 0 ? [`Numbered ${renamed} labels that had the same name.`] : []),
+  ]
+}
+
+type Checked =
+  | { readonly title: string; readonly chart: Channel.Chart; readonly changes: ReadonlyArray<string> }
+  | { readonly title: string; readonly reason: string }
+
+const checkPie = (title: string, chart: Extract<Channel.Chart, { readonly type: "pie" }>): Checked => {
+  const positive = chart.segments.filter((segment) => segment.value > 0)
+  if (positive.length === 0) return { title, reason: "It has no slice with a value above 0." }
+  const largest = positive.toSorted((left, right) => right.value - left.value)
+  const shown = new Set(largest.slice(0, pieSlices - 1))
+  const rest = largest.slice(pieSlices - 1)
+  const segments =
+    positive.length <= pieSlices
+      ? positive
+      : [
+          ...positive.filter((segment) => shown.has(segment)),
+          { label: "Other", value: rest.reduce((sum, segment) => sum + segment.value, 0) },
+        ]
+  const labels = segments.map((segment) => segment.label)
+  const fitted = labels.map((label) => cut(label, labelLimit))
+  return {
+    title,
+    chart: {
+      type: "pie",
+      title: cut(chart.title, titleLimit),
+      segments: segments.map((segment, index) => ({ label: fitted[index] ?? segment.label, value: segment.value })),
+    },
+    changes: [
+      ...changesOf(chart.title, labels, fitted),
+      ...(positive.length < chart.segments.length
+        ? [`Left out ${chart.segments.length - positive.length} slices with a value of 0 or less.`]
+        : []),
+      ...(positive.length > pieSlices ? [`Merged the ${rest.length} smallest slices into Other.`] : []),
+    ],
+  }
+}
+
+const checkSeries = (title: string, chart: Exclude<Channel.Chart, { readonly type: "pie" }>): Checked => {
+  if (chart.categories.length === 0 || chart.series.length === 0) return { title, reason: "It has no data." }
+  if (chart.categories.length > categoryLimit) return { title, reason: `It has more than ${categoryLimit} categories.` }
+  if (chart.series.length > seriesLimit) return { title, reason: `It has more than ${seriesLimit} series.` }
+  const uneven = chart.series.find((series) => series.values.length !== chart.categories.length)
+  if (uneven)
+    return {
+      title,
+      reason: `Series ${uneven.name} has ${uneven.values.length} values for ${chart.categories.length} categories.`,
+    }
+  const categories = distinct(chart.categories)
+  const names = distinct(chart.series.map((series) => series.name))
+  return {
+    title,
+    chart: {
+      ...chart,
+      title: cut(chart.title, titleLimit),
+      categories,
+      series: chart.series.map((series, index) => ({ name: names[index] ?? series.name, values: series.values })),
+      ...(chart.xLabel && { xLabel: cut(chart.xLabel, titleLimit) }),
+      ...(chart.yLabel && { yLabel: cut(chart.yLabel, titleLimit) }),
+    },
+    changes: changesOf(
+      chart.title,
+      [...chart.categories, ...chart.series.map((series) => series.name)],
+      [...categories, ...names],
+    ),
+  }
+}
+
+const check = (input: unknown): Checked => {
+  const title = Option.match(decodeTitle(input), { onNone: () => "Untitled chart", onSome: (found) => found.title })
+  const decoded = decodeChart(input)
+  if (Result.isFailure(decoded)) return { title, reason: `It is not a valid chart: ${decoded.failure.message}` }
+  return decoded.success.type === "pie" ? checkPie(title, decoded.success) : checkSeries(title, decoded.success)
+}
+
+export const repair = (inputs: ReadonlyArray<unknown>) => {
+  const checked = inputs.map(check)
+  const valid = checked.filter((each) => "chart" in each)
+  const kept = valid.slice(0, chartsPerMessage)
+  return {
+    charts: kept,
+    report: {
+      sent: kept.length,
+      repaired: kept
+        .filter((each) => each.changes.length > 0)
+        .map((each) => ({ title: each.title, reason: each.changes.join(" ") })),
+      dropped: [
+        ...checked.flatMap((each) => ("reason" in each ? [{ title: each.title, reason: each.reason }] : [])),
+        ...valid.slice(chartsPerMessage).map((each) => ({
+          title: each.title,
+          reason: `Slack shows at most ${chartsPerMessage} charts in a message.`,
+        })),
+      ],
+    } satisfies Channel.ChartReport,
+  }
+}
+
+const blockOf = (chart: Channel.Chart) => ({
+  type: "data_visualization",
+  title: chart.title,
+  chart:
+    chart.type === "pie"
+      ? { type: "pie", segments: chart.segments }
+      : {
+          type: chart.type,
+          series: chart.series.map((series) => ({
+            name: series.name,
+            data: chart.categories.map((label, index) => ({ label, value: series.values[index] ?? 0 })),
+          })),
+          axis_config: {
+            categories: chart.categories,
+            ...(chart.xLabel && { x_label: chart.xLabel }),
+            ...(chart.yLabel && { y_label: chart.yLabel }),
+          },
+        },
+})
+
+export const message = (text: string, charts: ReadonlyArray<Channel.Chart> = []) => ({
+  text: fallback(text),
+  blocks: [...blocks(text), ...charts.map(blockOf)],
+})
+
+export const post = <A>(
+  text: string,
+  charts: ReadonlyArray<unknown>,
+  send: (payload: ReturnType<typeof message>) => Effect.Effect<A, SlackApp.Failed>,
+): Effect.Effect<{ readonly answer: A; readonly charts: Option.Option<Channel.ChartReport> }, SlackApp.Failed> => {
+  if (charts.length === 0) return send(message(text)).pipe(Effect.map((answer) => ({ answer, charts: Option.none() })))
+  const repaired = repair(charts)
+  return send(
+    message(
+      text,
+      repaired.charts.map((each) => each.chart),
+    ),
+  ).pipe(
+    Effect.map((answer) => ({ answer, charts: Option.some(repaired.report) })),
+    Effect.catchTag("SlackApp.Failed", (error) =>
+      repaired.charts.length > 0 && error.error && chartErrors.has(error.error)
+        ? Effect.logWarning("Slack refused the charts of a reply; Ren posts the text only", error).pipe(
+            Effect.andThen(send(message(text))),
+            Effect.map((answer) => ({
+              answer,
+              charts: Option.some({
+                sent: 0,
+                repaired: [],
+                dropped: [
+                  ...repaired.report.dropped,
+                  ...repaired.charts.map((each) => ({
+                    title: each.title,
+                    reason: `Slack refused it: ${error.error}.`,
+                  })),
+                ],
+              }),
+            })),
+          )
+        : Effect.fail(error),
+    ),
+  )
+}
 
 export const delivery = (error: SlackApp.Failed) => {
   if (error.error && goneErrors.has(error.error)) return new ChannelProvider.PlaceGone({ message: error.message })
@@ -400,12 +600,13 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
       },
       Effect.mapError((error) => new ChannelProvider.Unavailable({ message: error.message })),
     ),
-    send: Effect.fn("Slack.send")(function* (target, text) {
+    send: Effect.fn("Slack.send")(function* (target, text, charts = []) {
       const token = yield* tokenOf(target.install)
       const thread = threadOf(target)
-      yield* app
-        .post("chat.postMessage", { channel: thread.channel, thread_ts: thread.ts, ...message(text) }, Posted, token)
-        .pipe(Effect.mapError(delivery))
+      const sent = yield* post(text, charts, (payload) =>
+        app.post("chat.postMessage", { channel: thread.channel, thread_ts: thread.ts, ...payload }, Posted, token),
+      ).pipe(Effect.mapError(delivery))
+      return sent.charts
     }),
     progress: Effect.fn("Slack.progress")(function* (target, status) {
       const token = yield* tokenOf(target.install)

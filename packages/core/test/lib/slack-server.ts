@@ -55,7 +55,12 @@ export interface Instance {
   readonly users: Map<string, User>
   readonly files: Map<string, string>
   readonly posted: Array<{ readonly method: string; readonly token: string; readonly params: Params }>
-  readonly options: { pageSize: number; revokeError: string | undefined; postError: string | undefined }
+  readonly options: {
+    pageSize: number
+    revokeError: string | undefined
+    postError: string | undefined
+    chartError: string | undefined
+  }
   readonly stop: () => void
 }
 
@@ -122,6 +127,13 @@ const lookup = (state: State, name: string, params: Params, origin: string) => {
     : undefined
 }
 
+const post = (state: State, name: string, token: string, params: Params) => {
+  state.posted.push({ method: name, token, params })
+  if (state.options.chartError && params.blocks?.includes('"data_visualization"'))
+    return refuse(state.options.chartError)
+  return state.options.postError ? refuse(state.options.postError) : answer({ ts: `${state.posted.length}.0` })
+}
+
 const method = (state: State, name: string, token: string, params: Params, origin: string) => {
   if (name === "oauth.v2.access") return exchange(state, params)
   if (!known(state, token)) return refuse("invalid_auth")
@@ -146,8 +158,7 @@ const method = (state: State, name: string, token: string, params: Params, origi
       return found ? answer({ channel: found }) : refuse("channel_not_found")
     }
     default:
-      state.posted.push({ method: name, token, params })
-      return state.options.postError ? refuse(state.options.postError) : answer({ ts: `${state.posted.length}.0` })
+      return post(state, name, token, params)
   }
 }
 
@@ -161,7 +172,7 @@ export const start = (): Instance => {
     users: new Map(),
     files: new Map(),
     posted: [],
-    options: { pageSize: 200, revokeError: undefined, postError: undefined },
+    options: { pageSize: 200, revokeError: undefined, postError: undefined, chartError: undefined },
   }
   const server = Bun.serve({
     hostname: "127.0.0.1",
