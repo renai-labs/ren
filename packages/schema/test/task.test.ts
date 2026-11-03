@@ -72,8 +72,14 @@ describe("Task.ReviewInput", () => {
 })
 
 describe("Task.AssignInput", () => {
-  test("needs an agent or an owner", () => {
+  test("needs an agent, an owner or a space", () => {
     expect(Exit.isSuccess(Schema.decodeUnknownExit(Task.AssignInput)({ note: "build it" }))).toBe(false)
+  })
+
+  test("a space alone moves the task", () => {
+    expect(
+      Exit.isSuccess(Schema.decodeUnknownExit(Task.AssignInput)({ spaceId: "spc_01M6G86V8P2B2208D9QDPT1M3R" })),
+    ).toBe(true)
   })
 
   test("accepts null to clear the agent", () => {

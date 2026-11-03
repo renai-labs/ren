@@ -202,7 +202,8 @@ export const UpdateInput = Schema.Struct({
 })
 
 export const hasAssignee = Schema.makeFilter(
-  (input: object) => "agentId" in input || "ownerId" in input || "Pass agentId or ownerId.",
+  (input: object) =>
+    "agentId" in input || "ownerId" in input || "spaceId" in input || "Pass agentId, ownerId or spaceId.",
 )
 
 export interface AssignInput extends Schema.Schema.Type<typeof AssignInput> {}
