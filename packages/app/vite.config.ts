@@ -33,6 +33,9 @@ const preloadFonts: Plugin = {
 
 export default defineConfig((env) => ({
   base,
+  resolve: {
+    alias: [{ find: /^@tabler\/icons-react$/u, replacement: new URL("icons/heroicons.tsx", import.meta.url).pathname }],
+  },
   plugins: [tanstackRouter(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), preloadFonts],
   build: { sourcemap: "hidden" },
   define:

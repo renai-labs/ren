@@ -25,10 +25,18 @@ export function RowMenu(props: {
   side?: "top" | "right" | "bottom" | "left"
 }) {
   const [confirming, setConfirming] = useState<RowMenuItem>()
+  const [chosen, setChosen] = useState<RowMenuItem>()
   if (props.items.length === 0) return null
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu
+        onOpenChangeComplete={(open) => {
+          if (open || !chosen) return
+          setChosen(undefined)
+          if (chosen.confirm) setConfirming(chosen)
+          else void chosen.onSelect()
+        }}
+      >
         <DropdownMenuTrigger
           render={
             <Button
@@ -46,10 +54,7 @@ export function RowMenu(props: {
             {props.items.map((item, index) => (
               <Fragment key={item.label}>
                 {item.confirm && index > 0 ? <DropdownMenuSeparator /> : null}
-                <DropdownMenuItem
-                  variant={item.confirm ? "destructive" : "default"}
-                  onClick={() => (item.confirm ? setConfirming(item) : void item.onSelect())}
-                >
+                <DropdownMenuItem variant={item.confirm ? "destructive" : "default"} onClick={() => setChosen(item)}>
                   <item.icon />
                   {item.label}
                 </DropdownMenuItem>
