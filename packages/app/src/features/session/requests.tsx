@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
-import type { Form } from "@ren/schema/form"
+import { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
 import { IconGhost, IconShieldQuestion, IconWorld, IconX } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
@@ -27,23 +27,6 @@ import {
 } from "@ren/ui/questionnaire"
 import { Spinner } from "@ren/ui/spinner"
 import { errorMessage } from "../../lib/errors.js"
-
-type QuestionField = Form.StringField | Form.MultiselectField
-
-const isQuestion = (field: Form.Field): field is QuestionField =>
-  field.type === "string" || field.type === "multiselect"
-
-function readAnswer(form: Form.Info, data: FormData): Form.Answer {
-  return Object.fromEntries(
-    form.fields.filter(isQuestion).flatMap((field) => {
-      const values = data
-        .getAll(field.key)
-        .flatMap((value) => (typeof value === "string" && value.trim() ? [value.trim()] : []))
-      if (values.length === 0) return []
-      return [[field.key, field.type === "multiselect" ? values : (values.at(0) ?? "")]]
-    }),
-  )
-}
 
 function Source(props: {
   title: string
@@ -119,7 +102,7 @@ function QuestionForm(props: {
   onSubmit: (answer: Form.Answer) => void
   onDismiss: () => void
 }) {
-  const questions = props.form.fields.filter(isQuestion)
+  const questions = props.form.fields.filter(Form.isQuestion)
   return (
     <Card size="sm">
       <CardHeader>
@@ -154,7 +137,8 @@ function QuestionForm(props: {
           }}
           onSubmit={(event) => {
             event.preventDefault()
-            props.onSubmit(readAnswer(props.form, new FormData(event.currentTarget)))
+            const data = new FormData(event.currentTarget)
+            props.onSubmit(Form.answer(props.form, (key) => data.getAll(key)))
           }}
         >
           {questions.length > 1 ? <QuestionnaireProgress /> : null}

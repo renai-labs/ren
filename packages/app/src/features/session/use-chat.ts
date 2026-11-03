@@ -1,13 +1,15 @@
+import { SessionTitle } from "@ren/chat"
+import { Seed, SessionPages } from "@ren/client/react"
 import { useState } from "react"
 import { useAtomRefresh } from "@effect/atom-react"
-import { ChatState, Composer, SessionTasks, type ChatSession } from "@ren/chat"
+import { ChatState, Composer, SessionLive, SessionTasks, type ChatSession } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import type { SessionInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Effect, Option, SubscriptionRef } from "effect"
+import { Option } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { toast } from "@ren/ui/sonner"
 import type { PromptInputBoot } from "./prompt-input.js"
@@ -17,26 +19,10 @@ import { useMembers } from "../../lib/use-members.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useComposerSuggestions } from "./use-composer-suggestions.js"
-import { childTitle, useView } from "./chat-view.js"
-import { Seed } from "../../lib/seed.js"
-import { sessionKeys, useChatCacheBridge } from "../../lib/chat.js"
-import { sessionTitle } from "../../lib/sessions.js"
 import { useAttentionNotification } from "../../lib/notify.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Drafts } from "../../lib/drafts.js"
 import { RouterContext } from "../../lib/router-context.js"
-
-const statusesOf = (state: ChatState.State, sessionID: Session.ID): ReadonlyMap<string, ChatState.PendingStatus> =>
-  new Map(
-    ChatState.pending(state, sessionID).flatMap((item) => {
-      const status = item.type === "user" ? ChatState.pendingStatus(state, sessionID, item.id) : undefined
-      return status ? [[item.id, status] as const] : []
-    }),
-  )
-
-const known = (state: ChatState.State, sessionID: Session.ID, id: SessionMessage.ID) =>
-  ChatState.messages(state, sessionID).some((message) => message.id === id) ||
-  ChatState.pending(state, sessionID).some((item) => item.id === id)
 
 function useChatSuggestions(input: {
   root: Session.ID
@@ -110,17 +96,6 @@ const capabilitiesOf = (info: { readonly capabilities: SessionInfo["capabilities
   canRevert: info?.capabilities.revert !== false,
 })
 
-const bridgeOf = (
-  info: { readonly title?: string | null | undefined } | undefined,
-  state: { readonly running: boolean },
-) =>
-  info
-    ? {
-        title: sessionTitle(info.title, "") || undefined,
-        status: state.running ? ("busy" as const) : ("idle" as const),
-      }
-    : {}
-
 const viewerOf = (user: {
   readonly id: string
   readonly name: string
@@ -153,13 +128,17 @@ export function useChat(
   const child = childOf(options, localChild)
   const stored = useQuery({
     ...api.session.get.queryOptions({ idOrSlug: params.sessionId }),
-    ...Seed.fromList<SessionInfo>(queryClient, [api.session.list.queryKey(), sessionKeys.infinite()], params.sessionId),
+    ...Seed.fromList<SessionInfo>(
+      queryClient,
+      [api.session.list.queryKey(), SessionPages.keys.all()],
+      params.sessionId,
+    ),
   })
-  const view = useView(root, child)
+  const view = ChatReact.useView(root, child)
   const state = view.state
   const info = state.info[root]
   const running = ChatState.activity(state, root) === "running"
-  const title = sessionTitle(info?.title ?? stored.data?.title)
+  const title = SessionTitle.display(info?.title ?? stored.data?.title)
   const spaceId = stored.data?.spaceId
   const spaceName = useSpaces().spaceName(spaceId)
   const members = useMembers().members
@@ -172,16 +151,7 @@ export function useChat(
   const [reverting, setReverting] = useState(false)
   const boot = AsyncResult.getOrElse(view.session.boot, () => undefined)
   const connection = AsyncResult.getOrElse(view.session.status, () => undefined)
-  const prompt = ChatReact.useAction(root, (opened, request: ChatSession.PromptInput) =>
-    opened.prompt(request).pipe(
-      Effect.retry({ times: 1 }),
-      Effect.catch((error) =>
-        Effect.flatMap(SubscriptionRef.get(opened.state), (current) =>
-          request.id && known(current, root, request.id) ? Effect.void : Effect.fail(error),
-        ),
-      ),
-    ),
-  )
+  const prompt = ChatReact.usePrompt(root)
   const interrupt = ChatReact.useAction(root, (opened) => opened.interrupt)
   const loadMore = ChatReact.useAction(root, (opened) => opened.loadMore(view.viewed))
   const revert = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.revert(id))
@@ -197,7 +167,7 @@ export function useChat(
   const expanded = ChatPreferences.detail.read(platform.storage) === "detailed"
   const blocked = Boolean(view.permission ?? view.form)
   useAttentionNotification({ running, asking: blocked, title })
-  useChatCacheBridge(root, bridgeOf(info, { running }))
+  SessionPages.useLive(api, root, SessionLive.of(state, root))
 
   const model = pickModel(modelList, [saved, info?.model])
   const suggestions = useChatSuggestions({
@@ -224,13 +194,13 @@ export function useChat(
     activeMessageID: view.projection?.activeMessageID,
     busy: view.running,
     working: view.working,
-    statuses: statusesOf(state, view.viewed),
+    statuses: ChatState.pendingStatuses(state, view.viewed),
     people: new Map(members.map((member) => [member.id, { name: member.name, image: member.image }])),
     modelNames: new Map(modelList.map((each) => [each.id, each.name])),
     more: ChatState.more(state, view.viewed),
     loading: view.loading,
     loadingHistory: ChatState.loadingHistory(state, view.viewed),
-    childTitle: child && childTitle(state, child),
+    childTitle: child && SessionTitle.child(state, child),
     requests: {
       permission: view.permission,
       permissionTitle: view.permissionTitle,

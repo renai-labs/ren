@@ -96,6 +96,18 @@ export const pendingStatus = (state: State, sessionID: string, inboxID: string):
     : "starting"
 }
 
+export const pendingStatuses = (state: State, sessionID: string): ReadonlyMap<string, PendingStatus> =>
+  new Map(
+    pending(state, sessionID).flatMap((item) => {
+      const status = item.type === "user" ? pendingStatus(state, sessionID, item.id) : undefined
+      return status ? [[item.id, status] as const] : []
+    }),
+  )
+
+export const knows = (state: State, sessionID: string, id: string) =>
+  messages(state, sessionID).some((message) => message.id === id) ||
+  pending(state, sessionID).some((item) => item.id === id)
+
 export const visibleMessages = (
   list: ReadonlyArray<SessionMessage.Info>,
   inbox: ReadonlyArray<SessionInbox.Info>,

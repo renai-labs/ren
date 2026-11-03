@@ -1,6 +1,7 @@
+import { RelativeTime } from "@ren/util/relative-time"
 import type { ScheduleInfo, ScheduleListInput, ScheduleWhen } from "@ren/client"
 import { Cron, DateTime, Option, Result, Schema } from "effect"
-import { civilDate, formatInZone, formatRelative, localTimeZone, timeZones } from "@ren/ui/time"
+import { civilDate, formatInZone, localTimeZone, timeZones } from "@ren/ui/time"
 
 const ScheduleSearchSchema = Schema.Struct({
   page: Schema.optional(Schema.Number),
@@ -226,7 +227,7 @@ const pauseWords = {
 export const statusOf = (schedule: ScheduleInfo, now: number) => {
   if (schedule.status === "paused") return pauseWords[schedule.pausedReason ?? "user"]
   if (schedule.status === "ended" || !schedule.nextRunAt) return "Expired"
-  return `Next run ${formatRelative(schedule.nextRunAt, now)}`
+  return `Next run ${RelativeTime.format(schedule.nextRunAt, now)}`
 }
 
 export const nameOf = (message: string) =>
