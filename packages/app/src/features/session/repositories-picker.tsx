@@ -13,7 +13,7 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { toast } from "@ren/ui/sonner"
 import { AddRepositoriesDialog } from "../../components/add-repositories-dialog.js"
-import { GitHubMark } from "../../components/brand-marks.js"
+import { GitHubMark } from "../../icons/brands.js"
 import { Repositories } from "../../lib/repositories.js"
 import { RouterContext } from "../../lib/router-context.js"
 

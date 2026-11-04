@@ -1,5 +1,5 @@
 import { PromptInput } from "./prompt-input.js"
-import { Logomark } from "../../components/logomark.js"
+import { Logomark } from "../../icons/logomark.js"
 import { ModelPicker, pickModel } from "../../components/model-picker.js"
 import { WorkingIn } from "./working-in.js"
 import { RepositoriesPicker } from "./repositories-picker.js"

@@ -1,4 +1,4 @@
-import { GitHubMark, LinearMark, SlackMark } from "./brand-marks.js"
+import { GitHubMark, LinearMark, SlackMark } from "../icons/brands.js"
 import type { Channels } from "../lib/channels.js"
 
 const marks = { github: GitHubMark, slack: SlackMark, linear: LinearMark } as const

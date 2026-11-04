@@ -18,7 +18,7 @@ import { FieldError } from "@ren/ui/field"
 import { Spinner } from "@ren/ui/spinner"
 import { errorMessage } from "../lib/errors.js"
 import { Repositories } from "../lib/repositories.js"
-import { GitHubMark } from "./brand-marks.js"
+import { GitHubMark } from "../icons/brands.js"
 import { EmptyState } from "./empty-state.js"
 import { RouterContext } from "../lib/router-context.js"
 

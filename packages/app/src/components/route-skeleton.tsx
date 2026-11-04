@@ -9,7 +9,7 @@ import { ChannelMark } from "./channel-mark.js"
 import { Textarea } from "@ren/ui/textarea"
 import { IconCircle, IconChevronDown } from "@tabler/icons-react"
 import { ChatSkeleton, ComposerFrame } from "./chat-skeleton.js"
-import { Logomark } from "./logomark.js"
+import { Logomark } from "../icons/logomark.js"
 import { PersonAvatar } from "./person-avatar.js"
 import { Page, PageSkeleton, Row, Rows, RowsSample, Section, TableSample, useShapeId } from "./page.js"
 

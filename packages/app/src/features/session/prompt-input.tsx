@@ -17,7 +17,7 @@ import {
   IconTerminal2,
   IconX,
 } from "@tabler/icons-react"
-import { GitHubMark } from "../../components/brand-marks.js"
+import { GitHubMark } from "../../icons/brands.js"
 import {
   Attachment,
   AttachmentAction,

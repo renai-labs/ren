@@ -17,7 +17,7 @@ import {
   IconSettings,
   IconUsers,
 } from "@tabler/icons-react"
-import { GitMark } from "./brand-marks.js"
+import { GitMark } from "../icons/brands.js"
 import {
   DropdownMenu,
   DropdownMenuContent,
