@@ -4,6 +4,7 @@ import { Database } from "@ren/db/database"
 import { App } from "@ren/schema/app"
 import type { AppProfile } from "@ren/schema/app-profile"
 import type { Auth } from "@ren/schema/auth"
+import type { Packages } from "@ren/schema/packages"
 import { and, eq, inArray, isNull, min } from "drizzle-orm"
 import { Effect, Predicate } from "effect"
 import type { Access } from "../access.js"
@@ -24,7 +25,7 @@ export const canonical = (value: unknown): string => {
 }
 
 export const execution = (
-  definition: Omit<App.Definition, "environment"> & { readonly environment?: App.Environment | undefined },
+  definition: Omit<App.Definition, "environment"> & { readonly environment?: Packages.Setup | undefined },
 ) =>
   canonical({
     requiredCredentials: definition.requiredCredentials,

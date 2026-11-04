@@ -309,6 +309,36 @@ it.live("a failed skill copy stays pending for the next environment call", () =>
   }),
 )
 
+it.live("an app's setup runs on the environment before the chat's first environment tool", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* opened.begin()
+    const token = crypto.randomUUID()
+    const log = join(workspace, `${crypto.randomUUID()}.log`)
+    yield* opened.harness.configure({
+      apps: Option.some({
+        fingerprint: crypto.randomUUID(),
+        catalog: {
+          apps: [
+            {
+              appId: App.ID.create(),
+              appSlug: "tools",
+              name: "tools",
+              profiles: [],
+              environment: { packages: {}, buildCommands: [`echo ${token} >> ${log}`] },
+            },
+          ],
+          mcps: [],
+          skills: [],
+          unavailable: [],
+        },
+      }),
+    })
+    yield* Shared.appsSettled(opened.harness)
+    expect(result(yield* session.shell(`cat ${log}`))).toContain(token)
+  }),
+)
+
 it.live("a chat without an environment loads a text skill and is told that a skill's files are not available", () =>
   Effect.gen(function* () {
     const opened = yield* open()

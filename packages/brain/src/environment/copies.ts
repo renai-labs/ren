@@ -1,10 +1,12 @@
 export * as EnvironmentCopies from "./copies.js"
 
 import type { EnvironmentApi } from "@ren/environment-api/environment-api"
+import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Drive } from "@ren/schema/drive"
+import { Packages } from "@ren/schema/packages"
 import type { Session } from "@ren/schema/session"
 import { Skill } from "@ren/schema/skill"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Hash, Option, Schema } from "effect"
 import type { EnvironmentConnections } from "./connections.js"
 
 export interface File {
@@ -17,6 +19,7 @@ export type Copy =
   | { readonly type: "archive"; readonly unpack: Omit<EnvironmentApi.UnpackInput, "path"> }
   | { readonly type: "inline"; readonly files: ReadonlyArray<File> }
   | { readonly type: "mount"; readonly remote: Drive.Remote; readonly access: Drive.Access }
+  | { readonly type: "setup"; readonly entries: ReadonlyArray<EnvironmentApi.SetupEntry> }
 
 export interface Item {
   readonly path: string
@@ -41,6 +44,7 @@ const copyWith = (connection: EnvironmentConnections.Connection, item: Item) => 
   const client = connection.client
   const copy = item.copy
   if (copy.type === "archive") return client["files.unpack"]({ ...copy.unpack, path: item.path })
+  if (copy.type === "setup") return client["setup.run"]({ entries: copy.entries })
   if (copy.type === "mount")
     return connection.hello.mount
       ? client["drives.mount"]({ path: item.path, remote: copy.remote, access: copy.access })
@@ -66,6 +70,24 @@ const copyWith = (connection: EnvironmentConnections.Connection, item: Item) => 
   })
 }
 
+export const setupOf = (apps: ReadonlyArray<AppCatalog.AppEntry>): Option.Option<Item> => {
+  const entries = apps.flatMap((app) => {
+    const steps = app.environment ? Packages.steps(app.environment) : []
+    return steps.length
+      ? [
+          {
+            key: Math.abs(Hash.string(JSON.stringify([app.appSlug, app.environment]))).toString(36),
+            name: `the app ${app.appSlug}`,
+            steps,
+          },
+        ]
+      : []
+  })
+  return entries.length
+    ? Option.some({ path: `setup:${entries.map((entry) => entry.key).join(",")}`, copy: { type: "setup", entries } })
+    : Option.none()
+}
+
 // oxlint-disable-next-line ren/no-comments -- R53: the record of copies for references and skills. The generation and the copies come from one connection, so a copy never counts for another environment.
 export const make = (connections: EnvironmentConnections.Interface, sessionId: Session.ID): Interface => {
   const copied = { generation: Number.NaN, paths: new Set<string>() }
@@ -87,7 +109,8 @@ export const make = (connections: EnvironmentConnections.Interface, sessionId: S
                 ),
                 Effect.tap((failure) =>
                   Effect.sync(() => {
-                    if (Option.isNone(failure) || item.copy.type === "mount") copied.paths.add(item.path)
+                    if (Option.isNone(failure) || item.copy.type === "mount" || item.copy.type === "setup")
+                      copied.paths.add(item.path)
                   }),
                 ),
               ),

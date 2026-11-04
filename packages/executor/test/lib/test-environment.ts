@@ -27,6 +27,7 @@ export const layer = (options: {
         ConfigProvider.fromUnknown({
           EXECUTOR_ENVIRONMENT_ID: options.environmentId,
           EXECUTOR_WORKSPACE: options.workspace,
+          EXECUTOR_SETUP_DIRECTORY: `${options.workspace}.setup`,
           ENVIRONMENT_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(options.publicKeys ?? [keys.publicKey]),
         }),
       ),

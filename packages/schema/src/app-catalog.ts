@@ -5,6 +5,7 @@ import { App } from "./app.js"
 import { AppProfile } from "./app-profile.js"
 import { Credential } from "./credential.js"
 import { Mcp } from "./mcp.js"
+import { Packages } from "./packages.js"
 import { Primitive } from "./primitive.js"
 import { Skill } from "./skill.js"
 
@@ -31,7 +32,13 @@ export const AppEntry = Schema.Struct({
       }),
     }),
   ),
-}).annotate({ identifier: "AppCatalog.AppEntry" })
+  environment: Schema.optionalKey(
+    Packages.Setup.annotate({ description: "What the app installs on an environment, before its first tool there." }),
+  ),
+}).annotate({
+  identifier: "AppCatalog.AppEntry",
+  description: "In the order the environment sets them up: an app comes after the apps it depends on.",
+})
 
 export interface McpEntry extends Schema.Schema.Type<typeof McpEntry> {}
 export const McpEntry = Schema.Struct({
