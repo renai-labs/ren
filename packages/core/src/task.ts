@@ -251,6 +251,7 @@ export const layer = Layer.effect(
       const message = {
         messageId: Session.MessageID.create(),
         prompt: { text: planned.plan.text },
+        task: planned.plan.task,
         sender: { userId: actor.userId, memberId: yield* Actor.memberOf(database.db, actor) },
       }
       const sessionId = planned.plan.sessionId ?? Session.ID.create()

@@ -1,8 +1,9 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { Database } from "@ren/db/database"
 import type { Session } from "@ren/schema/session"
+import { TaskAssignment } from "@ren/schema/task-assignment"
 import { eq } from "drizzle-orm"
-import { Effect } from "effect"
+import { Effect, Option } from "effect"
 import { Space } from "../src/space.js"
 import { Task } from "../src/task.js"
 import { TaskActivity } from "../src/task/activity.js"
@@ -131,6 +132,26 @@ describe("Task start", () => {
         ])
         expect((yield* tasks.get(o.ada, created.id)).description).toBe("Support Okta.")
       }),
+  )
+
+  it.live("a task's first message carries the assignment it sends the agent", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const tasks = yield* Task.Service
+      const o = yield* org
+      const plan = yield* o.agent("plan")
+      const script = harness.stub.script()
+      const created = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: `Plan ${script.marker}` })
+      const session = yield* sessionOf(yield* tasks.assign(o.ada, created.id, { agentId: plan }))
+      yield* Effect.promise(() => script.called(1))
+      const row = (yield* database.db
+        .select({ start: Database.Schema.agent_session.start_input })
+        .from(Database.Schema.agent_session)
+        .where(eq(Database.Schema.agent_session.id, session))).at(0)
+      const message = row?.start?.initialMessage
+      expect(message?.task).toMatchObject({ taskId: created.id, title: created.title })
+      expect(TaskAssignment.parse(message?.prompt.text ?? "")).toEqual(Option.fromNullishOr(message?.task))
+    }),
   )
 
   it.live("new always opens a session; continue opens one when the agent's last session is archived", () =>

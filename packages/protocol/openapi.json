@@ -19259,6 +19259,9 @@
           },
           "schedule": {
             "$ref": "#/components/schemas/ScheduleOrigin.Info"
+          },
+          "task": {
+            "$ref": "#/components/schemas/TaskAssignment.Info"
           }
         },
         "required": ["id", "time", "text", "type"],
@@ -20847,6 +20850,28 @@
         },
         "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
+      },
+      "TaskAssignment.Info": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "identifier": {
+            "type": "string",
+            "description": "The task’s identifier, such as `REN-12`."
+          },
+          "title": {
+            "type": "string"
+          },
+          "brief": {
+            "type": "string",
+            "description": "What the agent reads after the heading: the description, handoff note, review and factory order."
+          }
+        },
+        "required": ["taskId", "identifier", "title", "brief"],
+        "additionalProperties": false,
+        "description": "The task a message assigns to the chat’s agent."
       },
       "TaskComment.Body": {
         "type": "string",
