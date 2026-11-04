@@ -1,7 +1,17 @@
 import { useState, type ReactNode } from "react"
 import type { CredentialInfo } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
-import { IconArrowsExchange, IconCopy, IconRefresh, IconTrash } from "@tabler/icons-react"
+import {
+  IconApps,
+  IconArrowsExchange,
+  IconBuilding,
+  IconCopy,
+  IconCube,
+  IconKey,
+  IconRefresh,
+  IconTrash,
+  IconUser,
+} from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
@@ -13,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { RowMenu } from "./row-menu.js"
 import { StatusBadge } from "./status-badge.js"
 import { TableCard, TableEmpty } from "./page.js"
+import { KeySheet } from "./key-sheet.js"
 import { ownerInput, ownerOptions } from "./credential-sheet.js"
 import { useMe } from "../lib/use-me.js"
 import { useSpaces } from "../lib/use-spaces.js"
@@ -148,6 +159,56 @@ function OwnerDialog(props: { kind: "move" | "copy"; credential: Credential; onC
   )
 }
 
+function KeyName(props: { credential: Credential; detail: string; onOpen: () => void }) {
+  return (
+    <span className="flex min-w-0 items-center gap-3">
+      <IconKey className="size-4 shrink-0 text-muted-foreground" />
+      <span className="flex min-w-0 flex-col">
+        <Button
+          variant="link"
+          className="block h-auto max-w-full min-w-0 p-0 text-left font-normal text-foreground after:absolute after:inset-0 hover:no-underline focus-visible:ring-0 active:not-aria-[haspopup]:scale-none"
+          title={props.credential.label}
+          onClick={props.onOpen}
+        >
+          <span className="block truncate">{props.credential.name ?? props.credential.label}</span>
+        </Button>
+        {props.detail ? <span className="truncate text-xs text-muted-foreground">{props.detail}</span> : null}
+      </span>
+    </span>
+  )
+}
+
+function Hosts(props: { hosts: ReadonlyArray<string> }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+      <span className="truncate">{hostsLabel(props.hosts.slice(0, 1))}</span>
+      {props.hosts.length > 1 && !props.hosts.includes(anyHost) ? (
+        <span className="shrink-0 rounded-md bg-muted px-1.5 text-xs tabular-nums">+{props.hosts.length - 1}</span>
+      ) : null}
+    </span>
+  )
+}
+
+const ownerIcons = { org: IconBuilding, space: IconCube, person: IconUser, profile: IconApps }
+
+function Owner(props: { credential: Credential; label: string }) {
+  const credential = props.credential
+  const OwnerIcon = ownerIcons[credential.owner.kind]
+  return (
+    <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+      <OwnerIcon className="size-4 shrink-0" />
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate">{props.label}</span>
+        {credential.account ? (
+          <span className="truncate text-xs text-muted-foreground">{credential.account.name}’s account</span>
+        ) : null}
+      </span>
+      {credential.delivery === "delivered" ? <StatusBadge tone="warn">Delivered</StatusBadge> : null}
+      {credential.status === "reconnect" ? <StatusBadge tone="error">Reconnect</StatusBadge> : null}
+    </span>
+  )
+}
+
 export function CredentialsTable(props: {
   credentials: ReadonlyArray<Credential>
   empty: ReactNode
@@ -159,6 +220,7 @@ export function CredentialsTable(props: {
   const spaces = useSpaces().spaces
   const remove = useMutation(api.credential.remove.mutationOptions())
   const [editing, setEditing] = useState<Editing>()
+  const [opened, setOpened] = useState<string>()
   return (
     <TableCard className={cn("transition-opacity", props.stale && "opacity-60")}>
       <Table className="table-fixed">
@@ -178,31 +240,21 @@ export function CredentialsTable(props: {
               credential.keyPreview ? `…${credential.keyPreview}` : undefined,
             ].filter(Boolean)
             return (
-              <TableRow key={credential.id}>
+              <TableRow key={credential.id} className="relative cursor-pointer">
                 <TableCell>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate" title={credential.label}>
-                      {credential.name ?? credential.label}
-                    </span>
-                    {detail.length ? (
-                      <span className="truncate font-mono text-xs text-muted-foreground">{detail.join(" · ")}</span>
-                    ) : null}
-                  </span>
+                  <KeyName
+                    credential={credential}
+                    detail={detail.join(" · ")}
+                    onOpen={() => setOpened(credential.id)}
+                  />
                 </TableCell>
-                <TableCell className="truncate text-muted-foreground" title={credential.hosts.join(", ")}>
-                  {hostsLabel(credential.hosts)}
+                <TableCell title={credential.hosts.join(", ")}>
+                  <Hosts hosts={credential.hosts} />
                 </TableCell>
                 <TableCell>
-                  <span className="flex flex-wrap items-center gap-2">
-                    {ownerLabel(credential.owner, spaces, me.user.id)}
-                    {credential.account ? (
-                      <StatusBadge tone="neutral">{credential.account.name}’s account</StatusBadge>
-                    ) : null}
-                    {credential.delivery === "delivered" ? <StatusBadge tone="warn">Delivered</StatusBadge> : null}
-                    {credential.status === "reconnect" ? <StatusBadge tone="error">Reconnect</StatusBadge> : null}
-                  </span>
+                  <Owner credential={credential} label={ownerLabel(credential.owner, spaces, me.user.id)} />
                 </TableCell>
-                <TableCell>
+                <TableCell className="relative z-10">
                   <RowMenu
                     label={`${credential.label} actions`}
                     items={[
@@ -252,6 +304,11 @@ export function CredentialsTable(props: {
           })}
         </TableBody>
       </Table>
+      <KeySheet
+        credential={props.credentials.find((credential) => credential.id === opened)}
+        onClose={() => setOpened(undefined)}
+        onRemoved={props.onRemoved}
+      />
       {editing?.kind === "rotate" ? (
         <RotateDialog credential={editing.credential} onClose={() => setEditing(undefined)} />
       ) : null}

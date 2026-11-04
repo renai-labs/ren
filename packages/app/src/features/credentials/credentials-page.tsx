@@ -1,5 +1,7 @@
 import { useState } from "react"
-import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
+import { toast } from "@ren/ui/sonner"
+import { errorMessage } from "../../lib/errors.js"
 import { getRouteApi } from "@tanstack/react-router"
 import { IconPlus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
@@ -10,15 +12,16 @@ import { AppsTable } from "../../components/apps-table.js"
 import { CredentialSheet, ownerOptions } from "../../components/credential-sheet.js"
 import { CredentialsTable } from "../../components/credentials-table.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { Page, PageTabsList, PageTabsTrigger, SkeletonTable } from "../../components/page.js"
+import { Page, PageFooter, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
+import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { useCatalog } from "../../lib/use-catalog.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useMe } from "../../lib/use-me.js"
 import { useSpaces } from "../../lib/use-spaces.js"
-import { pageSize, currentPage, lastPageAfterRemoval } from "../../lib/pagination.js"
-import { reach, usedIn } from "../../lib/apps.js"
+import { pageSize, currentPage, lastPageAfterRemoval, pageCount } from "../../lib/pagination.js"
+import { isSpaceApp, reach, usedIn } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
@@ -61,6 +64,7 @@ function CredentialKeys() {
   const [query, setQuery] = useState("")
   const needle = useDebouncedValue(query.trim(), 250)
   const [adding, setAdding] = useState(false)
+  const keysShapeId = useShapeId("keys")
   const list = useQuery({
     ...api.credential.list.queryOptions({ page, pageSize, ...(needle && { search: needle }) }),
     placeholderData: keepPreviousData,
@@ -88,16 +92,18 @@ function CredentialKeys() {
       }
       footer={<ListPagination page={page} pageSize={pageSize} total={total} noun="key" />}
     >
-      {list.data ? (
-        <CredentialsTable
-          credentials={list.data.items}
-          stale={list.isPlaceholderData}
-          onRemoved={removed}
-          empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
-        />
-      ) : (
-        <SkeletonTable columns={["Key", "Hosts", "Owner", ""]} label="Loading keys" />
-      )}
+      <Loading id={keysShapeId} loading={!list.data} label="Loading keys">
+        {list.data ? (
+          <CredentialsTable
+            credentials={list.data.items}
+            stale={list.isPlaceholderData}
+            onRemoved={removed}
+            empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
+          />
+        ) : (
+          <TableSample columns={["Key", "Hosts", "Owner", ""]} />
+        )}
+      </Loading>
       <CredentialSheet
         open={adding}
         onOpenChange={setAdding}
@@ -112,26 +118,39 @@ function CredentialKeys() {
 
 function OrgApps() {
   const catalog = useCatalog()
+  const appsShapeId = useShapeId("apps")
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const opened = search.app
   const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
   const [profile, setProfile] = useState<ProfileTarget>()
-  const used = catalog.apps.filter((app) => catalog.profilesOf(app.id).length > 0)
+  const { api } = RouterContext.useRouterContext()
+  const deleteProfile = useMutation(api["app-profile-reach"]["app-profile"].delete.mutationOptions())
+  const spaces = useSpaces().spaces
+  const used = catalog.apps.filter((app) => catalog.profilesOf(app.id).length > 0 && !isSpaceApp(app, spaces))
+  const page = Math.min(currentPage(search), pageCount(used.length, pageSize))
   const app = opened ? catalog.appOf(opened) : undefined
-  if (catalog.loading) return <SkeletonTable columns={["App", "Used in", "Status", ""]} label="Loading apps" />
   return (
     <>
-      <AppsTable
-        rows={used.map((each) => ({
-          app: each,
-          profiles: catalog.profilesOf(each.id),
-          usedIn: usedIn(catalog.profilesOf(each.id)),
-        }))}
-        empty="No apps. Add one to a space from the Marketplace."
-        onOpen={setOpened}
-        onNew={(appId) => setProfile({ appId })}
-      />
+      <Loading id={appsShapeId} loading={catalog.loading} label="Loading apps">
+        {catalog.loading ? (
+          <TableSample columns={["App", "Used in", "Status", ""]} />
+        ) : (
+          <AppsTable
+            rows={used.slice((page - 1) * pageSize, page * pageSize).map((each) => ({
+              app: each,
+              profiles: catalog.profilesOf(each.id),
+              usedIn: usedIn(catalog.profilesOf(each.id)),
+            }))}
+            empty="No apps. Add one to a space from the Marketplace."
+            onOpen={setOpened}
+            onNew={(appId) => setProfile({ appId })}
+          />
+        )}
+      </Loading>
+      <PageFooter>
+        <ListPagination page={page} pageSize={pageSize} total={used.length} noun="app" />
+      </PageFooter>
       <AppSheet app={app} onClose={() => setOpened(undefined)}>
         {app ? (
           <AccountList
@@ -151,7 +170,20 @@ function OrgApps() {
             caption={reach}
             onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, edit: true })}
             action={(each) => (
-              <AccountActions profile={each} onOpen={() => setProfile({ appId: each.appId, profileId: each.id })} />
+              <AccountActions
+                profile={each}
+                onOpen={() => setProfile({ appId: each.appId, profileId: each.id })}
+                onDelete={() =>
+                  deleteProfile.mutateAsync(
+                    { id: each.id },
+                    {
+                      onSuccess: () => toast.success(`${each.name} deleted`),
+                      onError: (error) =>
+                        toast.error("Couldn’t delete the account", { description: errorMessage(error) }),
+                    },
+                  )
+                }
+              />
             )}
           />
         ) : null}

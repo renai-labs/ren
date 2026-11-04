@@ -27,14 +27,16 @@ export function AccountActions(props: {
   profile: AppProfile
   onOpen: () => void
   onRemove?: (() => void | Promise<unknown>) | undefined
+  onDelete?: (() => Promise<unknown>) | undefined
 }) {
-  const [confirming, setConfirming] = useState<Confirmation>()
+  const [confirming, setConfirming] = useState<{ confirmation: Confirmation; run: () => void | Promise<unknown> }>()
   const signIn = useSignIn()
   const startSignIn = (item: AppProfile["items"][number]) => signIn.start(props.profile.id, item)
   const items = props.profile.items.filter((item) => item.status !== "unavailable")
   const missing = items.filter((item) => !item.optional && item.status !== "ok")
   const first = missing.at(0)
   const remove = props.onRemove
+  const deleting = props.onDelete
   return (
     <>
       {first ? (
@@ -46,7 +48,7 @@ export function AccountActions(props: {
           {missing.length === 1 ? "Connect" : `Connect ${missing.length}`}
         </Button>
       ) : null}
-      {remove ? (
+      {remove || deleting ? (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -62,33 +64,57 @@ export function AccountActions(props: {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuGroup>
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() =>
-                  isLastSpace(props.profile)
-                    ? setConfirming({
-                        title: `Remove ${props.profile.name}?`,
-                        description: lastSpaceWarning(props.profile),
-                        action: "Remove and delete",
-                      })
-                    : void remove()
-                }
-              >
-                <IconTrash />
-                Remove from space
-              </DropdownMenuItem>
+              {remove ? (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() =>
+                    isLastSpace(props.profile)
+                      ? setConfirming({
+                          confirmation: {
+                            title: `Remove ${props.profile.name}?`,
+                            description: lastSpaceWarning(props.profile),
+                            action: "Remove and delete",
+                          },
+                          run: remove,
+                        })
+                      : void remove()
+                  }
+                >
+                  <IconTrash />
+                  Remove from space
+                </DropdownMenuItem>
+              ) : null}
+              {deleting ? (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() =>
+                    setConfirming({
+                      confirmation: {
+                        title: `Delete ${props.profile.name}?`,
+                        description:
+                          "Ren deletes this account and its saved sign-ins. Every space that uses it loses access at once.",
+                        action: "Delete account",
+                      },
+                      run: deleting,
+                    })
+                  }
+                >
+                  <IconTrash />
+                  Delete account
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      {confirming && remove ? (
+      {confirming ? (
         <ConfirmDialog
           open
           onOpenChange={(open) => {
             if (!open) setConfirming(undefined)
           }}
-          confirmation={confirming}
-          onConfirm={remove}
+          confirmation={confirming.confirmation}
+          onConfirm={confirming.run}
         />
       ) : null}
     </>

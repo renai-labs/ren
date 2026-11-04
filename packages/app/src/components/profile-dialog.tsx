@@ -28,9 +28,11 @@ import { Row, Rows } from "./page.js"
 import { useCatalog } from "../lib/use-catalog.js"
 import { useSignIn } from "../lib/use-sign-in.js"
 import { useSpaces } from "../lib/use-spaces.js"
+import { useMe } from "../lib/use-me.js"
 import { errorMessage } from "../lib/errors.js"
 import { gaps, signsIn, slugOf, type CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
+import { useScrollEdges } from "../lib/use-scroll-edges.js"
 import { RouterContext } from "../lib/router-context.js"
 
 type App = CatalogApp
@@ -60,12 +62,15 @@ function defaultName(input: {
   picked: ReadonlySet<string>
   spaces: ReadonlyArray<{ id: string; name: string }>
   app: App
+  user: string
 }) {
   if (input.typed.trim()) return input.typed.trim()
-  if (input.from) return input.from.name
-  if (input.only) return "Personal"
   const chosen = input.spaces.filter((space) => input.picked.has(space.id))
-  return chosen.length === 1 ? (chosen.at(0)?.name ?? input.app.name) : input.app.name
+  const space =
+    input.only || input.from?.private
+      ? undefined
+      : (input.from?.name ?? (chosen.length === 1 ? chosen.at(0)?.name : undefined))
+  return [space, input.app.name, input.user.split(" ").at(0)].filter(Boolean).join(" · ")
 }
 
 const slideIn = "animate-in duration-250 ease-out fade-in-0 slide-in-from-right-4 motion-reduce:slide-in-from-right-0"
@@ -252,6 +257,7 @@ function SpacesField(props: {
   every?: { checked: boolean; onChange: (checked: boolean) => void } | undefined
 }) {
   const row = "flex h-11 shrink-0 items-center justify-between gap-3 px-3"
+  const [listRef, edges] = useScrollEdges({ axis: "y" })
   const every = props.every
   const onOnly = props.onOnly
   return (
@@ -267,7 +273,15 @@ function SpacesField(props: {
             <Switch id="profile-every" checked={every.checked} onCheckedChange={(checked) => every.onChange(checked)} />
           </div>
         ) : null}
-        <div className="flex max-h-33.5 scrollbar-thin flex-col divide-y overflow-y-auto overscroll-contain">
+        <div
+          ref={listRef}
+          className={cn(
+            "flex max-h-38.5 scrollbar-thin flex-col divide-y overflow-y-auto overscroll-contain",
+            edges.start && edges.end && "mask-y-from-65%",
+            edges.start && !edges.end && "mask-t-from-65%",
+            !edges.start && edges.end && "mask-b-from-65%",
+          )}
+        >
           {props.spaces.map((space) => (
             <div key={space.id} className={row}>
               <FieldLabel htmlFor={`profile-space-${space.id}`} className="min-w-0 flex-1 font-normal">
@@ -483,6 +497,7 @@ function createDescription(from: From | undefined) {
 function CreateStep(props: { app: App; from: From | undefined; onCreated: (profile: AppProfile) => void }) {
   const { api } = RouterContext.useRouterContext()
   const others = useCatalog().profilesOf(props.app.id)
+  const user = useMe().user.name
   const spaces = useSpaces().joined.filter((space) => space.kind !== "private")
   const create = useMutation({ ...api["app-profile"].create.mutationOptions() })
   const [name, setName] = useState("")
@@ -499,7 +514,7 @@ function CreateStep(props: { app: App; from: From | undefined; onCreated: (profi
       description={createDescription(from)}
       onSubmit={() => {
         if (blocked) return
-        const accountName = defaultName({ typed: name, from, only, picked, spaces, app: props.app })
+        const accountName = defaultName({ typed: name, from, only, picked, spaces, app: props.app, user })
         create.mutate(
           {
             appId: props.app.id,
@@ -528,10 +543,9 @@ function CreateStep(props: { app: App; from: From | undefined; onCreated: (profi
               <FieldLabel htmlFor="profile-name">Name</FieldLabel>
               <Input
                 id="profile-name"
-                required
                 // oxlint-disable-next-line jsx-a11y/no-autofocus -- a second account needs a name before anything else
                 autoFocus
-                placeholder="Acme client"
+                placeholder={defaultName({ typed: "", from, only, picked, spaces, app: props.app, user })}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
@@ -624,7 +638,7 @@ function ConnectStep(props: {
     <Screen
       {...screen}
       onSubmit={submit}
-      note={oauthItem ? `You’ll sign in to ${props.app.name} in a new tab, then come back here.` : undefined}
+      note={oauthItem ? `You’ll sign in to ${props.app.name} in a small window, then come back here.` : undefined}
       action={
         <>
           {saveKey.error ? <FieldError className="text-center">{errorMessage(saveKey.error)}</FieldError> : null}
