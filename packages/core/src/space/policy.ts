@@ -46,6 +46,8 @@ export const documents = [
         when: [facts.member],
       },
       { actions: [actions.read, actions.reach], effect: "allow", roles: administratorRoles, when: [facts.shared] },
+      // oxlint-disable-next-line ren/no-comments -- environments EN20: org admins change the brain scope and the environment of shared spaces.
+      { actions: [actions.update], effect: "allow", roles: administratorRoles, when: [facts.shared] },
       { actions: [actions.reach], effect: "allow", roles: organizationRoles, when: [facts.member] },
       { actions: [actions.archive], effect: "allow", roles: organizationRoles, when: [facts.member, facts.shared] },
       { actions: [actions.archive], effect: "allow", roles: administratorRoles, when: [facts.private] },

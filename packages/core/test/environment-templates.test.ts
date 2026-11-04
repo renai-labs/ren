@@ -274,6 +274,22 @@ describe("EnvironmentTemplates", () => {
     }),
   )
 
+  it.live(
+    "an org admin chooses the environment of a shared space, not of a member's private space (environments test 11)",
+    () =>
+      Effect.gen(function* () {
+        const spaces = yield* Space.Service
+        const setup = yield* team()
+        const none = { environment: { kind: "none" } } as const
+        expect((yield* spaces.update(setup.admin, setup.space.id, none)).environment).toEqual({ kind: "none" })
+        const personal = (yield* spaces.list(setup.ada, { ...page, joined: true })).items.find(
+          (space) => space.kind === "private",
+        )
+        if (!personal) return yield* Effect.die(new Error("Ada has no private space"))
+        expect((yield* spaces.update(setup.admin, personal.id, none).pipe(Effect.flip))._tag).toBe("Primitive.Forbidden")
+      }),
+  )
+
   it.live("a space cannot choose another organization's environment template or an archived one", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
