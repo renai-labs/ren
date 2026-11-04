@@ -52,7 +52,9 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
         expect((yield* client["files.read"]({ path: "session/note.txt" })).bytes).toEqual(written)
         yield* provider.destroy(bindings[0])
         yield* provider.destroy(bindings[0])
-        expect((yield* provider.connect(bindings[0], input.network).pipe(Effect.flip))._tag).toBe("EnvironmentProvider.Gone")
+        expect((yield* provider.connect(bindings[0], input.network).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentProvider.Gone",
+        )
       }),
     180_000,
   )

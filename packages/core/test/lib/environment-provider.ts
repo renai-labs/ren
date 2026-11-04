@@ -17,8 +17,12 @@ interface Provisioned {
 interface Probe {
   readonly provisions: Ref.Ref<ReadonlyArray<Environment.ID>>
   readonly provisioned: Ref.Ref<ReadonlyArray<Provisioned>>
-  readonly keptAlive: Ref.Ref<ReadonlyArray<{ readonly environmentId: Environment.ID; readonly duration: Duration.Duration }>>
-  readonly networks: Ref.Ref<ReadonlyArray<{ readonly environmentId: Environment.ID; readonly hosts: Option.Option<ReadonlyArray<string>> }>>
+  readonly keptAlive: Ref.Ref<
+    ReadonlyArray<{ readonly environmentId: Environment.ID; readonly duration: Duration.Duration }>
+  >
+  readonly networks: Ref.Ref<
+    ReadonlyArray<{ readonly environmentId: Environment.ID; readonly hosts: Option.Option<ReadonlyArray<string>> }>
+  >
   readonly builds: Ref.Ref<ReadonlyArray<string>>
   readonly buildFails: Ref.Ref<boolean>
   readonly destroyed: Ref.Ref<ReadonlyArray<Environment.ID>>

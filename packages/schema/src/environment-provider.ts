@@ -13,6 +13,7 @@ export const Info = Schema.Struct({
   id: ID,
   title: Schema.String,
   description: Schema.String,
+  canLimitHosts: Schema.Boolean.annotate({ description: "Whether its environments can have limited networking." }),
   configSchema: Schema.Json.annotate({
     description: "A JSON Schema document (draft 2020-12) of the provider’s config.",
   }),

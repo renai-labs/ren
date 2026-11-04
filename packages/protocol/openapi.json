@@ -13737,11 +13737,15 @@
           "description": {
             "type": "string"
           },
+          "canLimitHosts": {
+            "type": "boolean",
+            "description": "Whether its environments can have limited networking."
+          },
           "configSchema": {
             "description": "A JSON Schema document (draft 2020-12) of the provider’s config."
           }
         },
-        "required": ["id", "title", "description", "configSchema"],
+        "required": ["id", "title", "description", "canLimitHosts", "configSchema"],
         "additionalProperties": false
       },
       "EnvironmentProvider.Infos": {

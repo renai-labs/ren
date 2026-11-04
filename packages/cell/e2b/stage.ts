@@ -209,7 +209,9 @@ if (import.meta.main) {
   }
   const dirty = (await Bun.$`git status --porcelain`.cwd(root).text()).trim().length > 0
   if (!(await smoke(built.tag))) {
-    process.stderr.write(`The smoke sandbox of ${built.tag} did not answer /ren/state within 120 s; do not use this tag\n`)
+    process.stderr.write(
+      `The smoke sandbox of ${built.tag} did not answer /ren/state within 120 s; do not use this tag\n`,
+    )
     process.exit(1)
   }
   process.stdout.write(`E2B_TEMPLATE=${built.tag}${dirty ? " (built from a tree with uncommitted files)" : ""}\n`)

@@ -358,6 +358,7 @@ export type EnvironmentProviderInfo = {
   id: EnvironmentProviderID
   title: string
   description: string
+  canLimitHosts: boolean
   configSchema: JsonValue
 }
 

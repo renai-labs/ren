@@ -286,7 +286,9 @@ describe("EnvironmentTemplates", () => {
           (space) => space.kind === "private",
         )
         if (!personal) return yield* Effect.die(new Error("Ada has no private space"))
-        expect((yield* spaces.update(setup.admin, personal.id, none).pipe(Effect.flip))._tag).toBe("Primitive.Forbidden")
+        expect((yield* spaces.update(setup.admin, personal.id, none).pipe(Effect.flip))._tag).toBe(
+          "Primitive.Forbidden",
+        )
       }),
   )
 
@@ -339,6 +341,7 @@ describe("EnvironmentTemplates", () => {
         id: EnvironmentProvider.ID.make("test"),
         title: "Test",
         description: "Environments that live in the test’s memory.",
+        canLimitHosts: true,
         configSchema: {
           dialect: "draft-2020-12",
           schema: {

@@ -1,12 +1,14 @@
 import { useState, type ReactNode } from "react"
-import type { SettingsInfo } from "@ren/client"
+import type { BrainScope, SettingsInfo, SpaceEnvironment } from "@ren/client"
 import { Session } from "@ren/schema/session"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
+import { Switch } from "@ren/ui/switch"
 import { InstructionsField } from "../../components/instructions-field.js"
 import { EditableText } from "../../components/editable-text.js"
 import { ModelPicker } from "../../components/model-picker.js"
 import { Row, Rows, Section } from "../../components/page.js"
+import { Choice } from "../../components/settings-shared.js"
 import { useAutosave } from "../../lib/use-autosave.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useMe } from "../../lib/use-me.js"
@@ -14,6 +16,19 @@ import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 const modelsProbe = Session.ID.create()
+
+const defaultValue = "default"
+
+const noneValue = "none"
+
+const valueOf = (environment: SpaceEnvironment) =>
+  environment.kind === "template" ? environment.environmentTemplateId : environment.kind
+
+const environmentOf = (value: string): SpaceEnvironment => {
+  if (value === defaultValue) return { kind: "default" }
+  if (value === noneValue) return { kind: "none" }
+  return { kind: "template", environmentTemplateId: value }
+}
 
 type Space = ReturnType<typeof useSpace>
 
@@ -66,8 +81,14 @@ function Details(props: { space: Space; model: ReactNode }) {
   const { api } = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
   const update = useMutation(api.space.update.mutationOptions())
+  const templates = useQuery(api["environment-template"].list.queryOptions({ page: 1, pageSize: 50 }))
   const space = props.space
-  const save = (change: { name?: string; description?: string | null }) =>
+  const save = (change: {
+    name?: string
+    description?: string | null
+    environment?: SpaceEnvironment
+    brainScope?: BrainScope
+  }) =>
     update.mutateAsync(
       { id: space.id, ...change },
       {
@@ -100,6 +121,33 @@ function Details(props: { space: Space; model: ReactNode }) {
         </Row>,
         <Row key="model" title="Default model" description="New chats in this space start with it.">
           {props.model}
+        </Row>,
+        <Row
+          key="environment"
+          title="Environment"
+          description="Where chats run file and shell tools. Chats move when they are idle; a change to or from none reaches new chats only."
+        >
+          <Choice
+            label="Environment"
+            options={[
+              { value: defaultValue, label: "Ren’s standard environment" },
+              ...(templates.data?.items ?? [])
+                .filter((template) => template.buildStatus === "ready" || template.image !== null)
+                .map((template) => ({ value: template.id, label: template.name })),
+              { value: noneValue, label: "None" },
+            ]}
+            value={valueOf(space.environment)}
+            disabled={!space.canUpdate}
+            onChange={(value) => void save({ environment: environmentOf(value) })}
+          />
+        </Row>,
+        <Row key="brain" title="Share one brain across chats" description="Applies to new chats.">
+          <Switch
+            aria-label="Share one brain across chats"
+            checked={space.brainScope === "space"}
+            disabled={!space.canUpdate}
+            onCheckedChange={(checked) => void save({ brainScope: checked ? "space" : "session" })}
+          />
         </Row>,
       ]}
     </Rows>

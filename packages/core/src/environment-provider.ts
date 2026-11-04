@@ -115,6 +115,7 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
       id: definition.id,
       title: definition.title,
       description: definition.description,
+      canLimitHosts: definition.canLimitHosts,
       configSchema: Schema.decodeUnknownSync(Schema.Json)(Schema.toJsonSchemaDocument(definition.config)),
     },
     egress: definition.egress,
