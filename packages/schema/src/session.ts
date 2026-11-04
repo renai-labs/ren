@@ -10,6 +10,7 @@ import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
 import { ScheduleOrigin } from "./schedule-origin.js"
+import { TaskAssignment } from "./task-assignment.js"
 import { SessionCapabilities } from "./session/capabilities.js"
 import { SessionMessage } from "./session/message.js"
 import { SessionModel } from "./session/model.js"
@@ -128,6 +129,7 @@ export const SendInput = Schema.Struct({
   sender: Sender,
   channel: Schema.optionalKey(ChannelOrigin.Info),
   schedule: Schema.optionalKey(ScheduleOrigin.Info),
+  task: Schema.optionalKey(TaskAssignment.Info),
   synthetic: Schema.optionalKey(Synthetic),
 }).annotate({ identifier: "Session.SendInput" })
 

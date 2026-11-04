@@ -22,6 +22,7 @@ import { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
+import { TaskAssignment } from "@ren/schema/task-assignment"
 import { Option, Predicate, pipe, Schema, Struct } from "effect"
 
 const UserID = Schema.Struct({ metadata: Schema.Struct({ userID: Schema.String }) })
@@ -32,6 +33,18 @@ const decodeChannel = Schema.decodeUnknownOption(FromChannel)
 
 const FromSchedule = Schema.Struct({ metadata: Schema.Struct({ schedule: ScheduleOrigin.Info }) })
 const decodeSchedule = Schema.decodeUnknownOption(FromSchedule)
+
+const FromTask = Schema.Struct({ metadata: Schema.Struct({ task: TaskAssignment.Info }) })
+const decodeTask = Schema.decodeUnknownOption(FromTask)
+
+const UserText = Schema.Struct({ type: Schema.Literal("user"), text: Schema.String })
+const decodeUserText = Schema.decodeUnknownOption(UserText)
+
+const taskOf = (value: unknown) =>
+  Option.orElse(
+    Option.map(decodeTask(value), (decoded) => decoded.metadata.task),
+    () => Option.flatMap(decodeUserText(value), (decoded) => TaskAssignment.parse(decoded.text)),
+  )
 
 const WithUploads = Schema.Struct({ metadata: Schema.Struct({ files: Schema.Array(SessionMessage.DriveFile) }) })
 const decodeUploads = Schema.decodeUnknownOption(WithUploads)
@@ -47,11 +60,13 @@ const withMetadata = (value: unknown): unknown => {
   const channel = decodeChannel(value)
   const schedule = decodeSchedule(value)
   const uploads = decodeUploads(value)
+  const task = taskOf(value)
   return {
     ...value,
     ...(Option.isSome(sender) && { sender: { userId: sender.value.metadata.userID } }),
     ...(Option.isSome(channel) && { channel: channel.value.metadata.channel }),
     ...(Option.isSome(schedule) && { schedule: schedule.value.metadata.schedule }),
+    ...(Option.isSome(task) && { task: task.value }),
     ...(Option.isSome(uploads) && {
       uploads: uploads.value.metadata.files,
       ...(Predicate.hasProperty(value, "files") && {

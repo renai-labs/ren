@@ -138,6 +138,8 @@ export type ChannelProvider = "slack" | "linear" | "github"
 
 export type ScheduleOriginInfo = { scheduleId: string; name: string; scheduledAt: string }
 
+export type TaskAssignmentInfo = { taskId: string; identifier: string; title: string; brief: string }
+
 export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
 
 export type SessionMessageShellOutput = { output: string; cursor: number; size: number; truncated: boolean }
@@ -849,6 +851,7 @@ export type SessionMessageUser = {
   sender?: SessionMessageSender
   channel?: ChannelOriginInfo
   schedule?: ScheduleOriginInfo
+  task?: TaskAssignmentInfo
 }
 
 export type SessionMessageToolCompleted = {

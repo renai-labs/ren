@@ -3,6 +3,7 @@ export * as TaskStart from "./start.js"
 import { Database } from "@ren/db/database"
 import { Factory } from "@ren/schema/factory"
 import { Task } from "@ren/schema/task"
+import { TaskAssignment } from "@ren/schema/task-assignment"
 import { and, desc, eq, sql } from "drizzle-orm"
 import { Effect } from "effect"
 import { AgentQueries } from "../agent/queries.js"
@@ -28,7 +29,7 @@ interface Described {
 
 const describe = (agent: Described) => `${agent.name}${agent.description ? ` — ${agent.description}` : ""}`
 
-const prompt = (input: {
+const assignment = (input: {
   readonly task: TaskQueries.Row
   readonly handoff: string | null
   readonly factory: ReadonlyArray<string>
@@ -40,17 +41,17 @@ const prompt = (input: {
     ...(input.review.descriptionChanged ? ["The description changed after the review was requested."] : []),
   ]
   const sections = [
-    [`${input.task.prefix}-${input.task.task.number}: ${input.task.task.title}`],
     input.task.task.description ? [input.task.task.description] : [],
     input.handoff ? [`Handoff note: ${input.handoff}`] : [],
     review ?? [],
     input.factory,
   ].filter((section) => section.length > 0)
-  return [
-    `<task_assignment task_id=${JSON.stringify(input.task.task.id)} note=${JSON.stringify(note)}>`,
-    sections.map((section) => section.join("\n")).join("\n\n"),
-    "</task_assignment>",
-  ].join("\n")
+  return {
+    taskId: input.task.task.id,
+    identifier: `${input.task.prefix}-${input.task.task.number}`,
+    title: input.task.task.title,
+    brief: sections.map((section) => section.join("\n")).join("\n\n"),
+  } satisfies TaskAssignment.Info
 }
 
 // oxlint-disable-next-line ren/no-comments -- A governed agent sees its handoff choices and limits; any other agent sees the factory's order.
@@ -136,15 +137,17 @@ export const plan = Effect.fnUntraced(function* (
     )
     .orderBy(desc(Database.Schema.task_event.created_at), desc(Database.Schema.task_event.id))
     .limit(1)).at(0)?.note
+  const task = assignment({
+    task: row,
+    handoff: handoff ?? null,
+    factory: factorySection(input.factory, agent.id, input.history, agents),
+    review: input.review,
+  })
   return {
     agentId: agent.id,
     isGlobal: !agent.organizationId,
     sessionId: session?.id,
-    text: prompt({
-      task: row,
-      handoff: handoff ?? null,
-      factory: factorySection(input.factory, agent.id, input.history, agents),
-      review: input.review,
-    }),
+    task,
+    text: TaskAssignment.text(task, note),
   }
 })
