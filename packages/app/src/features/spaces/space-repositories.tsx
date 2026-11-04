@@ -20,9 +20,9 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
 import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
-import { ExpandableSearch } from "../../components/expandable-search.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { TableCard, TableEmpty } from "../../components/page.js"
+import { PageFooter, TableCard, TableEmpty } from "../../components/page.js"
 import { AddRepositoriesDialog } from "../../components/add-repositories-dialog.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { GitHubMark } from "../../components/brand-marks.js"
@@ -117,9 +117,9 @@ export function SpaceRepositoriesTab() {
       (error: unknown) => toast.error("Could not remove the repository", { description: errorMessage(error) }),
     )
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-1 flex-col gap-4">
       <div className="flex items-center justify-end gap-1">
-        <ExpandableSearch label="Search repositories" value={query} onChange={setQuery} />
+        <ToolbarSearch label="Search repositories" value={query} onChange={setQuery} />
         {canUpdate ? (
           <Button onClick={() => open("add")}>
             <IconPlus data-icon="inline-start" />
@@ -188,9 +188,9 @@ export function SpaceRepositoriesTab() {
           </TableBody>
         </Table>
       </TableCard>
-      <div className="flex items-center justify-between gap-4 empty:hidden">
+      <PageFooter>
         <ListPagination page={page} pageSize={pageSize} total={total} noun="repository" />
-      </div>
+      </PageFooter>
       {dialog === "add" ? (
         <AddRepositoriesDialog existing={references} saving={saving} error={error} onAdd={add} onClose={() => open()} />
       ) : null}

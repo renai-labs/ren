@@ -22,7 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ChannelMark } from "../../components/channel-mark.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { TableCard, TableEmpty } from "../../components/page.js"
+import { PageFooter, TableCard, TableEmpty } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { errorMessage } from "../../lib/errors.js"
 import { pageSize, currentPage, pageCount } from "../../lib/pagination.js"
@@ -80,7 +80,7 @@ export function SpaceChannelsTab() {
       },
     )
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-1 flex-col gap-4">
       {canLink ? (
         <div className="flex items-center justify-end gap-1">
           <Button onClick={() => open(true)}>
@@ -135,9 +135,9 @@ export function SpaceChannelsTab() {
           </TableBody>
         </Table>
       </TableCard>
-      <div className="flex items-center justify-between gap-4 empty:hidden">
+      <PageFooter>
         <ListPagination page={page} pageSize={pageSize} total={mappings.length} noun="channel" />
-      </div>
+      </PageFooter>
       {adding ? (
         <AddChannelsDialog
           spaceId={space.id}
@@ -192,7 +192,7 @@ function AddChannelsDialog(props: {
           </DialogDescription>
         </DialogHeader>
         {connected ? (
-          <Command className="rounded-lg bg-muted inset-ring inset-ring-border **:data-[slot=input-group]:h-8.75">
+          <Command className="rounded-none bg-transparent p-0 **:data-[slot=command-input-wrapper]:mx-0 **:data-[slot=command-input-wrapper]:mt-0">
             <CommandInput placeholder="Search channels…" />
             <CommandList className="pt-1">
               <CommandEmpty>{emptyText(places, failed)}</CommandEmpty>

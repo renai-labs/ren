@@ -45,6 +45,7 @@ import { Route as AuthedShellSpacesSpaceIdKanbanRouteImport } from "./routes/_au
 import { Route as AuthedShellSpacesSpaceIdMembersRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/members"
 import { Route as AuthedShellSpacesSpaceIdRepositoriesRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/repositories"
 import { Route as AuthedShellSpacesSpaceIdSchedulesRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/schedules"
+import { Route as AuthedShellSpacesSpaceIdSettingsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/settings"
 import { Route as AuthedShellTasksTaskIdIndexRouteImport } from "./routes/_authed/_shell/tasks/$taskId/index"
 
 const AuthedRoute = AuthedRouteImport.update({
@@ -245,6 +246,12 @@ const AuthedShellSpacesSpaceIdSchedulesRoute =
     path: "/schedules",
     getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
   } as any)
+const AuthedShellSpacesSpaceIdSettingsRoute =
+  AuthedShellSpacesSpaceIdSettingsRouteImport.update({
+    id: "/settings",
+    path: "/settings",
+    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
+  } as any)
 const AuthedShellTasksTaskIdIndexRoute =
   AuthedShellTasksTaskIdIndexRouteImport.update({
     id: "/tasks/$taskId/",
@@ -288,6 +295,7 @@ export interface FileRoutesByFullPath {
   "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
   "/spaces/$spaceId/repositories": typeof AuthedShellSpacesSpaceIdRepositoriesRoute
   "/spaces/$spaceId/schedules": typeof AuthedShellSpacesSpaceIdSchedulesRoute
+  "/spaces/$spaceId/settings": typeof AuthedShellSpacesSpaceIdSettingsRoute
   "/sessions/$sessionId/": typeof AuthedShellSessionsSessionIdIndexRoute
   "/settings/channels/": typeof AuthedShellSettingsChannelsIndexRoute
   "/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
@@ -323,6 +331,7 @@ export interface FileRoutesByTo {
   "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
   "/spaces/$spaceId/repositories": typeof AuthedShellSpacesSpaceIdRepositoriesRoute
   "/spaces/$spaceId/schedules": typeof AuthedShellSpacesSpaceIdSchedulesRoute
+  "/spaces/$spaceId/settings": typeof AuthedShellSpacesSpaceIdSettingsRoute
   "/sessions/$sessionId": typeof AuthedShellSessionsSessionIdIndexRoute
   "/settings/channels": typeof AuthedShellSettingsChannelsIndexRoute
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdIndexRoute
@@ -363,6 +372,7 @@ export interface FileRoutesById {
   "/_authed/_shell/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
   "/_authed/_shell/spaces/$spaceId/repositories": typeof AuthedShellSpacesSpaceIdRepositoriesRoute
   "/_authed/_shell/spaces/$spaceId/schedules": typeof AuthedShellSpacesSpaceIdSchedulesRoute
+  "/_authed/_shell/spaces/$spaceId/settings": typeof AuthedShellSpacesSpaceIdSettingsRoute
   "/_authed/_shell/sessions/$sessionId/": typeof AuthedShellSessionsSessionIdIndexRoute
   "/_authed/_shell/settings/channels/": typeof AuthedShellSettingsChannelsIndexRoute
   "/_authed/_shell/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
@@ -402,6 +412,7 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/members"
     | "/spaces/$spaceId/repositories"
     | "/spaces/$spaceId/schedules"
+    | "/spaces/$spaceId/settings"
     | "/sessions/$sessionId/"
     | "/settings/channels/"
     | "/spaces/$spaceId/"
@@ -437,6 +448,7 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/members"
     | "/spaces/$spaceId/repositories"
     | "/spaces/$spaceId/schedules"
+    | "/spaces/$spaceId/settings"
     | "/sessions/$sessionId"
     | "/settings/channels"
     | "/spaces/$spaceId"
@@ -476,6 +488,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/spaces/$spaceId/members"
     | "/_authed/_shell/spaces/$spaceId/repositories"
     | "/_authed/_shell/spaces/$spaceId/schedules"
+    | "/_authed/_shell/spaces/$spaceId/settings"
     | "/_authed/_shell/sessions/$sessionId/"
     | "/_authed/_shell/settings/channels/"
     | "/_authed/_shell/spaces/$spaceId/"
@@ -747,6 +760,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSpacesSpaceIdSchedulesRouteImport
       parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
     }
+    "/_authed/_shell/spaces/$spaceId/settings": {
+      id: "/_authed/_shell/spaces/$spaceId/settings"
+      path: "/settings"
+      fullPath: "/spaces/$spaceId/settings"
+      preLoaderRoute: typeof AuthedShellSpacesSpaceIdSettingsRouteImport
+      parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
+    }
     "/_authed/_shell/tasks/$taskId/": {
       id: "/_authed/_shell/tasks/$taskId/"
       path: "/tasks/$taskId"
@@ -766,6 +786,7 @@ interface AuthedShellSpacesSpaceIdRouteRouteChildren {
   AuthedShellSpacesSpaceIdMembersRoute: typeof AuthedShellSpacesSpaceIdMembersRoute
   AuthedShellSpacesSpaceIdRepositoriesRoute: typeof AuthedShellSpacesSpaceIdRepositoriesRoute
   AuthedShellSpacesSpaceIdSchedulesRoute: typeof AuthedShellSpacesSpaceIdSchedulesRoute
+  AuthedShellSpacesSpaceIdSettingsRoute: typeof AuthedShellSpacesSpaceIdSettingsRoute
   AuthedShellSpacesSpaceIdIndexRoute: typeof AuthedShellSpacesSpaceIdIndexRoute
 }
 
@@ -783,6 +804,8 @@ const AuthedShellSpacesSpaceIdRouteRouteChildren: AuthedShellSpacesSpaceIdRouteR
       AuthedShellSpacesSpaceIdRepositoriesRoute,
     AuthedShellSpacesSpaceIdSchedulesRoute:
       AuthedShellSpacesSpaceIdSchedulesRoute,
+    AuthedShellSpacesSpaceIdSettingsRoute:
+      AuthedShellSpacesSpaceIdSettingsRoute,
     AuthedShellSpacesSpaceIdIndexRoute: AuthedShellSpacesSpaceIdIndexRoute,
   }
 

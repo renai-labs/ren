@@ -249,7 +249,7 @@ export function TableSample(props: { columns: ReadonlyArray<string>; count?: num
   )
 }
 
-function CardsSample(props: { count?: number | undefined; columns?: 2 | 3 | undefined }) {
+export function CardsSample(props: { count?: number | undefined; columns?: 2 | 3 | undefined }) {
   return (
     <div className={cn("mt-4 grid gap-5 sm:grid-cols-2", props.columns === 3 && "lg:grid-cols-3")}>
       {Array.from({ length: props.count ?? 4 }, (_, index) => (
@@ -350,40 +350,4 @@ export function SkeletonTable(props: {
       </div>
     )
   return table
-}
-
-export function SkeletonCards(props: {
-  count?: number | undefined
-  columns?: 2 | 3 | undefined
-  label?: string | undefined
-}) {
-  return (
-    <Loading label={props.label ?? "Loading spaces"}>
-      <div className={cn("mt-4 grid gap-4 sm:grid-cols-2", props.columns === 3 && "lg:grid-cols-3")}>
-        {Array.from({ length: props.count ?? 4 }, (_, index) => (
-          <SpaceCardFrame
-            key={index}
-            title={<span className="truncate text-md/5 font-medium tracking-snug">Team space</span>}
-            description="A shared space for your team."
-            chats="0 chats"
-            menu={
-              <Button variant="ghost" size="icon-sm" aria-label="Space actions">
-                <IconDots />
-              </Button>
-            }
-            members={
-              <Avatar size="sm">
-                <AvatarFallback>TM</AvatarFallback>
-              </Avatar>
-            }
-            apps={
-              <Avatar size="sm">
-                <AvatarFallback>AP</AvatarFallback>
-              </Avatar>
-            }
-          />
-        ))}
-      </div>
-    </Loading>
-  )
 }

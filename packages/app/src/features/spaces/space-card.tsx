@@ -22,11 +22,17 @@ import { useCanAdminister } from "../../lib/use-organization.js"
 import { errorMessage } from "../../lib/errors.js"
 import { initials, plural } from "../../lib/format.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { useSpaces } from "../../lib/use-spaces.js"
+import { isSpaceApp } from "../../lib/apps.js"
+import { Channels } from "../../lib/channels.js"
+import { ChannelMark } from "../../components/channel-mark.js"
+import { AppAvatarFallback, AppAvatarImage } from "../../components/app-icon.js"
 
 function Stack(props: {
   label: string
   items: ReadonlyArray<{ id: string; name: string; image?: string | null | undefined }>
   total: number
+  tile?: boolean | undefined
 }) {
   const shown = props.items.slice(0, 3)
   if (shown.length === 0) return null
@@ -34,9 +40,11 @@ function Stack(props: {
     <span className="flex items-center gap-1.5" aria-label={props.label}>
       <AvatarGroup className="-space-x-1 *:data-[slot=avatar]:ring-card">
         {shown.map((item) => (
-          <Avatar key={item.id} size="sm" title={item.name}>
-            {item.image ? <AvatarImage src={item.image} alt="" /> : null}
-            <AvatarFallback>{initials(item.name)}</AvatarFallback>
+          <Avatar key={item.id} size="sm" title={item.name} className="data-[size=sm]:size-6">
+            {item.image && props.tile ? <AppAvatarImage src={item.image} /> : null}
+            {item.image && !props.tile ? <AvatarImage src={item.image} alt="" /> : null}
+            {props.tile ? <AppAvatarFallback name={item.name} /> : null}
+            {props.tile ? null : <AvatarFallback className="text-2xs">{initials(item.name)}</AvatarFallback>}
           </Avatar>
         ))}
       </AvatarGroup>
@@ -81,7 +89,7 @@ function SpaceMenu(props: { space: SpaceInfo }) {
   const archive = useMutation(api.space.archive.mutationOptions())
   const [archiving, setArchiving] = useState(false)
   return (
-    <span className="relative -mt-1 -mr-1">
+    <span className="relative -mr-1">
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -121,6 +129,32 @@ function SpaceMenu(props: { space: SpaceInfo }) {
   )
 }
 
+function SpaceChannels(props: { spaceId: string }) {
+  const { api } = RouterContext.useRouterContext()
+  const mappings = useQuery({
+    ...api["channel-mapping"].list.queryOptions({ ...Channels.all, spaceId: props.spaceId }),
+    retry: false,
+  })
+  const items = mappings.data?.items ?? []
+  const shown = items.slice(0, 2)
+  if (shown.length === 0) return null
+  return (
+    <span className="flex min-w-0 items-center gap-2" aria-label={plural(items.length, "connected channel")}>
+      {shown.map((mapping) => (
+        <span
+          key={mapping.id}
+          title={Channels.label(mapping.provider, mapping.placeName)}
+          className="flex h-6 max-w-32 min-w-0 items-center gap-1.5 rounded-full border px-2 text-foreground"
+        >
+          <ChannelMark provider={mapping.provider} className="size-3.5 shrink-0" />
+          <span className="truncate">{Channels.label(mapping.provider, mapping.placeName)}</span>
+        </span>
+      ))}
+      {items.length > shown.length ? <span>+{items.length - shown.length}</span> : null}
+    </span>
+  )
+}
+
 export function SpaceCard(props: { space: SpaceInfo }) {
   const { api } = RouterContext.useRouterContext()
   const space = props.space
@@ -135,11 +169,14 @@ export function SpaceCard(props: { space: SpaceInfo }) {
   })
   const catalog = useCatalog()
   const appsLoading = reach.isPending || catalog.loading
-  const apps = [...new Set((reach.data?.profiles ?? []).map((profile) => profile.appId))].map((appId) => ({
-    id: appId,
-    name: catalog.appOf(appId)?.name ?? appId,
-    image: catalog.appOf(appId)?.icon,
-  }))
+  const spaces = useSpaces().spaces
+  const apps = [...new Set((reach.data?.profiles ?? []).map((profile) => profile.appId))]
+    .filter((appId) => !isSpaceApp(catalog.appOf(appId), spaces))
+    .map((appId) => ({
+      id: appId,
+      name: catalog.appOf(appId)?.name ?? appId,
+      image: catalog.appOf(appId)?.icon,
+    }))
   const members = (people.data?.items ?? []).flatMap((member) =>
     member.status === "active" ? [{ id: member.id, name: member.name, image: member.image }] : [],
   )
@@ -149,7 +186,7 @@ export function SpaceCard(props: { space: SpaceInfo }) {
         <Link
           to="/spaces/$spaceId"
           params={{ spaceId: space.id }}
-          className="truncate text-md/5 font-medium tracking-snug outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+          className="truncate text-base/6 font-medium tracking-snug outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
         >
           {space.name}
         </Link>
@@ -167,15 +204,24 @@ export function SpaceCard(props: { space: SpaceInfo }) {
           <Loading loading={people.isLoading} label="Loading space members">
             <Stack
               label={plural(space.memberCount, "member")}
-              items={people.isLoading ? [{ id: "sample-member", name: "Team member" }] : members}
+              items={
+                people.isLoading
+                  ? Array.from({ length: Math.min(space.memberCount, 3) }, (_, index) => ({
+                      id: `sample-member-${index}`,
+                      name: "Team member",
+                    }))
+                  : members
+              }
               total={space.memberCount}
             />
           </Loading>
         )
       }
+      channels={<SpaceChannels spaceId={space.id} />}
       apps={
         <Loading loading={appsLoading} label="Loading space apps">
           <Stack
+            tile
             label={plural(apps.length, "app")}
             items={appsLoading ? [{ id: "sample-app", name: "Team app" }] : apps}
             total={apps.length}
