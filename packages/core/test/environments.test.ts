@@ -7,7 +7,6 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Session } from "@ren/schema/session"
-import { Space } from "@ren/schema/space"
 import { eq, sql } from "drizzle-orm"
 import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
 import { EnvironmentProvider } from "../src/environment-provider.js"
@@ -46,6 +45,16 @@ const subjectIn = Effect.fnUntraced(function* (organizationId: Auth.Organization
   return yield* Seed.subject(organizationId, yield* Seed.team(organizationId))
 })
 
+const handOf = (session: { readonly sessionId: Session.ID }) =>
+  Option.some({
+    brainId: Brain.ofSession(session.sessionId),
+    generation: 1,
+    url: "http://hand.test",
+    workspace: "/home/user/workspace",
+    egress: true,
+    canMount: true,
+  })
+
 const environmentsOf = Effect.fnUntraced(function* (environmentTemplateId: EnvironmentTemplate.ID) {
   const database = yield* Database.Service
   return yield* database.db
@@ -65,7 +74,7 @@ describe("Environments", () => {
       const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
       const session = yield* subjectIn(organizationId)
       const binding = yield* subject.environments.bind(session, environmentTemplateId)
-      expect(binding).toEqual({ directory: `/workspace/${session.sessionId}`, isNew: true })
+      expect(binding).toEqual({ directory: `/home/user/workspace/${session.sessionId}`, isNew: true })
       expect(yield* subject.environments.findDirectory(session, Option.none())).toEqual(Option.some(binding.directory))
       expect(
         yield* subject.environments.findDirectory(
@@ -78,7 +87,7 @@ describe("Environments", () => {
   )
 
   it.live(
-    "a session keeps its environment template, and another organization's environment template is not found",
+    "a start of a bound session keeps its row, and another organization's environment template is not found",
     () =>
       Effect.gen(function* () {
         const subject = yield* environmentsWith()
@@ -89,7 +98,10 @@ describe("Environments", () => {
         yield* subject.environments.bind(session, environmentTemplateId)
         expect((yield* subject.environments.bind(session, environmentTemplateId)).isNew).toBe(false)
         const other = yield* Seed.environmentTemplate(organizationId)
-        expect((yield* subject.environments.bind(session, other).pipe(Effect.flip))._tag).toBe("Environments.Changed")
+        expect(yield* subject.environments.bind(session, other)).toEqual({
+          directory: `/home/user/workspace/${session.sessionId}`,
+          isNew: false,
+        })
         expect(
           (yield* subject.environments.bind(yield* subjectIn(organizationId), foreign).pipe(Effect.flip))._tag,
         ).toBe("Environments.NotFound")
@@ -97,27 +109,6 @@ describe("Environments", () => {
           (yield* subject.environments.access(yield* subjectIn(organizationId), Option.none()).pipe(Effect.flip))._tag,
         ).toBe("Environments.NotFound")
       }),
-  )
-
-  it.live("a session binds only to the environment template that its space chose", () =>
-    Effect.gen(function* () {
-      const subject = yield* environmentsWith()
-      const organizationId = yield* Seed.organization()
-      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
-      const session = yield* subjectIn(organizationId)
-      const otherSpace = yield* Seed.space(organizationId)
-      const elsewhere = { ...session, sessionId: Session.ID.create(), spaceId: otherSpace }
-      expect((yield* subject.environments.bind(elsewhere, environmentTemplateId).pipe(Effect.flip))._tag).toBe(
-        "Environments.NotFound",
-      )
-      expect(
-        (yield* subject.environments
-          .bind({ ...session, sessionId: Session.ID.create(), spaceId: Space.ID.create() }, environmentTemplateId)
-          .pipe(Effect.flip))._tag,
-      ).toBe("Environments.NotFound")
-      yield* subject.environments.bind(session, environmentTemplateId)
-      expect((yield* subject.environments.access(session, Option.none())).generation).toBe(1)
-    }),
   )
 
   it.live(
@@ -134,7 +125,7 @@ describe("Environments", () => {
         const again = yield* subject.environments.access(session, Option.none())
         const provisions = yield* Ref.get(subject.probe.provisions)
         expect(provisions.length).toBe(1)
-        expect([access.directory, access.generation]).toEqual([`/workspace/${session.sessionId}`, 1])
+        expect([access.directory, access.generation]).toEqual([`/home/user/workspace/${session.sessionId}`, 1])
         expect(again.url.href).toBe(access.url.href)
         const claims = yield* EnvironmentToken.verify([keys[0].publicKey], Redacted.value(access.token))
         expect(Option.map(claims, (found) => [found.kid, found.environment, found.brain])).toEqual(
@@ -155,8 +146,8 @@ describe("Environments", () => {
         const access = yield* subject.environments.access(session, Option.none())
         return [access.sharedDirectory, access.egress]
       })
-      expect(yield* egressOf(false)).toEqual(["/workspace/.ren", false])
-      expect(yield* egressOf(true)).toEqual(["/workspace/.ren", true])
+      expect(yield* egressOf(false)).toEqual(["/home/user/workspace/.ren", false])
+      expect(yield* egressOf(true)).toEqual(["/home/user/workspace/.ren", true])
     }),
   )
 
@@ -201,7 +192,7 @@ describe("Environments", () => {
         const environmentTemplateId = yield* Seed.environmentTemplate(organizationId, { sessionsPerEnvironment: 4 })
         const shared = yield* subjectIn(organizationId)
         const otherSpace = yield* Seed.space(organizationId)
-        yield* Seed.chooseEnvironmentTemplate(otherSpace, environmentTemplateId)
+        yield* Seed.chooseEnvironment(otherSpace, { kind: "template", environmentTemplateId })
         const other = yield* Seed.subject(organizationId, otherSpace)
         yield* Effect.forEach([shared, other], (session) => subject.environments.bind(session, environmentTemplateId), {
           discard: true,
@@ -275,5 +266,93 @@ describe("Environments", () => {
           (yield* subject.environments.bind(yield* subjectIn(organizationId), elsewhere).pipe(Effect.flip))._tag,
         ).toBe("Environments.NotFound")
       }),
+  )
+
+  it.live("an idle chat moves from template A to B at its next access, and the environment of A is destroyed", () =>
+    Effect.gen(function* () {
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const first = yield* Seed.environmentTemplate(organizationId)
+      const session = yield* subjectIn(organizationId)
+      yield* subject.environments.bind(session, first)
+      const before = yield* subject.environments.access(session, Option.none())
+      yield* subject.environments.release(session)
+      yield* Seed.environmentTemplate(organizationId)
+      const after = yield* subject.environments.access(session, Option.none())
+      expect(after.url.href).not.toBe(before.url.href)
+      expect(after.generation).toBe(2)
+      expect(yield* Ref.get(subject.probe.destroyed)).toEqual((yield* Ref.get(subject.probe.provisions)).slice(0, 1))
+      expect(yield* environmentsOf(first)).toEqual([])
+    }),
+  )
+
+  it.live("an outdated environment with a busy seat is kept for every chat on it until the last seat is idle", () =>
+    Effect.gen(function* () {
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const first = yield* Seed.environmentTemplate(organizationId)
+      const spaceId = yield* Seed.team(organizationId)
+      const busy = yield* Seed.subject(organizationId, spaceId)
+      const idle = yield* Seed.subject(organizationId, spaceId)
+      yield* Effect.forEach([busy, idle], (session) => subject.environments.bind(session, first), { discard: true })
+      const before = yield* Effect.forEach([busy, idle], (session) =>
+        subject.environments.access(session, Option.none()),
+      )
+      yield* subject.environments.release(idle)
+      yield* Seed.environmentTemplate(organizationId)
+      expect(before.at(0)?.url.href).toBe((yield* subject.environments.access(idle, Option.none())).url.href)
+      expect(yield* Ref.get(subject.probe.destroyed)).toEqual([])
+      yield* Effect.forEach([busy, idle], (session) => subject.environments.release(session), { discard: true })
+      const moved = yield* subject.environments.access(idle, Option.none())
+      expect(before.at(0)?.url.href).not.toBe(moved.url.href)
+      expect((yield* subject.environments.access(busy, Option.none())).url.href).toBe(moved.url.href)
+    }),
+  )
+
+  it.live("an idle chat on the brain's own sandbox moves to a template, and back when the space chooses default", () =>
+    Effect.gen(function* () {
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const spaceId = yield* Seed.team(organizationId)
+      const session = yield* Seed.subject(organizationId, spaceId)
+      const hand = handOf(session)
+      expect((yield* subject.environments.access(session, hand)).url.href).toBe("http://hand.test/")
+      yield* subject.environments.release(session)
+      yield* Seed.environmentTemplate(organizationId)
+      const template = yield* subject.environments.access(session, hand)
+      expect(template.url.href).not.toBe("http://hand.test/")
+      expect(template.directory).toBe(`/home/user/workspace/${session.sessionId}`)
+      yield* subject.environments.release(session)
+      yield* Seed.chooseEnvironment(spaceId, { kind: "default" })
+      expect((yield* subject.environments.access(session, hand)).url.href).toBe("http://hand.test/")
+      expect(yield* Ref.get(subject.probe.destroyed)).toEqual(yield* Ref.get(subject.probe.provisions))
+    }),
+  )
+
+  it.live("a busy chat on the brain's own sandbox stays there when its space chooses a template", () =>
+    Effect.gen(function* () {
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const session = yield* subjectIn(organizationId)
+      const hand = handOf(session)
+      yield* subject.environments.access(session, hand)
+      yield* Seed.environmentTemplate(organizationId)
+      expect((yield* subject.environments.access(session, hand)).url.href).toBe("http://hand.test/")
+      expect(yield* Ref.get(subject.probe.provisions)).toEqual([])
+    }),
+  )
+
+  it.live("a space that chooses none keeps the environment of its existing chats", () =>
+    Effect.gen(function* () {
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const spaceId = yield* Seed.team(organizationId)
+      const session = yield* Seed.subject(organizationId, spaceId)
+      yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+      const before = yield* subject.environments.access(session, Option.none())
+      yield* subject.environments.release(session)
+      yield* Seed.chooseEnvironment(spaceId, { kind: "none" })
+      expect((yield* subject.environments.access(session, Option.none())).url.href).toBe(before.url.href)
+    }),
   )
 })

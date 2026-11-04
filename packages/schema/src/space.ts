@@ -32,7 +32,7 @@ export const Environment = Schema.Union([
 ]).annotate({
   identifier: "Space.Environment",
   description:
-    "Where the chats of the space run their tools: Ren’s standard environment, an environment of a template, or none (no file or shell tools).",
+    "Where the chats of the space run their tools: Ren’s standard environment, an environment of a template, or none (no file or shell tools). Existing chats follow a change between default and templates when they are idle; a change to or from none reaches new chats only.",
 })
 export type Environment = typeof Environment.Type
 

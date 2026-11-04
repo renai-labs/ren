@@ -211,6 +211,7 @@ export const start = async (options: {
     REN_URL: renProxy.url,
     SANDBOX_PROVIDER: "cell",
     ENVIRONMENT_KEYS: JSON.stringify([encodedKey(TestEnvironment.keys.privateKey)]),
+    ENVIRONMENT_DIRECTORY: "/workspace",
     ...(options.tokenLifetime && { ENVIRONMENT_TOKEN_LIFETIME: options.tokenLifetime }),
   }
   const server = { child: undefined as Bun.Subprocess | undefined, log: "" }

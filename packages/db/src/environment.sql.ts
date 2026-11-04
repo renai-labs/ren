@@ -39,9 +39,9 @@ export const session_environment = pgTable(
       .$type<Space.ID>()
       .notNull()
       .references(() => space.id, { onDelete: "cascade" }),
+    // oxlint-disable-next-line ren/no-comments -- Null: the session runs its tools in the brain's own sandbox (environments EN24).
     environment_template_id: text()
       .$type<EnvironmentTemplate.ID>()
-      .notNull()
       .references(() => environment_template.id, { onDelete: "cascade" }),
     environment_id: text()
       .$type<Environment.ID>()

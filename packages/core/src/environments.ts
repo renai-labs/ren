@@ -10,7 +10,7 @@ import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { and, asc, count, eq, exists, inArray, isNull, type SQLWrapper, sql } from "drizzle-orm"
+import { and, asc, count, eq, exists, inArray, isNotNull, isNull, type SQLWrapper, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { Deployment } from "./deployment.js"
 import { EnvironmentProvider } from "./environment-provider.js"
@@ -40,6 +40,12 @@ export interface Capability {
   readonly egress: boolean
 }
 
+interface Outdated {
+  readonly environmentId: Environment.ID
+  readonly provider: EnvironmentProvider.ID
+  readonly binding: Schema.Json
+}
+
 interface Bound {
   readonly directory: Environment.Directory
   readonly isNew: boolean
@@ -49,7 +55,7 @@ export interface Interface {
   readonly bind: (
     placement: Subject & Placement,
     environmentTemplateId: EnvironmentTemplate.ID,
-  ) => Effect.Effect<Bound, NotFound | Changed>
+  ) => Effect.Effect<Bound, NotFound>
   readonly findDirectory: (
     subject: Subject,
     hand: Option.Option<Hand>,
@@ -72,8 +78,6 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/En
 
 export class NotFound extends Schema.TaggedError<NotFound>()("Environments.NotFound", { message: Schema.String }) {}
 
-export class Changed extends Schema.TaggedError<Changed>()("Environments.Changed", { message: Schema.String }) {}
-
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Environments.Unavailable", {
   message: Schema.String,
 }) {}
@@ -90,11 +94,6 @@ const isAvailable = (organizationId: Auth.OrganizationID, spaceId: SQLWrapper) =
     exists(sql`(select 1 from ${spaces} where ${and(eq(spaces.id, spaceId), isNull(spaces.archived_at))})`),
   )
 
-const isChosenBy = (spaceId: Space.ID) =>
-  exists(
-    sql`(select 1 from ${spaces} where ${and(eq(spaces.id, spaceId), eq(spaces.environment_template_id, templates.id))})`,
-  )
-
 const isSessionOf = (subject: Subject) =>
   and(
     eq(sessions.session_id, subject.sessionId),
@@ -103,12 +102,73 @@ const isSessionOf = (subject: Subject) =>
     ),
   )
 
+interface Held {
+  readonly id: Environment.ID
+  readonly binding: Schema.Json | null
+  readonly provider: EnvironmentProvider.ID
+  readonly busy: number
+}
+
+interface Seat {
+  readonly environmentTemplateId: EnvironmentTemplate.ID | null
+  readonly environmentId: Environment.ID | null
+  readonly idleAt: Date | null
+  readonly isNew: boolean
+  readonly choice: Space.Environment["kind"]
+  readonly chosenTemplateId: EnvironmentTemplate.ID | null
+  readonly isChosenAvailable: boolean
+}
+
+const targetOf = (seat: Seat, options: { readonly hasHand: boolean }): Option.Option<EnvironmentTemplate.ID | null> => {
+  if (seat.choice === "template" && seat.isChosenAvailable) return Option.some(seat.chosenTemplateId)
+  if (seat.choice === "default" && options.hasHand) return Option.some(null)
+  return Option.none()
+}
+
+// oxlint-disable-next-line ren/no-comments -- A seat with a machine moves only with every seat on that machine; a seat on the brain's own sandbox moves when idle; a seat with no machine moves freely.
+const planOf = (seat: Seat, environment: Held | undefined, options: { readonly hasHand: boolean }) => {
+  const target = targetOf(seat, options)
+  const replaced =
+    environment && seat.environmentId === environment.id && environment.busy === 0 ? environment : undefined
+  const canMove = seat.environmentId
+    ? replaced !== undefined
+    : seat.environmentTemplateId !== null || seat.isNew || seat.idleAt !== null
+  if (Option.isNone(target) || target.value === seat.environmentTemplateId || !canMove)
+    return { environmentTemplateId: seat.environmentTemplateId, isMoved: false, outdated: Option.none<Outdated>() }
+  return {
+    environmentTemplateId: target.value,
+    isMoved: true,
+    vacated: replaced?.id,
+    outdated: Option.fromNullishOr(replaced).pipe(
+      Option.flatMap((held) =>
+        Option.map(Option.fromNullishOr(held.binding), (binding): Outdated => ({
+          environmentId: held.id,
+          provider: held.provider,
+          binding,
+        })),
+      ),
+    ),
+  }
+}
+
+const vacate = (transaction: Database.Transaction, environmentId: Environment.ID) =>
+  Effect.gen(function* () {
+    yield* transaction
+      .update(sessions)
+      .set({ environment_id: null, generation: sql`${sessions.generation} + 1` })
+      .where(eq(sessions.environment_id, environmentId))
+    yield* transaction.delete(environments).where(eq(environments.id, environmentId))
+  })
+
+const markBusy = (transaction: Database.Transaction, subject: Subject) =>
+  transaction.update(sessions).set({ idle_at: null }).where(eq(sessions.session_id, subject.sessionId))
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.all({
       lifetime: Config.Duration("ENVIRONMENT_TOKEN_LIFETIME").pipe(Config.withDefault(Duration.minutes(15))),
-      directory: Config.String("ENVIRONMENT_DIRECTORY").pipe(Config.withDefault("/workspace")),
+      directory: Config.String("ENVIRONMENT_DIRECTORY").pipe(Config.withDefault("/home/user/workspace")),
     })
     const database = yield* Database.Service
     const registry = yield* EnvironmentProvider.Registry
@@ -130,7 +190,7 @@ export const layer = Layer.effect(
       database.db
         .select({ sessionId: sessions.session_id })
         .from(sessions)
-        .where(isSessionOf(subject))
+        .where(and(isSessionOf(subject), isNotNull(sessions.environment_template_id)))
         .pipe(
           Effect.orDie,
           Effect.map((rows) => rows.length > 0),
@@ -149,7 +209,6 @@ export const layer = Layer.effect(
           and(
             eq(templates.id, environmentTemplateId),
             isAvailable(placement.organizationId, sql`${placement.spaceId}`),
-            isChosenBy(placement.spaceId),
           ),
         )
         .pipe(Effect.orDie)
@@ -182,13 +241,15 @@ export const layer = Layer.effect(
             .where(and(eq(sessions.session_id, subject.sessionId), eq(spaces.organization_id, subject.organizationId)))
             .for("update", { of: sessions })
           const session = sessionRows.at(0)
-          if (!session) return yield* new NotFound({ message: `Session ${subject.sessionId} has no environment` })
+          if (!session?.environmentTemplateId)
+            return yield* new NotFound({ message: `Session ${subject.sessionId} has no environment` })
+          const environmentTemplateId = session.environmentTemplateId
           const templateRows = yield* transaction
             .select()
             .from(templates)
             .where(
               and(
-                eq(templates.id, session.environmentTemplateId),
+                eq(templates.id, environmentTemplateId),
                 isAvailable(subject.organizationId, sql`${session.spaceId}`),
               ),
             )
@@ -247,22 +308,116 @@ export const layer = Layer.effect(
     }, Observability.Trace.environmentAssign)
 
     const replace = (environmentId: Environment.ID) =>
-      database.transaction((transaction) =>
+      database.transaction((transaction) => vacate(transaction, environmentId))
+
+    const destroy = (outdated: Outdated) =>
+      Option.match(registry.get(outdated.provider), {
+        onNone: () => Effect.void,
+        onSome: (provider) =>
+          provider
+            .destroy(outdated.binding)
+            .pipe(
+              Effect.catch((error) =>
+                Effect.logWarning(`Could not destroy the outdated environment ${outdated.environmentId}`, error),
+              ),
+            ),
+      })
+
+    const lockEnvironment = Effect.fnUntraced(function* (transaction: Database.Transaction, subject: Subject) {
+      const held = (yield* database.db
+        .select({ environmentId: sessions.environment_id })
+        .from(sessions)
+        .where(isSessionOf(subject))
+        .pipe(Effect.orDie)).at(0)?.environmentId
+      if (!held) return
+      return (yield* transaction
+        .select({
+          id: environments.id,
+          binding: environments.binding,
+          provider: templates.provider,
+          busy: sql<number>`(select count(*)::int from ${sessions} where ${and(eq(sessions.environment_id, environments.id), isNull(sessions.idle_at))})`,
+        })
+        .from(environments)
+        .innerJoin(templates, eq(templates.id, environments.environment_template_id))
+        .where(eq(environments.id, held))
+        .for("update", { of: environments })).at(0)
+    })
+
+    const lockSeat = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      subject: Subject,
+      hand: Option.Option<Hand>,
+    ) {
+      const spaceId = Option.isSome(hand)
+        ? (yield* transaction
+            .select({ spaceId: Database.Schema.agent_session.space_id })
+            .from(Database.Schema.agent_session)
+            .innerJoin(spaces, eq(spaces.id, Database.Schema.agent_session.space_id))
+            .where(
+              and(
+                eq(Database.Schema.agent_session.id, subject.sessionId),
+                eq(spaces.organization_id, subject.organizationId),
+              ),
+            )).at(0)?.spaceId
+        : undefined
+      const inserted = spaceId
+        ? yield* transaction
+            .insert(sessions)
+            .values({ session_id: subject.sessionId, space_id: spaceId })
+            .onConflictDoNothing()
+            .returning({ sessionId: sessions.session_id })
+        : []
+      const seat = (yield* transaction
+        .select({
+          environmentTemplateId: sessions.environment_template_id,
+          environmentId: sessions.environment_id,
+          idleAt: sessions.idle_at,
+          choice: spaces.environment,
+          chosenTemplateId: spaces.environment_template_id,
+          isChosenAvailable: sql<boolean>`exists (select 1 from ${templates} where ${and(
+            eq(templates.id, spaces.environment_template_id),
+            eq(templates.organization_id, subject.organizationId),
+            isNull(templates.archived_at),
+          )})`,
+        })
+        .from(sessions)
+        .innerJoin(spaces, eq(spaces.id, sessions.space_id))
+        .where(and(eq(sessions.session_id, subject.sessionId), eq(spaces.organization_id, subject.organizationId)))
+        .for("update", { of: sessions })).at(0)
+      return seat && { ...seat, isNew: inserted.length > 0 }
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- environments §3 rules 4-5: a chat follows its space's choice when its environment can be replaced, which needs every seat on it idle.
+    const settle = Effect.fn("Environments.settle")(function* (subject: Subject, hand: Option.Option<Hand>) {
+      const settled = yield* database.transaction((transaction) =>
         Effect.gen(function* () {
-          yield* transaction
-            .update(sessions)
-            .set({ environment_id: null, generation: sql`${sessions.generation} + 1` })
-            .where(eq(sessions.environment_id, environmentId))
-          yield* transaction.delete(environments).where(eq(environments.id, environmentId))
+          const environment = yield* lockEnvironment(transaction, subject)
+          const seat = yield* lockSeat(transaction, subject, hand)
+          if (!seat) return { isOnHand: false, outdated: Option.none<Outdated>() }
+          const plan = planOf(seat, environment, { hasHand: Option.isSome(hand) })
+          if (plan.vacated) yield* vacate(transaction, plan.vacated)
+          if (plan.isMoved)
+            yield* transaction
+              .update(sessions)
+              .set({ environment_template_id: plan.environmentTemplateId })
+              .where(eq(sessions.session_id, subject.sessionId))
+          if (plan.environmentTemplateId === null) yield* markBusy(transaction, subject)
+          return {
+            isOnHand: plan.environmentTemplateId === null,
+            outdated: plan.outdated,
+          }
         }),
       )
+      if (Option.isSome(settled.outdated)) yield* destroy(settled.outdated.value)
+      return settled.isOnHand
+    })
 
     const grantAccess = Effect.fnUntraced(function* (
       subject: Subject,
       hand: Option.Option<Hand>,
       options: { readonly isRetry: boolean },
     ): Effect.fn.Return<Environment.Access, NotFound | Unavailable> {
-      if (Option.isSome(hand) && !(yield* isBound(subject))) {
+      if ((yield* settle(subject, hand)) && Option.isSome(hand)) {
         const exp = yield* expiry
         return {
           directory: handDirectory(hand.value, subject.sessionId),
@@ -351,6 +506,7 @@ export const layer = Layer.effect(
         placement: Subject & Placement,
         environmentTemplateId: EnvironmentTemplate.ID,
       ) {
+        if (yield* isBound(placement)) return { directory: directoryOf(placement.sessionId), isNew: false }
         yield* checkAvailable(placement, environmentTemplateId)
         const inserted = yield* database.db
           .insert(sessions)
@@ -362,18 +518,7 @@ export const layer = Layer.effect(
           .onConflictDoNothing()
           .returning({ session_id: sessions.session_id })
           .pipe(Effect.orDie)
-        if (inserted.length > 0) return { directory: directoryOf(placement.sessionId), isNew: true }
-        const existing = yield* database.db
-          .select({ environment_template_id: sessions.environment_template_id, space_id: sessions.space_id })
-          .from(sessions)
-          .where(eq(sessions.session_id, placement.sessionId))
-          .pipe(Effect.orDie)
-        const found = existing.at(0)
-        if (found?.environment_template_id === environmentTemplateId && found.space_id === placement.spaceId)
-          return { directory: directoryOf(placement.sessionId), isNew: false }
-        return yield* new Changed({
-          message: `Session ${placement.sessionId} cannot change its environment template or space: not supported yet`,
-        })
+        return { directory: directoryOf(placement.sessionId), isNew: inserted.length > 0 }
       }),
       findDirectory: Effect.fn("Environments.findDirectory")(function* (subject: Subject, hand: Option.Option<Hand>) {
         if (Option.isSome(hand) && !(yield* isBound(subject)))
@@ -408,7 +553,7 @@ export const layer = Layer.effect(
                     isAvailable(organizationId, sessions.space_id),
                   ),
                 )
-                .where(inArray(sessions.session_id, [...sessionIds]))
+                .where(and(inArray(sessions.session_id, [...sessionIds]), isNotNull(sessions.environment_template_id)))
                 .pipe(Effect.orDie)
         const providers = new Map(bound.map((row) => [row.sessionId, row.provider]))
         return new Map(

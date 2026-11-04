@@ -14,8 +14,9 @@ ENV PORT=4100 \
   CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
   GIT_SSL_CAINFO=/etc/ssl/certs/ca-certificates.crt \
   AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
-RUN mkdir /workspace && chown bun:bun /workspace
-WORKDIR /workspace
+# Every environment and the brain's own sandbox use one folder, so a chat keeps its folder when it moves (environments EN24).
+RUN mkdir -p /home/user/workspace && chown -R bun:bun /home/user
+WORKDIR /home/user/workspace
 EXPOSE 4100
 
 USER bun

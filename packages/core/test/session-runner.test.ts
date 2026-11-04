@@ -53,13 +53,10 @@ describe("SessionRunner", () => {
       const database = yield* Database.Service
       const owner = yield* Seed.owner()
       const environmentTemplateId = yield* Seed.environmentTemplate(owner.organizationId)
-      yield* Seed.chooseEnvironmentTemplate(owner.spaceId, environmentTemplateId)
+      yield* Seed.chooseEnvironment(owner.spaceId, { kind: "template", environmentTemplateId })
       const chosen = Session.ID.create()
       yield* sessions.create(owner, { sessionId: chosen, harness: "opencode", interactive: true })
-      yield* database.db
-        .update(Database.Schema.space)
-        .set({ environment: "none", environment_template_id: null })
-        .where(eq(Database.Schema.space.id, owner.spaceId))
+      yield* Seed.chooseEnvironment(owner.spaceId, { kind: "none" })
       const none = Session.ID.create()
       yield* sessions.create(owner, { sessionId: none, harness: "opencode", interactive: true })
       const environmentOf = (sessionId: Session.ID) =>

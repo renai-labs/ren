@@ -14,6 +14,7 @@ import { Space } from "@ren/schema/space"
 import { and, eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { RenSettings } from "../../src/settings/ren.js"
+import { SpaceQueries } from "../../src/space/queries.js"
 
 export const appInput = (ownerSpaceId: Space.ID, slug: string, configuration: Partial<App.Declaration> = {}) =>
   Schema.decodeUnknownSync(App.CreateInput)({
@@ -253,17 +254,14 @@ export const environmentTemplate = Effect.fnUntraced(function* (
     config: { label: "seeded" },
     sessions_per_environment: options.sessionsPerEnvironment ?? 8,
   })
-  yield* chooseEnvironmentTemplate(yield* team(organizationId), id)
+  yield* chooseEnvironment(yield* team(organizationId), { kind: "template", environmentTemplateId: id })
   return id
 })
 
-export const chooseEnvironmentTemplate = Effect.fnUntraced(function* (
-  spaceId: Space.ID,
-  environmentTemplateId: EnvironmentTemplate.ID,
-) {
+export const chooseEnvironment = Effect.fnUntraced(function* (spaceId: Space.ID, environment: Space.Environment) {
   const database = yield* Database.Service
   yield* database.db
     .update(Database.Schema.space)
-    .set({ environment: "template", environment_template_id: environmentTemplateId })
+    .set(SpaceQueries.environmentColumns(environment))
     .where(eq(Database.Schema.space.id, spaceId))
 })

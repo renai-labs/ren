@@ -19497,7 +19497,7 @@
             "additionalProperties": false
           }
         ],
-        "description": "Where the chats of the space run their tools: Ren’s standard environment, an environment of a template, or none (no file or shell tools)."
+        "description": "Where the chats of the space run their tools: Ren’s standard environment, an environment of a template, or none (no file or shell tools). Existing chats follow a change between default and templates when they are idle; a change to or from none reaches new chats only."
       },
       "Space.ID": {
         "type": "string",

@@ -630,23 +630,35 @@ describe("BrainHost environments", () => {
       yield* startOn(host, subject, environmentTemplateId)
       yield* startOn(host, subject, undefined)
       expect(recording.starts.map((input) => input.directory)).toEqual([
-        `/workspace/${subject.sessionId}`,
-        `/workspace/${subject.sessionId}`,
+        `/home/user/workspace/${subject.sessionId}`,
+        `/home/user/workspace/${subject.sessionId}`,
       ])
     }),
   )
 
-  it.live("Ren refuses an unknown environment template, or a change of template, before it calls the brain", () =>
-    Effect.gen(function* () {
-      const recording = yield* recordingCell()
-      const host = yield* hostWith(recording.url)
-      const subject = yield* seeded
-      yield* startOn(host, subject, EnvironmentTemplate.ID.create())
-      expect(recording.starts).toEqual([])
-      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
-      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
-      expect(recording.starts).toHaveLength(1)
-    }),
+  const templatesOf = (sessionId: Session.ID) =>
+    Database.Service.use((database) =>
+      database.db
+        .select({ environmentTemplateId: Database.Schema.session_environment.environment_template_id })
+        .from(Database.Schema.session_environment)
+        .where(eq(Database.Schema.session_environment.session_id, sessionId)),
+    )
+
+  it.live(
+    "Ren refuses an unknown environment template before it calls the brain; a later start keeps the chat's template",
+    () =>
+      Effect.gen(function* () {
+        const recording = yield* recordingCell()
+        const host = yield* hostWith(recording.url)
+        const subject = yield* seeded
+        yield* startOn(host, subject, EnvironmentTemplate.ID.create())
+        expect(recording.starts).toEqual([])
+        const first = yield* Seed.environmentTemplate(subject.owner.organizationId)
+        yield* startOn(host, subject, first)
+        yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
+        expect(recording.starts).toHaveLength(2)
+        expect(yield* templatesOf(subject.sessionId)).toEqual([{ environmentTemplateId: first }])
+      }),
   )
 
   it.live("two starts at once that name different templates leave the chat on one", () =>
@@ -659,7 +671,7 @@ describe("BrainHost environments", () => {
         yield* Seed.environmentTemplate(subject.owner.organizationId),
       ]
       yield* Effect.forEach(templates, (id) => startOn(host, subject, id), { concurrency: "unbounded" })
-      expect(recording.starts).toHaveLength(1)
+      expect(yield* templatesOf(subject.sessionId)).toHaveLength(1)
     }),
   )
 
