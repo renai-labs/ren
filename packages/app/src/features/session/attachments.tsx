@@ -78,7 +78,7 @@ function DriveFileCard(props: {
       </AttachmentContent>
       {drive.deleted || thumbnail ? null : <AttachmentTrigger aria-label={`Open ${file.name}`} onClick={drive.open} />}
       <AttachmentActions>
-        {drive.deleted ? null : (
+        {drive.deleted || props.onRemove ? null : (
           <AttachmentAction aria-label={`Download ${file.name}`} onClick={drive.download}>
             <IconDownload />
           </AttachmentAction>

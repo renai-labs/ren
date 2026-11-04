@@ -46,3 +46,8 @@ export function useSubagentCard(view: ChatAtoms.View, tool: SessionMessage.Tool)
   const state = AsyncResult.getOrElse(useAtomValue(ChatReact.useAtoms().state(view.root)), () => ChatState.empty)
   return Family.subagent(state, view.sessionID, tool)
 }
+
+export function useRunningAgent(root: Session.ID) {
+  const state = AsyncResult.getOrElse(ChatReact.useSession(root).state, () => ChatState.empty)
+  return ChatState.messages(state, root).findLast((message) => message.type === "assistant")?.agent
+}

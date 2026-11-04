@@ -14,21 +14,24 @@ import {
   type ChatAtoms,
 } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
-import { AppConnectCard } from "./app-connect.js"
 import { Link } from "@tanstack/react-router"
+import { cn } from "cn"
+import { AppConnectCard } from "./app-connect.js"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { Shell } from "@ren/schema/shell"
 import {
-  IconClipboardText,
-  IconFile,
   IconBrain,
+  IconChevronDown,
   IconChevronRight,
+  IconClipboardText,
   IconClock,
   IconCopy,
+  IconFile,
   IconInfoCircle,
   IconPencil,
+  IconChecklist,
 } from "@tabler/icons-react"
 import { AsyncResult } from "effect/reactivity"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
@@ -67,7 +70,7 @@ import {
   TraceTitle,
 } from "@ren/ui/trace"
 import { DriveFileCards } from "./attachments.js"
-import { Markdown } from "./markdown.js"
+import { Markdown } from "../../components/markdown.js"
 import { toolIcons } from "./tool-icons.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
 import { useSubagentCard } from "./chat-view.js"
@@ -79,6 +82,8 @@ import { withAppMentions } from "@ren/ui/app-mention"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { ChannelOrigin } from "./channel-origin.js"
 import { useCatalog } from "../../lib/use-catalog.js"
+import type { CatalogApp } from "../../lib/apps.js"
+import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
 
 interface Person {
@@ -384,7 +389,61 @@ function ScheduleOrigin(props: { schedule: NonNullable<SessionMessage.User["sche
   )
 }
 
+const taskAssignment = /^\s*<task_assignment task_id="([^"]+)"[^>]*>\n?([\s\S]*?)\n?<\/task_assignment>\s*$/u
+
+function TaskHandoff(props: { taskId: string; brief: string }) {
+  const [open, setOpen] = useState(false)
+  const lines = props.brief.split("\n")
+  const heading = lines.at(0) ?? ""
+  const separator = heading.indexOf(": ")
+  const identifier = separator === -1 ? undefined : heading.slice(0, separator)
+  const title = separator === -1 ? heading : heading.slice(separator + 2)
+  const rest = lines.slice(1).join("\n").trim()
+  return (
+    <div className="flex w-full max-w-md flex-col self-end overflow-hidden rounded-xl border bg-card text-sm">
+      <div className="relative flex items-center gap-3 px-3.5 py-3 transition-colors duration-150 ease-out hover:bg-muted/50">
+        <IconChecklist className="size-4.5 shrink-0 text-muted-foreground" />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="text-xs text-muted-foreground">
+            Task assigned{identifier ? <span className="font-mono"> · {identifier}</span> : null}
+          </span>
+          <Link
+            to="/tasks/$taskId"
+            params={{ taskId: props.taskId }}
+            className="truncate font-medium after:absolute after:inset-0"
+          >
+            {title}
+          </Link>
+        </div>
+        {rest ? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="relative z-10 text-muted-foreground"
+            aria-label={open ? "Hide the brief" : "Show the brief"}
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            <IconChevronDown className={cn("transition-transform duration-150 ease-out", open && "rotate-180")} />
+          </Button>
+        ) : null}
+      </div>
+      {open && rest ? (
+        <p className="max-h-72 overflow-y-auto overscroll-contain border-t px-3.5 py-3 whitespace-pre-wrap text-muted-foreground">
+          {rest}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined }) {
+  const assigned = taskAssignment.exec(props.message.text)
+  if (assigned?.[1]) return <TaskHandoff taskId={assigned[1]} brief={assigned[2] ?? ""} />
+  return <UserText message={props.message} spaceId={props.spaceId} />
+}
+
+function UserText(props: { message: SessionMessage.User; spaceId: string | undefined }) {
   const parts = splitPasted(props.message.text)
   const apps = useCatalog().apps
   const files = props.message.files ?? []
@@ -436,7 +495,11 @@ function UserMessage(props: {
   onSave: (text: string) => void
 }) {
   return (
-    <Message align="end" className={props.editing ? "w-full @transcript:-mr-13.5" : "w-auto @transcript:-mr-13.5"}>
+    <Message
+      align="end"
+      data-turn={props.message.id}
+      className={cn("scroll-mt-16", props.editing ? "w-full @transcript:-mr-13.5" : "w-auto @transcript:-mr-13.5")}
+    >
       <MessageAvatar className="ml-3.5">
         <Avatar size="sm">
           {props.person.image ? <AvatarImage src={props.person.image} alt="" /> : null}
@@ -845,9 +908,12 @@ function Steps(props: {
         <TraceCollapsibleContent className="flex flex-col gap-3">
           {runs.map((run) =>
             run.text ? (
-              <Markdown key={run.key} streaming={run.text.streaming} className="text-sm/relaxed text-foreground">
-                {run.text.text}
-              </Markdown>
+              <SmoothMarkdown
+                key={run.key}
+                text={run.text.text}
+                streaming={run.text.streaming}
+                className="text-sm/relaxed text-foreground"
+              />
             ) : (
               <Trace key={run.key}>
                 {run.steps.map((step) => (
@@ -999,6 +1065,24 @@ function UserBlock(props: {
   )
 }
 
+function SmoothMarkdown(props: {
+  text: string
+  streaming: boolean
+  className: string
+  apps?: ReadonlyArray<CatalogApp> | undefined
+}) {
+  const text = useSmoothText(props.text, { streaming: props.streaming })
+  return (
+    <Markdown
+      streaming={props.streaming || text.length < props.text.length}
+      apps={props.apps}
+      className={props.className}
+    >
+      {text}
+    </Markdown>
+  )
+}
+
 function AnswerBlock(props: { text: string; streaming: boolean; copy: string | undefined }) {
   const apps = useCatalog().apps
   return (
@@ -1006,9 +1090,12 @@ function AnswerBlock(props: { text: string; streaming: boolean; copy: string | u
       <MessageContent>
         <Bubble variant="ghost">
           <BubbleContent className="text-base leading-[1.7]">
-            <Markdown streaming={props.streaming} apps={apps} className="text-base leading-[1.7]">
-              {props.text}
-            </Markdown>
+            <SmoothMarkdown
+              text={props.text}
+              streaming={props.streaming}
+              apps={apps}
+              className="text-base leading-[1.7]"
+            />
           </BubbleContent>
         </Bubble>
         {props.copy ? (

@@ -1,11 +1,12 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
-import { IconArrowLeft, IconCube, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
+import { IconArrowLeft, IconCube, IconGhostFilled, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList } from "@ren/ui/breadcrumb"
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@ren/ui/breadcrumb"
 import { Button } from "@ren/ui/button"
 import { Queue } from "./queue.js"
 import { WorkspacePanel } from "./workspace-panel.js"
+import { TurnRail } from "./turn-rail.js"
 import { ChatActions } from "./chat-actions.js"
 import { ChatRequests } from "./requests.js"
 import { Transcript } from "./transcript.js"
@@ -14,12 +15,15 @@ import { ModelPicker } from "../../components/model-picker.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { cn } from "cn"
 import { useChat } from "./use-chat.js"
+import type { Session } from "@ren/schema/session"
+import { useAgents } from "../../lib/use-agents.js"
+import { useRunningAgent } from "./chat-view.js"
 
 const route = getRouteApi("/_authed/_shell/sessions/$sessionId/")
 
 type Chat = ReturnType<typeof useChat>
 
-function ChatThread(props: { chat: Chat }) {
+function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
   const chat = props.chat
   const admin = useCanAdminister()
   const [picking, setPicking] = useState(false)
@@ -54,14 +58,19 @@ function ChatThread(props: { chat: Chat }) {
       />
       <div className="px-6 pb-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-2">
-          <ChatComposer chat={chat} picking={picking} onPickingChange={setPicking} />
+          <ChatComposer chat={chat} dock={props.dock} picking={picking} onPickingChange={setPicking} />
         </div>
       </div>
     </>
   )
 }
 
-function ChatComposer(props: { chat: Chat; picking: boolean; onPickingChange: (open: boolean) => void }) {
+function ChatComposer(props: {
+  chat: Chat
+  dock?: ReactNode
+  picking: boolean
+  onPickingChange: (open: boolean) => void
+}) {
   const chat = props.chat
   return (
     <>
@@ -77,6 +86,7 @@ function ChatComposer(props: { chat: Chat; picking: boolean; onPickingChange: (o
           </AlertAction>
         </Alert>
       ) : null}
+      {chat.child ? null : props.dock}
       <ChatRequests
         root={chat.root}
         sessionID={chat.view.sessionID}
@@ -118,36 +128,62 @@ function ChatComposer(props: { chat: Chat; picking: boolean; onPickingChange: (o
   )
 }
 
+function useRunningAgentName(root: Session.ID) {
+  const agents = useAgents()
+  const agent = useRunningAgent(root)
+  if (!agent || agent === "ren") return
+  return agents.agent(agent)?.name ?? agent
+}
+
+function ChatBreadcrumb(props: { chat: Chat }) {
+  const chat = props.chat
+  const agent = useRunningAgentName(chat.root)
+  const space = (
+    <>
+      {agent ? null : <IconCube className="size-4" />}
+      {chat.spaceId ? chat.spaceName : "Chat"}
+    </>
+  )
+  return (
+    <Breadcrumb className="mr-auto flex h-8 items-center rounded-lg border bg-sidebar px-3">
+      <BreadcrumbList className="gap-2">
+        <BreadcrumbItem>
+          {chat.spaceId ? (
+            <BreadcrumbLink
+              className={cn("flex items-center gap-1.5", agent ? "text-muted-foreground" : "text-foreground")}
+              render={<Link to="/spaces/$spaceId" params={{ spaceId: chat.spaceId }} />}
+            >
+              {space}
+            </BreadcrumbLink>
+          ) : (
+            <span className="flex items-center gap-1.5 text-foreground">{space}</span>
+          )}
+        </BreadcrumbItem>
+        {agent ? (
+          <>
+            <BreadcrumbSeparator className="text-muted-foreground">/</BreadcrumbSeparator>
+            <BreadcrumbItem className="flex items-center gap-1.5 font-medium text-foreground">
+              <IconGhostFilled className="size-4" />
+              {agent}
+            </BreadcrumbItem>
+          </>
+        ) : null}
+      </BreadcrumbList>
+    </Breadcrumb>
+  )
+}
+
 function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => void }) {
   const chat = props.chat
   return (
-    <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2 group-has-[[data-slot=sidebar][data-state=collapsed]]/sidebar-wrapper:pl-11 max-md:pl-11">
+    <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2 max-md:pl-11">
       {chat.child ? (
         <Button variant="ghost" className="mr-auto text-muted-foreground" onClick={() => chat.openChild(undefined)}>
           <IconArrowLeft />
           {chat.childTitle ?? "Subagent"}
         </Button>
       ) : (
-        <Breadcrumb className="mr-auto flex h-8 items-center rounded-lg border bg-sidebar px-3">
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              {chat.spaceId ? (
-                <BreadcrumbLink
-                  className="flex items-center gap-1.5"
-                  render={<Link to="/spaces/$spaceId" params={{ spaceId: chat.spaceId }} />}
-                >
-                  <IconCube className="size-4" />
-                  {chat.spaceName}
-                </BreadcrumbLink>
-              ) : (
-                <span className="flex items-center gap-1.5">
-                  <IconCube className="size-4" />
-                  Chat
-                </span>
-              )}
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+        <ChatBreadcrumb chat={chat} />
       )}
       {chat.child ? null : (
         <ChatActions
@@ -200,7 +236,7 @@ export function ChatPage() {
   const [maximized, setMaximized] = useState(false)
   return (
     <div className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]">
-      <div className={panel && maximized ? "hidden" : "flex min-w-0 flex-1 flex-col"}>
+      <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
         <ChatHeader chat={chat} panel={panel} onTogglePanel={() => setPanel((current) => !current)} />
         {chat.failed ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
@@ -212,6 +248,7 @@ export function ChatPage() {
         ) : (
           <ChatThread chat={chat} />
         )}
+        {chat.child ? null : <TurnRail messages={chat.messages} />}
       </div>
       <div
         inert={!panel}
@@ -236,7 +273,7 @@ export function ChatPage() {
   )
 }
 
-export function SessionThread(props: { sessionId: string }) {
+export function SessionThread(props: { sessionId: string; dock?: ReactNode }) {
   const chat = useChat(props.sessionId, {})
-  return <ChatThread chat={chat} />
+  return <ChatThread chat={chat} dock={props.dock} />
 }
