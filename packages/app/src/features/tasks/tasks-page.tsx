@@ -1,14 +1,14 @@
 import { EmptyState } from "../../components/empty-state.js"
 import { Link, getRouteApi } from "@tanstack/react-router"
 import {
-  IconAlertCircle,
+  IconHandStop,
   IconChevronDown,
   IconCube,
   IconArchive,
   IconLink,
   IconX,
   IconPlus,
-  IconGhost,
+  IconGhostFilled,
 } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { Checkbox } from "@ren/ui/checkbox"
@@ -22,14 +22,18 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { Button } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
-import { ExpandableSearch } from "../../components/expandable-search.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
-import { TasksSkeleton } from "../../components/route-skeleton.js"
-import { Page } from "../../components/page.js"
+import { TasksSample } from "../../components/route-skeleton.js"
+import { Page, useShapeId } from "../../components/page.js"
+import { Loading } from "@ren/ui/loading"
 import { NewTaskDialog } from "../../components/new-task-dialog.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
 import { FilterChips, FilterMenu, type Filters } from "../../components/filter-menu.js"
 import { DisplayOptions } from "./task-filters.js"
+import { TaskBoard } from "./task-board.js"
+import { PriorityMenu, StatusMenu } from "../../components/task-pickers.js"
+import { errorMessage } from "../../lib/errors.js"
 import { countedTaskProperties, taskProperties, matchesFilters, type TaskLookups } from "./task-properties.js"
 import {
   LabelBadge,
@@ -87,7 +91,7 @@ function TaskMeta(props: { task: Task; show: (property: string) => boolean }) {
     <span className="ml-auto flex shrink-0 items-center gap-1">
       {task.humanReview ? (
         <Badge variant="outline" className="h-6 rounded-full bg-muted">
-          <IconAlertCircle />
+          <IconHandStop className="text-chart-3" />
           Needs review
         </Badge>
       ) : null}
@@ -117,7 +121,7 @@ function TaskAssignee(props: { task: Task; agentName: string | null; owner: Memb
   if (props.task.agentId)
     return (
       <span className="flex size-6 shrink-0 items-center justify-center">
-        <IconGhost className="size-4 text-muted-foreground" aria-label={props.agentName ?? "Agent"} />
+        <IconGhostFilled className="size-4 text-muted-foreground" aria-label={props.agentName ?? "Agent"} />
       </span>
     )
   return (
@@ -126,6 +130,8 @@ function TaskAssignee(props: { task: Task; agentName: string | null; owner: Memb
     </span>
   )
 }
+
+const rowControl = "relative z-10 size-7 data-popup-open:bg-muted"
 
 function TaskRow(props: {
   task: Task
@@ -138,6 +144,13 @@ function TaskRow(props: {
 }) {
   const task = props.task
   const show = (property: string) => props.show.includes(property)
+  const { api } = RouterContext.useRouterContext()
+  const update = useMutation(api.task.update.mutationOptions())
+  const change = (patch: { status?: Task["status"]; priority?: Task["priority"] }) =>
+    update.mutate(
+      { id: task.id, ...patch },
+      { onError: (error) => toast.error("Couldn’t save the task", { description: errorMessage(error) }) },
+    )
   return (
     <div
       data-selected={props.selected || undefined}
@@ -149,16 +162,36 @@ function TaskRow(props: {
         aria-label={`Select ${task.title}`}
         className="relative z-10 mx-1 size-3.5 border-muted-foreground/70 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 dark:bg-card data-checked:opacity-100 [&_[data-slot=checkbox-indicator]>svg]:size-3"
       />
-      {show("priority") ? <PriorityIcon priority={task.priority} /> : null}
+      {show("priority") ? (
+        <PriorityMenu
+          priority={task.priority}
+          onChange={(priority) => change({ priority })}
+          trigger={
+            <Button variant="ghost" size="icon-sm" className={rowControl} aria-label={`Priority for ${task.title}`} />
+          }
+        >
+          <PriorityIcon priority={task.priority} />
+        </PriorityMenu>
+      ) : null}
       <span
         className={cn(
-          "ml-2 min-w-20 shrink-0 font-mono text-xs whitespace-nowrap text-muted-foreground",
+          "ml-2 min-w-14 shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums",
           idWidths[Math.min(props.idWidth, idWidths.length - 1)],
         )}
       >
         {task.identifier}
       </span>
-      {show("status") ? <StatusIcon task={task} /> : null}
+      {show("status") ? (
+        <StatusMenu
+          status={task.status}
+          onChange={(status) => change({ status })}
+          trigger={
+            <Button variant="ghost" size="icon-sm" className={rowControl} aria-label={`Status for ${task.title}`} />
+          }
+        >
+          <StatusIcon task={task} />
+        </StatusMenu>
+      ) : null}
       <Link
         to="/tasks/$taskId"
         params={{ taskId: task.id }}
@@ -191,14 +224,14 @@ const groupingsFor = (lookups: TaskLookups) => ({
     ...lookups.agents.map((agent) => ({
       id: agent.id,
       label: agent.name,
-      icon: IconGhost,
+      icon: IconGhostFilled,
       spaceId: undefined,
       has: (task: Task) => task.agentId === agent.id,
     })),
     {
       id: "none",
       label: "No agent",
-      icon: IconGhost,
+      icon: IconGhostFilled,
       spaceId: undefined,
       has: (task: Task) => task.agentId === null,
     },
@@ -227,7 +260,7 @@ function TaskGroups(props: {
   const agents = useAgents()
   const members = useMembers()
   const groups = props.groups
-  if (props.loading) return <TasksSkeleton />
+  if (props.loading) return <TasksSample />
   if (groups.length === 0 && props.filtered)
     return (
       <EmptyState
@@ -349,6 +382,7 @@ export function TasksPage() {
     else toast.success(done)
   }
   const loading = tasks.isPending
+  const shapeId = useShapeId(`tasks-${display.layout}`)
   const stale = tasks.isPlaceholderData
   const idWidth = Math.max(0, ...roots.map((task) => task.identifier.length)) + 1
   const setFilters = (next: Filters) =>
@@ -382,6 +416,22 @@ export function TasksPage() {
       ids.length === 1 ? "Task archived" : `${ids.length} tasks archived`,
     )
   }
+  const moveTo = (input: { taskId: string; groupId: string }) => {
+    const failed = (error: unknown) => {
+      toast.error("Couldn’t move the task", { description: errorMessage(error) })
+    }
+    if (display.groupBy === "status") {
+      const status = input.groupId
+      return status === "todo" || status === "in_progress" || status === "done" || status === "dismissed"
+        ? update.mutateAsync({ id: input.taskId, status }).catch(failed)
+        : Promise.resolve()
+    }
+    if (display.groupBy === "agent")
+      return assign
+        .mutateAsync({ id: input.taskId, agentId: input.groupId === "none" ? null : input.groupId, start: "none" })
+        .catch(failed)
+    return assign.mutateAsync({ id: input.taskId, spaceId: input.groupId, start: "none" }).catch(failed)
+  }
   const groupings = groupingsFor(lookups)
   const grouping =
     display.groupBy === "status" || display.groupBy === "agent" ? groupings[display.groupBy] : groupings.space
@@ -393,15 +443,16 @@ export function TasksPage() {
       spaceId: group.spaceId,
       tasks: visible.filter(group.has),
     }))
-    .filter((group) => display.showEmpty || group.tasks.length > 0)
+    .filter((group) => display.showEmpty || display.layout === "board" || group.tasks.length > 0)
   return (
     <Page
       title="Tasks"
       width="full"
+      shape={`page-${display.layout}`}
       leading={<FilterChips properties={taskProperties(lookups)} value={filters} onChange={setFilters} />}
       actions={
         <>
-          <ExpandableSearch label="Search tasks" value={query} onChange={setQuery} />
+          <ToolbarSearch label="Search tasks" value={query} onChange={setQuery} />
           <FilterMenu
             label="Filter tasks"
             properties={countedTaskProperties(lookups, roots)}
@@ -423,19 +474,25 @@ export function TasksPage() {
         </>
       }
     >
-      <TaskGroups
-        groups={groups}
-        loading={loading}
-        stale={stale}
-        filtered={visible.length < roots.length}
-        onClearFilters={clearFilters}
-        properties={display.properties}
-        idWidth={idWidth}
-        selected={selected}
-        onSelect={({ taskId, checked }) =>
-          setSelected((current) => (checked ? [...current, taskId] : current.filter((id) => id !== taskId)))
-        }
-      />
+      <Loading id={shapeId} loading={loading} label="Loading tasks">
+        {display.layout === "board" && !loading && groups.length > 0 ? (
+          <TaskBoard groups={groups} properties={display.properties} stale={stale} onMove={moveTo} />
+        ) : (
+          <TaskGroups
+            groups={groups}
+            loading={loading}
+            stale={stale}
+            filtered={visible.length < roots.length}
+            onClearFilters={clearFilters}
+            properties={display.properties}
+            idWidth={idWidth}
+            selected={selected}
+            onSelect={({ taskId, checked }) =>
+              setSelected((current) => (checked ? [...current, taskId] : current.filter((id) => id !== taskId)))
+            }
+          />
+        )}
+      </Loading>
       <SelectionBar
         count={selected.length}
         agents={lookups.agents}
@@ -513,7 +570,7 @@ function SelectionBar(props: {
           <DropdownMenuGroup>
             {props.agents.map((agent) => (
               <DropdownMenuItem key={agent.id} onClick={() => props.onMove(agent.id)}>
-                <IconGhost />
+                <IconGhostFilled />
                 {agent.name}
               </DropdownMenuItem>
             ))}

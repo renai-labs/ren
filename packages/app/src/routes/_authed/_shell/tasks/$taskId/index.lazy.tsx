@@ -7,6 +7,12 @@ export const Route = createLazyFileRoute("/_authed/_shell/tasks/$taskId/")({ com
 function TaskRoute() {
   const search = Route.useSearch()
   return (
-    <TaskPage session={search.session ? <SessionThread key={search.session} sessionId={search.session} /> : null} />
+    <TaskPage
+      session={
+        search.session
+          ? (dock) => <SessionThread key={search.session} sessionId={search.session ?? ""} dock={dock} />
+          : null
+      }
+    />
   )
 }
