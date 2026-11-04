@@ -5241,12 +5241,12 @@ export type AppProfileReachSpaceProfilesInput = { readonly id: { readonly id: st
 
 export type AppProfileReachSpaceProfilesOutput = AppProfileReach
 
-export type AppProfileReachAppConnectInput = {
+export type AppProfileReachAppRequestConnectInput = {
   readonly app: { readonly app: string }["app"]
-  readonly spaceId?: { readonly spaceId?: string | undefined }["spaceId"]
+  readonly spaceId: { readonly spaceId: string }["spaceId"]
 }
 
-export type AppProfileReachAppConnectOutput = AppProfileConnect
+export type AppProfileReachAppRequestConnectOutput = AppProfileConnect
 
 export type AppRegistryListInput = {
   readonly query?: {

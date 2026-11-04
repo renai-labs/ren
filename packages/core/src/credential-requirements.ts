@@ -23,7 +23,7 @@ export interface Interface {
   readonly forApp: (
     actor: Actor.Info,
     app: string,
-    spaceId: Option.Option<Space.ID>,
+    spaceId: Space.ID,
   ) => Effect.Effect<AppProfile.Connect, Primitive.NotFound>
 }
 
@@ -80,13 +80,11 @@ export const layer = Layer.effect(
     return Service.of({
       forSpace,
       forApp: Effect.fn("CredentialRequirements.forApp")(function* (actor, app, spaceId) {
-        const target = Option.orElse(spaceId, () => Option.fromNullishOr(actor.agent?.spaceId))
-        if (Option.isNone(target)) return yield* new Primitive.NotFound({ message: "Pass the space to connect in." })
         const found = yield* database.transaction((transaction) => AppQueries.find(transaction, access, actor, app))
-        const reached = yield* forSpace(actor, target.value)
+        const reached = yield* forSpace(actor, spaceId)
         return {
           appId: found.app.id,
-          spaceId: target.value,
+          spaceId,
           profiles: reached.profiles.filter((profile) => profile.appId === found.app.id),
         } satisfies AppProfile.Connect
       }),

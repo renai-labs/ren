@@ -11,10 +11,10 @@ const decode = Schema.decodeUnknownOption(
 const calls = Schema.decodeUnknownOption(Schema.Array(Schema.Struct({ tool: Schema.String })))
 
 const called = (content: SessionMessage.Tool) =>
-  content.name.endsWith("_app_connect") ||
+  content.name.endsWith("_app_request_connect") ||
   (content.name === "execute" &&
     Option.exists(calls(ToolState.metadata(content).toolCalls), (list) =>
-      list.some((call) => call.tool.endsWith(".app_connect")),
+      list.some((call) => call.tool.endsWith(".app_request_connect")),
     ))
 
 export const of = (content: SessionMessage.Tool) =>

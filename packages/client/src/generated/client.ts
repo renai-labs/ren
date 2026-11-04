@@ -106,8 +106,8 @@ import type {
   AppProfileReachSessionProfilesOutput,
   AppProfileReachSpaceProfilesInput,
   AppProfileReachSpaceProfilesOutput,
-  AppProfileReachAppConnectInput,
-  AppProfileReachAppConnectOutput,
+  AppProfileReachAppRequestConnectInput,
+  AppProfileReachAppRequestConnectOutput,
   AppRegistryListInput,
   AppRegistryListOutput,
   AppRegistryGetInput,
@@ -1077,11 +1077,11 @@ export function make(options: ClientOptions) {
           ),
       },
       app: {
-        connect: (input: AppProfileReachAppConnectInput, requestOptions?: RequestOptions) =>
-          request<AppProfileReachAppConnectOutput>(
+        "request-connect": (input: AppProfileReachAppRequestConnectInput, requestOptions?: RequestOptions) =>
+          request<AppProfileReachAppRequestConnectOutput>(
             {
               method: "GET",
-              path: `/apps/${encodeURIComponent(input.app)}/connect`,
+              path: `/apps/${encodeURIComponent(input.app)}/request-connect`,
               query: { spaceId: input["spaceId"] },
               successStatus: 200,
               declaredStatuses: [401, 403, 404],

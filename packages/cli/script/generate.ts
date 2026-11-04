@@ -330,7 +330,7 @@ const elsewhere = new Map([
   ["invitation.preview", "The sign-up page shows an invitation before its invitee signs in."],
   ["ren-inference.connect", "The provider sign-in returns to the app in a browser."],
   ["drive.startUpload", "The upload posts its file to the bucket with the returned form; the app does it."],
-  ["app.connect", "An agent asks the person to connect an app; the chat shows the card."],
+  ["app.request-connect", "An agent asks the person to connect an app; the chat shows the card."],
 ])
 
 const handwritten = new Set(["login", "logout", "whoami", "upgrade", "health", "infra", "api"])

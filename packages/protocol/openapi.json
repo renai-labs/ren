@@ -4313,10 +4313,10 @@
         "summary": "List the profiles a new chat reaches"
       }
     },
-    "/apps/{app}/connect": {
+    "/apps/{app}/request-connect": {
       "get": {
         "tags": ["app-profile-reach"],
-        "operationId": "app.connect",
+        "operationId": "app.request-connect",
         "parameters": [
           {
             "name": "app",
@@ -4332,7 +4332,7 @@
             "schema": {
               "$ref": "#/components/schemas/Space.ID"
             },
-            "required": false
+            "required": true
           }
         ],
         "security": [
@@ -4385,7 +4385,7 @@
             }
           }
         },
-        "description": "Offer the person a Connect button for an app (ID or slug) in a space; an agent’s space is the default. Call it when you need an app the space cannot use yet, ask them in a few words to connect it, then end your turn. A profile with no gaps means the app is ready.",
+        "description": "Show the person a Connect button for an app (ID or slug) in a space; a profile with no gaps means the app is ready.",
         "summary": "Ask the person to connect an app"
       }
     },
