@@ -22,6 +22,7 @@ const provider = Effect.gen(function* () {
     description: "The chaos lane’s containers, behind its fault proxies.",
     egress: false,
     canMount: false,
+    canLimitHosts: false,
     config: Schema.Struct({}),
     binding: Schema.Struct({ environmentTemplateId: EnvironmentTemplate.ID, generation: Schema.Int }),
     provision: (input) =>

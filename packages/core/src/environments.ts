@@ -283,7 +283,7 @@ export const layer = Layer.effect(
               const id = Environment.ID.create()
               return transaction
                 .insert(environments)
-                .values({ id, environment_template_id: template.id, space_id: session.spaceId })
+                .values({ id, environment_template_id: template.id, space_id: session.spaceId, image: template.image })
                 .pipe(Effect.as(id))
             },
           })
@@ -448,6 +448,7 @@ export const layer = Layer.effect(
         })
       const keys = yield* signingKeys
       const assigned = yield* assign(subject)
+      const network = { hosts: Option.none(), proxy: Option.none() } satisfies EnvironmentProvider.Network
       const unavailableBecause = (error: EnvironmentProvider.Failed) =>
         new Unavailable({ message: `The environment of session ${subject.sessionId} is unavailable: ${error.message}` })
       const providerBinding =
@@ -457,6 +458,8 @@ export const layer = Layer.effect(
             environmentId: assigned.environmentId,
             environmentTemplateId: assigned.template.id,
             config: assigned.template.config,
+            image: Option.fromNullishOr(assigned.template.image),
+            network,
             variables: {
               ...ExecutorVariables.make(assigned.environmentId, keys.publicKeys),
               ...sandboxVariables({ "ren.organization.id": subject.organizationId }),
@@ -472,7 +475,7 @@ export const layer = Layer.effect(
                 .pipe(Effect.orDie),
             ),
           ))
-      const endpoint = yield* provider.value.connect(providerBinding).pipe(
+      const endpoint = yield* provider.value.connect(providerBinding, network).pipe(
         Effect.map(Option.some),
         Effect.catchTag("EnvironmentProvider.Gone", (gone) =>
           options.isRetry

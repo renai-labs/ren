@@ -7,7 +7,7 @@ import { Image, TestEnvironment } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Docker } from "../src/environment-provider/docker.js"
 import { testEffect } from "./lib/effect.js"
@@ -29,6 +29,8 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
           environmentId,
           environmentTemplateId: EnvironmentTemplate.ID.create(),
           config,
+          image: Option.none(),
+          network: { hosts: Option.none(), proxy: Option.none() },
           variables: ExecutorVariables.make(environmentId, [TestEnvironment.keys.publicKey]),
         }
         const bindings = yield* Effect.all([provider.provision(input), provider.provision(input)], {
@@ -36,7 +38,7 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
         })
         expect(bindings[1]).toEqual(bindings[0])
         yield* Effect.addFinalizer(() => provider.destroy(bindings[0]).pipe(Effect.ignore))
-        const endpoint = yield* provider.connect(bindings[0])
+        const endpoint = yield* provider.connect(bindings[0], input.network)
         const token = yield* EnvironmentToken.sign(TestEnvironment.keys.privateKey, {
           environment: input.environmentId,
           brain: Brain.ID.create(),
@@ -50,7 +52,7 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
         expect((yield* client["files.read"]({ path: "session/note.txt" })).bytes).toEqual(written)
         yield* provider.destroy(bindings[0])
         yield* provider.destroy(bindings[0])
-        expect((yield* provider.connect(bindings[0]).pipe(Effect.flip))._tag).toBe("EnvironmentProvider.Gone")
+        expect((yield* provider.connect(bindings[0], input.network).pipe(Effect.flip))._tag).toBe("EnvironmentProvider.Gone")
       }),
     180_000,
   )

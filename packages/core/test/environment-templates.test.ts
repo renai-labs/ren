@@ -15,7 +15,9 @@ import { TestProvider } from "./lib/environment-provider.js"
 import { Seed } from "./lib/seed.js"
 import { Signer } from "../src/signer.js"
 
-const probe = await Effect.runPromise(TestProvider.make())
+const probe = await Effect.runPromise(TestProvider.make({ canLimitHosts: true }))
+
+const fixed = await Effect.runPromise(TestProvider.make({ id: "fixed" }))
 
 const key = await Effect.runPromise(Signature.generate("environments"))
 
@@ -26,7 +28,7 @@ const it = testEffect(
     Space.layer,
     SpaceProvisioning.layer,
   ).pipe(
-    Layer.provideMerge(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
+    Layer.provideMerge(EnvironmentProvider.layer([Effect.succeed(probe.provider), Effect.succeed(fixed.provider)])),
     Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
     Layer.provideMerge(Testing.layer),
     Layer.provide(
@@ -110,6 +112,29 @@ describe("EnvironmentTemplates", () => {
       expect(update).toMatchObject({ _tag: "Primitive.Invalid", field: "config" })
       expect((yield* templates.update(setup.admin, made.id, { config: { label: "new" } })).config).toEqual({
         label: "new",
+      })
+    }),
+  )
+
+  it.live("limited networking is Invalid for a provider that cannot limit hosts (environments test 10)", () =>
+    Effect.gen(function* () {
+      const templates = yield* EnvironmentTemplates.Service
+      const setup = yield* team()
+      const networking = {
+        type: "limited",
+        allowPackageManagers: false,
+        allowMcpServers: false,
+        allowedHosts: [],
+      } as const
+      const provider = EnvironmentProvider.ID.make("fixed")
+      expect(yield* templates.create(setup.admin, { ...input, provider, networking }).pipe(Effect.flip)).toMatchObject({
+        _tag: "Primitive.Invalid",
+        field: "networking",
+      })
+      const made = yield* templates.create(setup.admin, { ...input, provider })
+      expect(yield* templates.update(setup.admin, made.id, { networking }).pipe(Effect.flip)).toMatchObject({
+        _tag: "Primitive.Invalid",
+        field: "networking",
       })
     }),
   )
@@ -198,31 +223,29 @@ describe("EnvironmentTemplates", () => {
   it.live("lists each provider with a JSON Schema of its config, for the form", () =>
     Effect.gen(function* () {
       const registry = yield* EnvironmentProvider.Registry
-      expect(registry.providers.map((provider) => provider.info)).toEqual([
-        {
-          id: EnvironmentProvider.ID.make("test"),
-          title: "Test",
-          description: "Environments that live in the test’s memory.",
-          configSchema: {
-            dialect: "draft-2020-12",
-            schema: {
-              type: "object",
-              title: "Test",
-              properties: {
-                label: {
-                  type: "string",
-                  minLength: 1,
-                  title: "Label",
-                  description: "A name for the test environments.",
-                },
+      expect(registry.providers.at(0)?.info).toEqual({
+        id: EnvironmentProvider.ID.make("test"),
+        title: "Test",
+        description: "Environments that live in the test’s memory.",
+        configSchema: {
+          dialect: "draft-2020-12",
+          schema: {
+            type: "object",
+            title: "Test",
+            properties: {
+              label: {
+                type: "string",
+                minLength: 1,
+                title: "Label",
+                description: "A name for the test environments.",
               },
-              required: ["label"],
-              additionalProperties: true,
             },
-            definitions: {},
+            required: ["label"],
+            additionalProperties: true,
           },
+          definitions: {},
         },
-      ])
+      })
     }),
   )
 })

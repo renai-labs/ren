@@ -55,17 +55,29 @@ export const layer = Layer.effect(
     const inOrganization = (actor: Actor.Info) =>
       and(eq(table.organization_id, actor.organizationId), isNull(table.archived_at))
 
-    const checkConfig = Effect.fnUntraced(function* (provider: EnvironmentProvider.ID, config: unknown) {
-      const found = registry.get(provider)
-      if (Option.isNone(found))
-        return yield* new Primitive.Invalid({
-          message: `Ren has no environment provider ${provider}.`,
-          field: "provider",
-        })
-      return yield* found.value
+    const providerOf = (provider: EnvironmentProvider.ID) =>
+      Option.match(registry.get(provider), {
+        onNone: () =>
+          Effect.fail(
+            new Primitive.Invalid({ message: `Ren has no environment provider ${provider}.`, field: "provider" }),
+          ),
+        onSome: Effect.succeed,
+      })
+
+    const checkConfig = (provider: EnvironmentProvider.Provider, config: unknown) =>
+      provider
         .check(config)
         .pipe(Effect.mapError((error) => new Primitive.Invalid({ message: error.message, field: "config" })))
-    })
+
+    const checkNetworking = (provider: EnvironmentProvider.Provider, networking: EnvironmentTemplate.Networking) =>
+      networking.type === "limited" && !provider.canLimitHosts
+        ? Effect.fail(
+            new Primitive.Invalid({
+              message: `${provider.info.title} environments cannot limit their hosts; use unrestricted networking.`,
+              field: "networking",
+            }),
+          )
+        : Effect.void
 
     const findForUpdate = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
@@ -157,7 +169,9 @@ export const layer = Layer.effect(
           return yield* new Primitive.Forbidden({
             message: "Only organization admins can create environment templates.",
           })
-        const config = yield* checkConfig(input.provider, input.config)
+        const provider = yield* providerOf(input.provider)
+        const config = yield* checkConfig(provider, input.config)
+        yield* checkNetworking(provider, input.networking)
         const rows = yield* database.db
           .insert(table)
           .values({
@@ -189,7 +203,8 @@ export const layer = Layer.effect(
               return yield* new Primitive.Forbidden({ message: "You cannot edit this environment template." })
             const config = Predicate.isUndefined(input.config)
               ? undefined
-              : yield* checkConfig(found.provider, input.config)
+              : yield* checkConfig(yield* providerOf(found.provider), input.config)
+            if (input.networking) yield* checkNetworking(yield* providerOf(found.provider), input.networking)
             const updated = yield* transaction
               .update(table)
               .set({

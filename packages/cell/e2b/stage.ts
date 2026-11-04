@@ -41,9 +41,12 @@ const Manifest = Schema.Struct({
 const Root = Schema.Struct({ packageManager: Schema.String })
 
 // oxlint-disable-next-line ren/no-comments -- Follows imports at any depth (ren-v1 INV-105). A file that no entry point imports never reaches the image, so its change never rebuilds the template.
-export const sources = async (repository: string) => {
+export const sources = async (
+  repository: string,
+  entrypoints: ReadonlyArray<string> = ["packages/cell/src/bun.ts", "packages/executor/src/main.ts"],
+) => {
   const build = await Bun.build({
-    entrypoints: ["packages/cell/src/bun.ts", "packages/executor/src/main.ts"].map((file) => join(repository, file)),
+    entrypoints: entrypoints.map((file) => join(repository, file)),
     target: "bun",
     metafile: true,
     plugins: [
@@ -96,8 +99,20 @@ const smoke = async (tag: string) => {
   return answered
 }
 
-if (import.meta.main) {
-  const imported = await sources(root)
+// oxlint-disable-next-line ren/no-comments -- One E2B image from the workspace: the files its entry points import, the install of its packages, its Dockerfiles and its start script. The tag is a hash of all of them, so an unchanged image is not built again.
+export interface Target {
+  readonly name: string
+  readonly entrypoints: ReadonlyArray<string>
+  readonly packages: ReadonlyArray<string>
+  readonly dockerfiles: ReadonlyArray<string>
+  readonly startScript: string
+  readonly readyCommand: string
+  readonly versionVariable: string
+  readonly size: { readonly cpuCount: number; readonly memoryMB: number }
+}
+
+export const build = async (target: Target) => {
+  const imported = await sources(root, target.entrypoints)
   // oxlint-disable-next-line ren/no-comments -- Every workspace manifest, because `--frozen-lockfile` checks the whole lockfile.
   const staged = [
     ...(await Bun.$`git ls-files --cached --others --exclude-standard`.cwd(root).text())
@@ -108,7 +123,7 @@ if (import.meta.main) {
       ),
     ...imported,
   ]
-  const context = await mkdtemp(join(tmpdir(), "ren-brain-"))
+  const context = await mkdtemp(join(tmpdir(), `${target.name}-`))
   const tree = join(context, "ren")
   await Promise.all(
     staged.map(async (file) => {
@@ -116,8 +131,9 @@ if (import.meta.main) {
       await Bun.write(join(tree, file), Bun.file(join(root, file)))
     }),
   )
-  // oxlint-disable-next-line ren/no-comments -- The install of e2b.Dockerfile, for the sandbox's platform. Each link names the version and peers a package resolves to, so the links change exactly when the image's dependencies do, whatever else changes in bun.lock.
-  await Bun.$`bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts --os linux --cpu x64`
+  const filters = target.packages.flatMap((name) => ["--filter", name])
+  // oxlint-disable-next-line ren/no-comments -- The install of the Dockerfile, for the sandbox's platform. Each link names the version and peers a package resolves to, so the links change exactly when the image's dependencies do, whatever else changes in bun.lock.
+  await Bun.$`bun install --frozen-lockfile --production ${filters} --ignore-scripts --os linux --cpu x64`
     .cwd(tree)
     .quiet()
   const links = await Promise.all(
@@ -139,8 +155,8 @@ if (import.meta.main) {
   const entries = await Promise.all(
     [
       ...imported.map((file) => join(root, file)),
-      ...dockerfiles.map((file) => join(import.meta.dir, file)),
-      join(import.meta.dir, "start.sh"),
+      ...target.dockerfiles.map((file) => join(import.meta.dir, file)),
+      join(import.meta.dir, target.startScript),
     ].map(async (path) => ({ path: path.slice(root.length + 1), content: await Bun.file(path).bytes() })),
   )
   const bun = Schema.decodeUnknownSync(Root)(await Bun.file(join(root, "package.json")).json()).packageManager.replace(
@@ -152,32 +168,49 @@ if (import.meta.main) {
     ...manifests,
     { path: "node_modules", content: new TextEncoder().encode(links.toSorted().join("")) },
     { path: "bun", content: new TextEncoder().encode(bun) },
-    { path: "size", content: new TextEncoder().encode(`${size.cpuCount}/${size.memoryMB}`) },
+    { path: "size", content: new TextEncoder().encode(`${target.size.cpuCount}/${target.size.memoryMB}`) },
   ])
-  const tag = `${name}:${version}`
-  const dirty = (await Bun.$`git status --porcelain`.cwd(root).text()).trim().length > 0
-  const tags = await Template.getTags(name).catch(() => [])
+  const tag = `${target.name}:${version}`
+  const tags = await Template.getTags(target.name).catch(() => [])
   if (tags.some((each) => each.tag === version)) {
     await rm(context, { recursive: true, force: true })
-    process.stdout.write(`${tag} exists; nothing to build\n`)
-    process.exit(0)
+    return { tag, isNew: false }
   }
   await Bun.$`tar -czf ${join(context, "ren.tar.gz")} --exclude=node_modules -C ${tree} .`
   await rm(tree, { recursive: true, force: true })
-  await Bun.write(join(context, "start.sh"), Bun.file(join(import.meta.dir, "start.sh")))
-  const parts = await Promise.all(dockerfiles.map((file) => Bun.file(join(import.meta.dir, file)).text()))
-  const dockerfile = `${parts.join("\n").replace(/^FROM oven\/bun:.*$/m, `FROM oven/bun:${bun}`)}\nENV REN_BRAIN_VERSION=${version}\n`
+  await Bun.write(join(context, target.startScript), Bun.file(join(import.meta.dir, target.startScript)))
+  const parts = await Promise.all(target.dockerfiles.map((file) => Bun.file(join(import.meta.dir, file)).text()))
+  const dockerfile = `${parts.join("\n").replace(/^FROM oven\/bun:.*$/m, `FROM oven/bun:${bun}`)}\nENV ${target.versionVariable}=${version}\n`
   await Template.build(
     Template({ fileContextPath: context })
       .fromDockerfile(dockerfile)
-      .setStartCmd("/opt/ren/start.sh", "pgrep -f /opt/ren/start.sh"),
+      .setStartCmd(`/opt/ren/${target.startScript}`, target.readyCommand),
     tag,
-    { ...size, onBuildLogs: defaultBuildLogger() },
+    { ...target.size, onBuildLogs: defaultBuildLogger() },
   )
   await rm(context, { recursive: true, force: true })
-  if (!(await smoke(tag))) {
-    process.stderr.write(`The smoke sandbox of ${tag} did not answer /ren/state within 120 s; do not use this tag\n`)
+  return { tag, isNew: true }
+}
+
+if (import.meta.main) {
+  const built = await build({
+    name,
+    entrypoints: ["packages/cell/src/bun.ts", "packages/executor/src/main.ts"],
+    packages: ["@ren/cell", "@ren/executor"],
+    dockerfiles,
+    startScript: "start.sh",
+    readyCommand: "pgrep -f /opt/ren/start.sh",
+    versionVariable: "REN_BRAIN_VERSION",
+    size,
+  })
+  if (!built.isNew) {
+    process.stdout.write(`${built.tag} exists; nothing to build\n`)
+    process.exit(0)
+  }
+  const dirty = (await Bun.$`git status --porcelain`.cwd(root).text()).trim().length > 0
+  if (!(await smoke(built.tag))) {
+    process.stderr.write(`The smoke sandbox of ${built.tag} did not answer /ren/state within 120 s; do not use this tag\n`)
     process.exit(1)
   }
-  process.stdout.write(`E2B_TEMPLATE=${tag}${dirty ? " (built from a tree with uncommitted files)" : ""}\n`)
+  process.stdout.write(`E2B_TEMPLATE=${built.tag}${dirty ? " (built from a tree with uncommitted files)" : ""}\n`)
 }

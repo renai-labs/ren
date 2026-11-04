@@ -35,6 +35,7 @@ import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
+import { E2BEnvironment } from "@ren/core/environment-provider/e2b"
 import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
@@ -102,6 +103,13 @@ const host = Layer.unwrap(
   }),
 )
 
+// oxlint-disable-next-line ren/no-comments -- E2B environments need the base image that cell/e2b/environment-base.ts builds; without E2B_ENVIRONMENT_BASE the deployment offers Docker only.
+const environmentProviders = Layer.unwrap(
+  Effect.map(Config.option(Config.String("E2B_ENVIRONMENT_BASE")), (base) =>
+    EnvironmentProvider.layer(Option.isSome(base) ? [Docker.provider, E2BEnvironment.provider] : [Docker.provider]),
+  ),
+)
+
 const models = Layer.unwrap(
   Effect.map(Config.option(Config.String("REN_INFERENCE_URL")), (url) =>
     Option.isSome(url)
@@ -163,7 +171,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([models, Environments.layer, GitHubApp.layer, Integrations.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
-  Layer.provide(EnvironmentProvider.layer([Docker.provider])),
+  Layer.provide(environmentProviders),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide(PostHog.layer),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),

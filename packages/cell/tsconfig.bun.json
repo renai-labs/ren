@@ -7,6 +7,6 @@
     "incremental": true,
     "tsBuildInfoFile": "node_modules/.ts-dist/bun.tsbuildinfo"
   },
-  "files": ["src/bun.ts", "e2b/stage.ts"],
+  "files": ["src/bun.ts", "e2b/stage.ts", "e2b/environment-base.ts"],
   "references": [{ "path": "./tsconfig.worker.json" }]
 }
