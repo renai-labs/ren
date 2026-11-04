@@ -1082,7 +1082,6 @@ export function make(options: ClientOptions) {
             {
               method: "GET",
               path: `/apps/${encodeURIComponent(input.app)}/request-connect`,
-              query: { spaceId: input["spaceId"] },
               successStatus: 200,
               declaredStatuses: [401, 403, 404],
               empty: false,

@@ -4325,14 +4325,6 @@
               "type": "string"
             },
             "required": true
-          },
-          {
-            "name": "spaceId",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/Space.ID"
-            },
-            "required": false
           }
         ],
         "security": [
@@ -4385,7 +4377,7 @@
             }
           }
         },
-        "description": "Show the person a Connect button for an app (ID or slug) in a space; an agent’s own space is the default. A profile with no gaps means the app is ready.",
+        "description": "Show the person a Connect button for an app (ID or slug) in your chat’s space. A profile with no gaps means the app is ready. Only an agent in a chat can call it.",
         "summary": "Ask the person to connect an app"
       }
     },
