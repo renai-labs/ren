@@ -183,7 +183,16 @@ export const make = <R, ER>(options: Options<R, ER>) => {
   ) => Effect.flatMap(AtomRegistry.getResult(registry, session(sessionID), { suspendOnWaiting: true }), action)
 
   const models = Atom.family((sessionID: Session.ID) =>
-    Atom.make((get) => Effect.flatMap(get.result(session(sessionID)), (opened) => opened.models)),
+    Atom.make((get) => {
+      const connection = get(status(sessionID))
+      const previous = Option.flatMap(
+        get.self<AsyncResult.AsyncResult<Effect.Success<ChatSession.ChatSession["models"]>, unknown>>(),
+        AsyncResult.value,
+      )
+      if (Option.isSome(previous) && !(AsyncResult.isSuccess(connection) && connection.value === "connected"))
+        return Effect.succeed(previous.value)
+      return Effect.flatMap(get.result(session(sessionID)), (opened) => opened.models)
+    }),
   )
 
   const agents = Atom.family((sessionID: Session.ID) =>

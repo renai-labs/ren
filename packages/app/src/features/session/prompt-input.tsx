@@ -4,19 +4,20 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
 import type { Suggest } from "./use-composer-suggestions.js"
 import { toast } from "@ren/ui/sonner"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import {
   IconApps,
   IconArrowUp,
-  IconBrandGit,
+  IconChevronRight,
   IconClipboardText,
-  IconPaperclip,
   IconLoader2,
+  IconPaperclip,
   IconPlayerStopFilled,
   IconPlus,
   IconTerminal2,
   IconX,
 } from "@tabler/icons-react"
+import { GitHubMark } from "../../components/brand-marks.js"
 import {
   Attachment,
   AttachmentAction,
@@ -28,14 +29,14 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@ren/ui/attachment"
-import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@ren/ui/avatar"
+import { Avatar, AvatarGroup, AvatarGroupCount } from "@ren/ui/avatar"
 import { Kbd } from "@ren/ui/kbd"
 import { Separator } from "@ren/ui/separator"
 import { Command, CommandGroup, CommandItem, CommandList } from "@ren/ui/command"
 import { useUploads, type Target } from "../../lib/use-uploads.js"
 import { DropOverlay, UploadChips } from "./attachments.js"
 import { MentionOverlay } from "@ren/ui/mention-overlay"
-import { AppIcon } from "../../components/app-icon.js"
+import { AppAvatarFallback, AppAvatarImage, AppIcon } from "../../components/app-icon.js"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -50,10 +51,10 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } fro
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@ren/ui/popover"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
-import { AddRepositoriesDialog } from "../../components/add-repositories-dialog.js"
+import { RepositoriesDialog } from "./repositories-picker.js"
 import { useCatalog } from "../../lib/use-catalog.js"
 import { useSpaces } from "../../lib/use-spaces.js"
-import { gaps } from "../../lib/apps.js"
+import { gaps, isSpaceApp } from "../../lib/apps.js"
 import { useStep } from "../../lib/use-step.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -67,9 +68,9 @@ function AddMenu(props: {
       <DropdownMenuTrigger
         render={
           <InputGroupButton
-            variant="outline"
+            variant="secondary"
             size="icon-sm"
-            className="rounded-full text-muted-foreground hover:text-foreground data-popup-open:bg-secondary data-popup-open:text-foreground [&_svg]:transition-transform data-popup-open:[&_svg]:rotate-45"
+            className="rounded-full [&_svg]:transition-transform data-popup-open:[&_svg]:rotate-45"
             aria-label="Add to this chat"
           />
         }
@@ -85,11 +86,6 @@ function AddMenu(props: {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => props.onInsert("/")}>
-            <IconTerminal2 />
-            Commands
-            <Kbd className="ml-auto">/</Kbd>
-          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => props.onInsert("@")}>
             <IconApps />
             Apps
@@ -97,38 +93,13 @@ function AddMenu(props: {
           </DropdownMenuItem>
           {props.onRepositories ? (
             <DropdownMenuItem onClick={props.onRepositories}>
-              <IconBrandGit />
+              <GitHubMark />
               Repositories
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-function RepositoriesDialog(props: { spaceId: string; onClose: () => void }) {
-  const { api } = RouterContext.useRouterContext()
-  const settings = useQuery(api["space-settings"].get.queryOptions({ idOrSlug: props.spaceId }))
-  const update = useMutation(api["space-settings"].update.mutationOptions())
-  const current = settings.data?.settings
-  if (!current) return null
-  const references = current.references ?? []
-  return (
-    <AddRepositoriesDialog
-      existing={references}
-      saving={update.isPending}
-      error={update.error}
-      onAdd={(added) =>
-        update
-          .mutateAsync({ id: props.spaceId, settings: { ...current, references: [...references, ...added] } })
-          .then(() => {
-            toast.success(added.length > 1 ? `${added.length} repositories added` : "Repository added")
-            props.onClose()
-          })
-      }
-      onClose={props.onClose}
-    />
   )
 }
 
@@ -144,21 +115,23 @@ function AppsStrip(props: { spaceId: string }) {
     members: space?.memberCount ?? 1,
     private: space?.kind === "private",
   }
-  const [connecting, setConnecting] = useState<ProfileTarget>()
+  const [connecting, setConnecting] = useState<ProfileTarget & { fromAdding?: boolean }>()
   const [open, setOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   const reach = useQuery({
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId }),
     retry: false,
   })
-  const profiles = (reach.data?.profiles ?? []).map((profile) => ({
-    id: profile.id,
-    appId: profile.appId,
-    name: profile.name,
-    app: catalog.appOf(profile.appId)?.name ?? profile.appSlug,
-    icon: catalog.appOf(profile.appId)?.icon ?? undefined,
-    gaps: gaps(profile),
-  }))
+  const profiles = (reach.data?.profiles ?? [])
+    .filter((profile) => !isSpaceApp(catalog.appOf(profile.appId), spaces.spaces))
+    .map((profile) => ({
+      id: profile.id,
+      appId: profile.appId,
+      name: profile.name,
+      app: catalog.appOf(profile.appId)?.name ?? profile.appSlug,
+      icon: catalog.appOf(profile.appId)?.icon ?? undefined,
+      gaps: gaps(profile),
+    }))
   if (reach.isPending) return null
   const apps = [...new Map(profiles.map((profile) => [profile.app, profile.icon] as const))]
   const shown = apps.slice(0, 3)
@@ -168,11 +141,19 @@ function AppsStrip(props: { spaceId: string }) {
       <AddAppDialog
         space={{ id: props.spaceId, name: spaceName(props.spaceId) }}
         added={new Set(profiles.map((profile) => profile.appId))}
-        onAdded={(added) => setConnecting({ appId: added.app.id, profileId: added.profileId, from })}
+        onAdded={(added) => setConnecting({ appId: added.app.id, profileId: added.profileId, from, fromAdding: true })}
         open={adding}
         onOpenChange={setAdding}
       />
-      {connecting ? <ProfileDialog {...connecting} onClose={() => setConnecting(undefined)} /> : null}
+      {connecting ? (
+        <ProfileDialog
+          {...connecting}
+          onClose={() => {
+            if (connecting.fromAdding) setAdding(true)
+            setConnecting(undefined)
+          }}
+        />
+      ) : null}
     </>
   )
   if (profiles.length === 0)
@@ -199,9 +180,10 @@ function AppsStrip(props: { spaceId: string }) {
         >
           <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
             {shown.map(([app, icon]) => (
+              // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
               <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
-                <AvatarImage src={icon} alt="" />
-                <AvatarFallback className="bg-secondary">{app.charAt(0)}</AvatarFallback>
+                <AppAvatarImage src={icon} />
+                <AppAvatarFallback name={app} />
               </Avatar>
             ))}
             {apps.length > shown.length ? (
@@ -214,28 +196,42 @@ function AppsStrip(props: { spaceId: string }) {
         <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
           <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
           {profiles.map((profile) => (
-            <div key={profile.id} className="flex items-center gap-3 rounded-sm p-2">
-              <Avatar size="sm" className="data-[size=sm]:size-5">
-                <AvatarImage src={profile.icon} alt="" />
-                <AvatarFallback className="bg-secondary">{profile.app.charAt(0)}</AvatarFallback>
+            <div key={profile.id} className="group/row relative flex items-center gap-3 rounded-md p-2 hover:bg-accent">
+              <Avatar // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
+                size="sm"
+                className="data-[size=sm]:size-5"
+              >
+                <AppAvatarImage src={profile.icon} />
+                <AppAvatarFallback name={profile.app} />
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm">
-                  {profile.app} · {profile.name}
-                </span>
+              <Button
+                variant="ghost"
+                className="h-auto min-w-0 flex-1 flex-col items-stretch gap-0 rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 after:rounded-md hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
+                onClick={() => {
+                  setOpen(false)
+                  setConnecting({ appId: profile.appId, profileId: profile.id, from, edit: true })
+                }}
+              >
+                <span className="truncate text-sm">{profile.app}</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {profile.gaps.length ? profile.gaps.join(", ") : "Connected"}
+                  {profile.gaps.length ? "Not connected" : "Connected"}
                 </span>
-              </div>
+              </Button>
               {profile.gaps.length ? (
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setConnecting({ appId: profile.appId, profileId: profile.id, from })}
+                  className="relative shrink-0"
+                  onClick={() => {
+                    setOpen(false)
+                    setConnecting({ appId: profile.appId, profileId: profile.id, from })
+                  }}
                 >
                   Connect
                 </Button>
-              ) : null}
+              ) : (
+                <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              )}
             </div>
           ))}
           <Separator className="my-1" />
@@ -367,10 +363,10 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
               onMouseDown={(event) => event.preventDefault()}
               onSelect={() => choose(item.value)}
             >
-              {item.kind === "command" ? (
-                <IconTerminal2 />
-              ) : (
-                <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm bg-transparent" />
+              {item.kind === "command" ? <IconTerminal2 /> : null}
+              {item.kind === "repository" ? <GitHubMark /> : null}
+              {item.kind === "command" || item.kind === "repository" ? null : (
+                <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
               )}
               <span className="min-w-0 flex-1 truncate">
                 <span className="font-medium text-foreground">{item.label}</span>

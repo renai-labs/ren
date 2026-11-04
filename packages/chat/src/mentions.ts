@@ -3,7 +3,7 @@ export * as Mentions from "./mentions.js"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionMessage } from "@ren/schema/session/message"
 
-export type Kind = "agent" | "skill" | "file" | "app"
+export type Kind = "agent" | "skill" | "file" | "app" | "repository"
 
 export interface Item {
   readonly kind: Kind

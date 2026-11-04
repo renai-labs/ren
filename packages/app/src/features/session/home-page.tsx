@@ -2,6 +2,7 @@ import { PromptInput } from "./prompt-input.js"
 import { Logomark } from "../../components/logomark.js"
 import { ModelPicker, pickModel } from "../../components/model-picker.js"
 import { WorkingIn } from "./working-in.js"
+import { RepositoriesPicker } from "./repositories-picker.js"
 import { useState } from "react"
 import { Composer } from "@ren/chat"
 import { useMutation } from "@tanstack/react-query"
@@ -43,7 +44,7 @@ export function HomePage() {
   const prepare = useMutation(api.chat.prepare.mutationOptions())
   const [prepared, setPrepared] = useState<ReadonlySet<string>>(() => new Set())
   const create = useMutation(api.session.create.mutationOptions())
-  const mentions = useMentionSuggestions()
+  const mentions = useMentionSuggestions(spaceId)
   const suggest = mentions.suggest
   const starting = create.isPending
   const modelsLoading = models.loading
@@ -107,12 +108,15 @@ export function HomePage() {
       </div>
       <div className="relative flex w-full max-w-3xl flex-col gap-2">
         <div className="relative flex flex-col gap-2">
-          <WorkingIn
-            spaces={spaces}
-            spaceId={spaceId}
-            disabled={starting || Boolean(draft.chat)}
-            onChange={chooseSpace}
-          />
+          <div className="flex items-center gap-1">
+            <WorkingIn
+              spaces={spaces}
+              spaceId={spaceId}
+              disabled={starting || Boolean(draft.chat)}
+              onChange={chooseSpace}
+            />
+            <RepositoriesPicker spaceId={spaceId} disabled={starting || Boolean(draft.chat)} />
+          </div>
           <PromptInput
             placement="home"
             spaceId={spaceId}

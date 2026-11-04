@@ -4,8 +4,12 @@ import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import { AsyncResult } from "effect/reactivity"
 import { useCatalog } from "../../lib/use-catalog.js"
-import { mentionColor } from "../../lib/apps.js"
+import { isSpaceApp, mentionColor } from "../../lib/apps.js"
+import { useSpaces } from "../../lib/use-spaces.js"
 import type { MentionMark } from "@ren/ui/mention-overlay"
+import { useQuery } from "@tanstack/react-query"
+import { Repositories } from "../../lib/repositories.js"
+import { RouterContext } from "../../lib/router-context.js"
 
 interface SuggestionItem {
   readonly value: string
@@ -36,6 +40,7 @@ const listed = <A>(result: AsyncResult.AsyncResult<ReadonlyArray<A>, unknown>) =
 
 export function useComposerSuggestions(input: {
   root: Session.ID
+  spaceId: string | undefined
   commands: boolean
   client: Readonly<Record<ClientCommand.ID, boolean>>
   onClient: (id: ClientCommand.ID) => void
@@ -43,30 +48,59 @@ export function useComposerSuggestions(input: {
   const offered = Composer.offeredCommands(listed(ChatReact.useCommands(input.root)))
   const brain = input.commands ? offered : []
   const core = useSuggestions({
+    spaceId: input.spaceId,
     commands: (query) => ClientCommand.suggestions(ClientCommand.offered(input.client), brain, query),
     onClient: input.onClient,
   })
   return { ...core, slash: (text: string) => Composer.slash(text, brain) }
 }
 
-export const useMentionSuggestions = () => useSuggestions({ commands: () => [], onClient: () => undefined })
+export const useMentionSuggestions = (spaceId: string | undefined) =>
+  useSuggestions({ spaceId, commands: () => [], onClient: () => undefined })
+
+function useRepositoryMentions(spaceId: string | undefined): ReadonlyArray<Mentions.Item> {
+  const { api } = RouterContext.useRouterContext()
+  const settings = useQuery({
+    ...api["space-settings"].get.queryOptions({ idOrSlug: spaceId ?? "" }),
+    enabled: spaceId !== undefined,
+  })
+  return (settings.data?.settings.references ?? []).map((reference) => ({
+    kind: "repository",
+    id: reference.alias,
+    label: Repositories.nameOf(reference.repository),
+    handle: reference.alias,
+    description: reference.description || reference.repository,
+  }))
+}
+
+const suggestionLabel = (trigger: Composer.Trigger | undefined, options: { repositories: boolean }) => {
+  if (trigger?.kind === "command") return "Commands"
+  return options.repositories ? "Apps and repositories" : "Apps"
+}
 
 function useSuggestions(input: {
+  spaceId: string | undefined
   commands: (query: string) => ReadonlyArray<ClientCommand.Suggestion>
   onClient: (id: ClientCommand.ID) => void
 }) {
   const [trigger, setTrigger] = useState<Composer.Trigger>()
   const [active, setActive] = useState<string>()
   const query = trigger?.kind === "mention" ? trigger.query.toLowerCase() : undefined
-  const apps = useCatalog().apps
-  const appById = new Map(apps.map((app) => [app.id, app]))
-  const connectors = apps.map((app): Mentions.Item => ({
-    kind: "app",
-    id: app.id,
-    label: app.name,
-    handle: app.slug,
-    description: app.description,
-  }))
+  const spaces = useSpaces().spaces
+  const catalog = useCatalog().apps
+  const appById = new Map(catalog.map((app) => [app.id, app]))
+  const apps = catalog.filter((app) => !isSpaceApp(app, spaces))
+  const repositories = useRepositoryMentions(input.spaceId)
+  const connectors = [
+    ...apps.map((app): Mentions.Item => ({
+      kind: "app",
+      id: app.id,
+      label: app.name,
+      handle: app.slug,
+      description: app.description,
+    })),
+    ...repositories,
+  ]
   const runnable = trigger?.kind === "command" ? input.commands(trigger.query) : []
   const mentionable =
     query === undefined
@@ -96,7 +130,7 @@ function useSuggestions(input: {
   }
   const suggest: Suggest = {
     open: trigger !== undefined && items.length > 0,
-    label: trigger?.kind === "command" ? "Commands" : "Apps",
+    label: suggestionLabel(trigger, { repositories: repositories.length > 0 }),
     items,
     active: current,
     onCursor: (text, cursor) => {

@@ -18,8 +18,8 @@ import {
   useHighlightedCode,
 } from "@ren/ui/code-block"
 import { AppMention, mentionLinks } from "@ren/ui/app-mention"
-import { ImageLightbox } from "../../components/image-lightbox.js"
-import type { CatalogApp } from "../../lib/apps.js"
+import { ImageLightbox } from "./image-lightbox.js"
+import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
 
@@ -86,6 +86,8 @@ const rehypePlugins: Array<(typeof defaultRehypePlugins)[string]> = Object.entri
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)
 
+const streamAnimation = { animation: "fadeIn", duration: 180, easing: "ease-out", sep: "word" } as const
+
 export function Markdown(props: {
   children: string
   streaming?: boolean | undefined
@@ -118,6 +120,7 @@ export function Markdown(props: {
       rehypePlugins={rehypePlugins}
       components={withApps}
       isAnimating={props.streaming === true}
+      animated={streamAnimation}
       className={cn("min-w-0 text-sm/relaxed", props.className)}
     >
       {mentionLinks(props.children, apps)}

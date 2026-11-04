@@ -3,7 +3,7 @@ import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
-import { IconGhost, IconShieldQuestion, IconWorld, IconX } from "@tabler/icons-react"
+import { IconGhostFilled, IconShieldQuestion, IconWorld, IconX } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@ren/ui/card"
@@ -26,6 +26,7 @@ import {
   QuestionnaireTitle,
 } from "@ren/ui/questionnaire"
 import { Spinner } from "@ren/ui/spinner"
+import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
 import { errorMessage } from "../../lib/errors.js"
 
 type QuestionField = Form.StringField | Form.MultiselectField
@@ -56,7 +57,7 @@ function Source(props: {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex min-w-0 items-center gap-2 px-1 text-xs text-muted-foreground">
-        <IconGhost className="size-4" />
+        <IconGhostFilled className="size-4" />
         <span className="truncate">{props.title} needs your input</span>
         <Button
           variant="ghost"
@@ -79,20 +80,32 @@ function PermissionRequest(props: {
 }) {
   const request = props.request
   return (
-    <Item variant="outline" className="bg-card">
-      <ItemMedia variant="icon">
-        <IconShieldQuestion />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle>Allow {request.action}?</ItemTitle>
-        {request.resources.length > 0 ? (
-          <ItemDescription className="font-mono text-xs break-all">{request.resources.join("\n")}</ItemDescription>
-        ) : null}
-        {request.message ? <ItemDescription>{request.message}</ItemDescription> : null}
-      </ItemContent>
-      <ItemActions>
-        <Button size="sm" variant="outline" disabled={props.pending} onClick={() => props.onReply("reject")}>
-          Deny
+    <section
+      aria-label="Permission request"
+      className="flex animate-in flex-col gap-3 rounded-xl border bg-card p-4 duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:slide-in-from-bottom-0"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-chart-3">
+          <IconShieldQuestion className="size-4" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-sm font-medium">Allow Ren to {request.action}?</span>
+          <span className="text-sm text-muted-foreground">
+            {request.message ?? "Ren asks before it does this. You can allow it once or every time."}
+          </span>
+        </div>
+      </div>
+      {request.resources.length > 0 ? (
+        <CodeBlock size="sm" className="ml-11 w-auto">
+          <CodeBlockContent wrap className="max-h-32">
+            {request.resources.join("\n")}
+          </CodeBlockContent>
+        </CodeBlock>
+      ) : null}
+      <div className="ml-11 flex flex-wrap items-center gap-2">
+        <Button size="sm" disabled={props.pending} onClick={() => props.onReply("once")}>
+          {props.pending ? <Spinner data-icon="inline-start" /> : null}
+          Allow once
         </Button>
         <Button
           size="sm"
@@ -103,12 +116,17 @@ function PermissionRequest(props: {
         >
           Always allow
         </Button>
-        <Button size="sm" disabled={props.pending} onClick={() => props.onReply("once")}>
-          {props.pending ? <Spinner data-icon="inline-start" /> : null}
-          Allow
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-muted-foreground"
+          disabled={props.pending}
+          onClick={() => props.onReply("reject")}
+        >
+          Deny
         </Button>
-      </ItemActions>
-    </Item>
+      </div>
+    </section>
   )
 }
 

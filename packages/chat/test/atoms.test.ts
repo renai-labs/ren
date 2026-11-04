@@ -15,47 +15,55 @@ setDefaultTimeout(60_000)
 
 const stub = Shared.stub()
 
-const setup = Effect.gen(function* () {
-  const brain = yield* BrainTest.make()
-  yield* brain.start()
-  const http = FetchHttpClient.layer.pipe(
-    Layer.provide(
-      Layer.succeed(
-        FetchHttpClient.Fetch,
-        Object.assign(
-          (input: string | URL | Request, init?: RequestInit) => {
-            const url = new URL(input instanceof Request ? input.url : String(input))
-            return brain.chatFetch(`${url.pathname}${url.search}`, input instanceof Request ? input : (init ?? {}))
-          },
-          { preconnect: fetch.preconnect },
+type Fetch = (path: string, request: Request | RequestInit) => Promise<Response>
+
+const setupWith = (intercept?: (path: string, next: () => Promise<Response>) => Promise<Response>) =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.make()
+    yield* brain.start()
+    const chatFetch: Fetch = (path, request) => Promise.resolve(brain.chatFetch(path, request))
+    const http = FetchHttpClient.layer.pipe(
+      Layer.provide(
+        Layer.succeed(
+          FetchHttpClient.Fetch,
+          Object.assign(
+            (input: string | URL | Request, init?: RequestInit) => {
+              const url = new URL(input instanceof Request ? input.url : String(input))
+              const path = `${url.pathname}${url.search}`
+              const next = () => chatFetch(path, input instanceof Request ? input : (init ?? {}))
+              return intercept ? intercept(path, next) : next()
+            },
+            { preconnect: fetch.preconnect },
+          ),
         ),
       ),
-    ),
-  )
-  const atoms = ChatAtoms.make({
-    runtime: Atom.runtime(http),
-    access: () =>
-      Effect.sync(() => ({
-        status: "ready" as const,
-        url: "http://cell",
-        token: "a-client-token",
-        expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
-      })),
-  })
-  const registry = AtomRegistry.make()
-  yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()))
-  const until = <A>(atom: Atom.Atom<A>, predicate: (value: A) => boolean) =>
-    AtomRegistry.toStream(registry, atom).pipe(
-      Stream.filter(predicate),
-      Stream.runHead,
-      Effect.map(Option.getOrThrow),
-      Effect.timeoutOrElse({
-        duration: "20 seconds",
-        orElse: () => Effect.die(new Error("The atom never reached the expected value")),
-      }),
     )
-  return { brain, atoms, registry, until }
-})
+    const atoms = ChatAtoms.make({
+      runtime: Atom.runtime(http),
+      access: () =>
+        Effect.sync(() => ({
+          status: "ready" as const,
+          url: "http://cell",
+          token: "a-client-token",
+          expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
+        })),
+    })
+    const registry = AtomRegistry.make()
+    yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()))
+    const until = <A>(atom: Atom.Atom<A>, predicate: (value: A) => boolean) =>
+      AtomRegistry.toStream(registry, atom).pipe(
+        Stream.filter(predicate),
+        Stream.runHead,
+        Effect.map(Option.getOrThrow),
+        Effect.timeoutOrElse({
+          duration: "20 seconds",
+          orElse: () => Effect.die(new Error("The atom never reached the expected value")),
+        }),
+      )
+    return { brain, atoms, registry, until }
+  })
+
+const setup = setupWith()
 
 test("the timeline atom of a session shows a prompt and its reply as rows", () =>
   Effect.gen(function* () {
@@ -199,4 +207,42 @@ test("the shell output atom reads a shell's output through the root session", ()
     yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(output)))
     const read = yield* made.until(output, AsyncResult.isSuccess)
     expect(AsyncResult.isSuccess(read) && read.value).toBe("hello world")
+  }).pipe(Effect.scoped, Effect.runPromise))
+
+test("the models atom loads again once the connection is back when its first read failed", () =>
+  Effect.gen(function* () {
+    const streams: Array<ReadableStreamDefaultController<Uint8Array>> = []
+    const failures = { models: 1 }
+    const made = yield* setupWith(async (path, next) => {
+      if (path.startsWith("/chat/model") && failures.models > 0) {
+        failures.models -= 1
+        return new Response("The brain is restarting", { status: 503 })
+      }
+      const response = await next()
+      const body = response.body
+      if (!path.startsWith("/chat/event") || !body) return response
+      const reader = body.getReader()
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            streams.push(controller)
+          },
+          pull: (controller) =>
+            reader.read().then((chunk) => (chunk.done ? controller.close() : controller.enqueue(chunk.value))),
+          cancel: () => reader.cancel(),
+        }),
+        { status: response.status, headers: response.headers },
+      )
+    })
+    const id = made.brain.id
+    const unmount = made.registry.mount(made.atoms.status(id))
+    yield* Effect.addFinalizer(() => Effect.sync(unmount))
+    const unmountModels = made.registry.mount(made.atoms.models(id))
+    yield* Effect.addFinalizer(() => Effect.sync(unmountModels))
+    yield* made.until(made.atoms.status(id), (value) => AsyncResult.isSuccess(value) && value.value === "connected")
+    yield* made.until(made.atoms.models(id), AsyncResult.isFailure)
+    streams.at(-1)?.error(new Error("The network dropped"))
+    yield* made.until(made.atoms.status(id), (value) => AsyncResult.isSuccess(value) && value.value === "reconnecting")
+    const models = yield* made.until(made.atoms.models(id), AsyncResult.isSuccess)
+    expect(AsyncResult.isSuccess(models) && models.value.length).toBeGreaterThan(0)
   }).pipe(Effect.scoped, Effect.runPromise))
