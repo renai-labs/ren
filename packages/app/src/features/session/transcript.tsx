@@ -389,30 +389,23 @@ function ScheduleOrigin(props: { schedule: NonNullable<SessionMessage.User["sche
   )
 }
 
-const taskAssignment = /^\s*<task_assignment task_id="([^"]+)"[^>]*>\n?([\s\S]*?)\n?<\/task_assignment>\s*$/u
-
-function TaskHandoff(props: { taskId: string; brief: string }) {
+function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) {
   const [open, setOpen] = useState(false)
-  const lines = props.brief.split("\n")
-  const heading = lines.at(0) ?? ""
-  const separator = heading.indexOf(": ")
-  const identifier = separator === -1 ? undefined : heading.slice(0, separator)
-  const title = separator === -1 ? heading : heading.slice(separator + 2)
-  const rest = lines.slice(1).join("\n").trim()
+  const rest = props.task.brief
   return (
     <div className="flex w-full max-w-md flex-col self-end overflow-hidden rounded-xl border bg-card text-sm">
       <div className="relative flex items-center gap-3 px-3.5 py-3 transition-colors duration-150 ease-out hover:bg-muted/50">
         <IconChecklist className="size-4.5 shrink-0 text-muted-foreground" />
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="text-xs text-muted-foreground">
-            Task assigned{identifier ? <span className="font-mono"> · {identifier}</span> : null}
+            Task assigned<span className="font-mono"> · {props.task.identifier}</span>
           </span>
           <Link
             to="/tasks/$taskId"
-            params={{ taskId: props.taskId }}
+            params={{ taskId: props.task.taskId }}
             className="truncate font-medium after:absolute after:inset-0"
           >
-            {title}
+            {props.task.title}
           </Link>
         </div>
         {rest ? (
@@ -438,8 +431,7 @@ function TaskHandoff(props: { taskId: string; brief: string }) {
 }
 
 function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined }) {
-  const assigned = taskAssignment.exec(props.message.text)
-  if (assigned?.[1]) return <TaskHandoff taskId={assigned[1]} brief={assigned[2] ?? ""} />
+  if (props.message.task) return <TaskHandoff task={props.message.task} />
   return <UserText message={props.message} spaceId={props.spaceId} />
 }
 
