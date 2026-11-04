@@ -173,6 +173,11 @@ function KeyName(props: { credential: Credential; detail: string; onOpen: () => 
           <span className="block truncate">{props.credential.name ?? props.credential.label}</span>
         </Button>
         {props.detail ? <span className="truncate text-xs text-muted-foreground">{props.detail}</span> : null}
+        {props.credential.status === "reconnect" ? (
+          <StatusBadge tone="error" className="mt-1 self-start">
+            Reconnect
+          </StatusBadge>
+        ) : null}
       </span>
     </span>
   )
@@ -198,13 +203,11 @@ function Owner(props: { credential: Credential; label: string }) {
     <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
       <OwnerIcon className="size-4 shrink-0" />
       <span className="flex min-w-0 flex-col">
-        <span className="truncate">{props.label}</span>
+        <span className="wrap-break-word">{props.label}</span>
         {credential.account ? (
-          <span className="truncate text-xs text-muted-foreground">{credential.account.name}’s account</span>
+          <span className="text-xs wrap-break-word text-muted-foreground">{credential.account.name}’s account</span>
         ) : null}
       </span>
-      {credential.delivery === "delivered" ? <StatusBadge tone="warn">Delivered</StatusBadge> : null}
-      {credential.status === "reconnect" ? <StatusBadge tone="error">Reconnect</StatusBadge> : null}
     </span>
   )
 }

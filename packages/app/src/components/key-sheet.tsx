@@ -110,6 +110,7 @@ function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() 
         <dl className="flex flex-col gap-2.5 border-b pb-6">
           <Detail label="Type">{typeLabels[key.type]}</Detail>
           {key.keyPreview ? <Detail label="Ends in">…{key.keyPreview}</Detail> : null}
+          {key.delivery === "delivered" ? <Detail label="Delivery">In the chat’s environment</Detail> : null}
           {key.account ? <Detail label="Account">{key.account.name}</Detail> : null}
           <Detail label="Created">{formatDate(key.createdAt)}</Detail>
         </dl>
