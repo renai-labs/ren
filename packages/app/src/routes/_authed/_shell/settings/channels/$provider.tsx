@@ -7,7 +7,7 @@ import { Channels } from "../../../../../lib/channels.js"
 import { Loader } from "../../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/settings/channels/$provider")({
-  head: () => ({ meta: [{ title: "Mentions · Ren" }] }),
+  head: () => ({ meta: [{ title: "Channels · Ren" }] }),
   params: {
     parse: (params) => {
       if (!Schema.is(Channel.Provider)(params.provider)) throw notFound()

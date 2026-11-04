@@ -12,12 +12,13 @@ import { Spinner } from "@ren/ui/spinner"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EmptyState } from "../../components/empty-state.js"
-import { ExpandableSearch } from "../../components/expandable-search.js"
-import { Page, SkeletonRows, SkeletonTable } from "../../components/page.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
+import { Page, PageFooter, SkeletonRows, TableSample, useShapeId } from "../../components/page.js"
+import { Loading } from "@ren/ui/loading"
 import { errorMessage } from "../../lib/errors.js"
 import { Loader } from "../../lib/loader.js"
 import { Channels } from "../../lib/channels.js"
-import { FilterMenu } from "../../components/filter-menu.js"
+import { FilterMenu, spaceOptions } from "../../components/filter-menu.js"
 import { currentPage, pageCount, pageSize } from "../../lib/pagination.js"
 import { ListPagination } from "../../components/list-pagination.js"
 import { MappingsTable } from "./mappings-table.js"
@@ -77,7 +78,7 @@ export function ChannelProviderPage() {
           })}
         >
           <IconArrowLeft />
-          Back to @mentions
+          Back to channels
         </Link>
       }
       media={<ChannelMark provider={provider.id} className="size-8" />}
@@ -150,6 +151,7 @@ function MappingList(props: {
   const navigate = route.useNavigate()
   const spaces = useQuery({ ...Channels.spacesOptions(client), ...Loader.required })
   const mappings = useQuery(Channels.mappingsOptions(client, props.install.id))
+  const shapeId = useShapeId("mappings")
   const remove = useMutation(api["channel-mapping"].remove.mutationOptions())
   const restore = useMutation(api["channel-mapping"].create.mutationOptions())
   const items = mappings.data ?? []
@@ -171,9 +173,6 @@ function MappingList(props: {
     <>
       <div className="flex flex-col gap-3">
         <MappingToolbar spaces={spaces.data ?? []} disabled={editableSpaces.length === 0} provider={props.provider} />
-        {mappings.isPending ? (
-          <SkeletonTable columns={["Channel", "Space", "Status", ""]} label="Loading mappings" />
-        ) : null}
         {mappings.isError ? (
           <Alert variant="destructive">
             <IconAlertCircle />
@@ -186,46 +185,49 @@ function MappingList(props: {
             </AlertDescription>
           </Alert>
         ) : null}
-        {mappings.isSuccess ? (
-          <MappingsTable
-            mappings={visible.slice((page - 1) * pageSize, page * pageSize)}
-            filtered={Boolean(search.q || search.spaces)}
-            editableSpaceIds={editableSpaces.map((space) => space.id)}
-            busy={remove.isPending || restore.isPending}
-            onEdit={(id) =>
-              void navigate({ search: (previous) => ({ ...previous, edit: id, add: undefined, place: undefined }) })
-            }
-            onRemove={(mapping) =>
-              remove.mutate(
-                { id: mapping.id },
-                {
-                  onSuccess: () =>
-                    toast.success(`${mapping.placeName} disconnected`, {
-                      action: {
-                        label: "Undo",
-                        onClick: () =>
-                          restore.mutate(Channels.settingsOf(mapping), {
-                            onError: (error) =>
-                              toast.error("Couldn’t restore the mapping", {
-                                description: errorMessage(error),
-                                duration: Infinity,
-                              }),
-                          }),
-                      },
-                    }),
-                  onError: (error) =>
-                    toast.error("Couldn’t disconnect the mapping", {
-                      description: errorMessage(error),
-                      duration: Infinity,
-                    }),
-                },
-              )
-            }
-          />
-        ) : null}
-        <div className="flex items-center justify-between gap-4 empty:hidden">
+        <Loading id={shapeId} loading={mappings.isPending} label="Loading mappings">
+          {mappings.isPending ? <TableSample columns={["Channel", "Space", "Status", ""]} /> : null}
+          {mappings.isSuccess ? (
+            <MappingsTable
+              mappings={visible.slice((page - 1) * pageSize, page * pageSize)}
+              filtered={Boolean(search.q || search.spaces)}
+              editableSpaceIds={editableSpaces.map((space) => space.id)}
+              busy={remove.isPending || restore.isPending}
+              onEdit={(id) =>
+                void navigate({ search: (previous) => ({ ...previous, edit: id, add: undefined, place: undefined }) })
+              }
+              onRemove={(mapping) =>
+                remove.mutate(
+                  { id: mapping.id },
+                  {
+                    onSuccess: () =>
+                      toast.success(`${mapping.placeName} disconnected`, {
+                        action: {
+                          label: "Undo",
+                          onClick: () =>
+                            restore.mutate(Channels.settingsOf(mapping), {
+                              onError: (error) =>
+                                toast.error("Couldn’t restore the mapping", {
+                                  description: errorMessage(error),
+                                  duration: Infinity,
+                                }),
+                            }),
+                        },
+                      }),
+                    onError: (error) =>
+                      toast.error("Couldn’t disconnect the mapping", {
+                        description: errorMessage(error),
+                        duration: Infinity,
+                      }),
+                  },
+                )
+              }
+            />
+          ) : null}
+        </Loading>
+        <PageFooter>
           <ListPagination page={page} pageSize={pageSize} total={visible.length} noun="mapping" />
-        </div>
+        </PageFooter>
       </div>
       {search.add && mappings.isSuccess ? (
         <AddMappingDialog
@@ -257,7 +259,7 @@ function MappingToolbar(props: { spaces: ReadonlyArray<SpaceInfo>; disabled: boo
   const navigate = route.useNavigate()
   return (
     <div className="flex min-h-8 items-center justify-end gap-1">
-      <ExpandableSearch
+      <ToolbarSearch
         label="Search mappings"
         value={search.q ?? ""}
         onChange={(q) =>
@@ -275,7 +277,7 @@ function MappingToolbar(props: { spaces: ReadonlyArray<SpaceInfo>; disabled: boo
             label: "Space",
             any: "All spaces",
             icon: IconCube,
-            options: props.spaces.map((space) => ({ value: space.id, label: space.name })),
+            options: spaceOptions(props.spaces),
           },
         ]}
         value={{ space: [...(search.spaces ?? [])] }}

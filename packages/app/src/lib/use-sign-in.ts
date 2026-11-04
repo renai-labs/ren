@@ -11,7 +11,11 @@ export function useSignIn(onOpened?: (item: AppProfileItem) => void) {
   const connect = useMutation(api["credential-connect"].credential.connect.mutationOptions())
   return {
     pending: connect.isPending,
-    start: (profileId: string, item: AppProfileItem, tab: Window | null = platform.blankTab?.() ?? null) => {
+    start: (
+      profileId: string,
+      item: AppProfileItem,
+      tab: Window | null = platform.blankPopup?.() ?? platform.blankTab?.() ?? null,
+    ) => {
       if (!("mcp" in item.item)) {
         tab?.close()
         return
@@ -27,7 +31,10 @@ export function useSignIn(onOpened?: (item: AppProfileItem) => void) {
             if (tab) tab.location.href = result.redirectUrl
             else platform.openExternal(result.redirectUrl)
             if (onOpened) onOpened(item)
-            else toast(`Opened ${item.name} in a new tab`, { description: "Finish signing in there, then come back." })
+            else
+              toast(`Sign in to ${item.name} in the window that opened`, {
+                description: "It closes by itself when you’re done.",
+              })
           },
           onError: (error) => {
             tab?.close()

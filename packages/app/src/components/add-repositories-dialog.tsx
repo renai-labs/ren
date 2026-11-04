@@ -73,7 +73,7 @@ export function AddRepositoriesDialog(props: {
           <DialogDescription>{Repositories.copy}</DialogDescription>
         </DialogHeader>
         {connected ? (
-          <Command className="rounded-lg bg-muted inset-ring inset-ring-border **:data-[slot=input-group]:h-8.75">
+          <Command className="rounded-none bg-transparent p-0 **:data-[slot=command-input-wrapper]:mx-0 **:data-[slot=command-input-wrapper]:mt-0">
             <CommandInput placeholder="Search repositories…" />
             <CommandList className="pt-1">
               <CommandEmpty>{emptyText(listed, repositories.length)}</CommandEmpty>

@@ -81,6 +81,15 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
       if (tab) tab.opener = null
       return tab
     },
+    blankPopup: () => {
+      const width = Math.min(560, window.screen.availWidth)
+      const height = Math.min(720, window.screen.availHeight)
+      const left = Math.round(window.screenX + (window.outerWidth - width) / 2)
+      const top = Math.round(window.screenY + (window.outerHeight - height) / 2)
+      const popup = window.open("", "ren-sign-in", `popup,width=${width},height=${height},left=${left},top=${top}`)
+      if (popup) popup.opener = null
+      return popup
+    },
     notify: async (title, body) => {
       if (!("Notification" in window) || Notification.permission !== "granted") return
       if (document.visibilityState === "visible" && document.hasFocus()) return

@@ -6,46 +6,44 @@ import { Page, Row, Rows, Section } from "../../components/page.js"
 import { Channels } from "../../lib/channels.js"
 import { RouterContext } from "../../lib/router-context.js"
 
-const connectionText = (offered: boolean) => (offered ? "Not connected" : "Not set up on this server")
-
 export function ChannelsSettingsPage() {
   const { api } = RouterContext.useRouterContext()
   const installs = useSuspenseQuery(Channels.installsOptions(api)).data.items
   const offered = useSuspenseQuery(api["channel-connect"]["channel-provider"].list.queryOptions()).data.items
-  const sections = Channels.sections.map((section) => ({
-    title: section.title,
-    description: section.description,
-    rows: section.providers.map((id) => ({
-      provider: Channels.byId[id],
-      installed: installs.some((install) => install.provider === id),
-      offered: offered.some((provider) => provider.id === id),
-    })),
-  }))
+  const sections = Channels.sections
+    .map((section) => ({
+      title: section.title,
+      rows: section.providers
+        .map((id) => ({
+          provider: Channels.byId[id],
+          installed: installs.some((install) => install.provider === id),
+          offered: offered.some((provider) => provider.id === id),
+        }))
+        .filter((row) => row.installed || row.offered),
+    }))
+    .filter((section) => section.rows.length > 0)
   return (
-    <Page title="@mentions" description="Invoke Ren from where your team already works.">
+    <Page title="Channels" description="Invoke Ren from where your team already works.">
+      {sections.length === 0 ? (
+        <p className="rounded-xl border py-8 text-center text-sm text-muted-foreground">
+          No channels are set up on this server yet.
+        </p>
+      ) : null}
       {sections.map((section) => (
-        <Section key={section.title} title={section.title} description={section.description}>
+        <Section key={section.title} title={section.title}>
           <Rows>
             {section.rows.map((row) => (
               <Row
                 key={row.provider.id}
                 title={row.provider.title}
                 media={<ChannelMark provider={row.provider.id} className="size-6" />}
-                description={
-                  row.installed ? <span className="text-chart-2">Connected</span> : connectionText(row.offered)
-                }
-                render={
-                  row.installed || row.offered ? (
-                    <Link to="/settings/channels/$provider" params={{ provider: row.provider.id }} />
-                  ) : undefined
-                }
+                description={row.installed ? <span className="text-chart-2">Connected</span> : "Not connected"}
+                render={<Link to="/settings/channels/$provider" params={{ provider: row.provider.id }} />}
               >
-                {row.installed || row.offered ? (
-                  <span className="flex items-center gap-1 text-muted-foreground">
-                    {row.installed ? "Configure" : null}
-                    <IconChevronRight className="size-4" />
-                  </span>
-                ) : null}
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  {row.installed ? "Configure" : null}
+                  <IconChevronRight className="size-4" />
+                </span>
               </Row>
             ))}
           </Rows>

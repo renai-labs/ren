@@ -1,20 +1,22 @@
-import { AppListingSkeleton } from "../../components/app-list.js"
+import { AppListingSample } from "../../components/app-list.js"
+import { Loading } from "@ren/ui/loading"
 import { useState, type ReactNode } from "react"
 import { EmptyState } from "../../components/empty-state.js"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { Button } from "@ren/ui/button"
+import { IconPlus } from "@tabler/icons-react"
 import { AddToSpace, type Added } from "../../components/add-to-space.js"
 import { AccountList, AppRow, AppSection, AppSheet, SeeAllRow } from "../../components/app-list.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
-import { Page } from "../../components/page.js"
+import { Page, useShapeId } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ListPagination } from "../../components/list-pagination.js"
 import { useCatalog } from "../../lib/use-catalog.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { pageSize, currentPage } from "../../lib/pagination.js"
-import { audience, connectLabel, fromRegistry, needsAttention, type CatalogApp } from "../../lib/apps.js"
+import { audience, connectLabel, fromRegistry, isSpaceApp, needsAttention, type CatalogApp } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
@@ -69,26 +71,41 @@ function MarketplaceSheet(props: {
       action={app ? <AddToSpace app={app} primary onAdded={props.onAdded} /> : null}
       onClose={props.onClose}
     >
-      {app ? <AppAccounts profiles={props.profiles} onProfile={props.onProfile} /> : null}
+      {app ? <AppAccounts appId={app.id} profiles={props.profiles} onProfile={props.onProfile} /> : null}
     </AppSheet>
   )
 }
 
 function AppAccounts(props: {
+  appId: string
   profiles: ReturnType<ReturnType<typeof useCatalog>["profilesOf"]>
   onProfile: (target: ProfileTarget) => void
 }) {
   return (
     <AccountList
       title="Accounts"
+      actions={
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground"
+          onClick={() => props.onProfile({ appId: props.appId })}
+        >
+          <IconPlus />
+          New account
+        </Button>
+      }
       profiles={props.profiles}
       caption={audience}
       onOpen={(each) => props.onProfile({ appId: each.appId, profileId: each.id, edit: true })}
-      action={(each) => (
-        <Button size="sm" onClick={() => props.onProfile({ appId: each.appId, profileId: each.id })}>
-          {connectLabel(each) ?? "Open"}
-        </Button>
-      )}
+      action={(each) => {
+        const label = connectLabel(each)
+        return label ? (
+          <Button size="sm" onClick={() => props.onProfile({ appId: each.appId, profileId: each.id })}>
+            {label}
+          </Button>
+        ) : null
+      }}
     />
   )
 }
@@ -99,6 +116,7 @@ export function MarketplacePage() {
   const page = currentPage(search)
   const catalog = useCatalog()
   const spaces = useSpaces()
+  const shapeId = useShapeId("apps")
   const [query, setQuery] = useState("")
   const needle = useDebouncedValue(query.trim(), 250)
   const registry = useQuery({
@@ -106,8 +124,11 @@ export function MarketplacePage() {
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
+  const loading = registry.isPending || catalog.loading
   const browse = (registry.data?.items ?? []).map(fromRegistry)
-  const usedApps = catalog.apps.filter((app) => catalog.profilesOf(app.id).length > 0)
+  const usedApps = catalog.apps.filter(
+    (app) => catalog.profilesOf(app.id).length > 0 && !isSpaceApp(app, spaces.spaces),
+  )
   const used = new Set(usedApps.map((app) => app.id))
   const navigate = route.useNavigate()
   const opened = search.app
@@ -144,16 +165,18 @@ export function MarketplacePage() {
       actions={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
       footer={<ListPagination page={page} pageSize={pageSize} total={registry.data?.total ?? 0} noun="app" />}
     >
-      {registry.isPending || catalog.loading ? (
-        <AppListingSkeleton />
-      ) : (
-        <AppListing
-          inUse={usedApps.filter((each) => matches(each, query))}
-          rest={browse.filter((each) => !used.has(each.id))}
-          query={query}
-          row={row}
-        />
-      )}
+      <Loading id={shapeId} loading={loading} label="Loading apps">
+        {loading ? (
+          <AppListingSample />
+        ) : (
+          <AppListing
+            inUse={usedApps.filter((each) => matches(each, query))}
+            rest={browse.filter((each) => !used.has(each.id))}
+            query={query}
+            row={row}
+          />
+        )}
+      </Loading>
       <MarketplaceSheet
         app={app}
         profiles={app ? catalog.profilesOf(app.id) : []}

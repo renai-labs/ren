@@ -22,6 +22,7 @@ interface Base {
   readonly openExternal: (url: string) => void
   readonly redirect?: (url: string) => void
   readonly blankTab?: () => Window | null
+  readonly blankPopup?: () => Window | null
   readonly notify: (title: string, body?: string) => Promise<void>
   readonly requestNotifications?: () => Promise<boolean>
   readonly fetch?: typeof globalThis.fetch

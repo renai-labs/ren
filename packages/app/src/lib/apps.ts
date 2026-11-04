@@ -157,3 +157,18 @@ export const fromRegistry = (app: AppRegistryInfo): CatalogApp => ({
 })
 
 export const mentionColor = (app: Pick<CatalogApp, "brandColor"> | undefined) => app?.brandColor ?? "var(--ring)"
+
+export const isSpaceApp = (
+  app: Pick<CatalogApp, "source" | "ownerSpaceId" | "name"> | undefined,
+  spaces: ReadonlyArray<{
+    readonly id: string
+    readonly name: string
+    readonly factory?: { readonly agents: ReadonlyArray<unknown> } | undefined
+  }>,
+) =>
+  app?.source === "custom" &&
+  spaces.some(
+    (space) =>
+      space.id === app.ownerSpaceId &&
+      ((space.factory?.agents.length ?? 0) > 0 || space.name.toLowerCase() === app.name.toLowerCase()),
+  )
