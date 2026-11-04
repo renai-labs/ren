@@ -237,6 +237,25 @@ export const scopeOf = Effect.fnUntraced(function* (
   client: Pick<Database.Transaction, "select">,
   workload: Workload.Info,
 ) {
+  // oxlint-disable-next-line ren/no-comments -- A hand is an environment that a template made, in its own space, or the brain's own sandbox, whose id follows the brain's.
+  const environment =
+    workload.kind === "hand"
+      ? (yield* client
+          .select({ space: Database.Schema.space })
+          .from(Database.Schema.environment)
+          .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.environment.space_id))
+          .where(eq(Database.Schema.environment.id, workload.id))).at(0)
+      : undefined
+  if (environment)
+    return Option.some({
+      organizationId: environment.space.organization_id,
+      workload,
+      spaceId: Option.some(environment.space.id),
+      person:
+        environment.space.kind === "private" && !environment.space.archived_at
+          ? Option.fromNullishOr(environment.space.owner_user_id)
+          : Option.none(),
+    } satisfies Scope)
   const brainId = workload.kind === "brain" ? workload.id : Brain.ID.make(`brn_${workload.id.slice(4)}`)
   const found = (yield* client
     .select({ brain: Database.Schema.brain, space: Database.Schema.space })

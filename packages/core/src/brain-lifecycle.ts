@@ -173,7 +173,10 @@ export const layer = Layer.effect(
 
     const create = Effect.fnUntraced(function* (row: Row) {
       const proxy = behindEgress
-        ? yield* egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id })
+        ? yield* egress.proxyFor({
+            workload: { kind: "brain", id: row.id, generation: row.generation },
+            organizationId: row.organization_id,
+          })
         : Option.none<SandboxProvider.Proxy>()
       const created = yield* provider
         .create({
@@ -259,7 +262,10 @@ export const layer = Layer.effect(
         return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
       }
       const proxy = behindEgress
-        ? yield* egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id })
+        ? yield* egress.proxyFor({
+            workload: { kind: "brain", id: row.id, generation: row.generation },
+            organizationId: row.organization_id,
+          })
         : Option.none<SandboxProvider.Proxy>()
       const connected = yield* provider.connect(row.binding, proxy).pipe(
         Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
@@ -336,7 +342,7 @@ export const layer = Layer.effect(
           }),
         )
         .pipe(Effect.orDie)
-      yield* egress.retire(row.id)
+      yield* egress.retire({ kind: "brain", id: row.id })
       if (row.binding)
         yield* provider
           .destroy(row.binding)
@@ -411,7 +417,7 @@ export const layer = Layer.effect(
 
     const rest = Effect.fnUntraced(function* (row: Pick<Row, "id" | "generation" | "binding">) {
       if (!row.binding) return
-      yield* egress.retire(row.id)
+      yield* egress.retire({ kind: "brain", id: row.id })
       yield* provider.destroy(row.binding)
       yield* update(row.id, {
         generation: row.generation + 1,

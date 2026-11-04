@@ -243,6 +243,7 @@ export const environmentTemplate = Effect.fnUntraced(function* (
     readonly provider?: string
     readonly sessionsPerEnvironment?: number
     readonly image?: string
+    readonly networking?: EnvironmentTemplate.Networking
   } = {},
 ) {
   const database = yield* Database.Service
@@ -255,6 +256,7 @@ export const environmentTemplate = Effect.fnUntraced(function* (
     config: { label: "seeded" },
     sessions_per_environment: options.sessionsPerEnvironment ?? 8,
     image: options.image ?? null,
+    ...(options.networking && { networking: options.networking }),
   })
   yield* chooseEnvironment(yield* team(organizationId), { kind: "template", environmentTemplateId: id })
   return id

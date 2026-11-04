@@ -1,20 +1,20 @@
 export * as SandboxEgress from "./sandbox-egress.js"
 
 import { Auth } from "@ren/schema/auth"
-import type { Brain } from "@ren/schema/brain"
+import type { Workload } from "@ren/schema/workload"
 import { Config, Context, Effect, Layer, Option, Redacted } from "effect"
 import { CredentialCallers } from "./credential-callers.js"
 import { EgressControl } from "./egress-control.js"
 import { Envelope } from "./envelope.js"
 import type { SandboxProvider } from "./sandbox-provider.js"
 
+// oxlint-disable-next-line ren/no-comments -- A machine that sends its traffic through the egress: a brain's sandbox, or an environment that a template made (environments §3 Networking rule 4).
 export interface Interface {
-  readonly proxyFor: (brain: {
-    readonly brainId: Brain.ID
-    readonly generation: number
+  readonly proxyFor: (caller: {
+    readonly workload: Workload.Info
     readonly organizationId: Auth.OrganizationID
   }) => Effect.Effect<Option.Option<SandboxProvider.Proxy>>
-  readonly retire: (brainId: Brain.ID) => Effect.Effect<void>
+  readonly retire: (workload: Pick<Workload.Info, "kind" | "id">) => Effect.Effect<void>
   readonly enabled: boolean
 }
 
@@ -55,22 +55,18 @@ export const layer = Layer.effect(
         ),
         Effect.orDie,
       )
-    const retire = Effect.fn("SandboxEgress.retire")(function* (brainId: Brain.ID) {
-      const revoked = yield* callers.revoke({ kind: "brain", id: brainId })
+    const retire = Effect.fn("SandboxEgress.retire")(function* (workload: Pick<Workload.Info, "kind" | "id">) {
+      const revoked = yield* callers.revoke(workload)
       yield* Effect.forEach(revoked.logins, (login) => control.invalidate({ login }), { discard: true })
     })
     return Service.of({
       enabled: true,
       retire,
-      proxyFor: Effect.fn("SandboxEgress.proxyFor")(function* (brain) {
-        const caller = {
-          workload: { kind: "brain" as const, id: brain.brainId, generation: brain.generation },
-          organizationId: brain.organizationId,
-        }
+      proxyFor: Effect.fn("SandboxEgress.proxyFor")(function* (caller) {
         const kept = yield* callers.placement(caller)
         const placement = Option.isSome(kept)
           ? kept.value
-          : yield* retire(brain.brainId).pipe(Effect.andThen(callers.issue(caller, "ProxyLogin")))
+          : yield* retire(caller.workload).pipe(Effect.andThen(callers.issue(caller, "ProxyLogin")))
         if (placement.kind !== "ProxyLogin") return Option.none()
         return Option.some({ address, username: placement.username, password: placement.password, ca })
       }),

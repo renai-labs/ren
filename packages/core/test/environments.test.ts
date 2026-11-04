@@ -1,4 +1,6 @@
 import { describe, expect } from "bun:test"
+import { EnvironmentNetwork } from "../src/environment-network.js"
+import { SandboxEgress } from "../src/sandbox-egress.js"
 import { EnvironmentToken } from "@ren/environment-api/environment-token"
 import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
@@ -33,7 +35,11 @@ const environmentsWith = Effect.fnUntraced(function* (
 ) {
   const probe = yield* TestProvider.make(options)
   const context = yield* Layer.build(
-    Layer.fresh(Environments.layer.pipe(Layer.provide(Signer.layerLocal))).pipe(
+    Layer.fresh(
+      Environments.layer.pipe(
+        Layer.provide([Signer.layerLocal, EnvironmentNetwork.layerNone, SandboxEgress.layerNone]),
+      ),
+    ).pipe(
       Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
       Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ ENVIRONMENT_KEYS: signingKeys, ...config }))),
     ),
@@ -367,34 +373,39 @@ describe("Environments", () => {
     }),
   )
 
-  it.live("an environment whose template has a new image is replaced when every seat is idle (environments test 5)", () =>
-    Effect.gen(function* () {
-      const subject = yield* environmentsWith()
-      const database = yield* Database.Service
-      const organizationId = yield* Seed.organization()
-      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId, { image: "base:1" })
-      const spaceId = yield* Seed.team(organizationId)
-      const sessions = yield* Effect.all([Seed.subject(organizationId, spaceId), Seed.subject(organizationId, spaceId)])
-      yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
-        discard: true,
-      })
-      const before = yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()))
-      yield* database.db
-        .update(Database.Schema.environment_template)
-        .set({ image: "base:2" })
-        .where(eq(Database.Schema.environment_template.id, environmentTemplateId))
-      yield* subject.environments.release(sessions[1])
-      expect(before.at(0)?.url.href).toBe((yield* subject.environments.access(sessions[1], Option.none())).url.href)
-      yield* Effect.forEach(sessions, (session) => subject.environments.release(session), { discard: true })
-      const after = yield* subject.environments.access(sessions[0], Option.none())
-      expect(before.at(0)?.url.href).not.toBe(after.url.href)
-      expect(after.generation).toBe(2)
-      expect((yield* Ref.get(subject.probe.provisioned)).map((made) => made.image)).toEqual([
-        Option.some("base:1"),
-        Option.some("base:2"),
-      ])
-      expect((yield* Ref.get(subject.probe.destroyed)).length).toBe(1)
-    }),
+  it.live(
+    "an environment whose template has a new image is replaced when every seat is idle (environments test 5)",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* environmentsWith()
+        const database = yield* Database.Service
+        const organizationId = yield* Seed.organization()
+        const environmentTemplateId = yield* Seed.environmentTemplate(organizationId, { image: "base:1" })
+        const spaceId = yield* Seed.team(organizationId)
+        const sessions = yield* Effect.all([
+          Seed.subject(organizationId, spaceId),
+          Seed.subject(organizationId, spaceId),
+        ])
+        yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
+          discard: true,
+        })
+        const before = yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()))
+        yield* database.db
+          .update(Database.Schema.environment_template)
+          .set({ image: "base:2" })
+          .where(eq(Database.Schema.environment_template.id, environmentTemplateId))
+        yield* subject.environments.release(sessions[1])
+        expect(before.at(0)?.url.href).toBe((yield* subject.environments.access(sessions[1], Option.none())).url.href)
+        yield* Effect.forEach(sessions, (session) => subject.environments.release(session), { discard: true })
+        const after = yield* subject.environments.access(sessions[0], Option.none())
+        expect(before.at(0)?.url.href).not.toBe(after.url.href)
+        expect(after.generation).toBe(2)
+        expect((yield* Ref.get(subject.probe.provisioned)).map((made) => made.image)).toEqual([
+          Option.some("base:1"),
+          Option.some("base:2"),
+        ])
+        expect((yield* Ref.get(subject.probe.destroyed)).length).toBe(1)
+      }),
   )
 
   it.live(
@@ -405,7 +416,10 @@ describe("Environments", () => {
         const organizationId = yield* Seed.organization()
         const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
         const spaceId = yield* Seed.team(organizationId)
-        const sessions = yield* Effect.all([Seed.subject(organizationId, spaceId), Seed.subject(organizationId, spaceId)])
+        const sessions = yield* Effect.all([
+          Seed.subject(organizationId, spaceId),
+          Seed.subject(organizationId, spaceId),
+        ])
         yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
           discard: true,
         })
@@ -449,5 +463,32 @@ describe("Environments", () => {
       expect(yield* Ref.get(subject.probe.destroyed)).toEqual(yield* Ref.get(subject.probe.provisions))
       expect(yield* environmentsOf(environmentTemplateId)).toEqual([])
     }),
+  )
+
+  it.live(
+    "a limited template gives the provider its hosts and the package managers; an unrestricted one gives none (environments test 9)",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* environmentsWith()
+        const organizationId = yield* Seed.organization()
+        const networking = {
+          type: "limited",
+          allowPackageManagers: true,
+          allowMcpServers: false,
+          allowedHosts: ["api.example.com"],
+        } as const
+        const limited = yield* subjectIn(organizationId)
+        yield* subject.environments.bind(limited, yield* Seed.environmentTemplate(organizationId, { networking }))
+        yield* subject.environments.access(limited, Option.none())
+        const open = yield* Seed.subject(organizationId, yield* Seed.space(organizationId))
+        const chosen = yield* Seed.environmentTemplate(organizationId)
+        yield* Seed.chooseEnvironment(open.spaceId, { kind: "template", environmentTemplateId: chosen })
+        yield* subject.environments.bind(open, chosen)
+        yield* subject.environments.access(open, Option.none())
+        expect((yield* Ref.get(subject.probe.provisioned)).map((made) => made.hosts)).toEqual([
+          Option.some(["api.example.com", ...EnvironmentNetwork.packageManagerHosts]),
+          Option.none(),
+        ])
+      }),
   )
 })

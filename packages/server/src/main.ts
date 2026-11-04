@@ -36,6 +36,8 @@ import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
 import { E2BEnvironment } from "@ren/core/environment-provider/e2b"
+import { EnvironmentNetwork } from "@ren/core/environment-network"
+import { AppResolve } from "@ren/core/app/resolve"
 import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
@@ -166,10 +168,16 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
+  // oxlint-disable-next-line ren/no-comments -- An environment's host list and egress login come from its space's credentials (environments §3 Networking), so environments sit above them.
+  Layer.provideMerge(
+    Environments.layer.pipe(
+      Layer.provide([EnvironmentNetwork.layer.pipe(Layer.provide(AppResolve.layer)), SandboxEgress.layerConfig]),
+    ),
+  ),
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provide([BrainClient.layer, Settings.layer]),
-  Layer.provide([models, Environments.layer, GitHubApp.layer, Integrations.layer]),
+  Layer.provide([models, GitHubApp.layer, Integrations.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provide(environmentProviders),
   Layer.provide([AuthDatabase.layer, Database.layer]),

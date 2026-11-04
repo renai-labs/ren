@@ -1,5 +1,7 @@
 export * as RealStack from "./real-stack.js"
 
+import { EnvironmentNetwork } from "@ren/core/environment-network"
+import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { PgClient } from "@effect/sql-pg"
 import { OpenCode } from "@opencode/client"
 import { Ren } from "@ren/client/chat"
@@ -271,7 +273,7 @@ export const start = async (options: {
           Layer.provide(ChaosModels.layer),
           Layer.provide(
             Environments.layer
-              .pipe(Layer.provide(Signer.layerLocal))
+              .pipe(Layer.provide([Signer.layerLocal, EnvironmentNetwork.layerNone, SandboxEgress.layerNone]))
               .pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers))),
           ),
           Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),

@@ -1,4 +1,6 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
+import { EnvironmentNetwork } from "../src/environment-network.js"
+import { SandboxEgress } from "../src/sandbox-egress.js"
 import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
@@ -445,7 +447,7 @@ describe("BrainHost pull", () => {
               ]),
               (probes) => {
                 const environments = Environments.layer.pipe(
-                  Layer.provide(Signer.layerLocal),
+                  Layer.provide([Signer.layerLocal, EnvironmentNetwork.layerNone, SandboxEgress.layerNone]),
                   Layer.provide(EnvironmentProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
                 )
                 return Layer.merge(
@@ -574,7 +576,11 @@ describe("BrainHost environments", () => {
       Host.cellLayer(
         { CELL_URL: cellUrl },
         fixed,
-        Layer.fresh(Environments.layer.pipe(Layer.provide(Signer.layerLocal))).pipe(
+        Layer.fresh(
+          Environments.layer.pipe(
+            Layer.provide([Signer.layerLocal, EnvironmentNetwork.layerNone, SandboxEgress.layerNone]),
+          ),
+        ).pipe(
           Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
           Layer.provide(
             ConfigProvider.layer(

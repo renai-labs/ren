@@ -17,6 +17,8 @@ import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
 import { Environments } from "@ren/core/environments"
+import { EnvironmentNetwork } from "@ren/core/environment-network"
+import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
@@ -118,7 +120,10 @@ export const services = Layer.mergeAll(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(AppProfiles.layer),
   Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
-  Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
+  Layer.provideMerge([
+    Models.layerNone,
+    Environments.layer.pipe(Layer.provide([Signer.layerLocal, EnvironmentNetwork.layerNone, SandboxEgress.layerNone])),
+  ]),
   Layer.provideMerge(RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal))),
   Layer.provideMerge(SlackApp.layer),
   Layer.provideMerge(

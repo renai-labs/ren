@@ -1,4 +1,6 @@
 import { describe, expect } from "bun:test"
+import { EnvironmentNetwork } from "../src/environment-network.js"
+import { SandboxEgress } from "../src/sandbox-egress.js"
 import { Signature } from "@ren/schema/signature"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
@@ -27,7 +29,7 @@ const key = await Effect.runPromise(Signature.generate("environments"))
 const it = testEffect(
   Layer.mergeAll(
     EnvironmentTemplates.layer,
-    Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
+    Environments.layer.pipe(Layer.provide([Signer.layerLocal, EnvironmentNetwork.layerNone, SandboxEgress.layerNone])),
     Space.layer,
     SpaceProvisioning.layer,
   ).pipe(
@@ -177,18 +179,16 @@ describe("EnvironmentTemplates", () => {
       const templates = yield* EnvironmentTemplates.Service
       const setup = yield* team()
       const made = yield* templates.create(setup.admin, { ...input, provider: EnvironmentProvider.ID.make("built") })
-      const first = yield* templates
-        .get(setup.admin, made.id)
-        .pipe(
-          Effect.repeat({
-            until: (template) => template.buildStatus === "ready",
-            schedule: Schedule.spaced("20 millis"),
-          }),
-          Effect.timeoutOrElse({
-            duration: "10 seconds",
-            orElse: () => Effect.die(new Error("The build did not end")),
-          }),
-        )
+      const first = yield* templates.get(setup.admin, made.id).pipe(
+        Effect.repeat({
+          until: (template) => template.buildStatus === "ready",
+          schedule: Schedule.spaced("20 millis"),
+        }),
+        Effect.timeoutOrElse({
+          duration: "10 seconds",
+          orElse: () => Effect.die(new Error("The build did not end")),
+        }),
+      )
       const rebased = yield* TestProvider.make({ id: "built", builds: true, base: "test-base:2" })
       const context = yield* Layer.build(
         Layer.fresh(EnvironmentTemplates.layer).pipe(

@@ -87,7 +87,7 @@ Done when: an admin creates a template with apt `ffmpeg`, npm `typescript` and `
 3. Core makes the host list of a `limited` environment: `allowedHosts`; Ren's package manager hosts when `allowPackageManagers` is set (npm, PyPI and its file host, Debian and Ubuntu mirrors, the Go module proxy); the hosts of the MCP servers enabled in the space when `allowMcpServers` is set; and the hosts of the credentials the space can use, always.
 4. The provider enforces the list. E2B gets it as `allowOut`, with `denyOut: ["0.0.0.0/0"]` and the egress proxy as today (`core/src/sandbox-provider/e2b.ts:21-25`). E2B checks the HTTP `Host` on port 80 and the TLS SNI on port 443 before the traffic reaches the egress, so hosts that the egress passes through without decryption (`tls.passthrough_hosts`, such as ngrok) are checked too. Every other port is blocked unless an IP is allowed.
 5. For `*.example.com`, the provider also adds `example.com`: E2B does not match the apex with a wildcard.
-6. When the list of a running environment changes (template edit, a credential or MCP server added or removed), Ren calls `updateNetwork`. An E2B update replaces the whole network config, so the provider sends the proxy again (prior art: `core/src/sandbox-provider/e2b.ts:194`).
+6. Ren gives the provider the current list at every `connect`, so a change (template edit, a credential or MCP server added or removed) reaches a running environment at its next access: the first tool call of a turn, or a token refresh during a turn (EN26). An E2B update replaces the whole network config, so the provider sends the proxy again (prior art: `core/src/sandbox-provider/e2b.ts:194`).
 7. Ren's egress keeps only its credential checks. It does not check hosts.
 8. The limit applies to the environment's traffic only. The brain's own web access (webfetch, websearch) follows the `webfetch` and `websearch` permission rules.
 
@@ -120,34 +120,34 @@ Run `bun run generate` after the protocol changes.
 
 ## 5. Lifecycle states
 
-| State                                                      | Behaviour                                                                                                    |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Mid-turn                                                   | Each `access` (first tool call, token refresh every 10 min) extends the environment by 30 min.               |
-| Mid-turn, another chat on the same environment ends a turn | Its `release` does not shorten the time.                                                                     |
-| Paused                                                     | The next `access` resumes it. A write of a saved tool output wakes it too.                                   |
-| Gone (killed, or lost by E2B)                              | `connect` fails with `Gone`; Ren gives the chats a new environment and the next generation, as today.        |
-| Outdated, every seat idle                                  | Replaced at the next `access`. Files are lost; the chat shows the notice.                                    |
-| Outdated, a seat busy                                      | Kept. Checked again at the next `access`.                                                                    |
-| Template building or failed                                | New environments use the last `ready` image.                                                                 |
-| Host list changes while it runs                            | `updateNetwork` at once. Not verified: whether E2B accepts it while paused; if not, it applies at `connect`. |
-| Every chat archived                                        | Destroyed.                                                                                                   |
+| State                                                      | Behaviour                                                                                             |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Mid-turn                                                   | Each `access` (first tool call, token refresh every 10 min) extends the environment by 30 min.        |
+| Mid-turn, another chat on the same environment ends a turn | Its `release` does not shorten the time.                                                              |
+| Paused                                                     | The next `access` resumes it. A write of a saved tool output wakes it too.                            |
+| Gone (killed, or lost by E2B)                              | `connect` fails with `Gone`; Ren gives the chats a new environment and the next generation, as today. |
+| Outdated, every seat idle                                  | Replaced at the next `access`. Files are lost; the chat shows the notice.                             |
+| Outdated, a seat busy                                      | Kept. Checked again at the next `access`.                                                             |
+| Template building or failed                                | New environments use the last `ready` image.                                                          |
+| Host list changes while it runs                            | At the next access, after `connect` resumes it, so E2B never gets an update while paused.             |
+| Every chat archived                                        | Destroyed.                                                                                            |
 
 ## 6. Tests
 
-| #   | Package | Test                                                                                                                                                                                  |
-| --- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `core`  | A chat in a space with a template gets an environment of the template's `image` at its first tool call.                                                                               |
-| 2   | `core`  | A chat in a space with `none` gets no environment; a chat with `default` on the sandbox host gets the brain's own sandbox.                                                            |
-| 3   | `core`  | A task, a schedule run and a channel chat get the space's choice through `SessionRunner.create`.                                                                                      |
-| 4   | `core`  | Two saves with the same config start one build run; a failed build keeps the last `ready` image; a template without one cannot be selected.                                           |
-| 5   | `core`  | An outdated environment with all seats idle is replaced at `access`; with one busy seat it is kept.                                                                                   |
-| 6   | `core`  | A `release` while another seat is busy does not call `keepAlive(10 min)`.                                                                                                             |
-| 7   | `core`  | Archiving the last chat on an environment destroys it.                                                                                                                                |
-| 8   | `core`  | A space that switches from template A to B, or from `default` to a template, moves its idle chats at their next `access`; a switch to `none` changes new chats only.                  |
-| 9   | `core`  | A `limited` template gives `provision` the hosts of `allowedHosts`, the package managers, the space's MCP servers and its credentials. Connecting a credential calls `updateNetwork`. |
-| 10  | `core`  | `limited` is refused for a provider without `canLimitHosts`.                                                                                                                          |
-| 11  | `core`  | Policy: a member cannot create a template; an org admin can update a shared space.                                                                                                    |
-| 12  | `core`  | Live E2B, only with `E2B_API_KEY`, and only after the user approves the sandbox: a `limited` environment reaches a listed host and cannot reach an unlisted host or an ngrok host.    |
+| #   | Package | Test                                                                                                                                                                                               |
+| --- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `core`  | A chat in a space with a template gets an environment of the template's `image` at its first tool call.                                                                                            |
+| 2   | `core`  | A chat in a space with `none` gets no environment; a chat with `default` on the sandbox host gets the brain's own sandbox.                                                                         |
+| 3   | `core`  | A task, a schedule run and a channel chat get the space's choice through `SessionRunner.create`.                                                                                                   |
+| 4   | `core`  | Two saves with the same config start one build run; a failed build keeps the last `ready` image; a template without one cannot be selected.                                                        |
+| 5   | `core`  | An outdated environment with all seats idle is replaced at `access`; with one busy seat it is kept.                                                                                                |
+| 6   | `core`  | A `release` while another seat is busy does not call `keepAlive(10 min)`.                                                                                                                          |
+| 7   | `core`  | Archiving the last chat on an environment destroys it.                                                                                                                                             |
+| 8   | `core`  | A space that switches from template A to B, or from `default` to a template, moves its idle chats at their next `access`; a switch to `none` changes new chats only.                               |
+| 9   | `core`  | A `limited` template gives `provision` the hosts of `allowedHosts`, the package managers, the space's MCP servers and its credentials. A credential added later is in the list of the next access. |
+| 10  | `core`  | `limited` is refused for a provider without `canLimitHosts`.                                                                                                                                       |
+| 11  | `core`  | Policy: a member cannot create a template; an org admin can update a shared space.                                                                                                                 |
+| 12  | `core`  | Live E2B, only with `E2B_API_KEY`, and only after the user approves the sandbox: a `limited` environment reaches a listed host and cannot reach an unlisted host or an ngrok host.                 |
 
 ## 7. Code quality and best practices
 

@@ -4,6 +4,7 @@ import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Credential } from "@ren/schema/credential"
+import { Environment } from "@ren/schema/environment"
 import { eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Exit, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -747,5 +748,23 @@ describe("Credentials: env vars of a workload (A35, C9)", () => {
           placeholders: { STRIPE_API_KEY: "ren:STRIPE_API_KEY" },
         })
       }),
+  )
+
+  it.live("an environment that a template made reaches the credentials of its own space", () =>
+    Effect.gen(function* () {
+      const credentials = yield* Credentials.Service
+      const database = yield* Database.Service
+      const organizationId = yield* Seed.organization()
+      const spaceId = yield* Seed.space(organizationId)
+      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+      const environmentId = Environment.ID.create()
+      yield* database.db
+        .insert(Database.Schema.environment)
+        .values({ id: environmentId, environment_template_id: environmentTemplateId, space_id: spaceId })
+      const workload = { kind: "hand", id: environmentId, generation: 1 } as const
+      expect(yield* credentials.scopeOf(workload)).toEqual(
+        Option.some({ organizationId, workload, spaceId: Option.some(spaceId), person: Option.none() }),
+      )
+    }),
   )
 })

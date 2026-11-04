@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
+import { EnvironmentNetwork } from "../src/environment-network.js"
+import { SandboxEgress } from "../src/sandbox-egress.js"
 import { Shared } from "@ren/cell/testing"
 import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
@@ -115,7 +117,7 @@ const stackOf = async (config: CoreConfig) => {
     },
     models,
     environments: Environments.layer
-      .pipe(Layer.provide(Signer.layerLocal))
+      .pipe(Layer.provide([Signer.layerLocal, EnvironmentNetwork.layerNone, SandboxEgress.layerNone]))
       .pipe(Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)]))),
   }).pipe(
     Layer.provide(

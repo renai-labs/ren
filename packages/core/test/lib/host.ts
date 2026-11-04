@@ -1,5 +1,6 @@
 export * as Host from "./host.js"
 
+import { EnvironmentNetwork } from "../../src/environment-network.js"
 import { BunCrypto } from "@effect/platform-bun"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { TestEnvironment } from "@ren/executor/testing"
@@ -54,7 +55,7 @@ const environmentKeys = JSON.stringify([
 ])
 
 export const noTemplates = Environments.layer
-  .pipe(Layer.provide(Signer.layerLocal))
+  .pipe(Layer.provide([Signer.layerLocal, EnvironmentNetwork.layerNone, SandboxEgress.layerNone]))
   .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([])))
 
 export const freePort = Effect.promise(async () => {

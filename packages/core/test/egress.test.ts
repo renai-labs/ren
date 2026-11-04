@@ -37,6 +37,8 @@ import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { TestDrives } from "./lib/drives.js"
+import { EnvironmentNetwork } from "../src/environment-network.js"
+import { AppResolve } from "../src/app/resolve.js"
 import { testEffect } from "./lib/effect.js"
 import { GitHubServer } from "./lib/github-server.js"
 import { ProfilesFixture } from "./lib/profiles.js"
@@ -144,6 +146,7 @@ const it = testEffect(
     SpaceMember.layer,
     SpaceProvisioning.layer,
     App.layer,
+    EnvironmentNetwork.layer.pipe(Layer.provide(AppResolve.layer)),
   ).pipe(
     Layer.provideMerge(AppProfiles.layer),
     Layer.provideMerge(CredentialRefresh.layer),
@@ -288,6 +291,38 @@ const values = (reply: Injection.Reply) =>
         return { ...op, value: Redacted.value(op.value) }
       })
     : reply
+
+describe("EnvironmentNetwork.hostsOf (environments test 9)", () => {
+  it.live("a limited environment reaches its template's hosts and the hosts of its space's credentials", () =>
+    Effect.gen(function* () {
+      const network = yield* EnvironmentNetwork.Service
+      const credentials = yield* Credentials.Service
+      const database = yield* Database.Service
+      const found = yield* setup()
+      const environmentId = Environment.ID.create()
+      yield* database.db.insert(Database.Schema.environment).values({
+        id: environmentId,
+        environment_template_id: yield* Seed.environmentTemplate(found.organizationId),
+        space_id: found.space.id,
+      })
+      const networking = {
+        type: "limited",
+        allowPackageManagers: false,
+        allowMcpServers: true,
+        allowedHosts: ["api.example.com"],
+      } as const
+      const hostsOf = network.hostsOf({ organizationId: found.organizationId, environmentId, networking })
+      expect(yield* hostsOf).toEqual(Option.some(["api.example.com"]))
+      yield* credentials.create(found.ada, {
+        owner: { kind: "space", spaceId: found.space.id },
+        label: "GITHUB_TOKEN",
+        hosts: ["*.github.com"],
+        value: { type: "key", value: Redacted.make("ghp_real") },
+      })
+      expect(yield* hostsOf).toEqual(Option.some(["api.example.com", "*.github.com"]))
+    }),
+  )
+})
 
 describe("Egress.resolve", () => {
   it.live("a brain's placeholder becomes its space's key, for the key's host only", () =>

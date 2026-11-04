@@ -13,7 +13,9 @@ import type { Space } from "@ren/schema/space"
 import { and, asc, count, eq, exists, inArray, isNotNull, isNull, type SQLWrapper, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { Deployment } from "./deployment.js"
+import { EnvironmentNetwork } from "./environment-network.js"
 import { EnvironmentProvider } from "./environment-provider.js"
+import { SandboxEgress } from "./sandbox-egress.js"
 import { Signer } from "./signer.js"
 
 interface Subject {
@@ -182,6 +184,8 @@ export const layer = Layer.effect(
     })
     const database = yield* Database.Service
     const registry = yield* EnvironmentProvider.Registry
+    const hosts = yield* EnvironmentNetwork.Service
+    const egress = yield* SandboxEgress.Service
     const sandboxVariables = yield* Deployment.sandboxVariables
     const directoryOf = (sessionId: Session.ID) => `${config.directory}/${sessionId}`
     const signer = yield* Signer.Service
@@ -324,13 +328,12 @@ export const layer = Layer.effect(
       Option.match(registry.get(outdated.provider), {
         onNone: () => Effect.void,
         onSome: (provider) =>
-          provider
-            .destroy(outdated.binding)
-            .pipe(
-              Effect.catch((error) =>
-                Effect.logWarning(`Could not destroy the outdated environment ${outdated.environmentId}`, error),
-              ),
+          provider.destroy(outdated.binding).pipe(
+            Effect.andThen(egress.retire({ kind: "hand", id: outdated.environmentId })),
+            Effect.catch((error) =>
+              Effect.logWarning(`Could not destroy the outdated environment ${outdated.environmentId}`, error),
             ),
+          ),
       })
 
     const lockEnvironment = Effect.fnUntraced(function* (transaction: Database.Transaction, subject: Subject) {
@@ -459,7 +462,20 @@ export const layer = Layer.effect(
         })
       const keys = yield* signingKeys
       const assigned = yield* assign(subject)
-      const network = { hosts: Option.none(), proxy: Option.none() } satisfies EnvironmentProvider.Network
+      // oxlint-disable-next-line ren/no-comments -- environments §3 Networking rules 3, 4 and 6: every connect gives the provider the current hosts and the egress login, so a change reaches a running environment at its next access.
+      const network = {
+        hosts: yield* hosts.hostsOf({
+          organizationId: subject.organizationId,
+          environmentId: assigned.environmentId,
+          networking: assigned.template.networking,
+        }),
+        proxy: provider.value.egress
+          ? yield* egress.proxyFor({
+              workload: { kind: "hand", id: assigned.environmentId, generation: 1 },
+              organizationId: subject.organizationId,
+            })
+          : Option.none(),
+      } satisfies EnvironmentProvider.Network
       const unavailableBecause = (error: EnvironmentProvider.Failed) =>
         new Unavailable({ message: `The environment of session ${subject.sessionId} is unavailable: ${error.message}` })
       const providerBinding =

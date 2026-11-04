@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { EnvironmentNetwork } from "@ren/core/environment-network"
 import { BunCrypto } from "@effect/platform-bun"
 import { PgClient } from "@effect/sql-pg"
 import { Access } from "@ren/core/access"
@@ -218,7 +219,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provide(Models.layerInferenceGateway),
             Layer.provide(
               Environments.layer
-                .pipe(Layer.provide(Signer.layerLocal))
+                .pipe(Layer.provide([Signer.layerLocal, EnvironmentNetwork.layerNone, SandboxEgress.layerNone]))
                 .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([]))),
             ),
             Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
