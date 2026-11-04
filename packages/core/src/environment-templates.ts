@@ -293,7 +293,7 @@ export const layer = Layer.effect(
               : yield* checkConfig(yield* providerOf(found.provider), input.config)
             if (input.networking) yield* checkNetworking(yield* providerOf(found.provider), input.networking)
             const isRebuilt =
-              config !== undefined &&
+              !Predicate.isUndefined(config) &&
               JSON.stringify(config) !== JSON.stringify(found.config) &&
               !isBuilt(found.provider)
             const updated = yield* transaction

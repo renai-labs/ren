@@ -169,7 +169,7 @@ export const layer = Layer.effect(
       if (!template)
         return yield* new Primitive.Invalid({ message: "Environment template not found.", field: "environment" })
       // oxlint-disable-next-line ren/no-comments -- environments §3 Build rule 4: a template is usable once it built, also while a later build runs or after it fails.
-      if (template.buildStatus !== "ready" && template.image === null)
+      if (template.buildStatus !== "ready" && !template.image)
         return yield* new Primitive.Invalid({
           message: "This environment template has not built yet. Choose it when its build is ready.",
           field: "environment",

@@ -145,8 +145,8 @@ const planOf = (seat: Seat, environment: Held | undefined, options: { readonly h
 }
 
 const canMove = (seat: Seat, replaced: Held | undefined) => {
-  if (seat.environmentId) return replaced !== undefined
-  return seat.environmentTemplateId !== null || seat.isNew || seat.idleAt !== null
+  if (seat.environmentId) return Boolean(replaced)
+  return Boolean(seat.environmentTemplateId) || seat.isNew || Boolean(seat.idleAt)
 }
 
 const outdatedOf = (held: Held | undefined) =>
@@ -415,9 +415,9 @@ export const layer = Layer.effect(
               .update(sessions)
               .set({ environment_template_id: plan.environmentTemplateId })
               .where(eq(sessions.session_id, subject.sessionId))
-          if (plan.environmentTemplateId === null) yield* markBusy(transaction, subject)
+          if (!plan.environmentTemplateId) yield* markBusy(transaction, subject)
           return {
-            isOnHand: plan.environmentTemplateId === null,
+            isOnHand: !plan.environmentTemplateId,
             outdated: plan.outdated,
           }
         }),

@@ -222,8 +222,8 @@ export const provider = Effect.gen(function* () {
         yield* call("configure", e2b.upload(binding, accessToken, E2BSandbox.caFile, ca.value)).pipe(
           Effect.flatMap((answer) => ok("configure", answer)),
         )
-      const env = Object.entries(input.variables)
-        .map((entry) => `${entry[0]}=${E2BApi.quote(entry[1])}`)
+      const env = Object.keys(input.variables)
+        .map((name) => `${name}=${E2BApi.quote(input.variables[name] ?? "")}`)
         .join("\n")
       yield* call("configure", e2b.upload(binding, accessToken, envFile, `${env}\n`)).pipe(
         Effect.flatMap((answer) => ok("configure", answer)),
