@@ -1,21 +1,23 @@
 import type { SpaceInfo } from "@ren/client"
+import { cn } from "cn"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import {
   IconApps,
   IconArrowLeft,
-  IconAt,
+  IconMessagesFilled,
   IconBuildingFactory2,
   IconClock,
   IconCube,
-  IconBrandGit,
   IconKey,
   IconLayoutDashboard,
   IconLayoutKanban,
   IconLock,
   IconSelector,
+  IconSettings,
   IconUsers,
 } from "@tabler/icons-react"
+import { GitMark } from "./brand-marks.js"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +37,7 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
 } from "@ren/ui/sidebar"
 import { Footer, Header, sidebarRow } from "./sidebar-parts.js"
 import { isSoftwareFactory } from "../lib/factory.js"
@@ -45,10 +48,11 @@ import { Seed } from "../lib/seed.js"
 const spaceSections = [
   { value: "overview", label: "Overview", icon: IconLayoutDashboard, to: "/spaces/$spaceId" },
   { value: "kanban", label: "Kanban", icon: IconLayoutKanban, to: "/spaces/$spaceId/kanban" },
+  { value: "settings", label: "Settings", icon: IconSettings, to: "/spaces/$spaceId/settings" },
   { value: "members", label: "Members", icon: IconUsers, to: "/spaces/$spaceId/members" },
   { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
-  { value: "repositories", label: "Repositories", icon: IconBrandGit, to: "/spaces/$spaceId/repositories" },
-  { value: "channels", label: "Mentions", icon: IconAt, to: "/spaces/$spaceId/channels" },
+  { value: "repositories", label: "Repositories", icon: GitMark, to: "/spaces/$spaceId/repositories" },
+  { value: "channels", label: "Channels", icon: IconMessagesFilled, to: "/spaces/$spaceId/channels" },
   { value: "credentials", label: "Keys", icon: IconKey, to: "/spaces/$spaceId/credentials" },
   { value: "schedules", label: "Scheduled", icon: IconClock, to: "/spaces/$spaceId/schedules" },
   { value: "factory", label: "Factory", icon: IconBuildingFactory2, to: "/spaces/$spaceId/factory" },
@@ -75,15 +79,18 @@ function SpaceSwitcher(props: {
       <DropdownMenuTrigger
         render={
           <SidebarMenuButton
-            size="lg"
-            className={sidebarRow}
+            className={cn(
+              sidebarRow,
+              "font-medium text-sidebar-accent-foreground [&>svg:first-child]:text-sidebar-accent-foreground",
+            )}
+            tooltip={props.space?.name ?? "Switch space"}
             aria-label={`Switch space (current: ${props.space?.name ?? "Space"})`}
           />
         }
       >
         <SpaceIcon kind={props.space?.kind ?? "shared"} className="size-4.5" />
         <span className="flex-1 truncate">{props.space?.name ?? "Space"}</span>
-        <IconSelector className="text-sidebar-foreground" />
+        <IconSelector className="text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-(--anchor-width) min-w-56">
         <DropdownMenuGroup>
@@ -92,8 +99,10 @@ function SpaceSwitcher(props: {
             value={props.spaceId}
             onValueChange={(spaceId: string) => {
               const target = spaces.find((each) => each.id === spaceId)
-              const kanban = props.section.value === "kanban" && !(target && isSoftwareFactory(target))
-              void navigate({ to: kanban ? "/spaces/$spaceId" : props.section.to, params: { spaceId } })
+              const factoryOnly =
+                (props.section.value === "kanban" || props.section.value === "overview") &&
+                !(target && isSoftwareFactory(target))
+              void navigate({ to: factoryOnly ? "/spaces/$spaceId" : props.section.to, params: { spaceId } })
             }}
           >
             {spaces.map((each) => (
@@ -110,16 +119,18 @@ function SpaceSwitcher(props: {
 }
 
 function SpaceNav(props: { spaceId: string; space: SpaceInfo | undefined; current: SpaceSection }) {
+  const factory = props.space !== undefined && isSoftwareFactory(props.space)
   return (
     <SidebarMenu className="gap-1">
       {spaceSections
         .filter((each) => each.value !== "members" || props.space?.kind !== "private")
-        .filter((each) => each.value !== "kanban" || (props.space && isSoftwareFactory(props.space)))
+        .filter((each) => factory || (each.value !== "kanban" && each.value !== "overview"))
         .map((each) => (
           <SidebarMenuItem key={each.value}>
             <SidebarMenuButton
               className={sidebarRow}
               isActive={props.current === each.value}
+              tooltip={each.label}
               render={<Link to={each.to} params={{ spaceId: props.spaceId }} />}
             >
               <each.icon />
@@ -146,29 +157,30 @@ export function SpaceSidebar(props: { spaceId: string; onSearch: () => void }) {
   const current = spaceSectionOf(path)
   const section = spaceSections.find((each) => each.value === current) ?? spaceSections[0]
   return (
-    <Sidebar variant="inset">
+    <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader className="gap-0 p-0">
         <Header onSearch={props.onSearch} />
         <SidebarMenu className="gap-1 px-0.5">
           <SidebarMenuItem>
-            <SidebarMenuButton className={sidebarRow} render={<Link to="/spaces" />}>
+            <SidebarMenuButton className={sidebarRow} tooltip="All spaces" render={<Link to="/spaces" />}>
               <IconArrowLeft />
               <span>All spaces</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
+          <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
             <SpaceSwitcher spaceId={props.spaceId} space={space} section={section} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup className="px-0.5 pt-5">
+        <SidebarGroup className="px-0.5 pt-5 group-data-[collapsible=icon]:pt-3">
           <SidebarGroupContent>
             <SpaceNav spaceId={props.spaceId} space={space} current={current} />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
       <Footer />
+      <SidebarRail />
     </Sidebar>
   )
 }

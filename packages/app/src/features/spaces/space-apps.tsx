@@ -9,7 +9,10 @@ import { AccountActions } from "../../components/account-actions.js"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { AccountList, AppSheet } from "../../components/app-list.js"
 import { AppsTable } from "../../components/apps-table.js"
-import { SkeletonTable } from "../../components/page.js"
+import { PageFooter, TableSample, useShapeId } from "../../components/page.js"
+import { ListPagination } from "../../components/list-pagination.js"
+import { currentPage, pageCount, pageSize } from "../../lib/pagination.js"
+import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { useCatalog } from "../../lib/use-catalog.js"
 import { errorMessage } from "../../lib/errors.js"
@@ -72,6 +75,7 @@ export function SpaceAppsTab() {
   const { api } = RouterContext.useRouterContext()
   const space = useSpace()
   const catalog = useCatalog()
+  const shapeId = useShapeId("apps")
   const reach = useQuery({
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: space.id }),
     refetchOnWindowFocus: "always",
@@ -95,6 +99,7 @@ export function SpaceAppsTab() {
       ? [{ app: each, profiles, usedIn: [...new Set(profiles.map((one) => source(one, space.id)))].join(", ") }]
       : []
   })
+  const page = Math.min(currentPage(search), pageCount(rows.length, pageSize))
   if (hiddenBy(reach.error))
     return (
       <p className="rounded-xl border py-8 text-center text-sm text-muted-foreground">
@@ -102,7 +107,7 @@ export function SpaceAppsTab() {
       </p>
     )
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-1 flex-col gap-4">
       <div className="flex justify-end">
         <AddAppDialog
           space={space}
@@ -110,11 +115,21 @@ export function SpaceAppsTab() {
           onAdded={(added) => setProfile({ appId: added.app.id, profileId: added.profileId, from })}
         />
       </div>
-      {reach.isPending || catalog.loading ? (
-        <SkeletonTable columns={["App", "Used in", "Status", ""]} count={3} label="Loading apps" />
-      ) : (
-        <AppsTable rows={rows} empty="No apps" onOpen={setOpened} onNew={(appId) => setProfile({ appId, from })} />
-      )}
+      <Loading id={shapeId} loading={reach.isPending || catalog.loading} label="Loading apps">
+        {reach.isPending || catalog.loading ? (
+          <TableSample columns={["App", "Used in", "Status", ""]} count={3} />
+        ) : (
+          <AppsTable
+            rows={rows.slice((page - 1) * pageSize, page * pageSize)}
+            empty="No apps"
+            onOpen={setOpened}
+            onNew={(appId) => setProfile({ appId, from })}
+          />
+        )}
+      </Loading>
+      <PageFooter>
+        <ListPagination page={page} pageSize={pageSize} total={rows.length} noun="app" />
+      </PageFooter>
       <AppSheet app={app} onClose={() => setOpened(undefined)}>
         {app ? (
           <SpaceAppAccounts

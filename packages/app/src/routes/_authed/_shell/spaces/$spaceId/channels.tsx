@@ -5,7 +5,7 @@ import { Loader } from "../../../../../lib/loader.js"
 import { Routing } from "../../../../../lib/routing.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/channels")({
-  head: () => ({ meta: [{ title: "Mentions · Space · Ren" }] }),
+  head: () => ({ meta: [{ title: "Channels · Space · Ren" }] }),
   validateSearch: Routing.PageSearch,
   loader: (options) => {
     Loader.start(

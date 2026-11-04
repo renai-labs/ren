@@ -23,7 +23,8 @@ import {
 import { CredentialSheet } from "../../components/credential-sheet.js"
 import { CredentialsTable } from "../../components/credentials-table.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { Row, Rows, SkeletonTable } from "../../components/page.js"
+import { PageFooter, Row, Rows, TableSample, useShapeId } from "../../components/page.js"
+import { Loading } from "@ren/ui/loading"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { useMe } from "../../lib/use-me.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
@@ -73,13 +74,14 @@ export function SpaceCredentialsTab() {
   )
   const total = keys.data?.total ?? 0
   const loading = keys.isPending
+  const shapeId = useShapeId("keys")
   const stale = keys.isPlaceholderData
   const removed = () => {
     const next = lastPageAfterRemoval(page, total, pageSize)
     if (next !== page) void navigate({ search: (previous) => ({ ...previous, page: next }) })
   }
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-1 flex-col gap-4">
       <div className="flex justify-end gap-1">
         <ToolbarSearch label="Search keys" value={query} onChange={setQuery} />
         {elsewhere.length > 0 ? (
@@ -109,19 +111,21 @@ export function SpaceCredentialsTab() {
           </Button>
         )}
       </div>
-      {loading ? (
-        <SkeletonTable columns={["Key", "Hosts", "Owner", ""]} count={3} label="Loading keys" />
-      ) : (
-        <CredentialsTable
-          credentials={here}
-          stale={stale}
-          onRemoved={removed}
-          empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
-        />
-      )}
-      <div className="flex items-center justify-between gap-4 empty:hidden">
+      <Loading id={shapeId} loading={loading} label="Loading keys">
+        {loading ? (
+          <TableSample columns={["Key", "Hosts", "Owner", ""]} count={3} />
+        ) : (
+          <CredentialsTable
+            credentials={here}
+            stale={stale}
+            onRemoved={removed}
+            empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
+          />
+        )}
+      </Loading>
+      <PageFooter>
         <ListPagination page={page} pageSize={pageSize} total={total} noun="key" />
-      </div>
+      </PageFooter>
       <CredentialSheet
         open={adding}
         onOpenChange={setAdding}

@@ -1,3 +1,4 @@
+import { useShapeId } from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
 import type { SpaceInfo } from "@ren/client"
 import { FactoryAnalytics } from "@ren/ui/factory-analytics"
@@ -12,9 +13,15 @@ const stacksPreference = Preference.make("factory.stacks.v1", Schema.Record(Sche
 
 export function FactoryDashboard(props: { space: SpaceInfo }) {
   const factory = useFactory(props.space)
+  const shapeId = useShapeId("factory-analytics")
   return (
     <div className="flex min-h-150 flex-1 flex-col">
-      <Loading loading={factory.loading} label="Loading factory analytics" className="flex flex-1 flex-col">
+      <Loading
+        id={shapeId}
+        loading={factory.loading}
+        label="Loading factory analytics"
+        className="flex flex-1 flex-col"
+      >
         <FactoryAnalytics world={factory.world} analytics={factory.analytics} />
       </Loading>
     </div>
@@ -25,9 +32,10 @@ export function FactoryKanban(props: { space: SpaceInfo }) {
   const factory = useFactory(props.space)
   const platform = Platform.usePlatform()
   const [stacks, setStacks] = useState(() => stacksPreference.read(platform.storage))
+  const shapeId = useShapeId("factory-board")
   return (
     <div className="-mx-8 flex min-h-150 flex-1 flex-col">
-      <Loading loading={factory.loading} label="Loading task board" className="flex flex-1 flex-col">
+      <Loading id={shapeId} loading={factory.loading} label="Loading task board" className="flex flex-1 flex-col">
         <FactoryBoard
           world={factory.world}
           spend={factory.spend}

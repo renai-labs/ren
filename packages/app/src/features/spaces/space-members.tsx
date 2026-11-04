@@ -15,10 +15,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@ren/ui/dialog"
-import { Field, FieldLabel } from "@ren/ui/field"
 import { Spinner } from "@ren/ui/spinner"
 import { ListPagination } from "../../components/list-pagination.js"
-import { SkeletonTable } from "../../components/page.js"
+import { PageFooter, useShapeId } from "../../components/page.js"
+import { Loading } from "@ren/ui/loading"
 import { MembersTable } from "../../components/members-table.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
 import { StatusBadge } from "../../components/status-badge.js"
@@ -48,7 +48,7 @@ function CandidateList(props: {
   onSelect: (value: string) => void
 }) {
   return (
-    <Command className="rounded-lg border">
+    <Command className="rounded-none bg-transparent p-0 **:data-[slot=command-input-wrapper]:mx-0 **:data-[slot=command-input-wrapper]:mt-0">
       <CommandInput placeholder="Search by name or email…" />
       <CommandList className="pt-1">
         <CommandEmpty>{props.loading ? "Loading…" : "Everyone is already in this space."}</CommandEmpty>
@@ -94,15 +94,12 @@ function AddSpaceMemberDialog(props: {
             Pick someone from the organization, or someone invited to it. Invited people join once they accept.
           </DialogDescription>
         </DialogHeader>
-        <Field>
-          <FieldLabel>Person</FieldLabel>
-          <CandidateList
-            candidates={props.candidates}
-            loading={props.loading}
-            selected={selected}
-            onSelect={setSelected}
-          />
-        </Field>
+        <CandidateList
+          candidates={props.candidates}
+          loading={props.loading}
+          selected={selected}
+          onSelect={setSelected}
+        />
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
           <Button disabled={!candidate || props.pending} onClick={() => candidate && props.onAdd(candidate)}>
@@ -173,6 +170,17 @@ export function SpaceMembersTab() {
         }
       : { id: member.id, name: member.email, email: member.email, you: false, pending: true },
   )
+  const sampleRows = Array.from(
+    { length: Math.max(0, Math.min(space.memberCount - (page - 1) * pageSize, pageSize)) },
+    (_, index) => ({
+      id: `sample-${index}`,
+      name: "Team member",
+      email: "member@company.com",
+      you: false,
+      pending: false,
+    }),
+  )
+  const shapeId = useShapeId("members")
   const needle = query.trim().toLowerCase()
   const total = members.data?.total ?? 0
   const stale = members.isPlaceholderData
@@ -194,7 +202,7 @@ export function SpaceMembersTab() {
       },
     )
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-1 flex-col gap-4">
       <div className="flex justify-end gap-1">
         <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
         {space.canAddMember ? (
@@ -208,11 +216,11 @@ export function SpaceMembersTab() {
           />
         ) : null}
       </div>
-      {members.isPending ? (
-        <SkeletonTable columns={["Name", "Email", "Status", ""]} label="Loading members" />
-      ) : (
+      <Loading id={shapeId} loading={members.isPending} label="Loading members">
         <MembersTable
-          rows={rows.filter((row) => `${row.name} ${row.email}`.toLowerCase().includes(needle))}
+          rows={(members.isPending ? sampleRows : rows).filter((row) =>
+            `${row.name} ${row.email}`.toLowerCase().includes(needle),
+          )}
           stale={stale}
           column={{
             heading: "Status",
@@ -247,10 +255,10 @@ export function SpaceMembersTab() {
           }
           empty={query ? `Nothing matches “${query.trim()}”` : "No members"}
         />
-      )}
-      <div className="flex items-center justify-between gap-4 empty:hidden">
+      </Loading>
+      <PageFooter>
         <ListPagination page={page} pageSize={pageSize} total={total} noun="member" />
-      </div>
+      </PageFooter>
     </div>
   )
 }

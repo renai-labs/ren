@@ -1,5 +1,5 @@
 import type { SpaceInfo } from "@ren/client"
-import { IconCube, IconEye, IconLogin2, IconPlus } from "@tabler/icons-react"
+import { IconCube, IconEye, IconLock, IconLogin2, IconPlus, IconUsers } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import {
   Dialog,
@@ -19,8 +19,9 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { FilterMenu, passes, type Filters } from "../../components/filter-menu.js"
-import { ExpandableSearch } from "../../components/expandable-search.js"
-import { Page, SkeletonCards } from "../../components/page.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
+import { CardsSample, Page, useShapeId } from "../../components/page.js"
+import { Loading } from "@ren/ui/loading"
 import { ListPagination } from "../../components/list-pagination.js"
 import { Spinner } from "@ren/ui/spinner"
 import { pageSize, pickerPageSize, currentPage } from "../../lib/pagination.js"
@@ -41,16 +42,25 @@ const route = getRouteApi("/_authed/_shell/spaces/")
 const isPrivate = (space: SpaceInfo) => space.kind === "private"
 
 export function SpacesPage() {
-  const { api } = RouterContext.useRouterContext()
+  const { api, queryClient } = RouterContext.useRouterContext()
   const search = route.useSearch()
   const navigate = useNavigate()
   const me = useMe()
   const page = currentPage(search)
+  const pickerKey = api.space.list.queryOptions({ page: 1, pageSize: pickerPageSize }).queryKey
   const list = useQuery({
     ...api.space.list.queryOptions({ page, pageSize }),
     placeholderData: keepPreviousData,
+    initialData: () => {
+      const picked = queryClient.getQueryData(pickerKey)
+      return page === 1 && picked && picked.total <= picked.items.length
+        ? { ...picked, items: picked.items.slice(0, pageSize) }
+        : undefined
+    },
+    initialDataUpdatedAt: () => queryClient.getQueryState(pickerKey)?.dataUpdatedAt,
     ...Loader.required,
   })
+  const shapeId = useShapeId("spaces")
   const [dialog, setDialog] = useState<"create" | "join" | null>(null)
   const joinable = useQuery({
     ...api.space.list.queryOptions({ page: 1, pageSize: pickerPageSize }),
@@ -84,7 +94,7 @@ export function SpacesPage() {
       description="Each space gives a team its own credentials, apps and agents."
       actions={
         <>
-          <ExpandableSearch label="Search spaces" value={query} onChange={setQuery} />
+          <ToolbarSearch label="Search spaces" value={query} onChange={setQuery} />
           <FilterMenu
             label="Filter spaces"
             properties={[
@@ -95,8 +105,8 @@ export function SpacesPage() {
                 icon: IconEye,
                 single: true,
                 options: [
-                  { value: "shared", label: "Shared" },
-                  { value: "private", label: "Private" },
+                  { value: "shared", label: "Shared", icon: IconUsers },
+                  { value: "private", label: "Private", icon: IconLock },
                 ],
               },
             ]}
@@ -134,21 +144,27 @@ export function SpacesPage() {
       }
       footer={<ListPagination page={page} pageSize={pageSize} total={total} noun="space" />}
     >
-      {spaces ? null : <SkeletonCards />}
-      <div
-        className={cn("mt-4 grid gap-4 transition-opacity sm:grid-cols-2", stale && "opacity-60", !spaces && "hidden")}
-      >
-        {(spaces ?? [])
-          .filter((space) => !needle || `${space.name} ${space.description ?? ""}`.toLowerCase().includes(needle))
-          .filter((space) =>
-            passes(filters, {
-              visibility: [isPrivate(space) ? "private" : "shared"],
-            }),
-          )
-          .map((space) => (
-            <SpaceCard key={space.id} space={space} />
-          ))}
-      </div>
+      <Loading id={shapeId} loading={!spaces} label="Loading spaces">
+        {spaces ? null : <CardsSample />}
+        <div
+          className={cn(
+            "mt-4 grid gap-5 transition-opacity sm:grid-cols-2",
+            stale && "opacity-60",
+            !spaces && "hidden",
+          )}
+        >
+          {(spaces ?? [])
+            .filter((space) => !needle || `${space.name} ${space.description ?? ""}`.toLowerCase().includes(needle))
+            .filter((space) =>
+              passes(filters, {
+                visibility: [isPrivate(space) ? "private" : "shared"],
+              }),
+            )
+            .map((space) => (
+              <SpaceCard key={space.id} space={space} />
+            ))}
+        </div>
+      </Loading>
     </Page>
   )
 }

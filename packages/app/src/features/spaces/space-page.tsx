@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import { SpaceSectionSkeleton, spaceSections } from "../../components/route-skeleton.js"
 import { useMutation } from "@tanstack/react-query"
-import { Outlet, useLocation, useNavigate } from "@tanstack/react-router"
+import { Outlet, useNavigate } from "@tanstack/react-router"
 import { IconArchive } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Page } from "../../components/page.js"
@@ -10,13 +10,14 @@ import { isSoftwareFactory } from "../../lib/factory.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { Routing } from "../../lib/routing.js"
 
 export function SpaceLayout() {
   const { api } = RouterContext.useRouterContext()
   const space = useSpace()
   const navigate = useNavigate()
   const archive = useMutation(api.space.archive.mutationOptions())
-  const tab = useLocation({ select: (location) => location.pathname.split("/").at(3) ?? "overview" })
+  const tab = Routing.useRenderedPath().split("/").at(3) ?? "overview"
   const factory = (tab === "overview" || tab === "kanban") && isSoftwareFactory(space)
   const section = spaceSections[tab] ?? spaceSections.overview
   if (factory)
