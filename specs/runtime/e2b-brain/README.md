@@ -70,7 +70,7 @@ Each runs only with `E2B_API_KEY`, and asks the user before it creates a sandbox
 
 ## 6. E2B environment provider
 
-`EnvironmentProvider` has only Docker (`core/src/environment-provider/docker.ts`). An E2B provider lets a template's environment run on E2B. The E2B REST calls move to one module that `SandboxProvider.layerE2B` and the E2B `EnvironmentProvider` share.
+`EnvironmentProvider` has only Docker (`core/src/environment-provider/docker.ts`). An E2B provider lets a template's environment run on E2B. The E2B REST calls move to one module that `SandboxProvider.layerE2B` and the E2B `EnvironmentProvider` share. Design: [`../environments/README.md`](../environments/README.md).
 
 ## 7. Environment retries
 

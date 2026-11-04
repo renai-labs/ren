@@ -32,3 +32,4 @@ Generated clients follow the protocol `HttpApi`.
 | [runtime/credentials/README.md](runtime/credentials/README.md)       | `oauth-session.complete`, KMS, traffic the egress cannot inject                                                                 |
 | [runtime/private-spaces/README.md](runtime/private-spaces/README.md) | Usage totals, files spec alignment                                                                                              |
 | [runtime/files/README.md](runtime/files/README.md)                   | Chat uploads and outputs on drives, cards, viewer, Files panel, mount fixes                                                     |
+| [runtime/environments/README.md](runtime/environments/README.md)     | Environment templates in the product: E2B provider, image build, space choice, networking, brains on ECS spike                  |
