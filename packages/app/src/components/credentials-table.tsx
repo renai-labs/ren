@@ -202,7 +202,7 @@ function Owner(props: { credential: Credential; label: string }) {
   return (
     <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
       <OwnerIcon className="size-4 shrink-0" />
-      <span className="flex min-w-0 flex-col">
+      <span className="flex min-w-0 flex-col whitespace-normal">
         <span className="wrap-break-word">{props.label}</span>
         {credential.account ? (
           <span className="text-xs wrap-break-word text-muted-foreground">{credential.account.name}’s account</span>
