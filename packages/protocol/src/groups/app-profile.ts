@@ -87,7 +87,7 @@ export const AppProfileReachGroup = HttpApiGroup.make("app-profile-reach")
   .add(
     HttpApiEndpoint.get("app.request-connect", "/apps/:app/request-connect", {
       params: { app: Schema.String },
-      query: { spaceId: Space.ID },
+      query: { spaceId: Schema.optional(Space.ID) },
       success: AppProfile.Connect,
       error: NotFoundError,
     }).annotateMerge(
@@ -95,7 +95,7 @@ export const AppProfileReachGroup = HttpApiGroup.make("app-profile-reach")
         identifier: "app.request-connect",
         summary: "Ask the person to connect an app",
         description:
-          "Show the person a Connect button for an app (ID or slug) in a space; a profile with no gaps means the app is ready.",
+          "Show the person a Connect button for an app (ID or slug) in a space; an agent’s own space is the default. A profile with no gaps means the app is ready.",
       }),
     ),
   )

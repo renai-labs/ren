@@ -5246,7 +5246,7 @@ export type AppProfileReachSpaceProfilesOutput = AppProfileReach
 
 export type AppProfileReachAppRequestConnectInput = {
   readonly app: { readonly app: string }["app"]
-  readonly spaceId: { readonly spaceId: string }["spaceId"]
+  readonly spaceId?: { readonly spaceId?: string | undefined }["spaceId"]
 }
 
 export type AppProfileReachAppRequestConnectOutput = AppProfileConnect

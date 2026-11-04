@@ -4332,7 +4332,7 @@
             "schema": {
               "$ref": "#/components/schemas/Space.ID"
             },
-            "required": true
+            "required": false
           }
         ],
         "security": [
@@ -4385,7 +4385,7 @@
             }
           }
         },
-        "description": "Show the person a Connect button for an app (ID or slug) in a space; a profile with no gaps means the app is ready.",
+        "description": "Show the person a Connect button for an app (ID or slug) in a space; an agent’s own space is the default. A profile with no gaps means the app is ready.",
         "summary": "Ask the person to connect an app"
       }
     },

@@ -1,7 +1,7 @@
 import { AppProfiles } from "@ren/core/app/profiles"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
 import { ForbiddenError, NotFoundError } from "@ren/protocol/errors"
-import { Effect } from "effect"
+import { Effect, Option } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "../../api.js"
 import { Primitive } from "../../primitive.js"
@@ -45,7 +45,7 @@ export const AppProfileReachHandler = HttpApiBuilder.group(Api, "app-profile-rea
       )
       .handle("app.request-connect", (request) =>
         Effect.flatMap(Primitive.currentActor, (actor) =>
-          requirements.forApp(actor, request.params.app, request.query.spaceId),
+          requirements.forApp(actor, request.params.app, Option.fromUndefinedOr(request.query.spaceId)),
         ).pipe(
           Effect.catchTag("Primitive.NotFound", (error) => Effect.fail(new NotFoundError({ message: error.message }))),
         ),

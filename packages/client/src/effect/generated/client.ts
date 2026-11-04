@@ -694,7 +694,7 @@ const EndpointAppProfileReachSpaceProfiles =
 type AppProfileReachAppRequestConnectRequest = Parameters<RawClient["app-profile-reach"]["app.request-connect"]>[0]
 type AppProfileReachAppRequestConnectInput = {
   readonly app: AppProfileReachAppRequestConnectRequest["params"]["app"]
-  readonly spaceId: AppProfileReachAppRequestConnectRequest["query"]["spaceId"]
+  readonly spaceId?: AppProfileReachAppRequestConnectRequest["query"]["spaceId"]
 }
 const EndpointAppProfileReachAppRequestConnect =
   (raw: RawClient["app-profile-reach"]) => (input: AppProfileReachAppRequestConnectInput) =>
