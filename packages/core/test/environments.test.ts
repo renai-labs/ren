@@ -136,6 +136,17 @@ describe("Environments", () => {
       }),
   )
 
+  it.live("the first access provisions an environment of the template's last ready image (environments test 1)", () =>
+    Effect.gen(function* () {
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const session = yield* subjectIn(organizationId)
+      yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId, { image: "ffmpeg:1" }))
+      yield* subject.environments.access(session, Option.none())
+      expect((yield* Ref.get(subject.probe.provisioned)).map((made) => made.image)).toEqual([Option.some("ffmpeg:1")])
+    }),
+  )
+
   it.live("an access names the folder that the environment's sessions share and the egress of its provider", () =>
     Effect.gen(function* () {
       const egressOf = Effect.fnUntraced(function* (egress: boolean) {

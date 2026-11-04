@@ -2,8 +2,9 @@ import { describe, expect } from "bun:test"
 import { Signature } from "@ren/schema/signature"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
-import { ConfigProvider, Effect, Layer, Option, Ref, Schema } from "effect"
+import { ConfigProvider, Context, Effect, Layer, Option, Ref, Schedule, Schema } from "effect"
 import { Access } from "../src/access.js"
+import { DurableRunner } from "../src/durable-runner.js"
 import { EgressControl } from "../src/egress-control.js"
 import { EnvironmentTemplates } from "../src/environment-templates.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
@@ -19,6 +20,8 @@ const probe = await Effect.runPromise(TestProvider.make({ canLimitHosts: true })
 
 const fixed = await Effect.runPromise(TestProvider.make({ id: "fixed" }))
 
+const builder = await Effect.runPromise(TestProvider.make({ id: "built", builds: true }))
+
 const key = await Effect.runPromise(Signature.generate("environments"))
 
 const it = testEffect(
@@ -28,7 +31,14 @@ const it = testEffect(
     Space.layer,
     SpaceProvisioning.layer,
   ).pipe(
-    Layer.provideMerge(EnvironmentProvider.layer([Effect.succeed(probe.provider), Effect.succeed(fixed.provider)])),
+    Layer.provideMerge(
+      EnvironmentProvider.layer([
+        Effect.succeed(probe.provider),
+        Effect.succeed(fixed.provider),
+        Effect.succeed(builder.provider),
+      ]),
+    ),
+    Layer.provideMerge(DurableRunner.layerMemory),
     Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
     Layer.provideMerge(Testing.layer),
     Layer.provide(
@@ -113,6 +123,92 @@ describe("EnvironmentTemplates", () => {
       expect((yield* templates.update(setup.admin, made.id, { config: { label: "new" } })).config).toEqual({
         label: "new",
       })
+    }),
+  )
+
+  it.live(
+    "a save builds each new config once; a failed build keeps the last ready image; a template that never built cannot be chosen (environments test 4)",
+    () =>
+      Effect.gen(function* () {
+        const templates = yield* EnvironmentTemplates.Service
+        const spaces = yield* Space.Service
+        const setup = yield* team()
+        const built = (id: typeof made.id) =>
+          templates.get(setup.admin, id).pipe(
+            Effect.repeat({
+              until: (template) => template.buildStatus === "ready" || template.buildStatus === "failed",
+              schedule: Schedule.spaced("20 millis"),
+            }),
+            Effect.timeoutOrElse({
+              duration: "10 seconds",
+              orElse: () => Effect.die(new Error("The build did not end")),
+            }),
+          )
+        const made = yield* templates.create(setup.admin, { ...input, provider: EnvironmentProvider.ID.make("built") })
+        expect([made.buildStatus, made.image]).toEqual(["queued", null])
+        const environment = { kind: "template", environmentTemplateId: made.id } as const
+        expect(yield* spaces.update(setup.ada, setup.space.id, { environment }).pipe(Effect.flip)).toMatchObject({
+          _tag: "Primitive.Invalid",
+          field: "environment",
+        })
+        const ready = yield* built(made.id)
+        expect(ready.buildStatus).toBe("ready")
+        expect(ready.image).toStartWith("test-image:")
+        yield* templates.update(setup.admin, made.id, { name: "Renamed", config: input.config })
+        expect((yield* templates.get(setup.admin, made.id)).buildStatus).toBe("ready")
+        expect(yield* Ref.get(builder.builds)).toHaveLength(1)
+        expect((yield* spaces.update(setup.ada, setup.space.id, { environment })).environment).toEqual(environment)
+        yield* Ref.set(builder.buildFails, true)
+        yield* templates.update(setup.admin, made.id, { config: { label: "other" } })
+        expect(yield* built(made.id)).toMatchObject({
+          buildStatus: "failed",
+          image: ready.image,
+          buildError: "the test build fails",
+        })
+        yield* Ref.set(builder.buildFails, false)
+        yield* templates.update(setup.admin, made.id, { config: input.config })
+        expect(yield* built(made.id)).toMatchObject({ buildStatus: "ready", image: ready.image, buildError: null })
+        expect(yield* Ref.get(builder.builds)).toHaveLength(3)
+      }),
+  )
+
+  it.live("a new base image builds every template again when Ren starts (environments §3 Build rule 6)", () =>
+    Effect.gen(function* () {
+      const templates = yield* EnvironmentTemplates.Service
+      const setup = yield* team()
+      const made = yield* templates.create(setup.admin, { ...input, provider: EnvironmentProvider.ID.make("built") })
+      const first = yield* templates
+        .get(setup.admin, made.id)
+        .pipe(
+          Effect.repeat({
+            until: (template) => template.buildStatus === "ready",
+            schedule: Schedule.spaced("20 millis"),
+          }),
+          Effect.timeoutOrElse({
+            duration: "10 seconds",
+            orElse: () => Effect.die(new Error("The build did not end")),
+          }),
+        )
+      const rebased = yield* TestProvider.make({ id: "built", builds: true, base: "test-base:2" })
+      const context = yield* Layer.build(
+        Layer.fresh(EnvironmentTemplates.layer).pipe(
+          Layer.provide(EnvironmentProvider.layer([Effect.succeed(rebased.provider)])),
+          Layer.provide([Access.layer, DurableRunner.layerMemory]),
+        ),
+      )
+      const restarted = Context.get(context, EnvironmentTemplates.Service)
+      const rebuilt = yield* restarted.get(setup.admin, made.id).pipe(
+        Effect.repeat({
+          until: (template) => template.buildStatus === "ready" && template.image !== first.image,
+          schedule: Schedule.spaced("20 millis"),
+        }),
+        Effect.timeoutOrElse({
+          duration: "10 seconds",
+          orElse: () => Effect.die(new Error("No build after the restart")),
+        }),
+      )
+      expect(rebuilt.image).toStartWith("test-image:")
+      expect(yield* Ref.get(rebased.builds)).toHaveLength(1)
     }),
   )
 

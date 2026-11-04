@@ -242,6 +242,7 @@ export const environmentTemplate = Effect.fnUntraced(function* (
     readonly id?: EnvironmentTemplate.ID
     readonly provider?: string
     readonly sessionsPerEnvironment?: number
+    readonly image?: string
   } = {},
 ) {
   const database = yield* Database.Service
@@ -253,6 +254,7 @@ export const environmentTemplate = Effect.fnUntraced(function* (
     provider: EnvironmentProvider.ID.make(options.provider ?? "test"),
     config: { label: "seeded" },
     sessions_per_environment: options.sessionsPerEnvironment ?? 8,
+    image: options.image ?? null,
   })
   yield* chooseEnvironment(yield* team(organizationId), { kind: "template", environmentTemplateId: id })
   return id

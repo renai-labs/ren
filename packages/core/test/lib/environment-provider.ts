@@ -34,6 +34,7 @@ export const make = (
     readonly canMount?: boolean
     readonly canLimitHosts?: boolean
     readonly builds?: boolean
+    readonly base?: string
     readonly endpoint?: (
       environmentId: Environment.ID,
     ) => Effect.Effect<EnvironmentProvider.Endpoint, EnvironmentProvider.Gone>
@@ -68,7 +69,7 @@ export const make = (
       binding: Schema.Struct({ environmentId: Environment.ID }),
       ...(options.builds && {
         build: {
-          base: "test-base:1",
+          base: options.base ?? "test-base:1",
           run: (input) =>
             Effect.gen(function* () {
               yield* Ref.update(builds, (all) => [...all, input.tag])

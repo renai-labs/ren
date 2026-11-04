@@ -58,6 +58,7 @@ interface Definition<Config, Binding> {
   readonly build?: {
     // oxlint-disable-next-line ren/no-comments -- The image every build starts from. A new base changes every template's tag, so every template builds again (environments §3 Build rule 6).
     readonly base: string
+    // oxlint-disable-next-line ren/no-comments -- Gives the image of a tag it built before at once, without building again (EN25).
     readonly run: (input: BuildInput<Config>) => Effect.Effect<string, Failed>
   }
   readonly provision: (input: ProvisionInput<Config>) => Effect.Effect<Binding, Failed>

@@ -152,7 +152,10 @@ export const layer = Layer.effect(
     ) {
       if (environment.kind !== "template") return
       const found = yield* transaction
-        .select({ id: Database.Schema.environment_template.id })
+        .select({
+          buildStatus: Database.Schema.environment_template.build_status,
+          image: Database.Schema.environment_template.image,
+        })
         .from(Database.Schema.environment_template)
         .where(
           and(
@@ -162,8 +165,15 @@ export const layer = Layer.effect(
           ),
         )
         .for("share")
-      if (found.length === 0)
+      const template = found.at(0)
+      if (!template)
         return yield* new Primitive.Invalid({ message: "Environment template not found.", field: "environment" })
+      // oxlint-disable-next-line ren/no-comments -- environments §3 Build rule 4: a template is usable once it built, also while a later build runs or after it fails.
+      if (template.buildStatus !== "ready" && template.image === null)
+        return yield* new Primitive.Invalid({
+          message: "This environment template has not built yet. Choose it when its build is ready.",
+          field: "environment",
+        })
     })
 
     return Service.of({

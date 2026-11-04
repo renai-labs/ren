@@ -55,7 +55,7 @@ Done when: an admin creates a template with apt `ffmpeg`, npm `typescript` and `
 
 ### Build
 
-1. Saving a template with a changed config starts one build run in `DurableRunner` (`core/src/durable-runner.ts:16`). Its key is `environment-build:<templateId>:<hash>`. The hash covers the base image tag and the config, so saving the same config again starts nothing.
+1. Saving a template with a changed config starts one build run in `DurableRunner` (`core/src/durable-runner.ts:16`). Its key is `environment-build:<templateId>:<hash>`. The hash covers the base image tag and the config, so saving the same config again starts nothing. A key that finished does not run again, so a save that returns to an earlier config (A, B, then A) runs the build of A again outside `DurableRunner`; the provider gives the image of a tag that it built before without building it again.
 2. The E2B provider builds `FROM ren-environment-base:<hash>`, Ren's image with the executor and its start script and no brain. It adds one `RUN` per package manager, with ren-v1's commands (`ren-v1/packages/app/src/lib/environment-config.ts:12-26`), then one `RUN` per build command. It sets CPU and memory at build time, because E2B fixes them per template (`cell/e2b/stage.ts:13`). Prior art for the build: `cell/e2b/stage.ts:155-178`.
 3. The template keeps the state of its latest build: `build_status` (`queued`, `building`, `ready`, `failed`), `image` (the last `ready` image) and `build_error`.
 4. While a build runs or after it fails, chats use the last `ready` image. A space cannot select a template that has no `ready` image yet.

@@ -29,6 +29,8 @@ const Created = Schema.Struct({
 
 const Listed = Schema.Array(Schema.Struct({ sandboxID: Schema.String }))
 
+const Tags = Schema.Array(Schema.Struct({ tag: Schema.String }))
+
 const Requested = Schema.Struct({ templateID: Schema.String, buildID: Schema.String })
 
 const Status = Schema.Struct({
@@ -117,6 +119,12 @@ export const provider = Effect.gen(function* () {
       base: settings.base,
       run: Effect.fn("E2BEnvironment.build")(function* (input) {
         const name = `ren-environment-${Identifier.suffix(input.environmentTemplateId).toLowerCase()}`
+        const tags = yield* call("tags", e2b.send(HttpClientRequest.get(`/templates/${name}/tags`)))
+        if (
+          tags._tag === "Ok" &&
+          (yield* decode("tags", Tags)(tags.text)).some((existing) => existing.tag === input.tag)
+        )
+          return `${name}:${input.tag}`
         const requested = yield* call(
           "build",
           e2b.send(

@@ -3,10 +3,12 @@ export * as EnvironmentTemplates from "./environment-templates.js"
 import { Database } from "@ren/db/database"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { and, asc, count, eq, isNotNull, isNull, sql } from "drizzle-orm"
-import { Context, DateTime, Effect, Layer, Option, Predicate, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Predicate, Result, Schema } from "effect"
+import { WorkflowEngine } from "effect/workflow"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { EnvironmentProvider } from "./environment-provider.js"
+import { DurableRunner } from "./durable-runner.js"
 import { Primitive } from "./primitive.js"
 
 export type Interface = Primitive.Interface<typeof EnvironmentTemplate.definition>
@@ -16,6 +18,20 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/En
 const notFound = new Primitive.NotFound({ message: "Environment template not found." })
 
 const table = Database.Schema.environment_template
+
+// oxlint-disable-next-line ren/no-comments -- environments §3 Build rule 1: one run per template and tag; the tag is a hash of the base image and the config.
+const BuildRun = DurableRunner.make("EnvironmentBuild", {
+  payload: { environmentTemplateId: EnvironmentTemplate.ID, tag: Schema.String },
+  idempotencyKey: (payload) => `environment-build:${payload.environmentTemplateId}:${payload.tag}`,
+})
+
+export const tagOf = (base: string, config: Schema.Json) =>
+  new Bun.CryptoHasher("sha256")
+    .update(`${base}\0${JSON.stringify(config)}`)
+    .digest("hex")
+    .slice(0, 16)
+
+const isConfig = (config: Schema.Json) => sql`${table.config} = ${JSON.stringify(config)}::jsonb`
 
 const actions = {
   list: Primitive.action(EnvironmentTemplate.definition, "list"),
@@ -91,6 +107,75 @@ export const layer = Layer.effect(
         .for("update")
       return rows.at(0)
     })
+
+    // oxlint-disable-next-line ren/no-comments -- A result counts only while the template still has the config it built (EN7): a later save wins over an earlier build that ends after it.
+    const build = Effect.fn("EnvironmentTemplates.build")(function* (payload: typeof BuildRun.payloadSchema.Type) {
+      const row = (yield* database.db
+        .select()
+        .from(table)
+        .where(and(eq(table.id, payload.environmentTemplateId), isNull(table.archived_at)))
+        .pipe(Effect.orDie)).at(0)
+      const builder = Option.flatMap(Option.fromNullishOr(row), (found) =>
+        Option.flatMap(registry.get(found.provider), (provider) => provider.build),
+      )
+      if (!row || Option.isNone(builder) || tagOf(builder.value.base, row.config) !== payload.tag) return
+      const current = and(eq(table.id, row.id), isConfig(row.config))
+      yield* database.db.update(table).set({ build_status: "building" }).where(current).pipe(Effect.orDie)
+      const result = yield* builder.value
+        .run({ environmentTemplateId: row.id, config: row.config, tag: payload.tag })
+        .pipe(Effect.result)
+      yield* database.db
+        .update(table)
+        .set(
+          Result.isSuccess(result)
+            ? { build_status: "ready", image: result.success, build_error: null }
+            : { build_status: "failed", build_error: result.failure.message },
+        )
+        .where(current)
+        .pipe(Effect.orDie)
+    })
+    const engine = yield* WorkflowEngine.WorkflowEngine
+    const ensureBuild = yield* DurableRunner.supervised(BuildRun, build)
+    // oxlint-disable-next-line ren/no-comments -- EN25: a key that finished does not run again, so a return to an earlier config builds here; the provider gives a tag it built before at once.
+    const requestBuild = Effect.fn("EnvironmentTemplates.requestBuild")(function* (row: typeof table.$inferSelect) {
+      const builder = Option.flatMap(registry.get(row.provider), (provider) => provider.build)
+      if (Option.isNone(builder)) return
+      const payload = { environmentTemplateId: row.id, tag: tagOf(builder.value.base, row.config) }
+      const finished = yield* BuildRun.executionId(payload).pipe(
+        Effect.flatMap((executionId) => BuildRun.poll(executionId)),
+        Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+      )
+      yield* Option.isSome(finished) ? Effect.forkDetach(build(payload)) : ensureBuild(payload)
+    })
+    // oxlint-disable-next-line ren/no-comments -- At start: a template whose tag has no run, such as after a new base image (Build rule 6), builds; one left queued or building after its run finished builds again (EN25).
+    yield* database.db
+      .select()
+      .from(table)
+      .where(isNull(table.archived_at))
+      .pipe(
+        Effect.orDie,
+        Effect.flatMap((rows) =>
+          Effect.forEach(
+            rows,
+            (row) =>
+              row.build_status === "queued" || row.build_status === "building"
+                ? requestBuild(row)
+                : Option.match(
+                    Option.flatMap(registry.get(row.provider), (provider) => provider.build),
+                    {
+                      onNone: () => Effect.void,
+                      onSome: (builder) =>
+                        ensureBuild({ environmentTemplateId: row.id, tag: tagOf(builder.base, row.config) }),
+                    },
+                  ),
+            { discard: true },
+          ),
+        ),
+        Effect.catchCause((cause) => Effect.logError("The environment builds could not be checked at start", cause)),
+        Effect.forkScoped,
+      )
+    const isBuilt = (provider: EnvironmentProvider.ID) =>
+      Option.isNone(Option.flatMap(registry.get(provider), (found) => found.build))
 
     const destroyEnvironments = Effect.fn("EnvironmentTemplates.destroyEnvironments")(function* (
       provider: EnvironmentProvider.ID,
@@ -183,11 +268,13 @@ export const layer = Layer.effect(
             config,
             sessions_per_environment: input.sessionsPerEnvironment,
             networking: input.networking,
+            build_status: isBuilt(input.provider) ? "ready" : "queued",
           })
           .returning()
           .pipe(Effect.orDie)
         const row = rows.at(0)
         if (!row) return yield* notFound
+        yield* requestBuild(row)
         return toInfo(row)
       }),
       update: Effect.fn("EnvironmentTemplates.update")(function* (
@@ -195,7 +282,7 @@ export const layer = Layer.effect(
         id: EnvironmentTemplate.ID,
         input: EnvironmentTemplate.UpdateInput,
       ) {
-        return yield* database.transaction((transaction) =>
+        const saved = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const found = yield* findForUpdate(transaction, actor, id)
             if (!found || found.archived_at) return yield* notFound
@@ -205,6 +292,10 @@ export const layer = Layer.effect(
               ? undefined
               : yield* checkConfig(yield* providerOf(found.provider), input.config)
             if (input.networking) yield* checkNetworking(yield* providerOf(found.provider), input.networking)
+            const isRebuilt =
+              config !== undefined &&
+              JSON.stringify(config) !== JSON.stringify(found.config) &&
+              !isBuilt(found.provider)
             const updated = yield* transaction
               .update(table)
               .set({
@@ -213,15 +304,18 @@ export const layer = Layer.effect(
                 config,
                 sessions_per_environment: input.sessionsPerEnvironment,
                 networking: input.networking,
+                ...(isRebuilt && { build_status: "queued" as const }),
                 updated_at: sql`now()`,
               })
               .where(eq(table.id, id))
               .returning()
             const row = updated.at(0)
             if (!row) return yield* notFound
-            return toInfo(row)
+            return { row, isRebuilt }
           }),
         )
+        if (saved.isRebuilt) yield* requestBuild(saved.row)
+        return toInfo(saved.row)
       }),
       archive: Effect.fn("EnvironmentTemplates.archive")(function* (actor: Actor.Info, id: EnvironmentTemplate.ID) {
         const archived = yield* database.transaction((transaction) =>
