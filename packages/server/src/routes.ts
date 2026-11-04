@@ -29,7 +29,6 @@ import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
 import { Space } from "@ren/core/space"
-import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
 import { ReferenceCheck } from "@ren/core/reference-check"
 import { RepositoryHosts } from "@ren/core/repository-hosts"
@@ -79,7 +78,6 @@ import { HostPullHandler } from "./handlers/ren-host/pull.js"
 import { HostTokenHandler } from "./handlers/ren-host/token.js"
 import { SessionHandler } from "./handlers/api/session.js"
 import { SpaceHandler } from "./handlers/api/space.js"
-import { SpaceEnvironmentTemplateHandler } from "./handlers/api/space-environment-template.js"
 import { SpaceMemberHandler } from "./handlers/api/space-member.js"
 import { SpaceSettingsHandler } from "./handlers/api/space-settings.js"
 import { TaskHandler } from "./handlers/api/task.js"
@@ -153,7 +151,6 @@ export const layer = Layer.mergeAll(
         SpaceMemberHandler,
         EnvironmentTemplateHandler,
         EnvironmentProviderHandler,
-        SpaceEnvironmentTemplateHandler,
         SpaceSettingsHandler,
         OrganizationSettingsHandler,
         MemoryHandler,
@@ -192,7 +189,6 @@ export const layer = Layer.mergeAll(
         Space.layer,
         SpaceMember.layer,
         EnvironmentTemplates.layer,
-        SpaceEnvironmentTemplate.layer,
         Memory.layer,
         Insights.layer.pipe(Layer.provide(Space.layer)),
         settingsAndAgents,

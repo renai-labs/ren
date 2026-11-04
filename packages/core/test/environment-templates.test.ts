@@ -9,7 +9,6 @@ import { EnvironmentTemplates } from "../src/environment-templates.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { Space } from "../src/space.js"
-import { SpaceEnvironmentTemplate } from "../src/space/environment-template.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/environment-provider.js"
@@ -23,7 +22,6 @@ const key = await Effect.runPromise(Signature.generate("environments"))
 const it = testEffect(
   Layer.mergeAll(
     EnvironmentTemplates.layer,
-    SpaceEnvironmentTemplate.layer,
     Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
     Space.layer,
     SpaceProvisioning.layer,
@@ -67,7 +65,8 @@ const input = {
   provider: EnvironmentProvider.ID.make("test"),
   config: { label: "python" },
   sessionsPerEnvironment: 2,
-}
+  networking: { type: "unrestricted" },
+} as const
 
 describe("EnvironmentTemplates", () => {
   it.live("an admin makes an org environment template; the provider checks the config and keeps its own form", () =>
@@ -80,10 +79,19 @@ describe("EnvironmentTemplates", () => {
         provider: "test",
         config: { label: "python" },
         sessionsPerEnvironment: 2,
+        networking: { type: "unrestricted" },
+        buildStatus: "ready",
         archivedAt: null,
       })
       expect(yield* templates.get(setup.admin, made.id)).toEqual(made)
       expect((yield* templates.list(setup.admin, page)).items).toEqual([made])
+      const networking = {
+        type: "limited",
+        allowPackageManagers: true,
+        allowMcpServers: false,
+        allowedHosts: ["api.example.com", "*.example.org"],
+      } as const
+      expect((yield* templates.update(setup.admin, made.id, { networking })).networking).toEqual(networking)
     }),
   )
 
@@ -121,61 +129,59 @@ describe("EnvironmentTemplates", () => {
     }),
   )
 
-  it.live(
-    "a member of a space links an org environment template to it; archiving the link ends its sessions' access",
-    () =>
-      Effect.gen(function* () {
-        const templates = yield* EnvironmentTemplates.Service
-        const links = yield* SpaceEnvironmentTemplate.Service
-        const environments = yield* Environments.Service
-        const setup = yield* team()
-        const grace = yield* user(setup.organizationId)
-        const made = yield* templates.create(setup.admin, input)
-        const link = { spaceId: setup.space.id, environmentTemplateId: made.id }
-        expect((yield* links.create(grace, link).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
-        const linked = yield* links.create(setup.ada, link)
-        expect((yield* links.create(setup.ada, link).pipe(Effect.flip))._tag).toBe("Primitive.Conflict")
-        expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([linked])
-        expect((yield* links.list(grace, { ...page, spaceId: setup.space.id })).items).toEqual([])
-        const session = yield* Seed.subject(setup.organizationId, setup.space.id)
-        yield* environments.bind(session, made.id)
-        yield* environments.access(session, Option.none())
-        expect((yield* links.archive(setup.ada, linked.id)).archivedAt).not.toBeNull()
-        expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([])
-        expect((yield* environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe(
-          "Environments.NotFound",
-        )
-      }),
-  )
-
-  it.live("a space cannot link another organization's environment template", () =>
+  it.live("a member of a space chooses an org environment template for it; a person outside the space cannot", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
-      const links = yield* SpaceEnvironmentTemplate.Service
+      const spaces = yield* Space.Service
+      const environments = yield* Environments.Service
+      const setup = yield* team()
+      const grace = yield* user(setup.organizationId)
+      const made = yield* templates.create(setup.admin, input)
+      const environment = { kind: "template", environmentTemplateId: made.id } as const
+      expect(setup.space.environment).toEqual({ kind: "default" })
+      expect((yield* spaces.update(grace, setup.space.id, { environment }).pipe(Effect.flip))._tag).toBe(
+        "Primitive.NotFound",
+      )
+      expect((yield* spaces.update(setup.ada, setup.space.id, { environment })).environment).toEqual(environment)
+      expect((yield* spaces.get(setup.ada, setup.space.id)).environment).toEqual(environment)
+      const session = yield* Seed.subject(setup.organizationId, setup.space.id)
+      yield* environments.bind(session, made.id)
+      expect((yield* environments.access(session, Option.none())).generation).toBe(1)
+      expect((yield* spaces.update(setup.ada, setup.space.id, { environment: { kind: "none" } })).environment).toEqual({
+        kind: "none",
+      })
+    }),
+  )
+
+  it.live("a space cannot choose another organization's environment template or an archived one", () =>
+    Effect.gen(function* () {
+      const templates = yield* EnvironmentTemplates.Service
+      const spaces = yield* Space.Service
       const setup = yield* team()
       const elsewhere = yield* team()
       const foreign = yield* templates.create(elsewhere.admin, input)
-      expect(
-        (yield* links
-          .create(setup.ada, { spaceId: setup.space.id, environmentTemplateId: foreign.id })
-          .pipe(Effect.flip))._tag,
-      ).toBe("Primitive.NotFound")
-      expect(
-        (yield* links
-          .create(elsewhere.admin, { spaceId: setup.space.id, environmentTemplateId: foreign.id })
-          .pipe(Effect.flip))._tag,
-      ).toBe("Primitive.NotFound")
+      const archived = yield* templates.create(setup.admin, input)
+      yield* templates.archive(setup.admin, archived.id)
+      const choose = (environmentTemplateId: typeof foreign.id) =>
+        spaces
+          .update(setup.ada, setup.space.id, { environment: { kind: "template", environmentTemplateId } })
+          .pipe(Effect.flip)
+      expect(yield* choose(foreign.id)).toMatchObject({ _tag: "Primitive.Invalid", field: "environment" })
+      expect(yield* choose(archived.id)).toMatchObject({ _tag: "Primitive.Invalid", field: "environment" })
+      expect((yield* spaces.get(setup.ada, setup.space.id)).environment).toEqual({ kind: "default" })
     }),
   )
 
   it.live("archiving hides an environment template, ends its sessions' access and destroys its environments", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
-      const links = yield* SpaceEnvironmentTemplate.Service
+      const spaces = yield* Space.Service
       const environments = yield* Environments.Service
       const setup = yield* team()
       const made = yield* templates.create(setup.admin, input)
-      yield* links.create(setup.ada, { spaceId: setup.space.id, environmentTemplateId: made.id })
+      yield* spaces.update(setup.ada, setup.space.id, {
+        environment: { kind: "template", environmentTemplateId: made.id },
+      })
       const session = yield* Seed.subject(setup.organizationId, setup.space.id)
       yield* environments.bind(session, made.id)
       yield* environments.access(session, Option.none())

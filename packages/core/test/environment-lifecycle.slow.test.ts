@@ -193,7 +193,7 @@ const start = async (input: { readonly withTemplate?: boolean; readonly first?: 
           sessionId,
           harness: "opencode",
           interactive: false,
-          ...(input.withTemplate !== false && { environmentTemplateId }),
+          environment: input.withTemplate === false ? { kind: "default" } : { kind: "template", environmentTemplateId },
           ...(input.first && {
             initialMessage: {
               messageId: Session.MessageID.create(),

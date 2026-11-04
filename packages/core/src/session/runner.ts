@@ -13,6 +13,7 @@ import { AgentQueries } from "../agent/queries.js"
 import { BrainHost } from "../brain-host.js"
 import { Brains } from "../brains.js"
 import { BrainRegistry } from "../brain-registry.js"
+import { SpaceQueries } from "../space/queries.js"
 import { OpenCodeStore } from "./opencode-store.js"
 
 export class NotFound extends Schema.TaggedError<NotFound>()("SessionRunner.NotFound", { message: Schema.String }) {}
@@ -41,10 +42,12 @@ export interface Info extends Owner {
   readonly updatedAt: DateTime.Utc | null
 }
 
+export type CreateInput = Omit<Session.StartInput, "environment">
+
 export interface Interface {
   readonly create: (
     owner: Owner,
-    input: Session.StartInput,
+    input: CreateInput,
     options?: { readonly agentId?: Agent.ID },
   ) => Effect.Effect<void, AlreadyExists | NotFound | Brains.BrainRejectedError>
   readonly send: (
@@ -71,13 +74,22 @@ export const layer = Layer.effect(
     return Service.of({
       create: Effect.fn("SessionRunner.create")(function* (
         owner: Owner,
-        input: Session.StartInput,
+        input: CreateInput,
         options: { readonly agentId?: Agent.ID } = {},
       ) {
-        const startInput = yield* Schema.encodeEffect(Session.StartInput)(input).pipe(Effect.orDie)
         const brainId = yield* registry.assign({ ...owner, sessionId: input.sessionId })
         const created = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
+            const space = (yield* transaction
+              .select({
+                environment: Database.Schema.space.environment,
+                environment_template_id: Database.Schema.space.environment_template_id,
+              })
+              .from(Database.Schema.space)
+              .where(eq(Database.Schema.space.id, owner.spaceId))
+              .for("share")).at(0)
+            if (!space) return yield* new NotFound({ message: "Space not found." })
+            const start = { ...input, environment: SpaceQueries.environmentOf(space) }
             if (
               options.agentId &&
               (yield* transaction
@@ -95,7 +107,7 @@ export const layer = Layer.effect(
                 .for("share")).length === 0
             )
               return yield* new NotFound({ message: "Agent not found." })
-            return yield* transaction
+            const rows = yield* transaction
               .insert(Database.Schema.agent_session)
               .values({
                 id: input.sessionId,
@@ -107,15 +119,16 @@ export const layer = Layer.effect(
                 brain_id: brainId,
                 harness: input.harness,
                 agent_id: options.agentId,
-                start_input: startInput,
+                start_input: yield* Schema.encodeEffect(Session.StartInput)(start).pipe(Effect.orDie),
                 started_at: null,
               })
               .onConflictDoNothing()
               .returning({ id: Database.Schema.agent_session.id })
+            return { start, isNew: rows.length > 0 }
           }),
         )
-        if (created.length === 0) return yield* alreadyExists
-        yield* brain.start(input, { ...owner, brainId })
+        if (!created.isNew) return yield* alreadyExists
+        yield* brain.start(created.start, { ...owner, brainId })
       }),
       send: Effect.fn("SessionRunner.send")(function* (input: Session.SendInput) {
         yield* Effect.annotateCurrentSpan("ren.session.id", input.sessionId)

@@ -128,6 +128,7 @@ describe("brain runs", () => {
       sessionId: found.sessionId,
       harness: "opencode" as const,
       interactive: false,
+      environment: { kind: "default" as const },
       initialMessage: {
         messageId: Session.MessageID.create(),
         prompt: { text: `${script.marker} hello` },

@@ -65,6 +65,7 @@ export const chat = Effect.fnUntraced(function* (initial: Models.Access) {
           sessionId,
           harness: "opencode",
           interactive: true,
+          environment: { kind: "default" },
           ...input,
           initialMessage: {
             messageId: Session.MessageID.create(),

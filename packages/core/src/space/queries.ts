@@ -13,6 +13,18 @@ import { SpacePolicy } from "./policy.js"
 
 export const membership = alias(Database.Schema.space_member, "membership")
 
+export const environmentOf = (
+  row: Pick<typeof Database.Schema.space.$inferSelect, "environment" | "environment_template_id">,
+): Space.Environment =>
+  row.environment_template_id
+    ? { kind: "template", environmentTemplateId: row.environment_template_id }
+    : { kind: row.environment === "none" ? "none" : "default" }
+
+export const environmentColumns = (environment: Space.Environment) => ({
+  environment: environment.kind,
+  environment_template_id: environment.kind === "template" ? environment.environmentTemplateId : null,
+})
+
 export const membershipOf = (actor: Actor.Info) =>
   and(
     eq(membership.space_id, Database.Schema.space.id),

@@ -47,6 +47,32 @@ describe("SessionRunner", () => {
     }),
   )
 
+  it.live("create starts a chat with the environment that its space chose at that time", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionRunner.Service
+      const database = yield* Database.Service
+      const owner = yield* Seed.owner()
+      const environmentTemplateId = yield* Seed.environmentTemplate(owner.organizationId)
+      yield* Seed.chooseEnvironmentTemplate(owner.spaceId, environmentTemplateId)
+      const chosen = Session.ID.create()
+      yield* sessions.create(owner, { sessionId: chosen, harness: "opencode", interactive: true })
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ environment: "none", environment_template_id: null })
+        .where(eq(Database.Schema.space.id, owner.spaceId))
+      const none = Session.ID.create()
+      yield* sessions.create(owner, { sessionId: none, harness: "opencode", interactive: true })
+      const environmentOf = (sessionId: Session.ID) =>
+        database.db
+          .select({ startInput: Database.Schema.agent_session.start_input })
+          .from(Database.Schema.agent_session)
+          .where(eq(Database.Schema.agent_session.id, sessionId))
+          .pipe(Effect.map((rows) => rows.map((row) => row.startInput?.environment)))
+      expect(yield* environmentOf(chosen)).toEqual([{ kind: "template", environmentTemplateId }])
+      expect(yield* environmentOf(none)).toEqual([{ kind: "none" }])
+    }),
+  )
+
   it.live(
     "create with a subagent, an archived agent or another space's agent fails with NotFound and stores no session",
     () =>

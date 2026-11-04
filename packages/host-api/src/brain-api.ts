@@ -14,7 +14,7 @@ import {
 export const hostTokenHeader = "ren-host-token"
 
 export const StartBody = Session.StartInput.mapFields((fields) => ({
-  ...Struct.omit(fields, ["environmentTemplateId"]),
+  ...Struct.omit(fields, ["environment"]),
   directory: Schema.optionalKey(
     Environment.Directory.annotate({
       description: "The session’s directory on its environment. Only a session with an environment has one.",

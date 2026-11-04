@@ -8,7 +8,6 @@ import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { eq, sql } from "drizzle-orm"
 import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
 import { EnvironmentProvider } from "../src/environment-provider.js"
@@ -85,11 +84,11 @@ describe("Environments", () => {
         const subject = yield* environmentsWith()
         const organizationId = yield* Seed.organization()
         const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
-        const other = yield* Seed.environmentTemplate(organizationId)
         const foreign = yield* Seed.environmentTemplate(yield* Seed.organization())
         const session = yield* subjectIn(organizationId)
         yield* subject.environments.bind(session, environmentTemplateId)
         expect((yield* subject.environments.bind(session, environmentTemplateId)).isNew).toBe(false)
+        const other = yield* Seed.environmentTemplate(organizationId)
         expect((yield* subject.environments.bind(session, other).pipe(Effect.flip))._tag).toBe("Environments.Changed")
         expect(
           (yield* subject.environments.bind(yield* subjectIn(organizationId), foreign).pipe(Effect.flip))._tag,
@@ -100,27 +99,24 @@ describe("Environments", () => {
       }),
   )
 
-  it.live("a session uses only an environment template linked to its space, and loses it when the link goes", () =>
+  it.live("a session binds only to the environment template that its space chose", () =>
     Effect.gen(function* () {
       const subject = yield* environmentsWith()
-      const database = yield* Database.Service
       const organizationId = yield* Seed.organization()
       const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
       const session = yield* subjectIn(organizationId)
-      const elsewhere = { ...session, sessionId: Session.ID.create(), spaceId: Space.ID.create() }
+      const otherSpace = yield* Seed.space(organizationId)
+      const elsewhere = { ...session, sessionId: Session.ID.create(), spaceId: otherSpace }
       expect((yield* subject.environments.bind(elsewhere, environmentTemplateId).pipe(Effect.flip))._tag).toBe(
         "Environments.NotFound",
       )
+      expect(
+        (yield* subject.environments
+          .bind({ ...session, sessionId: Session.ID.create(), spaceId: Space.ID.create() }, environmentTemplateId)
+          .pipe(Effect.flip))._tag,
+      ).toBe("Environments.NotFound")
       yield* subject.environments.bind(session, environmentTemplateId)
-      yield* subject.environments.access(session, Option.none())
-      yield* database.db
-        .update(Database.Schema.space_environment_template)
-        .set({ archived_at: new Date() })
-        .where(eq(Database.Schema.space_environment_template.environment_template_id, environmentTemplateId))
-      expect((yield* subject.environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe(
-        "Environments.NotFound",
-      )
-      expect(yield* subject.environments.findDirectory(session, Option.none())).toEqual(Option.none())
+      expect((yield* subject.environments.access(session, Option.none())).generation).toBe(1)
     }),
   )
 
@@ -197,20 +193,15 @@ describe("Environments", () => {
   )
 
   it.live(
-    "one template linked to two spaces never puts their sessions in one environment (private-spaces test 10)",
+    "one template that two spaces chose never puts their sessions in one environment (private-spaces test 10)",
     () =>
       Effect.gen(function* () {
         const subject = yield* environmentsWith()
         const organizationId = yield* Seed.organization()
         const environmentTemplateId = yield* Seed.environmentTemplate(organizationId, { sessionsPerEnvironment: 4 })
-        const database = yield* Database.Service
         const shared = yield* subjectIn(organizationId)
         const otherSpace = yield* Seed.space(organizationId)
-        yield* database.db.insert(Database.Schema.space_environment_template).values({
-          id: SpaceEnvironmentTemplate.ID.create(),
-          space_id: otherSpace,
-          environment_template_id: environmentTemplateId,
-        })
+        yield* Seed.chooseEnvironmentTemplate(otherSpace, environmentTemplateId)
         const other = yield* Seed.subject(organizationId, otherSpace)
         yield* Effect.forEach([shared, other], (session) => subject.environments.bind(session, environmentTemplateId), {
           discard: true,

@@ -1,11 +1,13 @@
 import { Auth } from "@ren/schema/auth"
 import { Primitive } from "@ren/schema/primitive"
 import type { Brain } from "@ren/schema/brain"
+import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Factory } from "@ren/schema/factory"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
 import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { organization, user } from "./auth.sql.js"
+import { environment_template } from "./environment-template.sql.js"
 
 export const spaceMemberUserConstraint = "space_member_space_id_user_id_uidx"
 
@@ -31,6 +33,10 @@ export const space = pgTable(
     name: text().notNull(),
     description: text(),
     brain_scope: text().$type<Brain.Scope>().notNull().default("space"),
+    environment: text().$type<Space.Environment["kind"]>().notNull().default("default"),
+    environment_template_id: text()
+      .$type<EnvironmentTemplate.ID>()
+      .references(() => environment_template.id),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),
@@ -42,7 +48,13 @@ export const space = pgTable(
     uniqueIndex(privateSpaceOwnerConstraint)
       .on(table.organization_id, table.owner_user_id)
       .where(sql`${table.kind} = 'private' and ${table.archived_at} is null`),
+    index("space_environment_template_id_idx").on(table.environment_template_id),
     check("space_kind_check", sql`${table.kind} in ('shared', 'private')`),
+    check("space_environment_check", sql`${table.environment} in ('default', 'template', 'none')`),
+    check(
+      "space_environment_template_check",
+      sql`(${table.environment} = 'template') = (${table.environment_template_id} is not null)`,
+    ),
     check("space_owner_check", sql`(${table.kind} = 'private') = (${table.owner_user_id} is not null)`),
     check(
       "space_name_length_check",

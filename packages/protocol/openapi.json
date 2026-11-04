@@ -1201,247 +1201,6 @@
         "summary": "List environment providers"
       }
     },
-    "/space-environment-templates": {
-      "get": {
-        "tags": ["space-environment-template"],
-        "operationId": "space-environment-template.list",
-        "parameters": [
-          {
-            "name": "spaceId",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/Space.ID"
-            },
-            "required": true
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
-            },
-            "required": false
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
-            },
-            "required": false
-          }
-        ],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceEnvironmentTemplate.Page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Page"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Return one page of the space-environment-templates that the caller can see.",
-        "summary": "List space-environment-templates"
-      },
-      "post": {
-        "tags": ["space-environment-template"],
-        "operationId": "space-environment-template.create",
-        "parameters": [],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceEnvironmentTemplate.Info",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Info"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "ConflictError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConflictErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Create one space-environment-template.",
-        "summary": "Create space-environment-template",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SpaceEnvironmentTemplate.CreateInput"
-              }
-            }
-          },
-          "required": true
-        }
-      }
-    },
-    "/space-environment-templates/{id}": {
-      "delete": {
-        "tags": ["space-environment-template"],
-        "operationId": "space-environment-template.archive",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "schema": {
-              "$ref": "#/components/schemas/SpaceEnvironmentTemplate.ID"
-            },
-            "required": true
-          }
-        ],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceEnvironmentTemplate.Info",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Info"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "ConflictError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConflictErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Archive one space-environment-template and return it. Archiving an archived space-environment-template returns it unchanged.",
-        "summary": "Archive space-environment-template"
-      }
-    },
     "/space-settings/{idOrSlug}": {
       "get": {
         "tags": ["space-settings"],
@@ -12988,7 +12747,8 @@
           {
             "type": "string",
             "maxLength": 253,
-            "pattern": "^(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]*[a-z0-9]$"
+            "pattern": "^(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]*[a-z0-9]$",
+            "description": "A host name, or `*.<domain>` for its subdomains."
           }
         ],
         "description": "A host that may get the credential: a name, `*.<domain>` for its subdomains, or `*` for any host."
@@ -13990,6 +13750,11 @@
           "$ref": "#/components/schemas/EnvironmentProvider.Info"
         }
       },
+      "EnvironmentTemplate.BuildStatus": {
+        "type": "string",
+        "enum": ["queued", "building", "ready", "failed"],
+        "description": "The state of the latest build of the image. A provider that builds no image is ready at once."
+      },
       "EnvironmentTemplate.CreateInput": {
         "type": "object",
         "properties": {
@@ -14019,6 +13784,9 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 100
+          },
+          "networking": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.Networking_1"
           }
         },
         "required": ["name", "provider", "config"],
@@ -14040,6 +13808,9 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 100
+          },
+          "networking": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.Networking_1"
           }
         },
         "required": ["provider", "config"],
@@ -14080,6 +13851,34 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "networking": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.Networking"
+          },
+          "buildStatus": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.BuildStatus"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last image that built. New environments use it while a later build runs or after it fails."
+          },
+          "buildError": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the latest build failed."
+          },
           "createdAt": {
             "type": "string"
           },
@@ -14105,11 +13904,99 @@
           "provider",
           "config",
           "sessionsPerEnvironment",
+          "networking",
+          "buildStatus",
+          "image",
+          "buildError",
           "createdAt",
           "updatedAt",
           "archivedAt"
         ],
         "additionalProperties": false
+      },
+      "EnvironmentTemplate.Networking": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["unrestricted"]
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["limited"]
+              },
+              "allowPackageManagers": {
+                "type": "boolean",
+                "description": "Allow the hosts of npm, PyPI, the Debian and Ubuntu mirrors and the Go module proxy."
+              },
+              "allowMcpServers": {
+                "type": "boolean",
+                "description": "Allow the hosts of the MCP servers of the space."
+              },
+              "allowedHosts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/HostName.Pattern"
+                },
+                "maxItems": 100
+              }
+            },
+            "required": ["type", "allowPackageManagers", "allowMcpServers", "allowedHosts"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "Where an environment can connect. A limited environment always reaches the hosts of the credentials of its space."
+      },
+      "EnvironmentTemplate.Networking_1": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["unrestricted"]
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["limited"]
+              },
+              "allowPackageManagers": {
+                "type": "boolean",
+                "description": "Allow the hosts of npm, PyPI, the Debian and Ubuntu mirrors and the Go module proxy."
+              },
+              "allowMcpServers": {
+                "type": "boolean",
+                "description": "Allow the hosts of the MCP servers of the space."
+              },
+              "allowedHosts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/HostName.Pattern"
+                },
+                "maxItems": 100
+              }
+            },
+            "required": ["type", "allowPackageManagers", "allowMcpServers", "allowedHosts"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "Where an environment can connect. A limited environment always reaches the hosts of the credentials of its space."
       },
       "EnvironmentTemplate.Page": {
         "type": "object",
@@ -14184,6 +14071,16 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "networking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentTemplate.Networking"
               },
               {
                 "type": "null"
@@ -14344,6 +14241,12 @@
             "enum": ["ok"]
           }
         ]
+      },
+      "HostName.Pattern": {
+        "type": "string",
+        "maxLength": 253,
+        "pattern": "^(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]*[a-z0-9]$",
+        "description": "A host name, or `*.<domain>` for its subdomains."
       },
       "Infra.Applied": {
         "type": "object",
@@ -19555,6 +19458,47 @@
         "required": ["name"],
         "additionalProperties": false
       },
+      "Space.Environment": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["default"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["template"]
+              },
+              "environmentTemplateId": {
+                "$ref": "#/components/schemas/EnvironmentTemplate.ID"
+              }
+            },
+            "required": ["kind", "environmentTemplateId"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["none"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "Where the chats of the space run their tools: Ren’s standard environment, an environment of a template, or none (no file or shell tools)."
+      },
       "Space.ID": {
         "type": "string",
         "pattern": "^spc_"
@@ -19616,6 +19560,9 @@
           "brainScope": {
             "$ref": "#/components/schemas/Brain.Scope"
           },
+          "environment": {
+            "$ref": "#/components/schemas/Space.Environment"
+          },
           "memberCount": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -19676,6 +19623,7 @@
           "name",
           "description",
           "brainScope",
+          "environment",
           "memberCount",
           "membershipId",
           "factory",
@@ -19775,46 +19723,11 @@
                 "type": "null"
               }
             ]
-          }
-        },
-        "additionalProperties": false
-      },
-      "SpaceEnvironmentTemplate.CreateInput": {
-        "type": "object",
-        "properties": {
-          "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
           },
-          "environmentTemplateId": {
-            "$ref": "#/components/schemas/EnvironmentTemplate.ID"
-          }
-        },
-        "required": ["spaceId", "environmentTemplateId"],
-        "additionalProperties": false
-      },
-      "SpaceEnvironmentTemplate.ID": {
-        "type": "string",
-        "pattern": "^spe_"
-      },
-      "SpaceEnvironmentTemplate.Info": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/SpaceEnvironmentTemplate.ID"
-          },
-          "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
-          },
-          "environmentTemplateId": {
-            "$ref": "#/components/schemas/EnvironmentTemplate.ID"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "archivedAt": {
+          "environment": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Space.Environment"
               },
               {
                 "type": "null"
@@ -19822,35 +19735,6 @@
             ]
           }
         },
-        "required": ["id", "spaceId", "environmentTemplateId", "createdAt", "archivedAt"],
-        "additionalProperties": false
-      },
-      "SpaceEnvironmentTemplate.Page": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Info"
-            }
-          },
-          "page": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "pageSize": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "total": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
       },
       "SpaceMember.Active": {
@@ -21494,9 +21378,6 @@
     },
     {
       "name": "environmentProvider"
-    },
-    {
-      "name": "space-environment-template"
     },
     {
       "name": "space-settings"

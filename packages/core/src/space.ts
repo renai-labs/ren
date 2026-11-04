@@ -105,6 +105,7 @@ export const layer = Layer.effect(
           name: row.space.name,
           description: canRead ? row.space.description : null,
           brainScope: row.space.brain_scope,
+          environment: SpaceQueries.environmentOf(row.space),
           memberCount: row.memberCount,
           membershipId: row.membershipId,
           factory: canRead ? TaskFactory.keep(row.space.factory, row.usable) : Factory.empty,
@@ -142,6 +143,27 @@ export const layer = Layer.effect(
       const resource = resourceOf(actor, row)
       if (!access.isAllowed({ actor, action: actions.get, resource })) return
       return { row, resource }
+    })
+
+    const checkEnvironment = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      environment: Space.Environment,
+    ) {
+      if (environment.kind !== "template") return
+      const found = yield* transaction
+        .select({ id: Database.Schema.environment_template.id })
+        .from(Database.Schema.environment_template)
+        .where(
+          and(
+            eq(Database.Schema.environment_template.id, environment.environmentTemplateId),
+            eq(Database.Schema.environment_template.organization_id, actor.organizationId),
+            isNull(Database.Schema.environment_template.archived_at),
+          ),
+        )
+        .for("share")
+      if (found.length === 0)
+        return yield* new Primitive.Invalid({ message: "Environment template not found.", field: "environment" })
     })
 
     return Service.of({
@@ -229,12 +251,14 @@ export const layer = Layer.effect(
                   field: "factory",
                 })
             }
+            if (input.environment) yield* checkEnvironment(transaction, actor, input.environment)
             const updated = yield* transaction
               .update(Database.Schema.space)
               .set({
                 name: input.name,
                 description: input.description,
                 brain_scope: input.brainScope,
+                ...(input.environment && SpaceQueries.environmentColumns(input.environment)),
                 factory: input.factory,
                 updated_at: sql`now()`,
               })

@@ -3,6 +3,7 @@ export * as Credential from "./credential.js"
 import { Effect, Schema } from "effect"
 import { AppIdentity } from "./app/identity.js"
 import { Auth } from "./auth.js"
+import { HostName } from "./host-name.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
@@ -178,17 +179,11 @@ export const Label = EnvName.check(
 })
 export type Label = typeof Label.Type
 
-const hostLabel = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
-
 const privateSuffixes = [".localhost", ".local", ".internal", ".lan", ".localdomain", ".home.arpa"]
 
 export const anyHost = "*"
 
-const NamedHost = Schema.String.check(
-  Schema.isMaxLength(253),
-  Schema.isPattern(new RegExp(`^(?:\\*\\.)?(?:${hostLabel}\\.)+[a-z][a-z0-9-]*[a-z0-9]$`, "u"), {
-    message: "Use a host name such as api.example.com, or *.example.com.",
-  }),
+const NamedHost = HostName.Pattern.check(
   Schema.makeFilter(
     (host) => host.replace(/^\*\./u, "").includes(".") || "A wildcard covers the subdomains of one domain.",
   ),

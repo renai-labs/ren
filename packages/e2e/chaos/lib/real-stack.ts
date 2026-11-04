@@ -31,7 +31,6 @@ import type { Agent as AgentSchema } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import type { Session as SessionSchema } from "@ren/schema/session"
-import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
@@ -182,15 +181,6 @@ export const start = async (options: {
           })),
         )
         .pipe(
-          Effect.andThen(
-            service.db.insert(Database.Schema.space_environment_template).values(
-              sandboxes.map((sandbox) => ({
-                id: SpaceEnvironmentTemplate.ID.create(),
-                space_id: owner.spaceId,
-                environment_template_id: sandbox.environmentTemplateId,
-              })),
-            ),
-          ),
           Effect.andThen(
             service.db.insert(Database.Schema.environment).values(
               sandboxes.map((sandbox) => ({
@@ -362,12 +352,16 @@ export const start = async (options: {
       sessionId,
       harness: "opencode",
       interactive: startOptions.interactive ?? false,
-      ...(environment &&
-        !startOptions.withoutEnvironment && {
-          environmentTemplateId: environment.environmentTemplateId,
-        }),
+      environment:
+        environment && !startOptions.withoutEnvironment
+          ? { kind: "template", environmentTemplateId: environment.environmentTemplateId }
+          : { kind: "default" },
       ...(startOptions.model && { model: startOptions.model }),
     })
+    // oxlint-disable-next-line ren/no-comments -- A space has one environment, and SessionRunner.create starts a chat with it; the cases make their chats one at a time.
+    await (environment
+      ? direct`UPDATE space SET environment = 'template', environment_template_id = ${environment.environmentTemplateId} WHERE id = ${owner.spaceId}`
+      : direct`UPDATE space SET environment = 'default', environment_template_id = NULL WHERE id = ${owner.spaceId}`)
     const startSession = (startOptions?: StartOptions) =>
       core(Brains.Service.use((brain) => brain.start(input(startOptions), { ...owner, brainId })))
     await core(

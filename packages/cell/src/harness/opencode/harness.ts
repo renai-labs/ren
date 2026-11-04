@@ -673,7 +673,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                 server,
                 settings,
                 {
-                  ...Struct.omit(input, ["environmentTemplateId", "directory"]),
+                  ...Struct.omit(input, ["environment", "directory"]),
                   ...(input.directory && { directory: Environment.Directory.make(input.directory) }),
                 },
                 state.modelCatalogs,

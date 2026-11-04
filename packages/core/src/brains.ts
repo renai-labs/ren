@@ -38,6 +38,7 @@ import {
   DateTime,
   Effect,
   Layer,
+  Match,
   Option,
   Redacted,
   Ref,
@@ -299,19 +300,23 @@ export const layer = Layer.effect(
           message: `The creator of ${input.sessionId} can no longer see its space`,
         })
       const target = yield* brainHost.target(placement.brainId)
-      const requested = input.environmentTemplateId
-      const binding = requested
-        ? Option.some(
-            yield* environments
-              .bind({ ...subject, spaceId: placement.spaceId }, requested)
-              .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
-          )
-        : Option.map(
-            yield* environments.findDirectory(subject, yield* handOf(placement.brainId, target.generation)),
-            (directory) => ({ directory, isNew: false }),
-          )
+      const binding = yield* Match.value(input.environment).pipe(
+        Match.discriminatorsExhaustive("kind")({
+          template: (environment) =>
+            environments.bind({ ...subject, spaceId: placement.spaceId }, environment.environmentTemplateId).pipe(
+              Effect.map(Option.some),
+              Effect.mapError((error) => new BrainRejectedError({ message: error.message })),
+            ),
+          none: () => Effect.succeedNone,
+          default: () =>
+            handOf(placement.brainId, target.generation).pipe(
+              Effect.flatMap((hand) => environments.findDirectory(subject, hand)),
+              Effect.map(Option.map((directory) => ({ directory, isNew: false }))),
+            ),
+        }),
+      )
       const payload = {
-        ...Struct.omit(input, ["environmentTemplateId"]),
+        ...Struct.omit(input, ["environment"]),
         ...Option.match(binding, { onNone: () => ({}), onSome: (found) => ({ directory: found.directory }) }),
       } satisfies StartBody
       const api = yield* client.brain(target)

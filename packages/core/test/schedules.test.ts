@@ -26,7 +26,7 @@ type Call =
   | {
       readonly kind: "create"
       readonly owner: SessionRunner.Owner
-      readonly input: Session.StartInput
+      readonly input: SessionRunner.CreateInput
       readonly agentId?: string
     }
   | { readonly kind: "send"; readonly input: Session.SendInput }

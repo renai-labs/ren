@@ -20,7 +20,7 @@ describe("environment templates over HTTP", () => {
     ])
   })
 
-  test("a config the provider refuses is a 400 that names the field; a good one makes an environment template a space can link", async () => {
+  test("a config the provider refuses is a 400 that names the field; a good one makes an environment template a space can choose", async () => {
     const cookie = sessionCookie(await signUp(app, "environments@gmail.com", "Ada"))
     const refused = await call(app, cookie, "POST", "/environment-templates", {
       name: "Python",
@@ -39,19 +39,9 @@ describe("environment templates over HTTP", () => {
     expect(template).toMatchObject({ provider: "docker", sessionsPerEnvironment: 8 })
     const spaces = await (await call(app, cookie, "GET", "/spaces")).json()
     const spaceId = spaces.items[0].id
-    const linked = await call(app, cookie, "POST", "/space-environment-templates", {
-      spaceId,
-      environmentTemplateId: template.id,
-    })
-    expect(linked.status).toBe(200)
-    const link = await linked.json()
-    const listed = await (await call(app, cookie, "GET", `/space-environment-templates?spaceId=${spaceId}`)).json()
-    expect(listed.items.map((each: { readonly environmentTemplateId: string }) => each.environmentTemplateId)).toEqual([
-      template.id,
-    ])
-    expect((await call(app, cookie, "DELETE", `/space-environment-templates/${link.id}`)).status).toBe(200)
-    expect(
-      (await (await call(app, cookie, "GET", `/space-environment-templates?spaceId=${spaceId}`)).json()).items,
-    ).toEqual([])
+    const environment = { kind: "template", environmentTemplateId: template.id }
+    const chosen = await call(app, cookie, "PATCH", `/spaces/${spaceId}`, { environment })
+    expect(chosen.status).toBe(200)
+    expect((await chosen.json()).environment).toEqual(environment)
   })
 })

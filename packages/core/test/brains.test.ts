@@ -55,7 +55,7 @@ describe("Brains on the cell host", () => {
           const brains = yield* Brains.Service
           yield* brains
             .start(
-              { sessionId, harness: "opencode", interactive: true },
+              { sessionId, harness: "opencode", interactive: true, environment: { kind: "default" } },
               { ...owner, brainId: Brain.ofSession(sessionId) },
             )
             .pipe(Effect.forkChild)

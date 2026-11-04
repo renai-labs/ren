@@ -33,6 +33,10 @@ const toInfo = (row: typeof table.$inferSelect): EnvironmentTemplate.Info => ({
   provider: row.provider,
   config: row.config,
   sessionsPerEnvironment: row.sessions_per_environment,
+  networking: row.networking,
+  buildStatus: row.build_status,
+  image: row.image,
+  buildError: row.build_error,
   createdAt: DateTime.fromDateUnsafe(row.created_at),
   updatedAt: DateTime.fromDateUnsafe(row.updated_at),
   archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
@@ -164,6 +168,7 @@ export const layer = Layer.effect(
             provider: input.provider,
             config,
             sessions_per_environment: input.sessionsPerEnvironment,
+            networking: input.networking,
           })
           .returning()
           .pipe(Effect.orDie)
@@ -192,6 +197,7 @@ export const layer = Layer.effect(
                 description: input.description,
                 config,
                 sessions_per_environment: input.sessionsPerEnvironment,
+                networking: input.networking,
                 updated_at: sql`now()`,
               })
               .where(eq(table.id, id))

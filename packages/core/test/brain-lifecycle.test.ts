@@ -52,7 +52,12 @@ describe("brain runs", () => {
           .where(eq(Database.Schema.member.organizationId, found.organizationId))
       }),
     )
-    const input = { sessionId: found.sessionId, harness: "opencode" as const, interactive: false }
+    const input = {
+      sessionId: found.sessionId,
+      harness: "opencode" as const,
+      interactive: false,
+      environment: { kind: "default" as const },
+    }
     const placement = { organizationId: found.organizationId, spaceId: found.spaceId, brainId: found.brainId }
     await current.runPromise(Brains.Service.use((host) => host.start(input, placement)))
     await current.runPromise(

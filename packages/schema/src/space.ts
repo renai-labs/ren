@@ -3,6 +3,7 @@ export * as Space from "./space.js"
 import { Schema } from "effect"
 import { Auth } from "./auth.js"
 import { Brain } from "./brain.js"
+import { EnvironmentTemplate } from "./environment-template.js"
 import { Factory } from "./factory.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
@@ -24,6 +25,17 @@ export const Kind = Schema.Literals(["shared", "private"]).annotate({
 })
 export type Kind = typeof Kind.Type
 
+export const Environment = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("default") }),
+  Schema.Struct({ kind: Schema.Literal("template"), environmentTemplateId: EnvironmentTemplate.ID }),
+  Schema.Struct({ kind: Schema.Literal("none") }),
+]).annotate({
+  identifier: "Space.Environment",
+  description:
+    "Where the chats of the space run their tools: Ren’s standard environment, an environment of a template, or none (no file or shell tools).",
+})
+export type Environment = typeof Environment.Type
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
@@ -38,6 +50,7 @@ export const Info = Schema.Struct({
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
   brainScope: Brain.Scope,
+  environment: Environment,
   memberCount: Schema.Int,
   membershipId: Schema.NullOr(MembershipID),
   factory: Factory.Info,
@@ -74,6 +87,7 @@ export const UpdateInput = Schema.Struct({
   name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NullOr(Schema.String)),
   brainScope: Schema.optional(Brain.Scope),
+  environment: Schema.optional(Environment),
 }).annotate({ identifier: "Space.UpdateInput" })
 
 export const definition = Primitive.define({

@@ -614,7 +614,7 @@ describe("BrainHost environments", () => {
           prompt: { text: "hello" },
           sender: { userId: subject.owner.createdBy },
         },
-        ...(id && { environmentTemplateId: id }),
+        environment: id ? { kind: "template", environmentTemplateId: id } : { kind: "default" },
       } satisfies Session.StartInput
       const placement = { organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, brainId }
       yield* Context.get(context, Brains.Service).start(input, placement)

@@ -3,6 +3,7 @@ export * as EnvironmentTemplate from "./environment-template.js"
 import { Effect, Schema, Struct } from "effect"
 import { Auth } from "./auth.js"
 import { EnvironmentProvider } from "./environment-provider.js"
+import { HostName } from "./host-name.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
@@ -21,6 +22,33 @@ const SessionsPerEnvironment = Schema.Int.check(
   ),
 )
 
+export const maximumAllowedHosts = 100
+
+export const Networking = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("unrestricted") }),
+  Schema.Struct({
+    type: Schema.Literal("limited"),
+    allowPackageManagers: Schema.Boolean.annotate({
+      description: "Allow the hosts of npm, PyPI, the Debian and Ubuntu mirrors and the Go module proxy.",
+    }),
+    allowMcpServers: Schema.Boolean.annotate({ description: "Allow the hosts of the MCP servers of the space." }),
+    allowedHosts: Schema.Array(HostName.Pattern).check(Schema.isMaxLength(maximumAllowedHosts)),
+  }),
+]).annotate({
+  identifier: "EnvironmentTemplate.Networking",
+  description:
+    "Where an environment can connect. A limited environment always reaches the hosts of the credentials of its space.",
+})
+export type Networking = typeof Networking.Type
+
+const unrestricted = { type: "unrestricted" } as const satisfies Networking
+
+export const BuildStatus = Schema.Literals(["queued", "building", "ready", "failed"]).annotate({
+  identifier: "EnvironmentTemplate.BuildStatus",
+  description: "The state of the latest build of the image. A provider that builds no image is ready at once.",
+})
+export type BuildStatus = typeof BuildStatus.Type
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
@@ -30,6 +58,12 @@ export const Info = Schema.Struct({
   provider: EnvironmentProvider.ID,
   config: Schema.Json,
   sessionsPerEnvironment: Schema.Int,
+  networking: Networking,
+  buildStatus: BuildStatus,
+  image: Schema.NullOr(Schema.String).annotate({
+    description: "The last image that built. New environments use it while a later build runs or after it fails.",
+  }),
+  buildError: Schema.NullOr(Schema.String).annotate({ description: "Why the latest build failed." }),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
   archivedAt: Schema.NullOr(Schema.DateTimeUtc),
@@ -51,6 +85,7 @@ export const CreateInput = Schema.Struct({
   sessionsPerEnvironment: SessionsPerEnvironment.pipe(
     Schema.withDecodingDefaultKey(Effect.succeed(defaultSessionsPerEnvironment)),
   ),
+  networking: Networking.pipe(Schema.withDecodingDefaultKey(Effect.succeed(unrestricted))),
 }).annotate({ identifier: "EnvironmentTemplate.CreateInput" })
 
 export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
@@ -71,6 +106,7 @@ export const UpdateInput = Schema.Struct({
     }),
   ),
   sessionsPerEnvironment: Schema.optional(SessionsPerEnvironment),
+  networking: Schema.optional(Networking),
 }).annotate({ identifier: "EnvironmentTemplate.UpdateInput" })
 
 export const definition = Primitive.define({

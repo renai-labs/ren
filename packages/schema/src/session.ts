@@ -5,7 +5,6 @@ import { AgentIdentity } from "./agent/identity.js"
 import { Auth } from "./auth.js"
 import { ChannelOrigin } from "./channel-origin.js"
 import { Drive } from "./drive.js"
-import { EnvironmentTemplate } from "./environment-template.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
@@ -141,7 +140,7 @@ export const StartInput = Schema.Struct({
   model: Schema.optionalKey(Model),
   defaultModels: Schema.optionalKey(ModelTypes.Defaults),
   interactive: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
-  environmentTemplateId: Schema.optionalKey(EnvironmentTemplate.ID),
+  environment: Space.Environment.pipe(Schema.withDecodingDefaultKey(Effect.succeed({ kind: "default" as const }))),
   initialMessage: Schema.optionalKey(
     SendInput.mapFields(Struct.omit(["sessionId", "delivery"])).annotate({
       identifier: "Session.InitialMessage",

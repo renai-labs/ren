@@ -81,21 +81,18 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Environments
 const templates = Database.Schema.environment_template
 const environments = Database.Schema.environment
 const sessions = Database.Schema.session_environment
-const spaceEnvironmentTemplates = Database.Schema.space_environment_template
 const spaces = Database.Schema.space
 
 const isAvailable = (organizationId: Auth.OrganizationID, spaceId: SQLWrapper) =>
   and(
     eq(templates.organization_id, organizationId),
     isNull(templates.archived_at),
-    exists(
-      sql`(select 1 from ${spaceEnvironmentTemplates} inner join ${spaces} on ${spaces.id} = ${spaceEnvironmentTemplates.space_id} where ${and(
-        eq(spaceEnvironmentTemplates.space_id, spaceId),
-        eq(spaceEnvironmentTemplates.environment_template_id, templates.id),
-        isNull(spaceEnvironmentTemplates.archived_at),
-        isNull(spaces.archived_at),
-      )})`,
-    ),
+    exists(sql`(select 1 from ${spaces} where ${and(eq(spaces.id, spaceId), isNull(spaces.archived_at))})`),
+  )
+
+const isChosenBy = (spaceId: Space.ID) =>
+  exists(
+    sql`(select 1 from ${spaces} where ${and(eq(spaces.id, spaceId), eq(spaces.environment_template_id, templates.id))})`,
   )
 
 const isSessionOf = (subject: Subject) =>
@@ -152,13 +149,14 @@ export const layer = Layer.effect(
           and(
             eq(templates.id, environmentTemplateId),
             isAvailable(placement.organizationId, sql`${placement.spaceId}`),
+            isChosenBy(placement.spaceId),
           ),
         )
         .pipe(Effect.orDie)
       const provider = Option.flatMap(Option.fromNullishOr(rows.at(0)), (row) => registry.get(row.provider))
       if (Option.isNone(provider))
         return yield* new NotFound({
-          message: `Environment template ${environmentTemplateId} is not available to this session’s space`,
+          message: `Environment template ${environmentTemplateId} is not the environment of this session’s space`,
         })
     })
 
@@ -198,7 +196,7 @@ export const layer = Layer.effect(
           const template = templateRows.at(0)
           if (!template)
             return yield* new NotFound({
-              message: `The environment template of session ${subject.sessionId} is archived or no longer linked to its space`,
+              message: `The environment template of session ${subject.sessionId} or its space is archived`,
             })
           const existing = session.environmentId
             ? Option.some(session.environmentId)
