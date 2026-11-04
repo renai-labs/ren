@@ -34,7 +34,11 @@ export function useSchedules(options: {
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
-  const [sheet, setSheet] = useState(() => ({
+  const [sheet, setSheet] = useState<{
+    open: boolean
+    id: string | undefined
+    key: number
+  }>(() => ({
     open: search.schedule !== undefined,
     id: search.schedule,
     key: 0,

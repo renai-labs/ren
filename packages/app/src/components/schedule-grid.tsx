@@ -1,13 +1,23 @@
 import type { ScheduleInfo } from "@ren/client"
-import { IconActivity, IconClock, IconCube, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react"
+import {
+  IconActivity,
+  IconClock,
+  IconCube,
+  IconPencil,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconPlus,
+  IconTrash,
+} from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Switch } from "@ren/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { ConfirmDialog } from "./confirm-dialog.js"
 import { EmptyState } from "./empty-state.js"
-import { ExpandableSearch } from "./expandable-search.js"
-import { FilterMenu, type FilterProperty } from "./filter-menu.js"
-import { SkeletonTable, TableCard } from "./page.js"
+import { ToolbarSearch } from "./toolbar-search.js"
+import { FilterMenu, spaceOptions, type FilterProperty } from "./filter-menu.js"
+import { TableCard, TableSample, useShapeId } from "./page.js"
+import { Loading } from "@ren/ui/loading"
 import { RowMenu } from "./row-menu.js"
 import { ScheduleSheet } from "./schedule-sheet.js"
 import type { Schedules } from "../lib/use-schedules.js"
@@ -24,8 +34,8 @@ export function ScheduleToolbar(props: { list: Schedules }) {
     icon: IconActivity,
     single: true,
     options: [
-      { value: "active", label: "Active" },
-      { value: "paused", label: "Paused" },
+      { value: "active", label: "Active", icon: IconPlayerPlay },
+      { value: "paused", label: "Paused", icon: IconPlayerPause },
     ],
   }
   const space: FilterProperty = {
@@ -34,11 +44,11 @@ export function ScheduleToolbar(props: { list: Schedules }) {
     any: "All spaces",
     icon: IconCube,
     single: true,
-    options: list.spaces.map((each) => ({ value: each.id, label: each.name })),
+    options: spaceOptions(list.spaces),
   }
   return (
     <>
-      <ExpandableSearch label="Search schedules" value={list.query} onChange={list.setQuery} />
+      <ToolbarSearch label="Search schedules" value={list.query} onChange={list.setQuery} />
       <FilterMenu
         label="Filter schedules"
         properties={list.spaceId ? [state] : [state, space]}
@@ -120,37 +130,38 @@ export function ScheduleGrid(props: { list: Schedules }) {
   const list = props.list
   const schedules = list.schedules
   const empty = schedules?.length === 0
+  const shapeId = useShapeId("schedules")
   return (
     <>
-      {schedules ? null : (
-        <SkeletonTable columns={["Name", "Frequency", "Next run", "Status", ""]} label="Loading schedules" />
-      )}
-      {empty && list.filtered ? (
-        <EmptyState title="No matching schedules">Try a different search or filter.</EmptyState>
-      ) : null}
-      {empty && !list.filtered ? (
-        <EmptyState title="No schedules yet">Create one to run a prompt on a recurring cadence.</EmptyState>
-      ) : null}
-      {schedules && !empty ? (
-        <TableCard className={cn("transition-opacity", list.stale && "opacity-60")}>
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Name</TableHead>
-                <TableHead>Frequency</TableHead>
-                <TableHead>Next run</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {schedules.map((schedule) => (
-                <ScheduleRow key={schedule.id} list={list} schedule={schedule} />
-              ))}
-            </TableBody>
-          </Table>
-        </TableCard>
-      ) : null}
+      <Loading id={shapeId} loading={!schedules} label="Loading schedules">
+        {schedules ? null : <TableSample columns={["Name", "Frequency", "Next run", "Status", ""]} />}
+        {empty && list.filtered ? (
+          <EmptyState title="No matching schedules">Try a different search or filter.</EmptyState>
+        ) : null}
+        {empty && !list.filtered ? (
+          <EmptyState title="No schedules yet">Create one to run a prompt on a timer.</EmptyState>
+        ) : null}
+        {schedules && !empty ? (
+          <TableCard className={cn("transition-opacity", list.stale && "opacity-60")}>
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Frequency</TableHead>
+                  <TableHead>Next run</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {schedules.map((schedule) => (
+                  <ScheduleRow key={schedule.id} list={list} schedule={schedule} />
+                ))}
+              </TableBody>
+            </Table>
+          </TableCard>
+        ) : null}
+      </Loading>
       <ScheduleSheet
         open={list.sheet.open}
         version={list.sheet.key}

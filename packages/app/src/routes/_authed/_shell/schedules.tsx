@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { PageSkeleton, SkeletonTable } from "../../../components/page.js"
 import { SchedulesPage } from "../../../features/schedules/schedules-page.js"
 import { pageSize, currentPage } from "../../../lib/pagination.js"
 import { Loader } from "../../../lib/loader.js"
@@ -18,14 +17,5 @@ export const Route = createFileRoute("/_authed/_shell/schedules")({
       ),
     )
   },
-  pendingComponent: SchedulesSkeleton,
   component: SchedulesPage,
 })
-
-function SchedulesSkeleton() {
-  return (
-    <PageSkeleton title="Scheduled" description="Work that starts on a schedule instead of a message.">
-      <SkeletonTable columns={["Name", "Frequency", "Next run", "Status", ""]} label="Loading schedules" />
-    </PageSkeleton>
-  )
-}

@@ -1,18 +1,11 @@
 import { useState } from "react"
 import type { ScheduleInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { IconCalendar, IconChevronDown } from "@tabler/icons-react"
+import { IconCalendar, IconCheck, IconClock } from "@tabler/icons-react"
 import { Option } from "effect"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import { Calendar } from "@ren/ui/calendar"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@ren/ui/dropdown-menu"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
@@ -22,7 +15,6 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHe
 import { Spinner } from "@ren/ui/spinner"
 import { Textarea } from "@ren/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
-import { MenuSearch } from "./menu-search.js"
 import { useNow } from "../lib/use-now.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { errorMessage } from "../lib/errors.js"
@@ -38,15 +30,15 @@ import {
   formatRun,
   frequencyOptions,
   isFrequency,
-  localTimeZone,
   monthDays,
   nameOf,
   preview,
-  timeZones,
   weekdays,
   whenOf,
 } from "../lib/schedules.js"
 import { RouterContext } from "../lib/router-context.js"
+import { TimeZone } from "../lib/time-zone.js"
+import { TimeZonePicker } from "./time-zone-picker.js"
 
 const defaultAgent = "default"
 
@@ -125,14 +117,14 @@ function ScheduleForm(props: {
   chat: ScheduleChat | undefined
   onClose: () => void
 }) {
-  const { api } = RouterContext.useRouterContext()
+  const { api, platform } = RouterContext.useRouterContext()
   const schedule = props.schedule
   const spaces = useSpaces()
   const initial = initialForm(schedule, props.spaceId ?? spaces.joined.at(0)?.id ?? "")
   const [message, setMessage] = useState(initial.message)
   const [spaceId, setSpaceId] = useState(initial.spaceId)
   const [agentId, setAgentId] = useState(initial.agentId)
-  const [cadence, setCadence] = useState(() => cadenceOf(schedule?.when, localTimeZone()))
+  const [cadence, setCadence] = useState(() => cadenceOf(schedule?.when, TimeZone.current(platform.storage)))
   const [error, setError] = useState("")
   const agents = useQuery({
     ...api.agent.list.queryOptions({ page: 1, pageSize: pickerPageSize, isSubagent: false, spaceId }),
@@ -291,15 +283,7 @@ function CadenceFields(props: {
           </Select>
         </Field>
         {timed ? (
-          <Field>
-            <FieldLabel htmlFor="schedule-time">Time</FieldLabel>
-            <Input
-              id="schedule-time"
-              type="time"
-              value={props.cadence.time}
-              onChange={(event) => props.onChange({ time: event.target.value })}
-            />
-          </Field>
+          <TimeField label="Time" value={props.cadence.time} onChange={(time) => props.onChange({ time })} />
         ) : null}
       </div>
       {props.cadence.frequency === "weekly" ? (
@@ -420,16 +404,13 @@ function UntilFields(props: { cadence: Cadence; onChange: (patch: Partial<Cadenc
         value={props.cadence.until}
         onChange={(until) => props.onChange({ until })}
       />
-      <Field>
-        <FieldLabel htmlFor="schedule-until-time">Until time</FieldLabel>
-        <Input
-          id="schedule-until-time"
-          type="time"
-          disabled={props.cadence.until === ""}
-          value={props.cadence.untilTime}
-          onChange={(event) => props.onChange({ untilTime: event.target.value })}
-        />
-      </Field>
+      <TimeField
+        label="Until time"
+        placeholder="End of day"
+        disabled={props.cadence.until === ""}
+        value={props.cadence.untilTime}
+        onChange={(untilTime) => props.onChange({ untilTime })}
+      />
     </div>
   )
 }
@@ -496,44 +477,115 @@ function DateField(props: {
   )
 }
 
-function TimeZoneField(props: { value: string; onChange: (value: string) => void }) {
-  const [query, setQuery] = useState("")
-  const needle = query.trim().toLowerCase().replaceAll(" ", "_")
-  const matches = timeZones().filter((zone) => zone.toLowerCase().includes(needle))
+const timeSlots = Array.from({ length: 96 }, (_, index) => {
+  const hours = Math.floor(index / 4)
+  const minutes = (index % 4) * 15
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
+})
+
+const formatTime = (value: string) => {
+  const [hours = 0, minutes = 0] = value.split(":").map(Number)
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours < 12 ? "AM" : "PM"}`
+}
+
+const parseTime = (text: string) => {
+  const match = /^\s*(\d{1,2})(?::?(\d{2}))?\s*([ap])?\.?m?\.?\s*$/iu.exec(text)
+  if (!match) return
+  const hour = Number(match[1])
+  const minutes = Number(match[2] ?? "0")
+  const meridiem = match[3]?.toLowerCase()
+  if (minutes > 59 || hour > 23 || (meridiem && (hour < 1 || hour > 12))) return
+  const hours = meridiem ? (hour % 12) + (meridiem === "p" ? 12 : 0) : hour
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
+}
+
+function TimeField(props: {
+  label: string
+  value: string
+  placeholder?: string | undefined
+  disabled?: boolean | undefined
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState("")
+  const parsed = parseTime(typed)
+  const typedSlots = parsed ? [parsed] : []
+  const slots = typed.trim() ? typedSlots : timeSlots
+  const anchor = timeSlots.findLast((slot) => slot <= (props.value || "09:00"))
+  const pick = (value: string) => {
+    props.onChange(value)
+    setOpen(false)
+  }
   return (
     <Field>
-      <FieldLabel>Timezone</FieldLabel>
-      <DropdownMenu
-        onOpenChange={(open) => {
-          if (!open) setQuery("")
+      <FieldLabel>{props.label}</FieldLabel>
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next)
+          if (!next) setTyped("")
         }}
       >
-        <DropdownMenuTrigger
+        <PopoverTrigger
+          disabled={props.disabled}
           render={
             <Button
               variant="outline"
-              className={cn(fieldTrigger, "w-full justify-between font-normal")}
-              aria-label={`Timezone: ${props.value}`}
+              className={cn(fieldTrigger, "w-full justify-start font-normal", !props.value && "text-muted-foreground")}
+              aria-label={`${props.label}: ${props.value ? formatTime(props.value) : (props.placeholder ?? "None")}`}
             />
           }
         >
-          {props.value.replaceAll("_", " ")}
-          <IconChevronDown data-icon="inline-end" className="text-muted-foreground" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-80 w-72">
-          <MenuSearch value={query} onChange={setQuery} placeholder="Search timezones…" />
-          {matches.length === 0 ? (
-            <p className="px-2 py-6 text-center text-sm text-muted-foreground">No timezones match “{query.trim()}”</p>
-          ) : null}
-          <DropdownMenuRadioGroup value={props.value} onValueChange={(value: string) => props.onChange(value)}>
-            {matches.map((zone) => (
-              <DropdownMenuRadioItem key={zone} value={zone} closeOnClick>
-                {zone.replaceAll("_", " ")}
-              </DropdownMenuRadioItem>
+          <IconClock data-icon="inline-start" />
+          <span className="tabular-nums">
+            {props.value ? formatTime(props.value) : (props.placeholder ?? "Pick a time")}
+          </span>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-(--anchor-width) min-w-44 gap-0 p-0">
+          <Input
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && parsed) pick(parsed)
+            }}
+            placeholder="Type a time, like 9:30 pm"
+            aria-label="Type a time"
+            className="h-10 rounded-none border-0 border-b bg-transparent focus-visible:ring-0"
+          />
+          <div className="flex max-h-60 flex-col overflow-y-auto overscroll-contain p-1">
+            {slots.length === 0 ? (
+              <p className="px-2 py-4 text-center text-sm text-muted-foreground">Not a time</p>
+            ) : null}
+            {slots.map((slot) => (
+              <Button
+                key={slot}
+                variant="ghost"
+                size="sm"
+                aria-pressed={slot === props.value}
+                ref={(node) => {
+                  const list = node?.parentElement
+                  // ast-grep-ignore: no-manual-scroll -- centres the chosen time in the open list, not a chat
+                  if (node && list && slot === anchor) list.scrollTop = node.offsetTop - list.clientHeight / 2
+                }}
+                onClick={() => pick(slot)}
+                className="justify-between font-normal tabular-nums aria-pressed:bg-accent"
+              >
+                {formatTime(slot)}
+                {slot === props.value ? <IconCheck className="text-muted-foreground" /> : null}
+              </Button>
             ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </Field>
+  )
+}
+
+function TimeZoneField(props: { value: string; onChange: (value: string) => void }) {
+  return (
+    <Field>
+      <FieldLabel>Timezone</FieldLabel>
+      <TimeZonePicker value={props.value} onChange={props.onChange} className={cn(fieldTrigger, "w-full")} />
     </Field>
   )
 }
