@@ -1,3 +1,4 @@
+import { RelativeTime } from "@ren/util/relative-time"
 import type { ScheduleInfo } from "@ren/client"
 import { IconActivity, IconClock, IconCube, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
@@ -11,7 +12,6 @@ import { SkeletonTable, TableCard } from "./page.js"
 import { RowMenu } from "./row-menu.js"
 import { ScheduleSheet } from "./schedule-sheet.js"
 import type { Schedules } from "../lib/use-schedules.js"
-import { formatRelative } from "@ren/ui/time"
 import { describe, statusOf } from "../lib/schedules.js"
 import { cn } from "cn"
 
@@ -54,7 +54,7 @@ export function ScheduleToolbar(props: { list: Schedules }) {
 }
 
 const nextRun = (schedule: ScheduleInfo, now: number) =>
-  schedule.status === "active" && schedule.nextRunAt ? formatRelative(schedule.nextRunAt, now) : "—"
+  schedule.status === "active" && schedule.nextRunAt ? RelativeTime.format(schedule.nextRunAt, now) : "—"
 
 function stateLabel(schedule: ScheduleInfo, now: number) {
   if (schedule.status === "active") return "Running on schedule"

@@ -1,4 +1,5 @@
 import { Loading } from "@ren/ui/loading"
+import { RelativeTime } from "@ren/util/relative-time"
 import { cn } from "cn"
 import { useState } from "react"
 import type { TaskActivityInfo, TaskActor, TaskEventInfo } from "@ren/client"
@@ -6,7 +7,7 @@ import { IconArrowUp, IconGhost } from "@tabler/icons-react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@ren/ui/input-group"
 import { toast } from "@ren/ui/sonner"
-import { formatDateTime, formatRelative } from "@ren/ui/time"
+import { formatDateTime } from "@ren/ui/time"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Item, ItemDescription, ItemHeader } from "@ren/ui/item"
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@ren/ui/trace"
@@ -108,7 +109,7 @@ const eventNote = (event: TaskEventInfo) => {
 
 const when = (at: string) => (
   <time dateTime={at} title={formatDateTime(at)}>
-    {formatRelative(at)}
+    {RelativeTime.format(at)}
   </time>
 )
 

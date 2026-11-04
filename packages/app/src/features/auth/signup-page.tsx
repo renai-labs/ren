@@ -1,3 +1,4 @@
+import { AuthError } from "@ren/client"
 import { Link, getRouteApi, useNavigate } from "@tanstack/react-router"
 import { Button } from "@ren/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
@@ -13,7 +14,6 @@ import {
 } from "../../components/auth-layout.js"
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { describeAuthError } from "../../lib/auth.js"
 import { useCompleteAuth } from "./use-complete-auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -119,7 +119,7 @@ export function SignupPage() {
     const result = await auth.signUp.email({ name: name.trim(), email, password })
     if (result.error !== null) {
       setPending(false)
-      const failure = describeAuthError(result.error)
+      const failure = AuthError.describe(result.error)
       if (emailRejections.has(failure.code)) {
         setEmailError(failure.message)
         setStep("details")

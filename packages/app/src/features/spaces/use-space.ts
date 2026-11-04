@@ -1,8 +1,8 @@
+import { Seed } from "@ren/client/react"
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import type { SpaceInfo } from "@ren/client"
 import { pickerPageSize } from "../../lib/pagination.js"
-import { Seed } from "../../lib/seed.js"
 import { RouterContext } from "../../lib/router-context.js"
 import type { Runtime } from "../../lib/runtime.js"
 

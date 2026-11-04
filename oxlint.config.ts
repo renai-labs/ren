@@ -344,6 +344,15 @@ const pulseClass = {
 }
 
 const siteTailwind = { cwd: new URL("packages/site", import.meta.url).pathname, entryPoint: "src/styles/globals.css" }
+const mobileTailwind = {
+  cwd: new URL("packages/mobile", import.meta.url).pathname,
+  entryPoint: "src/global.css",
+  selectors: [
+    ...tailwind.selectors,
+    { kind: SelectorKind.Attribute, name: "^\\w+ClassName$" },
+    { kind: SelectorKind.Attribute, name: "^\\w+ClassName$", match: [{ type: MatcherType.String }] },
+  ],
+} satisfies Settings
 const docsTailwind = { ...siteTailwind, entryPoint: "src/styles/docs.css" }
 
 export default defineConfig({
@@ -822,6 +831,32 @@ export default defineConfig({
         ...Object.fromEntries(Object.keys(tailwindRules).map((rule) => [rule, ["error", docsTailwind]])),
         "better-tailwindcss/no-unknown-classes": ["error", { ...docsTailwind, ignore: ["^docs-"] }],
       },
+    },
+    {
+      files: ["packages/mobile/**"],
+      rules: {
+        ...Object.fromEntries(Object.keys(tailwindRules).map((rule) => [rule, ["error", mobileTailwind]])),
+        "better-tailwindcss/no-restricted-classes": [
+          "error",
+          {
+            ...mobileTailwind,
+            restrict: [importantClass, rawArbitraryValue, readingOrderClass, colorRoleClass, spaceClass],
+          },
+        ],
+        "jsx-a11y/prefer-tag-over-role": "off",
+        "no-restricted-imports": restrictedImports(reactApis, reactMessage, [
+          ...browserPatterns,
+          {
+            regex: "^@ren/(?!client(/|$)|chat(/|$)|schema(/|$)|util(/|$))",
+            message:
+              "The mobile app depends on client, chat, schema and util only. Move shared logic out of @ren/app into the package that owns it.",
+          },
+        ]),
+      },
+    },
+    {
+      files: ["packages/mobile/src/app/**"],
+      rules: { "import/no-default-export": "off" },
     },
     {
       files: ["packages/app/src/main.tsx"],

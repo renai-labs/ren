@@ -22,6 +22,7 @@
   "dependencies": {
     "@better-auth/cimd": "catalog:",
     "@better-auth/drizzle-adapter": "catalog:",
+    "@better-auth/expo": "catalog:",
     "@better-auth/mcp": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@effect/platform-bun": "catalog:",

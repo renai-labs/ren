@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import { authRequest, makeApp, sessionCookie } from "./lib/app.js"
+import { authRequest, makeApp, sessionCookie, signUp } from "./lib/app.js"
 
 const app = makeApp()
 
@@ -43,6 +43,27 @@ test("the sign-in providers need no login, and GitHub and Slack are not ones whe
   const answered = await app.handler(new Request("http://localhost:4000/sign-in-providers"))
   expect(answered.status).toBe(200)
   expect(await answered.json()).toEqual({ items: ["google"] })
+})
+
+test("the mobile app, which sends no Origin header, signs in, calls Ren and signs out with its stored cookie", async () => {
+  const email = `ada-${crypto.randomUUID()}@acme.test`
+  await signUp(app, email)
+  const mobile = (path: string, cookie?: string) =>
+    new Request(`http://localhost:4000${path}`, {
+      method: path.startsWith("/auth/") ? "POST" : "GET",
+      headers: {
+        "content-type": "application/json",
+        "expo-origin": "ren://192.168.1.20:8081",
+        ...(cookie && { cookie }),
+      },
+      ...(path.startsWith("/auth/") && {
+        body: JSON.stringify(path === "/auth/sign-out" ? {} : { email, password: "correct horse battery staple" }),
+      }),
+    })
+  const cookie = sessionCookie(await app.handler(mobile("/auth/sign-in/email")))
+  expect((await app.handler(mobile("/me", cookie))).status).toBe(200)
+  expect((await app.handler(mobile("/auth/sign-out", cookie))).status).toBe(200)
+  expect((await app.handler(mobile("/me", cookie))).status).toBe(401)
 })
 
 test("Sign in with Slack keeps the account as team:user, since a Slack user id is unique only in its workspace", async () => {

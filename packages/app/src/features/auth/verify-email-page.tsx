@@ -1,6 +1,6 @@
+import { AuthError } from "@ren/client"
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import { AuthLayout, BackButton, CodeVerification } from "../../components/auth-layout.js"
-import { describeAuthError } from "../../lib/auth.js"
 import { useCompleteAuth } from "./use-complete-auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -15,13 +15,13 @@ export function VerifyEmailPage() {
   const email = search.email ?? ""
   const verify = async (otp: string) => {
     const result = await auth.emailOtp.verifyEmail({ email, otp })
-    if (result.error !== null) return describeAuthError(result.error)
+    if (result.error !== null) return AuthError.describe(result.error)
     await completeAuth()
     return
   }
   const resend = async () => {
     const result = await auth.emailOtp.sendVerificationOtp({ email, type: "email-verification" })
-    return result.error === null ? undefined : describeAuthError(result.error)
+    return result.error === null ? undefined : AuthError.describe(result.error)
   }
   const back = () => void navigate({ to: "/login", search: destination })
   return (

@@ -1,6 +1,6 @@
 # @ren/app
 
-The product SPA and its web host, built from shadcn's components in `@ren/ui`. Desktop and mobile hosts will import it through a dedicated entry point and supply their own `Platform`. Load the `react`, `interface` and `shadcn` skills before writing components.
+The product SPA and its web host, built from shadcn's components in `@ren/ui`. A desktop host will import it through a dedicated entry point and supply its own `Platform`. The mobile app (`packages/mobile`) has native screens and shares Ren's packages, not this one: logic it needs moves out of `src/` into the package that owns it. Load the `react`, `interface` and `shadcn` skills before writing components.
 
 ## Structure
 
@@ -24,7 +24,7 @@ The product SPA and its web host, built from shadcn's components in `@ren/ui`. D
 - State lives in one place:
   - Server data lives in TanStack Query.
   - Live chat state lives in `@ren/chat` atoms, read through `@ren/chat/react`; `useChatCacheBridge` writes a live title and status into the query cache.
-  - Only `features/session/chat-view.ts` reads the whole chat state during render. Components take its narrow values, never `ChatState.State`, so streaming doesn't re-render them.
+  - Only `ChatReact.useView` (`@ren/chat/react`), called from `features/session/use-chat.ts`, reads the whole chat state during render. Components take its narrow values, never `ChatState.State`, so streaming doesn't re-render them.
   - Anything shareable or restorable (filters, tabs, open panels, selection) lives in the URL as search params validated with Effect Schema.
   - Everything else lives in the component that owns it.
 - Auth goes through `better-auth/client` in `src/lib/auth.ts`. The session is a query (`sessionOptions(auth)`), guarded in `beforeLoad`.
@@ -35,7 +35,7 @@ The product SPA and its web host, built from shadcn's components in `@ren/ui`. D
 
 ## Accepted exceptions
 
-- `features/session/use-chat.ts` (`useChat`) returns one object for a chat: the route's chat page and the task page's session sheet both render a chat from it, and its sections take narrow values from it. It reads the chat state through `useView` from `chat-view.ts`.
+- `features/session/use-chat.ts` (`useChat`) returns one object for a chat: the route's chat page and the task page's session sheet both render a chat from it, and its sections take narrow values from it. It reads the chat state through `ChatReact.useView`.
 - `lib/use-schedules.ts` (`useSchedules`) returns the list, filters and sheet state shared by the Scheduled page and a space's Scheduled tab.
 - Task list, task detail and task activity refresh every 5 seconds (`refreshEvery` in `lib/tasks.ts`), as main does, until tasks have a realtime subscription.
 

@@ -1,4 +1,6 @@
 import type { SpaceInfo } from "@ren/client"
+import { SessionTitle } from "@ren/chat"
+import { SessionPages } from "@ren/client/react"
 import { useState, useSyncExternalStore, type ReactNode } from "react"
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
@@ -67,7 +69,6 @@ import { organizationsOptions } from "../lib/auth.js"
 import { resetSession } from "../lib/chat.js"
 import { initials } from "../lib/format.js"
 import { docsUrl, founderCallUrl } from "../lib/links.js"
-import { ownChats, sessionTitle, sidebarSessionsOptions, type SessionFilter } from "../lib/sessions.js"
 import { useMe } from "../lib/use-me.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
@@ -158,7 +159,7 @@ export function Section(props: {
 function SpaceChats(props: { space: SpaceInfo; path: string }) {
   const { client } = RouterContext.useRouterContext()
   const [shown, setShown] = useState(5)
-  const chats = useInfiniteQuery(sidebarSessionsOptions(client, { spaceId: [props.space.id] }))
+  const chats = useInfiniteQuery(SessionPages.options(client, { spaceId: [props.space.id] }))
   const items = chats.data?.pages.flatMap((page) => page.items) ?? []
   return (
     <section aria-label={`Chats in ${props.space.name}`}>
@@ -185,7 +186,7 @@ function SpaceChats(props: { space: SpaceInfo; path: string }) {
               isActive={props.path === `/sessions/${chat.id}`}
               render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
             >
-              <span>{sessionTitle(chat.title)}</span>
+              <span>{SessionTitle.display(chat.title)}</span>
             </SidebarMenuButton>
             <ChatStatus sessionId={chat.id} busy={chat.status === "busy"} />
           </SidebarMenuItem>
@@ -436,12 +437,12 @@ const startOfDayAgo = (daysAgo: number) => {
   return new Date(today.getTime() - daysAgo * 86_400_000).toISOString()
 }
 
-const chatFilter = (filters: Filters, userId: string): SessionFilter => {
+const chatFilter = (filters: Filters, userId: string): SessionPages.Filter => {
   const status = filters.status?.length === 1 ? filters.status.at(0) : undefined
   const updated = (["today", "week", "month"] as const).find((key) => key === filters.updated?.at(0))
   const origin = (filters.origin ?? []).filter(isOrigin)
   return {
-    ...ownChats(userId),
+    ...SessionPages.own(userId),
     ...(filters.space?.length && { spaceId: filters.space }),
     ...((status === "idle" || status === "busy") && { status }),
     ...(origin.length > 0 && { origin }),
@@ -558,7 +559,7 @@ export function ChatsList(props: { path: string; filters: Filters }) {
   const me = useMe()
   const filtered = Object.values(props.filters).some((values) => values.length > 0)
   const chatPages = useInfiniteQuery({
-    ...sidebarSessionsOptions(client, chatFilter(props.filters, me.user.id)),
+    ...SessionPages.options(client, chatFilter(props.filters, me.user.id)),
     placeholderData: keepPreviousData,
   })
   const chats = chatPages.data?.pages.flatMap((page) => page.items) ?? []
@@ -577,7 +578,7 @@ export function ChatsList(props: { path: string; filters: Filters }) {
               isActive={props.path === `/sessions/${chat.id}`}
               render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
             >
-              <span>{sessionTitle(chat.title)}</span>
+              <span>{SessionTitle.display(chat.title)}</span>
             </SidebarMenuButton>
             <ChatStatus sessionId={chat.id} busy={chat.status === "busy"} />
           </SidebarMenuItem>

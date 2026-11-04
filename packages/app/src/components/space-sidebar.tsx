@@ -1,4 +1,5 @@
 import type { SpaceInfo } from "@ren/client"
+import { Seed } from "@ren/client/react"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import {
@@ -40,7 +41,6 @@ import { Footer, Header, sidebarRow } from "./sidebar-parts.js"
 import { isSoftwareFactory } from "../lib/factory.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
-import { Seed } from "../lib/seed.js"
 
 const spaceSections = [
   { value: "overview", label: "Overview", icon: IconLayoutDashboard, to: "/spaces/$spaceId" },

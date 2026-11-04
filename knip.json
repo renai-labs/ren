@@ -52,6 +52,14 @@
     },
     "packages/httpapi-codegen": {
       "entry": ["test/**/*.test.ts", "script/**/*.ts"]
+    },
+    "packages/mobile": {
+      "entry": ["script/**/*.ts"],
+      "ignoreDependencies": [
+        "@expo-google-fonts/ibm-plex-mono",
+        "@expo-google-fonts/inter",
+        "react-native-drawer-layout"
+      ]
     }
   },
   "ignoreDependencies": ["tailwindcss", "@fontsource/ibm-plex-mono", "auth", "turbo", "@typescript/native-preview"],

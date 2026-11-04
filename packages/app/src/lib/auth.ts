@@ -142,54 +142,6 @@ export const organizationSlug = Auth.organizationSlug
 
 export const consentOrganizationHeader = Auth.consentOrganizationHeader
 
-const authMessages = {
-  EMAIL_NOT_VERIFIED: "Verify your email to continue.",
-  INVALID_OTP: "That code didn’t work. Check it and try again.",
-  OTP_EXPIRED: "That code has expired. Request a new one.",
-  TOO_MANY_ATTEMPTS: "Too many attempts. Request a new code.",
-  INVALID_EMAIL_OR_PASSWORD: "Invalid email or password.",
-  RATE_LIMITED: "Too many attempts. Please wait and try again.",
-  DISPOSABLE_EMAIL: "Use a permanent email address.",
-  UNDELIVERABLE_EMAIL_DOMAIN: "This email domain can’t receive email. Check the address and try again.",
-  ALIAS_EMAIL: "An account already exists for this inbox. Sign in instead.",
-}
-
-type AuthFailureCode = keyof typeof authMessages | "UNKNOWN"
-
-export interface AuthFailure {
-  readonly code: AuthFailureCode
-  readonly message: string
-}
-
-const authAliases: Record<string, keyof typeof authMessages> = {
-  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "ALIAS_EMAIL",
-}
-
-const unavailable = "The authentication service is unavailable. Please try again."
-
-const transportMessages = new Set([
-  "Fetch related error. Captured by catchAllError option. See error property for more details.",
-  "Failed to fetch",
-  "Fetch Error",
-])
-
-const isKnown = (code: string): code is keyof typeof authMessages => Object.hasOwn(authMessages, code)
-
-export function describeAuthError(error: {
-  readonly code?: string | undefined
-  readonly message?: string | undefined
-  readonly status: number
-  readonly statusText: string
-}): AuthFailure {
-  const code = error.status === 429 ? "RATE_LIMITED" : (authAliases[error.code ?? ""] ?? error.code ?? "")
-  if (isKnown(code)) return { code, message: authMessages[code] }
-  if (error.status >= 500) return { code: "UNKNOWN", message: unavailable }
-  const detail = [error.message?.trim() ?? "", error.statusText.trim()].find(
-    (text) => text !== "" && !transportMessages.has(text),
-  )
-  return { code: "UNKNOWN", message: detail ?? unavailable }
-}
-
 export interface Destination {
   readonly invitationId?: string | undefined
   readonly redirect?: string | undefined

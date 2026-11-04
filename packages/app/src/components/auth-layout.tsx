@@ -1,3 +1,4 @@
+import type { AuthError } from "@ren/client"
 import { useEffect, useId, useState, type ComponentProps, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Channel } from "@ren/schema/channel"
@@ -10,7 +11,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@ren/ui/input-otp"
 import { Spinner } from "@ren/ui/spinner"
 import { GitHubMark, SlackMark } from "./brand-marks.js"
-import { destinationHref, type AuthFailure, type Destination } from "../lib/auth.js"
+import { destinationHref, type Destination } from "../lib/auth.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
 
@@ -197,8 +198,8 @@ const codeLength = 6
 
 export function CodeVerification(props: {
   email: string
-  verify: (code: string) => Promise<AuthFailure | undefined>
-  resend: () => Promise<AuthFailure | undefined>
+  verify: (code: string) => Promise<AuthError.Failure | undefined>
+  resend: () => Promise<AuthError.Failure | undefined>
 }) {
   const id = useId()
   const [code, setCode] = useState("")
