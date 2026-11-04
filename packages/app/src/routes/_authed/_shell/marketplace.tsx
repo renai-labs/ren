@@ -1,6 +1,4 @@
-import { AppListingSkeleton } from "../../../components/app-list.js"
 import { createFileRoute } from "@tanstack/react-router"
-import { PageSkeleton } from "../../../components/page.js"
 import { MarketplacePage } from "../../../features/apps/marketplace-page.js"
 import { pageSize, currentPage } from "../../../lib/pagination.js"
 import { Loader } from "../../../lib/loader.js"
@@ -17,17 +15,5 @@ export const Route = createFileRoute("/_authed/_shell/marketplace")({
       ),
     )
   },
-  pendingComponent: MarketplaceSkeleton,
   component: MarketplacePage,
 })
-
-function MarketplaceSkeleton() {
-  return (
-    <PageSkeleton
-      title="Marketplace"
-      description="Apps give Ren new tools. Add one to a space and every chat there can use it."
-    >
-      <AppListingSkeleton />
-    </PageSkeleton>
-  )
-}

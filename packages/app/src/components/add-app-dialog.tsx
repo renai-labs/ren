@@ -1,11 +1,18 @@
 import { useState } from "react"
+import { useInfiniteQuery } from "@tanstack/react-query"
 import { IconPlus, IconSearch } from "@tabler/icons-react"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
 import { useAddition, type Added } from "./add-to-space.js"
 import { AppRow } from "./app-list.js"
+import { Loading } from "@ren/ui/loading"
 import { useCatalog } from "../lib/use-catalog.js"
+import { AppRegistryPages } from "../lib/app-registry.js"
+import { fromRegistry, isSpaceApp } from "../lib/apps.js"
+import { useSpaces } from "../lib/use-spaces.js"
+import { useDebouncedValue } from "../lib/use-debounced-value.js"
+import { RouterContext } from "../lib/router-context.js"
 import { cn } from "cn"
 
 type CatalogApp = ReturnType<typeof useCatalog>["apps"][number]
@@ -40,10 +47,83 @@ function AddAppRow(props: { app: CatalogApp; space: { id: string; name: string }
 const matches = (app: { name: string; description: string }, query: string) =>
   `${app.name} ${app.description}`.toLowerCase().includes(query.trim().toLowerCase())
 
-function emptyText(catalog: { readonly loading: boolean }, query: string, space: string) {
-  if (catalog.loading) return "Loading apps…"
+function emptyText(query: string, space: string) {
   if (query) return `Nothing matches “${query.trim()}”`
   return `${space} has every app`
+}
+
+function MoreApps(props: { onVisible: () => void }) {
+  return (
+    <div
+      aria-hidden
+      className="h-px shrink-0"
+      ref={(node) => {
+        if (!node) return
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) props.onVisible()
+          },
+          { rootMargin: "320px 0px" },
+        )
+        observer.observe(node)
+        return () => observer.disconnect()
+      }}
+    />
+  )
+}
+
+function AppRowsSample(props: { count: number }) {
+  return (
+    <Loading label="Loading apps">
+      {Array.from({ length: props.count }, (_, index) => (
+        <AppRow key={index} compact name="Team app" caption="Tools for your team’s work" />
+      ))}
+    </Loading>
+  )
+}
+
+function AppResults(props: {
+  query: string
+  space: { id: string; name: string }
+  added: ReadonlySet<string>
+  onAdded: Added
+}) {
+  const { client } = RouterContext.useRouterContext()
+  const needle = useDebouncedValue(props.query.trim(), 200)
+  const catalog = useCatalog()
+  const spaces = useSpaces().spaces
+  const pages = useInfiniteQuery(AppRegistryPages.options(client, needle))
+  const registry = (pages.data?.pages ?? []).flatMap((page) => page.items).map(fromRegistry)
+  const listed = new Set(registry.map((app) => app.id))
+  const own = catalog.apps.filter(
+    (app) => app.source !== "registry" && !listed.has(app.id) && !isSpaceApp(app, spaces) && matches(app, props.query),
+  )
+  const found = [...own, ...registry].filter((app) => !props.added.has(app.id))
+  const loading = pages.isPending || catalog.loading
+  return (
+    <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a list of Item rows; Item renders a div
+      role="list"
+      aria-label="Apps"
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-4"
+    >
+      {loading ? <AppRowsSample count={8} /> : null}
+      {!loading && found.length === 0 && !pages.hasNextPage ? (
+        <p className="py-12 text-center text-sm text-muted-foreground">{emptyText(props.query, props.space.name)}</p>
+      ) : null}
+      {found.map((app) => (
+        <AddAppRow key={app.id} app={app} space={props.space} onAdded={props.onAdded} />
+      ))}
+      {pages.hasNextPage ? (
+        <MoreApps
+          onVisible={() => {
+            if (!pages.isFetchingNextPage) void pages.fetchNextPage()
+          }}
+        />
+      ) : null}
+      {pages.isFetchingNextPage ? <AppRowsSample count={3} /> : null}
+    </div>
+  )
 }
 
 export function AddAppDialog(props: {
@@ -57,8 +137,6 @@ export function AddAppDialog(props: {
   const open = props.open ?? ownOpen
   const setOpen = props.onOpenChange ?? setOwnOpen
   const [query, setQuery] = useState("")
-  const catalog = useCatalog()
-  const found = catalog.apps.filter((app) => !props.added.has(app.id) && matches(app, query))
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {props.open === undefined ? (
@@ -85,29 +163,15 @@ export function AddAppDialog(props: {
             />
           </InputGroup>
         </div>
-        <div
-          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a list of Item rows; Item renders a div
-          role="list"
-          aria-label="Apps"
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-4"
-        >
-          {found.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              {emptyText(catalog, query, props.space.name)}
-            </p>
-          ) : null}
-          {found.map((app) => (
-            <AddAppRow
-              key={app.id}
-              app={app}
-              space={props.space}
-              onAdded={(added) => {
-                setOpen(false)
-                props.onAdded(added)
-              }}
-            />
-          ))}
-        </div>
+        <AppResults
+          query={query}
+          space={props.space}
+          added={props.added}
+          onAdded={(added) => {
+            setOpen(false)
+            props.onAdded(added)
+          }}
+        />
       </DialogContent>
     </Dialog>
   )

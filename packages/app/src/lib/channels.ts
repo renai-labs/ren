@@ -23,16 +23,11 @@ export const byId: Readonly<Record<Provider, Info>> = {
 
 export const sections: ReadonlyArray<{
   readonly title: string
-  readonly description: string
   readonly providers: ReadonlyArray<Provider>
 }> = [
-  { title: "Git providers", description: "Let Ren work in your repositories", providers: ["github"] },
-  {
-    title: "Communication",
-    description: "Ren can join your team’s chats and work alongside everyone",
-    providers: ["slack"],
-  },
-  { title: "Task management", description: "Turn issues into pull requests", providers: ["linear"] },
+  { title: "Git providers", providers: ["github"] },
+  { title: "Communication", providers: ["slack"] },
+  { title: "Task management", providers: ["linear"] },
 ]
 
 export const all = { page: 1, pageSize: pickerPageSize }

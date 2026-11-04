@@ -3,25 +3,18 @@ import { EmptyState } from "../../components/empty-state.js"
 import { useState } from "react"
 import type { RenInferenceConnection } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { IconChevronDown, IconExternalLink, IconInfoCircle, IconPlus, IconTrash } from "@tabler/icons-react"
+import { IconExternalLink, IconInfoCircle, IconPlus, IconTrash } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import { Link } from "@ren/ui/link"
 import { cn } from "cn"
 import { Card } from "@ren/ui/card"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@ren/ui/dropdown-menu"
 import { Progress } from "@ren/ui/progress"
 import { formatCountdown, formatDateTime } from "@ren/ui/time"
 import { Tabs } from "@ren/ui/tabs"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EditableText } from "../../components/editable-text.js"
-import { Page, PageTabsList, PageTabsTrigger } from "../../components/page.js"
+import { Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ProviderMark } from "../../components/provider-mark.js"
 import { StatusBadge } from "../../components/status-badge.js"
 import { useNow } from "../../lib/use-now.js"
@@ -65,34 +58,37 @@ function SubscriptionList(props: {
   onRename: (id: string, label: string) => Promise<unknown>
   onRemove: (connection: ProviderConnection) => void
 }) {
-  if (!props.loading && props.rows.length === 0)
-    return <NoSubscriptions product={props.product} unavailable={props.unavailable} onConnect={props.onConnect} />
+  const shapeId = useShapeId(`subscriptions-${props.product}`)
   return (
-    <Loading loading={props.loading} label="Loading subscriptions">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {(props.loading
-          ? Array.from({ length: 2 }, (_, index) => ({
-              id: `sample-${index}`,
-              label: "Team subscription",
-              providerName: props.product,
-              iconUrl: "",
-              status: { tone: "ok" as const, label: "Connected" },
-              canManage: false,
-              canReconnect: false,
-              meters: [],
-            }))
-          : props.rows
-        ).map((connection, index) => (
-          <SubscriptionCard
-            key={connection.id}
-            connection={connection}
-            index={index}
-            onReconnect={() => props.onReconnect(connection)}
-            onRename={(label) => props.onRename(connection.id, label)}
-            onRemove={() => props.onRemove(connection)}
-          />
-        ))}
-      </div>
+    <Loading id={shapeId} loading={props.loading} label="Loading subscriptions">
+      {!props.loading && props.rows.length === 0 ? (
+        <NoSubscriptions product={props.product} unavailable={props.unavailable} onConnect={props.onConnect} />
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {(props.loading
+            ? Array.from({ length: 2 }, (_, index) => ({
+                id: `sample-${index}`,
+                label: "Team subscription",
+                providerName: props.product,
+                iconUrl: "",
+                status: { tone: "ok" as const, label: "Connected" },
+                canManage: false,
+                canReconnect: false,
+                meters: [],
+              }))
+            : props.rows
+          ).map((connection, index) => (
+            <SubscriptionCard
+              key={connection.id}
+              connection={connection}
+              index={index}
+              onReconnect={() => props.onReconnect(connection)}
+              onRename={(label) => props.onRename(connection.id, label)}
+              onRemove={() => props.onRemove(connection)}
+            />
+          ))}
+        </div>
+      )}
     </Loading>
   )
 }
@@ -134,7 +130,14 @@ export function ProvidersPage() {
     <Page
       title="Providers"
       description="Subscriptions your agents run on."
-      aside={isAdmin ? <ConnectMenu onSelect={connect} /> : undefined}
+      aside={
+        isAdmin && !unavailable ? (
+          <Button onClick={() => connect(tab)}>
+            <IconPlus />
+            Connect {product}
+          </Button>
+        ) : undefined
+      }
       leading={
         <Tabs value={tab} onValueChange={setTab}>
           <PageTabsList aria-label="Providers">
@@ -194,28 +197,6 @@ export function ProvidersPage() {
         />
       ) : null}
     </Page>
-  )
-}
-
-function ConnectMenu(props: { onSelect: (provider: string) => void }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button />}>
-        <IconPlus />
-        Connect
-        <IconChevronDown className="opacity-60" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
-        <DropdownMenuGroup>
-          {providers.map((provider) => (
-            <DropdownMenuItem key={provider.name} onClick={() => props.onSelect(provider.name)}>
-              <ProviderMark provider={provider.name} />
-              {provider.product}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }
 

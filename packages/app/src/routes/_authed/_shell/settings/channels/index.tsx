@@ -4,7 +4,7 @@ import { Channels } from "../../../../../lib/channels.js"
 import { Loader } from "../../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/settings/channels/")({
-  head: () => ({ meta: [{ title: "Mentions · Ren" }] }),
+  head: () => ({ meta: [{ title: "Channels · Ren" }] }),
   loader: (options) => {
     Loader.start(
       options.context.queryClient.query(Channels.installsOptions(options.context.api)),

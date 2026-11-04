@@ -1,11 +1,11 @@
-import { Loading } from "@ren/ui/loading"
 import type { ReactNode } from "react"
-import { IconBolt, IconChevronRight, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
+import { IconChevronRight, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@ren/ui/sheet"
-import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@ren/ui/avatar"
-import { AppIcon } from "./app-icon.js"
+import { Avatar, AvatarGroup } from "@ren/ui/avatar"
+import { AppAvatarFallback, AppAvatarImage, AppIcon, appTile } from "./app-icon.js"
+import { DefaultIcon } from "./default-icon.js"
 import { gaps } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
 import { cn } from "cn"
@@ -52,24 +52,22 @@ function AppGrid(props: { label: string; children: ReactNode }) {
   )
 }
 
-export function AppListingSkeleton() {
+export function AppListingSample() {
   return (
-    <Loading label="Loading apps">
-      <AppSection title="Browse apps">
-        {Array.from({ length: 6 }, (_, index) => (
-          <AppRow
-            key={index}
-            name="Team app"
-            caption="Tools for your team’s work"
-            action={
-              <Button variant="outline" size="sm">
-                Add
-              </Button>
-            }
-          />
-        ))}
-      </AppSection>
-    </Loading>
+    <AppSection title="All apps">
+      {Array.from({ length: 6 }, (_, index) => (
+        <AppRow
+          key={index}
+          name="Team app"
+          caption="Tools for your team’s work"
+          action={
+            <Button variant="ghost" size="icon" aria-label="Add app to a space">
+              <IconPlus />
+            </Button>
+          }
+        />
+      ))}
+    </AppSection>
   )
 }
 
@@ -93,9 +91,9 @@ export function AppRow(props: {
     >
       <ItemMedia>
         {props.compact ? (
-          <AppIcon name={props.name} icon={props.icon} className="size-9 rounded-lg border" />
+          <AppIcon name={props.name} description={props.caption} icon={props.icon} className="size-9 rounded-lg" />
         ) : (
-          <AppIcon name={props.name} icon={props.icon} size="lg" />
+          <AppIcon name={props.name} description={props.caption} icon={props.icon} size="lg" />
         )}
       </ItemMedia>
       <ItemContent className="min-w-0 gap-0.5">
@@ -138,9 +136,10 @@ export function SeeAllRow(props: {
       <ItemMedia>
         <AvatarGroup className="-space-x-3 *:data-[slot=avatar]:ring-background">
           {props.apps.slice(0, 3).map((app) => (
+            // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
             <Avatar key={app.id} size="lg">
-              {app.icon ? <AvatarImage src={app.icon} alt="" /> : null}
-              <AvatarFallback>{app.name.charAt(0)}</AvatarFallback>
+              {app.icon ? <AppAvatarImage src={app.icon} /> : null}
+              <AppAvatarFallback name={app.name} />
             </Avatar>
           ))}
         </AvatarGroup>
@@ -167,10 +166,11 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
   const spaceName = useSpaces().spaceName
   const mcps = Object.entries(app.mcps)
   const skills = Object.entries(app.skills)
+  const tile = appTile(app)
   return (
     <div className="flex flex-1 flex-col gap-9 overflow-y-auto overscroll-contain px-7 pt-7 pb-10">
       <SheetHeader className="gap-4 p-0">
-        <AppIcon name={app.name} icon={app.icon} size="xl" />
+        <AppIcon name={app.name} description={app.description} icon={app.icon} size="xl" />
         <div className="flex items-center justify-between gap-8">
           <div className="flex min-w-0 flex-col gap-1.5">
             <SheetTitle className="flex items-center gap-1.5 text-lg/7">
@@ -191,7 +191,13 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
             {mcps.map(([slug, mcp]) => (
               <Entry
                 key={slug}
-                media={<AppIcon name={app.name} icon={app.icon} size="lg" />}
+                media={
+                  tile ? (
+                    <DefaultIcon kind="mcp" name={slug} tile={tile} />
+                  ) : (
+                    <AppIcon name={app.name} description={app.description} icon={app.icon} size="lg" />
+                  )
+                }
                 title={slug}
                 description={transportLabel(mcp.transport)}
               />
@@ -205,7 +211,14 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
             {skills.map(([slug, skill]) => (
               <Entry
                 key={slug}
-                media={<Tile icon={<IconBolt />} />}
+                media={
+                  <DefaultIcon
+                    kind="skill"
+                    name={slug}
+                    description={skill.type === "content" ? skill.description : undefined}
+                    tile={tile}
+                  />
+                }
                 title={slug}
                 description={skill.type === "content" ? skill.description : skill.upstream.url}
               />
@@ -261,14 +274,6 @@ const transportLabel = (transport: App["mcps"][string]["transport"]) => {
   if (transport.type === "local") return "stdio"
   if (transport.type === "managed") return "managed by Ren"
   return transport.provider
-}
-
-function Tile(props: { icon: ReactNode }) {
-  return (
-    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-6 [&_svg]:stroke-[1.5]">
-      {props.icon}
-    </span>
-  )
 }
 
 function Entry(props: {
