@@ -1,7 +1,7 @@
 import type { TaskInfo } from "@ren/client"
 import type { ComponentType } from "react"
 import { IconWorld } from "@tabler/icons-react"
-import { GitHubMark, LinearMark, SlackMark } from "../../components/brand-marks.js"
+import { GitHubMark, LinearMark, SlackMark } from "../../icons/brands.js"
 import { Badge } from "@ren/ui/badge"
 import { Link } from "@ren/ui/link"
 

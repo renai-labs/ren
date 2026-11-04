@@ -1,4 +1,4 @@
-/* oxlint-disable react/only-export-components -- stands in for @tabler/icons-react (aliased in vite.config.ts): filled Heroicons under Tabler's names, Tabler for the rest */
+/* oxlint-disable react/only-export-components, eslint/no-restricted-imports, react/forbid-component-props -- stands in for @tabler/icons-react (aliased in vite.config.ts): filled Heroicons under Tabler's names, Tabler for the rest; the one place that imports Heroicons and maps Tabler's color prop to style */
 import type { ComponentType, SVGProps } from "react"
 import {
   AdjustmentsHorizontalIcon,
