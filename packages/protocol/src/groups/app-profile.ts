@@ -87,15 +87,14 @@ export const AppProfileReachGroup = HttpApiGroup.make("app-profile-reach")
   .add(
     HttpApiEndpoint.get("app.request-connect", "/apps/:app/request-connect", {
       params: { app: Schema.String },
-      query: { spaceId: Schema.optional(Space.ID) },
       success: AppProfile.Connect,
-      error: NotFoundError,
+      error: [NotFoundError, ForbiddenError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "app.request-connect",
         summary: "Ask the person to connect an app",
         description:
-          "Show the person a Connect button for an app (ID or slug) in a space; an agent’s own space is the default. A profile with no gaps means the app is ready.",
+          "Show the person a Connect button for an app (ID or slug) in your chat’s space. A profile with no gaps means the app is ready. Only an agent in a chat can call it.",
       }),
     ),
   )

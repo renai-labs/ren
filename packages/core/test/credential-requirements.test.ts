@@ -3,7 +3,8 @@ import type { App as AppSchema } from "@ren/schema/app"
 import type { Mcp } from "@ren/schema/mcp"
 import { Agent } from "@ren/schema/agent"
 import { Session } from "@ren/schema/session"
-import { Effect, Option } from "effect"
+import type { Space } from "@ren/schema/space"
+import { Effect } from "effect"
 import { App } from "../src/app.js"
 import { AppProfiles } from "../src/app/profiles.js"
 import { ProfileItems } from "../src/app/profile-items.js"
@@ -161,30 +162,26 @@ describe("the composer pill (P15)", () => {
 
 describe("app_request_connect", () => {
   it.live(
-    "names the app and the space with the space's profiles of it; an agent's space is the default; an unknown app is not found",
+    "names the app and the calling agent's space with the space's profiles of it; a person is forbidden; an unknown app is not found",
     () =>
       Effect.gen(function* () {
         const requirements = yield* CredentialRequirements.Service
         const found = yield* single({ mcps: { calendar: calendar("https://cal.example.com/mcp") } })
         const other = yield* ProfilesFixture.space(found.ana, "Design")
-        const here = yield* requirements.forApp(found.ana, found.app.slug, Option.some(found.ana.personal))
+        const agentIn = (spaceId: Space.ID) => ({
+          ...found.ana,
+          agent: { agentId: Agent.ID.create(), sessionId: Session.ID.create(), spaceId, fence: null },
+        })
+        const here = yield* requirements.forApp(agentIn(found.ana.personal), found.app.slug)
         expect({ app: here.appId, space: here.spaceId, profiles: here.profiles.map((profile) => profile.id) }).toEqual({
           app: found.app.id,
           space: found.ana.personal,
           profiles: [found.profile.id],
         })
-        expect((yield* requirements.forApp(found.ana, found.app.id, Option.some(other))).profiles).toEqual([])
-        expect((yield* Effect.flip(requirements.forApp(found.ana, found.app.slug, Option.none())))._tag).toBe(
-          "Primitive.NotFound",
-        )
-        const agent = {
-          ...found.ana,
-          agent: { agentId: Agent.ID.create(), sessionId: Session.ID.create(), spaceId: other, fence: null },
-        }
-        expect((yield* requirements.forApp(agent, found.app.slug, Option.none())).spaceId).toBe(other)
-        expect((yield* Effect.flip(requirements.forApp(found.ana, "no-such-app", Option.some(other))))._tag).toBe(
-          "Primitive.NotFound",
-        )
+        const there = yield* requirements.forApp(agentIn(other), found.app.id)
+        expect({ space: there.spaceId, profiles: there.profiles }).toEqual({ space: other, profiles: [] })
+        expect((yield* Effect.flip(requirements.forApp(found.ana, found.app.slug)))._tag).toBe("Primitive.Forbidden")
+        expect((yield* Effect.flip(requirements.forApp(agentIn(other), "no-such-app")))._tag).toBe("Primitive.NotFound")
       }),
   )
 })
