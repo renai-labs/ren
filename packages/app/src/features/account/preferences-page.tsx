@@ -13,6 +13,9 @@ import { resetSession } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Choice, deliveries, details, PasswordDialog, ThemePicker } from "../../components/settings-shared.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { AvatarPicker } from "../../components/avatar-picker.js"
+import { TimeZone } from "../../lib/time-zone.js"
+import { TimeZonePicker } from "../../components/time-zone-picker.js"
 
 export function PreferencesPage() {
   const { api, auth, platform, queryClient } = RouterContext.useRouterContext()
@@ -20,6 +23,7 @@ export function PreferencesPage() {
   const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
   const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
   const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
+  const [timeZone, setTimeZone] = useState(() => TimeZone.chosen.read(platform.storage) ?? "")
   const rename = useMutation({
     mutationFn: async (name: string) => {
       const result = await auth.updateUser({ name })
@@ -28,6 +32,15 @@ export function PreferencesPage() {
     // ast-grep-ignore: no-manual-invalidation -- Better Auth changes the user
     onSuccess: () => queryClient.invalidateQueries({ queryKey: api.me.get.queryKey() }),
     onError: (error) => toast.error("Couldn’t change your name", { description: errorMessage(error) }),
+  })
+  const photo = useMutation({
+    mutationFn: async (image: string | null) => {
+      const result = await auth.updateUser({ image })
+      if (result.error !== null) throw new Error(result.error.message ?? "Failed to change your photo")
+    },
+    // ast-grep-ignore: no-manual-invalidation -- Better Auth changes the user
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: api.me.get.queryKey() }),
+    onError: (error) => toast.error("Couldn’t change your photo", { description: errorMessage(error) }),
   })
   const navigate = useNavigate()
   const [leaving, setLeaving] = useState(false)
@@ -65,6 +78,15 @@ export function PreferencesPage() {
           <Row key="email" title="Email" description="Contact support to change.">
             <span className="text-sm text-muted-foreground">{user.email}</span>
           </Row>,
+          <Row key="photo" title="Photo" description="Shown beside your name across Ren.">
+            <AvatarPicker
+              kind="person"
+              label="Your photo"
+              name={user.name || user.email}
+              value={user.image}
+              onChange={(image) => photo.mutateAsync(image)}
+            />
+          </Row>,
           <Row key="name" title="Name">
             <EditableText
               value={user.name}
@@ -77,6 +99,24 @@ export function PreferencesPage() {
       </Rows>
       <Section title="Appearance">
         <Rows>{[<ThemePicker key="theme" />]}</Rows>
+      </Section>
+      <Section title="Time">
+        <Rows>
+          {[
+            <Row key="time-zone" title="Timezone" description="New schedules start in this timezone.">
+              <TimeZonePicker
+                automatic
+                value={timeZone}
+                variant="ghost"
+                className="gap-2 text-muted-foreground"
+                onChange={(value) => {
+                  TimeZone.chosen.write(platform.storage, value || null)
+                  setTimeZone(value)
+                }}
+              />
+            </Row>,
+          ]}
+        </Rows>
       </Section>
       <Section title="Chats">
         <Rows>
