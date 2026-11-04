@@ -287,7 +287,7 @@ function PastedChip(props: { text: string }) {
 
 function FileChips(props: { files: ReadonlyArray<SessionMessage.FileAttachment> }) {
   return (
-    <AttachmentGroup className="justify-end">
+    <AttachmentGroup className="justify-end-safe">
       {props.files.map((file, index) => {
         const image = file.mime.startsWith("image/") && file.source.type === "inline" && file.data
         return (
@@ -442,7 +442,9 @@ function UserText(props: { message: SessionMessage.User; spaceId: string | undef
   const uploads = props.message.uploads ?? []
   return (
     <>
-      {uploads.length > 0 ? <DriveFileCards spaceId={props.spaceId} files={uploads} className="justify-end" /> : null}
+      {uploads.length > 0 ? (
+        <DriveFileCards spaceId={props.spaceId} files={uploads} className="justify-end-safe" />
+      ) : null}
       {files.length > 0 ? <FileChips files={files} /> : null}
       {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
       {parts.typed ? (
