@@ -201,11 +201,6 @@ export const UpdateInput = Schema.Struct({
   description: "Change the task’s content. Assignment has its own action, `assign`.",
 })
 
-export const hasAssignee = Schema.makeFilter(
-  (input: object) =>
-    "agentId" in input || "ownerId" in input || "spaceId" in input || "Pass agentId, ownerId or spaceId.",
-)
-
 export interface AssignInput extends Schema.Schema.Type<typeof AssignInput> {}
 export const AssignInput = Schema.Struct({
   agentId: Schema.optional(Schema.NullOr(Agent.ID)).annotate({
@@ -224,7 +219,11 @@ export const AssignInput = Schema.Struct({
     description: "Whether to start the agent. The default is `continue` when the agent changes, else `none`.",
   }),
 })
-  .check(hasAssignee)
+  .check(
+    Schema.makeFilter(
+      (input) => ["agentId", "ownerId", "spaceId"].some((key) => key in input) || "Pass agentId, ownerId or spaceId.",
+    ),
+  )
   .annotate({ identifier: "Task.AssignInput" })
 
 export interface StartInput extends Schema.Schema.Type<typeof StartInput> {}
