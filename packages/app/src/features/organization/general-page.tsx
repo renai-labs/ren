@@ -2,11 +2,11 @@ import { useState } from "react"
 import { Session } from "@ren/schema/session"
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
-import { Textarea } from "@ren/ui/textarea"
+import { InstructionsField } from "../../components/instructions-field.js"
 import { EditableText } from "../../components/editable-text.js"
 import { ModelPicker } from "../../components/model-picker.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
-import { PersonAvatar } from "../../components/person-avatar.js"
+import { AvatarPicker } from "../../components/avatar-picker.js"
 import { useMe } from "../../lib/use-me.js"
 import { useAutosave } from "../../lib/use-autosave.js"
 import { errorMessage } from "../../lib/errors.js"
@@ -55,15 +55,35 @@ export function GeneralSettingsPage() {
       queryClient.invalidateQueries({ queryKey: organizationOptions(auth, me.organization.id).queryKey }),
     ])
   }
+  const changeLogo = async (logo: string | null) => {
+    const result = await auth.organization.update({ organizationId: me.organization.id, data: { logo: logo ?? "" } })
+    if (result.error !== null) {
+      toast.error(result.error.message ?? "Failed to update the logo")
+      return
+    }
+    await Promise.all([
+      // ast-grep-ignore: no-manual-invalidation -- the organization logo changes through Better Auth
+      queryClient.invalidateQueries({ queryKey: api.me.get.queryKey() }),
+      // ast-grep-ignore: no-manual-invalidation -- the organization logo changes through Better Auth
+      queryClient.invalidateQueries({ queryKey: organizationOptions(auth, me.organization.id).queryKey }),
+    ])
+  }
   return (
     <Page title="General">
       <Rows>
         {[
+          <Row key="logo" title="Logo" description="Shown in the sidebar and wherever your organization appears.">
+            <AvatarPicker
+              kind="organization"
+              label="Organization logo"
+              name={organization.name}
+              value={organization.logo}
+              disabled={!canUpdate}
+              onChange={changeLogo}
+            />
+          </Row>,
           <Row key="name" title="Name">
-            <span className="flex items-center gap-3">
-              <PersonAvatar name={organization.name} />
-              <EditableText value={organization.name} label="name" required readOnly={!canUpdate} onCommit={rename} />
-            </span>
+            <EditableText value={organization.name} label="name" required readOnly={!canUpdate} onCommit={rename} />
           </Row>,
           <Row key="model" title="Default model" description="New chats start with it unless a space sets its own.">
             <ModelPicker
@@ -87,13 +107,12 @@ export function GeneralSettingsPage() {
         title="Instructions"
         description="Shared guidance for every agent in your organization. Spaces can add their own."
       >
-        <Textarea
-          aria-label="Instructions"
+        <InstructionsField
+          label="Instructions"
           value={draft}
           readOnly={!canUpdate}
-          onChange={(event) => setInstructions(event.currentTarget.value)}
+          onChange={setInstructions}
           placeholder={"# Organization instructions\n\n- Conventions every agent should follow."}
-          className="min-h-110 rounded-xl bg-card p-4 dark:bg-card"
         />
         <p className="text-xs text-muted-foreground">{saving ? "Saving…" : "Changes save automatically."}</p>
       </Section>

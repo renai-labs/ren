@@ -1,3 +1,4 @@
+import { IconCrown, IconUser, IconUserShield } from "@tabler/icons-react"
 import { useState } from "react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
@@ -23,9 +24,12 @@ import { RouterContext } from "../lib/router-context.js"
 
 const roleList: ReadonlyArray<Role> = ["owner", "admin", "member"]
 
+const roleIcons = { owner: IconCrown, admin: IconUserShield, member: IconUser }
+
 export const roles = roleList.map((role) => ({
   value: role,
   label: roleLabel[role],
+  icon: roleIcons[role],
 }))
 
 type Option = { value: string; label: string }

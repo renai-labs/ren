@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
-import { IconBan, IconMailForward, IconPlus, IconSearch, IconShield } from "@tabler/icons-react"
+import { IconBan, IconMailForward, IconPlus, IconShield } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import {
@@ -133,7 +133,6 @@ export function MembersSettingsPage() {
   const tab = search.tab ?? "members"
   const page = currentPage(search)
   const [filters, setFilters] = useState<Filters>({})
-  const [searching, setSearching] = useState(false)
   const [query, setQuery] = useState("")
   const needle = query.trim().toLowerCase()
   const rows = members
@@ -226,19 +225,7 @@ export function MembersSettingsPage() {
       }
       actions={
         <>
-          {searching ? (
-            <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
-          ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground"
-              aria-label="Search members"
-              onClick={() => setSearching(true)}
-            >
-              <IconSearch />
-            </Button>
-          )}
+          <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
           <FilterMenu
             label="Filter members"
             properties={[{ key: "role", label: "Role", any: "Any", icon: IconShield, options: roles }]}
