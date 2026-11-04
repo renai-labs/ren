@@ -108,7 +108,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
     Layer.provide(Settings.layer),
     Layer.provide(options.models),
-    Layer.provide(options.environments),
+    Layer.provideMerge(options.environments),
     Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(

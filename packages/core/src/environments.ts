@@ -71,6 +71,7 @@ export interface Interface {
     hand: Option.Option<Hand>,
   ) => Effect.Effect<Environment.Access, NotFound | Unavailable>
   readonly release: (subject: Subject) => Effect.Effect<void>
+  readonly archive: (subject: Subject) => Effect.Effect<void>
   readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
 }
 
@@ -107,6 +108,7 @@ interface Held {
   readonly binding: Schema.Json | null
   readonly provider: EnvironmentProvider.ID
   readonly busy: number
+  readonly isStale: boolean
 }
 
 interface Seat {
@@ -130,26 +132,34 @@ const planOf = (seat: Seat, environment: Held | undefined, options: { readonly h
   const target = targetOf(seat, options)
   const replaced =
     environment && seat.environmentId === environment.id && environment.busy === 0 ? environment : undefined
-  const canMove = seat.environmentId
-    ? replaced !== undefined
-    : seat.environmentTemplateId !== null || seat.isNew || seat.idleAt !== null
-  if (Option.isNone(target) || target.value === seat.environmentTemplateId || !canMove)
-    return { environmentTemplateId: seat.environmentTemplateId, isMoved: false, outdated: Option.none<Outdated>() }
+  const isMoved = Option.isSome(target) && target.value !== seat.environmentTemplateId && canMove(seat, replaced)
+  const vacated = isMoved || replaced?.isStale ? replaced : undefined
   return {
-    environmentTemplateId: target.value,
-    isMoved: true,
-    vacated: replaced?.id,
-    outdated: Option.fromNullishOr(replaced).pipe(
-      Option.flatMap((held) =>
-        Option.map(Option.fromNullishOr(held.binding), (binding): Outdated => ({
-          environmentId: held.id,
-          provider: held.provider,
-          binding,
-        })),
-      ),
-    ),
+    environmentTemplateId: isMoved ? target.value : seat.environmentTemplateId,
+    isMoved,
+    vacated: vacated?.id,
+    outdated: outdatedOf(vacated),
   }
 }
+
+const canMove = (seat: Seat, replaced: Held | undefined) => {
+  if (seat.environmentId) return replaced !== undefined
+  return seat.environmentTemplateId !== null || seat.isNew || seat.idleAt !== null
+}
+
+const outdatedOf = (held: Held | undefined) =>
+  Option.flatMap(Option.fromNullishOr(held), (found) =>
+    Option.map(Option.fromNullishOr(found.binding), (binding): Outdated => ({
+      environmentId: found.id,
+      provider: found.provider,
+      binding,
+    })),
+  )
+
+// oxlint-disable-next-line ren/no-comments -- EN9: each access keeps an environment awake for 30 minutes; a turn end with no other turn on it lets it pause after 10.
+const awakeWhileUsed = Duration.minutes(30)
+
+const awakeAfterUse = Duration.minutes(10)
 
 const vacate = (transaction: Database.Transaction, environmentId: Environment.ID) =>
   Effect.gen(function* () {
@@ -336,6 +346,7 @@ export const layer = Layer.effect(
           binding: environments.binding,
           provider: templates.provider,
           busy: sql<number>`(select count(*)::int from ${sessions} where ${and(eq(sessions.environment_id, environments.id), isNull(sessions.idle_at))})`,
+          isStale: sql<boolean>`${environments.image} is distinct from ${templates.image}`,
         })
         .from(environments)
         .innerJoin(templates, eq(templates.id, environments.environment_template_id))
@@ -485,6 +496,13 @@ export const layer = Layer.effect(
         Effect.catchTag("EnvironmentProvider.Failed", (error) => Effect.fail(unavailableBecause(error))),
       )
       if (Option.isNone(endpoint)) return yield* grantAccess(subject, hand, { isRetry: true })
+      yield* provider.value
+        .keepAlive(providerBinding, awakeWhileUsed)
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(`Could not keep environment ${assigned.environmentId} awake`, error),
+          ),
+        )
       const exp = yield* expiry
       return {
         directory: directoryOf(subject.sessionId),
@@ -586,6 +604,47 @@ export const layer = Layer.effect(
           .set({ idle_at: sql`now()` })
           .where(and(isSessionOf(subject), isNull(sessions.idle_at)))
           .pipe(Effect.orDie)
+        // oxlint-disable-next-line ren/no-comments -- EN9: a turn end shortens the time only when no other chat on the environment is in a turn.
+        const idle = (yield* database.db
+          .select({ id: environments.id, binding: environments.binding, provider: templates.provider })
+          .from(sessions)
+          .innerJoin(environments, eq(environments.id, sessions.environment_id))
+          .innerJoin(templates, eq(templates.id, environments.environment_template_id))
+          .where(
+            and(
+              isSessionOf(subject),
+              sql`not exists (select 1 from ${sessions} as busy where busy.environment_id = ${environments.id} and busy.idle_at is null)`,
+            ),
+          )
+          .pipe(Effect.orDie)).at(0)
+        if (!idle?.binding) return
+        const binding = idle.binding
+        yield* Option.match(registry.get(idle.provider), {
+          onNone: () => Effect.void,
+          onSome: (provider) =>
+            provider
+              .keepAlive(binding, awakeAfterUse)
+              .pipe(Effect.catch((error) => Effect.logWarning(`Could not let environment ${idle.id} pause`, error))),
+        })
+      }),
+      archive: Effect.fn("Environments.archive")(function* (subject: Subject) {
+        const outdated = yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const environment = yield* lockEnvironment(transaction, subject)
+            if (!environment) return Option.none<Outdated>()
+            const live = (yield* transaction
+              .select({ live: count() })
+              .from(sessions)
+              .innerJoin(Database.Schema.agent_session, eq(Database.Schema.agent_session.id, sessions.session_id))
+              .where(
+                and(eq(sessions.environment_id, environment.id), isNull(Database.Schema.agent_session.archived_at)),
+              )).at(0)?.live
+            if (live !== 0) return Option.none<Outdated>()
+            yield* vacate(transaction, environment.id)
+            return outdatedOf(environment)
+          }),
+        )
+        if (Option.isSome(outdated)) yield* destroy(outdated.value)
       }),
       executorVariables: Effect.fn("Environments.executorVariables")(function* (environmentId: Environment.ID) {
         const keys = yield* signingKeys

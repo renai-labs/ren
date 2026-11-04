@@ -28,6 +28,7 @@ import { Actor } from "./actor.js"
 import { Brains } from "./brains.js"
 import { Models } from "./models.js"
 import { Primitive } from "./primitive.js"
+import { Environments } from "./environments.js"
 import { SessionRunner } from "./session/runner.js"
 import { SessionPolicy } from "./session/policy.js"
 import { SpaceQueries } from "./space/queries.js"
@@ -168,6 +169,7 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const sessions = yield* SessionRunner.Service
     const brain = yield* Brains.Service
+    const environments = yield* Environments.Service
     const catalog = yield* Models.Service
     const codecs = yield* TranscriptCodec.Registry
     const historyAdmitted = yield* Semaphore.make(historyReads + historyWaiting)
@@ -391,21 +393,27 @@ export const layer = Layer.effect(
         return toInfo(yield* read(actor, input.id))
       }),
       archive: Effect.fn("Session.archive")(function* (actor: Actor.Info, id: Session.ID) {
-        return yield* database.transaction((transaction) =>
+        const archived = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id))
             if (
               !access.isAllowed({ actor, action: actions.archive, resource: SessionPolicy.resource(row.membershipId) })
             )
               return yield* new Primitive.Forbidden({ message: "You cannot archive this chat." })
-            if (row.session.archived_at) return toInfo(row)
+            if (row.session.archived_at) return { info: toInfo(row), isNew: false }
             yield* transaction
               .update(Database.Schema.agent_session)
               .set({ archived_at: new Date() })
               .where(eq(Database.Schema.agent_session.id, id))
-            return toInfo(yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
+            return {
+              info: toInfo(yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id))),
+              isNew: true,
+            }
           }),
         )
+        // oxlint-disable-next-line ren/no-comments -- environments §3 Running environment rule 5: the environment goes with the last live chat on it.
+        if (archived.isNew) yield* environments.archive({ sessionId: id, organizationId: actor.organizationId })
+        return archived.info
       }),
       messages: Effect.fn("Session.messages")(function* (actor, id, query) {
         const admitted = yield* Effect.uninterruptibleMask((restore) =>

@@ -8,7 +8,7 @@ import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Session } from "@ren/schema/session"
 import { eq, sql } from "drizzle-orm"
-import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
+import { ConfigProvider, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { testEffect } from "./lib/effect.js"
@@ -364,6 +364,90 @@ describe("Environments", () => {
       yield* subject.environments.release(session)
       yield* Seed.chooseEnvironment(spaceId, { kind: "none" })
       expect((yield* subject.environments.access(session, Option.none())).url.href).toBe(before.url.href)
+    }),
+  )
+
+  it.live("an environment whose template has a new image is replaced when every seat is idle (environments test 5)", () =>
+    Effect.gen(function* () {
+      const subject = yield* environmentsWith()
+      const database = yield* Database.Service
+      const organizationId = yield* Seed.organization()
+      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId, { image: "base:1" })
+      const spaceId = yield* Seed.team(organizationId)
+      const sessions = yield* Effect.all([Seed.subject(organizationId, spaceId), Seed.subject(organizationId, spaceId)])
+      yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
+        discard: true,
+      })
+      const before = yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()))
+      yield* database.db
+        .update(Database.Schema.environment_template)
+        .set({ image: "base:2" })
+        .where(eq(Database.Schema.environment_template.id, environmentTemplateId))
+      yield* subject.environments.release(sessions[1])
+      expect(before.at(0)?.url.href).toBe((yield* subject.environments.access(sessions[1], Option.none())).url.href)
+      yield* Effect.forEach(sessions, (session) => subject.environments.release(session), { discard: true })
+      const after = yield* subject.environments.access(sessions[0], Option.none())
+      expect(before.at(0)?.url.href).not.toBe(after.url.href)
+      expect(after.generation).toBe(2)
+      expect((yield* Ref.get(subject.probe.provisioned)).map((made) => made.image)).toEqual([
+        Option.some("base:1"),
+        Option.some("base:2"),
+      ])
+      expect((yield* Ref.get(subject.probe.destroyed)).length).toBe(1)
+    }),
+  )
+
+  it.live(
+    "an access keeps the environment awake for 30 minutes; a release shortens it to 10 only when no seat is busy (environments test 6)",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* environmentsWith()
+        const organizationId = yield* Seed.organization()
+        const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+        const spaceId = yield* Seed.team(organizationId)
+        const sessions = yield* Effect.all([Seed.subject(organizationId, spaceId), Seed.subject(organizationId, spaceId)])
+        yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
+          discard: true,
+        })
+        yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()), {
+          discard: true,
+        })
+        const minutes = Effect.map(Ref.get(subject.probe.keptAlive), (all) =>
+          all.map((kept) => Duration.toMinutes(kept.duration)),
+        )
+        expect(yield* minutes).toEqual([30, 30])
+        yield* subject.environments.release(sessions[0])
+        expect(yield* minutes).toEqual([30, 30])
+        yield* subject.environments.release(sessions[1])
+        expect(yield* minutes).toEqual([30, 30, 10])
+      }),
+  )
+
+  it.live("archiving the last live chat on an environment destroys it (environments test 7)", () =>
+    Effect.gen(function* () {
+      const subject = yield* environmentsWith()
+      const database = yield* Database.Service
+      const organizationId = yield* Seed.organization()
+      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+      const spaceId = yield* Seed.team(organizationId)
+      const sessions = yield* Effect.all([Seed.subject(organizationId, spaceId), Seed.subject(organizationId, spaceId)])
+      yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
+        discard: true,
+      })
+      yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()), {
+        discard: true,
+      })
+      const archive = (session: (typeof sessions)[number]) =>
+        database.db
+          .update(Database.Schema.agent_session)
+          .set({ archived_at: new Date() })
+          .where(eq(Database.Schema.agent_session.id, session.sessionId))
+          .pipe(Effect.andThen(subject.environments.archive(session)))
+      yield* archive(sessions[0])
+      expect(yield* Ref.get(subject.probe.destroyed)).toEqual([])
+      yield* archive(sessions[1])
+      expect(yield* Ref.get(subject.probe.destroyed)).toEqual(yield* Ref.get(subject.probe.provisions))
+      expect(yield* environmentsOf(environmentTemplateId)).toEqual([])
     }),
   )
 })
