@@ -38,7 +38,7 @@ const actions: Readonly<Record<string, string>> = {
   handoff: "Handing off",
   tool_search: "Searching tools",
   tool_execute: "Executing",
-  ren_app_connect: "Connecting App",
+  ren_app_request_connect: "Connecting App",
   ren_search: "Searching catalog",
   ren_pod_list: "Listing teams",
   ren_pod_get: "Reading team",
