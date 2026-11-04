@@ -5,21 +5,24 @@ import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query"
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
 import {
-  IconAlertCircle,
-  IconCalendar,
+  IconArrowUpLeft,
+  IconCalendarDue,
+  IconCheck,
+  IconChecklist,
   IconChevronRight,
   IconCube,
   IconDots,
+  IconGhostFilled,
+  IconHandStop,
   IconHistory,
   IconMessage,
   IconPlayerPlay,
   IconPlus,
-  IconGhost,
-  IconSquare,
-  IconSquareCheckFilled,
+  IconTag,
   IconUserCircle,
 } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
+import { Checkbox } from "@ren/ui/checkbox"
 import { Calendar } from "@ren/ui/calendar"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
 import {
@@ -27,8 +30,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
@@ -43,10 +44,8 @@ import {
   PriorityIcon,
   StatusIcon,
   labelColor,
-  priorities,
   priorityLabelOf,
   statusOf,
-  statuses,
 } from "../../components/task-meta.js"
 import { formatDate } from "@ren/ui/time"
 import { errorMessage } from "../../lib/errors.js"
@@ -59,16 +58,18 @@ import { useLabels } from "../../lib/use-labels.js"
 import { useMembers, type Member } from "../../lib/use-members.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { ColorDot } from "@ren/ui/color-dot"
+import { TaskDescription } from "./task-description.js"
 import { TaskActivity } from "./task-activity.js"
 import { TaskLinks } from "./task-links.js"
+import { PriorityMenu, StatusMenu } from "../../components/task-pickers.js"
+import { NewTaskDialog } from "../../components/new-task-dialog.js"
 import { cn } from "cn"
 
 const propertyButton =
-  "-ml-2 h-8 w-fit justify-start gap-2 px-2 font-normal [&_svg:not([class*='text-'])]:text-muted-foreground"
+  "-ml-2.5 h-8 w-fit justify-start gap-2 rounded-full px-2.5 font-normal data-popup-open:bg-muted [&_svg:not([class*='text-'])]:text-muted-foreground"
 
-const pickerCommand =
-  "rounded-none! **:data-[slot=input-group]:h-14! **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:uppercase"
-const pickerItem = "h-11 gap-3 rounded-lg px-3"
+const pickerCommand = "rounded-none! **:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:text-xs"
+const pickerItem = "gap-2"
 
 function PropertySection(props: { title: string; children: ReactNode }) {
   return (
@@ -96,7 +97,7 @@ function pickShown(patch: Patch): Partial<TaskInfo> {
   }
 }
 
-export function TaskPage(props: { session: ReactNode }) {
+export function TaskPage(props: { session: ((dock: ReactNode) => ReactNode) | null }) {
   const { api, queryClient } = RouterContext.useRouterContext()
   const params = route.useParams()
   const search = route.useSearch()
@@ -129,7 +130,7 @@ export function TaskPage(props: { session: ReactNode }) {
         onArchive={() => setArchiving(true)}
       />
       <div className="flex min-h-0 flex-1 gap-8 overflow-y-auto overscroll-contain pr-8 pl-2">
-        <TaskArticle task={task} onChange={change} />
+        <TaskArticle task={task} onChange={change} onOpenSession={openSession} />
         <aside aria-label="Task properties" className="flex w-70 shrink-0 flex-col gap-6 pt-12">
           <PropertySection title="Properties">
             <StatusProperty task={task} onChange={change} />
@@ -137,6 +138,11 @@ export function TaskPage(props: { session: ReactNode }) {
             <AssigneeProperty task={task} onAssign={reassign} />
             <DueDateProperty task={task} onChange={change} />
           </PropertySection>
+          {task.links.length > 0 ? (
+            <PropertySection title="Links">
+              <TaskLinks links={task.links} />
+            </PropertySection>
+          ) : null}
           <PropertySection title="Labels">
             <LabelsProperty task={task} onChange={change} />
           </PropertySection>
@@ -172,7 +178,9 @@ export function TaskPage(props: { session: ReactNode }) {
             <SheetTitle>Task session</SheetTitle>
             <SheetDescription>Chat with the agent working on this task.</SheetDescription>
           </SheetHeader>
-          <div className="flex min-h-0 flex-1 flex-col">{props.session}</div>
+          <div className="flex min-h-0 flex-1 flex-col">
+            {props.session?.(task.humanReview ? <ReviewCard task={task} /> : null)}
+          </div>
         </SheetContent>
       </Sheet>
     </div>
@@ -201,12 +209,24 @@ function TaskHeader(props: {
       },
     )
   return (
-    <header className="mx-8 flex h-11.5 shrink-0 items-center gap-2 border-b text-sm group-has-[[data-slot=sidebar][data-state=collapsed]]/sidebar-wrapper:pl-6 max-md:pl-6">
+    <header className="mx-8 flex h-15 shrink-0 items-center gap-2.5 border-b pt-1 text-sm max-md:pl-6">
       <Link to="/tasks" className="font-medium">
         Tasks
       </Link>
       <IconChevronRight className="size-4 text-muted-foreground" />
-      <span className="font-mono text-xs text-muted-foreground">{task.identifier}</span>
+      {task.parent ? (
+        <>
+          <Link
+            to="/tasks/$taskId"
+            params={{ taskId: task.parent.id }}
+            className="max-w-60 truncate text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground"
+          >
+            {task.parent.title}
+          </Link>
+          <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        </>
+      ) : null}
+      <IconChecklist aria-label={task.identifier} className="size-4 shrink-0 text-muted-foreground" />
       <span className="truncate font-medium">{task.title}</span>
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button className="ml-auto" aria-label={`Start a session for ${task.title}`} />}>
@@ -274,11 +294,27 @@ function TaskHeader(props: {
   )
 }
 
-function TaskArticle(props: { task: TaskInfo; onChange: (patch: Patch) => void }) {
+function TaskArticle(props: {
+  task: TaskInfo
+  onChange: (patch: Patch) => void
+  onOpenSession: (session: string | undefined) => void
+}) {
   const task = props.task
   return (
-    <article className="mx-auto flex w-full max-w-200 min-w-0 flex-col gap-6 pt-12 pb-16">
+    <article className="mx-auto flex w-full max-w-200 min-w-0 flex-col gap-6 self-start pt-12 pb-24">
       <h1 className="sr-only">{task.title}</h1>
+      {task.parent ? (
+        <Link
+          to="/tasks/$taskId"
+          params={{ taskId: task.parent.id }}
+          title={`Back to ${task.parent.identifier}`}
+          className="-mb-3 flex h-7 w-fit max-w-full items-center gap-1.5 rounded-full border bg-muted px-2.5 text-xs text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground"
+        >
+          <IconArrowUpLeft className="size-3.5 shrink-0" />
+          <IconChecklist className="size-3.5 shrink-0" />
+          <span className="truncate font-medium text-foreground">{task.parent.title}</span>
+        </Link>
+      ) : null}
       <Textarea
         key={`title-${task.title}`}
         defaultValue={task.title}
@@ -299,50 +335,81 @@ function TaskArticle(props: { task: TaskInfo; onChange: (patch: Patch) => void }
           else if (title !== task.title) props.onChange({ title })
         }}
         aria-label="Task title"
-        className="min-h-0 resize-none rounded-none border-0 bg-transparent p-0 text-2xl font-semibold tracking-heading shadow-none focus-visible:ring-0 md:text-2xl dark:bg-transparent"
+        className="min-h-0 shrink-0 resize-none rounded-none border-0 bg-transparent p-0 text-2xl font-semibold tracking-heading shadow-none focus-visible:ring-0 md:text-2xl dark:bg-transparent"
       />
-      {task.humanReview ? <ReviewBanner task={task} /> : null}
-      <Textarea
-        key={`description-${task.description ?? ""}`}
-        defaultValue={task.description ?? ""}
-        readOnly={!task.canUpdate}
-        onBlur={(event) => {
-          const description = event.currentTarget.value.trim()
-          if (description !== (task.description ?? "")) props.onChange({ description: description || null })
-        }}
-        placeholder="Add description…"
-        aria-label="Task description"
-        className="min-h-0 resize-none rounded-none border-0 bg-transparent p-0 text-md/6 shadow-none focus-visible:ring-0 md:text-md/6 dark:bg-transparent"
-      />
+      {task.humanReview ? <ReviewBanner task={task} onOpenSession={props.onOpenSession} /> : null}
+      <TaskDescription task={task} onChange={(description) => props.onChange({ description })} />
       <Subtasks task={task} />
-      {task.links.length > 0 ? <TaskLinks links={task.links} /> : null}
       <Separator />
-      <TaskActivity taskId={task.id} />
+      <TaskActivity taskId={task.id} onOpenSession={props.onOpenSession} />
     </article>
   )
 }
 
-function ReviewBanner(props: { task: TaskInfo }) {
+function useReview(task: TaskInfo) {
   const { api } = RouterContext.useRouterContext()
   const review = useMutation(api.task.review.mutationOptions())
-  const decide = (decision: "approved" | "changes_requested") =>
-    review.mutate(
-      { id: props.task.id, payload: { humanReview: false, decision } },
-      { onError: failed("Couldn’t send the review") },
-    )
+  return {
+    pending: review.isPending,
+    decide: (decision: "approved" | "changes_requested") =>
+      review.mutate(
+        { id: task.id, payload: { humanReview: false, decision } },
+        { onError: failed("Couldn’t send the review") },
+      ),
+  }
+}
+
+function ReviewBanner(props: { task: TaskInfo; onOpenSession: (session: string | undefined) => void }) {
+  const waiting = useAgents().agent(props.task.agentId)?.name ?? "Ren"
+  const review = useReview(props.task)
+  const session = props.task.session?.id
   return (
-    <div className="flex items-start gap-3 rounded-xl border bg-card p-4">
-      <IconAlertCircle className="mt-0.5 size-4 text-chart-3" />
-      <div className="flex flex-1 flex-col gap-1">
-        <span className="text-sm font-medium">Needs your review</span>
-        {props.task.humanReviewReason ? (
-          <span className="text-sm text-muted-foreground">{props.task.humanReviewReason}</span>
-        ) : null}
-      </div>
-      <Button variant="ghost" onClick={() => decide("changes_requested")}>
-        Request changes
+    <div className="flex items-center gap-3 rounded-xl border bg-card py-2.5 pr-2.5 pl-4">
+      <IconHandStop className="size-4 shrink-0 text-chart-3" />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">{waiting} is waiting for your go-ahead</span>
+      {session ? (
+        <Button size="sm" variant="ghost" onClick={() => props.onOpenSession(session)}>
+          See details
+        </Button>
+      ) : null}
+      <Button size="sm" disabled={review.pending} onClick={() => review.decide("approved")}>
+        <IconCheck />
+        Approve
       </Button>
-      <Button onClick={() => decide("approved")}>Approve</Button>
+    </div>
+  )
+}
+
+function ReviewCard(props: { task: TaskInfo }) {
+  const review = useReview(props.task)
+  const waiting = useAgents().agent(props.task.agentId)?.name ?? "Ren"
+  return (
+    <div className="flex animate-in flex-col gap-3 rounded-xl border bg-card p-4 duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:slide-in-from-bottom-0">
+      <div className="flex items-start gap-3">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-chart-3">
+          <IconHandStop className="size-4" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-sm font-medium">{waiting} is waiting for your go-ahead</span>
+          {props.task.humanReviewReason ? (
+            <span className="text-sm whitespace-pre-wrap text-muted-foreground">{props.task.humanReviewReason}</span>
+          ) : null}
+        </div>
+      </div>
+      <div className="ml-11 flex gap-2">
+        <Button size="sm" disabled={review.pending} onClick={() => review.decide("approved")}>
+          <IconCheck />
+          Approve
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={review.pending}
+          onClick={() => review.decide("changes_requested")}
+        >
+          Request changes
+        </Button>
+      </div>
     </div>
   )
 }
@@ -356,29 +423,40 @@ function Subtasks(props: { task: TaskInfo }) {
   })
   const subtasks = listed.data?.items ?? []
   const total = task.subtasks?.total ?? 0
-  if (listed.isPending && total > 0)
-    return (
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium">Subtasks</h2>
-        <SkeletonRows count={Math.min(total, 3)} label="Loading subtasks" />
-      </section>
-    )
-  if (subtasks.length === 0) return null
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-medium">
-        Subtasks · {task.subtasks?.done ?? 0} of {total || subtasks.length} done
-      </h2>
+    <section className="flex flex-col gap-1">
+      <div className="flex h-8 items-center justify-between">
+        <h2 className="text-sm font-medium">
+          Sub-tasks
+          {total > 0 ? (
+            <span className="ml-1.5 font-normal text-muted-foreground tabular-nums">
+              {task.subtasks?.done ?? 0}/{total}
+            </span>
+          ) : null}
+        </h2>
+        {task.canUpdate ? (
+          <NewTaskDialog
+            spaceId={task.spaceId}
+            parent={{ id: task.id, identifier: task.identifier }}
+            trigger={<Button variant="ghost" size="sm" className="text-muted-foreground" />}
+          >
+            <IconPlus />
+            Add sub-task
+          </NewTaskDialog>
+        ) : null}
+      </div>
+      {listed.isPending && total > 0 ? <SkeletonRows count={Math.min(total, 3)} label="Loading sub-tasks" /> : null}
       {subtasks.map((subtask) => (
         <Link
           key={subtask.id}
           to="/tasks/$taskId"
           params={{ taskId: subtask.id }}
-          className="flex h-9 items-center gap-2 rounded-lg px-2 text-sm hover:bg-muted"
+          className="-mx-2 flex h-9 items-center gap-2 rounded-lg px-2 text-sm transition-colors duration-150 ease-out hover:bg-muted"
         >
+          <PriorityIcon priority={subtask.priority} />
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{subtask.identifier}</span>
           <StatusIcon task={subtask} />
-          <span className="font-mono text-xs text-muted-foreground">{subtask.identifier}</span>
-          {subtask.title}
+          <span className="truncate font-medium">{subtask.title}</span>
         </Link>
       ))}
     </section>
@@ -388,65 +466,34 @@ function Subtasks(props: { task: TaskInfo }) {
 function StatusProperty(props: { task: TaskInfo; onChange: (patch: Patch) => void }) {
   const task = props.task
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button variant="ghost" className={propertyButton} aria-label={`Status for ${task.title}`} />}
-      >
-        <StatusIcon task={task} />
-        {statusOf(task.status).label}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-40">
-        <DropdownMenuRadioGroup
-          value={task.status}
-          onValueChange={(status: string) => {
-            if (status === "todo" || status === "in_progress" || status === "done" || status === "dismissed")
-              props.onChange({ status })
-          }}
-        >
-          {Object.entries(statuses).map((entry) => (
-            <DropdownMenuRadioItem key={entry[0]} value={entry[0]}>
-              {entry[1].label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <StatusMenu
+      status={task.status}
+      onChange={(status) => props.onChange({ status })}
+      trigger={<Button variant="ghost" className={propertyButton} aria-label={`Status for ${task.title}`} />}
+    >
+      <StatusIcon task={task} />
+      {statusOf(task.status).label}
+    </StatusMenu>
   )
 }
 
 function PriorityProperty(props: { task: TaskInfo; onChange: (patch: Patch) => void }) {
   const task = props.task
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button variant="ghost" className={propertyButton} aria-label={`Priority for ${task.title}`} />}
-      >
-        <PriorityIcon priority={task.priority} />
-        {task.priority ? priorityLabelOf(task.priority) : "No priority"}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-40">
-        <DropdownMenuRadioGroup
-          value={task.priority ?? "none"}
-          onValueChange={(priority: string) =>
-            props.onChange({
-              priority: priority === "high" || priority === "medium" || priority === "low" ? priority : null,
-            })
-          }
-        >
-          {[["none", "No priority"], ...Object.entries(priorities)].map((entry) => (
-            <DropdownMenuRadioItem key={entry[0]} value={entry[0]}>
-              {entry[1]}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <PriorityMenu
+      priority={task.priority}
+      onChange={(priority) => props.onChange({ priority })}
+      trigger={<Button variant="ghost" className={propertyButton} aria-label={`Priority for ${task.title}`} />}
+    >
+      <PriorityIcon priority={task.priority} />
+      {task.priority ? priorityLabelOf(task.priority) : "No priority"}
+    </PriorityMenu>
   )
 }
 
 function AssigneeIcon(props: { task: TaskInfo; owner: Member | undefined }) {
   const owner = props.owner
-  if (props.task.agentId) return <IconGhost />
+  if (props.task.agentId) return <IconGhostFilled />
   if (owner?.name) return <PersonAvatar name={owner.name} image={owner.image} />
   return <IconUserCircle />
 }
@@ -469,9 +516,9 @@ function AssigneeProperty(props: { task: TaskInfo; onAssign: (target: Assignment
         <AssigneeIcon task={task} owner={owner} />
         {assignee ?? "Unassigned"}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 gap-0 p-0">
+      <PopoverContent align="start" className="w-60 gap-0 p-0">
         <Command className={pickerCommand}>
-          <CommandInput placeholder="Search assignee…" className="text-base" />
+          <CommandInput placeholder="Search assignee…" />
           <AssigneeList task={task} assigned={assignee !== null} onAssign={props.onAssign} />
         </Command>
       </PopoverContent>
@@ -484,7 +531,7 @@ function AssigneeList(props: { task: TaskInfo; assigned: boolean; onAssign: (tar
   const agents = useAgents().agents
   const members = useMembers().members
   return (
-    <CommandList className="max-h-80 p-1">
+    <CommandList className="max-h-72 p-1">
       <CommandEmpty>No one matches.</CommandEmpty>
       <CommandGroup>
         <CommandItem
@@ -504,7 +551,7 @@ function AssigneeList(props: { task: TaskInfo; assigned: boolean; onAssign: (tar
             data-checked={task.agentId === agent.id}
             onSelect={() => props.onAssign({ agentId: agent.id })}
           >
-            <IconGhost />
+            <IconGhostFilled />
             {agent.name}
           </CommandItem>
         ))}
@@ -540,15 +587,15 @@ function DueDateProperty(props: { task: TaskInfo; onChange: (patch: Patch) => vo
           />
         }
       >
-        <IconCalendar />
+        <IconCalendarDue />
         {task.dueAt ? formatDate(task.dueAt) : "Set due date"}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 gap-2 p-3">
+      <PopoverContent align="start" className="w-auto gap-1 p-1.5">
         <Calendar
           mode="single"
           selected={task.dueAt ? new Date(task.dueAt) : undefined}
           onSelect={(day: Date | undefined) => set({ dueAt: day ? day.toISOString() : null })}
-          className="w-full p-0"
+          className="p-0"
         />
         <Separator />
         <Button
@@ -576,52 +623,71 @@ function LabelsProperty(props: { task: TaskInfo; onChange: (patch: Patch) => voi
           render={
             <Button
               variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
+              className={cn(propertyButton, "text-muted-foreground", task.labels.length > 0 && "ml-0 w-8 px-0")}
               aria-label={`Labels for ${task.title}`}
             />
           }
         >
-          <IconPlus />
+          {task.labels.length > 0 ? <IconPlus /> : <IconTag />}
+          {task.labels.length > 0 ? null : "Add label"}
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 gap-0 p-1">
-          <Command>
-            <CommandInput placeholder="Search or create labels…" />
-            <LabelList task={task} onChange={props.onChange} />
-          </Command>
+          <LabelPicker task={task} onChange={props.onChange} />
         </PopoverContent>
       </Popover>
     </div>
   )
 }
 
-function LabelList(props: { task: TaskInfo; onChange: (patch: Patch) => void }) {
+function LabelPicker(props: { task: TaskInfo; onChange: (patch: Patch) => void }) {
   const labels = useLabels()
+  const [query, setQuery] = useState("")
   const names = props.task.labels.map((each) => each.name)
+  const typed = query.trim()
+  const creatable = typed !== "" && !labels.some((label) => label.name.toLowerCase() === typed.toLowerCase())
+  const toggle = (name: string) =>
+    props.onChange({ labels: names.includes(name) ? names.filter((each) => each !== name) : [...names, name] })
   return (
-    <CommandList className="pt-1">
-      <CommandEmpty>No labels match.</CommandEmpty>
-      <CommandGroup className="p-0">
-        {labels.map((label) => {
-          const checked = names.includes(label.name)
-          return (
+    <Command>
+      <CommandInput placeholder="Search or create labels…" value={query} onValueChange={setQuery} />
+      <CommandList className="pt-1">
+        {creatable ? null : <CommandEmpty>No labels match.</CommandEmpty>}
+        <CommandGroup className="p-0">
+          {labels.map((label) => (
             <CommandItem
               key={label.id}
-              data-checked={checked}
-              onSelect={() =>
-                props.onChange({
-                  labels: checked ? names.filter((name) => name !== label.name) : [...names, label.name],
-                })
-              }
+              value={label.name}
+              onSelect={() => toggle(label.name)}
+              className="[&>svg:last-child]:hidden"
             >
-              {checked ? <IconSquareCheckFilled /> : <IconSquare className="text-muted-foreground" />}
               <ColorDot color={labelColor(label.color)} />
-              {label.name}
+              <span className="min-w-0 flex-1 truncate">{label.name}</span>
+              <Checkbox
+                checked={names.includes(label.name)}
+                tabIndex={-1}
+                aria-hidden
+                className="pointer-events-none data-checked:border-chart-1 data-checked:bg-chart-1 data-checked:text-white dark:data-checked:bg-chart-1"
+              />
             </CommandItem>
-          )
-        })}
-      </CommandGroup>
-    </CommandList>
+          ))}
+          {creatable ? (
+            <CommandItem
+              value={`create ${typed}`}
+              onSelect={() => {
+                toggle(typed)
+                setQuery("")
+              }}
+              className="[&>svg:last-child]:hidden"
+            >
+              <IconPlus className="text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate">
+                Create <span className="font-medium">“{typed}”</span>
+              </span>
+            </CommandItem>
+          ) : null}
+        </CommandGroup>
+      </CommandList>
+    </Command>
   )
 }
 
@@ -642,11 +708,11 @@ function SpaceProperty(props: { task: TaskInfo; onAssign: (target: Assignment) =
         <IconCube />
         {spaces.spaceName(task.spaceId)}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 gap-0 p-0">
+      <PopoverContent align="start" className="w-60 gap-0 p-0">
         <Command className={pickerCommand}>
-          <CommandInput placeholder="Search space…" className="text-base" />
-          <p className="-mx-1 border-b px-4 py-2 text-xs text-muted-foreground">Moving a task does not start work.</p>
-          <CommandList className="max-h-80 p-1">
+          <CommandInput placeholder="Search space…" />
+          <p className="border-b px-3 py-1.5 text-xs text-muted-foreground">Moving a task does not start work.</p>
+          <CommandList className="max-h-72 p-1">
             <CommandEmpty>No spaces match.</CommandEmpty>
             <CommandGroup heading="Move to a space">
               {spaces.spaces.map((space) => (

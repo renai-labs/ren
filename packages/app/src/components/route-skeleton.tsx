@@ -36,7 +36,7 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   factory: { title: "Factory", description: (space) => `Agents that work on tasks in ${space}.` },
 }
 
-function TasksSample() {
+export function TasksSample() {
   return (
     <div className="flex flex-col">
       {["Backlog", "In progress"].map((title) => (
@@ -374,29 +374,5 @@ function SettingsPageSkeleton() {
     >
       {body}
     </Page>
-  )
-}
-
-export function TasksSkeleton() {
-  return (
-    <Loading label="Loading tasks">
-      <div className="flex flex-col gap-4">
-        {["Backlog", "In progress"].map((title) => (
-          <div key={title}>
-            <div className="flex h-9 items-center gap-2 rounded-lg bg-muted px-2 text-sm">
-              <IconChevronDown className="size-3.5" />
-              <span>{title}</span>
-            </div>
-            {Array.from({ length: 4 }, (_, index) => (
-              <div key={index} className="flex min-h-9 items-center gap-3 border-b px-3 text-sm">
-                <IconCircle className="size-4" />
-                <span className="text-muted-foreground">REN-{index + 1}</span>
-                <span>Task title</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    </Loading>
   )
 }

@@ -3,12 +3,13 @@ import { useState, type ReactElement, type ReactNode } from "react"
 import { useMutation } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import {
-  IconMaximize,
-  IconMinimize,
+  IconCalendarDue,
   IconChevronDown,
   IconChevronRight,
   IconCube,
-  IconGhost,
+  IconGhostFilled,
+  IconMaximize,
+  IconMinimize,
   IconTag,
   IconUserCircle,
   IconX,
@@ -26,6 +27,9 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { Switch } from "@ren/ui/switch"
 import { Textarea } from "@ren/ui/textarea"
+import { Calendar } from "@ren/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
+import { formatDate } from "@ren/ui/time"
 import { PriorityIcon, StatusGlyph, priorityLabelOf, statusOf, labelColor, priorities, statuses } from "./task-meta.js"
 import { Spinner } from "@ren/ui/spinner"
 import { useAgents } from "../lib/use-agents.js"
@@ -81,6 +85,7 @@ const draftFor = (spaceId: string) => ({
   priority: "none",
   agentId: "none",
   labels: [] as string[],
+  dueAt: "",
 })
 
 const isBareKey = (event: KeyboardEvent) =>
@@ -106,8 +111,10 @@ function createStatus(status: string): TaskCreateInput["status"] {
 const createPriority = (priority: string): Pick<TaskCreateInput, "priority"> =>
   priority === "high" || priority === "medium" || priority === "low" ? { priority } : {}
 
-const taskInput = (draft: ReturnType<typeof draftFor>, spaceId: string): TaskCreateInput => ({
+const taskInput = (draft: ReturnType<typeof draftFor>, spaceId: string, parentId?: string): TaskCreateInput => ({
   spaceId,
+  ...(parentId && { parentId }),
+  ...(draft.dueAt && { dueAt: draft.dueAt }),
   title: draft.title.trim(),
   ...(draft.description.trim() && { description: draft.description.trim() }),
   status: createStatus(draft.status),
@@ -226,13 +233,59 @@ function TaskChips(props: {
             label: agent.name,
           })),
         ]}
-        icon={props.draft.agentId === "none" ? <IconUserCircle /> : <IconGhost />}
+        icon={props.draft.agentId === "none" ? <IconUserCircle /> : <IconGhostFilled />}
         text={agents.find((agent) => agent.id === props.draft.agentId)?.name ?? "Assignee"}
         muted={props.draft.agentId === "none"}
         onChange={(agentId) => props.onChange({ agentId })}
       />
       <LabelsChip value={props.draft.labels} onChange={(next) => props.onChange({ labels: next })} />
+      <DueChip value={props.draft.dueAt} onChange={(dueAt) => props.onChange({ dueAt })} />
     </div>
+  )
+}
+
+function DueChip(props: { value: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Due date"
+            className={cn("rounded-full px-3", props.value && "text-foreground")}
+          />
+        }
+      >
+        <IconCalendarDue />
+        {props.value ? formatDate(props.value) : "Due date"}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 gap-2 p-3">
+        <Calendar
+          mode="single"
+          selected={props.value ? new Date(props.value) : undefined}
+          onSelect={(day: Date | undefined) => {
+            props.onChange(day ? day.toISOString() : "")
+            setOpen(false)
+          }}
+          className="w-full p-0"
+        />
+        {props.value ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="self-start"
+            onClick={() => {
+              props.onChange("")
+              setOpen(false)
+            }}
+          >
+            Clear
+          </Button>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -248,6 +301,7 @@ export function NewTaskDialog(props: {
   trigger?: ReactElement | undefined
   children?: ReactNode
   spaceId?: string | undefined
+  parent?: { id: string; identifier: string } | undefined
   open?: boolean | undefined
   onOpenChange?: ((open: boolean) => void) | undefined
 }) {
@@ -262,7 +316,7 @@ export function NewTaskDialog(props: {
   const set = (patch: Partial<typeof draft>) => setDraft((current) => ({ ...current, ...patch }))
   const mutation = useMutation(api.task.create.mutationOptions())
   const create = () => {
-    mutation.mutate(taskInput(draft, spaceId), {
+    mutation.mutate(taskInput(draft, spaceId, props.parent?.id), {
       onSuccess: (task) => {
         toast.success(`${task.identifier} created`)
         setDraft(draftFor(spaceId))
@@ -279,9 +333,13 @@ export function NewTaskDialog(props: {
         className={cn("top-[12%] translate-y-0 gap-0 p-0", expanded ? "sm:max-w-5xl" : "sm:max-w-3xl")}
       >
         <div className="flex items-center gap-2 p-4 pb-2">
-          <SpaceChip spaceId={spaceId} onChange={(next) => set({ spaceId: next })} />
+          {props.parent ? (
+            <span className="font-mono text-xs text-muted-foreground">{props.parent.identifier}</span>
+          ) : (
+            <SpaceChip spaceId={spaceId} onChange={(next) => set({ spaceId: next })} />
+          )}
           <IconChevronRight className="size-4 text-muted-foreground" />
-          <DialogTitle>New task</DialogTitle>
+          <DialogTitle>{props.parent ? "New sub-task" : "New task"}</DialogTitle>
           <DialogDescription className="sr-only">Add a task to a space.</DialogDescription>
           <Button
             variant="ghost"
@@ -319,7 +377,7 @@ export function NewTaskDialog(props: {
               placeholder="Task title"
               aria-label="Task title"
               rows={1}
-              className="min-h-7 resize-none rounded-none border-0 p-0 text-xl font-medium focus-visible:ring-0 md:text-xl"
+              className="min-h-7 resize-none rounded-none border-0 bg-transparent p-0 text-xl font-medium shadow-none focus-visible:ring-0 md:text-xl dark:bg-transparent"
             />
             <Textarea
               value={draft.description}
@@ -327,7 +385,7 @@ export function NewTaskDialog(props: {
               placeholder="Add description…"
               aria-label="Task description"
               className={cn(
-                "resize-none rounded-none border-0 p-0 text-base focus-visible:ring-0 md:text-base",
+                "resize-none rounded-none border-0 bg-transparent p-0 text-base shadow-none focus-visible:ring-0 md:text-base dark:bg-transparent",
                 expanded ? "min-h-80" : "min-h-20",
               )}
             />

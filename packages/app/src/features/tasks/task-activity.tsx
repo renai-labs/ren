@@ -2,15 +2,36 @@ import { Loading } from "@ren/ui/loading"
 import { cn } from "cn"
 import { useState } from "react"
 import type { TaskActivityInfo, TaskActor, TaskEventInfo } from "@ren/client"
-import { IconArrowUp, IconGhost } from "@tabler/icons-react"
+import {
+  IconArchive,
+  IconArrowRight,
+  IconArrowUp,
+  IconCheck,
+  IconChevronRight,
+  IconCirclePlus,
+  IconHandStop,
+  IconGhostFilled,
+  IconLink,
+  IconMessage,
+  IconPencil,
+  IconPlayerStopFilled,
+  IconSubtask,
+  IconTag,
+  IconArrowBackUp,
+} from "@tabler/icons-react"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { ChatReact } from "@ren/chat/react"
+import { Session } from "@ren/schema/session"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@ren/ui/input-group"
 import { toast } from "@ren/ui/sonner"
 import { formatDateTime, formatRelative } from "@ren/ui/time"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
-import { Item, ItemDescription, ItemHeader } from "@ren/ui/item"
+import { Item, ItemHeader } from "@ren/ui/item"
+import { Button } from "@ren/ui/button"
+import { Spinner } from "@ren/ui/spinner"
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@ren/ui/trace"
 import { StatusGlyph, statusOf } from "../../components/task-meta.js"
+import { Markdown } from "../../components/markdown.js"
 import { errorMessage } from "../../lib/errors.js"
 import { taskActivityOptions } from "../../lib/tasks.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -48,7 +69,8 @@ const assignment = (data: Extract<TaskEventInfo["data"], { _tag: "assigned" }>, 
   const moved = data.fromSpaceId === data.toSpaceId ? undefined : `moved it to ${names.space(data.toSpaceId)}`
   const assignee = names.agent(data.toAgentId) ?? names.person(data.toOwnerId)
   const changed = data.fromAgentId !== data.toAgentId || data.fromOwnerId !== data.toOwnerId
-  const assigned = assignee ? `assigned it to ${assignee}` : "removed the assignee"
+  const handoff = data.fromAgentId !== null && data.toAgentId !== null
+  const assigned = assignee ? `${handoff ? "handed off to" : "assigned it to"} ${assignee}` : "removed the assignee"
   return [changed ? assigned : undefined, moved].filter(Boolean).join(" and ") || "changed the assignment"
 }
 
@@ -103,6 +125,7 @@ function eventText(data: EventData, names: Names) {
 const eventNote = (event: TaskEventInfo) => {
   if (event.data._tag === "review_requested") return event.data.reason
   if (event.data._tag === "reviewed") return event.data.comment
+  if (event.data._tag === "assigned") return event.data.note
   return null
 }
 
@@ -113,7 +136,7 @@ const when = (at: string) => (
 )
 
 function ActorMark(props: { actor: TaskActor; names: Names }) {
-  if (props.actor.agentId) return <IconGhost />
+  if (props.actor.agentId) return <IconGhostFilled />
   const image = props.names.image(props.actor)
   return (
     <Avatar size="sm" className="data-[size=sm]:size-4">
@@ -123,21 +146,130 @@ function ActorMark(props: { actor: TaskActor; names: Names }) {
   )
 }
 
-function EventMark(props: { event: TaskEventInfo; names: Names }) {
-  if (props.event.data._tag === "status") return <StatusGlyph status={props.event.data.to} />
-  return <ActorMark actor={props.event.actor} names={props.names} />
+const eventIcons = {
+  created: IconCirclePlus,
+  assigned: IconArrowRight,
+  started: IconMessage,
+  review_requested: IconHandStop,
+  field: IconPencil,
+  label: IconTag,
+  link: IconLink,
+  parent: IconSubtask,
+  archived: IconArchive,
+} as const
+
+function EventMark(props: { event: TaskEventInfo }) {
+  const data = props.event.data
+  if (data._tag === "status") return <StatusGlyph status={data.to} />
+  if (data._tag === "reviewed") return data.decision === "approved" ? <IconCheck /> : <IconArrowBackUp />
+  const Icon = eventIcons[data._tag]
+  return <Icon />
 }
 
-function Events(props: { events: ReadonlyArray<TaskEventInfo>; names: Names }) {
+const sessionState = { busy: "Working", idle: "Finished" } as const
+
+function StopSession(props: { sessionId: string; agent: string }) {
+  const sessionId = Session.ID.make(props.sessionId)
+  const stop = ChatReact.useAction(sessionId, (opened) => opened.stop(sessionId))
+  const [stopping, setStopping] = useState(false)
   return (
-    <Trace className="relative gap-2.5 pl-3.5 before:absolute before:inset-y-2.5 before:left-5.5 before:w-px before:bg-border">
+    <Button
+      variant="outline"
+      size="sm"
+      aria-label={`Stop ${props.agent}’s session`}
+      disabled={stopping}
+      className="absolute top-2 right-2 rounded-full"
+      onClick={() => {
+        setStopping(true)
+        void stop()
+          .catch((error: unknown) => toast.error("Couldn’t stop the session", { description: errorMessage(error) }))
+          .finally(() => setStopping(false))
+      }}
+    >
+      {stopping ? <Spinner data-icon="inline-start" /> : <IconPlayerStopFilled data-icon="inline-start" />}
+      Stop
+    </Button>
+  )
+}
+
+function SessionCard(props: {
+  event: TaskEventInfo
+  sessionId: string
+  agentId: string
+  names: Names
+  onOpen: (sessionId: string) => void
+}) {
+  const { api } = RouterContext.useRouterContext()
+  const session = useQuery({
+    ...api.session.get.queryOptions({ idOrSlug: props.sessionId }),
+    retry: false,
+    refetchInterval: (query) => (query.state.data?.status === "busy" ? 5000 : false),
+  })
+  const status = session.data?.status
+  const agent = props.names.agent(props.agentId) ?? "Agent"
+  return (
+    <div className="relative ml-6 flex">
+      <Button
+        variant="outline"
+        aria-label={`Open ${agent}’s session`}
+        onClick={() => props.onOpen(props.sessionId)}
+        className="h-auto flex-1 flex-col items-stretch gap-0 overflow-hidden rounded-xl bg-card p-0 text-left font-normal whitespace-normal hover:bg-muted/60 dark:bg-card dark:hover:bg-muted/60"
+      >
+        <span className="flex items-center gap-2 border-b px-3.5 py-2.5 text-sm">
+          <IconMessage className="text-muted-foreground" />
+          <span className="font-medium">{agent}</span>
+          <span className="text-muted-foreground">
+            started by {props.names.actor(props.event.actor)} · {when(props.event.createdAt)}
+          </span>
+        </span>
+        <span className="flex items-center gap-2 px-3.5 py-2.5 text-sm">
+          {status === "busy" ? (
+            <Spinner className="size-3.5 text-chart-2" />
+          ) : (
+            <span aria-hidden className="mx-0.75 size-2 shrink-0 rounded-full bg-muted-foreground/60" />
+          )}
+          <span className={status === "busy" ? "text-foreground" : "text-muted-foreground"}>
+            {status ? sessionState[status] : "Session"}
+          </span>
+          {session.data?.title ? (
+            <span className="min-w-0 flex-1 truncate">{session.data.title}</span>
+          ) : (
+            <span className="flex-1" />
+          )}
+          <IconChevronRight className="shrink-0 text-muted-foreground" />
+        </span>
+      </Button>
+      {status === "busy" ? <StopSession sessionId={props.sessionId} agent={agent} /> : null}
+    </div>
+  )
+}
+
+function Events(props: {
+  events: ReadonlyArray<TaskEventInfo>
+  names: Names
+  onOpenSession: (sessionId: string) => void
+}) {
+  return (
+    <Trace className="relative gap-4 pl-3.5 before:absolute before:inset-y-2.5 before:left-5.5 before:w-px before:bg-border">
       {props.events.map((event) => {
         const note = eventNote(event)
+        const data = event.data
+        if (data._tag === "started")
+          return (
+            <SessionCard
+              key={event.id}
+              event={event}
+              sessionId={data.sessionId}
+              agentId={data.agentId}
+              names={props.names}
+              onOpen={props.onOpenSession}
+            />
+          )
         return (
           <div key={event.id} className="flex flex-col gap-1.5">
             <TraceLine>
-              <TraceIcon className="relative bg-background">
-                <EventMark event={event} names={props.names} />
+              <TraceIcon className="relative bg-background text-muted-foreground">
+                <EventMark event={event} />
               </TraceIcon>
               <TraceTitle>
                 {props.names.actor(event.actor)} {eventText(event.data, props.names)}{" "}
@@ -171,9 +303,9 @@ function CommentCard(props: {
         <span className="font-medium">{props.names.actor(props.comment.author)}</span>
         <span className="text-muted-foreground">{when(props.comment.createdAt)}</span>
       </ItemHeader>
-      <ItemDescription className="line-clamp-none w-full text-md/6 whitespace-pre-wrap text-foreground">
+      <Markdown className="w-full text-md/6 [&_h1]:text-base [&_h2]:text-base [&_h3]:text-md">
         {props.comment.body}
-      </ItemDescription>
+      </Markdown>
     </Item>
   )
 }
@@ -211,7 +343,7 @@ function CommentComposer(props: { taskId: string }) {
     )
   }
   return (
-    <InputGroup className="rounded-xl">
+    <InputGroup className="relative rounded-xl">
       <InputGroupTextarea
         aria-label="Comment"
         placeholder="Leave a comment…"
@@ -222,9 +354,9 @@ function CommentComposer(props: { taskId: string }) {
           event.preventDefault()
           send()
         }}
-        className="min-h-12 px-4 pt-3.5 text-md md:text-md"
+        className="min-h-23 px-4 pt-3.5 pb-12 text-md md:text-md"
       />
-      <InputGroupAddon align="block-end" className="justify-end px-3 pb-3">
+      <InputGroupAddon align="block-end" className="absolute right-0 bottom-0 w-auto px-3 pb-3">
         <InputGroupButton
           variant={body.trim() ? "default" : "ghost"}
           size="icon-xs"
@@ -240,7 +372,7 @@ function CommentComposer(props: { taskId: string }) {
   )
 }
 
-export function TaskActivity(props: { taskId: string }) {
+export function TaskActivity(props: { taskId: string; onOpenSession: (sessionId: string) => void }) {
   const { client } = RouterContext.useRouterContext()
   const names = useNames()
   const now = useNow()
@@ -253,7 +385,7 @@ export function TaskActivity(props: { taskId: string }) {
           <Trace>
             <TraceLine>
               <TraceIcon>
-                <IconGhost />
+                <IconGhostFilled />
               </TraceIcon>
               <TraceTitle>Task activity</TraceTitle>
             </TraceLine>
@@ -263,7 +395,7 @@ export function TaskActivity(props: { taskId: string }) {
       <div className="flex flex-col gap-4">
         {blocksOf(activity.data ?? []).map((block) =>
           block.kind === "events" ? (
-            <Events key={block.id} events={block.events} names={names} />
+            <Events key={block.id} events={block.events} names={names} onOpenSession={props.onOpenSession} />
           ) : (
             <CommentCard
               key={block.id}
@@ -273,7 +405,9 @@ export function TaskActivity(props: { taskId: string }) {
             />
           ),
         )}
-        <CommentComposer taskId={props.taskId} />
+        <div className="pt-4">
+          <CommentComposer taskId={props.taskId} />
+        </div>
       </div>
     </section>
   )

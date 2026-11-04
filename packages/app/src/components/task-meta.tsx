@@ -1,4 +1,5 @@
 import { useId, type SVGProps } from "react"
+import { IconLineDashed } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { cn } from "cn"
 import type { TaskInfo } from "@ren/client"
@@ -158,14 +159,21 @@ export const priorities = {
   low: "Low",
 } as const
 
-const priorityLevel: Record<string, number> = { low: 1, medium: 2, high: 3 }
+const priorityLevels = { low: 1, medium: 2, high: 3 } as const
 
 export function PriorityIcon(props: { priority: string | null; className?: string | undefined }) {
+  if (!props.priority)
+    return (
+      <IconLineDashed
+        aria-label="No priority"
+        className={cn("size-4 shrink-0 text-muted-foreground", props.className)}
+      />
+    )
   return (
     <SignalBars
-      level={props.priority ? (priorityLevel[props.priority] ?? 0) : 0}
+      level={Object.entries(priorityLevels).find((entry) => entry[0] === props.priority)?.[1] ?? 0}
       className={cn("size-4 shrink-0 text-muted-foreground", props.className)}
-      aria-label={props.priority ?? "No priority"}
+      aria-label={props.priority}
     />
   )
 }
