@@ -8,7 +8,8 @@ afterEach(() => Promise.all(directories.splice(0).map((directory) => rm(director
 
 test("parallel files get separate homes before package preloads and all homes are removed", async () => {
   const directory = await mkdtemp(join(tmpdir(), "ren-runner-"))
-  directories.push(directory)
+  const home = await mkdtemp(join(tmpdir(), "ren-runner-home-"))
+  directories.push(directory, home)
   await Bun.write(join(directory, "a.test.ts"), Bun.file(new URL("./lib/probe.ts", import.meta.url)))
   await Bun.write(join(directory, "b.test.ts"), Bun.file(new URL("./lib/probe.ts", import.meta.url)))
   await Bun.write(
@@ -18,7 +19,7 @@ test("parallel files get separate homes before package preloads and all homes ar
   await Bun.write(join(directory, "preload.ts"), Bun.file(new URL("./lib/probe-preload.ts", import.meta.url)))
   const child = Bun.spawn([process.execPath, new URL("../../../script/test.ts", import.meta.url).pathname], {
     cwd: directory,
-    env: { ...process.env, REN_TEST_WORKERS: "2", REN_TEST_MEMORY_MIB: "1", REN_TEST_BUDGET_MIB: "65536" },
+    env: { ...process.env, HOME: home, REN_TEST_WORKERS: "2", REN_TEST_MEMORY_MIB: "1", REN_MEMORY_FLOOR_MIB: "0" },
     stdout: "ignore",
     stderr: "pipe",
   })
@@ -26,6 +27,7 @@ test("parallel files get separate homes before package preloads and all homes ar
   expect(await child.exited, errors).toBe(0)
   const homes = await Promise.all(["a", "b"].map((name) => Bun.file(join(directory, `${name}.test.ts.home`)).text()))
   expect(new Set(homes).size).toBe(2)
+  expect(homes.filter((path) => path.startsWith(join(home, ".cache")))).toHaveLength(2)
   expect(await Promise.all(homes.map((home) => Bun.file(join(home, "marker")).exists()))).toEqual([false, false])
   expect(await Bun.file(join(directory, ".cache/test-timings.json")).exists()).toBe(true)
 })

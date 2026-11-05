@@ -44,7 +44,8 @@ Test databases are named `ren_test_clone_<uuid>`, cloned from a cached migrated 
 - Durations: `bun run test` prints only failures. `bun test <file>` prints each test with its duration. Move a test that takes more than 5 seconds to a `*.slow.test.ts` file, as `AGENTS.md` says.
 - End-to-end: `cd packages/e2e && bun run test`. It starts its own server on port 4010.
 - Everything: `bun turbo test`.
-- `bun run test` runs files in isolated parallel workers and waits when other test runs hold the machine's memory budget. Set `REN_TEST_WORKERS=1` for a serial run and `REN_TEST_PROFILE=1` to print setup, body and cleanup timings.
+- `bun run test` runs files in isolated parallel workers and waits, or runs fewer workers, when free memory or the machine's memory budget is short. `bun run lint` and `bun run typecheck` share the budget. Set `REN_TEST_WORKERS=1` for a serial run and `REN_TEST_PROFILE=1` to print setup, body and cleanup timings.
+- `bun run memory` shows who holds the budget. Run another heavy command, such as a build, with `bun run memory queue -- <cmd>`.
 
 ## Generated code
 

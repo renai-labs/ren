@@ -14,35 +14,19 @@ if (
 }
 const memory = Number(process.env.REN_TEST_MEMORY_MIB ?? 1536)
 if (!Number.isSafeInteger(memory) || memory < 1) throw new Error("REN_TEST_MEMORY_MIB must be a positive integer")
-const capacity = Number(
-  process.env.REN_TEST_BUDGET_MIB ??
-    Math.max(
-      1,
-      Math.min(
-        Math.floor(Math.min(os.totalmem(), process.constrainedMemory() || os.totalmem()) / 2 / 1024 ** 2),
-        os.availableParallelism() * memory,
-      ),
-    ),
-)
-const workers = Math.min(requested, os.availableParallelism(), Math.max(1, Math.floor(capacity / memory)))
-const budget = {
-  directory: path.join(os.tmpdir(), `ren-test-budget-${process.getuid?.() ?? os.userInfo().username}`),
-  capacityMiB: capacity,
-  costMiB: memory * workers,
-}
-let reservation = await Budget.reserve(budget)
-if (reservation._tag === "Waiting") {
-  console.error(`Tests waiting for memory: ${reservation.heldMiB} MiB reserved of ${budget.capacityMiB} MiB`)
-}
-while (reservation._tag === "Waiting") {
-  // oxlint-disable-next-line eslint/no-await-in-loop -- Budget retries must wait for the preceding attempt.
-  await Bun.sleep(250)
-  // oxlint-disable-next-line eslint/no-await-in-loop -- Only one admission attempt may run at a time.
-  reservation = await Budget.reserve(budget)
-}
+const wanted = Math.min(requested, os.availableParallelism())
+const reservation = await Budget.acquire({
+  purpose: `tests in ${process.env.npm_package_name ?? path.basename(process.cwd())}`,
+  unitMiB: memory,
+  units: wanted,
+  onWait: console.error,
+})
 process.once("exit", reservation.release)
+const workers = reservation.units
+if (workers < wanted)
+  console.error(`Running ${workers} of ${wanted} test workers to fit the memory budget and free memory`)
 const admitted = performance.now()
-const home = await Homes.create(budget.directory)
+const home = await Homes.create(Budget.directory)
 const temporary = path.join(home, "tmp")
 await fs.mkdir(temporary)
 const timings = path.join(process.cwd(), ".cache", "test-timings.json")
