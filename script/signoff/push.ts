@@ -70,7 +70,7 @@ const current = pushed.find((entry) => entry.tree === working)
 const recorded = current === undefined ? [] : await runs(current.tree)
 if (
   blocking.some((script) => find(recorded, root, script)?.passed !== true) &&
-  (await Bun.$`bun run check`.nothrow()).exitCode !== 0
+  (await Bun.$`bun run check:all`.nothrow()).exitCode !== 0
 ) {
   console.error("signoff: lint or typecheck failed. Fix it and push again.")
   process.exit(1)

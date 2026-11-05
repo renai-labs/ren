@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "incremental": true,
+    "noEmit": false,
+    "outDir": "node_modules/.ts-dist/source",
+    "rootDir": "src",
+    "tsBuildInfoFile": "node_modules/.ts-dist/source.tsbuildinfo"
+  },
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../cell/tsconfig.worker.json"
+    },
+    {
+      "path": "../db/tsconfig.src.json"
+    },
+    {
+      "path": "../environment-api/tsconfig.src.json"
+    },
+    {
+      "path": "../executor/tsconfig.src.json"
+    },
+    {
+      "path": "../host-api/tsconfig.src.json"
+    },
+    {
+      "path": "../opencode-transcript/tsconfig.src.json"
+    },
+    {
+      "path": "../schema/tsconfig.src.json"
+    },
+    {
+      "path": "../telemetry/tsconfig.src.json"
+    },
+    {
+      "path": "../util/tsconfig.src.json"
+    }
+  ]
+}

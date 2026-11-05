@@ -14,5 +14,15 @@
     "tsBuildInfoFile": "node_modules/.ts-dist/source.tsbuildinfo"
   },
   "include": ["src"],
-  "exclude": ["src/bun.ts"]
+  "exclude": ["src/bun.ts"],
+  "references": [
+    { "path": "../brain/tsconfig.src.json" },
+    { "path": "../environment-api/tsconfig.src.json" },
+    { "path": "../executor/tsconfig.src.json" },
+    { "path": "../host-api/tsconfig.src.json" },
+    { "path": "../opencode-transcript/tsconfig.src.json" },
+    { "path": "../protocol/tsconfig.src.json" },
+    { "path": "../schema/tsconfig.src.json" },
+    { "path": "../telemetry/tsconfig.src.json" }
+  ]
 }

@@ -2,6 +2,19 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ESNext", "DOM", "DOM.Iterable"]
-  }
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.ts-dist/tsbuildinfo"
+  },
+  "references": [
+    {
+      "path": "../httpapi-codegen/tsconfig.src.json"
+    },
+    {
+      "path": "../protocol/tsconfig.src.json"
+    },
+    {
+      "path": "../schema/tsconfig.src.json"
+    }
+  ]
 }

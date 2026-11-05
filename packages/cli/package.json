@@ -17,7 +17,7 @@
     "generate": "bun run script/generate.ts",
     "test": "bun ../../script/signoff/record.ts bun ../../script/test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo -b"
   },
   "dependencies": {
     "@effect/platform-bun": "catalog:",
