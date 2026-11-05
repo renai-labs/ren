@@ -66,6 +66,7 @@ export interface Instance {
   readonly users: Map<string, User>
   readonly files: Map<string, string>
   readonly posted: Array<{ readonly method: string; readonly token: string; readonly params: Params }>
+  readonly responses: Array<unknown>
   readonly options: {
     pageSize: number
     revokeError: string | undefined
@@ -229,6 +230,7 @@ export const start = (): Instance => {
     users: new Map(),
     files: new Map(),
     posted: [],
+    responses: [],
     options: {
       pageSize: 200,
       revokeError: undefined,
@@ -245,6 +247,10 @@ export const start = (): Instance => {
       const uploaded = /^\/upload\/(F\d+)$/u.exec(url.pathname)?.[1]
       if (uploaded) {
         state.uploads.set(uploaded, await request.text())
+        return new Response(null, { status: 200 })
+      }
+      if (url.pathname.startsWith("/response/") && request.method === "POST") {
+        state.responses.push(await request.json())
         return new Response(null, { status: 200 })
       }
       const file = /^\/files\/(F\d+)$/u.exec(url.pathname)?.[1]

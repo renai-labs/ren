@@ -112,6 +112,19 @@ A [task](/docs/concepts/tasks/) URL in Slack shows a task card. The card shows t
 - **Notices:** When a task needs a person or is done, Ren posts a notice with the card in each linked thread. The notice tags the task's owner, else its creator.
 - **Who sees the title:** Everyone in the channel can see a card. The title, description, links and chats show only in a channel mapped to the task's space. Elsewhere the card shows the task ID.
 - **Other links:** Chat links do not get a card. Ren's own messages do not unfurl links.
+- **Buttons:** The card's buttons follow the task's state. A click acts as you, so you must have a Ren account and be a member of the task's space. Otherwise, only you see a reply that tells you why.
+
+| Task state                | Buttons      | More actions              |
+| ------------------------- | ------------ | ------------------------- |
+| No agent and no owner     | Assign to me | Open in Ren, Dismiss      |
+| No agent, with an owner   | Open in Ren  | Dismiss                   |
+| Has an agent, not started | Start        | Open in Ren, Dismiss      |
+| In progress               | Open session | Request review, Mark done |
+| Needs review, with a PR   | Approve      | Open session, Open PR     |
+| Needs review, with no PR  | Start build  | Open plan                 |
+| Done or dismissed         | Open in Ren  | Open PR                   |
+
+**Start build** approves the review, as **Approve** does. To request changes or assign an agent, open the task in Ren.
 
 Workspaces that installed Ren before task cards must install it again: the cards need new Slack permissions.
 

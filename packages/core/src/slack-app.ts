@@ -162,7 +162,26 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
       ),
     )
 
-  return { settings: app, post, upload, download }
+  const respond = (url: string, message: object) =>
+    http
+      .execute(
+        HttpClientRequest.post(url).pipe(
+          HttpClientRequest.bodyJsonUnsafe({ response_type: "ephemeral", replace_original: false, ...message }),
+        ),
+      )
+      .pipe(
+        Effect.flatMap((response) =>
+          response.status >= 200 && response.status < 300
+            ? Effect.void
+            : Effect.fail(new Failed({ message: `Slack answered ${response.status} to a response URL` })),
+        ),
+        Effect.timeout(timeLimit),
+        Effect.mapError((cause) =>
+          cause instanceof Failed ? cause : new Failed({ message: `Slack did not take the reply: ${String(cause)}` }),
+        ),
+      )
+
+  return { settings: app, post, upload, download, respond }
 })
 
 export type Client = Effect.Success<ReturnType<typeof make>>

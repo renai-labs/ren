@@ -13,6 +13,7 @@ import { BrainRegistry } from "@ren/core/brain-registry"
 import { ChannelInstalls } from "@ren/core/channel-installs"
 import { ChannelMappings } from "@ren/core/channel-mappings"
 import { SlackBot } from "@ren/core/slack-bot"
+import { SlackTaskActions } from "@ren/core/slack-task-actions"
 import { ChannelTurns } from "@ren/core/channel-turns"
 import { Channels } from "@ren/core/channels"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
@@ -239,6 +240,7 @@ export const layer = Layer.mergeAll(
     OAuthRoutes.layer,
     ChannelRoutes.layer.pipe(
       Layer.provide(Channels.layer),
+      Layer.provide(SlackTaskActions.layer),
       Layer.provide([Task.layer.pipe(Layer.provideMerge(SessionRunner.layer)), ChannelInstalls.layer]),
       Layer.provide(BrainRegistry.layer),
     ),

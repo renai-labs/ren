@@ -8,12 +8,16 @@ import type { Session } from "@ren/schema/session"
 import { eq } from "drizzle-orm"
 import { ConfigProvider, Context, Effect, Layer, Option, Redacted, Schedule, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
+import { ChannelIdentity } from "../src/channel-identity.js"
 import { ChannelNotice } from "../src/channel-notice.js"
 import { ChannelProvider } from "../src/channel-provider.js"
+import { Slack } from "../src/channel-provider/slack.js"
+import { ChannelRoute } from "../src/channel-route.js"
 import { ChannelSecrets } from "../src/channel-secrets.js"
 import { Envelope } from "../src/envelope.js"
 import { GitHubTaskCard } from "../src/github-task-card.js"
 import { SlackApp } from "../src/slack-app.js"
+import { SlackTaskActions } from "../src/slack-task-actions.js"
 import { SlackTaskCard } from "../src/slack-task-card.js"
 import { Task } from "../src/task.js"
 import { TaskCard } from "../src/task-card.js"
@@ -60,6 +64,12 @@ const Entity = Schema.Struct({
     attributes: Schema.Struct({ title: Schema.Struct({ text: Schema.String }) }),
     fields: Schema.Record(Schema.String, Schema.Struct({ value: Schema.Unknown })),
     custom_fields: Schema.Array(Schema.Struct({ key: Schema.String, value: Schema.Unknown })),
+    actions: Schema.optionalKey(
+      Schema.Struct({
+        primary_actions: Schema.optionalKey(Schema.Array(Schema.Struct({ text: Schema.String }))),
+        overflow_actions: Schema.optionalKey(Schema.Array(Schema.Struct({ text: Schema.String }))),
+      }),
+    ),
   }),
 })
 type Entity = typeof Entity.Type
@@ -139,6 +149,26 @@ const threaded = Effect.fnUntraced(function* (
       sessionId ??
       (yield* Seed.session({ organizationId: o.organizationId, spaceId: o.factory.id, createdBy: o.ada.userId })),
   })
+})
+
+const buttonsOf = (message: SlackServer.Posted | undefined) => {
+  const actions = metadataOf(message)?.entities.at(0)?.entity_payload.actions
+  return [actions?.primary_actions ?? [], actions?.overflow_actions ?? []].map((each) =>
+    each.map((action) => action.text),
+  )
+}
+
+const actionsOf = Effect.gen(function* () {
+  const context = yield* Layer.build(
+    SlackTaskActions.layer.pipe(
+      Layer.provide(ChannelRoute.layer),
+      Layer.provide(ChannelIdentity.layer),
+      Layer.provide(ChannelProvider.layer(Effect.all([Slack.provider]))),
+      Layer.provide(slackCards),
+      Layer.provide(ConfigProvider.layerAdd(ConfigProvider.fromUnknown({ APP_URL: app }))),
+    ),
+  )
+  return Context.get(context, SlackTaskActions.Service)
 })
 
 const cardsOf = Effect.gen(function* () {
@@ -356,6 +386,68 @@ describe("SlackTaskCard", () => {
         yield* requested(found.channel, "not-a-task")
         yield* until(() => calls("entity.presentDetails").length === before + 4)
         expect(calls("entity.presentDetails").at(-1)?.params.error).toBe(JSON.stringify({ status: "not_found" }))
+      }),
+  )
+
+  it.live(
+    "a card button acts as the person who clicked and the card shows the next state's buttons; others get a private reply",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const database = yield* Database.Service
+        const o = yield* TaskFixture.org
+        const found = yield* installed(o)
+        const actions = yield* actionsOf
+        const thread = threadIn(found.channel)
+        yield* database.db.insert(Database.Schema.account).values(
+          [
+            { user: "UADA", userId: o.ada.userId },
+            { user: "UGRACE", userId: o.grace.userId },
+          ].map((each) => ({
+            id: Auth.AccountID.create(),
+            providerId: "slack",
+            accountId: `${found.workspace}:${each.user}`,
+            userId: each.userId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          })),
+        )
+        const created = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Ship SSO", links: [thread.url] })
+        const card = () => buttonsOf(slack.threads.get(thread.key)?.at(0))
+        const shows = (primary: ReadonlyArray<string>) => until(() => card()[0]?.join() === primary.join())
+        const click = (user: string, action: Channel.CardAction) =>
+          actions.act(o.organizationId, {
+            kind: "card_action",
+            install: found.workspace,
+            sender: { accountId: `${found.workspace}:${user}` },
+            taskId: created.id,
+            action,
+            responseUrl: `${slack.url}/response/${user}`,
+          })
+        const replied = (count: number) => until(() => slack.responses.length === count)
+        yield* shows(["Assign to me"])
+        expect(card()[1]).toEqual(["Open in Ren", "Dismiss"])
+        yield* click("UADA", "assign_to_me")
+        yield* shows(["Open in Ren"])
+        expect((yield* tasks.get(o.ada, created.id)).ownerId).toBe(o.ada.userId)
+        const before = slack.responses.length
+        yield* click("UNOBODY", "dismiss")
+        yield* replied(before + 1)
+        expect(JSON.stringify(slack.responses.at(-1))).toContain("Connect your Ren account")
+        yield* click("UGRACE", "dismiss")
+        yield* replied(before + 2)
+        expect(slack.responses.at(-1)).toMatchObject({ response_type: "ephemeral" })
+        expect((yield* tasks.get(o.ada, created.id)).status).toBe("todo")
+        yield* tasks.review(o.ada, created.id, { humanReview: true, reason: "Check the plan" })
+        yield* shows(["Start build"])
+        yield* click("UADA", "approve")
+        yield* shows(["Open in Ren"])
+        const events = yield* database.db
+          .select({ data: Database.Schema.task_event.data, userId: Database.Schema.task_event.actor_user_id })
+          .from(Database.Schema.task_event)
+          .where(eq(Database.Schema.task_event.task_id, created.id))
+        expect(events.find((each) => each.data._tag === "reviewed")?.userId).toBe(o.ada.userId)
+        expect((yield* tasks.get(o.ada, created.id)).humanReview).toBe(false)
       }),
   )
 })
