@@ -13,16 +13,23 @@
     "print-policies": "bun run --cwd packages/core print-policies",
     "ren:settings": "bun run --cwd packages/core ren:settings",
     "lint": "bun script/signoff/record.ts bun script/memory.ts queue --mib=2048 -- bun run lint:all",
-    "lint:all": "bun turbo lint --concurrency=3 --output-logs=errors-only && oxlint --disable-nested-config --type-aware --deny-warnings script && oxlint --disable-nested-config --deny-warnings oxlint.config.ts && ast-grep scan -c script/ast-grep/sgconfig.yml --globs '!**/generated/**' --globs '!**/*.gen.ts' --globs '!packages/db/src/auth.sql.ts' packages script && knip --no-config-hints && oxfmt --check",
+    "lint:all": "bun turbo lint lint:root lint:rules lint:unused format:check --concurrency=3 --output-logs=errors-only",
     "typecheck": "bun script/signoff/record.ts bun script/memory.ts queue --mib=2048 -- bun run typecheck:all",
-    "typecheck:all": "bun turbo typecheck --concurrency=3 && tsgo --noEmit",
-    "check": "bun run lint && bun run typecheck",
+    "typecheck:all": "bun turbo typecheck typecheck:root --concurrency=3 --output-logs=errors-only",
+    "check": "bun script/memory.ts queue --mib=2048 -- bun run script/check.ts",
     "generate": "bun run script/generate.ts",
     "memory": "bun script/memory.ts",
     "keys": "bun run packages/schema/script/keys.ts",
     "format": "bun run script/format.ts",
     "prepare": "husky && if [ -d .husky/_ ]; then cp .husky/reference-transaction .husky/_/reference-transaction; fi",
-    "test": "echo 'do not run tests from root' && exit 1"
+    "test": "echo 'do not run tests from root' && exit 1",
+    "lint:root": "oxlint --disable-nested-config --type-aware --deny-warnings script && oxlint --disable-nested-config --deny-warnings oxlint.config.ts",
+    "lint:rules": "ast-grep scan -c script/ast-grep/sgconfig.yml --globs '!**/generated/**' --globs '!**/*.gen.ts' --globs '!packages/db/src/auth.sql.ts' packages script",
+    "lint:unused": "knip --no-config-hints",
+    "format:check": "oxfmt --check",
+    "typecheck:root": "tsgo -b",
+    "check:all": "bun run typecheck && bun run lint",
+    "test:changed": "bun run script/test-changed.ts"
   },
   "workspaces": {
     "packages": [

@@ -294,7 +294,6 @@ const tailwindRules = {
   "better-tailwindcss/no-deprecated-classes": "error",
   "better-tailwindcss/no-unnecessary-whitespace": "error",
   "better-tailwindcss/no-concatenated-classes": "error",
-  "better-tailwindcss/enforce-canonical-classes": "error",
   "better-tailwindcss/enforce-shorthand-classes": "error",
   "better-tailwindcss/enforce-consistent-class-order": "error",
   "better-tailwindcss/enforce-consistent-variable-syntax": "error",

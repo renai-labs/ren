@@ -3,6 +3,25 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "types": ["bun", "vite/client"]
-  }
+    "types": ["bun", "vite/client"],
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.ts-dist/tsbuildinfo"
+  },
+  "references": [
+    {
+      "path": "../chat/tsconfig.src.json"
+    },
+    {
+      "path": "../client/tsconfig.src.json"
+    },
+    {
+      "path": "../schema/tsconfig.src.json"
+    },
+    {
+      "path": "../ui/tsconfig.src.json"
+    },
+    {
+      "path": "../util/tsconfig.src.json"
+    }
+  ]
 }

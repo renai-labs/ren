@@ -1,12 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "lib": ["ESNext", "DOM", "DOM.Iterable"]
-  },
+  "files": [],
   "references": [
     {
-      "path": "../cell/tsconfig.worker.json"
+      "path": "./tsconfig.src.json"
+    },
+    {
+      "path": "./tsconfig.tests.json"
     }
   ]
 }

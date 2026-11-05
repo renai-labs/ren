@@ -77,6 +77,8 @@ Lint enforces most style rules. Run `bun run check` and follow each message. The
 
 ## Checks
 
-- Run `bun run check` from the repo root before pushing. The pre-push hook reuses or runs it, and attaches it and the latest affected test runs to the commit (`CONTRIBUTING.md`, Signoff). Run `bun run format` to fix formatting.
+- While you work, run `bun run check` from the repo root. It typechecks the packages changed since the branch left `main` and their dependents, lints the changed packages and runs the root rules, all through Turborepo's cache. `bun run check:all` is the full run with knip; the pre-push hook reuses or runs it, and attaches it and the latest affected test runs to the commit (`CONTRIBUTING.md`, Signoff). Run `bun run format` to fix formatting.
+- `bun run test:changed` from the repo root runs the test files that import a changed file, in each changed package, and names the dependents it did not run. In one package, `bun run test --changed` does the same.
 - A package's `test` script and the root `lint` and `typecheck` scripts go through `script/signoff/record.ts`. Keep it there when you change one.
 - Run `bun typecheck` from a package directory to typecheck one package. Never run `tsc` directly.
+- Typecheck uses project references. A package's `tsconfig.src.json` emits declarations to `node_modules/.ts-dist`, and a dependent reads those instead of the package's source. `tsconfig.tests.json` covers `test` and `script`; `tsconfig.json` lists both. When you add a dependency between packages, add the reference to both files.
