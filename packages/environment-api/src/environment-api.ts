@@ -4,7 +4,7 @@ import { Drive } from "@ren/schema/drive"
 import { Environment } from "@ren/schema/environment"
 import { Identifier } from "@ren/schema/identifier"
 import { Brain } from "@ren/schema/brain"
-import { Context, Duration, Effect, Schema } from "effect"
+import { Context, Duration, Effect, ErrorReporter, Schema } from "effect"
 import { Rpc, type RpcClientError, RpcGroup, RpcMiddleware } from "effect/rpc"
 import { Signal } from "./signal.js"
 
@@ -128,16 +128,22 @@ export const ReadResult = Schema.Struct({ info: FileInfo, bytes: Schema.Uint8Arr
 
 export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()("UnauthorizedError", {
   message: Schema.String,
-}) {}
+}) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class FileNotFoundError extends Schema.TaggedError<FileNotFoundError>()("FileNotFoundError", {
   path: Schema.String,
-}) {}
+}) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class WrongKindError extends Schema.TaggedError<WrongKindError>()("WrongKindError", {
   path: Schema.String,
   actual: FileType,
-}) {}
+}) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class FileSystemError extends Schema.TaggedError<FileSystemError>()("FileSystemError", {
   path: Schema.String,
@@ -150,17 +156,23 @@ export class SpawnFailedError extends Schema.TaggedError<SpawnFailedError>()("Sp
 
 export class StdinClosedError extends Schema.TaggedError<StdinClosedError>()("StdinClosedError", {
   id: ProcessID,
-}) {}
+}) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class StdinFullError extends Schema.TaggedError<StdinFullError>()("StdinFullError", {
   id: ProcessID,
-}) {}
+}) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class FileTooLargeError extends Schema.TaggedError<FileTooLargeError>()("FileTooLargeError", {
   path: Schema.String,
   sizeBytes: Schema.Int,
   maxBytes: Schema.Int,
-}) {}
+}) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class ArchiveError extends Schema.TaggedError<ArchiveError>()("ArchiveError", {
   url: Schema.String,
@@ -231,7 +243,9 @@ export const UploadedInput = Schema.Struct({
 
 export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundError>()("ProcessNotFoundError", {
   id: ProcessID,
-}) {}
+}) {
+  override readonly [ErrorReporter.ignore] = true
+}
 
 export class Caller extends Context.Service<Caller, { readonly brain: Brain.ID }>()("@ren/environment-api/Caller") {}
 
