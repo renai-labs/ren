@@ -42,7 +42,6 @@ describe.skipIf(!isLive)("the E2B environment provider, live", () => {
           packages: { apt: ["ffmpeg"], npm: ["typescript"], pip: ["requests"] },
           buildCommands: ["echo built > /home/user/built.txt"],
         })
-        const image = yield* build.run({ environmentTemplateId, config, tag: "live" })
         yield* Effect.addFinalizer(() =>
           Effect.promise(() =>
             fetch(
@@ -51,6 +50,7 @@ describe.skipIf(!isLive)("the E2B environment provider, live", () => {
             ),
           ),
         )
+        const image = yield* build.run({ environmentTemplateId, config, tag: "live" })
         const environmentId = Environment.ID.create()
         const network = { hosts: Option.some(["example.com", "*.github.com"]), proxy: Option.none() }
         const binding = yield* provider.provision({
