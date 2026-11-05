@@ -34,7 +34,6 @@ export const isAlive = (pid: number) => Bun.spawnSync(["kill", "-0", String(pid)
 
 export const pidOf = (binding: unknown) => Schema.decodeUnknownSync(Schema.Struct({ pid: Schema.Int }))(binding).pid
 
-// oxlint-disable-next-line ren/no-comments -- The brain process of a local sandbox, without its process group: stopping it leaves the machine running.
 export const brainOf = (binding: unknown) =>
   Number(
     new TextDecoder()

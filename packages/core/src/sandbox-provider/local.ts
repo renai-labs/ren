@@ -195,7 +195,6 @@ export const layer = (options: {
           if (!(yield* isAlive(binding.pid))) return "gone" as const
           return paused.has(binding.pid) ? ("paused" as const) : ("running" as const)
         }),
-        // oxlint-disable-next-line ren/no-comments -- The machine of a local brain is its process group, and this computer's memory and disk are its own. A stopped group leader is a frozen machine, which reports no sample.
         vitals: Effect.fn("LocalSandbox.vitals")(function* (raw) {
           const binding = yield* read(raw)
           const state = new TextDecoder()

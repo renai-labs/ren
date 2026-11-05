@@ -292,7 +292,7 @@ describe("brain runs", () => {
     await runtime.dispose()
   })
 
-  test("an access after the app could not reach its brain asks the machine: a frozen one wakes and is replaced, one that runs keeps its brain that does not answer", async () => {
+  test("an access after the app could not reach its brain asks the machine: a frozen one is replaced, one that runs keeps its brain that does not answer", async () => {
     const chats = await Promise.all([runs.seeded(), runs.seeded()])
     await runs.database.runPromise(
       Effect.gen(function* () {
@@ -308,7 +308,7 @@ describe("brain runs", () => {
           )
       }),
     )
-    const runtime = await runs.ren({ lostEvery: "1 hour", config: { BRAIN_WAKE_TIMEOUT: "2 seconds" } })
+    const runtime = await runs.ren({ lostEvery: "1 hour" })
     await runtime.runPromise(
       BrainLifecycle.Service.use((lifecycle) => Effect.forEach(chats, (chat) => lifecycle.ensure(chat.brainId))),
     )
@@ -333,7 +333,7 @@ describe("brain runs", () => {
       ),
     )
     expect(answers.map((answer) => (answer.status === "starting" ? answer.phase : answer.status))).toEqual([
-      "waking",
+      "replacing",
       "ready",
     ])
     const replaced = await Effect.runPromise(

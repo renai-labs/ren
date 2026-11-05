@@ -59,7 +59,6 @@ const Samples = Schema.Array(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- E2B samples a sandbox every 5 seconds and serves a sample about 10 seconds later. It keeps that step for a window of 30 minutes; a longer window comes in steps of minutes. A window without samples, as for a machine frozen longer, answers 400.
 const samplesWithin = Duration.minutes(30)
 
 const share = (used: number, total: number) => (total > 0 ? used / total : 0)
