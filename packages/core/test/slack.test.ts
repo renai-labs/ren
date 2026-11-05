@@ -277,6 +277,7 @@ describe("Slack", () => {
             ts: "1712.40",
             thread_ts: "1712.33",
             text: "<@UBOT> the deploy failed",
+            action_token: "12345.98765.abcd",
           }),
         ).toEqual({
           _tag: "Event",
@@ -290,6 +291,7 @@ describe("Slack", () => {
             sender: { accountId: "T01:U01" },
             text: "the deploy failed",
             files: [],
+            data: { slack: { actionToken: "12345.98765.abcd" } },
           },
         })
         expect(

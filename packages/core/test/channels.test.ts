@@ -181,16 +181,23 @@ describe("Channels", () => {
     }),
   )
 
-  it.live("a message to a session that exists steers it", () =>
+  it.live("a message to a session that exists steers it, and its thread keeps the message's data", () =>
     Effect.gen(function* () {
+      const database = yield* Database.Service
       const subject = yield* routed
       const sessionId = yield* started(subject.owner)
-      const found = ChannelFixture.event(subject.install)
+      const found = ChannelFixture.event(subject.install, { data: { slack: { actionToken: "12345.98765.abcd" } } })
       yield* ChannelFixture.thread(subject.owner.organizationId, found, sessionId)
       yield* ChannelFixture.receive(ChannelFixture.delivery(found))
       expect(yield* ChannelFixture.accepted(1)).toMatchObject([
         { kind: "send", sessionId, delivery: "steer", prompt: { text: found.text } },
       ])
+      expect(
+        yield* database.db
+          .select({ data: Database.Schema.channel_thread.data })
+          .from(Database.Schema.channel_thread)
+          .where(eq(Database.Schema.channel_thread.session_id, sessionId)),
+      ).toEqual([{ data: { slack: { actionToken: "12345.98765.abcd" } } }])
     }),
   )
 

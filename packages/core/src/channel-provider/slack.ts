@@ -34,6 +34,7 @@ const SlackEvent = Schema.Struct({
   trigger_id: Schema.optionalKey(Schema.String),
   entity_url: Schema.optionalKey(Schema.String),
   external_ref: Schema.optionalKey(Schema.Struct({ id: Schema.optionalKey(Schema.String) })),
+  action_token: Schema.optionalKey(Schema.String),
 })
 
 const Envelope = Schema.Struct({
@@ -406,6 +407,7 @@ const messageOf = (
     sender: { accountId: `${event.user_team ?? event.team ?? delivery.install}:${found.user}` },
     text: parsed.text,
     files: [...parsed.files],
+    ...(event.action_token && { data: { slack: { actionToken: event.action_token } } }),
   }
 }
 
