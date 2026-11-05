@@ -210,6 +210,7 @@ describe("GitHub", () => {
             install: "77",
             link: { kind: "github_pr", key: "acme/api#41" },
             url: "https://github.com/acme/api/pull/41",
+            sender: { accountId: "583231", handle: "octocat" },
             text: "acme-7-fix-deploy\nFix the deploy\nCloses ACME-7",
           },
         })
@@ -296,6 +297,7 @@ describe("GitHub", () => {
           install: "77",
           link: { kind: "github_issue", key: "acme/api#12" },
           url: "https://github.com/acme/api/issues/12",
+          sender: { accountId: "583231", handle: "octocat" },
           text: "Deploy fails",
         },
       })

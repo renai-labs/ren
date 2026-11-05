@@ -7,7 +7,7 @@ import { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq, inArray, isNull } from "drizzle-orm"
+import { and, eq, inArray, sql } from "drizzle-orm"
 import { Deferred, Effect, Layer, Option, Schedule } from "effect"
 import { ChannelIdentity } from "../src/channel-identity.js"
 import { ChannelInstalls } from "../src/channel-installs.js"
@@ -1062,6 +1062,31 @@ const tasked = Effect.gen(function* () {
   return { subject, owner, spaceId, agent, build, task, found }
 })
 
+const linkAccount = Effect.fnUntraced(function* (accountId: string, userId: Auth.UserID) {
+  const database = yield* Database.Service
+  yield* database.db.insert(Database.Schema.account).values({
+    id: Auth.AccountID.create(),
+    providerId: "slack",
+    accountId,
+    userId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+})
+
+const mentioned = (setup: Effect.Success<typeof tasked>, accountId: string, text: ReadonlyArray<string>) =>
+  JSON.stringify({
+    type: "signal",
+    signal: {
+      kind: "mentioned",
+      install: setup.subject.install,
+      link: { kind: "github_pr", key: "acme/web#52" },
+      url: "https://github.com/acme/web/pull/52",
+      sender: { accountId },
+      text: text.join("\n"),
+    },
+  })
+
 const taskSession = Effect.fnUntraced(function* (
   setup: Effect.Success<typeof tasked>,
   agentId: Agent.ID = setup.build,
@@ -1240,30 +1265,22 @@ describe("Channels and tasks", () => {
       }),
   )
 
-  it.live("a pull request that names tasks by ID, by branch or by task URL links each one once", () =>
+  it.live("a pull request that names tasks by ID, by branch or by task URL links each one once, as its sender", () =>
     Effect.gen(function* () {
       const setup = yield* tasked
       const tasks = yield* Task.Service
       const database = yield* Database.Service
+      yield* linkAccount("U01", setup.owner.userId)
       const byUrl = yield* tasks.create(setup.owner, { spaceId: setup.spaceId, title: "Named by URL" })
       const byId = yield* tasks.create(setup.owner, { spaceId: setup.spaceId, title: "Named by ID" })
       const unnamed = yield* tasks.create(setup.owner, { spaceId: setup.spaceId, title: "Not named" })
       const prefix = setup.task.identifier.slice(0, setup.task.identifier.lastIndexOf("-"))
       const pull = "https://github.com/acme/web/pull/52"
-      const mention = JSON.stringify({
-        type: "signal",
-        signal: {
-          kind: "mentioned",
-          install: setup.subject.install,
-          link: { kind: "github_pr", key: "acme/web#52" },
-          url: pull,
-          text: [
-            `${setup.task.identifier.toLowerCase()}-fix-deploy`,
-            `Fix the deploy, see ${ChannelFixture.app}/tasks/${byUrl.id}`,
-            `Closes ${byId.identifier}. Not X${prefix}-${unnamed.number}, not ${prefix}-${unnamed.number}0, not OTHER-${unnamed.number}.`,
-          ].join("\n"),
-        },
-      })
+      const mention = mentioned(setup, "U01", [
+        `${setup.task.identifier.toLowerCase()}-fix-deploy`,
+        `Fix the deploy, see ${ChannelFixture.app}/tasks/${byUrl.id}`,
+        `Closes ${byId.identifier}. Not X${prefix}-${unnamed.number}, not ${prefix}-${unnamed.number}0, not OTHER-${unnamed.number}.`,
+      ])
       expect(yield* ChannelFixture.receive(mention)).toEqual({ status: 200 })
       expect(yield* ChannelFixture.receive(mention)).toEqual({ status: 200 })
       const after = yield* Effect.forEach([setup.task.id, byUrl.id, byId.id, unnamed.id], (id) =>
@@ -1281,7 +1298,7 @@ describe("Channels and tasks", () => {
           and(
             eq(Database.Schema.task_event.kind, "link"),
             inArray(Database.Schema.task_event.task_id, [setup.task.id, byUrl.id, byId.id, unnamed.id]),
-            isNull(Database.Schema.task_event.actor_user_id),
+            sql`${Database.Schema.task_event.data} ->> 'added' like '%/pull/52%'`,
           ),
         )
         .orderBy(Database.Schema.task_event.task_id)
@@ -1289,9 +1306,53 @@ describe("Channels and tasks", () => {
         [setup.task.id, byUrl.id, byId.id].toSorted().map((taskId) => ({
           taskId,
           data: { _tag: "link", added: [pull], removed: [] },
-          userId: null,
+          userId: setup.owner.userId,
         })),
       )
+    }),
+  )
+
+  it.live(
+    "a mention links nothing for a sender with no Ren account or who cannot update the task; Ren's own bot links it",
+    () =>
+      Effect.gen(function* () {
+        const setup = yield* tasked
+        const tasks = yield* Task.Service
+        const database = yield* Database.Service
+        const outsider = yield* Seed.actor(setup.subject.owner.organizationId, "member")
+        yield* linkAccount("U02", outsider.userId)
+        yield* database.db
+          .update(Database.Schema.channel_install)
+          .set({ bot_user: "B01" })
+          .where(eq(Database.Schema.channel_install.workspace, setup.subject.install))
+        const named = [`Fixes ${setup.task.identifier}`]
+        const links = () =>
+          tasks.get(setup.owner, setup.task.id).pipe(Effect.map((task) => task.links.map((link) => link.url)))
+        expect(yield* ChannelFixture.receive(mentioned(setup, "U09", named))).toEqual({ status: 200 })
+        expect(yield* ChannelFixture.receive(mentioned(setup, "U02", named))).toEqual({ status: 200 })
+        expect(yield* links()).toEqual([permalink])
+        expect(yield* ChannelFixture.receive(mentioned(setup, "B01", named))).toEqual({ status: 200 })
+        expect(yield* links()).toEqual([permalink, "https://github.com/acme/web/pull/52"])
+      }),
+  )
+
+  it.live("a pull request event whose mention fails is not acknowledged, and its turn does not start", () =>
+    Effect.gen(function* () {
+      const setup = yield* tasked
+      yield* linkAccount("U01", setup.owner.userId)
+      const signal = {
+        kind: "mentioned",
+        install: setup.subject.install,
+        link: { kind: "github_pr", key: "acme/web#53" },
+        url: "https://github.com/acme/web/pull/53\u0000",
+        sender: { accountId: "U01" },
+        text: `Fixes ${setup.task.identifier}`,
+      }
+      const before = (yield* sessionsOf(setup.subject.owner)).length
+      expect(yield* ChannelFixture.receive(JSON.stringify({ type: "event", event: setup.found, signal }))).toEqual({
+        status: 500,
+      })
+      expect(yield* sessionsOf(setup.subject.owner)).toHaveLength(before)
     }),
   )
 

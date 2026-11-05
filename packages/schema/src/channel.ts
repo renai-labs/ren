@@ -44,6 +44,12 @@ export const FileRef = Schema.Struct({
   size: Schema.optionalKey(Schema.Int),
 }).annotate({ identifier: "Channel.FileRef" })
 
+const Sender = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  name: Schema.optionalKey(Schema.String),
+  handle: Schema.optionalKey(Schema.String),
+})
+
 export interface Event extends Schema.Schema.Type<typeof Event> {}
 export const Event = Schema.Struct({
   provider: Provider,
@@ -64,11 +70,7 @@ export const Event = Schema.Struct({
   message: Schema.NonEmptyString.annotate({
     description: "The provider’s id of the message: a Slack ts, a Linear activity, a GitHub comment.",
   }),
-  sender: Schema.Struct({
-    accountId: Schema.NonEmptyString,
-    name: Schema.optionalKey(Schema.String),
-    handle: Schema.optionalKey(Schema.String),
-  }),
+  sender: Sender,
   text: Schema.String,
   files: Schema.Array(FileRef),
   trigger: Schema.optionalKey(TriggerID).annotate({
@@ -94,6 +96,7 @@ export const Signal = Schema.Union([
     install: Schema.NonEmptyString,
     link: SignalLink,
     url: Schema.String,
+    sender: Sender.annotate({ description: "Who opened or edited the item." }),
     text: Schema.String.annotate({ description: "The text that can name tasks, such as a branch, title and body." }),
   }),
 ]).annotate({ identifier: "Channel.Signal", description: "A provider event that changes tasks and starts no turn." })

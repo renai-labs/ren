@@ -57,7 +57,7 @@ const Body = Schema.fromJsonString(
     Schema.Struct({ type: Schema.Literal("handshake"), challenge: Schema.String }),
     Schema.Struct({ type: Schema.Literal("ignore") }),
     Schema.Struct({ type: Schema.Literal("uninstalled"), install: Schema.NonEmptyString }),
-    Schema.Struct({ type: Schema.Literal("event"), event: Channel.Event }),
+    Schema.Struct({ type: Schema.Literal("event"), event: Channel.Event, signal: Schema.optionalKey(Channel.Signal) }),
     Schema.Struct({ type: Schema.Literal("signal"), signal: Channel.Signal }),
   ]),
 )
@@ -117,7 +117,7 @@ const provider = Effect.gen(function* () {
           if (body.type === "ignore") return { _tag: "Ignore", reason: "a bot’s own message" }
           if (body.type === "uninstalled") return { _tag: "Uninstalled", install: body.install }
           if (body.type === "signal") return { _tag: "Signal", signal: body.signal }
-          return { _tag: "Event", event: body.event }
+          return { _tag: "Event", event: body.event, ...(body.signal && { signal: body.signal }) }
         }),
       ),
     fetchFile: (_install, file) => {
