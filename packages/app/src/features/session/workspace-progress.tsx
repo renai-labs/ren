@@ -12,10 +12,10 @@ import {
   DropdownMenuGroup,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
 import { formatClock } from "@ren/ui/time"
 import { cn } from "cn"
+import { EmptyState } from "../../components/empty-state.js"
 import { usePinToEnd } from "../../lib/use-pin-to-end.js"
 
 type Kind = "user" | "message" | ToolDisplay.Kind
@@ -240,19 +240,7 @@ export function ProgressTab(props: { messages: ReadonlyArray<SessionMessage.Info
         </Button>
       </div>
       {count === 0 ? (
-        <Empty className="flex-1">
-          <EmptyHeader>
-            <EmptyMedia className="text-muted-foreground [&_svg]:size-6">
-              <IconMessageChatbot />
-            </EmptyMedia>
-            <EmptyTitle>{props.messages.length === 0 ? "Nothing yet" : "No matching steps"}</EmptyTitle>
-            <EmptyDescription>
-              {props.messages.length === 0
-                ? "Every message, command and tool call Ren makes shows up here."
-                : "Try a different search or filter."}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <EmptyState>{props.messages.length === 0 ? "No steps" : "No steps match"}</EmptyState>
       ) : (
         <div
           ref={list}

@@ -1,10 +1,9 @@
 import { useState } from "react"
 import { PatchFiles } from "@ren/chat"
 import type { SessionMessage } from "@ren/schema/session/message"
-import { IconFileDiff } from "@tabler/icons-react"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { FileTree } from "@ren/ui/file-tree"
 import { PatchDiff } from "@ren/ui/patch-diff"
+import { EmptyState } from "../../components/empty-state.js"
 import { Theme } from "../../components/theme.js"
 
 interface Change {
@@ -47,18 +46,7 @@ export function ChangesTab(props: { messages: ReadonlyArray<SessionMessage.Info>
   const changes = changesOf(props.messages)
   const [chosen, setChosen] = useState<string>()
   const selected = changes.find((change) => change.path === chosen) ?? changes.at(0)
-  if (changes.length === 0)
-    return (
-      <Empty className="flex-1">
-        <EmptyHeader>
-          <EmptyMedia className="text-muted-foreground [&_svg]:size-6">
-            <IconFileDiff />
-          </EmptyMedia>
-          <EmptyTitle>No changes yet</EmptyTitle>
-          <EmptyDescription>Files Ren creates or edits in this chat show up here as diffs.</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    )
+  if (changes.length === 0) return <EmptyState>No changes</EmptyState>
   const additions = changes.reduce((total, change) => total + change.additions, 0)
   const deletions = changes.reduce((total, change) => total + change.deletions, 0)
   return (

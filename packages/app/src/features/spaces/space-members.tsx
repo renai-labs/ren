@@ -253,7 +253,7 @@ export function SpaceMembersTab() {
               },
             )
           }
-          empty={query ? `Nothing matches “${query.trim()}”` : "No members"}
+          empty={query ? "No members match" : "No members"}
         />
       </Loading>
       <PageFooter>

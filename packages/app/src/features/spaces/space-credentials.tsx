@@ -119,7 +119,7 @@ export function SpaceCredentialsTab() {
             credentials={here}
             stale={stale}
             onRemoved={removed}
-            empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
+            empty={query ? "No keys match" : "No keys"}
           />
         )}
       </Loading>

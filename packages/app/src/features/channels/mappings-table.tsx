@@ -28,11 +28,7 @@ export function MappingsTable(props: {
         </TableHeader>
         <TableBody>
           {props.mappings.length === 0 ? (
-            <TableEmpty columns={3}>
-              {props.filtered
-                ? "No matching mappings. Change the search or space filter."
-                : "No mappings yet. Add one to choose where mentions start work."}
-            </TableEmpty>
+            <TableEmpty columns={3}>{props.filtered ? "No mappings match" : "No mappings"}</TableEmpty>
           ) : null}
           {props.mappings.map((mapping) => (
             <TableRow key={mapping.id} className="relative">
