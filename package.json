@@ -22,14 +22,14 @@
     "keys": "bun run packages/schema/script/keys.ts",
     "format": "bun run script/format.ts",
     "prepare": "husky && if [ -d .husky/_ ]; then cp .husky/reference-transaction .husky/_/reference-transaction; fi",
-    "test": "echo 'do not run tests from root' && exit 1",
+    "test": "bun run script/test-changed.ts",
     "lint:root": "oxlint --disable-nested-config --type-aware --deny-warnings script && oxlint --disable-nested-config --deny-warnings oxlint.config.ts",
     "lint:rules": "ast-grep scan -c script/ast-grep/sgconfig.yml --globs '!**/generated/**' --globs '!**/*.gen.ts' --globs '!packages/db/src/auth.sql.ts' packages script",
     "lint:unused": "knip --no-config-hints",
     "format:check": "oxfmt --check",
     "typecheck:root": "tsgo -b",
     "check:all": "bun run typecheck && bun run lint",
-    "test:changed": "bun run script/test-changed.ts"
+    "test:all": "bun turbo test:all --output-logs=errors-only"
   },
   "workspaces": {
     "packages": [

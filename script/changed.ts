@@ -16,3 +16,20 @@ const Packages = Schema.Struct({
 export const packages = async (filter: string) =>
   Schema.decodeUnknownSync(Packages)(await Bun.$`bun turbo ls --filter=${filter} --output=json`.quiet().json()).packages
     .items
+
+if (import.meta.main) {
+  const command = process.argv.slice(2)
+  if (command.length === 0) {
+    console.log(await base())
+  } else {
+    const child = Bun.spawn({
+      cmd: [...command, `--changed=${await base()}`],
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    })
+    process.once("SIGINT", () => child.kill("SIGINT"))
+    process.once("SIGTERM", () => child.kill("SIGTERM"))
+    process.exitCode = await child.exited
+  }
+}

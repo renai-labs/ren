@@ -40,17 +40,12 @@ Test databases are named `ren_test_clone_<uuid>`, cloned from a cached migrated 
 - Before adding a test, find existing coverage and name the distinct behavior it will prove. Extend that coverage where possible. Test shared user behavior through the public Ren surface; adapter tests cover translation and upstream behavior Ren relies on.
 - For a recovery test, observe the fault before removing it. Observe the intended recovery mechanism before making a request that could itself trigger recovery. Use events or latches to establish ordering, and scoped finalizers to release faults and held requests.
 - Keep distinct race and failure scenarios. Prune repeated happy paths and fixture-shape assertions that another test already proves.
-- One package: `cd packages/<name> && bun run test`. It skips `*.slow.test.ts` files; set `REN_SLOW=1` to run them too. Add `--changed` to run only the test files that import a file changed since `HEAD`, or `--changed=<ref>` since a ref. From the repo root, `bun run test:changed` does this for each package changed since the branch left `main`.
+- One package: `cd packages/<name> && bun run test`. It runs the test files that import a changed file; `bun run test:all` runs every file. Both skip `*.slow.test.ts` files; set `REN_SLOW=1` to run them too.
 - Durations: `bun run test` prints only failures. `bun test <file>` prints each test with its duration. Move a test that takes more than 5 seconds to a `*.slow.test.ts` file, as `AGENTS.md` says.
 - End-to-end: `cd packages/e2e && bun run test`. It starts its own server on port 4010.
-- Everything: `bun turbo test`.
-- `bun run test` runs files in isolated parallel workers and waits, or runs fewer workers, when free memory or the machine's memory budget is short. `bun run lint` and `bun run typecheck` share the budget. Set `REN_TEST_WORKERS=1` for a serial run and `REN_TEST_PROFILE=1` to print setup, body and cleanup timings.
+- Everything: `bun run test:all` from the repo root.
+- `bun run test` runs files in isolated parallel workers and waits, or runs fewer workers, when free memory or the machine's memory budget is short. `bun run check`, `bun run lint` and `bun run typecheck` share the budget. Set `REN_TEST_WORKERS=1` for a serial run and `REN_TEST_PROFILE=1` to print setup, body and cleanup timings.
 - `bun run memory` shows who holds the budget. Run another heavy command, such as a build, with `bun run memory queue -- <cmd>`.
-
-## Checks
-
-- `bun run check` from the repo root is the inner-loop check: it typechecks the changed packages and their dependents, lints the changed packages and runs the root rules. `bun run check:all` also lints unchanged packages and runs knip; the pre-push hook runs it when no signoff matches.
-- Typecheck is incremental through project references. A change to a package's exports re-checks every dependent in full, so expect a `schema` edit to cost more than a `server` edit.
 
 ## Generated code
 
