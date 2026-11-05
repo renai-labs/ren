@@ -159,10 +159,7 @@ const boot = Effect.gen(function* () {
       ),
     )
     .pipe(Scope.provide(scope))
-  const health = yield* SandboxHealth.make({
-    state,
-    memoryEvents: "/sys/fs/cgroup/ren.slice/ren-tools.slice/memory.events",
-  })
+  const health = yield* SandboxHealth.make({ state, memoryEvents: vars.REN_TOOLS_MEMORY_EVENTS })
   yield* scheduler.job("health", health.pipe(Effect.as(interval))).pipe(Scope.provide(scope))
   const activity = yield* Cell.Activity
   // oxlint-disable-next-line ren/no-comments -- Until the first pull reaches Ren, the brain tries every second: Ren makes it ready only after one (M1).

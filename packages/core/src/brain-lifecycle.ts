@@ -426,6 +426,12 @@ export const layer = Layer.effect(
     }).pipe(Effect.withErrorReporting, Effect.forkScoped)
 
     const silent = Effect.fnUntraced(function* (row: Row, binding: Schema.Json) {
+      if (!provider.canSample) {
+        const message = `Brain ${row.id} does not answer, and its provider reports no samples of its machine; Ren keeps it`
+        return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(
+          Effect.annotateLogs({ "ren.brain.id": row.id, "ren.brain.generation": row.generation }),
+        )
+      }
       const vitals = yield* provider.vitals(binding).pipe(
         Effect.tapError((error) => Effect.logWarning("The sandbox samples are unknown", error)),
         Effect.option,
