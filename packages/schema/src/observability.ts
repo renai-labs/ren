@@ -69,10 +69,6 @@ export const Metrics = {
       100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10_000, 15_000, 20_000, 30_000, 60_000,
     ],
   }),
-  toolsOutOfMemory: Metric.counter("ren.tools.out_of_memory", {
-    description:
-      "Processes that a sandbox’s kernel stopped because the brain’s tools used all the memory they may use. The brain and the sandbox keep running.",
-  }),
 } as const
 
 export const layer = (minimum: LogLevel.LogLevel) =>
