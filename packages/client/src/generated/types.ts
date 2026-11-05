@@ -213,6 +213,10 @@ export type TaskEventLinksChanged = { _tag: "link"; added: Array<string>; remove
 
 export type TaskEventArchived = { _tag: "archived" }
 
+export type PullRequestState = "open" | "draft" | "merged" | "closed"
+
+export type SessionLinksIssue = { kind: "github_issue" | "linear_issue"; url: string }
+
 export type ScheduleID = string
 
 export type ScheduleOnce = { at: string }
@@ -518,6 +522,8 @@ export type ChannelOriginInfo = {
   trigger?: string
 }
 
+export type SessionLinksThread = { provider: ChannelProvider; url: string; place: string | null }
+
 export type SessionMessageSynthetic = {
   id: SessionMessageID
   time: { created: number }
@@ -580,6 +586,8 @@ export type TaskParent = { id: TaskID; identifier: string; title: string }
 
 export type TaskEventParentChanged = { _tag: "parent"; from: TaskID | null; to: TaskID | null }
 
+export type SessionLinksLinkedTask = { id: TaskID; identifier: string; title: string; status: TaskStatus }
+
 export type TaskAgentSession = { id: SessionID; state: TaskSessionState }
 
 export type LabelSummary = { id: LabelID; name: string; color: string | null; isSystem: boolean }
@@ -610,6 +618,8 @@ export type TaskEventStatusChanged = {
 export type TaskEventReviewed = { _tag: "reviewed"; decision: TaskDecision; comment: string | null }
 
 export type TaskEventFieldChanged = { _tag: "field"; field: TaskEventField; from: string | null; to: string | null }
+
+export type PullRequestInfo = { url: string; number: number; title: string | null; state: PullRequestState | null }
 
 export type ScheduleWhen = { cron: string; timeZone: string; until?: string } | ScheduleOnce
 
@@ -916,6 +926,13 @@ export type TaskEventData =
   | TaskEventLinksChanged
   | TaskEventParentChanged
   | TaskEventArchived
+
+export type SessionLinksInfo = {
+  tasks: Array<SessionLinksLinkedTask>
+  pullRequests: Array<PullRequestInfo>
+  issues: Array<SessionLinksIssue>
+  threads: Array<SessionLinksThread>
+}
 
 export type ScheduleInfo = {
   id: ScheduleID
@@ -6173,6 +6190,14 @@ export type TaskActivityListInput = {
 }
 
 export type TaskActivityListOutput = TaskActivityPage
+
+export type LinkSessionLinksInput = { readonly id: { readonly id: string }["id"] }
+
+export type LinkSessionLinksOutput = SessionLinksInfo
+
+export type LinkTaskPullRequestsInput = { readonly id: { readonly id: string }["id"] }
+
+export type LinkTaskPullRequestsOutput = Array<PullRequestInfo>
 
 export type LabelListInput = {
   readonly spaceId?: {

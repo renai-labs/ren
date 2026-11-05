@@ -8,7 +8,9 @@ import { Effect, Layer } from "effect"
 import { Access } from "../../src/access.js"
 import { BrainRegistry } from "../../src/brain-registry.js"
 import { EgressControl } from "../../src/egress-control.js"
+import { GitHubApp } from "../../src/github-app.js"
 import { Models } from "../../src/models.js"
+import { PullRequest } from "../../src/pull-request.js"
 import { Session } from "../../src/session.js"
 import { SessionRunner } from "../../src/session/runner.js"
 import { SessionSync } from "../../src/session-sync.js"
@@ -41,6 +43,7 @@ export const runnerLayer = Layer.mergeAll(SessionRunner.layer, SessionSync.layer
 
 export const sessionLayer = Layer.mergeAll(Session.layer, Space.layer, SpaceProvisioning.layer).pipe(
   Layer.provideMerge(SessionRunner.layer),
+  Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone))),
   Layer.provideMerge(BrainRegistry.layer),
   Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
   Layer.provideMerge(Host.layer({}, models)),

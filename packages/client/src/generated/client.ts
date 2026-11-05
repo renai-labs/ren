@@ -160,6 +160,10 @@ import type {
   TaskCommentArchiveOutput,
   TaskActivityListInput,
   TaskActivityListOutput,
+  LinkSessionLinksInput,
+  LinkSessionLinksOutput,
+  LinkTaskPullRequestsInput,
+  LinkTaskPullRequestsOutput,
   LabelListInput,
   LabelListOutput,
   LabelCreateInput,
@@ -1476,6 +1480,34 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+    },
+    link: {
+      session: {
+        links: (input: LinkSessionLinksInput, requestOptions?: RequestOptions) =>
+          request<LinkSessionLinksOutput>(
+            {
+              method: "GET",
+              path: `/sessions/${encodeURIComponent(input.id)}/links`,
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      task: {
+        pullRequests: (input: LinkTaskPullRequestsInput, requestOptions?: RequestOptions) =>
+          request<LinkTaskPullRequestsOutput>(
+            {
+              method: "GET",
+              path: `/tasks/${encodeURIComponent(input.id)}/pull-requests`,
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
     },
     label: {
       list: (input: LabelListInput, requestOptions?: RequestOptions) =>

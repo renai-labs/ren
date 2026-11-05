@@ -1,7 +1,12 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
+import { Channel } from "@ren/schema/channel"
+import type { Session as SessionSchema } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
+import type { Space as SpaceSchema } from "@ren/schema/space"
+import { Task } from "@ren/schema/task"
+import { TaskLink } from "@ren/schema/task-link"
 import { eq } from "drizzle-orm"
 import { DateTime, Deferred, Effect, Fiber, Schedule } from "effect"
 import { SqlClient, Statement } from "effect/sql"
@@ -78,6 +83,91 @@ const listed = (actor: Actor.Info, input: Partial<ListInput> = {}) =>
   )
 
 describe("Session", () => {
+  it.live(
+    "links lists the chat's tasks the caller can read, their pull requests and issues once each, and its threads",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const sessions = yield* Session.Service
+        const owner = yield* Seed.owner()
+        const id = yield* Seed.session(owner)
+        const hidden = yield* Seed.space(owner.organizationId)
+        yield* database.db
+          .insert(Database.Schema.task_sequence)
+          .values({ organization_id: owner.organizationId, prefix: "ACME", last_number: 4 })
+        const task = Effect.fnUntraced(function* (
+          number: number,
+          spaceId: SpaceSchema.ID,
+          createdIn: SessionSchema.ID | null,
+          urls: ReadonlyArray<string>,
+        ) {
+          const taskId = Task.ID.create()
+          const createdAt = new Date(Date.UTC(2026, 0, number))
+          yield* database.db.insert(Database.Schema.task).values({
+            id: taskId,
+            organization_id: owner.organizationId,
+            space_id: spaceId,
+            number,
+            title: `Task ${number}`,
+            created_by_session_id: createdIn,
+            created_at: createdAt,
+          })
+          if (urls.length > 0)
+            yield* database.db.insert(Database.Schema.task_link).values(
+              urls.map((url) => ({
+                id: TaskLink.ID.create(),
+                task_id: taskId,
+                organization_id: owner.organizationId,
+                ...TaskLink.classify(url),
+                url,
+                created_at: createdAt,
+              })),
+            )
+          return taskId
+        })
+        const created = yield* task(1, owner.spaceId, id, [
+          "https://github.com/acme/web/pull/41",
+          "https://github.com/acme/web/issues/30",
+        ])
+        const worked = yield* task(2, owner.spaceId, null, [
+          "https://github.com/Acme/Web/pull/41/files",
+          "https://linear.app/acme/issue/ENG-7/login",
+          "https://acme.slack.com/archives/C07/p1760000000000100",
+        ])
+        yield* task(3, hidden, id, ["https://github.com/acme/web/pull/99"])
+        yield* task(4, owner.spaceId, null, ["https://github.com/acme/web/pull/7"])
+        yield* database.db.insert(Database.Schema.task_session).values({ task_id: worked, session_id: id })
+        yield* database.db.insert(Database.Schema.channel_thread).values(
+          [
+            { thread: "C07:1760000000.000100", url: "https://acme.slack.com/archives/C07/p1760000000000100" },
+            { thread: "C07:1760000000.000200", url: null },
+          ].map((thread) => ({
+            id: Channel.ThreadID.create(),
+            organization_id: owner.organizationId,
+            provider: "slack" as const,
+            install: "T01",
+            session_id: id,
+            place_name: "web-team",
+            ...thread,
+          })),
+        )
+        expect(yield* sessions.links(actorOf(owner), id)).toEqual({
+          tasks: [
+            { id: created, identifier: "ACME-1", title: "Task 1", status: "todo" },
+            { id: worked, identifier: "ACME-2", title: "Task 2", status: "todo" },
+          ],
+          pullRequests: [{ url: "https://github.com/acme/web/pull/41", number: 41, title: null, state: null }],
+          issues: [
+            { kind: "github_issue", url: "https://github.com/acme/web/issues/30" },
+            { kind: "linear_issue", url: "https://linear.app/acme/issue/ENG-7/login" },
+          ],
+          threads: [
+            { provider: "slack", url: "https://acme.slack.com/archives/C07/p1760000000000100", place: "web-team" },
+          ],
+        })
+      }),
+  )
+
   it.live("creating again with the same ID is safe for its creator and a conflict for anyone else", () =>
     Effect.gen(function* () {
       const sessions = yield* Session.Service

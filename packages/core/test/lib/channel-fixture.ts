@@ -34,6 +34,7 @@ import { ChannelNotice } from "../../src/channel-notice.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
 import { ChannelTurns } from "../../src/channel-turns.js"
 import { EgressControl } from "../../src/egress-control.js"
+import { GitHubApp } from "../../src/github-app.js"
 import { Envelope } from "../../src/envelope.js"
 import { PersonCredentials } from "../../src/person-credentials.js"
 import { ChannelRoute } from "../../src/channel-route.js"
@@ -41,6 +42,7 @@ import { Channels } from "../../src/channels.js"
 import { DurableRunner } from "../../src/durable-runner.js"
 import { Drives } from "../../src/drives.js"
 import { Models } from "../../src/models.js"
+import { PullRequest } from "../../src/pull-request.js"
 import { SessionRunner } from "../../src/session/runner.js"
 import { SessionSync } from "../../src/session-sync.js"
 import { SlackTaskActions } from "../../src/slack-task-actions.js"
@@ -346,7 +348,14 @@ const core = (held: boolean) =>
     ChannelMappings.layer,
     SessionSync.layer,
   ).pipe(
-    Layer.provideMerge(Layer.mergeAll(notices, TaskCard.layerNone, SlackTaskActions.layerNone)),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        notices,
+        TaskCard.layerNone,
+        SlackTaskActions.layerNone,
+        PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone)),
+      ),
+    ),
     Layer.provideMerge(
       Layer.mergeAll(
         BrainRegistry.layer,

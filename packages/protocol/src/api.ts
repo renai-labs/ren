@@ -20,6 +20,7 @@ import { InfraGroup } from "./groups/infra.js"
 import { InsightsGroup } from "./groups/insights.js"
 import { InvitationGroup } from "./groups/invitation.js"
 import { LabelGroup } from "./groups/label.js"
+import { LinkGroup } from "./groups/link.js"
 import { MeGroup } from "./groups/me.js"
 import { MemoryGroup } from "./groups/memory.js"
 import { OrganizationSettingsGroup } from "./groups/organization-settings.js"
@@ -58,6 +59,7 @@ export const Api = HttpApi.make("server")
   .add(TaskGroup)
   .add(TaskCommentGroup)
   .add(TaskActivityGroup)
+  .add(LinkGroup)
   .add(LabelGroup)
   .add(ScheduleGroup)
   .add(ScheduleRunGroup)

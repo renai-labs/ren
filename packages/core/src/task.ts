@@ -5,6 +5,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Label } from "@ren/schema/label"
 import type { Space } from "@ren/schema/space"
 import { Session } from "@ren/schema/session"
+import type { PullRequest as PullRequestSchema } from "@ren/schema/pull-request"
 import { Task } from "@ren/schema/task"
 import type { TaskEvent } from "@ren/schema/task-event"
 import { TaskLink } from "@ren/schema/task-link"
@@ -17,6 +18,7 @@ import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { ChannelNotice } from "./channel-notice.js"
 import { Primitive } from "./primitive.js"
+import { PullRequest } from "./pull-request.js"
 import { SessionRunner } from "./session/runner.js"
 import { TaskCard } from "./task-card.js"
 import { TaskPolicy } from "./task/policy.js"
@@ -51,6 +53,10 @@ export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assig
     actor: Actor.Info,
     id: Task.ID,
   ) => Effect.Effect<Task.Info, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid>
+  readonly pullRequests: (
+    actor: Actor.Info,
+    id: Task.ID,
+  ) => Effect.Effect<ReadonlyArray<PullRequestSchema.Info>, Primitive.NotFound>
 }
 
 export const reviewStart: "continue" | "none" = "continue"
@@ -228,6 +234,7 @@ export const layer = Layer.effect(
     const runner = yield* SessionRunner.Service
     const notices = yield* ChannelNotice.Service
     const cards = yield* TaskCard.Service
+    const pulls = yield* PullRequest.Service
 
     const reread = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Task.ID) {
       const rows = yield* TaskQueries.select(transaction, actor).where(eq(Database.Schema.task.id, id))
@@ -857,6 +864,25 @@ export const layer = Layer.effect(
             if (!info) return yield* TaskQueries.notFound
             return info
           }),
+        )
+      }),
+      pullRequests: Effect.fn("Task.pullRequests")(function* (actor: Actor.Info, id: Task.ID) {
+        const links = yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const found = yield* TaskQueries.select(transaction, actor).where(
+              and(eq(Database.Schema.task.id, id), TaskQueries.visibleTo(access, actor)),
+            )
+            if (found.length === 0) return yield* TaskQueries.notFound
+            return yield* transaction
+              .select({ url: Database.Schema.task_link.url })
+              .from(Database.Schema.task_link)
+              .where(and(eq(Database.Schema.task_link.task_id, id), eq(Database.Schema.task_link.kind, "github_pr")))
+              .orderBy(asc(Database.Schema.task_link.created_at), asc(Database.Schema.task_link.id))
+          }),
+        )
+        return yield* pulls.read(
+          actor.organizationId,
+          links.map((link) => link.url),
         )
       }),
       create: Effect.fn("Task.create")(function* (actor: Actor.Info, input: Task.CreateInput) {

@@ -1076,6 +1076,21 @@ const EndpointTaskActivityList = (raw: RawClient["task-activity"]) => (input: Ta
 
 const adaptGroupTaskActivity = (raw: RawClient["task-activity"]) => ({ list: EndpointTaskActivityList(raw) })
 
+type LinkSessionLinksRequest = Parameters<RawClient["link"]["session.links"]>[0]
+type LinkSessionLinksInput = { readonly id: LinkSessionLinksRequest["params"]["id"] }
+const EndpointLinkSessionLinks = (raw: RawClient["link"]) => (input: LinkSessionLinksInput) =>
+  raw["session.links"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type LinkTaskPullRequestsRequest = Parameters<RawClient["link"]["task.pullRequests"]>[0]
+type LinkTaskPullRequestsInput = { readonly id: LinkTaskPullRequestsRequest["params"]["id"] }
+const EndpointLinkTaskPullRequests = (raw: RawClient["link"]) => (input: LinkTaskPullRequestsInput) =>
+  raw["task.pullRequests"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupLink = (raw: RawClient["link"]) => ({
+  session: { links: EndpointLinkSessionLinks(raw) },
+  task: { pullRequests: EndpointLinkTaskPullRequests(raw) },
+})
+
 type LabelListRequest = Parameters<RawClient["label"]["label.list"]>[0]
 type LabelListInput = {
   readonly spaceId?: LabelListRequest["query"]["spaceId"]
@@ -1705,6 +1720,7 @@ const adaptClient = (raw: RawClient) => ({
   task: adaptGroupTask(raw["task"]),
   "task-comment": adaptGroupTaskComment(raw["task-comment"]),
   "task-activity": adaptGroupTaskActivity(raw["task-activity"]),
+  link: adaptGroupLink(raw["link"]),
   label: adaptGroupLabel(raw["label"]),
   schedule: adaptGroupSchedule(raw["schedule"]),
   "schedule-run": adaptGroupScheduleRun(raw["schedule-run"]),

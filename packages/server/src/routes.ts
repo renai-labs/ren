@@ -32,6 +32,7 @@ import { SessionSync } from "@ren/core/session-sync"
 import { Space } from "@ren/core/space"
 import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
+import { PullRequest } from "@ren/core/pull-request"
 import { ReferenceCheck } from "@ren/core/reference-check"
 import { RepositoryHosts } from "@ren/core/repository-hosts"
 import { SpaceSettings } from "@ren/core/space/settings"
@@ -84,6 +85,7 @@ import { SpaceEnvironmentTemplateHandler } from "./handlers/api/space-environmen
 import { SpaceMemberHandler } from "./handlers/api/space-member.js"
 import { SpaceSettingsHandler } from "./handlers/api/space-settings.js"
 import { TaskHandler } from "./handlers/api/task.js"
+import { LinkHandler } from "./handlers/api/link.js"
 import { TaskActivityHandler } from "./handlers/api/task-activity.js"
 import { TaskCommentHandler } from "./handlers/api/task-comment.js"
 import { SyncHandler } from "./handlers/sync.js"
@@ -170,6 +172,7 @@ export const layer = Layer.mergeAll(
         ChatHandler,
         TaskHandler,
         TaskActivityHandler,
+        LinkHandler,
         TaskCommentHandler,
         LabelHandler,
         ScheduleHandler,
@@ -256,4 +259,4 @@ export const layer = Layer.mergeAll(
     ]),
   ),
   Cors,
-).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))
+).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer), Layer.provide(PullRequest.layer))

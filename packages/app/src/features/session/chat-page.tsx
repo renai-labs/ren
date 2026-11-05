@@ -185,20 +185,7 @@ function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => vo
       ) : (
         <ChatBreadcrumb chat={chat} />
       )}
-      {chat.child ? null : (
-        <ChatActions
-          sessionId={chat.root}
-          title={chat.title}
-          spaceId={chat.spaceId}
-          capabilities={chat.capabilities}
-          prompted={chat.prompted}
-          reverted={chat.reverted}
-          onUndo={chat.undo}
-          onRestore={chat.restore}
-          onCompact={chat.compact}
-          onArchive={chat.archive}
-        />
-      )}
+      {chat.child ? null : <ChatActions sessionId={chat.root} title={chat.title} onArchive={chat.archive} />}
       <Button
         variant="ghost"
         size="icon"
