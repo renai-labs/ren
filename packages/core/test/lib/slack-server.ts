@@ -89,6 +89,11 @@ const tokenOf = (request: Request) => request.headers.get("authorization")?.repl
 
 const known = (state: State, token: string) => [...state.grants.values()].some((grant) => grant.token === token)
 
+const download = (state: State, request: Request, file: string) =>
+  known(state, tokenOf(request)) && state.files.has(file)
+    ? new Response(state.files.get(file))
+    : new Response(null, { status: 403 })
+
 const exchange = (state: State, params: Params) => {
   const grant = state.grants.get(params.code ?? "")
   if (!grant || params.client_secret !== "slack-secret") return refuse("invalid_code")
@@ -254,10 +259,7 @@ export const start = (): Instance => {
         return new Response(null, { status: 200 })
       }
       const file = /^\/files\/(F\d+)$/u.exec(url.pathname)?.[1]
-      if (file && request.method === "GET")
-        return known(state, tokenOf(request)) && state.files.has(file)
-          ? new Response(state.files.get(file))
-          : new Response(null, { status: 403 })
+      if (file && request.method === "GET") return download(state, request, file)
       const name = /^\/api\/([\w.]+)$/u.exec(url.pathname)?.[1]
       if (request.method !== "POST" || !name) return new Response(null, { status: 404 })
       const params = Object.fromEntries(new URLSearchParams(await request.text()))

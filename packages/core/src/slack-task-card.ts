@@ -172,7 +172,6 @@ const actionsOf = (app: string, card: Card) => {
     ...(primary.length > 0 && { primary_actions: primary }),
     ...(overflow.length > 0 && { overflow_actions: overflow }),
   })
-  if (card.archived) return undefined
   if (!Task.actionable.includes(card.status)) return shown(openInRen, link("pr", "Open PR", pull))
   if (card.humanReview && pull)
     return shown(button("approve", "Approve"), [...openSession, ...link("pr", "Open PR", pull)])
@@ -376,7 +375,6 @@ export const layer = Layer.effect(
 
     const entityOf = (card: Card, options: { readonly titled: boolean; readonly detailed: boolean }) => {
       const activity = Option.getOrUndefined(card.activity)
-      const actions = actionsOf(app, card)
       return {
         entity_type: "slack#/entities/task",
         url: urlOf(card),
@@ -396,7 +394,7 @@ export const layer = Layer.effect(
             ...(activity && { date_updated: { value: seconds(activity.at) } }),
           },
           custom_fields: [...summaryFields(app, card), ...(options.detailed ? detailFields(app, card, options) : [])],
-          ...(actions && { actions }),
+          ...(!card.archived && { actions: actionsOf(app, card) }),
         },
       }
     }
