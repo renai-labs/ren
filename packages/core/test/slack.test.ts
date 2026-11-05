@@ -286,9 +286,13 @@ describe("Slack", () => {
           reply("5.0", "U01", "<@UBOT> why?"),
         )
         const event = eventOf({ install: found.workspace })
-        expect(yield* slackProvider.context(event)).toEqual(Option.some("[Ben Silva] it failed for @Ana Lima"))
+        expect(yield* slackProvider.context(event)).toEqual(
+          Option.some({ text: "[Ben Silva] it failed for @Ana Lima", files: [] }),
+        )
         slack.replies.splice(0, 2)
-        expect(yield* slackProvider.context(event)).toEqual(Option.some("[Ben Silva] it failed for @Ana Lima"))
+        expect(yield* slackProvider.context(event)).toEqual(
+          Option.some({ text: "[Ben Silva] it failed for @Ana Lima", files: [] }),
+        )
         slack.replies.splice(
           0,
           slack.replies.length,
@@ -296,7 +300,7 @@ describe("Slack", () => {
           reply("99.0", "U02", "<@UBOT> sum it up"),
         )
         const long = yield* slackProvider.context(eventOf({ install: found.workspace, message: "99.0" }))
-        const lines = Option.getOrElse(long, () => "").split("\n")
+        const lines = Option.match(long, { onNone: () => "", onSome: (found) => found.text }).split("\n")
         expect([lines.length, lines[0], lines[1], lines.at(-1)]).toEqual([
           51,
           "[earlier messages omitted]",
@@ -305,6 +309,48 @@ describe("Slack", () => {
         ])
         slack.replies.splice(0, slack.replies.length, reply("5.0", "U01", "<@UBOT> why?"))
         expect(yield* slackProvider.context(event)).toEqual(Option.none())
+      }),
+  )
+
+  it.live(
+    "the context carries the files of the current message and of the latest 10 thread files since Ren's previous mention, without Ren's own",
+    () =>
+      Effect.gen(function* () {
+        const slackProvider = yield* provider
+        const found = yield* installed()
+        const file = (id: string, name: string, mimetype: string) => ({
+          id,
+          name,
+          mimetype,
+          url_private_download: `${slack.url}/files/${id}`,
+        })
+        const ref = (id: string, name: string, mime: string) => ({ url: `${slack.url}/files/${id}`, name, mime })
+        slack.replies.splice(
+          0,
+          slack.replies.length,
+          { ts: "1.0", user: "U01", text: "<@UBOT> old", files: [file("F00", "old.png", "image/png")] },
+          { ts: "2.0", user: "U02", text: "the crash", files: [file("F01", "crash.png", "image/png")] },
+          { ts: "3.0", user: "UBOT", text: "a chart", files: [file("F02", "chart.png", "image/png")] },
+          ...Array.from({ length: 10 }, (_, index) => ({
+            ts: `3.${index + 1}`,
+            user: "U02",
+            text: "",
+            files: [file(`F1${index}`, `clip-${index}.mp4`, "video/mp4")],
+          })),
+          { ts: "5.0", user: "U01", text: "<@UBOT> what is this?", files: [file("F03", "log.txt", "text/plain")] },
+          { ts: "6.0", user: "U01", text: "later" },
+        )
+        const context = yield* slackProvider.context(eventOf({ install: found.workspace }))
+        expect(Option.map(context, (each) => each.files)).toEqual(
+          Option.some([
+            ref("F03", "log.txt", "text/plain"),
+            ...Array.from({ length: 10 }, (_, index) => ref(`F1${index}`, `clip-${index}.mp4`, "video/mp4")),
+          ]),
+        )
+        slack.replies.splice(1, 12)
+        expect(yield* slackProvider.context(eventOf({ install: found.workspace }))).toEqual(
+          Option.some({ text: "", files: [ref("F03", "log.txt", "text/plain")] }),
+        )
       }),
   )
 
@@ -322,7 +368,10 @@ describe("Slack", () => {
         })),
       )
       expect(yield* slackProvider.context(eventOf({ install: found.workspace, message: "2002.0" }))).toEqual(
-        Option.some("[Thread context omitted: the pagination limit was reached before the current message.]"),
+        Option.some({
+          text: "[Thread context omitted: the pagination limit was reached before the current message.]",
+          files: [],
+        }),
       )
     }),
   )

@@ -353,6 +353,26 @@ describe("Channels", () => {
       }),
   )
 
+  it.live(
+    "the files of earlier thread messages go to the drive after the message's own, and a file in both is fetched once",
+    () =>
+      Effect.gen(function* () {
+        const found = ChannelFixture.event((yield* routed).install, {
+          message: "files",
+          files: [{ url: "bytes:4", name: "screenshot.png", mime: "image/png" }],
+        })
+        yield* ChannelFixture.receive(ChannelFixture.delivery(found))
+        const sent = (yield* ChannelFixture.accepted(1)).at(0)
+        const folder = `chats/${sent?.sessionId}/uploads/${sent?.messageId}`
+        expect(sent?.prompt.files).toEqual([
+          { path: `${folder}/screenshot.png`, name: "screenshot.png" },
+          { path: `${folder}/demo.mp4`, name: "demo.mp4" },
+        ])
+        const owner = yield* ownerOf(sent?.sessionId ?? Session.ID.create())
+        expect((yield* (yield* Drives.Service).read(owner, `${folder}/demo.mp4`)).length).toBe(5)
+      }),
+  )
+
   it.live("every file goes to the drive, and the inline copies stop at 10 MB in total", () =>
     Effect.gen(function* () {
       const found = ChannelFixture.event((yield* routed).install, {

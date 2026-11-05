@@ -69,9 +69,15 @@ export const layer = Layer.effect(
     const thread = Database.Schema.channel_thread
     const install = Database.Schema.channel_install
 
-    const fetchFiles = Effect.fnUntraced(function* (provider: ChannelProvider.Provider, event: Channel.Event) {
+    const fetchFiles = Effect.fnUntraced(function* (
+      provider: ChannelProvider.Provider,
+      event: Channel.Event,
+      context: Option.Option<ChannelProvider.ThreadContext>,
+    ) {
+      const own = new Set(event.files.map((file) => file.url))
+      const earlier = Option.isSome(context) ? context.value.files.filter((file) => !own.has(file.url)) : []
       const fetched = yield* Effect.forEach(
-        event.files,
+        [...event.files, ...earlier],
         (file) =>
           provider.fetchFile(event.install, file).pipe(
             Effect.tapError((error) => Effect.logWarning(`Channel file ${file.name} could not be read`, error)),
@@ -438,9 +444,9 @@ export const layer = Layer.effect(
       const trigger = found.value.triggers.find((each) => each.id === event.trigger)
       const context = yield* found.value.context(event).pipe(
         Effect.tapError((error) => Effect.logWarning(`The ${event.provider} thread context could not be read`, error)),
-        Effect.orElseSucceed(Option.none<string>),
+        Effect.orElseSucceed(Option.none<ChannelProvider.ThreadContext>),
       )
-      const fetched = yield* fetchFiles(found.value, event)
+      const fetched = yield* fetchFiles(found.value, event, context)
       const base = {
         messageId: payload.messageId,
         sender: { userId: route.senderUserId },
@@ -450,7 +456,7 @@ export const layer = Layer.effect(
           ...(event.thread.url && { threadUrl: event.thread.url }),
           sender: event.sender.name ?? event.sender.handle ?? event.sender.accountId,
           ...(event.sender.handle && { handle: event.sender.handle }),
-          ...(Option.isSome(context) && { context: context.value }),
+          ...(Option.isSome(context) && context.value.text.length > 0 && { context: context.value.text }),
           ...(trigger && { trigger: trigger.title }),
         },
       }

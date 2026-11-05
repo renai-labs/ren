@@ -283,12 +283,16 @@ describe("GitHub", () => {
       if (parsed._tag !== "Event") return yield* Effect.die(new Error("The mention did not parse"))
       const event = { ...parsed.event, install }
       expect(yield* provider.context(event)).toEqual(
-        Option.some("Issue #12 “The deploy fails”, open\nTriggering comment: 456 (issue) by @octocat"),
+        Option.some({
+          text: "Issue #12 “The deploy fails”, open\nTriggering comment: 456 (issue) by @octocat",
+          files: [],
+        }),
       )
       expect(yield* provider.context({ ...event, thread: { id: "8812:41" }, message: "review:789" })).toEqual(
-        Option.some(
-          "Pull request #41 “Fix the deploy”, draft, fix-deploy → main\nTriggering comment: 789 (review) by @hubot",
-        ),
+        Option.some({
+          text: "Pull request #41 “Fix the deploy”, draft, fix-deploy → main\nTriggering comment: 789 (review) by @hubot",
+          files: [],
+        }),
       )
       expect(
         yield* provider.context({
@@ -297,7 +301,12 @@ describe("GitHub", () => {
           message: "pull:41",
           sender: { accountId: "1", handle: "hubot" },
         }),
-      ).toEqual(Option.some("Pull request #41 “Fix the deploy”, draft, fix-deploy → main\nReady for review, by @hubot"))
+      ).toEqual(
+        Option.some({
+          text: "Pull request #41 “Fix the deploy”, draft, fix-deploy → main\nReady for review, by @hubot",
+          files: [],
+        }),
+      )
       expect(github.minted.filter((each) => each === install)).toHaveLength(1)
       expect((yield* Effect.flip(provider.context({ ...event, thread: { id: "8812:404" } })))._tag).toBe(
         "ChannelProvider.Unavailable",

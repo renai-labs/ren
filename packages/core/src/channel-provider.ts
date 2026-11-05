@@ -67,6 +67,11 @@ export interface Place {
   readonly url?: string
 }
 
+export interface ThreadContext {
+  readonly text: string
+  readonly files: ReadonlyArray<Channel.FileRef>
+}
+
 export interface Provider {
   readonly id: Channel.Provider
   readonly triggers: ReadonlyArray<Channel.Trigger>
@@ -75,7 +80,7 @@ export interface Provider {
   readonly parse: (request: Request) => Effect.Effect<Channel.Parsed, Malformed>
   readonly enrich?: (event: Channel.Event) => Effect.Effect<Channel.Event>
   readonly fetchFile: (install: string, file: Channel.FileRef) => Effect.Effect<Uint8Array, FileUnavailable>
-  readonly context: (event: Channel.Event) => Effect.Effect<Option.Option<string>, Unavailable>
+  readonly context: (event: Channel.Event) => Effect.Effect<Option.Option<ThreadContext>, Unavailable>
   readonly linkOf: (event: Channel.Event) => Option.Option<TaskLink.Ref>
   readonly send: (
     target: Target,

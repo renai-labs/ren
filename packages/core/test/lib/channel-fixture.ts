@@ -132,7 +132,16 @@ const provider = Effect.gen(function* () {
     context: (found) =>
       found.message === "unreadable"
         ? Effect.fail(new ChannelProvider.Unavailable({ message: "Slack is down" }))
-        : Effect.succeedSome("[Bob] the deploy failed at 10:02"),
+        : Effect.succeedSome({
+            text: "[Bob] the deploy failed at 10:02",
+            files:
+              found.message === "files"
+                ? [
+                    { url: "bytes:4", name: "screenshot.png", mime: "image/png" },
+                    { url: "bytes:5", name: "demo.mp4", mime: "video/mp4" },
+                  ]
+                : [],
+          }),
     linkOf: (found) =>
       Option.fromNullishOr(found.thread.url).pipe(
         Option.map(TaskLink.classify),

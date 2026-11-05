@@ -37,6 +37,7 @@ interface Reply {
   readonly user: string
   readonly text: string
   readonly bot_id?: string
+  readonly files?: ReadonlyArray<object>
 }
 
 interface Channel {
@@ -101,7 +102,12 @@ const conversations = (state: State, params: Params) => {
 const replies = (state: State, params: Params) => {
   const start = Number(params.cursor ?? "0")
   const next = start + Number(params.limit ?? "50")
-  const messages = state.replies.filter((reply) => !params.latest || Number(reply.ts) < Number(params.latest))
+  const messages = state.replies.filter(
+    (reply) =>
+      !params.latest ||
+      Number(reply.ts) < Number(params.latest) ||
+      (params.inclusive === "true" && reply.ts === params.latest),
+  )
   return answer({
     messages: messages.slice(start, next),
     response_metadata: { next_cursor: next < messages.length ? String(next) : "" },
