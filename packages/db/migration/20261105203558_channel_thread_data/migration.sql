@@ -1,0 +1,1 @@
+ALTER TABLE "channel_thread" ADD COLUMN "data" jsonb DEFAULT '{}' NOT NULL;
