@@ -86,17 +86,17 @@ export const timing = {
   stuck: Duration.minutes(30),
   accessMargin: Duration.minutes(2),
   poll: Duration.seconds(1),
-  probe: Duration.seconds(3),
-  fresh: Duration.seconds(60),
-  full: 0.95,
+  probeTimeout: Duration.seconds(3),
+  sampleMaxAge: Duration.seconds(60),
+  fullShare: 0.95,
   failures: 3,
 }
 
 type Row = typeof Database.Schema.brain.$inferSelect
 
-const reasonOf = (sample: SandboxProvider.Vitals | undefined) => {
-  if (sample && sample.memory >= timing.full) return "memory" as const
-  if (sample && sample.disk >= timing.full) return "disk" as const
+const reasonOf = (sample: SandboxProvider.Sample | undefined) => {
+  if (sample && sample.memory >= timing.fullShare) return "memory" as const
+  if (sample && sample.disk >= timing.fullShare) return "disk" as const
   return "unknown" as const
 }
 
@@ -425,19 +425,19 @@ export const layer = Layer.effect(
       )
     }).pipe(Effect.withErrorReporting, Effect.forkScoped)
 
-    const silent = Effect.fnUntraced(function* (row: Row, binding: Schema.Json) {
+    const replaceIfFrozen = Effect.fnUntraced(function* (row: Row, binding: Schema.Json) {
       if (!provider.canSample) {
         const message = `Brain ${row.id} does not answer, and its provider reports no samples of its machine; Ren keeps it`
         return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(
           Effect.annotateLogs({ "ren.brain.id": row.id, "ren.brain.generation": row.generation }),
         )
       }
-      const vitals = yield* provider.vitals(binding).pipe(
+      const found = yield* provider.lastSample(binding).pipe(
         Effect.tapError((error) => Effect.logWarning("The sandbox samples are unknown", error)),
         Effect.option,
       )
-      if (Option.isNone(vitals)) return
-      const sample = Option.getOrUndefined(vitals.value)
+      if (Option.isNone(found)) return
+      const sample = Option.getOrUndefined(found.value)
       const logged = Effect.annotateLogs({
         "ren.brain.id": row.id,
         "ren.brain.generation": row.generation,
@@ -447,7 +447,7 @@ export const layer = Layer.effect(
           "ren.sandbox.disk": sample.disk,
         }),
       })
-      if (sample && Duration.isLessThan(DateTime.distance(sample.at, yield* DateTime.now), timing.fresh)) {
+      if (sample && Duration.isLessThan(DateTime.distance(sample.at, yield* DateTime.now), timing.sampleMaxAge)) {
         const message = `Brain ${row.id} does not answer, but its machine runs; Ren keeps it`
         return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(logged)
       }
@@ -465,7 +465,7 @@ export const layer = Layer.effect(
       const answered = Option.isSome(target)
         ? yield* client.brain(target.value).pipe(
             Effect.flatMap((api) => api.brain["brain.state"]()),
-            Effect.timeoutOption(timing.probe),
+            Effect.timeoutOption(timing.probeTimeout),
             Effect.option,
           )
         : Option.none()
@@ -479,7 +479,7 @@ export const layer = Layer.effect(
       if (row.phase !== "ready") return
       // oxlint-disable-next-line ren/no-comments -- A paused sandbox wakes; it is never replaced here (E123).
       if (status.value === "paused") return yield* update(row.id, { phase: "resuming" })
-      yield* silent(row, row.binding)
+      yield* replaceIfFrozen(row, row.binding)
     })
 
     const rest = Effect.fnUntraced(function* (row: Pick<Row, "id" | "generation" | "binding">) {

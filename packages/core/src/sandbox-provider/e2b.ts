@@ -59,7 +59,7 @@ const Samples = Schema.Array(
   }),
 )
 
-const samplesWithin = Duration.minutes(30)
+const sampleWindow = Duration.minutes(30)
 
 const share = (used: number, total: number) => (total > 0 ? used / total : 0)
 
@@ -305,9 +305,9 @@ export const layer = Layer.effect(
         )
         return detail.state === "paused" ? ("paused" as const) : ("running" as const)
       }),
-      vitals: Effect.fn("E2BSandbox.vitals")(function* (raw) {
+      lastSample: Effect.fn("E2BSandbox.lastSample")(function* (raw) {
         const binding = yield* read(raw)
-        const since = DateTime.subtractDuration(yield* DateTime.now, samplesWithin)
+        const since = DateTime.subtractDuration(yield* DateTime.now, sampleWindow)
         const response = yield* send(
           "metrics",
           HttpClientRequest.get(`/sandboxes/${binding.sandboxId}/metrics`).pipe(
@@ -326,7 +326,7 @@ export const layer = Layer.effect(
               undefined,
             ),
           ),
-          (last): SandboxProvider.Vitals => ({
+          (last): SandboxProvider.Sample => ({
             at: DateTime.makeUnsafe(last.timestampUnix * 1000),
             memory: share(last.memUsed, last.memTotal),
             disk: share(last.diskUsed, last.diskTotal),
