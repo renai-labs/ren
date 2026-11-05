@@ -8,8 +8,8 @@ import { join } from "node:path"
 const text = (path: string) =>
   Effect.promise(() => readFile(path, "utf8").then(Option.some, () => Option.none<string>()))
 
-const oomKills = (memoryEvents: string) =>
-  Effect.map(text(memoryEvents), (found) =>
+const oomKills = (memoryEvents: string | undefined) =>
+  Effect.map(memoryEvents ? text(memoryEvents) : Effect.succeedNone, (found) =>
     Option.flatMap(found, (events) =>
       Option.fromNullishOr(/^oom_kill (\d+)$/mu.exec(events)?.at(1)).pipe(Option.map(Number)),
     ),
@@ -17,7 +17,7 @@ const oomKills = (memoryEvents: string) =>
 
 const failure = (name: string, message: string) => Cause.die(Object.assign(new Error(message), { name }))
 
-export const make = (options: { readonly state: string; readonly memoryEvents: string }) =>
+export const make = (options: { readonly state: string; readonly memoryEvents?: string | undefined }) =>
   Effect.map(Effect.flatMap(oomKills(options.memoryEvents), Ref.make), (seen) =>
     Effect.gen(function* () {
       for (const process of ["brain", "executor"]) {

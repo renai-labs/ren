@@ -30,6 +30,7 @@ if [ -s "$home/.ren/egress-ca.pem" ]; then
 fi
 tools() { "$@"; }
 if sudo -n systemd-run --quiet --scope --slice=ren-tools.slice true >/dev/null 2>&1; then
+  export REN_TOOLS_MEMORY_EVENTS=/sys/fs/cgroup/ren.slice/ren-tools.slice/memory.events
   tools() {
     sudo -E env "PATH=$PATH" "HOME=$home" systemd-run --quiet --scope --slice=ren-tools.slice \
       --uid="$(id -u)" --gid="$(id -g)" -- "$@"

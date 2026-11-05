@@ -28,4 +28,8 @@ export const Vars = Schema.Struct({
     description: "The brain runs behind Ren’s egress: it holds no host token and keeps REN_URL (C8, C49).",
   }),
   REN_BRAIN_VERSION: Schema.optional(Schema.String),
+  REN_TOOLS_MEMORY_EVENTS: Schema.optional(Schema.String).annotate({
+    description:
+      "The memory.events file of the group that caps the tools’ memory. Without it, the brain counts no tools that the sandbox stops.",
+  }),
 })

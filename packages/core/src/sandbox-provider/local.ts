@@ -80,6 +80,7 @@ export const layer = (options: {
         kind: "local",
         canEgress: true,
         canMount: false,
+        canSample: true,
         template: options.template ?? null,
         create: Effect.fn("LocalSandbox.create")(function* (input) {
           const home = homeOf(input.brainId, input.generation)
