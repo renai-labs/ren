@@ -7,4 +7,5 @@ import { localTimeZone } from "./schedules.js"
 
 export const chosen = Preference.make("time-zone.v1", Schema.NullOr(Schema.String), null)
 
-export const current = (storage: Platform.Storage) => chosen.read(storage) ?? localTimeZone()
+export const current = (storage: Platform.Storage, organization?: string) =>
+  chosen.read(storage) ?? organization ?? localTimeZone()

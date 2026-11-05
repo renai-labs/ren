@@ -211,6 +211,34 @@ describe("Schedules", () => {
       }),
   )
 
+  it.live(
+    "a cron without a zone runs in the organization's timezone, else UTC; a new cron without a zone keeps the schedule's",
+    () =>
+      Effect.gen(function* () {
+        const schedules = yield* Schedules.Service
+        const database = yield* Database.Service
+        const t = yield* team
+        const create = schedules.create(
+          t.ada,
+          decodeCreate({ spaceId: t.spaceId, name: "Report", message: "Post it.", when: { cron: "0 9 * * *" } }),
+        )
+        expect((yield* create).when).toEqual({ cron: "0 9 * * *", timeZone: "UTC" })
+        yield* database.db
+          .insert(Database.Schema.settings)
+          .values({ organization_id: t.organizationId, settings: { timezone: "Asia/Kolkata" } })
+        const created = yield* create
+        expect(created.when).toEqual({ cron: "0 9 * * *", timeZone: "Asia/Kolkata" })
+        yield* database.db
+          .update(Database.Schema.settings)
+          .set({ settings: { timezone: "Europe/Berlin" } })
+          .where(eq(Database.Schema.settings.organization_id, t.organizationId))
+        expect((yield* schedules.update(t.ada, created.id, { when: { cron: "0 10 * * *" } })).when).toEqual({
+          cron: "0 10 * * *",
+          timeZone: "Asia/Kolkata",
+        })
+      }),
+  )
+
   it.live("two ticks at once insert one run and start one chat (S1)", () =>
     Effect.gen(function* () {
       const schedules = yield* Schedules.Service

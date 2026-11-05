@@ -49,7 +49,7 @@ ren org create "Acme"
 | Setting       | What it changes                                                                                                                              |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Name and icon | How the organization shows in the sidebar and the organization menu.                                                                         |
-| Timezone      | The default time zone for new schedules.                                                                                                     |
+| Timezone      | The time zone that agents, shells, and new schedules use. Without it, UTC.                                                                   |
 | Default model | The model that chats use when the space, the project, and the chat do not pick one.                                                          |
 | Instructions  | Rules that Ren obeys in every chat in the organization. Space and project instructions also apply. See [Projects](/docs/concepts/projects/). |
 
@@ -125,4 +125,5 @@ On the **Members** tab, change the role of a person from the **Role** menu. To t
 - Invitations expire after seven days.
 - **Remove** takes a person out of the organization and out of all of its spaces.
 - Organization instructions apply together with space and project instructions.
-- The organization timezone is the default time zone for new schedules.
+- The organization timezone is the default time zone for new schedules. Agents get it with the time of each message, and commands run with it as `TZ`.
+- Only the organization sets a timezone. Spaces and agents cannot set their own.

@@ -162,6 +162,32 @@ describe("BrainSettings.resolve", () => {
     expect(resolve({ ren: layer({ model: stub }), agents: [primary()] }).primary.steps).toBe(Settings.defaultSteps)
   })
 
+  test("every agent gets the organization's timezone, else Ren's, else UTC; a space or agent zone is ignored", () => {
+    const zones = (stored: Omit<Stored, "agents">) => {
+      const resolved = resolve({
+        ...stored,
+        agents: [
+          primary({ timezone: "America/New_York" }),
+          { name: "explore", isSubagent: true, settings: layer({ timezone: "Europe/Paris" }) },
+        ],
+      })
+      return [resolved.primary.timezone, ...resolved.subagents.map((agent) => agent.timezone)]
+    }
+    const space = layer({ timezone: "Asia/Tokyo" })
+    expect(
+      zones({
+        ren: layer({ model: stub, timezone: "Europe/Berlin" }),
+        organization: layer({ timezone: "Asia/Kolkata" }),
+        space,
+      }),
+    ).toEqual(["Asia/Kolkata", "Asia/Kolkata"])
+    expect(zones({ ren: layer({ model: stub, timezone: "Europe/Berlin" }), space })).toEqual([
+      "Europe/Berlin",
+      "Europe/Berlin",
+    ])
+    expect(zones({ ren: layer({ model: stub }), space })).toEqual(["UTC", "UTC"])
+  })
+
   test("an unavailable agent model falls back to the space's model, and an unavailable subagent model to the primary's (E61)", () => {
     const resolved = resolve({
       space: layer({ model: stub }),

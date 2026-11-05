@@ -14,7 +14,16 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "OrganizationSettings.Info" })
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
-export const UpdateInput = Schema.Struct({ settings: Settings.Info }).annotate({
+export const UpdateInput = Schema.Struct({
+  settings: Settings.Info.mapFields((fields) => ({
+    ...fields,
+    timezone: Schema.optionalKey(
+      Settings.TimeZone.annotate({
+        description: `The IANA time zone that agents, shells and new schedules use. Without it, ${Settings.defaultTimezone}.`,
+      }),
+    ),
+  })).annotate({ identifier: "OrganizationSettings.Settings" }),
+}).annotate({
   identifier: "OrganizationSettings.UpdateInput",
 })
 

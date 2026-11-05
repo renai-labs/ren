@@ -15,6 +15,7 @@ import { Choice, deliveries, details, PasswordDialog, ThemePicker } from "../../
 import { RouterContext } from "../../lib/router-context.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
+import { localTimeZone } from "../../lib/schedules.js"
 import { TimeZonePicker } from "../../components/time-zone-picker.js"
 
 export function PreferencesPage() {
@@ -105,7 +106,7 @@ export function PreferencesPage() {
           {[
             <Row key="time-zone" title="Timezone" description="New schedules start in this timezone.">
               <TimeZonePicker
-                automatic
+                unset={{ label: "Automatic", zone: localTimeZone() }}
                 value={timeZone}
                 variant="ghost"
                 className="gap-2 text-muted-foreground"

@@ -999,6 +999,7 @@ export type SettingsInfo = {
   model?: SessionModel
   defaultModels?: ModelTypesDefaults
   steps?: number
+  timezone?: string
   permissions?: PermissionRuleList
   references?: ReferenceList
 }
@@ -1150,8 +1151,6 @@ export type AgentInfo = {
   archivedAt: string | null
 }
 
-export type OrganizationSettingsUpdateInput2 = { settings: SettingsInfo }
-
 export type AgentDeclaration = { description?: string; isSubagent?: boolean; settings?: SettingsInfo }
 
 export type SkillInfo =
@@ -1296,11 +1295,7 @@ export type SessionMessageAssistant = {
 
 export type InfraPulled = {
   bindings: { organization: string; spaces: { [x: PrimitiveSlug]: InfraPulledBindings } }
-  spec: {
-    org: OrganizationSettingsUpdateInput2
-    memory?: MemoryFiles
-    spaces: { [x: PrimitiveSlug]: InfraPulledSpace }
-  }
+  spec: { org: { settings: SettingsInfo }; memory?: MemoryFiles; spaces: { [x: PrimitiveSlug]: InfraPulledSpace } }
   lock: InfraLock
   write: Array<string>
   remove: Array<string>
@@ -1663,6 +1658,7 @@ export type SpaceSettingsUpdateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1698,6 +1694,7 @@ export type OrganizationSettingsUpdateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1889,6 +1886,7 @@ export type AgentCreateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1918,6 +1916,7 @@ export type AgentCreateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1947,6 +1946,7 @@ export type AgentCreateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -1976,6 +1976,7 @@ export type AgentCreateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -2005,6 +2006,7 @@ export type AgentCreateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -2039,6 +2041,7 @@ export type AgentUpdateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -2067,6 +2070,7 @@ export type AgentUpdateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -2095,6 +2099,7 @@ export type AgentUpdateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -2123,6 +2128,7 @@ export type AgentUpdateInput = {
         readonly video_generation?: { readonly providerId: string; readonly modelId: string }
       }
       readonly steps?: number
+      readonly timezone?: string
       readonly permissions?: ReadonlyArray<{
         readonly action: string
         readonly resource: string
@@ -6304,7 +6310,7 @@ export type ScheduleCreateInput = {
     readonly slug?: string | null
     readonly message: string
     readonly when:
-      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
       | { readonly at: string }
       | { readonly in: string }
     readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
@@ -6316,7 +6322,7 @@ export type ScheduleCreateInput = {
     readonly slug?: string | null
     readonly message: string
     readonly when:
-      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
       | { readonly at: string }
       | { readonly in: string }
     readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
@@ -6328,7 +6334,7 @@ export type ScheduleCreateInput = {
     readonly slug?: string | null
     readonly message: string
     readonly when:
-      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
       | { readonly at: string }
       | { readonly in: string }
     readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
@@ -6340,7 +6346,7 @@ export type ScheduleCreateInput = {
     readonly slug?: string | null
     readonly message: string
     readonly when:
-      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
       | { readonly at: string }
       | { readonly in: string }
     readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
@@ -6352,7 +6358,7 @@ export type ScheduleCreateInput = {
     readonly slug?: string | null
     readonly message: string
     readonly when:
-      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
       | { readonly at: string }
       | { readonly in: string }
     readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
@@ -6364,7 +6370,7 @@ export type ScheduleCreateInput = {
     readonly slug?: string | null
     readonly message: string
     readonly when:
-      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
       | { readonly at: string }
       | { readonly in: string }
     readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
@@ -6376,7 +6382,7 @@ export type ScheduleCreateInput = {
     readonly slug?: string | null
     readonly message: string
     readonly when:
-      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
       | { readonly at: string }
       | { readonly in: string }
     readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
@@ -6393,7 +6399,7 @@ export type ScheduleUpdateInput = {
     readonly message?: string | null
     readonly when?:
       | (
-          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
           | { readonly at: string }
           | { readonly in: string }
         )
@@ -6406,7 +6412,7 @@ export type ScheduleUpdateInput = {
     readonly message?: string | null
     readonly when?:
       | (
-          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
           | { readonly at: string }
           | { readonly in: string }
         )
@@ -6419,7 +6425,7 @@ export type ScheduleUpdateInput = {
     readonly message?: string | null
     readonly when?:
       | (
-          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
           | { readonly at: string }
           | { readonly in: string }
         )
@@ -6432,7 +6438,7 @@ export type ScheduleUpdateInput = {
     readonly message?: string | null
     readonly when?:
       | (
-          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
           | { readonly at: string }
           | { readonly in: string }
         )
@@ -6445,7 +6451,7 @@ export type ScheduleUpdateInput = {
     readonly message?: string | null
     readonly when?:
       | (
-          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly cron: string; readonly timeZone?: string; readonly until?: string }
           | { readonly at: string }
           | { readonly in: string }
         )
@@ -7130,6 +7136,7 @@ export type InfraPullInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -7160,6 +7167,7 @@ export type InfraPullInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -7187,6 +7195,7 @@ export type InfraPullInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -7466,6 +7475,7 @@ export type InfraPullInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -7496,6 +7506,7 @@ export type InfraPullInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -7523,6 +7534,7 @@ export type InfraPullInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -7802,6 +7814,7 @@ export type InfraPullInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -7832,6 +7845,7 @@ export type InfraPullInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -7859,6 +7873,7 @@ export type InfraPullInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -8143,6 +8158,7 @@ export type InfraPlanInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -8173,6 +8189,7 @@ export type InfraPlanInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -8200,6 +8217,7 @@ export type InfraPlanInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -8479,6 +8497,7 @@ export type InfraPlanInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -8509,6 +8528,7 @@ export type InfraPlanInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -8536,6 +8556,7 @@ export type InfraPlanInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -8815,6 +8836,7 @@ export type InfraPlanInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -8845,6 +8867,7 @@ export type InfraPlanInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -8872,6 +8895,7 @@ export type InfraPlanInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -9156,6 +9180,7 @@ export type InfraApplyInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -9186,6 +9211,7 @@ export type InfraApplyInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -9213,6 +9239,7 @@ export type InfraApplyInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -9494,6 +9521,7 @@ export type InfraApplyInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -9524,6 +9552,7 @@ export type InfraApplyInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -9551,6 +9580,7 @@ export type InfraApplyInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -9832,6 +9862,7 @@ export type InfraApplyInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -9862,6 +9893,7 @@ export type InfraApplyInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -9889,6 +9921,7 @@ export type InfraApplyInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -10170,6 +10203,7 @@ export type InfraApplyInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -10200,6 +10234,7 @@ export type InfraApplyInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -10227,6 +10262,7 @@ export type InfraApplyInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string
@@ -10508,6 +10544,7 @@ export type InfraApplyInput = {
             readonly video_generation?: { readonly providerId: string; readonly modelId: string }
           }
           readonly steps?: number
+          readonly timezone?: string
           readonly permissions?: ReadonlyArray<{
             readonly action: string
             readonly resource: string
@@ -10538,6 +10575,7 @@ export type InfraApplyInput = {
               readonly video_generation?: { readonly providerId: string; readonly modelId: string }
             }
             readonly steps?: number
+            readonly timezone?: string
             readonly permissions?: ReadonlyArray<{
               readonly action: string
               readonly resource: string
@@ -10565,6 +10603,7 @@ export type InfraApplyInput = {
                   readonly video_generation?: { readonly providerId: string; readonly modelId: string }
                 }
                 readonly steps?: number
+                readonly timezone?: string
                 readonly permissions?: ReadonlyArray<{
                   readonly action: string
                   readonly resource: string

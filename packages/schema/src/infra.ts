@@ -134,6 +134,20 @@ export const Spec = Schema.Struct({
             })),
           ),
         ),
+        ...spaces.flatMap(([space, declaration]) =>
+          [
+            { path: ["spaces", space, "settings", "timezone"], settings: declaration.settings },
+            ...Object.entries(declaration.agents).map(([name, owned]) => ({
+              path: ["spaces", space, "agents", name, "settings", "timezone"],
+              settings: owned.settings,
+            })),
+          ]
+            .filter((declared) => declared.settings.timezone)
+            .map((declared) => ({
+              path: declared.path,
+              issue: "Timezone is an organization setting. Set it in org.yaml.",
+            })),
+        ),
         ...[...owners.agents.values()]
           .flat()
           .filter((owned) => Agent.reserved.has(owned.name))
@@ -398,7 +412,7 @@ export const Pulled = Schema.Struct({
     spaces: Schema.Record(Primitive.Slug, PulledBindings),
   }),
   spec: Schema.Struct({
-    org: OrganizationSettings.UpdateInput,
+    org: Schema.Struct({ settings: Settings.Info }),
     memory: PulledMemory,
     spaces: Schema.Record(Primitive.Slug, PulledSpace),
   }),

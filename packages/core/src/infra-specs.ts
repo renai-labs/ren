@@ -827,7 +827,7 @@ export const layer = Layer.effect(
           .filter(([, bindings]) => bindings.timezone)
           .map(([slug]) => ({
             path: `deploy.yaml/spaces/${slug}/timezone`,
-            message: "Infra does not apply the timezone of a space yet.",
+            message: "Timezone is an organization setting. Set it in org.yaml.",
           })),
         ...bound
           .filter(([, bindings]) => Object.keys(bindings.webhooks).length > 0)

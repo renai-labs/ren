@@ -20,6 +20,7 @@ import { ScheduleRuns } from "./schedule/runs.js"
 import { ScheduleTime } from "./schedule/time.js"
 import { ScheduleTrigger } from "./schedule-trigger.js"
 import { SessionRunner } from "./session/runner.js"
+import { SettingsRows } from "./settings/rows.js"
 import { SpaceQueries } from "./space/queries.js"
 
 export type Interface = Primitive.Interface<typeof Schedule.definition> & {
@@ -58,13 +59,13 @@ const actions = {
 }
 
 // oxlint-disable-next-line ren/no-comments -- S4: a delay is stored as one time.
-const storedOf = (when: Schedule.WhenInput, at: Date) => {
+const storedOf = (when: Schedule.WhenInput, at: Date, timeZone: string | null) => {
   if ("in" in when)
     return { cron: null, time_zone: null, until_at: null, run_at: new Date(at.getTime() + Duration.toMillis(when.in)) }
   if ("at" in when) return { cron: null, time_zone: null, until_at: null, run_at: DateTime.toDateUtc(when.at) }
   return {
     cron: when.cron.trim().split(/\s+/u).join(" "),
-    time_zone: when.timeZone,
+    time_zone: timeZone,
     until_at: when.until ? DateTime.toDateUtc(when.until) : null,
     run_at: null,
   }
@@ -232,8 +233,17 @@ export const layer = Layer.effect(
       return { target_session_id: target === "this-chat" ? chat.rootId : sessionId }
     })
 
-    const whenOfInput = Effect.fnUntraced(function* (when: Schedule.WhenInput, at: Date) {
-      const stored = storedOf(when, at)
+    const whenOfInput = Effect.fnUntraced(function* (
+      transaction: Pick<Database.Transaction, "select">,
+      row: Pick<Row, "organization_id" | "time_zone">,
+      when: Schedule.WhenInput,
+      at: Date,
+    ) {
+      const timeZone =
+        "cron" in when
+          ? (when.timeZone ?? row.time_zone ?? (yield* SettingsRows.timezone(transaction, row.organization_id)))
+          : null
+      const stored = storedOf(when, at, timeZone)
       const problem = problemOf(stored, at)
       if (problem) return yield* invalid(problem, "when")
       return stored
@@ -633,7 +643,7 @@ export const layer = Layer.effect(
             const placement = { organization_id: actor.organizationId, space_id: input.spaceId }
             if (input.agentId && Option.isNone(yield* agentIn(transaction, placement, input.agentId)))
               return yield* new Primitive.NotFound({ message: "Agent not found." })
-            const stored = yield* whenOfInput(input.when, at)
+            const stored = yield* whenOfInput(transaction, { ...placement, time_zone: null }, input.when, at)
             const target = yield* targetOf(transaction, actor, input.spaceId, input.target ?? "new-chat")
             const taken = yield* transaction
               .select({ slug: schedule.slug })
@@ -672,7 +682,7 @@ export const layer = Layer.effect(
             // ast-grep-ignore: no-nullish-comparison, -- null clears the agent; undefined leaves it
             if (input.agentId != null && Option.isNone(yield* agentIn(transaction, row, input.agentId)))
               return yield* new Primitive.NotFound({ message: "Agent not found." })
-            const stored = input.when ? yield* whenOfInput(input.when, at) : undefined
+            const stored = input.when ? yield* whenOfInput(transaction, row, input.when, at) : undefined
             if (stored && !row.paused_reason && !row.next_run_at) yield* full(transaction, row.space_id)
             const target = input.target ? yield* targetOf(transaction, actor, row.space_id, input.target) : undefined
             const isWritten = [input.message, input.agentId, input.when, input.target].some(

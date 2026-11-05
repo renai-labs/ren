@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { cn } from "cn"
-import { localTimeZone, timeZones } from "../lib/schedules.js"
+import { timeZones } from "../lib/schedules.js"
 import { MenuSearch } from "./menu-search.js"
 
 const readable = (zone: string) => zone.replaceAll("_", " ")
@@ -18,15 +18,16 @@ const readable = (zone: string) => zone.replaceAll("_", " ")
 export function TimeZonePicker(props: {
   value: string
   onChange: (value: string) => void
-  automatic?: boolean | undefined
+  unset?: { label: string; zone: string } | undefined
   variant?: "outline" | "ghost" | undefined
+  disabled?: boolean | undefined
   className?: string | undefined
 }) {
   const [query, setQuery] = useState("")
   const needle = query.trim().toLowerCase().replaceAll(" ", "_")
   const matches = timeZones().filter((zone) => zone.toLowerCase().includes(needle))
-  const label =
-    props.automatic && props.value === "" ? `Automatic · ${readable(localTimeZone())}` : readable(props.value)
+  const unset = props.unset && `${props.unset.label} · ${readable(props.unset.zone)}`
+  const label = unset && props.value === "" ? unset : readable(props.value)
   return (
     <DropdownMenu
       onOpenChange={(open) => {
@@ -37,6 +38,7 @@ export function TimeZonePicker(props: {
         render={
           <Button
             variant={props.variant ?? "outline"}
+            disabled={props.disabled}
             className={cn("justify-between font-normal", props.className)}
             aria-label={`Timezone: ${label}`}
           />
@@ -54,10 +56,10 @@ export function TimeZonePicker(props: {
           <p className="px-2 py-6 text-center text-sm text-muted-foreground">No timezones match “{query.trim()}”</p>
         ) : null}
         <DropdownMenuRadioGroup value={props.value} onValueChange={(value: string) => props.onChange(value)}>
-          {props.automatic && !needle ? (
+          {unset && !needle ? (
             <>
               <DropdownMenuRadioItem value="" closeOnClick>
-                Automatic · {readable(localTimeZone())}
+                {unset}
               </DropdownMenuRadioItem>
               <DropdownMenuSeparator />
             </>

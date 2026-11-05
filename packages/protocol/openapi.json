@@ -14947,7 +14947,14 @@
             "type": "object",
             "properties": {
               "org": {
-                "$ref": "#/components/schemas/OrganizationSettings.UpdateInput"
+                "type": "object",
+                "properties": {
+                  "settings": {
+                    "$ref": "#/components/schemas/Settings.Info"
+                  }
+                },
+                "required": ["settings"],
+                "additionalProperties": false
               },
               "memory": {
                 "$ref": "#/components/schemas/Memory.Files"
@@ -17185,11 +17192,41 @@
         "required": ["id", "settings", "canUpdate", "updatedAt"],
         "additionalProperties": false
       },
+      "OrganizationSettings.Settings": {
+        "type": "object",
+        "properties": {
+          "instructions": {
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/Session.Model"
+          },
+          "defaultModels": {
+            "$ref": "#/components/schemas/ModelTypes.Defaults"
+          },
+          "steps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "The most model iterations in one run of an agent. Then its tools stop and it must answer. Without it, 100."
+          },
+          "timezone": {
+            "$ref": "#/components/schemas/Settings.TimeZone"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/Permission.RuleList"
+          },
+          "references": {
+            "$ref": "#/components/schemas/Reference.List"
+          }
+        },
+        "additionalProperties": false
+      },
       "OrganizationSettings.UpdateInput": {
         "type": "object",
         "properties": {
           "settings": {
-            "$ref": "#/components/schemas/Settings.Info"
+            "$ref": "#/components/schemas/OrganizationSettings.Settings"
           }
         },
         "required": ["settings"],
@@ -17569,7 +17606,7 @@
             "$ref": "#/components/schemas/Schedule.Cron"
           },
           "timeZone": {
-            "$ref": "#/components/schemas/Schedule.TimeZone"
+            "$ref": "#/components/schemas/Settings.TimeZone_2"
           },
           "message": {
             "$ref": "#/components/schemas/Schedule.MessageEncoded"
@@ -17743,13 +17780,13 @@
             "$ref": "#/components/schemas/Schedule.Cron"
           },
           "timeZone": {
-            "$ref": "#/components/schemas/Schedule.TimeZone"
+            "$ref": "#/components/schemas/Settings.TimeZone_1"
           },
           "until": {
             "type": "string"
           }
         },
-        "required": ["cron", "timeZone"],
+        "required": ["cron"],
         "additionalProperties": false
       },
       "Schedule.Status": {
@@ -17797,9 +17834,6 @@
           }
         ],
         "description": "`new-chat` starts a chat at each run. `this-chat` sends the message to the chat of the agent that calls; a person cannot use it. A session ID sends the message to that chat."
-      },
-      "Schedule.TimeZone": {
-        "type": "string"
       },
       "Schedule.UpdateInput": {
         "type": "object",
@@ -19683,6 +19717,10 @@
             "maximum": 1000,
             "description": "The most model iterations in one run of an agent. Then its tools stop and it must answer. Without it, 100."
           },
+          "timezone": {
+            "type": "string",
+            "description": "The organization's time zone. Only an organization sets it. Without it, UTC."
+          },
           "permissions": {
             "$ref": "#/components/schemas/Permission.RuleList"
           },
@@ -19691,6 +19729,15 @@
           }
         },
         "additionalProperties": false
+      },
+      "Settings.TimeZone": {
+        "type": "string"
+      },
+      "Settings.TimeZone_1": {
+        "type": "string"
+      },
+      "Settings.TimeZone_2": {
+        "type": "string"
       },
       "Skill.Content": {
         "type": "object",

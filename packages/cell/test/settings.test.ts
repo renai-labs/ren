@@ -774,6 +774,25 @@ describe("settings in the cell", () => {
     }),
   )
 
+  it.live(
+    "the model gets the timezone and each message's local send time; a pulled zone applies at the next turn",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* open(TestSettings.layers({ ren: { timezone: "Asia/Kolkata" } }))
+        const first = stub.script()
+        yield* opened.turn(first)
+        expect(first.calls[0]?.system).toContain("Timezone: Asia/Kolkata (UTC+05:30).")
+        expect(first.calls[0]?.text).toMatch(
+          /go\n\n<sent_at time="\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+05:30" day="[A-Z][a-z]+day" \/>$/u,
+        )
+        yield* opened.pull(TestSettings.layers())
+        const second = stub.script()
+        yield* opened.turn(second)
+        expect(second.calls[0]?.system).toContain("Timezone: UTC (UTC+00:00).")
+        expect(second.calls[0]?.text).toMatch(/\+00:00" day="[A-Z][a-z]+day" \/>$/u)
+      }),
+  )
+
   it.live("a chat without an environment gets no references", () =>
     Effect.gen(function* () {
       const docs = { alias: "docs", repository: "https://github.com/acme/docs", description: "Product docs" }

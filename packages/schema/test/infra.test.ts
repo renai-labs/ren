@@ -50,6 +50,16 @@ describe("Infra.Spec", () => {
     expect(String(exit)).toContain("The name ren is reserved.")
   })
 
+  test("rejects a timezone in a space or an agent, and one in org.yaml that is not IANA", () => {
+    const settings = { timezone: "Asia/Kolkata" }
+    const exit = decode({ engineering: { name: "Engineering", settings, agents: { build: { ...agent, settings } } } })
+    expect(String(exit).split("Timezone is an organization setting. Set it in org.yaml.")).toHaveLength(3)
+    const org = (timezone: string) =>
+      Schema.decodeUnknownExit(Infra.Spec)({ org: { settings: { timezone } }, spaces: {} })
+    expect(Exit.isSuccess(org("Asia/Kolkata"))).toBe(true)
+    expect(String(org("IST"))).toContain('Use an IANA time zone, for example "Europe/Berlin".')
+  })
+
   test("rejects a use of an agent that no space defines", () => {
     const exit = decode({ support: { name: "Support", uses: { agents: ["build"] } } })
     expect(String(exit)).toContain('Space "support" uses agent "build", which no space defines.')

@@ -73,6 +73,18 @@ describe("SpaceSettings", () => {
     }),
   )
 
+  it.live("a space cannot set a timezone: only its organization does", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const space = yield* SpaceSettings.Service
+      const ada = yield* Seed.actor(yield* Seed.organization(), "member")
+      const team = yield* spaces.create(ada, { name: "Team" })
+      expect(
+        yield* Effect.flip(space.update(ada, team.id, { settings: { ...settings, timezone: "Asia/Kolkata" } })),
+      ).toEqual(new Primitive.Invalid({ message: "Timezone is an organization setting.", field: "timezone" }))
+    }),
+  )
+
   it.live("a space with no row reads as empty settings", () =>
     Effect.gen(function* () {
       const spaces = yield* Space.Service
