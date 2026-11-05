@@ -97,14 +97,18 @@ export function ScheduleSheet(props: {
           <SheetTitle>{copy.title}</SheetTitle>
           <SheetDescription>{copy.description}</SheetDescription>
         </SheetHeader>
-        <ScheduleForm
-          key={props.version}
-          schedule={props.schedule}
-          spaceId={props.chat?.spaceId ?? props.spaceId}
-          chat={props.chat}
-          organizationTimezone={organization.data?.settings.timezone}
-          onClose={props.onClose}
-        />
+        {organization.isPending ? (
+          <Spinner aria-label="Loading the organization’s timezone" className="mx-auto my-8" />
+        ) : (
+          <ScheduleForm
+            key={props.version}
+            schedule={props.schedule}
+            spaceId={props.chat?.spaceId ?? props.spaceId}
+            chat={props.chat}
+            organizationTimezone={organization.data?.settings.timezone}
+            onClose={props.onClose}
+          />
+        )}
       </SheetContent>
     </Sheet>
   )

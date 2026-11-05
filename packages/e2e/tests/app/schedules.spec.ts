@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
-import { createOrganization } from "../lib/servers.js"
+import { Schema } from "effect"
+import { createOrganization, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -37,4 +38,35 @@ test("a member creates a daily schedule, runs it now and finds the scheduled mes
   await expect(page.getByText("Summarize the day")).toBeVisible({ timeout: brainStart })
   await expect(page.getByRole("link", { name: "Daily report", exact: true })).toBeVisible()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+})
+
+test.describe("in a browser on UTC", () => {
+  test.use({ timezoneId: "UTC" })
+
+  test("a new schedule starts in the organization's timezone, also when its settings arrive after the sheet opens", async ({
+    page,
+  }) => {
+    await createOrganization(page.request, { name: "Grace Hopper" })
+    const me = Schema.decodeUnknownSync(Schema.Struct({ organization: Schema.Struct({ id: Schema.String }) }))(
+      await (await page.request.get(`${serverURL}/me`)).json(),
+    )
+    const saved = await page.request.patch(`${serverURL}/organization-settings/${me.organization.id}`, {
+      data: { settings: { timezone: "Asia/Kolkata" } },
+    })
+    expect(saved.ok()).toBe(true)
+    const held = Promise.withResolvers<void>()
+    await page.route(/\/organization-settings\//, async (route) => {
+      await held.promise
+      await route.continue()
+    })
+    await page.goto("/app/schedules")
+    await page.getByRole("button", { name: "Create schedule" }).first().click()
+    const dialog = page.getByRole("dialog", { name: "New schedule" })
+    try {
+      await expect(dialog.getByRole("status", { name: "Loading the organization’s timezone" })).toBeVisible()
+    } finally {
+      held.resolve()
+    }
+    await expect(dialog.getByRole("button", { name: "Timezone: Asia/Kolkata" })).toBeVisible()
+  })
 })
