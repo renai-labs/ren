@@ -45,7 +45,7 @@ fi
 ) &
 export REN_HOME="$home" PORT="${BRAIN_PORT:-4800}"
 cd "$home/workspace"
-watch() {
+kill_when_stuck() {
   missed=0
   while sleep 5; do
     if curl -s -o /dev/null -m 5 "http://127.0.0.1:$PORT/ren/state"; then
@@ -63,9 +63,9 @@ watch() {
 while true; do
   bun /opt/ren/packages/cell/src/bun.ts >>"$home/.ren/brain.log" 2>&1 &
   brain=$!
-  watch "$brain" &
-  watcher=$!
+  kill_when_stuck "$brain" &
+  watchdog=$!
   wait "$brain" || echo "$?" >"$home/.ren/brain.exit"
-  kill "$watcher" 2>/dev/null || true
+  kill "$watchdog" 2>/dev/null || true
   sleep 1
 done
