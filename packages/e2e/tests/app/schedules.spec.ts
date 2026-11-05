@@ -10,7 +10,7 @@ test("a member creates a daily schedule, runs it now and finds the scheduled mes
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await page.goto("/app/schedules")
-  await expect(page.getByText("No schedules yet")).toBeVisible()
+  await expect(page.getByText("No schedules")).toBeVisible()
 
   await page.getByRole("button", { name: "Create schedule" }).first().click()
   const dialog = page.getByRole("dialog", { name: "New schedule" })

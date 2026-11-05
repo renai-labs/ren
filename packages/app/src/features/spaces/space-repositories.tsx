@@ -138,11 +138,7 @@ export function SpaceRepositoriesTab() {
           </TableHeader>
           <TableBody>
             {visible.length === 0 ? (
-              <TableEmpty columns={3}>
-                {query.trim()
-                  ? `Nothing matches “${query.trim()}”`
-                  : "No repositories yet. Add one so Ren can read it."}
-              </TableEmpty>
+              <TableEmpty columns={3}>{query.trim() ? "No repositories match" : "No repositories"}</TableEmpty>
             ) : null}
             {visible.map((reference) => (
               <TableRow

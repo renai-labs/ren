@@ -99,9 +99,7 @@ export function SpaceChannelsTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visible.length === 0 ? (
-              <TableEmpty columns={3}>No channels yet. Link one so people can mention @Ren there.</TableEmpty>
-            ) : null}
+            {visible.length === 0 ? <TableEmpty columns={3}>No channels</TableEmpty> : null}
             {visible.map((mapping) => {
               const name = Channels.label(mapping.provider, mapping.placeName)
               return (

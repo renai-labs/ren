@@ -98,7 +98,7 @@ function CredentialKeys() {
             credentials={list.data.items}
             stale={list.isPlaceholderData}
             onRemoved={removed}
-            empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
+            empty={query ? "No keys match" : "No keys"}
           />
         ) : (
           <TableSample columns={["Key", "Hosts", "Owner", ""]} />
@@ -142,7 +142,7 @@ function OrgApps() {
               profiles: catalog.profilesOf(each.id),
               usedIn: usedIn(catalog.profilesOf(each.id)),
             }))}
-            empty="No apps. Add one to a space from the Marketplace."
+            empty="No apps"
             onOpen={setOpened}
             onNew={(appId) => setProfile({ appId })}
           />
