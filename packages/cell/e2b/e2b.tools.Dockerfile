@@ -39,6 +39,9 @@ RUN (id -u user >/dev/null 2>&1 || useradd --create-home --shell /bin/bash user)
   && echo 'user ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/user \
   && chmod 0440 /etc/sudoers.d/user
 
+# Docker's containers are tools too: they count against the memory of ren-tools.slice (e2b.Dockerfile).
+RUN mkdir -p /etc/docker && echo '{ "cgroup-parent": "ren-tools.slice" }' >/etc/docker/daemon.json
+
 # agent-browser keeps its browser in the home of the user that runs it.
 RUN npm install --global agent-browser@0.38.1 \
   && HOME=/home/user agent-browser install --with-deps \

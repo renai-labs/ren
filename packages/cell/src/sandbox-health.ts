@@ -1,6 +1,7 @@
 export * as SandboxHealth from "./sandbox-health.js"
 
-import { Cause, Effect, Option, Ref } from "effect"
+import { Observability } from "@ren/schema/observability"
+import { Cause, Effect, Metric, Option, Ref } from "effect"
 import { readFile, rm } from "node:fs/promises"
 import { constants } from "node:os"
 import { join } from "node:path"
@@ -38,9 +39,7 @@ export const make = (options: { readonly state: string; readonly memoryEvents: s
         Option.zipWith(now, before, (current, previous) => current - previous),
         () => 0,
       )
-      if (killed > 0) {
-        const message = `The sandbox killed ${killed} ${killed === 1 ? "process" : "processes"} for lack of memory`
-        yield* Effect.logError(message, failure("OutOfMemory", message))
-      }
+      // oxlint-disable-next-line ren/no-comments -- A tool that runs out of memory is the user's workload at its limit, not a fault of Ren: it is counted, not reported as an error.
+      if (killed > 0) yield* Metric.update(Observability.Metrics.toolsOutOfMemory, killed)
     }),
   )

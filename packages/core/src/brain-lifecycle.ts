@@ -8,7 +8,20 @@ import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
 import { and, eq, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
-import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
+import {
+  Cause,
+  Clock,
+  Config,
+  Context,
+  DateTime,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Schedule,
+  Schema,
+  Stream,
+} from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
 import { DurableRunner } from "./durable-runner.js"
@@ -19,6 +32,15 @@ import { SandboxProvider } from "./sandbox-provider.js"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("BrainLifecycle.Unavailable", {
   message: Schema.String,
+}) {}
+
+export class Unreachable extends Schema.TaggedError<Unreachable>()("BrainLifecycle.Unreachable", {
+  message: Schema.String,
+}) {}
+
+export class Frozen extends Schema.TaggedError<Frozen>()("BrainLifecycle.Frozen", {
+  message: Schema.String,
+  reason: Schema.Literals(["memory", "disk", "unknown"]),
 }) {}
 
 export type Access =
@@ -64,10 +86,19 @@ export const timing = {
   stuck: Duration.minutes(30),
   accessMargin: Duration.minutes(2),
   poll: Duration.seconds(1),
+  probe: Duration.seconds(3),
+  fresh: Duration.seconds(30),
+  full: 0.95,
   failures: 3,
 }
 
 type Row = typeof Database.Schema.brain.$inferSelect
+
+const reasonOf = (sample: SandboxProvider.Vitals | undefined) => {
+  if (sample && sample.memory >= timing.full) return "memory" as const
+  if (sample && sample.disk >= timing.full) return "disk" as const
+  return "unknown" as const
+}
 
 const brains = Database.Schema.brain
 
@@ -394,19 +425,65 @@ export const layer = Layer.effect(
       )
     }).pipe(Effect.withErrorReporting, Effect.forkScoped)
 
+    // oxlint-disable-next-line ren/no-comments -- A ready brain that does not answer: the samples of its machine decide. A machine that still reports samples is alive, and only the brain's path or process is broken, so Ren keeps it. A frozen machine wakes as a resumed one does and is replaced when it does not answer (E132).
+    const silent = Effect.fnUntraced(function* (row: Row, binding: Schema.Json) {
+      const vitals = yield* provider
+        .vitals(binding)
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("The sandbox samples are unknown", error).pipe(Effect.as(Option.none())),
+          ),
+        )
+      const sample = Option.getOrUndefined(vitals)
+      const logged = Effect.annotateLogs({
+        "ren.brain.id": row.id,
+        "ren.brain.generation": row.generation,
+        ...(sample && {
+          "ren.sandbox.sampled_at": DateTime.formatIso(sample.at),
+          "ren.sandbox.memory": sample.memory,
+          "ren.sandbox.disk": sample.disk,
+        }),
+      })
+      if (sample && (yield* now).getTime() - DateTime.toEpochMillis(sample.at) < Duration.toMillis(timing.fresh)) {
+        const message = `Brain ${row.id} does not answer, but its machine runs; Ren keeps it`
+        return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(logged)
+      }
+      const message = sample
+        ? `Brain ${row.id} does not answer, and its machine stopped at ${DateTime.formatIso(sample.at)} with ${Math.round(sample.memory * 100)}% of its memory and ${Math.round(sample.disk * 100)}% of its disk in use; Ren wakes it and replaces it if it stays silent`
+        : `Brain ${row.id} does not answer, and its machine reports no samples; Ren wakes it and replaces it if it stays silent`
+      yield* Effect.logError(message, Cause.fail(new Frozen({ message, reason: reasonOf(sample) }))).pipe(logged)
+      yield* database.db
+        .update(brains)
+        .set({ phase: "waking" })
+        .where(and(eq(brains.id, row.id), eq(brains.generation, row.generation), eq(brains.phase, "ready")))
+        .pipe(Effect.orDie)
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- Runs only after a caller got no answer from the brain (E123), so a brain that answers costs nothing more.
     const check = Effect.fn("BrainLifecycle.check")(function* (brainId: Brain.ID) {
       const row = yield* read(brainId)
       if (!row.binding) return
-      const status = yield* provider
-        .status(row.binding)
-        .pipe(
-          Effect.catch((error) =>
-            Effect.logWarning("The sandbox status is unknown", error).pipe(Effect.as("running" as const)),
-          ),
-        )
-      if (status === "gone") yield* lose({ brainId, generation: row.generation })
+      const target = Option.filter(targetOf(row), () => row.phase === "ready")
+      const answered = Option.isSome(target)
+        ? yield* client.brain(target.value).pipe(
+            Effect.flatMap((api) => api.brain["brain.state"]()),
+            Effect.timeoutOption(timing.probe),
+            Effect.orElseSucceed(Option.none),
+          )
+        : Option.none()
+      if (Option.isSome(answered)) return
+      const status = yield* provider.status(row.binding).pipe(
+        Effect.map(Option.some),
+        Effect.catch((error) =>
+          Effect.logWarning("The sandbox status is unknown", error).pipe(Effect.as(Option.none())),
+        ),
+      )
+      if (Option.isNone(status)) return
+      if (status.value === "gone") return yield* lose({ brainId, generation: row.generation })
+      if (row.phase !== "ready") return
       // oxlint-disable-next-line ren/no-comments -- A paused sandbox wakes; it is never replaced here (E123).
-      if (status === "paused" && row.phase === "ready") yield* update(row.id, { phase: "resuming" })
+      if (status.value === "paused") return yield* update(row.id, { phase: "resuming" })
+      yield* silent(row, row.binding)
     })
 
     const rest = Effect.fnUntraced(function* (row: Pick<Row, "id" | "generation" | "binding">) {

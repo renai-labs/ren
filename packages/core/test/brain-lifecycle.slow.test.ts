@@ -292,6 +292,64 @@ describe("brain runs", () => {
     await runtime.dispose()
   })
 
+  test("an access after the app could not reach its brain asks the machine: a frozen one wakes and is replaced, one that runs keeps its brain that does not answer", async () => {
+    const chats = await Promise.all([runs.seeded(), runs.seeded()])
+    await runs.database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        yield* db.db
+          .update(Database.Schema.agent_session)
+          .set({ started_at: new Date() })
+          .where(
+            inArray(
+              Database.Schema.agent_session.id,
+              chats.map((chat) => chat.sessionId),
+            ),
+          )
+      }),
+    )
+    const runtime = await runs.ren({ lostEvery: "1 hour", config: { BRAIN_WAKE_TIMEOUT: "2 seconds" } })
+    await runtime.runPromise(
+      BrainLifecycle.Service.use((lifecycle) => Effect.forEach(chats, (chat) => lifecycle.ensure(chat.brainId))),
+    )
+    await Promise.all(chats.map((chat) => runs.reaches(chat.brainId, "ready")))
+    const frozen = chats[0]
+    const stuck = chats[1]
+    process.kill(-BrainRuns.pidOf((await runs.row(frozen.brainId)).binding), "SIGSTOP")
+    const brain = BrainRuns.brainOf((await runs.row(stuck.brainId)).binding)
+    process.kill(brain, "SIGSTOP")
+    const answers = await runtime.runPromise(
+      Brains.Service.use((brains) =>
+        Effect.forEach(
+          [frozen, stuck],
+          (chat) =>
+            brains.access(
+              chat.sessionId,
+              { userId: chat.creatorId, memberId: Auth.MemberID.create() },
+              { unreachable: true },
+            ),
+          { concurrency: "unbounded" },
+        ),
+      ),
+    )
+    expect(answers.map((answer) => (answer.status === "starting" ? answer.phase : answer.status))).toEqual([
+      "waking",
+      "ready",
+    ])
+    const replaced = await Effect.runPromise(
+      Effect.promise(() => runs.row(frozen.brainId)).pipe(
+        Effect.repeat({
+          until: (found) => found.phase === "ready" && found.generation === 2,
+          schedule: Schedule.spaced("100 millis"),
+        }),
+        Effect.timeout("60 seconds"),
+      ),
+    )
+    process.kill(brain, "SIGCONT")
+    expect([replaced.generation, (await runs.row(stuck.brainId)).generation]).toEqual([2, 1])
+    await runtime.dispose()
+  })
+
   test("a push makes an awake brain pull without extending its keep-alive, leaves a paused one paused, and a down one costs at most 2 s (HR12)", async () => {
     const chats = await Promise.all([runs.seeded(), runs.seeded(), runs.seeded()])
     const runtime = await runs.ren({ lostEvery: "1 hour" })
