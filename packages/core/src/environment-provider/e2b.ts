@@ -35,7 +35,14 @@ const Requested = Schema.Struct({ templateID: Schema.String, buildID: Schema.Str
 
 const Status = Schema.Struct({
   status: Schema.String,
-  reason: Schema.optional(Schema.NullOr(Schema.Struct({ message: Schema.optional(Schema.String) }))),
+  reason: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        message: Schema.optional(Schema.String),
+        logEntries: Schema.optional(Schema.NullOr(Schema.Array(Schema.Struct({ message: Schema.String })))),
+      }),
+    ),
+  ),
 })
 
 const envFile = "/home/user/.ren/environment.env"
@@ -49,6 +56,8 @@ const awakeAtStart = Duration.minutes(30)
 const buildCheckedEvery = Duration.seconds(5)
 
 const buildWithin = Duration.minutes(45)
+
+const logLinesShown = 8
 
 // oxlint-disable-next-line ren/no-comments -- ren-v1's commands (ren-v1 packages/app/src/lib/environment-config.ts:12-26), one RUN each, as root; a build command runs as the sandbox user, who has sudo.
 const stepsOf = (config: typeof TemplateConfig.Type) => {
@@ -167,8 +176,14 @@ export const provider = Effect.gen(function* () {
               ),
           }),
         )
+        // oxlint-disable-next-line ren/no-comments -- The last lines of the build log say which package or command failed; the admin sees them as the template's build error.
         if (finished.status === "error")
-          return yield* new EnvironmentProvider.Failed({ message: finished.reason?.message ?? "The build failed" })
+          return yield* new EnvironmentProvider.Failed({
+            message: [
+              finished.reason?.message ?? "The build failed",
+              ...(finished.reason?.logEntries ?? []).slice(-logLinesShown).map((entry) => entry.message),
+            ].join("\n"),
+          })
         return `${name}:${input.tag}`
       }),
     },

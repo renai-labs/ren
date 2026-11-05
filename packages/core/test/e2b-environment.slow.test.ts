@@ -17,12 +17,9 @@ const isLive = Boolean(Bun.env.E2B_API_KEY && Bun.env.E2B_ENVIRONMENT_BASE)
 
 const it = testEffect(FetchHttpClient.layer)
 
-const statusOf = (client: EnvironmentClient.Client, url: string) =>
+const outputOf = (client: EnvironmentClient.Client, script: string) =>
   Effect.gen(function* () {
-    const spawned = yield* client["process.spawn"]({
-      command: "sh",
-      arguments: ["-c", `curl -s -o /dev/null -w '%{http_code}' --max-time 15 ${url} || true`],
-    })
+    const spawned = yield* client["process.spawn"]({ command: "sh", arguments: ["-c", script] })
     const events = yield* client["process.output"]({ id: spawned.id }).pipe(Stream.runCollect)
     return events
       .flatMap((event) => (event.type === "stdout" ? [new TextDecoder().decode(event.bytes)] : []))
@@ -30,15 +27,21 @@ const statusOf = (client: EnvironmentClient.Client, url: string) =>
       .trim()
   })
 
+const statusOf = (client: EnvironmentClient.Client, url: string) =>
+  outputOf(client, `curl -s -o /dev/null -w '%{http_code}' --max-time 15 ${url} || true`)
+
 describe.skipIf(!isLive)("the E2B environment provider, live", () => {
   it.live(
-    "a limited environment reaches a listed host and cannot reach an unlisted host or an ngrok host",
+    "a template's packages are in its image; a limited environment reaches a listed host and cannot reach an unlisted host or an ngrok host",
     () =>
       Effect.gen(function* () {
         const provider = yield* E2BEnvironment.provider
         const build = Option.getOrThrow(provider.build)
         const environmentTemplateId = EnvironmentTemplate.ID.create()
-        const config = yield* provider.check({})
+        const config = yield* provider.check({
+          packages: { apt: ["ffmpeg"], npm: ["typescript"], pip: ["requests"] },
+          buildCommands: ["echo built > /home/user/built.txt"],
+        })
         const image = yield* build.run({ environmentTemplateId, config, tag: "live" })
         yield* Effect.addFinalizer(() =>
           Effect.promise(() =>
@@ -73,6 +76,16 @@ describe.skipIf(!isLive)("the E2B environment provider, live", () => {
           ngrok: statusOf(client, "https://ren-environments-test.ngrok-free.app"),
         })
         expect(reached).toEqual({ listed: "200", apex: "200", unlisted: "000", ngrok: "000" })
+        const installed = yield* outputOf(
+          client,
+          "ffmpeg -version >/dev/null && echo ffmpeg; tsc -v; python3 -c 'import requests; print(\"requests\")'; cat /home/user/built.txt",
+        )
+        expect(installed.split("\n").map((line) => line.replace(/^Version .*/u, "tsc"))).toEqual([
+          "ffmpeg",
+          "tsc",
+          "requests",
+          "built",
+        ])
       }).pipe(Effect.provideService(FetchHttpClient.Fetch, fetch)),
     1_200_000,
   )
