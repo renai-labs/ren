@@ -8,7 +8,7 @@ import { Session } from "@ren/schema/session"
 import { Task } from "@ren/schema/task"
 import type { TaskEvent } from "@ren/schema/task-event"
 import { TaskLink } from "@ren/schema/task-link"
-import { and, asc, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
+import { and, asc, count, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { alias } from "drizzle-orm/pg-core"
 import { Array, Context, DateTime, Effect, Layer, Option, Predicate, Schema } from "effect"
@@ -778,7 +778,25 @@ export const layer = Layer.effect(
                   canCreate: canCreateLabel(actor, { id: input.spaceId, isMember: true }),
                 })
               : []
-            const links = yield* editLinks(transaction, task, input.links ?? [], [])
+            const threads = actor.agent
+              ? yield* transaction
+                  .select({ url: Database.Schema.channel_thread.url })
+                  .from(Database.Schema.channel_thread)
+                  .where(
+                    and(
+                      eq(Database.Schema.channel_thread.session_id, actor.agent.sessionId),
+                      isNotNull(Database.Schema.channel_thread.url),
+                    ),
+                  )
+                  .orderBy(asc(Database.Schema.channel_thread.created_at))
+                  .limit(Task.maximumLinks - (input.links?.length ?? 0))
+              : []
+            const links = yield* editLinks(
+              transaction,
+              task,
+              [...(input.links ?? []), ...threads.flatMap((thread) => (thread.url ? [thread.url] : []))],
+              [],
+            )
             yield* TaskTrail.record(transaction, task, actor, [{ _tag: "created" }, ...labels, ...links])
             return yield* reread(transaction, actor, task.id)
           }),

@@ -149,6 +149,11 @@ export function TaskPage(props: { session: ((dock: ReactNode) => ReactNode) | nu
           <PropertySection title="Space">
             <SpaceProperty task={task} onAssign={reassign} />
           </PropertySection>
+          {task.createdBy.sessionId ? (
+            <PropertySection title="Created in session">
+              <CreatedInProperty sessionId={task.createdBy.sessionId} onOpenSession={openSession} />
+            </PropertySection>
+          ) : null}
         </aside>
       </div>
       <ConfirmDialog
@@ -688,6 +693,22 @@ function LabelPicker(props: { task: TaskInfo; onChange: (patch: Patch) => void }
         </CommandGroup>
       </CommandList>
     </Command>
+  )
+}
+
+function CreatedInProperty(props: { sessionId: string; onOpenSession: (session: string | undefined) => void }) {
+  const { api } = RouterContext.useRouterContext()
+  const session = useQuery({ ...api.session.get.queryOptions({ idOrSlug: props.sessionId }), retry: false })
+  return (
+    <Button
+      variant="ghost"
+      className={cn(propertyButton, "max-w-full")}
+      aria-label="Open the session that created this task"
+      onClick={() => props.onOpenSession(props.sessionId)}
+    >
+      <IconMessage />
+      <span className="truncate">{session.data?.title ?? "Session"}</span>
+    </Button>
   )
 }
 
