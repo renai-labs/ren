@@ -13,6 +13,7 @@ export const answerWithin = Duration.seconds(30)
 
 const answerWithinFor: Readonly<Record<string, Duration.Duration>> = {
   "executor.hello": Duration.seconds(10),
+  "executor.memory": Duration.seconds(10),
   "process.heartbeat": Duration.seconds(5),
   "process.kill": Duration.seconds(5),
   // oxlint-disable-next-line ren/no-comments -- R39: a reference archive can have 1 GiB; the executor stops a stalled download after 60 s itself.
