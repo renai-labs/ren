@@ -427,10 +427,8 @@ export const layer = Layer.effect(
 
     const silent = Effect.fnUntraced(function* (row: Row, binding: Schema.Json) {
       const vitals = yield* provider.vitals(binding).pipe(
-        Effect.map(Option.some),
-        Effect.catch((error) =>
-          Effect.logWarning("The sandbox samples are unknown", error).pipe(Effect.as(Option.none())),
-        ),
+        Effect.tapError((error) => Effect.logWarning("The sandbox samples are unknown", error)),
+        Effect.option,
       )
       if (Option.isNone(vitals)) return
       const sample = Option.getOrUndefined(vitals.value)
@@ -443,7 +441,7 @@ export const layer = Layer.effect(
           "ren.sandbox.disk": sample.disk,
         }),
       })
-      if (sample && (yield* now).getTime() - DateTime.toEpochMillis(sample.at) < Duration.toMillis(timing.fresh)) {
+      if (sample && Duration.isLessThan(DateTime.distance(sample.at, yield* DateTime.now), timing.fresh)) {
         const message = `Brain ${row.id} does not answer, but its machine runs; Ren keeps it`
         return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(logged)
       }
@@ -462,15 +460,13 @@ export const layer = Layer.effect(
         ? yield* client.brain(target.value).pipe(
             Effect.flatMap((api) => api.brain["brain.state"]()),
             Effect.timeoutOption(timing.probe),
-            Effect.orElseSucceed(Option.none),
+            Effect.option,
           )
         : Option.none()
-      if (Option.isSome(answered)) return
+      if (Option.isSome(answered) && Option.isSome(answered.value)) return
       const status = yield* provider.status(row.binding).pipe(
-        Effect.map(Option.some),
-        Effect.catch((error) =>
-          Effect.logWarning("The sandbox status is unknown", error).pipe(Effect.as(Option.none())),
-        ),
+        Effect.tapError((error) => Effect.logWarning("The sandbox status is unknown", error)),
+        Effect.option,
       )
       if (Option.isNone(status)) return
       if (status.value === "gone") return yield* lose({ brainId, generation: row.generation })
