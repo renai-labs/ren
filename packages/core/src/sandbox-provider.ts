@@ -46,6 +46,13 @@ export interface Metered {
   readonly costMicroUsd: number
 }
 
+// oxlint-disable-next-line ren/no-comments -- The last sample that the sandbox's machine reported, as fractions of its memory and disk in use. A machine that is frozen sends no new samples.
+export interface Vitals {
+  readonly at: DateTime.Utc
+  readonly memory: number
+  readonly disk: number
+}
+
 export interface Listed {
   readonly binding: Schema.Json
   readonly brainId: Brain.ID
@@ -81,6 +88,7 @@ export interface Interface {
   readonly keepAlive: (binding: Schema.Json, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
   readonly status: (binding: Schema.Json) => Effect.Effect<Status, Failed>
+  readonly vitals: (binding: Schema.Json) => Effect.Effect<Option.Option<Vitals>, Failed>
   readonly hand: (binding: Schema.Json) => Effect.Effect<Hand, Failed>
   readonly lost: Stream.Stream<Lost>
   readonly list: Effect.Effect<ReadonlyArray<Listed>, Failed>

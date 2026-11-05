@@ -28,10 +28,19 @@ if [ -s "$home/.ren/egress-ca.pem" ]; then
     certutil -d "$nssdb" -A -t "C,," -n ren-egress -i "$home/.ren/egress-ca.pem" || true
   fi
 fi
+# The executor, and so every tool, runs in ren-tools.slice, whose memory is capped (e2b.Dockerfile). A machine
+# without sudo or systemd runs it as it is.
+tools() { "$@"; }
+if sudo -n systemd-run --quiet --scope --slice=ren-tools.slice true >/dev/null 2>&1; then
+  tools() {
+    sudo -E env "PATH=$PATH" "HOME=$home" systemd-run --quiet --scope --slice=ren-tools.slice \
+      --uid="$(id -u)" --gid="$(id -g)" -- "$@"
+  }
+fi
 (
   export PORT="${EXECUTOR_PORT:-4100}" EXECUTOR_HOST=127.0.0.1 EXECUTOR_WORKSPACE="$home/workspace"
   while true; do
-    bun /opt/ren/packages/executor/src/main.ts >>"$home/.ren/executor.log" 2>&1 || echo "$?" >"$home/.ren/executor.exit"
+    tools bun /opt/ren/packages/executor/src/main.ts >>"$home/.ren/executor.log" 2>&1 || echo "$?" >"$home/.ren/executor.exit"
     sleep 1
   done
 ) &

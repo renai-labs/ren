@@ -49,6 +49,21 @@ const Listed = Schema.Array(
 
 const Detail = Schema.Struct({ state: Schema.optional(Schema.String) })
 
+const Samples = Schema.Array(
+  Schema.Struct({
+    timestampUnix: Schema.Number,
+    memUsed: Schema.Number,
+    memTotal: Schema.Number,
+    diskUsed: Schema.Number,
+    diskTotal: Schema.Number,
+  }),
+)
+
+// oxlint-disable-next-line ren/no-comments -- E2B samples a sandbox every 5 seconds and serves a sample about 10 seconds later. It keeps that step for a window of 30 minutes; a longer window comes in steps of minutes. A window without samples, as for a machine frozen longer, answers 400.
+const samplesWithin = Duration.minutes(30)
+
+const share = (used: number, total: number) => (total > 0 ? used / total : 0)
+
 const runTypes = ["sandbox.lifecycle.paused", "sandbox.lifecycle.killed"] as const
 
 const Runs = Schema.Array(
@@ -289,6 +304,34 @@ export const layer = Layer.effect(
           Effect.mapError(failed("info")),
         )
         return detail.state === "paused" ? ("paused" as const) : ("running" as const)
+      }),
+      vitals: Effect.fn("E2BSandbox.vitals")(function* (raw) {
+        const binding = yield* read(raw)
+        const since = DateTime.subtractDuration(yield* DateTime.now, samplesWithin)
+        const response = yield* send(
+          "metrics",
+          HttpClientRequest.get(`/sandboxes/${binding.sandboxId}/metrics`).pipe(
+            HttpClientRequest.setUrlParams({ start: String(Math.floor(DateTime.toEpochMillis(since) / 1000)) }),
+          ),
+        )
+        if (response.status === 400 || response.status === 404) return Option.none()
+        const text = yield* strict("metrics", response)
+        const samples = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Samples))(text).pipe(
+          Effect.mapError(failed("metrics")),
+        )
+        return Option.map(
+          Option.fromNullishOr(
+            samples.reduce<(typeof samples)[number] | undefined>(
+              (newest, each) => (newest && newest.timestampUnix >= each.timestampUnix ? newest : each),
+              undefined,
+            ),
+          ),
+          (last): SandboxProvider.Vitals => ({
+            at: DateTime.makeUnsafe(last.timestampUnix * 1000),
+            memory: share(last.memUsed, last.memTotal),
+            disk: share(last.diskUsed, last.diskTotal),
+          }),
+        )
       }),
       metered: Effect.fn("E2BSandbox.metered")(function* (since) {
         const older = (run: Run) => Option.exists(since, (time) => DateTime.isLessThan(run.timestamp, time))

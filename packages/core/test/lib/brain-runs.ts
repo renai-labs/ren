@@ -34,6 +34,15 @@ export const isAlive = (pid: number) => Bun.spawnSync(["kill", "-0", String(pid)
 
 export const pidOf = (binding: unknown) => Schema.decodeUnknownSync(Schema.Struct({ pid: Schema.Int }))(binding).pid
 
+// oxlint-disable-next-line ren/no-comments -- The brain process of a local sandbox, without its process group: stopping it leaves the machine running.
+export const brainOf = (binding: unknown) =>
+  Number(
+    new TextDecoder()
+      .decode(Bun.spawnSync(["pgrep", "-g", String(pidOf(binding)), "-f", "^bun .*cell/src/bun\\.ts"]).stdout)
+      .trim()
+      .split("\n")[0],
+  )
+
 // oxlint-disable-next-line ren/no-comments -- One file's Postgres, Ren port and brain root. Each ren() is a Ren that starts and stops on that root; when it stops it kills every brain under the root, unless keepBrains leaves them for the next Ren of the test.
 export const make = async () => {
   const database = ManagedRuntime.make(Testing.layer)

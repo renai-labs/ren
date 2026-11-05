@@ -1,10 +1,11 @@
 export * as LocalSandbox from "./local.js"
 
 import { Brain } from "@ren/schema/brain"
-import { Duration, Effect, FiberMap, Layer, Option, Schema, Stream } from "effect"
+import { DateTime, Duration, Effect, FiberMap, Layer, Option, Schema, Stream } from "effect"
 import { spawn } from "node:child_process"
-import { mkdir, readdir, rm } from "node:fs/promises"
+import { mkdir, readdir, rm, statfs } from "node:fs/promises"
 import { createServer } from "node:net"
+import { freemem, totalmem } from "node:os"
 import { join } from "node:path"
 import { SandboxProvider } from "../sandbox-provider.js"
 
@@ -193,6 +194,20 @@ export const layer = (options: {
           const binding = yield* read(raw)
           if (!(yield* isAlive(binding.pid))) return "gone" as const
           return paused.has(binding.pid) ? ("paused" as const) : ("running" as const)
+        }),
+        // oxlint-disable-next-line ren/no-comments -- The machine of a local brain is its process group, and this computer's memory and disk are its own. A stopped group leader is a frozen machine, which reports no sample.
+        vitals: Effect.fn("LocalSandbox.vitals")(function* (raw) {
+          const binding = yield* read(raw)
+          const state = new TextDecoder()
+            .decode(Bun.spawnSync(["ps", "-o", "stat=", "-p", String(binding.pid)]).stdout)
+            .trim()
+          if (state === "" || state.startsWith("T")) return Option.none()
+          const disk = yield* Effect.tryPromise({ try: () => statfs(binding.home), catch: failed })
+          return Option.some({
+            at: yield* DateTime.now,
+            memory: 1 - freemem() / totalmem(),
+            disk: 1 - disk.bavail / disk.blocks,
+          })
         }),
         hand: Effect.fn("LocalSandbox.hand")(function* (raw) {
           const binding = yield* read(raw)
