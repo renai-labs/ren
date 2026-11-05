@@ -23,9 +23,10 @@ Done when a flag targets one space through local evaluation.
 
 ## Waiting for this service
 
-| Item                                                                                   | Where                 |
-| -------------------------------------------------------------------------------------- | --------------------- |
-| `Task.reviewStart` becomes a flag targeted by space (see [`../tasks.md`](../tasks.md)) | `core/src/task.ts:44` |
+| Item                                                                                                                                                                                       | Where                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| `Task.reviewStart` becomes a flag targeted by space (see [`../tasks.md`](../tasks.md))                                                                                                     | `core/src/task.ts:44`                   |
+| `Watchdog.defaults` (stall after 5 min, sample every 5 s, memory high 80%, critical 92%) becomes a flag targeted by space, tuned from the `memory.peak` values renai-labs/ren#231 collects | `cell/src/harness/opencode/watchdog.ts` |
 
 ## Flags
 

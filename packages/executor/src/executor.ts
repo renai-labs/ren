@@ -7,6 +7,7 @@ import { Context, type Effect, type Stream } from "effect"
 
 export interface Interface {
   readonly hello: EnvironmentApi.Hello
+  readonly memory: (brain: Brain.ID) => Effect.Effect<EnvironmentApi.MemoryReport>
   readonly spawn: (
     brain: Brain.ID,
     input: EnvironmentApi.SpawnInput,
