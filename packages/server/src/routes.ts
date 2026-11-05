@@ -112,6 +112,7 @@ const Cors = HttpRouter.middleware(
         "content-type",
         Auth.consentOrganizationHeader,
         "x-posthog-session-id",
+        "x-posthog-window-id",
         "x-posthog-distinct-id",
       ],
       credentials: true,

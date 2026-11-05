@@ -42,3 +42,18 @@ test.each([
     credentials: response.headers.get("access-control-allow-credentials"),
   }).toMatchObject(row.allowed)
 })
+
+test("allows the headers that PostHog adds to requests to the server", async () => {
+  const headers = ["x-posthog-session-id", "x-posthog-window-id", "x-posthog-distinct-id"]
+  const response = await app.handler(
+    new Request("http://localhost/me", {
+      method: "OPTIONS",
+      headers: {
+        origin,
+        "access-control-request-method": "GET",
+        "access-control-request-headers": headers.join(","),
+      },
+    }),
+  )
+  expect(response.headers.get("access-control-allow-headers")?.split(",")).toEqual(expect.arrayContaining(headers))
+})
