@@ -320,6 +320,12 @@ describe("SlackBot", () => {
         slack.replies.length,
         ...["1.0", "2.0", "3.0"].map((ts) => ({ ts, user: "U01", text: `message ${ts}` })),
       )
+      slack.replies.splice(1, 1, {
+        ts: "2.0",
+        user: "U01",
+        text: "message 2.0",
+        files: [{ id: "F01", name: "demo.mp4", mimetype: "video/mp4" }],
+      })
       const first = yield* bot.call(asAgent(owner, sessionId), "read_thread", {
         channelId: "C07",
         threadTs: "1.0",
@@ -327,8 +333,8 @@ describe("SlackBot", () => {
       })
       expect(first).toEqual({
         messages: [
-          { ts: "1.0", userId: "U01", text: "message 1.0" },
-          { ts: "2.0", userId: "U01", text: "message 2.0" },
+          { ts: "1.0", userId: "U01", text: "message 1.0", files: [] },
+          { ts: "2.0", userId: "U01", text: "message 2.0", files: [{ name: "demo.mp4", mime: "video/mp4" }] },
         ],
         nextCursor: "2",
       })
@@ -339,7 +345,7 @@ describe("SlackBot", () => {
           limit: 2,
           cursor: "2",
         }),
-      ).toEqual({ messages: [{ ts: "3.0", userId: "U01", text: "message 3.0" }], nextCursor: null })
+      ).toEqual({ messages: [{ ts: "3.0", userId: "U01", text: "message 3.0", files: [] }], nextCursor: null })
       slack.options.postError = "not_in_channel"
       const refused = yield* Effect.flip(
         bot.call(asAgent(owner, sessionId), "post_new_message", { channelId: "C08", text: "hi" }),

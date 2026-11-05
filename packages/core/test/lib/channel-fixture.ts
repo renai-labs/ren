@@ -86,6 +86,7 @@ export class Outbox extends Context.Service<
     readonly lookups: Array<string>
     readonly places: Array<ChannelProvider.Place>
     readonly announced: Array<{ readonly place: string; readonly text: string }>
+    readonly earlierFiles: Array<Channel.FileRef>
   }
 >()("@ren/core/test/ChannelFixture/Outbox") {}
 
@@ -132,7 +133,7 @@ const provider = Effect.gen(function* () {
     context: (found) =>
       found.message === "unreadable"
         ? Effect.fail(new ChannelProvider.Unavailable({ message: "Slack is down" }))
-        : Effect.succeedSome("[Bob] the deploy failed at 10:02"),
+        : Effect.succeedSome({ text: "[Bob] the deploy failed at 10:02", files: outbox.earlierFiles }),
     linkOf: (found) =>
       Option.fromNullishOr(found.thread.url).pipe(
         Option.map(TaskLink.classify),
@@ -368,6 +369,7 @@ const core = (held: boolean) =>
             { id: "C11", name: "shared-with-vendor", private: false, anyoneCanWrite: true },
           ],
           announced: [],
+          earlierFiles: [],
         })),
       ),
     ),

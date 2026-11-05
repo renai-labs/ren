@@ -310,9 +310,10 @@ describe("Slack", () => {
           reply("5.0", "U01", "<@UBOT> why?"),
         )
         const event = eventOf({ install: found.workspace })
-        expect(yield* slackProvider.context(event)).toEqual(Option.some("[Ben Silva] it failed for @Ana Lima"))
+        const said = Option.some({ text: "[Ben Silva] it failed for @Ana Lima", files: [] })
+        expect(yield* slackProvider.context(event)).toEqual(said)
         slack.replies.splice(0, 2)
-        expect(yield* slackProvider.context(event)).toEqual(Option.some("[Ben Silva] it failed for @Ana Lima"))
+        expect(yield* slackProvider.context(event)).toEqual(said)
         slack.replies.splice(
           0,
           slack.replies.length,
@@ -320,7 +321,7 @@ describe("Slack", () => {
           reply("99.0", "U02", "<@UBOT> sum it up"),
         )
         const long = yield* slackProvider.context(eventOf({ install: found.workspace, message: "99.0" }))
-        const lines = Option.getOrElse(long, () => "").split("\n")
+        const lines = Option.match(long, { onNone: () => "", onSome: (context) => context.text }).split("\n")
         expect([lines.length, lines[0], lines[1], lines.at(-1)]).toEqual([
           51,
           "[earlier messages omitted]",
@@ -346,9 +347,49 @@ describe("Slack", () => {
         })),
       )
       expect(yield* slackProvider.context(eventOf({ install: found.workspace, message: "2002.0" }))).toEqual(
-        Option.some("[Thread context omitted: the pagination limit was reached before the current message.]"),
+        Option.some({
+          text: "[Thread context omitted: the pagination limit was reached before the current message.]",
+          files: [],
+        }),
       )
     }),
+  )
+
+  it.live(
+    "the context carries the files of the thread since Ren's previous mention, without Ren's own, the latest 10 at most",
+    () =>
+      Effect.gen(function* () {
+        const slackProvider = yield* provider
+        const found = yield* installed()
+        const file = (id: string) => ({
+          id,
+          name: `${id}.png`,
+          mimetype: "image/png",
+          url_private_download: `${slack.url}/files/${id}`,
+        })
+        slack.replies.splice(
+          0,
+          slack.replies.length,
+          { ts: "1.0", user: "U01", text: "before", files: [file("F00")] },
+          { ts: "2.0", user: "U02", text: "<@UBOT> check it" },
+          { ts: "3.0", user: "UBOT", text: "Here is mine", files: [file("F01")] },
+          { ts: "4.0", user: "U01", text: "", files: [file("F02")] },
+          {
+            ts: "4.5",
+            user: "U02",
+            text: "and these",
+            files: Array.from({ length: 10 }, (_, index) => file(`F${index + 3}`)),
+          },
+          { ts: "5.0", user: "U01", text: "<@UBOT> what is in the screenshots?" },
+        )
+        const context = yield* slackProvider.context(eventOf({ install: found.workspace }))
+        expect(Option.map(context, (found) => found.files.map((each) => each.name))).toEqual(
+          Option.some(Array.from({ length: 10 }, (_, index) => `F${index + 3}.png`)),
+        )
+        expect(Option.map(context, (found) => found.files[0])).toEqual(
+          Option.some({ url: `${slack.url}/files/F3`, name: "F3.png", mime: "image/png" }),
+        )
+      }),
   )
 
   it.live("files declared over the size limit are refused before downloading", () =>

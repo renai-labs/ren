@@ -353,6 +353,23 @@ describe("Channels", () => {
       }),
   )
 
+  it.live("the files of earlier thread messages go to the drive after the message's own, and a file in both once", () =>
+    Effect.gen(function* () {
+      const outbox = yield* ChannelFixture.Outbox
+      const notes = { url: "bytes:3", name: "notes.txt", mime: "text/plain" }
+      outbox.earlierFiles.push({ url: "bytes:4", name: "shot.png", mime: "image/png" }, notes)
+      yield* ChannelFixture.receive(
+        ChannelFixture.delivery(ChannelFixture.event((yield* routed).install, { files: [notes] })),
+      )
+      const sent = (yield* ChannelFixture.accepted(1)).at(0)
+      const folder = `chats/${sent?.sessionId}/uploads/${sent?.messageId}`
+      expect(sent?.prompt.files).toEqual([
+        { path: `${folder}/notes.txt`, name: "notes.txt" },
+        { path: `${folder}/shot.png`, name: "shot.png" },
+      ])
+    }),
+  )
+
   it.live("every file goes to the drive, and the inline copies stop at 10 MB in total", () =>
     Effect.gen(function* () {
       const found = ChannelFixture.event((yield* routed).install, {

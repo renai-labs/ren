@@ -405,6 +405,8 @@ const contextCharacters = 12_000
 
 const contextPages = 10
 
+const contextFiles = 10
+
 const omitted = "[earlier messages omitted]"
 
 const accountUser = (accountId: string) => accountId.slice(accountId.indexOf(":") + 1)
@@ -553,7 +555,7 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
     context: Effect.fn("Slack.context")(
       function* (event) {
         const found = yield* secrets.ofWorkspace("slack", event.install)
-        if (Option.isNone(found)) return Option.none<string>()
+        if (Option.isNone(found)) return Option.none<ChannelProvider.ThreadContext>()
         const token = found.value.secret
         const bot = found.value.botUser ?? undefined
         const root = event.thread.id.slice(event.thread.id.indexOf(":") + 1)
@@ -582,14 +584,20 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
             ),
         ).pipe(Stream.runCollect)
         if (pages.at(-1)?.response_metadata?.next_cursor)
-          return Option.some("[Thread context omitted: the pagination limit was reached before the current message.]")
+          return Option.some({
+            text: "[Thread context omitted: the pagination limit was reached before the current message.]",
+            files: [],
+          })
         const before = pages.flatMap((page) => page.messages).filter((each) => Number(each.ts) < Number(event.message))
         const previous = before.findLastIndex(
           (each) => Boolean(bot) && each.user !== bot && (each.text ?? "").includes(`<@${bot}>`),
         )
         const bodies = before.slice(previous + 1).flatMap((each) => {
-          const text = each.user === bot ? "" : SlackMessage.parse(each, bot).text
-          return text ? [{ author: each.user ?? each.bot_id ?? "unknown", text }] : []
+          if (each.user === bot) return []
+          const parsed = SlackMessage.parse(each, bot)
+          return parsed.text
+            ? [{ author: each.user ?? each.bot_id ?? "unknown", text: parsed.text, files: parsed.files }]
+            : []
         })
         const kept = bodies.slice(-contextMessages)
         const mentioned = kept.map((each) => SlackMessage.references(each.text))
@@ -602,8 +610,11 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
             (each) => `[${people.get(each.author) ?? each.author}] ${SlackMessage.named(each.text, people, channels)}`,
           ),
         )
-        if (lines.length === 0) return Option.none<string>()
-        return Option.some([...(lines.length < bodies.length ? [omitted] : []), ...lines].join("\n"))
+        if (lines.length === 0) return Option.none<ChannelProvider.ThreadContext>()
+        return Option.some({
+          text: [...(lines.length < bodies.length ? [omitted] : []), ...lines].join("\n"),
+          files: kept.flatMap((each) => each.files).slice(-contextFiles),
+        })
       },
       Effect.mapError((error) => new ChannelProvider.Unavailable({ message: error.message })),
     ),

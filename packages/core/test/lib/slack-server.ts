@@ -37,6 +37,7 @@ interface Reply {
   readonly user: string
   readonly text: string
   readonly bot_id?: string
+  readonly files?: ReadonlyArray<object>
 }
 
 interface Channel {
