@@ -221,6 +221,14 @@ export const RefreshInput = Schema.Struct({
   }),
 }).annotate({ identifier: "Executor.RefreshInput" })
 
+export interface UploadedInput extends Schema.Schema.Type<typeof UploadedInput> {}
+export const UploadedInput = Schema.Struct({
+  path: Schema.String.annotate({
+    description:
+      "A file written on a mounted drive. The answer comes once the drive holds the file, or with rclone’s error when its upload fails. A file on no mounted drive answers at once.",
+  }),
+}).annotate({ identifier: "Executor.UploadedInput" })
+
 export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundError>()("ProcessNotFoundError", {
   id: ProcessID,
 }) {}
@@ -294,4 +302,5 @@ export const Rpcs = RpcGroup.make(
   Rpc.make("files.unpack", { payload: UnpackInput, error: Schema.Union([ArchiveError, FileSystemError]) }),
   Rpc.make("drives.mount", { payload: MountInput, error: MountError }),
   Rpc.make("drives.refresh", { payload: RefreshInput, error: MountError }),
+  Rpc.make("drives.uploaded", { payload: UploadedInput, error: MountError }),
 ).middleware(Authentication)

@@ -63,14 +63,14 @@ Done when: in a chat on E2B, a person drops a 30 MB zip and pastes a 2 MB screen
 
 ### Outputs
 
-1. `show_file {path}` copies the file to `chats/<sessionId>/outputs/<name>` on the mount, as ren-v1 did (`opencode-plugin/src/tools/show-file.ts`).
+1. `show_file {path}` copies the file to `chats/<sessionId>/outputs/<name>` on the mount, as ren-v1 did (`opencode-plugin/src/tools/show-file.ts`), then waits with `drives.uploaded` until the drive holds it (F23).
 2. Only files passed to `show_file` become cards. Edits stay diffs.
 
 ### Cards
 
 1. A card shows a thumbnail (image) or an icon, the name and the size. A click opens the preview. It has Download.
 2. The card gets its link from `drive.download` when it scrolls into view, and a new link once if the link fails.
-3. A deleted file shows the icon, the name and "Deleted from the drive".
+3. A file that is not in the drive shows the icon, the name and "Not in the drive".
 4. A message from before this change renders its files from their base64 copy.
 5. Clients never receive base64 for new messages. The transcript gives `uploads: DriveFile[]` from `metadata.files`.
 
@@ -125,7 +125,7 @@ A right sheet from a button at the top right of the chat. It lists the chat's up
 | 16  | app                 | Picking the same file twice attaches it twice.                                                                       | v1             |
 | 17  | app                 | A file with no MIME type gets its type and icon from the extension.                                                  | v1 `0af1fbc80` |
 | 18  | app                 | A 200,000-row, 60-column CSV previews the first 1,000 rows with every column visible, and the page stays responsive. | v1 `0af1fbc80` |
-| 19  | app                 | A card whose file is deleted shows "Deleted from the drive".                                                         | v1 REN-1277    |
+| 19  | app                 | A card whose file is not in the drive shows "Not in the drive".                                                      | v1 REN-1277    |
 | 20  | e2e (`ren-stack`)   | The "done when" flow.                                                                                                | —              |
 
 ## 6. Later

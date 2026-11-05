@@ -98,6 +98,7 @@ const operations = EnvironmentApi.Rpcs.toLayer(
       "files.unpack": (input) => executor.unpack(input),
       "drives.mount": (input) => executor.mount(input),
       "drives.refresh": (input) => executor.refresh(input),
+      "drives.uploaded": (input) => executor.uploaded(input),
     })
   }),
 )

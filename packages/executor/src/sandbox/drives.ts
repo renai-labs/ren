@@ -4,7 +4,7 @@ import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Duration, Effect, Exit, Option, Schedule, Schema, Semaphore } from "effect"
 import { type ChildProcess, spawn } from "node:child_process"
 import { constants } from "node:fs"
-import { access, mkdir, readdir, rm } from "node:fs/promises"
+import { access, mkdir, readdir, rm, stat } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, relative, resolve } from "node:path"
 
@@ -37,15 +37,21 @@ const nameOf = (path: string) => Bun.hash(path).toString(36)
 
 const RefreshAnswer = Schema.Struct({ result: Schema.Record(Schema.String, Schema.String) })
 
-// oxlint-disable-next-line ren/no-comments -- rclone refreshes only a folder that it has listed before, and answers "file does not exist" for any other. The deepest folder it knows is refreshed; every folder under it is new to rclone, so rclone lists it from the drive when it is first read.
-const refreshed = (socket: string, dir: string) =>
+const StatAnswer = Schema.Struct({ item: Schema.NullOr(Schema.Struct({ Size: Schema.Number })) })
+
+const control = <S extends Schema.Top & { readonly DecodingServices: never }>(
+  socket: string,
+  command: string,
+  input: object,
+  answer: S,
+) =>
   Effect.tryPromise({
     try: async () => {
-      const response = await fetch("http://rclone/vfs/refresh", {
+      const response = await fetch(`http://rclone/${command}`, {
         method: "POST",
         unix: socket,
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(dir ? { dir } : {}),
+        body: JSON.stringify(input),
         signal: AbortSignal.timeout(10_000),
       })
       const text = await response.text()
@@ -55,11 +61,29 @@ const refreshed = (socket: string, dir: string) =>
     catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
   }).pipe(
     Effect.flatMap((text) =>
-      Schema.decodeUnknownEffect(Schema.fromJsonString(RefreshAnswer))(text).pipe(
+      Schema.decodeUnknownEffect(Schema.fromJsonString(answer))(text).pipe(
         Effect.mapError(() => `rclone answered ${text.slice(0, 300)}`),
       ),
     ),
+  )
+
+// oxlint-disable-next-line ren/no-comments -- rclone refreshes only a folder that it has listed before, and answers "file does not exist" for any other. The deepest folder it knows is refreshed; every folder under it is new to rclone, so rclone lists it from the drive when it is first read.
+const refreshed = (socket: string, dir: string) =>
+  control(socket, "vfs/refresh", dir ? { dir } : {}, RefreshAnswer).pipe(
     Effect.map((answer) => Object.values(answer.result).at(0) ?? ""),
+  )
+
+const driveOf = (path: string) =>
+  Effect.map(mounts, (all) =>
+    all
+      .filter(
+        (mounted) =>
+          mounted.source.startsWith(":s3:") && (path === mounted.path || path.startsWith(`${mounted.path}/`)),
+      )
+      .reduce<{ readonly source: string; readonly path: string } | undefined>(
+        (deepest, mounted) => (deepest && deepest.path.length >= mounted.path.length ? deepest : mounted),
+        undefined,
+      ),
   )
 
 const isServed = (source: string, path: string) =>
@@ -223,15 +247,7 @@ export const make = (workspace: string) => {
   const refresh = Effect.fn("Executor.refresh")(function* (input: EnvironmentApi.RefreshInput) {
     const path = resolve(workspace, input.path)
     const failed = (message: string) => new EnvironmentApi.MountError({ path: input.path, message })
-    const drive = (yield* mounts)
-      .filter(
-        (mounted) =>
-          mounted.source.startsWith(":s3:") && (path === mounted.path || path.startsWith(`${mounted.path}/`)),
-      )
-      .reduce<{ readonly path: string } | undefined>(
-        (deepest, mounted) => (deepest && deepest.path.length >= mounted.path.length ? deepest : mounted),
-        undefined,
-      )
+    const drive = yield* driveOf(path)
     if (!drive) return yield* failed("it is not on a mounted drive")
     const parts = relative(drive.path, path).split("/").filter(Boolean)
     const socket = join(state, `${nameOf(drive.path)}.sock`)
@@ -242,6 +258,46 @@ export const make = (workspace: string) => {
     }
     return yield* failed("rclone does not know the root of the drive")
   })
+  const uploaded = Effect.fn("Executor.uploaded")(function* (input: EnvironmentApi.UploadedInput) {
+    const path = resolve(workspace, input.path)
+    const failed = (message: string) => new EnvironmentApi.MountError({ path: input.path, message })
+    const drive = yield* driveOf(path)
+    if (!drive) return
+    const name = nameOf(drive.path)
+    const socket = join(state, `${name}.sock`)
+    const remote = relative(drive.path, path)
+    const written = yield* Effect.tryPromise({
+      try: () => stat(path),
+      catch: (cause) => failed(cause instanceof Error ? cause.message : String(cause)),
+    })
+    const failure = ` ERROR : ${remote}: Failed to copy: `
+    const stored = Effect.gen(function* () {
+      const found = yield* control(socket, "operations/stat", { fs: drive.source, remote }, StatAnswer).pipe(
+        Effect.orElseSucceed(() => ({ item: null })),
+      )
+      if (found.item?.Size === written.size) return true
+      // oxlint-disable-next-line ren/no-comments -- With --vfs-write-back 0s rclone does not retry a failed upload; it only logs it, stamped to the second.
+      const failedUpload = (yield* Effect.promise(() =>
+        Bun.file(join(state, `${name}.log`))
+          .text()
+          .catch(() => ""),
+      ))
+        .split("\n")
+        .findLast(
+          (line) =>
+            line.includes(failure) && Date.parse(line.slice(0, 19)) >= Math.floor(written.mtimeMs / 1000) * 1000,
+        )
+      if (failedUpload) return yield* failed(failedUpload.slice(failedUpload.indexOf(failure) + failure.length))
+      return false
+    })
+    yield* stored.pipe(
+      Effect.repeat({ schedule: Schedule.spaced("250 millis"), until: (isStored) => isStored }),
+      Effect.timeoutOrElse({
+        duration: Duration.minutes(2),
+        orElse: () => Effect.fail(failed("it did not reach the drive within 2 minutes")),
+      }),
+    )
+  })
   return {
     mount: (input: EnvironmentApi.MountInput) => {
       const path = resolve(workspace, input.path)
@@ -250,5 +306,6 @@ export const make = (workspace: string) => {
       return lock.withPermits(1)(mount(path, input))
     },
     refresh,
+    uploaded,
   }
 }
