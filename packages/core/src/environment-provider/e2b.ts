@@ -96,14 +96,6 @@ export const provider = Effect.gen(function* () {
     new EnvironmentProvider.Gone({ message: `E2B sandbox ${binding.sandboxId} does not exist` })
   const urlOf = (binding: typeof Binding.Type) =>
     new URL(`https://${EnvironmentApi.port}-${binding.sandboxId}.${binding.domain}`)
-  const updateNetwork = Effect.fn("E2BEnvironment.updateNetwork")(function* (
-    binding: typeof Binding.Type,
-    network: EnvironmentProvider.Network,
-  ) {
-    const answer = yield* call("network", e2b.updateNetwork(binding.sandboxId, E2BApi.networkOf(network)))
-    if (answer._tag === "Missing") return yield* gone(binding)
-    yield* ok("network", answer)
-  })
 
   return EnvironmentProvider.make({
     id: EnvironmentProvider.ID.make("e2b"),
@@ -234,7 +226,10 @@ export const provider = Effect.gen(function* () {
       const answer = yield* call("connect", e2b.connect(binding.sandboxId, awakeAtStart))
       if (answer._tag === "Missing") return yield* gone(binding)
       yield* ok("connect", answer)
-      yield* updateNetwork(binding, network)
+      // oxlint-disable-next-line ren/no-comments -- After the resume: E2B answers 404 to a network update of a paused sandbox (checked live). An update replaces the whole config, so it repeats the proxy.
+      const updated = yield* call("network", e2b.updateNetwork(binding.sandboxId, E2BApi.networkOf(network)))
+      if (updated._tag === "Missing") return yield* gone(binding)
+      yield* ok("network", updated)
       const url = urlOf(binding)
       yield* EnvironmentProvider.waitForExecutor(http, url)
       return { url }
@@ -244,7 +239,6 @@ export const provider = Effect.gen(function* () {
       if (answer._tag === "Missing") return yield* gone(binding)
       yield* ok("timeout", answer)
     }),
-    updateNetwork,
     destroy: Effect.fn("E2BEnvironment.destroy")(function* (binding) {
       const answer = yield* call("kill", e2b.kill(binding.sandboxId))
       if (answer._tag === "Missing") return

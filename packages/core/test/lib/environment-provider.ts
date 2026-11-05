@@ -20,9 +20,6 @@ interface Probe {
   readonly keptAlive: Ref.Ref<
     ReadonlyArray<{ readonly environmentId: Environment.ID; readonly duration: Duration.Duration }>
   >
-  readonly networks: Ref.Ref<
-    ReadonlyArray<{ readonly environmentId: Environment.ID; readonly hosts: Option.Option<ReadonlyArray<string>> }>
-  >
   readonly builds: Ref.Ref<ReadonlyArray<string>>
   readonly buildFails: Ref.Ref<boolean>
   readonly destroyed: Ref.Ref<ReadonlyArray<Environment.ID>>
@@ -52,9 +49,6 @@ export const make = (
     const provisioned = yield* Ref.make<ReadonlyArray<Provisioned>>([])
     const keptAlive = yield* Ref.make<
       ReadonlyArray<{ readonly environmentId: Environment.ID; readonly duration: Duration.Duration }>
-    >([])
-    const networks = yield* Ref.make<
-      ReadonlyArray<{ readonly environmentId: Environment.ID; readonly hosts: Option.Option<ReadonlyArray<string>> }>
     >([])
     const builds = yield* Ref.make<ReadonlyArray<string>>([])
     const buildFails = yield* Ref.make(false)
@@ -96,8 +90,6 @@ export const make = (
         }),
       keepAlive: (binding, duration) =>
         Ref.update(keptAlive, (all) => [...all, { environmentId: binding.environmentId, duration }]),
-      updateNetwork: (binding, network) =>
-        Ref.update(networks, (all) => [...all, { environmentId: binding.environmentId, hosts: network.hosts }]),
       connect: (binding) =>
         Effect.gen(function* () {
           if ((yield* Ref.get(gone)).has(binding.environmentId))
@@ -110,7 +102,6 @@ export const make = (
       provisions,
       provisioned,
       keptAlive,
-      networks,
       builds,
       buildFails,
       destroyed,

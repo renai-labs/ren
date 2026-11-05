@@ -64,7 +64,6 @@ interface Definition<Config, Binding> {
   readonly provision: (input: ProvisionInput<Config>) => Effect.Effect<Binding, Failed>
   readonly connect: (binding: Binding, network: Network) => Effect.Effect<Endpoint, Gone | Failed>
   readonly keepAlive?: (binding: Binding, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
-  readonly updateNetwork?: (binding: Binding, network: Network) => Effect.Effect<void, Gone | Failed>
   readonly destroy: (binding: Binding) => Effect.Effect<void, Failed>
 }
 
@@ -81,7 +80,6 @@ export interface Provider {
   readonly provision: (input: ProvisionInput<Schema.Json>) => Effect.Effect<Schema.Json, Failed>
   readonly connect: (binding: Schema.Json, network: Network) => Effect.Effect<Endpoint, Gone | Failed>
   readonly keepAlive: (binding: Schema.Json, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
-  readonly updateNetwork: (binding: Schema.Json, network: Network) => Effect.Effect<void, Gone | Failed>
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
 }
 
@@ -138,16 +136,10 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
     })),
     connect: (value, network) =>
       stored(binding)(value).pipe(Effect.flatMap((decoded) => definition.connect(decoded, network))),
-    // oxlint-disable-next-line ren/no-comments -- A provider without these keeps its machines awake and their network fixed on its own.
+    // oxlint-disable-next-line ren/no-comments -- A provider without it keeps its machines awake on its own.
     keepAlive: (value, duration) =>
       stored(binding)(value).pipe(
         Effect.flatMap((decoded) => (definition.keepAlive ? definition.keepAlive(decoded, duration) : Effect.void)),
-      ),
-    updateNetwork: (value, network) =>
-      stored(binding)(value).pipe(
-        Effect.flatMap((decoded) =>
-          definition.updateNetwork ? definition.updateNetwork(decoded, network) : Effect.void,
-        ),
       ),
     destroy: (value) => stored(binding)(value).pipe(Effect.flatMap(definition.destroy)),
   }

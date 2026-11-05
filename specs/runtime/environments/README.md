@@ -100,21 +100,21 @@ Done when: an admin creates a template with apt `ffmpeg`, npm `typescript` and `
 
 ## 4. Contract changes
 
-| Where                                         | Change                                                                                                                                                                                                                                                        |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schema/environment-template.ts`              | `networking` in `Info`, `CreateInput`, `UpdateInput`. `Info` gets `buildStatus`, `image`, `buildError`.                                                                                                                                                       |
-| `schema/space.ts`                             | `environment` in `Info` and `UpdateInput`.                                                                                                                                                                                                                    |
-| `schema/session.ts`                           | `StartInput.environmentTemplateId` becomes `environment` (`default`, `template` with its id, or `none`).                                                                                                                                                      |
-| `schema/space-environment-template.ts`        | Removed, with its protocol group, core service, policy and table.                                                                                                                                                                                             |
-| `db`                                          | `environment_template`: `networking`, `build_status`, `image`, `build_error`. `environment`: `image`. `space`: the environment choice. `session_environment.environment_template_id` changes when the space's choice changes.                                 |
-| `core/environment-provider.ts`                | Optional `build(config) → image`, `keepAlive(binding, duration)` and `updateNetwork(binding, hosts)`. `canLimitHosts` flag, beside `canMount` (`core/src/environment-provider.ts:37`). `provision` takes `image` and the host list (none for `unrestricted`). |
-| `core/environment-provider/e2b.ts`            | New. The E2B REST calls move to one module that it shares with `sandbox-provider/e2b.ts` (e2b-brain E135).                                                                                                                                                    |
-| `core/environments.ts`                        | Replace outdated environments at `access`; `keepAlive` on `access` and `release`; destroy when every chat is archived.                                                                                                                                        |
-| `core/session/runner.ts`                      | Reads `space.environment` and fills `StartInput.environment`.                                                                                                                                                                                                 |
-| `core/space/policy.ts`                        | Org admins: `space.update` on shared spaces.                                                                                                                                                                                                                  |
-| `core/environments.ts`, `executor/Dockerfile` | `ENVIRONMENT_DIRECTORY` defaults to `/home/user/workspace`; the Docker executor image creates it for its user.                                                                                                                                                |
-| A new script beside `cell/e2b/stage.ts`       | Builds `ren-environment-base:<hash>`: the executor and its start script.                                                                                                                                                                                      |
-| `app`                                         | Settings → Environments (admins: list, create, edit, build status). Space settings → Environment (`default`, a template, `none`) and Brain scope.                                                                                                             |
+| Where                                         | Change                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema/environment-template.ts`              | `networking` in `Info`, `CreateInput`, `UpdateInput`. `Info` gets `buildStatus`, `image`, `buildError`.                                                                                                                                                                                                                    |
+| `schema/space.ts`                             | `environment` in `Info` and `UpdateInput`.                                                                                                                                                                                                                                                                                 |
+| `schema/session.ts`                           | `StartInput.environmentTemplateId` becomes `environment` (`default`, `template` with its id, or `none`).                                                                                                                                                                                                                   |
+| `schema/space-environment-template.ts`        | Removed, with its protocol group, core service, policy and table.                                                                                                                                                                                                                                                          |
+| `db`                                          | `environment_template`: `networking`, `build_status`, `image`, `build_error`. `environment`: `image`. `space`: the environment choice. `session_environment.environment_template_id` changes when the space's choice changes.                                                                                              |
+| `core/environment-provider.ts`                | Optional `build(config) → image` and `keepAlive(binding, duration)`; `connect` takes the network, so the provider applies the current hosts at each access (EN26). `canLimitHosts` flag, beside `canMount` (`core/src/environment-provider.ts:37`). `provision` takes `image` and the host list (none for `unrestricted`). |
+| `core/environment-provider/e2b.ts`            | New. The E2B REST calls move to one module that it shares with `sandbox-provider/e2b.ts` (e2b-brain E135).                                                                                                                                                                                                                 |
+| `core/environments.ts`                        | Replace outdated environments at `access`; `keepAlive` on `access` and `release`; destroy when every chat is archived.                                                                                                                                                                                                     |
+| `core/session/runner.ts`                      | Reads `space.environment` and fills `StartInput.environment`.                                                                                                                                                                                                                                                              |
+| `core/space/policy.ts`                        | Org admins: `space.update` on shared spaces.                                                                                                                                                                                                                                                                               |
+| `core/environments.ts`, `executor/Dockerfile` | `ENVIRONMENT_DIRECTORY` defaults to `/home/user/workspace`; the Docker executor image creates it for its user.                                                                                                                                                                                                             |
+| A new script beside `cell/e2b/stage.ts`       | Builds `ren-environment-base:<hash>`: the executor and its start script.                                                                                                                                                                                                                                                   |
+| `app`                                         | Settings → Environments (admins: list, create, edit, build status). Space settings → Environment (`default`, a template, `none`) and Brain scope.                                                                                                                                                                          |
 
 Run `bun run generate` after the protocol changes.
 
@@ -161,8 +161,8 @@ These rules come from the Software Factory (`renai-labs/integrations`, `.ren/spa
 
 ### Design
 
-1. Swappable parts stay behind their interface. Core asks `EnvironmentProvider` for `build`, `keepAlive`, `updateNetwork` and `canLimitHosts`; it never asks "is this E2B". The same holds for `BrainHost`, `SandboxProvider` and the harness.
-2. No speculative abstraction. Add an optional provider method only with its first real user: E2B for `build`, `keepAlive` and `updateNetwork`. Do not add a Docker `build` until a case needs it.
+1. Swappable parts stay behind their interface. Core asks `EnvironmentProvider` for `build`, `keepAlive` and `canLimitHosts`; it never asks "is this E2B". The same holds for `BrainHost`, `SandboxProvider` and the harness.
+2. No speculative abstraction. Add an optional provider method only with its first real user: E2B for `build` and `keepAlive`. Do not add a Docker `build` until a case needs it.
 3. Reuse what exists before you write a new pattern:
 
    | Need                        | Use                                                                          |
@@ -171,7 +171,7 @@ These rules come from the Software Factory (`renai-labs/integrations`, `.ren/spa
    | The build run               | `DurableRunner` (`core/src/durable-runner.ts`)                               |
    | The E2B image build         | `cell/e2b/stage.ts:155-178`                                                  |
    | Keep-alive and pause        | the brain sandbox (`core/src/brain-lifecycle.ts`, `sandbox-provider/e2b.ts`) |
-   | E2B network update          | `updateNetwork` in `core/src/sandbox-provider/e2b.ts:194`                    |
+   | E2B network update          | `E2BApi.updateNetwork` in `core/src/e2b-api.ts`, after `connect`             |
    | Host patterns               | `Credential.matchesHost` (`schema/src/credential.ts:206`)                    |
    | Config forms                | the provider's JSON Schema (`EnvironmentProvider.Info.configSchema`)         |
 
@@ -187,7 +187,7 @@ Handle each case that a person or a caller can cause. Never remove handling for 
 | Retries and duplicates            | `provision` stays idempotent per environment id; a build run with the same key runs once                            |
 | Concurrent calls                  | two chats access one environment while it is replaced; a `release` while another seat is busy                       |
 | A step that fails halfway         | a build that fails after its E2B template exists; provision that fails after the sandbox exists                     |
-| Crash, restart, sleep, wake       | Ren restarts during a build run; an environment pauses mid-turn; a paused environment gets `updateNetwork`          |
+| Crash, restart, sleep, wake       | Ren restarts during a build run; an environment pauses mid-turn; a paused environment gets a new host list          |
 | Memory against stored state       | a host list that changed while an environment was paused; an `environment.image` that differs from `template.image` |
 | Permissions                       | a member edits a template; a member of another space selects a template; an admin on a private space                |
 | Harm                              | a `limited` environment that reaches an unlisted host; an environment that is never destroyed                       |
@@ -225,6 +225,6 @@ Choose names with the factory's `naming` skill. The repository's `AGENTS.md` win
 
 1. `default` on a brain host without its own sandbox (ECS, a Durable Object): a Ren-owned template on the E2B provider.
 2. UDP DNS to `8.8.8.8` leaves outside the firewall and the egress (E2B BYOP docs). It cannot leak a credential, but it can leak data. Close it with `dnsServers` and a resolver that Ren runs.
-3. Not verified: whether E2B limits the number of domains in `allowOut`. The limit of 10 domains in the E2B docs is for transform `rules`.
+3. E2B accepts at least 500 domains in `allowOut` (checked live on 2026-11-05); Ren allows at most 100 `allowedHosts`. The limit of 10 domains in the E2B docs is for transform `rules`.
 4. Laptops as an environment provider. Today's provider contract is `provision → connect → destroy` (`core/src/environment-provider.ts:30-42`): Ren makes the machine. A laptop connects to Ren instead, so it needs a contract where the environment connects in.
 5. Personal templates (ren-v1 "mine"). Not now: only admins write templates.
