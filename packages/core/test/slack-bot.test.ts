@@ -166,6 +166,7 @@ describe("SlackBot", () => {
         params: {
           channel: "C07",
           thread_ts: "1712.33",
+          unfurl_links: "false",
           text: "Done.",
           blocks: JSON.stringify([{ type: "markdown", text: "Done." }]),
         },

@@ -31,7 +31,6 @@ import { ChannelInstalls } from "../../src/channel-installs.js"
 import { ChannelSecrets } from "../../src/channel-secrets.js"
 import { ChannelMappings } from "../../src/channel-mappings.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
-import { GitHubTaskCard } from "../../src/github-task-card.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
 import { ChannelTurns } from "../../src/channel-turns.js"
 import { EgressControl } from "../../src/egress-control.js"
@@ -44,6 +43,8 @@ import { Drives } from "../../src/drives.js"
 import { Models } from "../../src/models.js"
 import { SessionRunner } from "../../src/session/runner.js"
 import { SessionSync } from "../../src/session-sync.js"
+import { SlackTaskCard } from "../../src/slack-task-card.js"
+import { TaskCard } from "../../src/task-card.js"
 import { Task } from "../../src/task.js"
 import { TestDrives } from "./drives.js"
 import { Host } from "./host.js"
@@ -221,6 +222,7 @@ export const install = Effect.fnUntraced(function* (owner: {
 export const app = "https://ren.test/app"
 
 const notices = ChannelNotice.layer.pipe(
+  Layer.provideMerge(SlackTaskCard.layerNone),
   Layer.provide(ConfigProvider.layerAdd(ConfigProvider.fromUnknown({ APP_URL: app }))),
 )
 
@@ -343,7 +345,7 @@ const core = (held: boolean) =>
     ChannelMappings.layer,
     SessionSync.layer,
   ).pipe(
-    Layer.provideMerge(Layer.mergeAll(notices, GitHubTaskCard.layerNone)),
+    Layer.provideMerge(Layer.mergeAll(notices, TaskCard.layerNone)),
     Layer.provideMerge(
       Layer.mergeAll(
         BrainRegistry.layer,

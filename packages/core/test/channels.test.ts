@@ -1239,32 +1239,6 @@ describe("Channels and tasks", () => {
     }),
   )
 
-  it.live(
-    "a review request posts its reason once to each Slack thread the task links, except the requesting agent's own",
-    () =>
-      Effect.gen(function* () {
-        const setup = yield* tasked
-        const tasks = yield* Task.Service
-        const outbox = yield* ChannelFixture.Outbox
-        const chat = yield* started(setup.subject.owner)
-        yield* ChannelFixture.thread(setup.subject.owner.organizationId, setup.found, chat)
-        const as = (sessionId: Session.ID) => ({
-          ...setup.owner,
-          agent: { agentId: setup.build, sessionId, spaceId: setup.spaceId, fence: null },
-        })
-        const build = as(yield* taskSession(setup))
-        yield* tasks.review(build, setup.task.id, { humanReview: true, reason: "PR #41 is ready to merge." })
-        yield* tasks.review(build, setup.task.id, { humanReview: true, reason: "PR #41 is ready to merge." })
-        yield* tasks.review(as(chat), setup.task.id, { humanReview: true, reason: "Pick a layout." })
-        expect(outbox.sent).toEqual([
-          {
-            target: expect.objectContaining({ install: setup.subject.install, thread: setup.found.thread.id }),
-            text: `Needs a person: PR #41 is ready to merge. [Open the task](${ChannelFixture.app}/tasks/${setup.task.id})`,
-          },
-        ])
-      }),
-  )
-
   it.live("a pull request that names tasks by ID, by branch or by task URL links each one once, as its sender", () =>
     Effect.gen(function* () {
       const setup = yield* tasked

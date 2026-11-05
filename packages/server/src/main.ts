@@ -65,6 +65,8 @@ import { EgressRoutes } from "./egress.js"
 import { Routes } from "./routes.js"
 import { Signer } from "@ren/core/signer"
 import { SlackApp } from "@ren/core/slack-app"
+import { SlackTaskCard } from "@ren/core/slack-task-card"
+import { TaskCard } from "@ren/core/task-card"
 import { EgressControl } from "@ren/core/egress-control"
 
 const host = Layer.unwrap(
@@ -153,8 +155,9 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       BillingEnrollment.layer.pipe(Layer.provide(Billing.layerConfig)),
     ),
     Layer.mergeAll(
-      ChannelNotice.layer,
-      GitHubTaskCard.layer,
+      Layer.mergeAll(ChannelNotice.layer, TaskCard.layer).pipe(
+        Layer.provideMerge(Layer.mergeAll(GitHubTaskCard.layer, SlackTaskCard.layer)),
+      ),
       ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer)),
     ).pipe(Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider])))),
     Mailer.layer,

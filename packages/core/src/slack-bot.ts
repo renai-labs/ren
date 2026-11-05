@@ -245,7 +245,12 @@ export const layer = Layer.effect(
       const sent = yield* Slack.post(input.text, input.charts ?? [], (payload) =>
         connection.client.post(
           "chat.postMessage",
-          { channel: input.channelId, ...(input.threadTs && { thread_ts: input.threadTs }), ...payload },
+          {
+            channel: input.channelId,
+            ...(input.threadTs && { thread_ts: input.threadTs }),
+            unfurl_links: false,
+            ...payload,
+          },
           Posted,
           connection.token,
         ),

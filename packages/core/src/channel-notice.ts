@@ -8,6 +8,7 @@ import type { Task } from "@ren/schema/task"
 import { and, eq, ne, sql } from "drizzle-orm"
 import { Config, Context, Effect, Layer, Option } from "effect"
 import { ChannelProvider } from "./channel-provider.js"
+import { SlackTaskCard } from "./slack-task-card.js"
 
 export interface Notice {
   readonly provider: Channel.Provider
@@ -23,9 +24,16 @@ export interface Review {
   readonly sessionId?: Session.ID | undefined
 }
 
+export interface Done {
+  readonly organizationId: Auth.OrganizationID
+  readonly taskId: Task.ID
+  readonly sessionId?: Session.ID | undefined
+}
+
 export interface Interface {
   readonly notice: (notice: Notice) => Effect.Effect<void>
   readonly review: (review: Review) => Effect.Effect<void>
+  readonly done: (done: Done) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/ChannelNotice") {}
@@ -60,6 +68,7 @@ export const layerLog = Layer.succeed(
       ),
     review: (review) =>
       Effect.logInfo(`Task review requested: ${review.reason}`).pipe(Effect.annotateLogs({ task: review.taskId })),
+    done: (done) => Effect.logInfo("Task done").pipe(Effect.annotateLogs({ task: done.taskId })),
   }),
 )
 
@@ -71,6 +80,7 @@ export const layer = Layer.effect(
     const app = (yield* Config.String("APP_URL").pipe(Effect.orDie)).replace(/\/$/u, "")
     const thread = Database.Schema.channel_thread
     const link = Database.Schema.task_link
+    const cards = yield* SlackTaskCard.Service
     const send = (provider: Channel.Provider, target: ChannelProvider.Target, text: string, about: string) =>
       Option.match(registry.get(provider), {
         onNone: () => Effect.logWarning(`No channel provider ${provider} posts notices`),
@@ -83,53 +93,43 @@ export const layer = Layer.effect(
               ),
             ),
       })
+    const post = Effect.fnUntraced(function* (about: Done, text: string) {
+      const threads = yield* database.db
+        .selectDistinct({ thread: link.key })
+        .from(link)
+        .innerJoin(
+          thread,
+          and(
+            eq(thread.organization_id, link.organization_id),
+            eq(thread.provider, "slack"),
+            eq(sql`upper(${thread.thread})`, link.key),
+          ),
+        )
+        .where(
+          and(
+            eq(link.task_id, about.taskId),
+            eq(link.organization_id, about.organizationId),
+            eq(link.kind, "slack_thread"),
+            about.sessionId ? ne(thread.session_id, about.sessionId) : undefined,
+          ),
+        )
+        .pipe(Effect.orDie)
+      yield* Effect.forEach(
+        threads,
+        (found) =>
+          cards.post({ organizationId: about.organizationId, taskId: about.taskId, thread: found.thread, text }),
+        { discard: true },
+      )
+    })
     return Service.of({
       notice: Effect.fn("ChannelNotice.notice")(function* (notice: Notice) {
         yield* send(notice.provider, notice.target, textOf(notice, app), notice.reason)
       }),
       review: Effect.fn("ChannelNotice.review")(function* (review: Review) {
-        const threads = yield* database.db
-          .select({
-            provider: thread.provider,
-            install: thread.install,
-            thread: thread.thread,
-            place: thread.place_name,
-            message: thread.last_message,
-          })
-          .from(link)
-          .innerJoin(
-            thread,
-            and(
-              eq(thread.organization_id, link.organization_id),
-              eq(thread.provider, "slack"),
-              eq(sql`upper(${thread.thread})`, link.key),
-            ),
-          )
-          .where(
-            and(
-              eq(link.task_id, review.taskId),
-              eq(link.organization_id, review.organizationId),
-              eq(link.kind, "slack_thread"),
-              review.sessionId ? ne(thread.session_id, review.sessionId) : undefined,
-            ),
-          )
-          .pipe(Effect.orDie)
-        yield* Effect.forEach(
-          threads,
-          (found) =>
-            send(
-              found.provider,
-              {
-                install: found.install,
-                place: found.place ?? found.thread,
-                thread: found.thread,
-                message: found.message ?? "",
-              },
-              `Needs a person: ${review.reason} [Open the task](${app}/tasks/${review.taskId})`,
-              "a review request",
-            ),
-          { discard: true },
-        )
+        yield* post(review, `Needs a person: ${review.reason} [Open the task](${app}/tasks/${review.taskId})`)
+      }),
+      done: Effect.fn("ChannelNotice.done")(function* (done: Done) {
+        yield* post(done, `Done. [Open the task](${app}/tasks/${done.taskId})`)
       }),
     })
   }),

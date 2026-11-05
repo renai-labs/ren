@@ -17,9 +17,10 @@ import { ChannelProvider } from "./channel-provider.js"
 import { ChannelRoute } from "./channel-route.js"
 import { Drives } from "./drives.js"
 import { DurableRunner } from "./durable-runner.js"
-import { GitHubTaskCard } from "./github-task-card.js"
 import { SessionRunner } from "./session/runner.js"
+import { SlackTaskCard } from "./slack-task-card.js"
 import { Task } from "./task.js"
+import { TaskCard } from "./task-card.js"
 import { TaskTrail } from "./task/trail.js"
 
 export interface Reply {
@@ -66,7 +67,8 @@ export const layer = Layer.effect(
     const brainHost = yield* BrainHost.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const tasks = yield* Task.Service
-    const cards = yield* GitHubTaskCard.Service
+    const cards = yield* TaskCard.Service
+    const slackCards = yield* SlackTaskCard.Service
     const drives = yield* Drives.Service
     const thread = Database.Schema.channel_thread
     const install = Database.Schema.channel_install
@@ -348,6 +350,8 @@ export const layer = Layer.effect(
           .from(install)
           .where(and(eq(install.provider, provider), eq(install.workspace, received.install)))).at(0)
         if (!installed) return yield* Effect.logWarning(`A ${provider} signal names no install: ${received.install}`)
+        if (received.kind === "links_shared") return yield* slackCards.unfurl(installed.organizationId, received)
+        if (received.kind === "details_requested") return yield* slackCards.present(installed.organizationId, received)
         if (received.kind === "pull_request_merged") {
           const done = yield* tasks.completeMerged(installed.organizationId, received.link, received.url)
           return yield* Effect.logInfo(`${received.url} merged; ${done.length} tasks are done`)

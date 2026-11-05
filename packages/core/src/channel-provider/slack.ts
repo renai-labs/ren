@@ -26,6 +26,13 @@ const SlackEvent = Schema.Struct({
   attachments: Schema.optionalKey(Schema.Unknown),
   files: Schema.optionalKey(Schema.Unknown),
   tokens: Schema.optionalKey(Schema.Struct({ bot: Schema.optionalKey(Schema.Array(Schema.String)) })),
+  message_ts: Schema.optionalKey(Schema.String),
+  unfurl_id: Schema.optionalKey(Schema.String),
+  source: Schema.optionalKey(Schema.String),
+  links: Schema.optionalKey(Schema.Array(Schema.Struct({ url: Schema.String }))),
+  trigger_id: Schema.optionalKey(Schema.String),
+  entity_url: Schema.optionalKey(Schema.String),
+  external_ref: Schema.optionalKey(Schema.Struct({ id: Schema.optionalKey(Schema.String) })),
 })
 
 const Envelope = Schema.Struct({
@@ -385,8 +392,40 @@ const messageOf = (
   }
 }
 
+const linksShared = (delivery: Delivery, event: typeof SlackEvent.Type): Channel.Parsed =>
+  event.channel && event.message_ts && event.links
+    ? {
+        _tag: "Signal",
+        signal: {
+          kind: "links_shared",
+          install: delivery.install,
+          place: event.channel,
+          message: event.message_ts,
+          ...(event.unfurl_id && event.source && { unfurl: { id: event.unfurl_id, source: event.source } }),
+          urls: event.links.map((link) => link.url),
+        },
+      }
+    : ignore("Slack sent a link_shared with no channel, message or links")
+
+const detailsRequested = (delivery: Delivery, event: typeof SlackEvent.Type): Channel.Parsed =>
+  event.trigger_id && event.entity_url
+    ? {
+        _tag: "Signal",
+        signal: {
+          kind: "details_requested",
+          install: delivery.install,
+          ...(event.channel && { place: event.channel }),
+          trigger: event.trigger_id,
+          url: event.entity_url,
+          ...(event.external_ref?.id && { externalId: event.external_ref.id }),
+        },
+      }
+    : ignore("Slack sent an entity_details_requested with no trigger or entity URL")
+
 const fromEvent = (delivery: Delivery, event: typeof SlackEvent.Type): Channel.Parsed => {
   if (uninstalls(event)) return { _tag: "Uninstalled", install: delivery.install }
+  if (event.type === "link_shared") return linksShared(delivery, event)
+  if (event.type === "entity_details_requested") return detailsRequested(delivery, event)
   const kind = kindOf(event)
   if (!kind) return ignore(`Slack ${[event.type, event.channel_type].filter(Boolean).join(".")} is not handled`)
   const reason = ignoredBecause(delivery.bot, event, kind)
@@ -622,7 +661,12 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
       const token = yield* tokenOf(target.install)
       const thread = threadOf(target)
       const sent = yield* post(text, charts, (payload) =>
-        app.post("chat.postMessage", { channel: thread.channel, thread_ts: thread.ts, ...payload }, Posted, token),
+        app.post(
+          "chat.postMessage",
+          { channel: thread.channel, thread_ts: thread.ts, unfurl_links: false, ...payload },
+          Posted,
+          token,
+        ),
       ).pipe(Effect.mapError(delivery))
       return sent.charts
     }),
@@ -755,7 +799,9 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
     }),
     announce: Effect.fn("Slack.announce")(function* (workspace, place, text) {
       const token = yield* tokenOf(workspace)
-      yield* app.post("chat.postMessage", { channel: place.id, text }, Posted, token).pipe(Effect.mapError(delivery))
+      yield* app
+        .post("chat.postMessage", { channel: place.id, text, unfurl_links: false }, Posted, token)
+        .pipe(Effect.mapError(delivery))
     }),
   }
 }
