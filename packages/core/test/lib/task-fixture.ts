@@ -15,6 +15,7 @@ import { EgressControl } from "../../src/egress-control.js"
 import type { Actor } from "../../src/actor.js"
 import { BrainRegistry } from "../../src/brain-registry.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
+import { GitHubTaskCard } from "../../src/github-task-card.js"
 import { Label } from "../../src/label.js"
 import { Models } from "../../src/models.js"
 import { SessionRunner } from "../../src/session/runner.js"
@@ -27,7 +28,9 @@ import { testEffect } from "./effect.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
 
-export const harness = () => {
+export const harness = (
+  cards: Layer.Layer<GitHubTaskCard.Service, never, Database.Service> = GitHubTaskCard.layerNone,
+) => {
   const stub = Shared.stub()
   const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.url)
   const models = Layer.succeed(
@@ -43,7 +46,9 @@ export const harness = () => {
     stub,
     it: testEffect(
       Layer.mergeAll(Task.layer, TaskComment.layer, TaskActivity.layer, Label.layer).pipe(
-        Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer, SessionRunner.layer, ChannelNotice.layerLog)),
+        Layer.provideMerge(
+          Layer.mergeAll(Space.layer, SpaceMember.layer, SessionRunner.layer, ChannelNotice.layerLog, cards),
+        ),
         Layer.provideMerge(BrainRegistry.layer),
         Layer.provideMerge(Host.layer({}, models)),
         Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),

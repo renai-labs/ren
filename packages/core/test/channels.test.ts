@@ -7,7 +7,7 @@ import { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq, inArray } from "drizzle-orm"
+import { and, eq, inArray, isNull } from "drizzle-orm"
 import { Deferred, Effect, Layer, Option, Schedule } from "effect"
 import { ChannelIdentity } from "../src/channel-identity.js"
 import { ChannelInstalls } from "../src/channel-installs.js"
@@ -1238,6 +1238,61 @@ describe("Channels and tasks", () => {
           },
         ])
       }),
+  )
+
+  it.live("a pull request that names tasks by ID, by branch or by task URL links each one once", () =>
+    Effect.gen(function* () {
+      const setup = yield* tasked
+      const tasks = yield* Task.Service
+      const database = yield* Database.Service
+      const byUrl = yield* tasks.create(setup.owner, { spaceId: setup.spaceId, title: "Named by URL" })
+      const byId = yield* tasks.create(setup.owner, { spaceId: setup.spaceId, title: "Named by ID" })
+      const unnamed = yield* tasks.create(setup.owner, { spaceId: setup.spaceId, title: "Not named" })
+      const prefix = setup.task.identifier.slice(0, setup.task.identifier.lastIndexOf("-"))
+      const pull = "https://github.com/acme/web/pull/52"
+      const mention = JSON.stringify({
+        type: "signal",
+        signal: {
+          kind: "mentioned",
+          install: setup.subject.install,
+          link: { kind: "github_pr", key: "acme/web#52" },
+          url: pull,
+          text: [
+            `${setup.task.identifier.toLowerCase()}-fix-deploy`,
+            `Fix the deploy, see ${ChannelFixture.app}/tasks/${byUrl.id}`,
+            `Closes ${byId.identifier}. Not X${prefix}-${unnamed.number}, not ${prefix}-${unnamed.number}0, not OTHER-${unnamed.number}.`,
+          ].join("\n"),
+        },
+      })
+      expect(yield* ChannelFixture.receive(mention)).toEqual({ status: 200 })
+      expect(yield* ChannelFixture.receive(mention)).toEqual({ status: 200 })
+      const after = yield* Effect.forEach([setup.task.id, byUrl.id, byId.id, unnamed.id], (id) =>
+        tasks.get(setup.owner, id),
+      )
+      expect(after.map((task) => task.links.some((link) => link.url === pull))).toEqual([true, true, true, false])
+      const linked = yield* database.db
+        .select({
+          taskId: Database.Schema.task_event.task_id,
+          data: Database.Schema.task_event.data,
+          userId: Database.Schema.task_event.actor_user_id,
+        })
+        .from(Database.Schema.task_event)
+        .where(
+          and(
+            eq(Database.Schema.task_event.kind, "link"),
+            inArray(Database.Schema.task_event.task_id, [setup.task.id, byUrl.id, byId.id, unnamed.id]),
+            isNull(Database.Schema.task_event.actor_user_id),
+          ),
+        )
+        .orderBy(Database.Schema.task_event.task_id)
+      expect(linked).toEqual(
+        [setup.task.id, byUrl.id, byId.id].toSorted().map((taskId) => ({
+          taskId,
+          data: { _tag: "link", added: [pull], removed: [] },
+          userId: null,
+        })),
+      )
+    }),
   )
 
   it.live("a merged pull request sets each open task that links it to done once, with GitHub in the trail", () =>

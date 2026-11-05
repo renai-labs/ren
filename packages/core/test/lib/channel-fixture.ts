@@ -31,6 +31,7 @@ import { ChannelInstalls } from "../../src/channel-installs.js"
 import { ChannelSecrets } from "../../src/channel-secrets.js"
 import { ChannelMappings } from "../../src/channel-mappings.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
+import { GitHubTaskCard } from "../../src/github-task-card.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
 import { ChannelTurns } from "../../src/channel-turns.js"
 import { EgressControl } from "../../src/egress-control.js"
@@ -342,7 +343,7 @@ const core = (held: boolean) =>
     ChannelMappings.layer,
     SessionSync.layer,
   ).pipe(
-    Layer.provideMerge(notices),
+    Layer.provideMerge(Layer.mergeAll(notices, GitHubTaskCard.layerNone)),
     Layer.provideMerge(
       Layer.mergeAll(
         BrainRegistry.layer,

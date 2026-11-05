@@ -28,7 +28,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 
 - The default branch is `main`.
 - Commits and PR titles use `type(scope): summary` with one of `feat`, `fix`, `docs`, `chore`, `refactor`, `test`. The scope is optional.
-- Branch names are at most three hyphenated words, with no prefix such as `feat/`.
+- Branch names are at most three hyphenated words, with no prefix such as `feat/`. A branch for a Ren task starts with the lowercase task ID: `renai-35-github-linkback`.
 - A branch that adds or pulls a git subtree (`repos/effect`, `repos/iron-proxy`) lands on `main` with its history: a fast-forward or a merge commit. Rebase-merge and squash-merge drop the subtree commits; GitHub's rebase also refuses, because a subtree squash commit has no parent and its files sit at the root.
 
 ## Layering

@@ -53,6 +53,9 @@ export interface Instance {
   readonly minted: Array<string>
   readonly resources: Map<string, unknown>
   readonly posted: Array<{ readonly path: string; readonly body: unknown; readonly authorization: string | null }>
+  readonly patched: Array<{ readonly path: string; readonly body: unknown }>
+  readonly comments: Map<string, Array<{ readonly id: number; body: string; readonly user: { readonly id: number } }>>
+  readonly writes: Set<() => void>
   readonly removed: Array<string>
   readonly repositories: Array<{
     readonly id: number
@@ -62,10 +65,15 @@ export interface Instance {
     readonly html_url?: string
   }>
   readonly options: { failDelete: boolean; tokenExpiresAt: string; postStatus: number; unavailable: boolean }
+  readonly written: (count: number) => Promise<void>
   readonly stop: () => void
 }
 
-type State = Omit<Instance, "url" | "stop">
+type State = Omit<Instance, "url" | "stop" | "written">
+
+const Body = Schema.Struct({ body: Schema.String })
+
+const issueComments = /^\/repos\/[^/]+\/[^/]+\/issues\/\d+\/comments$/u
 
 const exchange = async (state: State, request: Request) => {
   const body = Schema.decodeUnknownSync(Exchange)(await request.text())
@@ -127,16 +135,37 @@ const appInstallation = (state: State, request: Request, id: string, options: { 
 
 const resource = (state: State, request: Request, url: URL) => {
   if (!request.headers.get("authorization")?.startsWith("Bearer ghs_")) return new Response(null, { status: 401 })
-  const found = state.resources.get(url.pathname)
+  const found =
+    state.resources.get(url.pathname) ??
+    (issueComments.test(url.pathname) ? (state.comments.get(url.pathname) ?? []) : undefined)
   return found === undefined ? new Response(null, { status: 404 }) : Response.json(found)
 }
 
 const post = async (state: State, request: Request, url: URL) => {
   const authorization = request.headers.get("authorization")
-  state.posted.push({ path: url.pathname, body: await request.json(), authorization })
+  const body: unknown = await request.json()
+  state.posted.push({ path: url.pathname, body, authorization })
+  if (issueComments.test(url.pathname) && state.options.postStatus < 300)
+    state.comments.set(url.pathname, [
+      ...(state.comments.get(url.pathname) ?? []),
+      { id: state.posted.length, body: Schema.decodeUnknownSync(Body)(body).body, user: { id: 9001 } },
+    ])
+  for (const written of state.writes) written()
   return state.options.postStatus < 300
     ? Response.json({ id: state.posted.length }, { status: state.options.postStatus })
     : Response.json({ message: "Not Found" }, { status: state.options.postStatus })
+}
+
+const patch = async (state: State, request: Request, url: URL) => {
+  if (!request.headers.get("authorization")?.startsWith("Bearer ghs_")) return new Response(null, { status: 401 })
+  const body: unknown = await request.json()
+  const id = Number(url.pathname.split("/").at(-1))
+  const found = [...state.comments.values()].flat().find((comment) => comment.id === id)
+  if (!found) return new Response(null, { status: 404 })
+  found.body = Schema.decodeUnknownSync(Body)(body).body
+  state.patched.push({ path: url.pathname, body })
+  for (const written of state.writes) written()
+  return Response.json(found)
 }
 
 const repositories = (state: State, request: Request, url: URL) => {
@@ -157,6 +186,7 @@ const repositories = (state: State, request: Request, url: URL) => {
 const api = (state: State, request: Request, url: URL) => {
   if (/^\/(?:repositories|installation)\//u.test(url.pathname)) return repositories(state, request, url)
   if (request.method === "POST") return post(state, request, url)
+  if (request.method === "PATCH") return patch(state, request, url)
   if (request.method !== "DELETE") return resource(state, request, url)
   state.removed.push(url.pathname)
   return new Response(null, { status: 204 })
@@ -170,6 +200,9 @@ export const start = (): Instance => {
     minted: [],
     resources: new Map(),
     posted: [],
+    patched: [],
+    comments: new Map(),
+    writes: new Set(),
     removed: [],
     repositories: [],
     options: { failDelete: false, tokenExpiresAt: "2027-01-15T08:00:00Z", postStatus: 201, unavailable: false },
@@ -190,5 +223,15 @@ export const start = (): Instance => {
       return appInstallation(state, request, match[1], { tokens: request.method === "POST" && Boolean(match[2]) })
     },
   })
-  return { ...state, url: server.url.origin, stop: () => void server.stop(true) }
+  const written = (count: number) =>
+    new Promise<void>((resolve) => {
+      const check = () => {
+        if (state.posted.length + state.patched.length < count) return
+        state.writes.delete(check)
+        resolve()
+      }
+      state.writes.add(check)
+      check()
+    })
+  return { ...state, url: server.url.origin, written, stop: () => void server.stop(true) }
 }

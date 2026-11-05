@@ -17,6 +17,7 @@ import { ChannelProvider } from "./channel-provider.js"
 import { ChannelRoute } from "./channel-route.js"
 import { Drives } from "./drives.js"
 import { DurableRunner } from "./durable-runner.js"
+import { GitHubTaskCard } from "./github-task-card.js"
 import { SessionRunner } from "./session/runner.js"
 import { Task } from "./task.js"
 import { TaskTrail } from "./task/trail.js"
@@ -65,6 +66,7 @@ export const layer = Layer.effect(
     const brainHost = yield* BrainHost.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const tasks = yield* Task.Service
+    const cards = yield* GitHubTaskCard.Service
     const drives = yield* Drives.Service
     const thread = Database.Schema.channel_thread
     const install = Database.Schema.channel_install
@@ -336,6 +338,7 @@ export const layer = Layer.effect(
           )
         }),
       )
+      yield* cards.refresh(task.id)
     })
 
     const signal = (provider: Channel.Provider, received: Channel.Signal) =>
@@ -345,8 +348,12 @@ export const layer = Layer.effect(
           .from(install)
           .where(and(eq(install.provider, provider), eq(install.workspace, received.install)))).at(0)
         if (!installed) return yield* Effect.logWarning(`A ${provider} signal names no install: ${received.install}`)
-        const done = yield* tasks.completeMerged(installed.organizationId, received.link, received.url)
-        yield* Effect.logInfo(`${received.url} merged; ${done.length} tasks are done`)
+        if (received.kind === "pull_request_merged") {
+          const done = yield* tasks.completeMerged(installed.organizationId, received.link, received.url)
+          return yield* Effect.logInfo(`${received.url} merged; ${done.length} tasks are done`)
+        }
+        const linked = yield* tasks.linkMentioned(installed.organizationId, received.url, received.text)
+        if (linked.length > 0) yield* Effect.logInfo(`${received.url} names ${linked.length} tasks; linked`)
       }).pipe(
         Effect.as({ status: 200 } satisfies Reply),
         Effect.catchCause((cause) =>
@@ -516,6 +523,7 @@ export const layer = Layer.effect(
           return { status: 200 } satisfies Reply
         }
         if (value._tag === "Signal") return yield* signal(found.value.id, value.signal)
+        if (value.signal) yield* signal(found.value.id, value.signal)
         return yield* DurableRunner.ensure(EventRun, {
           event: value.event,
           messageId: Session.MessageID.create(),

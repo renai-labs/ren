@@ -16,6 +16,7 @@ import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { ChannelNotice } from "./channel-notice.js"
+import { GitHubTaskCard } from "./github-task-card.js"
 import { Primitive } from "./primitive.js"
 import { SessionRunner } from "./session/runner.js"
 import { TaskPolicy } from "./task/policy.js"
@@ -38,6 +39,11 @@ export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assig
     organizationId: Auth.OrganizationID,
     link: TaskLink.Ref,
     url: string,
+  ) => Effect.Effect<ReadonlyArray<Task.ID>>
+  readonly linkMentioned: (
+    organizationId: Auth.OrganizationID,
+    url: string,
+    text: string,
   ) => Effect.Effect<ReadonlyArray<Task.ID>>
   readonly runEnded: (sessionId: Session.ID) => Effect.Effect<void>
 }
@@ -216,6 +222,7 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const runner = yield* SessionRunner.Service
     const notices = yield* ChannelNotice.Service
+    const cards = yield* GitHubTaskCard.Service
 
     const reread = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Task.ID) {
       const rows = yield* TaskQueries.select(transaction, actor).where(eq(Database.Schema.task.id, id))
@@ -523,13 +530,17 @@ export const layer = Layer.effect(
           sessionId: actor.agent?.sessionId,
         })
       const start = input.start ?? assigned.start ?? (assigned.agentChanged ? "continue" : "none")
-      if (start === "none" || !assigned.hasAgent) return { task: yield* read(actor, id), start: "none" }
+      if (start === "none" || !assigned.hasAgent) {
+        yield* cards.refresh(id)
+        return { task: yield* read(actor, id), start: "none" }
+      }
       const started = yield* launch(actor, id, start).pipe(
         Effect.as("started" as const),
         Effect.catch((error) =>
           Effect.logWarning("The task’s agent did not start", error).pipe(Effect.as("failed" as const)),
         ),
       )
+      yield* cards.refresh(id)
       return { task: yield* read(actor, id), start: started }
     })
 
@@ -624,7 +635,75 @@ export const layer = Layer.effect(
               return open.map((task) => task.id)
             }),
           )
+          .pipe(
+            Effect.orDie,
+            Effect.tap((done) => Effect.forEach(done, cards.refresh, { discard: true })),
+          )
+      }),
+      linkMentioned: Effect.fn("Task.linkMentioned")(function* (
+        organizationId: Auth.OrganizationID,
+        url: string,
+        text: string,
+      ) {
+        const prefix = (yield* database.db
+          .select({ prefix: Database.Schema.task_sequence.prefix })
+          .from(Database.Schema.task_sequence)
+          .where(eq(Database.Schema.task_sequence.organization_id, organizationId))
+          .pipe(Effect.orDie)).at(0)?.prefix
+        if (!prefix) return []
+        const quoted = prefix.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&")
+        const named = new RegExp(`(?<![\\p{L}\\p{N}])${quoted}-(\\d{1,9})(?!\\d)`, "giu")
+        const numbers = Array.dedupe([...text.matchAll(named)].map((match) => Number(match.at(1))))
+        const ids = Array.dedupe(
+          [...text.matchAll(/\/tasks\/(tsk_[0-9A-Z]{26})(?![0-9A-Za-z])/gu)].flatMap((match) =>
+            Option.match(Option.fromNullishOr(match.at(1)), { onNone: () => [], onSome: (id) => [Task.ID.make(id)] }),
+          ),
+        )
+        if (numbers.length === 0 && ids.length === 0) return []
+        const found = yield* database.db
+          .select({ id: Database.Schema.task.id })
+          .from(Database.Schema.task)
+          .where(
+            and(
+              eq(Database.Schema.task.organization_id, organizationId),
+              isNull(Database.Schema.task.archived_at),
+              or(
+                numbers.length > 0 ? inArray(Database.Schema.task.number, numbers) : undefined,
+                ids.length > 0 ? inArray(Database.Schema.task.id, ids) : undefined,
+              ),
+            ),
+          )
+          .orderBy(asc(Database.Schema.task.id))
           .pipe(Effect.orDie)
+        const linked = yield* Effect.forEach(found, (row) =>
+          database
+            .transaction((transaction) =>
+              Effect.gen(function* () {
+                const target = { id: row.id, organizationId }
+                yield* transaction
+                  .select({ id: Database.Schema.task.id })
+                  .from(Database.Schema.task)
+                  .where(eq(Database.Schema.task.id, row.id))
+                  .for("update")
+                const events = yield* editLinks(transaction, target, [url], [])
+                if (events.length === 0) return []
+                yield* transaction
+                  .update(Database.Schema.task)
+                  .set({ updated_at: sql`now()` })
+                  .where(eq(Database.Schema.task.id, row.id))
+                yield* TaskTrail.record(transaction, target, null, events)
+                return [row.id]
+              }),
+            )
+            .pipe(
+              Effect.catchTag("Primitive.Invalid", (error) =>
+                Effect.logWarning(`${url} was not linked to ${row.id}: ${error.message}`).pipe(Effect.as([])),
+              ),
+              Effect.orDie,
+            ),
+        ).pipe(Effect.map((each) => each.flat()))
+        yield* Effect.forEach(linked, cards.refresh, { discard: true })
+        return linked
       }),
       // oxlint-disable-next-line ren/no-comments -- A governed agent's run must end with a handoff or a review request, else a person must look. Lock first, then read the trail, so the check sees what committed while it waited. OpenCode keeps a session's last idle, so only an idle after the run's start counts.
       runEnded: Effect.fn("Task.runEnded")(function* (sessionId: Session.ID) {
@@ -729,7 +808,7 @@ export const layer = Layer.effect(
         )
       }),
       create: Effect.fn("Task.create")(function* (actor: Actor.Info, input: Task.CreateInput) {
-        return yield* database.transaction((transaction) =>
+        const created = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* TaskQueries.writableSpace(transaction, access, actor, input.spaceId, actions.create)
             yield* TaskQueries.checkAssignment(transaction, actor.organizationId, input.spaceId, input)
@@ -801,11 +880,13 @@ export const layer = Layer.effect(
             return yield* reread(transaction, actor, task.id)
           }),
         )
+        yield* cards.refresh(created.id)
+        return created
       }),
       update: Effect.fn("Task.update")(function* (actor: Actor.Info, id: Task.ID, input: Task.UpdateInput) {
         if (input.parentId === id)
           return yield* new Primitive.Invalid({ message: "A task cannot be its own parent.", field: "parentId" })
-        return yield* database.transaction((transaction) =>
+        const updated = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             // oxlint-disable-next-line ren/no-comments -- Reparents in one organization take turns, so two tasks made each other's parent cannot lock their rows in opposite orders.
             if (input.parentId)
@@ -862,9 +943,11 @@ export const layer = Layer.effect(
                 })
                 .where(eq(Database.Schema.task.id, id))
             yield* TaskTrail.record(transaction, task, actor, events)
-            return yield* reread(transaction, actor, id)
+            return { task: yield* reread(transaction, actor, id), changed: events.length > 0 }
           }),
         )
+        if (updated.changed) yield* cards.refresh(id)
+        return updated.task
       }),
       archive: Effect.fn("Task.archive")(function* (actor: Actor.Info, id: Task.ID) {
         return yield* database.transaction((transaction) =>
@@ -900,9 +983,11 @@ export const layer = Layer.effect(
       }),
       handOff,
       start: Effect.fn("Task.start")(function* (actor: Actor.Info, id: Task.ID, input: Task.StartInput) {
-        return yield* launch(actor, id, input.mode).pipe(
+        const started = yield* launch(actor, id, input.mode).pipe(
           Effect.catchTags({ BrainUnavailable: Effect.die, BrainRejectedError: Effect.die }),
         )
+        yield* cards.refresh(id)
+        return started
       }),
       review: Effect.fn("Task.review")(function* (actor: Actor.Info, id: Task.ID, input: Task.ReviewInput) {
         const decided = yield* database.transaction((transaction) =>
@@ -941,7 +1026,9 @@ export const layer = Layer.effect(
           })
         const start = input.humanReview ? "none" : (input.start ?? reviewStart)
         if (Option.isNone(decided.decided) || start === "none") return yield* read(actor, id)
-        return yield* launchAfterCommit(actor, id, "continue", decided.decided.value)
+        const started = yield* launchAfterCommit(actor, id, "continue", decided.decided.value)
+        yield* cards.refresh(id)
+        return started
       }),
     })
   }),

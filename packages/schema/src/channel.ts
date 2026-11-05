@@ -77,21 +77,32 @@ export const Event = Schema.Struct({
   }),
 }).annotate({ identifier: "Channel.Event" })
 
-export interface Signal extends Schema.Schema.Type<typeof Signal> {}
-export const Signal = Schema.Struct({
-  kind: Schema.Literal("pull_request_merged"),
-  install: Schema.NonEmptyString,
-  link: Schema.Struct({
-    kind: TaskLink.Kind,
-    key: Schema.String.annotate({ description: "The canonical key of the linked item, such as acme/web#41." }),
+const SignalLink = Schema.Struct({
+  kind: TaskLink.Kind,
+  key: Schema.String.annotate({ description: "The canonical key of the linked item, such as acme/web#41." }),
+})
+
+export const Signal = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("pull_request_merged"),
+    install: Schema.NonEmptyString,
+    link: SignalLink,
+    url: Schema.String,
   }),
-  url: Schema.String,
-}).annotate({ identifier: "Channel.Signal", description: "A provider event that changes tasks and starts no turn." })
+  Schema.Struct({
+    kind: Schema.Literal("mentioned"),
+    install: Schema.NonEmptyString,
+    link: SignalLink,
+    url: Schema.String,
+    text: Schema.String.annotate({ description: "The text that can name tasks, such as a branch, title and body." }),
+  }),
+]).annotate({ identifier: "Channel.Signal", description: "A provider event that changes tasks and starts no turn." })
+export type Signal = typeof Signal.Type
 
 export const Parsed = Schema.Union([
   Schema.TaggedStruct("Handshake", { body: Schema.Json }),
   Schema.TaggedStruct("Ignore", { reason: Schema.String }),
-  Schema.TaggedStruct("Event", { event: Event }),
+  Schema.TaggedStruct("Event", { event: Event, signal: Schema.optionalKey(Signal) }),
   Schema.TaggedStruct("Uninstalled", { install: Schema.NonEmptyString }),
   Schema.TaggedStruct("Signal", { signal: Signal }),
 ]).annotate({ identifier: "Channel.Parsed" })
