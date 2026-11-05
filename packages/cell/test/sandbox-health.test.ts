@@ -44,4 +44,36 @@ describe("SandboxHealth", () => {
       expect(yield* Effect.promise(() => Bun.file(join(state, "brain.exit")).exists())).toBe(false)
     }),
   )
+
+  it.live("reports a brain that the watchdog stopped once, as stuck and not as an exit", () =>
+    Effect.gen(function* () {
+      const state = yield* Effect.promise(() => mkdtemp(join(tmpdir(), "ren-health-")))
+      yield* Effect.promise(() =>
+        Promise.all([Bun.write(join(state, "brain.stuck"), "120\n"), Bun.write(join(state, "brain.exit"), "137\n")]),
+      )
+      const errors: Array<{ readonly message: unknown; readonly name: unknown }> = []
+      const check = yield* SandboxHealth.make({ state, memoryEvents: join(state, "memory.events") })
+      const run = check.pipe(
+        Effect.provide(
+          Logger.layer([
+            Logger.make((log) => {
+              const reason = log.cause.reasons.at(0)
+              if (log.logLevel === "Error")
+                errors.push({
+                  message: log.message,
+                  name: reason?._tag === "Die" && reason.defect instanceof Error ? reason.defect.name : undefined,
+                })
+            }),
+          ]),
+        ),
+      )
+
+      yield* run
+      yield* run
+
+      expect(errors).toEqual([
+        { message: ["The brain did not answer for 120 s; the sandbox restarted it"], name: "BrainStuck" },
+      ])
+    }),
+  )
 })
