@@ -33,6 +33,8 @@ export const botScopes = [
   "im:history",
   "im:read",
   "im:write",
+  "links:read",
+  "links:write",
   "reactions:read",
   "reactions:write",
   "users:read",

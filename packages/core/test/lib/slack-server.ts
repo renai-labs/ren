@@ -1,5 +1,6 @@
 export * as SlackServer from "./slack-server.js"
 
+import { Schema } from "effect"
 import { createHmac } from "node:crypto"
 
 const signingSecret = "slack-signing"
@@ -40,6 +41,14 @@ interface Reply {
   readonly files?: ReadonlyArray<object>
 }
 
+export interface Posted {
+  ts: string
+  readonly user: string
+  text: string
+  blocks?: unknown
+  metadata?: unknown
+}
+
 interface Channel {
   readonly id: string
   readonly name: string
@@ -53,6 +62,7 @@ export interface Instance {
   readonly channels: Array<Channel>
   readonly uploads: Map<string, string>
   readonly replies: Array<Reply>
+  readonly threads: Map<string, Array<Posted>>
   readonly users: Map<string, User>
   readonly files: Map<string, string>
   readonly posted: Array<{ readonly method: string; readonly token: string; readonly params: Params }>
@@ -61,6 +71,7 @@ export interface Instance {
     revokeError: string | undefined
     postError: string | undefined
     chartError: string | undefined
+    metadataError: string | undefined
   }
   readonly stop: () => void
 }
@@ -100,6 +111,19 @@ const conversations = (state: State, params: Params) => {
 }
 
 const replies = (state: State, params: Params) => {
+  const thread = state.threads.get(`${params.channel}:${params.ts}`)
+  if (thread)
+    return answer({
+      messages:
+        params.include_all_metadata === "true"
+          ? thread
+          : thread.map((message) => ({
+              ts: message.ts,
+              user: message.user,
+              text: message.text,
+              blocks: message.blocks,
+            })),
+    })
   const start = Number(params.cursor ?? "0")
   const next = start + Number(params.limit ?? "50")
   const messages = state.replies.filter((reply) => !params.latest || Number(reply.ts) < Number(params.latest))
@@ -123,16 +147,47 @@ const lookup = (state: State, name: string, params: Params, origin: string) => {
         })
       : refuse("user_not_found")
   }
+  if (name === "users.lookupByEmail") {
+    const found = [...state.users].find((entry) => entry[1].email === params.email)
+    return found ? answer({ user: { id: found[0] } }) : refuse("users_not_found")
+  }
   return name === "chat.getPermalink"
     ? answer({ permalink: `${origin}/archives/${params.channel}/p${(params.message_ts ?? "").replace(".", "")}` })
     : undefined
+}
+
+const decodeJson = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))
+
+const parsed = (value: string | undefined): unknown => (value === undefined ? undefined : decodeJson(value))
+
+const keep = (state: State, name: string, params: Params, ts: string) => {
+  if (name === "chat.postMessage") {
+    state.threads.get(`${params.channel}:${params.thread_ts}`)?.push({
+      ts,
+      user: "UBOT",
+      text: params.text ?? "",
+      blocks: parsed(params.blocks),
+      metadata: parsed(params.metadata),
+    })
+  }
+  if (name === "chat.update") {
+    const found = [...state.threads.values()].flat().find((message) => message.ts === params.ts)
+    if (!found) return
+    found.text = params.text ?? found.text
+    found.blocks = parsed(params.blocks) ?? found.blocks
+    found.metadata = parsed(params.metadata) ?? found.metadata
+  }
 }
 
 const post = (state: State, name: string, token: string, params: Params) => {
   state.posted.push({ method: name, token, params })
   if (state.options.chartError && params.blocks?.includes('"data_visualization"'))
     return refuse(state.options.chartError)
-  return state.options.postError ? refuse(state.options.postError) : answer({ ts: `${state.posted.length}.0` })
+  if (state.options.metadataError && params.metadata) return refuse(state.options.metadataError)
+  if (state.options.postError) return refuse(state.options.postError)
+  const ts = `${state.posted.length}.0`
+  keep(state, name, params, ts)
+  return answer({ ts })
 }
 
 const method = (state: State, name: string, token: string, params: Params, origin: string) => {
@@ -170,10 +225,17 @@ export const start = (): Instance => {
     channels: [],
     uploads: new Map(),
     replies: [],
+    threads: new Map(),
     users: new Map(),
     files: new Map(),
     posted: [],
-    options: { pageSize: 200, revokeError: undefined, postError: undefined, chartError: undefined },
+    options: {
+      pageSize: 200,
+      revokeError: undefined,
+      postError: undefined,
+      chartError: undefined,
+      metadataError: undefined,
+    },
   }
   const server = Bun.serve({
     hostname: "127.0.0.1",

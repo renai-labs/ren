@@ -99,7 +99,26 @@ export const Signal = Schema.Union([
     sender: Sender.annotate({ description: "Who opened or edited the item." }),
     text: Schema.String.annotate({ description: "The text that can name tasks, such as a branch, title and body." }),
   }),
-]).annotate({ identifier: "Channel.Signal", description: "A provider event that changes tasks and starts no turn." })
+  Schema.Struct({
+    kind: Schema.Literal("links_shared"),
+    install: Schema.NonEmptyString,
+    place: Schema.String.annotate({ description: "The Slack channel, or COMPOSER for a message not yet sent." }),
+    message: Schema.String.annotate({ description: "The ts of the message that has the links." }),
+    unfurl: Schema.optionalKey(Schema.Struct({ id: Schema.String, source: Schema.String })),
+    urls: Schema.Array(Schema.String),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("details_requested"),
+    install: Schema.NonEmptyString,
+    place: Schema.optionalKey(Schema.String).annotate({ description: "The Slack channel of the card, if any." }),
+    trigger: Schema.String.annotate({ description: "The trigger_id that opens the details." }),
+    url: Schema.String,
+    externalId: Schema.optionalKey(Schema.String),
+  }),
+]).annotate({
+  identifier: "Channel.Signal",
+  description: "A provider event that changes or shows tasks and starts no turn.",
+})
 export type Signal = typeof Signal.Type
 
 export const Parsed = Schema.Union([

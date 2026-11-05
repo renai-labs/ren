@@ -16,9 +16,9 @@ import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { ChannelNotice } from "./channel-notice.js"
-import { GitHubTaskCard } from "./github-task-card.js"
 import { Primitive } from "./primitive.js"
 import { SessionRunner } from "./session/runner.js"
+import { TaskCard } from "./task-card.js"
 import { TaskPolicy } from "./task/policy.js"
 import { TaskFactory } from "./task/factory.js"
 import { TaskQueries } from "./task/queries.js"
@@ -223,7 +223,7 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const runner = yield* SessionRunner.Service
     const notices = yield* ChannelNotice.Service
-    const cards = yield* GitHubTaskCard.Service
+    const cards = yield* TaskCard.Service
 
     const reread = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Task.ID) {
       const rows = yield* TaskQueries.select(transaction, actor).where(eq(Database.Schema.task.id, id))
@@ -647,7 +647,13 @@ export const layer = Layer.effect(
           )
           .pipe(
             Effect.orDie,
-            Effect.tap((done) => Effect.forEach(done, cards.refresh, { discard: true })),
+            Effect.tap((done) =>
+              Effect.forEach(
+                done,
+                (taskId) => Effect.andThen(notices.done({ organizationId, taskId }), cards.refresh(taskId)),
+                { discard: true },
+              ),
+            ),
           )
       }),
       linkMentioned: Effect.fn("Task.linkMentioned")(function* (
@@ -798,7 +804,15 @@ export const layer = Layer.effect(
             }),
           )
           .pipe(
-            Effect.flatMap((reviews) => Effect.forEach(reviews, notices.review, { discard: true })),
+            Effect.flatMap((reviews) =>
+              Effect.forEach(
+                reviews,
+                (review) => Effect.andThen(notices.review(review), cards.refresh(review.taskId)),
+                {
+                  discard: true,
+                },
+              ),
+            ),
             Effect.catchCause((cause) => Effect.logError(`The task run of ${sessionId} could not be checked`, cause)),
           )
       }),
@@ -960,14 +974,25 @@ export const layer = Layer.effect(
                 })
                 .where(eq(Database.Schema.task.id, id))
             yield* TaskTrail.record(transaction, task, actor, events)
-            return { task: yield* reread(transaction, actor, id), changed: events.length > 0 }
+            return {
+              task: yield* reread(transaction, actor, id),
+              changed: events.length > 0,
+              done: status === "done",
+              organizationId: row.task.organization_id,
+            }
           }),
         )
+        if (updated.done)
+          yield* notices.done({
+            organizationId: updated.organizationId,
+            taskId: id,
+            sessionId: actor.agent?.sessionId,
+          })
         if (updated.changed) yield* cards.refresh(id)
         return updated.task
       }),
       archive: Effect.fn("Task.archive")(function* (actor: Actor.Info, id: Task.ID) {
-        return yield* database.transaction((transaction) =>
+        const archived = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* TaskQueries.lockForWrite(
               transaction,
@@ -991,9 +1016,14 @@ export const layer = Layer.effect(
                 { _tag: "archived" },
               ]),
             )
-            return yield* reread(transaction, actor, id)
+            return {
+              task: yield* reread(transaction, actor, id),
+              archived: [id, ...subtasks.map((subtask) => subtask.id)],
+            }
           }),
         )
+        yield* Effect.forEach(archived.archived, cards.refresh, { discard: true })
+        return archived.task
       }),
       assign: Effect.fn("Task.assign")(function* (actor: Actor.Info, id: Task.ID, input: Task.AssignInput) {
         return (yield* handOff(actor, id, input)).task
@@ -1042,7 +1072,10 @@ export const layer = Layer.effect(
             sessionId: actor.agent?.sessionId,
           })
         const start = input.humanReview ? "none" : (input.start ?? reviewStart)
-        if (Option.isNone(decided.decided) || start === "none") return yield* read(actor, id)
+        if (Option.isNone(decided.decided) || start === "none") {
+          if (decided.requested || !input.humanReview) yield* cards.refresh(id)
+          return yield* read(actor, id)
+        }
         const started = yield* launchAfterCommit(actor, id, "continue", decided.decided.value)
         yield* cards.refresh(id)
         return started

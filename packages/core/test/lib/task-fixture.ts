@@ -15,13 +15,13 @@ import { EgressControl } from "../../src/egress-control.js"
 import type { Actor } from "../../src/actor.js"
 import { BrainRegistry } from "../../src/brain-registry.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
-import { GitHubTaskCard } from "../../src/github-task-card.js"
 import { Label } from "../../src/label.js"
 import { Models } from "../../src/models.js"
 import { SessionRunner } from "../../src/session/runner.js"
 import { Space } from "../../src/space.js"
 import { SpaceMember } from "../../src/space/member.js"
 import { Task } from "../../src/task.js"
+import { TaskCard } from "../../src/task-card.js"
 import { TaskActivity } from "../../src/task/activity.js"
 import { TaskComment } from "../../src/task/comment.js"
 import { testEffect } from "./effect.js"
@@ -29,7 +29,8 @@ import { Host } from "./host.js"
 import { Seed } from "./seed.js"
 
 export const harness = (
-  cards: Layer.Layer<GitHubTaskCard.Service, never, Database.Service> = GitHubTaskCard.layerNone,
+  cards: Layer.Layer<TaskCard.Service, never, Database.Service> = TaskCard.layerNone,
+  notices: Layer.Layer<ChannelNotice.Service, never, Database.Service> = ChannelNotice.layerLog,
 ) => {
   const stub = Shared.stub()
   const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.url)
@@ -46,9 +47,7 @@ export const harness = (
     stub,
     it: testEffect(
       Layer.mergeAll(Task.layer, TaskComment.layer, TaskActivity.layer, Label.layer).pipe(
-        Layer.provideMerge(
-          Layer.mergeAll(Space.layer, SpaceMember.layer, SessionRunner.layer, ChannelNotice.layerLog, cards),
-        ),
+        Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer, SessionRunner.layer, notices, cards)),
         Layer.provideMerge(BrainRegistry.layer),
         Layer.provideMerge(Host.layer({}, models)),
         Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),

@@ -5,7 +5,9 @@ import { ConfigProvider, Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { GitHubApp } from "../src/github-app.js"
 import { GitHubTaskCard } from "../src/github-task-card.js"
+import { SlackTaskCard } from "../src/slack-task-card.js"
 import { Task } from "../src/task.js"
+import { TaskCard } from "../src/task-card.js"
 import { GitHubServer } from "./lib/github-server.js"
 import { Seed } from "./lib/seed.js"
 import { TaskFixture } from "./lib/task-fixture.js"
@@ -16,7 +18,9 @@ afterAll(() => github.stop())
 const app = "https://ren.test/app"
 
 const it = TaskFixture.harness(
-  GitHubTaskCard.layer.pipe(
+  TaskCard.layer.pipe(
+    Layer.provide(SlackTaskCard.layerNone),
+    Layer.provide(GitHubTaskCard.layer),
     Layer.provide(GitHubApp.layer),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(
