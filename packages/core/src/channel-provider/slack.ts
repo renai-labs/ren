@@ -1,6 +1,7 @@
 export * as Slack from "./slack.js"
 
 import { Channel } from "@ren/schema/channel"
+import { Task } from "@ren/schema/task"
 import type { TaskLink } from "@ren/schema/task-link"
 import { Clock, Effect, Option, Redacted, Result, Schema, Stream, Struct } from "effect"
 import { createHmac, timingSafeEqual } from "node:crypto"
@@ -44,6 +45,16 @@ const Envelope = Schema.Struct({
     Schema.Array(Schema.Struct({ team_id: Schema.NullOr(Schema.String), user_id: Schema.optionalKey(Schema.String) })),
   ),
   event: Schema.optionalKey(SlackEvent),
+})
+
+const Interaction = Schema.Struct({
+  type: Schema.String,
+  team: Schema.optionalKey(Schema.NullOr(Schema.Struct({ id: Schema.String }))),
+  user: Schema.optionalKey(Schema.Struct({ id: Schema.String, team_id: Schema.optionalKey(Schema.String) })),
+  response_url: Schema.optionalKey(Schema.String),
+  actions: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ action_id: Schema.String, value: Schema.optionalKey(Schema.String) })),
+  ),
 })
 
 const Profile = Schema.Struct({
@@ -99,6 +110,12 @@ const Answered = Schema.Struct({})
 const settledReactions: ReadonlySet<string> = new Set(["already_reacted", "no_reaction"])
 
 const decodeEnvelope = Schema.decodeUnknownEffect(Schema.fromJsonString(Envelope))
+
+const decodeInteraction = Schema.decodeUnknownEffect(Schema.fromJsonString(Interaction))
+
+const decodeCardAction = Schema.decodeUnknownOption(Channel.CardAction)
+
+export const taskActionPrefix = "ren_task."
 
 const signatureAge = 5 * 60
 
@@ -422,6 +439,28 @@ const detailsRequested = (delivery: Delivery, event: typeof SlackEvent.Type): Ch
       }
     : ignore("Slack sent an entity_details_requested with no trigger or entity URL")
 
+const fromInteraction = (interaction: typeof Interaction.Type): Channel.Parsed => {
+  if (interaction.type !== "block_actions") return ignore(`Slack ${interaction.type} is not handled`)
+  const clicked = interaction.actions?.at(0)
+  const action = clicked?.action_id.startsWith(taskActionPrefix)
+    ? decodeCardAction(clicked.action_id.slice(taskActionPrefix.length))
+    : Option.none()
+  const install = interaction.team?.id ?? interaction.user?.team_id
+  if (Option.isNone(action) || !Schema.is(Task.ID)(clicked?.value) || !install || !interaction.user)
+    return ignore("Slack sent a click that changes no task")
+  return {
+    _tag: "Signal",
+    signal: {
+      kind: "card_action",
+      install,
+      sender: { accountId: `${interaction.user.team_id ?? install}:${interaction.user.id}` },
+      taskId: clicked.value,
+      action: action.value,
+      ...(interaction.response_url && { responseUrl: interaction.response_url }),
+    },
+  }
+}
+
 const fromEvent = (delivery: Delivery, event: typeof SlackEvent.Type): Channel.Parsed => {
   if (uninstalls(event)) return { _tag: "Uninstalled", install: delivery.install }
   if (event.type === "link_shared") return linksShared(delivery, event)
@@ -523,6 +562,12 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
         return yield* unauthorized("The signature does not match the body")
     }),
     parse: Effect.fnUntraced(function* (request) {
+      if (request.headers.get("content-type")?.startsWith("application/x-www-form-urlencoded"))
+        return fromInteraction(
+          yield* decodeInteraction(new URLSearchParams(request.body).get("payload") ?? "").pipe(
+            Effect.mapError((error) => new ChannelProvider.Malformed({ message: error.message })),
+          ),
+        )
       const body = yield* decodeEnvelope(request.body).pipe(
         Effect.mapError((error) => new ChannelProvider.Malformed({ message: error.message })),
       )

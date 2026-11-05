@@ -4,6 +4,7 @@ import { Schema } from "effect"
 import { Agent } from "./agent.js"
 import { ChannelOrigin } from "./channel-origin.js"
 import { Identifier } from "./identifier.js"
+import { Task } from "./task.js"
 import { TaskLink } from "./task-link.js"
 
 export const Provider = ChannelOrigin.Provider
@@ -79,6 +80,16 @@ export const Event = Schema.Struct({
   }),
 }).annotate({ identifier: "Channel.Event" })
 
+export const CardAction = Schema.Literals([
+  "approve",
+  "start",
+  "request_review",
+  "done",
+  "dismiss",
+  "assign_to_me",
+]).annotate({ identifier: "Channel.CardAction", description: "A button on a task card that changes the task." })
+export type CardAction = typeof CardAction.Type
+
 const SignalLink = Schema.Struct({
   kind: TaskLink.Kind,
   key: Schema.String.annotate({ description: "The canonical key of the linked item, such as acme/web#41." }),
@@ -114,6 +125,16 @@ export const Signal = Schema.Union([
     trigger: Schema.String.annotate({ description: "The trigger_id that opens the details." }),
     url: Schema.String,
     externalId: Schema.optionalKey(Schema.String),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("card_action"),
+    install: Schema.NonEmptyString,
+    sender: Sender.annotate({ description: "Who clicked." }),
+    taskId: Task.ID,
+    action: CardAction,
+    responseUrl: Schema.optionalKey(Schema.String).annotate({
+      description: "Where a private reply to the person who clicked goes.",
+    }),
   }),
 ]).annotate({
   identifier: "Channel.Signal",

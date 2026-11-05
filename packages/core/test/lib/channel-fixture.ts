@@ -43,6 +43,7 @@ import { Drives } from "../../src/drives.js"
 import { Models } from "../../src/models.js"
 import { SessionRunner } from "../../src/session/runner.js"
 import { SessionSync } from "../../src/session-sync.js"
+import { SlackTaskActions } from "../../src/slack-task-actions.js"
 import { SlackTaskCard } from "../../src/slack-task-card.js"
 import { TaskCard } from "../../src/task-card.js"
 import { Task } from "../../src/task.js"
@@ -345,7 +346,7 @@ const core = (held: boolean) =>
     ChannelMappings.layer,
     SessionSync.layer,
   ).pipe(
-    Layer.provideMerge(Layer.mergeAll(notices, TaskCard.layerNone)),
+    Layer.provideMerge(Layer.mergeAll(notices, TaskCard.layerNone, SlackTaskActions.layerNone)),
     Layer.provideMerge(
       Layer.mergeAll(
         BrainRegistry.layer,

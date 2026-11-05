@@ -3,6 +3,7 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
+import { Task } from "@ren/schema/task"
 import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChannelProvider } from "../src/channel-provider.js"
@@ -185,6 +186,48 @@ describe("Slack", () => {
         _tag: "Ignore",
       })
     }),
+  )
+
+  it.live(
+    "a click on a task card button is a signal of the clicker; a link button or another interaction is ignored",
+    () =>
+      Effect.gen(function* () {
+        const slackProvider = yield* provider
+        const clicked = (payload: object) => {
+          const body = new URLSearchParams({ payload: JSON.stringify(payload) }).toString()
+          return slackProvider.parse({
+            headers: new Headers({
+              ...SlackServer.sign(body, Math.floor(Date.now() / 1000)),
+              "content-type": "application/x-www-form-urlencoded",
+            }),
+            body,
+          })
+        }
+        const taskId = Task.ID.make("tsk_01M6NZMF5TRCM677MMNXB5MHQN")
+        const click = (actionId: string) => ({
+          type: "block_actions",
+          team: { id: "T01" },
+          user: { id: "U01", team_id: "T02" },
+          response_url: "https://hooks.slack.com/actions/T01/1/a",
+          actions: [{ action_id: actionId, value: taskId }],
+        })
+        expect(yield* clicked(click("ren_task.approve"))).toEqual({
+          _tag: "Signal",
+          signal: {
+            kind: "card_action",
+            install: "T01",
+            sender: { accountId: "T02:U01" },
+            taskId,
+            action: "approve",
+            responseUrl: "https://hooks.slack.com/actions/T01/1/a",
+          },
+        })
+        expect(yield* clicked(click("ren_task.open_pr"))).toMatchObject({ _tag: "Ignore" })
+        expect(
+          yield* clicked({ ...click("ren_task.approve"), actions: [{ action_id: "ren_task.approve" }] }),
+        ).toMatchObject({ _tag: "Ignore" })
+        expect(yield* clicked({ type: "view_submission", team: { id: "T01" } })).toMatchObject({ _tag: "Ignore" })
+      }),
   )
 
   it.live("places are the public and private channels on every page; more than 25 pages is an error", () =>

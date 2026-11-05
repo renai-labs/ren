@@ -120,6 +120,7 @@ interface Card {
   readonly humanReview: boolean
   readonly archived: boolean
   readonly agent: string | null
+  readonly ownerId: Auth.UserID | null
   readonly person: Auth.UserID | null
   readonly links: ReadonlyArray<{ readonly kind: string; readonly key: string; readonly url: string }>
   readonly sessions: ReadonlyArray<{ readonly sessionId: string; readonly agent: string | null }>
@@ -154,6 +155,35 @@ const summaryFields = (app: string, card: Card) => {
         ]
       : []),
   ]
+}
+
+const actionsOf = (app: string, card: Card) => {
+  const button = (action: Channel.CardAction, text: string) => [
+    { text, action_id: `${Slack.taskActionPrefix}${action}`, value: card.id },
+  ]
+  const link = (name: string, text: string, url: string | undefined) =>
+    url ? [{ text, action_id: `${Slack.taskActionPrefix}open_${name}`, url }] : []
+  const pull = card.links.findLast((each) => each.kind === "github_pr")?.url
+  const issue = card.links.findLast((each) => each.kind === "github_issue")?.url
+  const session = card.sessions.at(-1)
+  const openSession = link("session", "Open session", session && `${app}/sessions/${session.sessionId}`)
+  const openInRen = link("ren", "Open in Ren", `${app}/tasks/${card.identifier}`)
+  const shown = (primary: ReadonlyArray<object>, overflow: ReadonlyArray<object>) => ({
+    ...(primary.length > 0 && { primary_actions: primary }),
+    ...(overflow.length > 0 && { overflow_actions: overflow }),
+  })
+  if (card.archived) return undefined
+  if (!Task.actionable.includes(card.status)) return shown(openInRen, link("pr", "Open PR", pull))
+  if (card.humanReview && pull)
+    return shown(button("approve", "Approve"), [...openSession, ...link("pr", "Open PR", pull)])
+  if (card.humanReview)
+    return shown(button("approve", "Start build"), issue ? link("plan", "Open plan", issue) : openInRen)
+  if (card.status === "in_progress")
+    return shown(openSession, [...button("request_review", "Request review"), ...button("done", "Mark done")])
+  if (card.agent) return shown(button("start", "Start"), [...openInRen, ...button("dismiss", "Dismiss")])
+  if (!card.ownerId)
+    return shown(button("assign_to_me", "Assign to me"), [...openInRen, ...button("dismiss", "Dismiss")])
+  return shown(openInRen, button("dismiss", "Dismiss"))
 }
 
 const listField = (key: string, label: string, lines: ReadonlyArray<string>) =>
@@ -288,6 +318,7 @@ export const layer = Layer.effect(
         humanReview: row.humanReview,
         archived: Boolean(row.archivedAt),
         agent: row.agent,
+        ownerId: row.ownerId,
         person: row.ownerId ?? row.createdBy,
         links,
         sessions,
@@ -345,6 +376,7 @@ export const layer = Layer.effect(
 
     const entityOf = (card: Card, options: { readonly titled: boolean; readonly detailed: boolean }) => {
       const activity = Option.getOrUndefined(card.activity)
+      const actions = actionsOf(app, card)
       return {
         entity_type: "slack#/entities/task",
         url: urlOf(card),
@@ -364,6 +396,7 @@ export const layer = Layer.effect(
             ...(activity && { date_updated: { value: seconds(activity.at) } }),
           },
           custom_fields: [...summaryFields(app, card), ...(options.detailed ? detailFields(app, card, options) : [])],
+          ...(actions && { actions }),
         },
       }
     }
