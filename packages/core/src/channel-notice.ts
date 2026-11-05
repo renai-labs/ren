@@ -1,7 +1,11 @@
 export * as ChannelNotice from "./channel-notice.js"
 
+import { Database } from "@ren/db/database"
+import type { Auth } from "@ren/schema/auth"
 import type { Channel } from "@ren/schema/channel"
 import type { Session } from "@ren/schema/session"
+import type { Task } from "@ren/schema/task"
+import { and, eq, ne, sql } from "drizzle-orm"
 import { Config, Context, Effect, Layer, Option } from "effect"
 import { ChannelProvider } from "./channel-provider.js"
 
@@ -12,8 +16,16 @@ export interface Notice {
   readonly sessionId?: Session.ID
 }
 
+export interface Review {
+  readonly organizationId: Auth.OrganizationID
+  readonly taskId: Task.ID
+  readonly reason: string
+  readonly sessionId?: Session.ID | undefined
+}
+
 export interface Interface {
   readonly notice: (notice: Notice) => Effect.Effect<void>
+  readonly review: (review: Review) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/ChannelNotice") {}
@@ -46,26 +58,78 @@ export const layerLog = Layer.succeed(
           thread: notice.target.thread,
         }),
       ),
+    review: (review) =>
+      Effect.logInfo(`Task review requested: ${review.reason}`).pipe(Effect.annotateLogs({ task: review.taskId })),
   }),
 )
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
+    const database = yield* Database.Service
     const registry = yield* ChannelProvider.Registry
     const app = (yield* Config.String("APP_URL").pipe(Effect.orDie)).replace(/\/$/u, "")
+    const thread = Database.Schema.channel_thread
+    const link = Database.Schema.task_link
+    const send = (provider: Channel.Provider, target: ChannelProvider.Target, text: string, about: string) =>
+      Option.match(registry.get(provider), {
+        onNone: () => Effect.logWarning(`No channel provider ${provider} posts notices`),
+        onSome: (found) =>
+          found
+            .send(target, text)
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning(`A ${provider} notice of ${about} could not be sent`, cause),
+              ),
+            ),
+      })
     return Service.of({
       notice: Effect.fn("ChannelNotice.notice")(function* (notice: Notice) {
-        const provider = registry.get(notice.provider)
-        if (Option.isNone(provider))
-          return yield* Effect.logWarning(`No channel provider ${notice.provider} posts notices`)
-        yield* provider.value
-          .send(notice.target, textOf(notice, app))
-          .pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning(`A ${notice.provider} notice of ${notice.reason} could not be sent`, cause),
+        yield* send(notice.provider, notice.target, textOf(notice, app), notice.reason)
+      }),
+      review: Effect.fn("ChannelNotice.review")(function* (review: Review) {
+        const threads = yield* database.db
+          .select({
+            provider: thread.provider,
+            install: thread.install,
+            thread: thread.thread,
+            place: thread.place_name,
+            message: thread.last_message,
+          })
+          .from(link)
+          .innerJoin(
+            thread,
+            and(
+              eq(thread.organization_id, link.organization_id),
+              eq(thread.provider, "slack"),
+              eq(sql`upper(${thread.thread})`, link.key),
             ),
           )
+          .where(
+            and(
+              eq(link.task_id, review.taskId),
+              eq(link.organization_id, review.organizationId),
+              eq(link.kind, "slack_thread"),
+              review.sessionId ? ne(thread.session_id, review.sessionId) : undefined,
+            ),
+          )
+          .pipe(Effect.orDie)
+        yield* Effect.forEach(
+          threads,
+          (found) =>
+            send(
+              found.provider,
+              {
+                install: found.install,
+                place: found.place ?? found.thread,
+                thread: found.thread,
+                message: found.message ?? "",
+              },
+              `Needs a person: ${review.reason} [Open the task](${app}/tasks/${review.taskId})`,
+              "a review request",
+            ),
+          { discard: true },
+        )
       }),
     })
   }),

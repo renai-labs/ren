@@ -235,7 +235,10 @@ export type Decision = typeof Decision.Type
 export const ReviewInput = Schema.Union([
   Schema.Struct({
     humanReview: Schema.Literal(true),
-    reason: Reason.annotate({ description: "Why a person must act, and what to look at." }),
+    reason: Reason.annotate({
+      description:
+        "Why a person must act, and what to look at. Ren posts it, with a link to the task, to each Slack thread the task links, except the one this session answers.",
+    }),
   }),
   Schema.Struct({
     humanReview: Schema.Literal(false),

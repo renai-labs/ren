@@ -15,6 +15,7 @@ import { Array, Context, DateTime, Effect, Layer, Option, Predicate, Schema } fr
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
+import { ChannelNotice } from "./channel-notice.js"
 import { Primitive } from "./primitive.js"
 import { SessionRunner } from "./session/runner.js"
 import { TaskPolicy } from "./task/policy.js"
@@ -214,6 +215,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const runner = yield* SessionRunner.Service
+    const notices = yield* ChannelNotice.Service
 
     const reread = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Task.ID) {
       const rows = yield* TaskQueries.select(transaction, actor).where(eq(Database.Schema.task.id, id))
@@ -391,8 +393,8 @@ export const layer = Layer.effect(
           )
           const factory = yield* TaskFactory.handOff(transaction, row.task, actor.agent?.agentId, input)
           if (factory._tag === "review") {
-            yield* TaskFactory.requestReview(transaction, row.task, factory.reason)
-            return { hasAgent: false, agentChanged: false, start: undefined }
+            const requested = yield* TaskFactory.requestReview(transaction, row.task, factory.reason)
+            return { hasAgent: false, agentChanged: false, start: undefined, review: requested ? factory.reason : null }
           }
           const next = yield* nextAssignment(transaction, actor, row, {
             spaceId: input.spaceId,
@@ -509,9 +511,17 @@ export const layer = Layer.effect(
             hasAgent: Boolean(next.agentId),
             agentChanged: next.agentId !== row.task.agent_id,
             start: factory.start,
+            review: null,
           }
         }),
       )
+      if (assigned.review)
+        yield* notices.review({
+          organizationId: actor.organizationId,
+          taskId: id,
+          reason: assigned.review,
+          sessionId: actor.agent?.sessionId,
+        })
       const start = input.start ?? assigned.start ?? (assigned.agentChanged ? "continue" : "none")
       if (start === "none" || !assigned.hasAgent) return { task: yield* read(actor, id), start: "none" }
       const started = yield* launch(actor, id, start).pipe(
@@ -658,10 +668,10 @@ export const layer = Layer.effect(
                 )
                 .orderBy(asc(Database.Schema.task.id))
                 .for("update", { of: Database.Schema.task })
-              yield* Effect.forEach(ended, (row) =>
+              return yield* Effect.forEach(ended, (row) =>
                 Effect.gen(function* () {
                   const factory = yield* TaskFactory.read(transaction, row.task.space_id)
-                  if (!row.task.agent_id || !TaskFactory.isGoverned(factory, row.task.agent_id)) return
+                  if (!row.task.agent_id || !TaskFactory.isGoverned(factory, row.task.agent_id)) return []
                   const quiet = yield* transaction
                     .select({ id: started.id })
                     .from(started)
@@ -680,19 +690,19 @@ export const layer = Layer.effect(
                       ),
                     )
                     .limit(1)
-                  if (quiet.length === 0) return
-                  yield* TaskFactory.requestReview(
-                    transaction,
-                    row.task,
+                  if (quiet.length === 0) return []
+                  const reason =
                     row.outcome === "failed"
                       ? `${row.agent} stopped with an error.`
-                      : `${row.agent} ended its run without a handoff.`,
-                  )
+                      : `${row.agent} ended its run without a handoff.`
+                  const requested = yield* TaskFactory.requestReview(transaction, row.task, reason)
+                  return requested ? [{ organizationId: row.task.organization_id, taskId: row.task.id, reason }] : []
                 }),
-              )
+              ).pipe(Effect.map((reviews) => reviews.flat()))
             }),
           )
           .pipe(
+            Effect.flatMap((reviews) => Effect.forEach(reviews, notices.review, { discard: true })),
             Effect.catchCause((cause) => Effect.logError(`The task run of ${sessionId} could not be checked`, cause)),
           )
       }),
@@ -888,11 +898,12 @@ export const layer = Layer.effect(
             )
             if (!input.humanReview) {
               const review = yield* decide(transaction, row, actor, input)
-              return row.task.agent_id ? Option.some(review) : Option.none()
+              return { requested: false, decided: row.task.agent_id ? Option.some(review) : Option.none() }
             }
             if (closed.has(row.task.status))
               return yield* new Primitive.Conflict({ message: "A done or dismissed task needs no review." })
-            if (row.task.human_review && row.task.human_review_reason === input.reason) return Option.none()
+            if (row.task.human_review && row.task.human_review_reason === input.reason)
+              return { requested: false, decided: Option.none() }
             yield* transaction
               .update(Database.Schema.task)
               .set({ human_review: true, human_review_reason: input.reason, updated_at: sql`now()` })
@@ -900,12 +911,19 @@ export const layer = Layer.effect(
             yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
               { _tag: "review_requested", reason: input.reason },
             ])
-            return Option.none()
+            return { requested: true, decided: Option.none() }
           }),
         )
+        if (input.humanReview && decided.requested)
+          yield* notices.review({
+            organizationId: actor.organizationId,
+            taskId: id,
+            reason: input.reason,
+            sessionId: actor.agent?.sessionId,
+          })
         const start = input.humanReview ? "none" : (input.start ?? reviewStart)
-        if (Option.isNone(decided) || start === "none") return yield* read(actor, id)
-        return yield* launchAfterCommit(actor, id, "continue", decided.value)
+        if (Option.isNone(decided.decided) || start === "none") return yield* read(actor, id)
+        return yield* launchAfterCommit(actor, id, "continue", decided.decided.value)
       }),
     })
   }),
