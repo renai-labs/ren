@@ -11,6 +11,7 @@ import type { SessionMessage as OpenCodeMessage } from "@opencode/schema/session
 import type { Revert } from "@opencode/schema/session-revert"
 import type { Shell as OpenCodeShell } from "@opencode/schema/shell"
 import type { Skill } from "@opencode/schema/skill"
+import type { Vcs } from "@opencode/schema/vcs"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
@@ -21,6 +22,7 @@ import { SessionCatalog } from "@ren/schema/session/catalog"
 import { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
+import { SessionVcs } from "@ren/schema/session/vcs"
 import { Shell } from "@ren/schema/shell"
 import { TaskAssignment } from "@ren/schema/task-assignment"
 import { Option, Predicate, pipe, Schema, Struct } from "effect"
@@ -114,6 +116,7 @@ const readAgent = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Agent)
 const readSkill = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Skill))
 const readCommand = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Command))
 const readFile = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.File))
+const readVcs = Schema.decodeUnknownOption(Schema.toType(SessionVcs.Info))
 
 const Typed = Schema.Struct({ type: Schema.String })
 const decodeTyped = Schema.decodeUnknownOption(Typed)
@@ -172,3 +175,5 @@ export const skill = (info: Skill.Info) => readSkill(info)
 export const command = (info: Command.Info) => readCommand(info)
 
 export const file = (entry: FileSystem.Entry) => readFile(entry)
+
+export const vcs = (info: Vcs.Info) => readVcs(info)

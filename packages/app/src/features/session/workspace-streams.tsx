@@ -5,8 +5,6 @@ import {
   IconDeviceDesktop,
   IconHandFinger,
   IconRefresh,
-  IconFiles,
-  IconTerminal2,
   IconWorld,
 } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
@@ -98,36 +96,6 @@ export function BrowserTab() {
         />
       </div>
       <Playback label="Browser" />
-    </div>
-  )
-}
-
-export function TerminalTab() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-1 px-4 py-1 font-mono text-xs/5">
-      <span className="flex items-center gap-2 pb-2 text-muted-foreground">
-        <IconTerminal2 className="size-3.5" />
-        /bin/bash
-      </span>
-      <span className="text-muted-foreground"># The environment’s terminal streams here once it’s connected.</span>
-      <span>
-        <span className="text-chart-2">ren@environment</span>
-        <span className="text-muted-foreground">:</span>
-        <span className="text-chart-1">~</span>
-        <span className="text-muted-foreground">$</span>
-      </span>
-    </div>
-  )
-}
-
-export function FilesTab() {
-  return (
-    <div className="min-h-0 flex-1">
-      <Waiting
-        icon={<IconFiles />}
-        title="Files"
-        description="Browse the environment’s workspace here once it’s connected."
-      />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { Database } from "@ren/db/database"
 import { TestEnvironment } from "@ren/executor/testing"
 import { Signature } from "@ren/schema/signature"
 import { Effect, Layer, Redacted, Schema } from "effect"
+import { realpathSync } from "fs"
 import os from "os"
 import path from "path"
 import { databaseURL, ports } from "../tests/lib/env.js"
@@ -123,7 +124,8 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
     SIGNUP_MX_CHECK: "false",
     SANDBOX_PROVIDER: "local",
-    LOCAL_BRAIN_ROOT: path.join(os.tmpdir(), `${name}-brains`),
+    // oxlint-disable-next-line ren/no-comments -- OpenCode compares a chat's real paths with its folder, so the folder must not sit under a symlink such as macOS's /var.
+    LOCAL_BRAIN_ROOT: path.join(realpathSync(os.tmpdir()), `${name}-brains`),
     LOCAL_BRAIN_OWNER: String(process.pid),
     REN_URL: serverURL,
     // oxlint-disable-next-line ren/no-comments -- A brain's start signs its environment's executor variables, also when it has no environment.

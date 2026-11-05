@@ -1,4 +1,5 @@
 import { useState } from "react"
+import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import {
   IconArrowsDiagonal,
@@ -20,7 +21,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { ChangesTab } from "./workspace-changes.js"
 import { ProgressTab } from "./workspace-progress.js"
-import { BrowserTab, ComputerTab, FilesTab, TerminalTab } from "./workspace-streams.js"
+import { FilesTab } from "./workspace-files.js"
+import { BrowserTab, ComputerTab } from "./workspace-streams.js"
+import { TerminalTab } from "./workspace-terminal.js"
 
 type Kind = "computer" | "browser" | "files" | "changes" | "progress" | "terminal"
 
@@ -28,12 +31,12 @@ const kinds: ReadonlyArray<{ kind: Kind; label: string; description: string; ico
   { kind: "computer", label: "Computer", description: "Watch and control Ren’s computer", icon: IconDeviceDesktop },
   { kind: "browser", label: "Browser", description: "See the pages Ren opens", icon: IconWorld },
   { kind: "files", label: "Files", description: "Browse files in this workspace", icon: IconFiles },
-  { kind: "changes", label: "Changes", description: "See Ren’s file edits", icon: IconFileDiff },
+  { kind: "changes", label: "Changes", description: "See what changed in this workspace", icon: IconFileDiff },
   { kind: "progress", label: "Progress", description: "Understand Ren’s history and actions", icon: IconTimeline },
   {
     kind: "terminal",
     label: "Terminal",
-    description: "Open a terminal that belongs to this chat",
+    description: "Run commands in this chat’s environment",
     icon: IconTerminal2,
     many: true,
   },
@@ -112,6 +115,7 @@ function Launcher(props: { onPick: (kind: Kind) => void }) {
 }
 
 export function WorkspacePanel(props: {
+  root: Session.ID
   messages: ReadonlyArray<SessionMessage.Info>
   maximized: boolean
   onMaximize: (maximized: boolean) => void
@@ -198,12 +202,12 @@ export function WorkspacePanel(props: {
         {tabs.length === 0 ? <Launcher onPick={pick} /> : null}
         {tabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 flex-col">
-            {tab.kind === "changes" ? <ChangesTab messages={props.messages} /> : null}
+            {tab.kind === "changes" ? <ChangesTab root={props.root} messages={props.messages} /> : null}
             {tab.kind === "progress" ? <ProgressTab messages={props.messages} /> : null}
             {tab.kind === "computer" ? <ComputerTab /> : null}
             {tab.kind === "browser" ? <BrowserTab /> : null}
-            {tab.kind === "files" ? <FilesTab /> : null}
-            {tab.kind === "terminal" ? <TerminalTab /> : null}
+            {tab.kind === "files" ? <FilesTab root={props.root} /> : null}
+            {tab.kind === "terminal" ? <TerminalTab root={props.root} /> : null}
           </TabsContent>
         ))}
       </Tabs>
