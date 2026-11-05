@@ -6,6 +6,7 @@ import { Clock, Effect, Option, Redacted, Schema } from "effect"
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { ChannelProvider } from "../channel-provider.js"
 import { GitHubApp } from "../github-app.js"
+import { PullRequest } from "../pull-request.js"
 
 const Envelope = Schema.Struct({
   action: Schema.optionalKey(Schema.String),
@@ -55,15 +56,6 @@ const Issue = Schema.Struct({
   title: Schema.String,
   state: Schema.String,
   pull_request: Schema.optionalKey(Schema.Struct({})),
-})
-
-const Pull = Schema.Struct({
-  title: Schema.String,
-  state: Schema.String,
-  draft: Schema.optionalKey(Schema.Boolean),
-  merged: Schema.optionalKey(Schema.Boolean),
-  head: Schema.Struct({ ref: Schema.String }),
-  base: Schema.Struct({ ref: Schema.String }),
 })
 
 const Reactions = Schema.Array(
@@ -128,12 +120,6 @@ const subjectOf = (message: string) => {
 const malformed = (error: Schema.SchemaError) => new ChannelProvider.Malformed({ message: error.message })
 
 const ignore = (reason: string) => ({ _tag: "Ignore", reason }) satisfies Channel.Parsed
-
-const stateOf = (pull: typeof Pull.Type) => {
-  if (pull.merged) return "merged"
-  if (pull.draft && pull.state === "open") return "draft"
-  return pull.state
-}
 
 export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
   const secret = Redacted.value(app.settings.webhookSecret)
@@ -325,9 +311,9 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
           : `Ready for review, by @${event.sender.handle ?? event.sender.accountId}`
         if (!issue.pull_request)
           return Option.some({ text: `Issue #${number} “${issue.title}”, ${issue.state}\n${triggering}`, files: [] })
-        const pull = yield* read(`/pulls/${number}`, Pull)
+        const pull = yield* read(`/pulls/${number}`, PullRequest.Pull)
         return Option.some({
-          text: `Pull request #${number} “${pull.title}”, ${stateOf(pull)}, ${pull.head.ref} → ${pull.base.ref}\n${triggering}`,
+          text: `Pull request #${number} “${pull.title}”, ${PullRequest.stateOf(pull)}, ${pull.head.ref} → ${pull.base.ref}\n${triggering}`,
           files: [],
         })
       },

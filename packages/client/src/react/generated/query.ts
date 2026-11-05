@@ -80,6 +80,8 @@ import type {
   TaskCommentUpdateInput,
   TaskCommentArchiveInput,
   TaskActivityListInput,
+  LinkSessionLinksInput,
+  LinkTaskPullRequestsInput,
   LabelListInput,
   LabelCreateInput,
   LabelUpdateInput,
@@ -888,6 +890,34 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryKey: ["task-activity", "list", input] as const,
             queryFn: (context) => client["task-activity"]["list"](input, { signal: context.signal }),
           }),
+      },
+    },
+    link: {
+      session: {
+        links: {
+          queryKey: (input?: LinkSessionLinksInput) =>
+            input === undefined
+              ? (["link", "session", "links"] as const)
+              : (["link", "session", "links", input] as const),
+          queryOptions: (input: LinkSessionLinksInput) =>
+            queryOptions({
+              queryKey: ["link", "session", "links", input] as const,
+              queryFn: (context) => client["link"]["session"]["links"](input, { signal: context.signal }),
+            }),
+        },
+      },
+      task: {
+        pullRequests: {
+          queryKey: (input?: LinkTaskPullRequestsInput) =>
+            input === undefined
+              ? (["link", "task", "pullRequests"] as const)
+              : (["link", "task", "pullRequests", input] as const),
+          queryOptions: (input: LinkTaskPullRequestsInput) =>
+            queryOptions({
+              queryKey: ["link", "task", "pullRequests", input] as const,
+              queryFn: (context) => client["link"]["task"]["pullRequests"](input, { signal: context.signal }),
+            }),
+        },
       },
     },
     label: {

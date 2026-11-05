@@ -3,11 +3,13 @@ export * as Session from "./session.js"
 import { Database } from "@ren/db/database"
 import { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
+import type { SessionLinks } from "@ren/schema/session/links"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { Space } from "@ren/schema/space"
 import {
   and,
+  asc,
   type Column,
   count,
   desc,
@@ -18,6 +20,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  or,
   sql,
   type SQL,
 } from "drizzle-orm"
@@ -28,9 +31,11 @@ import { Actor } from "./actor.js"
 import { Brains } from "./brains.js"
 import { Models } from "./models.js"
 import { Primitive } from "./primitive.js"
+import { PullRequest } from "./pull-request.js"
 import { SessionRunner } from "./session/runner.js"
 import { SessionPolicy } from "./session/policy.js"
 import { SpaceQueries } from "./space/queries.js"
+import { TaskQueries } from "./task/queries.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
 import { TranscriptCodec } from "./transcript-codec.js"
 
@@ -58,6 +63,7 @@ export type Interface = Primitive.Interface<typeof Session.definition> & {
     query: { readonly limit?: number | undefined; readonly cursor?: string | undefined },
   ) => Effect.Effect<SessionMessage.Page, Primitive.NotFound | Primitive.Invalid | Busy | PageTooLarge>
   readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
+  readonly links: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionLinks.Info, Primitive.NotFound>
   readonly prepare: (actor: Actor.Info, spaceId: Space.ID) => Effect.Effect<void, Primitive.NotFound>
   readonly retry: (
     actor: Actor.Info,
@@ -170,6 +176,7 @@ export const layer = Layer.effect(
     const brain = yield* Brains.Service
     const catalog = yield* Models.Service
     const codecs = yield* TranscriptCodec.Registry
+    const pulls = yield* PullRequest.Service
     const historyAdmitted = yield* Semaphore.make(historyReads + historyWaiting)
     const historyReading = yield* Semaphore.make(historyReads)
     const historyMemory = yield* Semaphore.make(historyMemoryBytes)
@@ -408,6 +415,86 @@ export const layer = Layer.effect(
         return admitted.value
       }),
       models: Effect.fn("Session.models")(models),
+      links: Effect.fn("Session.links")(function* (actor: Actor.Info, id: Session.ID) {
+        yield* read(actor, id)
+        const found = yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const tasks = yield* TaskQueries.select(transaction, actor)
+              .where(
+                and(
+                  TaskQueries.visibleTo(access, actor),
+                  or(
+                    eq(Database.Schema.task.created_by_session_id, id),
+                    inArray(
+                      Database.Schema.task.id,
+                      transaction
+                        .select({ id: Database.Schema.task_session.task_id })
+                        .from(Database.Schema.task_session)
+                        .where(eq(Database.Schema.task_session.session_id, id)),
+                    ),
+                  ),
+                ),
+              )
+              .orderBy(asc(Database.Schema.task.created_at), asc(Database.Schema.task.number))
+            const links =
+              tasks.length === 0
+                ? []
+                : yield* transaction
+                    .select({
+                      kind: Database.Schema.task_link.kind,
+                      key: Database.Schema.task_link.key,
+                      url: Database.Schema.task_link.url,
+                    })
+                    .from(Database.Schema.task_link)
+                    .innerJoin(Database.Schema.task, eq(Database.Schema.task.id, Database.Schema.task_link.task_id))
+                    .where(
+                      inArray(
+                        Database.Schema.task_link.task_id,
+                        tasks.map((row) => row.task.id),
+                      ),
+                    )
+                    .orderBy(
+                      asc(Database.Schema.task.created_at),
+                      asc(Database.Schema.task.number),
+                      asc(Database.Schema.task_link.created_at),
+                      asc(Database.Schema.task_link.id),
+                    )
+            const threads = yield* transaction
+              .select({
+                provider: Database.Schema.channel_thread.provider,
+                url: Database.Schema.channel_thread.url,
+                place: Database.Schema.channel_thread.place_name,
+              })
+              .from(Database.Schema.channel_thread)
+              .where(
+                and(
+                  eq(Database.Schema.channel_thread.session_id, id),
+                  eq(Database.Schema.channel_thread.organization_id, actor.organizationId),
+                ),
+              )
+              .orderBy(asc(Database.Schema.channel_thread.created_at), asc(Database.Schema.channel_thread.id))
+            return { tasks, links: Array.dedupeWith(links, (a, b) => a.kind === b.kind && a.key === b.key), threads }
+          }),
+        )
+        return {
+          tasks: found.tasks.map((row) => ({
+            id: row.task.id,
+            identifier: `${row.prefix}-${row.task.number}`,
+            title: row.task.title,
+            status: row.task.status,
+          })),
+          pullRequests: yield* pulls.read(
+            actor.organizationId,
+            found.links.filter((link) => link.kind === "github_pr").map((link) => link.url),
+          ),
+          issues: found.links.flatMap((link) =>
+            link.kind === "github_issue" || link.kind === "linear_issue" ? [{ kind: link.kind, url: link.url }] : [],
+          ),
+          threads: found.threads.flatMap((thread) =>
+            thread.url ? [{ provider: thread.provider, url: thread.url, place: thread.place }] : [],
+          ),
+        }
+      }),
       prepare: Effect.fn("Session.prepare")(function* (actor: Actor.Info, spaceId: Space.ID) {
         yield* visibleSpace(actor, spaceId)
         yield* brain.prepare(spaceId)

@@ -6731,6 +6731,145 @@
         "summary": "List task-activities"
       }
     },
+    "/sessions/{id}/links": {
+      "get": {
+        "tags": ["link"],
+        "operationId": "session.links",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SessionLinks.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionLinks.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the chat’s tasks, the pull requests and issues they link, and the chat’s channel threads. Ren reads each pull request’s state from GitHub on each call.",
+        "summary": "List a chat’s links"
+      }
+    },
+    "/tasks/{id}/pull-requests": {
+      "get": {
+        "tags": ["link"],
+        "operationId": "task.pullRequests",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Task.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PullRequest.Info"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the pull requests the task links, in link order, with their title and state from GitHub. Ren reads GitHub on each call.",
+        "summary": "List a task’s pull requests"
+      }
+    },
     "/labels": {
       "get": {
         "tags": ["label"],
@@ -17063,6 +17202,46 @@
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
         "description": "Unique among the live schedules of its space. A new name does not change it."
       },
+      "PullRequest.Info": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PullRequest.State"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["url", "number", "title", "state"],
+        "additionalProperties": false,
+        "description": "A GitHub pull request as GitHub shows it now. `title` and `state` are null when Ren cannot read it: no GitHub install, a repository outside the install, or GitHub did not answer."
+      },
+      "PullRequest.State": {
+        "type": "string",
+        "enum": ["open", "draft", "merged", "closed"]
+      },
       "Reference.Alias": {
         "type": "string",
         "minLength": 1,
@@ -18167,6 +18346,98 @@
           }
         },
         "required": ["type", "message"],
+        "additionalProperties": false
+      },
+      "SessionLinks.Info": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionLinks.LinkedTask"
+            },
+            "description": "The tasks the chat worked on or created, that the caller can read. Oldest first."
+          },
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PullRequest.Info"
+            },
+            "description": "The pull requests those tasks link."
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionLinks.Issue"
+            },
+            "description": "The GitHub and Linear issues those tasks link."
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionLinks.Thread"
+            },
+            "description": "The channel threads that talk to the chat."
+          }
+        },
+        "required": ["tasks", "pullRequests", "issues", "threads"],
+        "additionalProperties": false
+      },
+      "SessionLinks.Issue": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["github_issue", "linear_issue"]
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": ["kind", "url"],
+        "additionalProperties": false
+      },
+      "SessionLinks.LinkedTask": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Task.ID"
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Task.Status"
+          }
+        },
+        "required": ["id", "identifier", "title", "status"],
+        "additionalProperties": false
+      },
+      "SessionLinks.Thread": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          },
+          "url": {
+            "type": "string"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The channel or repository, such as web-team."
+          }
+        },
+        "required": ["provider", "url", "place"],
         "additionalProperties": false
       },
       "SessionMessage.AgentAttachment": {
@@ -21542,6 +21813,9 @@
     },
     {
       "name": "task-activity"
+    },
+    {
+      "name": "link"
     },
     {
       "name": "label"

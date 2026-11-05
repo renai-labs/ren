@@ -23,7 +23,7 @@ export interface Context {
 }
 
 const invalidates: Readonly<Record<string, ReadonlyArray<string>>> = {
-  task: ["task", "task-activity", "label"],
+  task: ["task", "task-activity", "label", "link"],
   "task-comment": ["task-activity"],
   "space-member": ["space-member", "space"],
   "app-profile": ["app-profile", "app-profile-reach"],

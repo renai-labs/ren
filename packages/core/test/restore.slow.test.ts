@@ -14,7 +14,9 @@ import { BrainClient } from "../src/brain-client.js"
 import { BrainHost } from "../src/brain-host.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { Brains } from "../src/brains.js"
+import { GitHubApp } from "../src/github-app.js"
 import { Models } from "../src/models.js"
+import { PullRequest } from "../src/pull-request.js"
 import { SandboxProvider } from "../src/sandbox-provider.js"
 import { Session } from "../src/session.js"
 import { SessionRunner } from "../src/session/runner.js"
@@ -43,6 +45,7 @@ const fixed = Layer.succeed(
 const it = testEffect(
   Session.layer.pipe(
     Layer.provideMerge(SessionRunner.layer),
+    Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone))),
     Layer.provideMerge(BrainRegistry.layer),
     Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
     Layer.provideMerge(Access.layer),

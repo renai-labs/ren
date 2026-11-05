@@ -275,6 +275,18 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     ...resolved("session", "session.get"),
   },
   {
+    operation: "session.links",
+    path: ["session", "links"],
+    description: "List a chat’s tasks, pull requests, issues and threads",
+    ...resolved("session", "session.get"),
+  },
+  {
+    operation: "task.pullRequests",
+    path: ["task", "pull-requests"],
+    description: "List a task’s pull requests and their state",
+    ...resolved("task", "task.get"),
+  },
+  {
     operation: "app-profile.delete",
     path: ["app", "profile", "delete"],
     description: "Delete an app profile",

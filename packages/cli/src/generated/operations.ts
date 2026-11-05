@@ -1466,6 +1466,32 @@ export const SessionProfiles = (input: Command.Command.Config.Infer<typeof Comma
     (client, request) => client["app-profile-reach"]["session"]["profiles"]({ ...request.params }),
   )
 
+export const SessionLinks = (input: Command.Command.Config.Infer<typeof Commands.SessionLinks>) =>
+  Operation.run(
+    ClientApi.groups["link"].endpoints["session.links"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<session>" },
+      lookups: {
+        id: (client, value) => client["session"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["link"]["session"]["links"]({ ...request.params }),
+  )
+
+export const TaskPullRequests = (input: Command.Command.Config.Infer<typeof Commands.TaskPullRequests>) =>
+  Operation.run(
+    ClientApi.groups["link"].endpoints["task.pullRequests"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<task>" },
+      lookups: {
+        id: (client, value) => client["task"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["link"]["task"]["pullRequests"]({ ...request.params }),
+  )
+
 export const AppProfileDelete = (input: Command.Command.Config.Infer<typeof Commands.AppProfileDelete>) =>
   Operation.run(
     ClientApi.groups["app-profile-reach"].endpoints["app-profile.delete"],

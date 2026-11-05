@@ -12,11 +12,13 @@ import { and, eq, isNull } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Access } from "../../src/access.js"
 import { EgressControl } from "../../src/egress-control.js"
+import { GitHubApp } from "../../src/github-app.js"
 import type { Actor } from "../../src/actor.js"
 import { BrainRegistry } from "../../src/brain-registry.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
 import { Label } from "../../src/label.js"
 import { Models } from "../../src/models.js"
+import { PullRequest } from "../../src/pull-request.js"
 import { SessionRunner } from "../../src/session/runner.js"
 import { Space } from "../../src/space.js"
 import { SpaceMember } from "../../src/space/member.js"
@@ -31,6 +33,9 @@ import { Seed } from "./seed.js"
 export const harness = (
   cards: Layer.Layer<TaskCard.Service, never, Database.Service> = TaskCard.layerNone,
   notices: Layer.Layer<ChannelNotice.Service, never, Database.Service> = ChannelNotice.layerLog,
+  pulls: Layer.Layer<PullRequest.Service, never, Database.Service> = PullRequest.layer.pipe(
+    Layer.provide(GitHubApp.layerNone),
+  ),
 ) => {
   const stub = Shared.stub()
   const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.url)
@@ -47,7 +52,7 @@ export const harness = (
     stub,
     it: testEffect(
       Layer.mergeAll(Task.layer, TaskComment.layer, TaskActivity.layer, Label.layer).pipe(
-        Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer, SessionRunner.layer, notices, cards)),
+        Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer, SessionRunner.layer, notices, cards, pulls)),
         Layer.provideMerge(BrainRegistry.layer),
         Layer.provideMerge(Host.layer({}, models)),
         Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),

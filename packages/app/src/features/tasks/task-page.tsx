@@ -140,7 +140,7 @@ export function TaskPage(props: { session: ((dock: ReactNode) => ReactNode) | nu
           </PropertySection>
           {task.links.length > 0 ? (
             <PropertySection title="Links">
-              <TaskLinks links={task.links} />
+              <LinksProperty task={task} />
             </PropertySection>
           ) : null}
           <PropertySection title="Labels">
@@ -694,6 +694,15 @@ function LabelPicker(props: { task: TaskInfo; onChange: (patch: Patch) => void }
       </CommandList>
     </Command>
   )
+}
+
+function LinksProperty(props: { task: TaskInfo }) {
+  const { api } = RouterContext.useRouterContext()
+  const pullRequests = useQuery({
+    ...api.link.task.pullRequests.queryOptions({ id: props.task.id }),
+    enabled: props.task.links.some((link) => link.kind === "github_pr"),
+  })
+  return <TaskLinks links={props.task.links} pullRequests={pullRequests.data} />
 }
 
 function CreatedInProperty(props: { sessionId: string; onOpenSession: (session: string | undefined) => void }) {
