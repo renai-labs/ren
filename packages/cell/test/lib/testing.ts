@@ -1,4 +1,3 @@
-export { BunBrain } from "./bun-brain.js"
 export { Celld } from "./celld.js"
 export { FakeRen } from "./ren.js"
 export { Shared } from "./shared.js"
