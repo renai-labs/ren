@@ -221,7 +221,7 @@ export const requestReview = Effect.fnUntraced(function* (
   },
   reason: string,
 ) {
-  if (task.human_review && task.human_review_reason === reason) return
+  if (task.human_review && task.human_review_reason === reason) return false
   yield* transaction
     .update(Database.Schema.task)
     .set({ human_review: true, human_review_reason: reason, updated_at: sql`now()` })
@@ -229,4 +229,5 @@ export const requestReview = Effect.fnUntraced(function* (
   yield* TaskTrail.record(transaction, { id: task.id, organizationId: task.organization_id }, null, [
     { _tag: "review_requested", reason },
   ])
+  return true
 })

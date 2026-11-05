@@ -340,8 +340,8 @@ const core = (held: boolean) =>
     ChannelRoute.layer.pipe(Layer.provideMerge(ChannelIdentity.layer)),
     ChannelMappings.layer,
     SessionSync.layer,
-    notices,
   ).pipe(
+    Layer.provideMerge(notices),
     Layer.provideMerge(
       Layer.mergeAll(
         BrainRegistry.layer,
