@@ -4,6 +4,7 @@ import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { GitHubApp } from "@ren/core/github-app"
+import { GitHubTaskCard } from "@ren/core/github-task-card"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { PersonCredentials } from "@ren/core/person-credentials"
 import { ChannelProvider } from "@ren/core/channel-provider"
@@ -108,6 +109,7 @@ export const services = Layer.mergeAll(
     Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),
   ),
   ChannelNotice.layerLog,
+  GitHubTaskCard.layerNone,
   Mailer.layer,
   SignupGuard.layer,
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),

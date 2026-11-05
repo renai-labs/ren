@@ -106,6 +106,29 @@ On a pull request, Ren works on the branch of that pull request. In any chat, yo
 
 Ren works on the machine of the project's space. Each chat gets its own working directory there, so several chats can work on the same repository at the same time.
 
+## Link tasks
+
+Name a [task](/docs/concepts/tasks/) in a pull request or an issue, and Ren links them. Ren reads the branch name, the title and the description. It reads them when you open, edit or reopen the pull request or issue.
+
+| You write                | Example                                |
+| ------------------------ | -------------------------------------- |
+| The task ID, in any case | `ACME-42`, or the branch `acme-42-fix` |
+| The task URL             | `https://useren.ai/app/tasks/ACME-42`  |
+
+Ren reads only the task IDs of the organization that installed the app. Words such as `Fixes` or `Closes` change nothing. When the pull request merges, Ren sets each task that links it to done.
+
+Ren posts one comment on each linked pull request and issue. The comment shows the task ID, title, status and agent, and a link to each chat of the task. When the task changes, Ren edits the same comment.
+
+### Make task IDs links on GitHub
+
+A GitHub autolink turns each task ID in GitHub into a link to the task. A repository admin adds it one time for each repository:
+
+1. On GitHub, open the repository's **Settings → Autolink references**.
+2. Select **Add autolink reference**.
+3. In **Reference prefix**, enter your organization's task prefix and a hyphen, such as `ACME-`.
+4. In **Target URL**, enter `https://useren.ai/app/tasks/ACME-<num>`.
+5. Choose **Numeric**, so that only numbers after the prefix match. Then select **Add autolink reference**.
+
 ## Who Ren commits as
 
 The author of the commits and comments of Ren depends on the [space](/docs/concepts/spaces/) of the project.

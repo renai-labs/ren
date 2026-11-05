@@ -34,6 +34,7 @@ import { Signer } from "@ren/core/signer"
 import { EgressControl } from "@ren/core/egress-control"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { GitHubApp } from "@ren/core/github-app"
+import { GitHubTaskCard } from "@ren/core/github-task-card"
 import { SlackApp } from "@ren/core/slack-app"
 import { PersonCredentials } from "@ren/core/person-credentials"
 import { CredentialEnv } from "@ren/core/credential-env"
@@ -79,6 +80,7 @@ HttpRouter.serve(Routes.layer).pipe(
       Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),
     ),
     ChannelNotice.layerLog,
+    GitHubTaskCard.layerNone,
     Mailer.layer,
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),

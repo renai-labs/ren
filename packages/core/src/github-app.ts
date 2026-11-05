@@ -265,6 +265,11 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
         installationId,
         HttpClientRequest.post(`${app.api}${path}`).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
       ).pipe(Effect.withSpan("GitHubApp.post")),
+    patch: (installationId: string, path: string, body: unknown) =>
+      write(
+        installationId,
+        HttpClientRequest.patch(`${app.api}${path}`).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
+      ).pipe(Effect.withSpan("GitHubApp.patch")),
     remove: (installationId: string, path: string) =>
       write(installationId, HttpClientRequest.delete(`${app.api}${path}`)).pipe(Effect.withSpan("GitHubApp.remove")),
     read: <S extends Schema.Top>(installationId: string, path: string, schema: S) =>

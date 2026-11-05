@@ -24,6 +24,7 @@ import { GitHub } from "@ren/core/channel-provider/github"
 import { Slack } from "@ren/core/channel-provider/slack"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { GitHubApp } from "@ren/core/github-app"
+import { GitHubTaskCard } from "@ren/core/github-task-card"
 import { PersonCredentials } from "@ren/core/person-credentials"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
@@ -151,9 +152,11 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       RenInferenceRemoval.layer,
       BillingEnrollment.layer.pipe(Layer.provide(Billing.layerConfig)),
     ),
-    Layer.mergeAll(ChannelNotice.layer, ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer))).pipe(
-      Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider]))),
-    ),
+    Layer.mergeAll(
+      ChannelNotice.layer,
+      GitHubTaskCard.layer,
+      ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer)),
+    ).pipe(Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider])))),
     Mailer.layer,
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
