@@ -31,26 +31,24 @@ const linearKeyOf = (url: string) =>
     ?.pathname.split("/")
     .find((part) => /^[A-Z][A-Z0-9]*-\d+$/u.test(part)) ?? "Linear issue"
 
-function LinkGroup(props: { label: string; children: ReadonlyArray<ReactNode> }) {
-  if (props.children.length === 0) return null
+type LinkRow = { key: string; icon: ReactNode; label: string; shortcut: string; onClick: () => void }
+
+function LinkGroup(props: { label: string; rows: ReadonlyArray<LinkRow> }) {
+  if (props.rows.length === 0) return null
   return (
     <>
       <DropdownMenuGroup>
         <DropdownMenuLabel>{props.label}</DropdownMenuLabel>
-        {props.children}
+        {props.rows.map((row) => (
+          <DropdownMenuItem key={row.key} onClick={row.onClick}>
+            {row.icon}
+            <span className="min-w-0 flex-1 truncate">{row.label}</span>
+            <DropdownMenuShortcut>{row.shortcut}</DropdownMenuShortcut>
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
     </>
-  )
-}
-
-function LinkItem(props: { icon: ReactNode; label: string; shortcut: string; onClick: () => void }) {
-  return (
-    <DropdownMenuItem onClick={props.onClick}>
-      {props.icon}
-      <span className="min-w-0 flex-1 truncate">{props.label}</span>
-      <DropdownMenuShortcut>{props.shortcut}</DropdownMenuShortcut>
-    </DropdownMenuItem>
   )
 }
 
@@ -76,64 +74,58 @@ export function ChatActions(props: { sessionId: Session.ID; title: string; onArc
           <IconDots />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
-          <LinkGroup label="Tasks">
-            {(links?.tasks ?? []).map((task) => (
-              <LinkItem
-                key={task.id}
-                icon={<IconChecklist />}
-                label={task.title}
-                shortcut={task.identifier}
-                onClick={() => void navigate({ to: "/tasks/$taskId", params: { taskId: task.id } })}
-              />
-            ))}
-          </LinkGroup>
-          <LinkGroup label="Pull requests">
-            {(links?.pullRequests ?? []).map((pull) => (
-              <LinkItem
-                key={pull.url}
-                icon={<PullRequestIcon state={pull.state} />}
-                label={pull.title ?? repositoryOf(pull.url)}
-                shortcut={`#${pull.number}`}
-                onClick={() => platform.openExternal(pull.url)}
-              />
-            ))}
-          </LinkGroup>
-          <LinkGroup label="Issues">
-            {(links?.issues ?? []).map((issue) =>
-              issue.kind === "github_issue" ? (
-                <LinkItem
-                  key={issue.url}
-                  icon={<GitHubMark className="text-foreground" />}
-                  label={repositoryOf(issue.url)}
-                  shortcut={`#${URL.parse(issue.url)?.pathname.split("/").at(4) ?? ""}`}
-                  onClick={() => platform.openExternal(issue.url)}
-                />
-              ) : (
-                <LinkItem
-                  key={issue.url}
-                  icon={<LinearMark className="text-foreground" />}
-                  label={linearKeyOf(issue.url)}
-                  shortcut="Linear"
-                  onClick={() => platform.openExternal(issue.url)}
-                />
-              ),
+          <LinkGroup
+            label="Tasks"
+            rows={(links?.tasks ?? []).map((task) => ({
+              key: task.id,
+              icon: <IconChecklist />,
+              label: task.title,
+              shortcut: task.identifier,
+              onClick: () => void navigate({ to: "/tasks/$taskId", params: { taskId: task.id } }),
+            }))}
+          />
+          <LinkGroup
+            label="Pull requests"
+            rows={(links?.pullRequests ?? []).map((pull) => ({
+              key: pull.url,
+              icon: <PullRequestIcon state={pull.state} />,
+              label: pull.title ?? repositoryOf(pull.url),
+              shortcut: `#${pull.number}`,
+              onClick: () => platform.openExternal(pull.url),
+            }))}
+          />
+          <LinkGroup
+            label="Issues"
+            rows={(links?.issues ?? []).map((issue) =>
+              issue.kind === "github_issue"
+                ? {
+                    key: issue.url,
+                    icon: <GitHubMark className="text-foreground" />,
+                    label: repositoryOf(issue.url),
+                    shortcut: `#${URL.parse(issue.url)?.pathname.split("/").at(4) ?? ""}`,
+                    onClick: () => platform.openExternal(issue.url),
+                  }
+                : {
+                    key: issue.url,
+                    icon: <LinearMark className="text-foreground" />,
+                    label: linearKeyOf(issue.url),
+                    shortcut: "Linear",
+                    onClick: () => platform.openExternal(issue.url),
+                  },
             )}
-          </LinkGroup>
-          <LinkGroup label="Threads">
-            {(links?.threads ?? []).map((thread) => (
-              <LinkItem
-                key={thread.url}
-                icon={<ChannelMark provider={thread.provider} className="text-foreground" />}
-                label={
-                  thread.place
-                    ? Channels.label(thread.provider, thread.place)
-                    : `${Channels.byId[thread.provider].title} thread`
-                }
-                shortcut={Channels.byId[thread.provider].title}
-                onClick={() => platform.openExternal(thread.url)}
-              />
-            ))}
-          </LinkGroup>
+          />
+          <LinkGroup
+            label="Threads"
+            rows={(links?.threads ?? []).map((thread) => ({
+              key: thread.url,
+              icon: <ChannelMark provider={thread.provider} className="text-foreground" />,
+              label: thread.place
+                ? Channels.label(thread.provider, thread.place)
+                : `${Channels.byId[thread.provider].title} thread`,
+              shortcut: Channels.byId[thread.provider].title,
+              onClick: () => platform.openExternal(thread.url),
+            }))}
+          />
           {write ? (
             <>
               <DropdownMenuGroup>

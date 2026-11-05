@@ -141,14 +141,15 @@ describe("Session", () => {
           [
             { thread: "C07:1760000000.000100", url: "https://acme.slack.com/archives/C07/p1760000000000100" },
             { thread: "C07:1760000000.000200", url: null },
-          ].map((thread) => ({
+          ].map((row) => ({
             id: Channel.ThreadID.create(),
             organization_id: owner.organizationId,
             provider: "slack" as const,
             install: "T01",
+            thread: row.thread,
+            url: row.url,
             session_id: id,
             place_name: "web-team",
-            ...thread,
           })),
         )
         expect(yield* sessions.links(actorOf(owner), id)).toEqual({
