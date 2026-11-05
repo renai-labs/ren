@@ -285,6 +285,7 @@ export const layer = Layer.effect(
           place_name: event.place.name ?? event.place.id,
           last_message: event.message,
           last_message_at: new Date(),
+          data: event.data ?? {},
         })
         .onConflictDoUpdate({
           target: [thread.provider, thread.install, thread.thread],
@@ -294,6 +295,7 @@ export const layer = Layer.effect(
             place_name: event.place.name ?? event.place.id,
             last_message: event.message,
             last_message_at: new Date(),
+            data: event.data ?? {},
             updated_at: new Date(),
           },
         })
@@ -427,6 +429,7 @@ export const layer = Layer.effect(
           place_name: event.place.name ?? event.place.id,
           last_message: event.message,
           last_message_at: new Date(),
+          data: event.data ?? {},
           updated_at: new Date(),
         })
         .where(eq(thread.id, claimed.id))
