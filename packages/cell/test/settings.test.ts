@@ -28,6 +28,7 @@ import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ChatSettings } from "../src/chat-settings.js"
+import { Env } from "../src/env.js"
 import { Inference } from "../src/inference.js"
 import type { Harness } from "../src/harness/harness.js"
 import type { HarnessConfig } from "../src/harness/config.js"
@@ -81,7 +82,11 @@ const open = Effect.fnUntraced(function* (
       createEmbeddedRoutes(
         {
           database: { path: options.database ?? ":memory:" },
-          config: { directory, project: false, content: options.config ?? Shared.vars(stub.url).OPENCODE_CONFIG },
+          config: {
+            directory,
+            project: false,
+            content: options.config ?? Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url)).OPENCODE_CONFIG,
+          },
           models: { fetch: false },
           fs: { filewatcher: false, fff: false },
         },
@@ -737,6 +742,21 @@ describe("settings in the cell", () => {
         agent: "ren",
         model: { providerID: "stub", id: "stub-model" },
       })
+    }),
+  )
+
+  it.live("a main agent named plan runs as Ren's agent, without OpenCode's Plan mode", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(
+        TestSettings.layers({
+          ren: { instructions: "Hand off when done." },
+          agents: [TestSettings.agent("plan", {}, { isSubagent: false })],
+        }),
+      )
+      const script = stub.script()
+      yield* opened.turn(script)
+      expect(script.calls[0]?.system).toContain("Hand off when done.")
+      expect(JSON.stringify(script.calls[0]?.body.messages)).not.toContain("Plan mode")
     }),
   )
 
