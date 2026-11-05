@@ -45,6 +45,22 @@ export const FileRef = Schema.Struct({
   size: Schema.optionalKey(Schema.Int),
 }).annotate({ identifier: "Channel.FileRef" })
 
+export interface ThreadData extends Schema.Schema.Type<typeof ThreadData> {}
+export const ThreadData = Schema.Struct({
+  slack: Schema.optionalKey(
+    Schema.Struct({
+      actionToken: Schema.optionalKey(Schema.String).annotate({
+        description:
+          "Slack’s action_token of the message: for a short time, the bot searches Slack with it as the sender.",
+      }),
+    }),
+  ),
+}).annotate({
+  identifier: "Channel.ThreadData",
+  description:
+    "Provider data that a message brings for the tools that act on its thread, under the key of its provider. The thread keeps the data of its latest message.",
+})
+
 const Sender = Schema.Struct({
   accountId: Schema.NonEmptyString,
   name: Schema.optionalKey(Schema.String),
@@ -78,6 +94,7 @@ export const Event = Schema.Struct({
     description:
       "Set when nobody mentioned Ren. Only a mapping with this trigger on answers, with its prompt in place of the text.",
   }),
+  data: Schema.optionalKey(ThreadData),
 }).annotate({ identifier: "Channel.Event" })
 
 export const CardAction = Schema.Literals([

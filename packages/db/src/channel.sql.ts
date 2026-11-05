@@ -110,6 +110,7 @@ export const channel_thread = pgTable(
     last_message: text(),
     last_message_at: timestamp(),
     last_reply_at: timestamp(),
+    data: jsonb().$type<typeof Channel.ThreadData.Encoded>().notNull().default({}),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
   },
