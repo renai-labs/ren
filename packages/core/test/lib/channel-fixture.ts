@@ -108,7 +108,7 @@ const provider = Effect.gen(function* () {
   return {
     id: "slack",
     triggers: [trigger],
-    replyTool: "slack_reply_to_current_thread",
+    replyTool: "slack_send_message",
     verify: (request) =>
       request.headers.get("x-signature") === sign(request.body)
         ? Effect.void

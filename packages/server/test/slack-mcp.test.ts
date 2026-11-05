@@ -34,6 +34,7 @@ const send = Effect.fnUntraced(function* (
         "mcp-protocol-version": "2026-07-28",
         "mcp-method": method,
         ...(typeof params.name === "string" && { "mcp-name": params.name }),
+        ...(typeof params.uri === "string" && { "mcp-name": params.uri }),
         ...headers,
       }),
       HttpClientRequest.bodyJsonUnsafe({
@@ -55,7 +56,7 @@ const send = Effect.fnUntraced(function* (
 
 describe("Slack MCP", () => {
   it.live(
-    "serves the Slack tools to a brain's chat only, and a call where Slack is off is a tool error with the reason",
+    "serves the Slack tools and guides to a brain's chat only, and a call where Slack is off is a tool error with the reason",
     () =>
       Effect.gen(function* () {
         yield* Seed.ren()
@@ -68,8 +69,10 @@ describe("Slack MCP", () => {
         expect((yield* send({ authorization: headers.authorization }, "tools/list")).status).toBe(401)
         const listed = yield* send(headers, "tools/list")
         expect(listed.status).toBe(200)
-        expect(listed.text).toContain('"name":"reply_to_current_thread"')
-        const called = yield* send(headers, "tools/call", { name: "list_channels", arguments: {} })
+        expect(listed.text).toContain('"name":"send_message"')
+        const guide = yield* send(headers, "resources/read", { uri: "slack://guides/messaging" })
+        expect(guide.text).toContain("# Writing Slack messages")
+        const called = yield* send(headers, "tools/call", { name: "list_user_channels", arguments: {} })
         expect(yield* Effect.promise(() => result(new Response(called.text)))).toMatchObject({
           isError: true,
           content: [{ type: "text", text: "Slack is not set up on this Ren server." }],

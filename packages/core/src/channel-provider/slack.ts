@@ -566,7 +566,7 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
   return {
     id: "slack",
     triggers: [],
-    replyTool: "slack_reply_to_current_thread",
+    replyTool: "slack_send_message",
     verify: Effect.fnUntraced(function* (request) {
       const timestamp = request.headers.get("x-slack-request-timestamp") ?? ""
       const now = Math.floor((yield* Clock.currentTimeMillis) / 1000)
