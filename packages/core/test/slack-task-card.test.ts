@@ -273,6 +273,7 @@ describe("SlackTaskCard", () => {
           `${app}/tasks/${created.id}`,
           `${app}/tasks/${archived.identifier}`,
           `${app}/tasks/OTHER-1`,
+          `${app}/tasks/not-a-task`,
           `${app}/sessions/ses_01M6NZMF5TRCM677MMNXB5MHQN`,
         ])
         yield* until(() => calls("chat.unfurl").length === before + 1)
@@ -351,6 +352,9 @@ describe("SlackTaskCard", () => {
         ])
         yield* requested(found.channel, "tsk_01M6NZMF5TRCM677MMNXB5MHQN")
         yield* until(() => calls("entity.presentDetails").length === before + 3)
+        expect(calls("entity.presentDetails").at(-1)?.params.error).toBe(JSON.stringify({ status: "not_found" }))
+        yield* requested(found.channel, "not-a-task")
+        yield* until(() => calls("entity.presentDetails").length === before + 4)
         expect(calls("entity.presentDetails").at(-1)?.params.error).toBe(JSON.stringify({ status: "not_found" }))
       }),
   )
