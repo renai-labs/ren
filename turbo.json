@@ -3,7 +3,7 @@
   "agentGuidance": false,
   "globalDependencies": ["patches/**", "tsconfig.base.json", "bunfig.toml", ".github/actions/setup-bun/**"],
   "globalEnv": ["CI", "REN_SLOW"],
-  "globalPassThroughEnv": ["CI", "DATABASE_URL"],
+  "globalPassThroughEnv": ["CI", "DATABASE_URL", "REN_MEMORY_LEASE"],
   "tasks": {
     "typecheck": {
       "dependsOn": ["^typecheck"]
@@ -23,7 +23,8 @@
     "test": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/script/test.ts", "$TURBO_ROOT$/packages/test-harness/src/**"],
-      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_BUDGET_MIB", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
+      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
+      "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"],
       "outputs": []
     },
     "@ren/e2e#test": {
