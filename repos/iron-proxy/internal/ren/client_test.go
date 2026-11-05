@@ -472,7 +472,7 @@ func TestHandleSignsAgainWithRensAWSKeys(t *testing.T) {
 		{name: "a list on the bucket host", method: "GET", url: bucket + "/?delimiter=%2F&list-type=2&prefix=org_1%2Fdrives%2Forg%2F", payloadHash: emptySHA256},
 		{name: "a ranged get of a Unicode key, path-style", method: "GET", url: "http://rustfs:9000/ren-drives/org_1/drives/org/r%C3%A9sum%C3%A9%20final.pdf", payloadHash: emptySHA256, headers: map[string]string{"Range": "bytes=0-99"}},
 		{name: "a put in aws-chunked with an unsigned trailer", method: "PUT", url: space + "/notes.md?x-id=PutObject", payloadHash: "STREAMING-UNSIGNED-PAYLOAD-TRAILER", body: chunks, headers: chunked},
-		{name: "a put with an unsigned payload, path-style", method: "PUT", url: "http://rustfs:9000/ren-drives/org_1/drives/spaces/spc_1/notes.md", payloadHash: "UNSIGNED-PAYLOAD", body: "hello", headers: map[string]string{"Content-Type": "text/markdown", "X-Amz-Meta-Mtime": "1800000000.5"}},
+		{name: "a put with an unsigned payload, path-style", method: "PUT", url: "http://rustfs:9000/ren-drives/org_1/drives/spaces/spc_1/notes.md", payloadHash: "UNSIGNED-PAYLOAD", body: "hello", headers: map[string]string{"Content-Md5": "XUFAKrxLKna5cZ2REBfFkg==", "Content-Type": "text/markdown", "X-Amz-Meta-Mtime": "1800000000.5"}},
 		{name: "the start of a multipart upload", method: "POST", url: space + "/big.bin?uploads=", payloadHash: emptySHA256},
 		{name: "a part of a multipart upload", method: "PUT", url: space + "/big.bin?partNumber=1&uploadId=VXBsb2Fk", payloadHash: "STREAMING-UNSIGNED-PAYLOAD-TRAILER", body: chunks, headers: chunked},
 		{name: "the completion of a multipart upload", method: "POST", url: space + "/big.bin?uploadId=VXBsb2Fk", payloadHash: hex.EncodeToString(completionHash[:]), body: completion, headers: map[string]string{"Content-Type": "application/xml"}},
@@ -506,7 +506,7 @@ func TestHandleSignsAgainWithRensAWSKeys(t *testing.T) {
 			require.NoError(t, err)
 			expected := build()
 			for name := range expected.Header {
-				if !strings.HasPrefix(name, "X-Amz-") {
+				if !strings.HasPrefix(name, "X-Amz-") && name != "Content-Md5" {
 					expected.Header.Del(name)
 				}
 			}

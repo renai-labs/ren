@@ -46,7 +46,7 @@ func awsSign(req *http.Request, op Op, now time.Time) error {
 	signed := req.Clone(req.Context())
 	signed.Header = http.Header{}
 	for name, values := range req.Header {
-		if strings.HasPrefix(http.CanonicalHeaderKey(name), "X-Amz-") {
+		if canonical := http.CanonicalHeaderKey(name); strings.HasPrefix(canonical, "X-Amz-") || canonical == "Content-Md5" {
 			signed.Header[name] = values
 		}
 	}
