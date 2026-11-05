@@ -297,6 +297,15 @@ export const layer = Layer.effect(
 
     const taskIn = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, ref: string) {
       const named = /^(?<prefix>.+)-(?<number>\d{1,9})$/u.exec(ref)?.groups
+      const byId = Schema.is(Task.ID)(ref) ? eq(task.id, ref) : undefined
+      const byIdentifier =
+        named?.prefix && named.number
+          ? and(
+              eq(Database.Schema.task_sequence.prefix, named.prefix.toUpperCase()),
+              eq(task.number, Number(named.number)),
+            )
+          : undefined
+      if (!byId && !byIdentifier) return Option.none<Card>()
       const found = (yield* database.db
         .select({ id: task.id })
         .from(task)
@@ -304,21 +313,7 @@ export const layer = Layer.effect(
           Database.Schema.task_sequence,
           eq(Database.Schema.task_sequence.organization_id, task.organization_id),
         )
-        .where(
-          and(
-            eq(task.organization_id, organizationId),
-            isNull(task.archived_at),
-            or(
-              Schema.is(Task.ID)(ref) ? eq(task.id, ref) : undefined,
-              named?.prefix && named.number
-                ? and(
-                    eq(Database.Schema.task_sequence.prefix, named.prefix.toUpperCase()),
-                    eq(task.number, Number(named.number)),
-                  )
-                : undefined,
-            ),
-          ),
-        )).at(0)
+        .where(and(eq(task.organization_id, organizationId), isNull(task.archived_at), or(byId, byIdentifier)))).at(0)
       return found ? yield* cardOf(found.id) : Option.none<Card>()
     })
 
