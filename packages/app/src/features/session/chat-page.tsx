@@ -185,7 +185,10 @@ function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => vo
       ) : (
         <ChatBreadcrumb chat={chat} />
       )}
-      {chat.child ? null : <ChatActions sessionId={chat.root} title={chat.title} onArchive={chat.archive} />}
+      <ChatActions
+        sessionId={chat.child ?? chat.root}
+        archive={chat.child ? undefined : { title: chat.title, onArchive: chat.archive }}
+      />
       <Button
         variant="ghost"
         size="icon"

@@ -64,7 +64,13 @@ export interface Instance {
     readonly description?: string | null
     readonly html_url?: string
   }>
-  readonly options: { failDelete: boolean; tokenExpiresAt: string; postStatus: number; unavailable: boolean }
+  readonly options: {
+    failDelete: boolean
+    tokenExpiresAt: string
+    postStatus: number
+    unavailable: boolean
+    held: Promise<void> | undefined
+  }
   readonly written: (count: number) => Promise<void>
   readonly stop: () => void
 }
@@ -133,7 +139,8 @@ const appInstallation = (state: State, request: Request, id: string, options: { 
   return new Response(null, { status: 204 })
 }
 
-const resource = (state: State, request: Request, url: URL) => {
+const resource = async (state: State, request: Request, url: URL) => {
+  await state.options.held
   if (!request.headers.get("authorization")?.startsWith("Bearer ghs_")) return new Response(null, { status: 401 })
   const found =
     state.resources.get(url.pathname) ??
@@ -205,7 +212,13 @@ export const start = (): Instance => {
     writes: new Set(),
     removed: [],
     repositories: [],
-    options: { failDelete: false, tokenExpiresAt: "2027-01-15T08:00:00Z", postStatus: 201, unavailable: false },
+    options: {
+      failDelete: false,
+      tokenExpiresAt: "2027-01-15T08:00:00Z",
+      postStatus: 201,
+      unavailable: false,
+      held: undefined,
+    },
   }
   const server = Bun.serve({
     hostname: "127.0.0.1",

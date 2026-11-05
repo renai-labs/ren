@@ -684,6 +684,10 @@ export const SessionProfiles = { id: Argument.String("session").pipe(Argument.wi
 
 export const SessionLinks = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
 
+export const SessionPullRequests = {
+  id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")),
+}
+
 export const TaskPullRequests = { id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")) }
 
 export const AppProfileDelete = { id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")) }
@@ -1123,6 +1127,12 @@ export const commands = [
         Command.withDescription("List a chat’s tasks, pull requests, issues and threads"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.SessionLinks(input)),
+        ),
+      ),
+      Command.make("pull-requests", SessionPullRequests).pipe(
+        Command.withDescription("List a chat’s pull requests and their state"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.SessionPullRequests(input)),
         ),
       ),
     ]),

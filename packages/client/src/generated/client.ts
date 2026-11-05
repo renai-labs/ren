@@ -162,6 +162,8 @@ import type {
   TaskActivityListOutput,
   LinkSessionLinksInput,
   LinkSessionLinksOutput,
+  LinkSessionPullRequestsInput,
+  LinkSessionPullRequestsOutput,
   LinkTaskPullRequestsInput,
   LinkTaskPullRequestsOutput,
   LabelListInput,
@@ -1488,6 +1490,17 @@ export function make(options: ClientOptions) {
             {
               method: "GET",
               path: `/sessions/${encodeURIComponent(input.id)}/links`,
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        pullRequests: (input: LinkSessionPullRequestsInput, requestOptions?: RequestOptions) =>
+          request<LinkSessionPullRequestsOutput>(
+            {
+              method: "GET",
+              path: `/sessions/${encodeURIComponent(input.id)}/pull-requests`,
               successStatus: 200,
               declaredStatuses: [401, 403, 404],
               empty: false,

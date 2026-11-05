@@ -213,9 +213,11 @@ export type TaskEventLinksChanged = { _tag: "link"; added: Array<string>; remove
 
 export type TaskEventArchived = { _tag: "archived" }
 
-export type PullRequestState = "open" | "draft" | "merged" | "closed"
+export type SessionLinksLinkedPullRequest = { url: string; number: number }
 
 export type SessionLinksIssue = { kind: "github_issue" | "linear_issue"; url: string }
+
+export type PullRequestState = "open" | "draft" | "merged" | "closed"
 
 export type ScheduleID = string
 
@@ -884,6 +886,13 @@ export type SessionMessageCompaction =
   | SessionMessageCompactionCompleted
   | SessionMessageCompactionFailed
 
+export type SessionLinksInfo = {
+  tasks: Array<SessionLinksLinkedTask>
+  pullRequests: Array<SessionLinksLinkedPullRequest>
+  issues: Array<SessionLinksIssue>
+  threads: Array<SessionLinksThread>
+}
+
 export type LabelPage = { items: Array<LabelInfo>; page: number; pageSize: number; total: number }
 
 export type TaskInfo = {
@@ -926,13 +935,6 @@ export type TaskEventData =
   | TaskEventLinksChanged
   | TaskEventParentChanged
   | TaskEventArchived
-
-export type SessionLinksInfo = {
-  tasks: Array<SessionLinksLinkedTask>
-  pullRequests: Array<PullRequestInfo>
-  issues: Array<SessionLinksIssue>
-  threads: Array<SessionLinksThread>
-}
 
 export type ScheduleInfo = {
   id: ScheduleID
@@ -6194,6 +6196,10 @@ export type TaskActivityListOutput = TaskActivityPage
 export type LinkSessionLinksInput = { readonly id: { readonly id: string }["id"] }
 
 export type LinkSessionLinksOutput = SessionLinksInfo
+
+export type LinkSessionPullRequestsInput = { readonly id: { readonly id: string }["id"] }
+
+export type LinkSessionPullRequestsOutput = Array<PullRequestInfo>
 
 export type LinkTaskPullRequestsInput = { readonly id: { readonly id: string }["id"] }
 
