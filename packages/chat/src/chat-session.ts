@@ -9,6 +9,7 @@ import type { SessionEvent } from "@ren/schema/session/event"
 import type { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
+import type { SessionVcs } from "@ren/schema/session/vcs"
 import type { Shell } from "@ren/schema/shell"
 import {
   Clock,
@@ -1021,6 +1022,11 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     commands: Effect.flatMap(client, (api) => api.command.list({ sessionID: root })),
     searchFiles: (query: string, type?: SessionCatalog.FileType) =>
       Effect.flatMap(client, (api) => api.file.search({ sessionID: root, query, ...(type && { type }) })),
+    listFiles: (path: string) =>
+      Effect.flatMap(client, (api) => api.file.list({ sessionID: root, ...(path && { path }) })),
+    readFile: (path: string) => Effect.flatMap(client, (api) => api.file.read({ sessionID: root, path })),
+    vcs: Effect.flatMap(client, (api) => api.vcs.get({ sessionID: root })),
+    vcsDiff: (mode: SessionVcs.Mode) => Effect.flatMap(client, (api) => api.vcs.diff({ sessionID: root, mode })),
     interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root, resume: true })),
     stop: (sessionID: Session.ID) => Effect.flatMap(client, (api) => api.session.interrupt({ sessionID })),
     background: Effect.flatMap(client, (api) => api.session.background({ sessionID: root })),
@@ -1069,6 +1075,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         Effect.andThen(removeForm(sessionID, formID)),
         Effect.andThen(forgetExpired(sessionID, formID)),
       ),
+    runShell: (command: string) => Effect.flatMap(client, (api) => api.shell.create({ sessionID: root, command })),
+    shell: (sessionID: Session.ID, shellID: Shell.ID) =>
+      Effect.flatMap(client, (api) => api.shell.get({ sessionID, shellID })),
     shellOutput: (sessionID: Session.ID, shellID: Shell.ID, cursor: number) =>
       Effect.flatMap(client, (api) => api.shell.output({ sessionID, shellID, cursor })),
     stopShell: (sessionID: Session.ID, shellID: Shell.ID) =>

@@ -2,8 +2,10 @@ export * as ChatReact from "./react.js"
 
 import { RegistryContext, useAtomMount, useAtomRefresh, useAtomValue } from "@effect/atom-react"
 import type { Session } from "@ren/schema/session"
+import type { SessionVcs } from "@ren/schema/session/vcs"
 import type { Shell } from "@ren/schema/shell"
 import { Effect } from "effect"
+import type { AsyncResult, Atom } from "effect/reactivity"
 import { createContext, createElement, type ReactNode, useCallback, useContext } from "react"
 import type { ChatAtoms } from "./atoms.js"
 import type { ChatSession } from "./chat-session.js"
@@ -47,6 +49,24 @@ export const useSkills = (sessionID: Session.ID) => useAtomValue(useAtoms().skil
 export const useCommands = (sessionID: Session.ID) => useAtomValue(useAtoms().commands(sessionID))
 
 export const useFiles = (search: ChatAtoms.FileQuery) => useAtomValue(useAtoms().files(search))
+
+const useRefreshable = <A, E>(atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>) => ({
+  result: useAtomValue(atom),
+  refresh: useAtomRefresh(atom),
+})
+
+export const useFolder = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().folder(view))
+
+export const useFile = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().file(view))
+
+export const useVcs = (root: Session.ID) => useRefreshable(useAtoms().vcs(root))
+
+export const useVcsDiff = (root: Session.ID, mode: SessionVcs.Mode) =>
+  useRefreshable(useAtoms().vcsDiff({ root, mode }))
+
+export const useRunningShells = (root: Session.ID) => useAtomValue(useAtoms().runningShells(root))
+
+export const useShell = (view: Omit<ChatAtoms.ShellView, "running">) => useAtomValue(useAtoms().shell(view))
 
 export const useStatus = (sessionID: Session.ID) => useAtomValue(useAtoms().status(sessionID))
 

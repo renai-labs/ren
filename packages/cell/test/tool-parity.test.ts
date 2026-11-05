@@ -55,6 +55,7 @@ const localHarness = Effect.gen(function* () {
         skills: () => Effect.die(new Error("The tool parity host has no skills")),
         commands: () => Effect.die(new Error("The tool parity host has no commands")),
         findFiles: () => Effect.die(new Error("The tool parity host has no file search")),
+        environment: () => Effect.die(new Error("The tool parity host has no environment")),
         webSearchProviders: () => Effect.die(new Error("The tool parity host has no web search")),
         credentials: Context.get(services, Credential.Service),
         sessions: Context.get(services, OpenCodeSession.Service),

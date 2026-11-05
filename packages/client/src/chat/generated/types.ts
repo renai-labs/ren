@@ -138,6 +138,17 @@ export type SessionCatalogCommand = { name: string; description?: string }
 
 export type SessionCatalogFileType = "file" | "directory"
 
+export type SessionCatalogFileContent = {
+  path: string
+  mime: string
+  size: number
+  encoding: "utf8" | "base64"
+  content: string
+  truncated: boolean
+}
+
+export type SessionVcsInfo = { provider?: string; branch: { current?: string; default?: string } }
+
 export type SessionCatalogWebSearchProvider = { id: string; name: string }
 
 export type SessionEventSessionAgentSelected = {
@@ -1381,6 +1392,21 @@ export type ShellListInput = { readonly sessionID: { readonly sessionID: string 
 
 export type ShellListOutput = Array<ShellInfo>
 
+export type ShellCreateInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly command: { readonly command: string; readonly timeout?: number | undefined }["command"]
+  readonly timeout?: { readonly command: string; readonly timeout?: number | undefined }["timeout"]
+}
+
+export type ShellCreateOutput = ShellInfo
+
+export type ShellGetInput = {
+  readonly sessionID: { readonly sessionID: string; readonly shellID: string }["sessionID"]
+  readonly shellID: { readonly sessionID: string; readonly shellID: string }["shellID"]
+}
+
+export type ShellGetOutput = ShellInfo
+
 export type ShellOutputInput = {
   readonly sessionID: { readonly sessionID: string; readonly shellID: string }["sessionID"]
   readonly shellID: { readonly sessionID: string; readonly shellID: string }["shellID"]
@@ -1429,6 +1455,38 @@ export type FileSearchInput = {
 }
 
 export type FileSearchOutput = Array<SessionCatalogFile>
+
+export type FileListInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly path?: { readonly path?: string | undefined }["path"]
+}
+
+export type FileListOutput = Array<SessionCatalogFile>
+
+export type FileReadInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly path: { readonly path: string }["path"]
+}
+
+export type FileReadOutput = SessionCatalogFileContent
+
+export type VcsGetInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type VcsGetOutput = SessionVcsInfo
+
+export type VcsDiffInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly mode?: {
+    readonly mode?: ("working" | "branch" | "committed") | undefined
+    readonly context?: number | undefined
+  }["mode"]
+  readonly context?: {
+    readonly mode?: ("working" | "branch" | "committed") | undefined
+    readonly context?: number | undefined
+  }["context"]
+}
+
+export type VcsDiffOutput = Array<SessionInfoFileDiff>
 
 export type WebsearchProvidersInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 

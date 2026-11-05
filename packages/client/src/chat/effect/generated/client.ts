@@ -282,6 +282,28 @@ type ShellListInput = { readonly sessionID: ShellListRequest["params"]["sessionI
 const EndpointShellList = (raw: RawClient["shell"]) => (input: ShellListInput) =>
   raw["shell.list"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
 
+type ShellCreateRequest = Parameters<RawClient["shell"]["shell.create"]>[0]
+type ShellCreateInput = {
+  readonly sessionID: ShellCreateRequest["params"]["sessionID"]
+  readonly command: ShellCreateRequest["payload"]["command"]
+  readonly timeout?: ShellCreateRequest["payload"]["timeout"]
+}
+const EndpointShellCreate = (raw: RawClient["shell"]) => (input: ShellCreateInput) =>
+  raw["shell.create"]({
+    params: { sessionID: input["sessionID"] },
+    payload: { command: input["command"], timeout: input["timeout"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ShellGetRequest = Parameters<RawClient["shell"]["shell.get"]>[0]
+type ShellGetInput = {
+  readonly sessionID: ShellGetRequest["params"]["sessionID"]
+  readonly shellID: ShellGetRequest["params"]["shellID"]
+}
+const EndpointShellGet = (raw: RawClient["shell"]) => (input: ShellGetInput) =>
+  raw["shell.get"]({ params: { sessionID: input["sessionID"], shellID: input["shellID"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
 type ShellOutputRequest = Parameters<RawClient["shell"]["shell.output"]>[0]
 type ShellOutputInput = {
   readonly sessionID: ShellOutputRequest["params"]["sessionID"]
@@ -307,6 +329,8 @@ const EndpointShellRemove = (raw: RawClient["shell"]) => (input: ShellRemoveInpu
 
 const adaptGroupShell = (raw: RawClient["shell"]) => ({
   list: EndpointShellList(raw),
+  create: EndpointShellCreate(raw),
+  get: EndpointShellGet(raw),
   output: EndpointShellOutput(raw),
   remove: EndpointShellRemove(raw),
 })
@@ -345,7 +369,50 @@ const EndpointFileSearch = (raw: RawClient["file"]) => (input: FileSearchInput) 
     query: { query: input["query"], type: input["type"], limit: input["limit"] },
   }).pipe(Effect.mapError(mapClientError))
 
-const adaptGroupFile = (raw: RawClient["file"]) => ({ search: EndpointFileSearch(raw) })
+type FileListRequest = Parameters<RawClient["file"]["file.list"]>[0]
+type FileListInput = {
+  readonly sessionID: FileListRequest["params"]["sessionID"]
+  readonly path?: FileListRequest["query"]["path"]
+}
+const EndpointFileList = (raw: RawClient["file"]) => (input: FileListInput) =>
+  raw["file.list"]({ params: { sessionID: input["sessionID"] }, query: { path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type FileReadRequest = Parameters<RawClient["file"]["file.read"]>[0]
+type FileReadInput = {
+  readonly sessionID: FileReadRequest["params"]["sessionID"]
+  readonly path: FileReadRequest["query"]["path"]
+}
+const EndpointFileRead = (raw: RawClient["file"]) => (input: FileReadInput) =>
+  raw["file.read"]({ params: { sessionID: input["sessionID"] }, query: { path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupFile = (raw: RawClient["file"]) => ({
+  search: EndpointFileSearch(raw),
+  list: EndpointFileList(raw),
+  read: EndpointFileRead(raw),
+})
+
+type VcsGetRequest = Parameters<RawClient["vcs"]["vcs.get"]>[0]
+type VcsGetInput = { readonly sessionID: VcsGetRequest["params"]["sessionID"] }
+const EndpointVcsGet = (raw: RawClient["vcs"]) => (input: VcsGetInput) =>
+  raw["vcs.get"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+
+type VcsDiffRequest = Parameters<RawClient["vcs"]["vcs.diff"]>[0]
+type VcsDiffInput = {
+  readonly sessionID: VcsDiffRequest["params"]["sessionID"]
+  readonly mode?: VcsDiffRequest["query"]["mode"]
+  readonly context?: VcsDiffRequest["query"]["context"]
+}
+const EndpointVcsDiff = (raw: RawClient["vcs"]) => (input: VcsDiffInput) =>
+  raw["vcs.diff"]({
+    params: { sessionID: input["sessionID"] },
+    query: { mode: input["mode"], context: input["context"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupVcs = (raw: RawClient["vcs"]) => ({ get: EndpointVcsGet(raw), diff: EndpointVcsDiff(raw) })
 
 type WebsearchProvidersRequest = Parameters<RawClient["websearch"]["websearch.providers"]>[0]
 type WebsearchProvidersInput = { readonly sessionID: WebsearchProvidersRequest["params"]["sessionID"] }
@@ -363,6 +430,7 @@ const adaptClient = (raw: RawClient) => ({
   skill: adaptGroupSkill(raw["skill"]),
   command: adaptGroupCommand(raw["command"]),
   file: adaptGroupFile(raw["file"]),
+  vcs: adaptGroupVcs(raw["vcs"]),
   websearch: adaptGroupWebsearch(raw["websearch"]),
 })
 

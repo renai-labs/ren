@@ -222,6 +222,7 @@ export function ChatPage() {
       >
         <div className={cn("h-full", maximized ? "w-full" : "w-(--panel-width)")}>
           <WorkspacePanel
+            root={chat.root}
             messages={chat.messages}
             maximized={maximized}
             onMaximize={setMaximized}

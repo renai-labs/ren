@@ -610,6 +610,24 @@ test("a client lists the agents, skills and commands where the session works, fi
     }),
   ))
 
+test("a session without an environment refuses to list or read files, read version control or run a command", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      yield* Effect.promise(() => Bun.write(`${brain.directory}/notes.md`, "# Notes"))
+      const params = { sessionID: brain.id }
+      const refused = yield* Effect.all([
+        brain.chat.file["file.list"]({ params, query: {} }).pipe(Effect.flip),
+        brain.chat.file["file.read"]({ params, query: { path: "notes.md" } }).pipe(Effect.flip),
+        brain.chat.vcs["vcs.get"]({ params }).pipe(Effect.flip),
+        brain.chat.vcs["vcs.diff"]({ params, query: {} }).pipe(Effect.flip),
+        brain.chat.shell["shell.create"]({ params, payload: { command: "true" } }).pipe(Effect.flip),
+      ])
+      expect(refused.map((error) => error._tag)).toEqual(refused.map(() => "InvalidRequestError"))
+    }),
+  ))
+
 test("a session with no messages reads as an empty page", () =>
   live(
     Effect.gen(function* () {
@@ -656,8 +674,12 @@ test("a client token for one chat reads that chat and its child, and gets Forbid
           payload: { id: SessionMessage.ID.create(), text: "hi", delivery: "steer" },
         }).pipe(Effect.flip),
         own.shell["shell.list"]({ params }).pipe(Effect.flip),
+        own.shell["shell.create"]({ params, payload: { command: "true" } }).pipe(Effect.flip),
         own.agent["agent.list"]({ params }).pipe(Effect.flip),
         own.file["file.search"]({ params, query: { query: "a" } }).pipe(Effect.flip),
+        own.file["file.list"]({ params, query: {} }).pipe(Effect.flip),
+        own.file["file.read"]({ params, query: { path: "a.txt" } }).pipe(Effect.flip),
+        own.vcs["vcs.diff"]({ params, query: {} }).pipe(Effect.flip),
         own.websearch["websearch.providers"]({ params }).pipe(Effect.flip),
       ])
       expect(refused.map((error) => error._tag)).toEqual(refused.map(() => "ForbiddenError"))

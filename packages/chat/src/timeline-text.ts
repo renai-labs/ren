@@ -127,7 +127,7 @@ export const notice = (message: SessionMessage.Info): Notice | undefined => {
 
 export const shellOutput = (text: string) => text.replaceAll(ansi, "").replaceAll(/\r\n?/g, "\n")
 
-export const shellError = (message: SessionMessage.Shell) => {
+export const shellError = (message: Pick<SessionMessage.Shell, "status" | "exit">) => {
   if (message.status === "timeout") return "Timed out"
   if (message.status === "killed") return "Cancelled"
   return message.status === "exited" && message.exit ? `Exit ${message.exit}` : undefined

@@ -3,6 +3,7 @@ export * as ChatAtoms from "./atoms.js"
 import type { Session } from "@ren/schema/session"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionMessage } from "@ren/schema/session/message"
+import type { SessionVcs } from "@ren/schema/session/vcs"
 import type { Shell } from "@ren/schema/shell"
 import { Effect, Option, Queue, Stream, SubscriptionRef } from "effect"
 import type { HttpClient } from "effect/http"
@@ -25,6 +26,11 @@ export interface FileQuery {
   readonly root: Session.ID
   readonly query: string
   readonly type?: SessionCatalog.FileType
+}
+
+export interface PathView {
+  readonly root: Session.ID
+  readonly path: string
 }
 
 export interface ShellView extends View {
@@ -206,6 +212,40 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     ),
   )
 
+  const running = Atom.family((root: Session.ID) =>
+    Atom.make((get) =>
+      Option.match(AsyncResult.value(get(state(root))), {
+        onNone: () => false,
+        onSome: (current) => ChatState.activity(current, root) === "running",
+      }),
+    ),
+  )
+
+  const workspace = <A, E>(root: Session.ID, read: (opened: ChatSession.ChatSession) => Effect.Effect<A, E>) =>
+    Atom.make((get) => {
+      get(running(root))
+      return Effect.flatMap(get.result(session(root)), read)
+    })
+
+  const folder = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.listFiles(view.path)))
+
+  const file = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.readFile(view.path)))
+
+  const vcs = Atom.family((root: Session.ID) => workspace(root, (opened) => opened.vcs))
+
+  const vcsDiff = Atom.family((view: { readonly root: Session.ID; readonly mode: SessionVcs.Mode }) =>
+    workspace(view.root, (opened) => opened.vcsDiff(view.mode)),
+  )
+
+  const runningShells = Atom.family((root: Session.ID) =>
+    Atom.make((get) =>
+      Option.match(AsyncResult.value(get(state(root))), {
+        onNone: () => undefined,
+        onSome: (current) => current.shells,
+      }),
+    ),
+  )
+
   const webSearchProviders = Atom.family((view: View) =>
     Atom.make((get) =>
       Effect.flatMap(get.result(session(view.root)), (opened) => opened.webSearchProviders(view.sessionID)),
@@ -219,6 +259,13 @@ export const make = <R, ER>(options: Options<R, ER>) => {
         onSome: (current) => ChatState.shellRunning(current, view.shellID),
       }),
     ),
+  )
+
+  const shell = Atom.family((view: Omit<ShellView, "running">) =>
+    Atom.make((get) => {
+      get(runningShells(view.root))
+      return Effect.flatMap(get.result(session(view.root)), (opened) => opened.shell(view.sessionID, view.shellID))
+    }),
   )
 
   const shells = ShellOutput.make()
@@ -256,8 +303,14 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     skills,
     commands,
     files,
+    folder,
+    file,
+    vcs,
+    vcsDiff,
     webSearchProviders,
     shellRunning,
+    runningShells,
+    shell,
     shellOutput,
     run,
   }
