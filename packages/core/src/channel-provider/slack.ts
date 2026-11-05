@@ -351,10 +351,12 @@ const kindOf = (event: typeof SlackEvent.Type) =>
 const uninstalls = (event: typeof SlackEvent.Type) =>
   event.type === "app_uninstalled" || (event.type === "tokens_revoked" && (event.tokens?.bot ?? []).length > 0)
 
+const handledSubtypes = { channel: "bot_message", dm: "file_share" } as const
+
 const ignoredBecause = (bot: string | undefined, event: typeof SlackEvent.Type, kind: "channel" | "dm") => {
-  if (event.subtype && !(kind === "dm" && event.subtype === "file_share"))
+  if (event.subtype && event.subtype !== handledSubtypes[kind])
     return `Slack ${event.type}.${event.subtype} is not handled`
-  if (event.bot_id || event.user === bot) return "Slack sent a message from a bot"
+  if ((bot && event.user === bot) || (event.bot_id && kind === "dm")) return "Slack sent a message from a bot"
   return ""
 }
 
@@ -389,12 +391,10 @@ const fromEvent = (delivery: Delivery, event: typeof SlackEvent.Type): Channel.P
   if (!kind) return ignore(`Slack ${[event.type, event.channel_type].filter(Boolean).join(".")} is not handled`)
   const reason = ignoredBecause(delivery.bot, event, kind)
   if (reason) return ignore(reason)
-  if (!event.channel || !event.ts || !event.user || !delivery.eventId)
+  const user = event.user ?? event.bot_id
+  if (!event.channel || !event.ts || !user || !delivery.eventId)
     return ignore("Slack sent a message with no channel, timestamp, sender or event id")
-  return {
-    _tag: "Event",
-    event: messageOf(delivery, event, { kind, channel: event.channel, ts: event.ts, user: event.user }),
-  }
+  return { _tag: "Event", event: messageOf(delivery, event, { kind, channel: event.channel, ts: event.ts, user }) }
 }
 
 const lookups = 50

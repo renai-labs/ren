@@ -173,7 +173,7 @@ describe("Slack", () => {
   )
 
   it.live(
-    "a mention or a DM is an event of the thread channel:thread_ts; a bot, Ren's own message, an edit and a channel message without a mention are ignored",
+    "a mention or a DM is an event of the thread channel:thread_ts, and another app's mention is sent by its bot; Ren's own message, an app's DM, an edit and a channel message without a mention are ignored",
     () =>
       Effect.gen(function* () {
         expect(
@@ -222,6 +222,21 @@ describe("Slack", () => {
             files: [{ url: "https://f/1", name: "a.log", mime: "text/plain" }],
           },
         })
+        const alert = { type: "app_mention", team: "T01", channel: "C07", ts: "1714.00", text: "<@UBOT> new issue" }
+        expect(
+          yield* Effect.forEach(
+            [
+              { ...alert, bot_id: "B07" },
+              { ...alert, bot_id: "B07", subtype: "bot_message" },
+              { ...alert, bot_id: "B07", user: "U07" },
+            ],
+            parsed,
+          ),
+        ).toMatchObject([
+          { _tag: "Event", event: { sender: { accountId: "T01:B07" }, text: "new issue" } },
+          { _tag: "Event", event: { sender: { accountId: "T01:B07" } } },
+          { _tag: "Event", event: { sender: { accountId: "T01:U07" } } },
+        ])
         const message = { type: "message", channel_type: "im", user: "U01", channel: "D01", ts: "1713.00", text: "hi" }
         expect(
           yield* Effect.forEach(
@@ -230,10 +245,19 @@ describe("Slack", () => {
               { ...message, user: "UBOT" },
               { ...message, subtype: "message_changed" },
               { ...message, channel_type: "channel" },
+              { ...alert, user: "UBOT", bot_id: "B00" },
+              { ...alert, bot_id: "B07", subtype: "message_changed" },
             ],
             parsed,
           ),
-        ).toMatchObject([{ _tag: "Ignore" }, { _tag: "Ignore" }, { _tag: "Ignore" }, { _tag: "Ignore" }])
+        ).toMatchObject([
+          { _tag: "Ignore" },
+          { _tag: "Ignore" },
+          { _tag: "Ignore" },
+          { _tag: "Ignore" },
+          { _tag: "Ignore" },
+          { _tag: "Ignore" },
+        ])
       }),
   )
 
