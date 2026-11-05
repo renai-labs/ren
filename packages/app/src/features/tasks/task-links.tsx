@@ -61,11 +61,12 @@ export function TaskLinks(props: {
   links: TaskInfo["links"]
   pullRequests: ReadonlyArray<PullRequestInfo> | undefined
 }) {
+  const pulls = new Map(props.pullRequests?.map((pull) => [pull.url, pull]))
   return (
     <div className="flex flex-wrap gap-1.5">
       {props.links.map((link) => {
         const shown = describe(link)
-        const pull = props.pullRequests?.find((each) => each.url === link.url)
+        const pull = pulls.get(link.url)
         const content = (
           <>
             <LinkMark link={link} shown={shown} pull={pull} />
