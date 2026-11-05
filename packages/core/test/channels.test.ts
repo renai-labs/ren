@@ -451,7 +451,7 @@ describe("ChannelTurns", () => {
           sessionId: thread.sessionId,
           delivery: "queue",
           prompt: {
-            text: "You have not answered in the Slack thread. Text in this chat is not sent there: answer the person with slack_reply_to_current_thread.",
+            text: "You have not answered in the Slack thread. Text in this chat is not sent there: answer the person with slack_send_message.",
           },
           synthetic: { description: "Reminder: reply in the thread", source: "channel" },
         },

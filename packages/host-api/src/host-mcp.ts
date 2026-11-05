@@ -11,15 +11,16 @@ export const channelServers: Readonly<
   Partial<Record<Channel.Provider, { readonly reply: string; readonly posting: ReadonlyArray<string> }>>
 > = {
   slack: {
-    reply: "reply_to_current_thread",
+    reply: "send_message",
     posting: [
-      "reply_to_current_thread",
-      "post_new_message",
-      "reply_in_thread",
-      "upload_file",
-      "react",
+      "send_message",
+      "schedule_message",
       "edit_message",
       "delete_message",
+      "add_reaction",
+      "remove_reaction",
+      "create_canvas",
+      "update_canvas",
     ],
   },
 }

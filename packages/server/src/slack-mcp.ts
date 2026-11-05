@@ -3,6 +3,7 @@ export * as SlackMcp from "./slack-mcp.js"
 import { Actor } from "@ren/core/actor"
 import { Brains } from "@ren/core/brains"
 import { SlackBot } from "@ren/core/slack-bot"
+import { SlackGuides } from "@ren/core/slack-guides"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import { Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { McpProtocol, McpSchema, McpServer } from "effect/ai"
@@ -11,12 +12,12 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 export const path = HostMcp.channelPath("slack")
 
 const instructions = [
-  "Slack tools for the Slack workspace connected to this Ren space. Each tool acts as Ren's Slack bot.",
-  "Answer the Slack thread that started this session with reply_to_current_thread.",
-  "Write two or three sentences, the answer first, in Markdown, never Slack mrkdwn.",
-  "Put longer output in a file: show it with show_file before you reply, and the reply uploads it to the thread.",
-  "Put a numeric comparison in charts (at most 2): Ren posts each as a native Slack chart under the text.",
-].join(" ")
+  "Slack tools act as Ren’s bot in the Slack workspace of this space, not as a person.",
+  "Text in this chat is not posted to Slack: answer the Slack thread that started the chat with slack_send_message, without channel_id.",
+  "Write standard Markdown, never Slack mrkdwn. Put the answer first and keep it short; put long output in a file shown with show_file, and the answer posts it.",
+  "Post in another channel, DM someone or schedule a message only when the person asked for it.",
+  `Before writing more than a short answer, searching Slack or writing a canvas, read its guide with read_mcp_resource from the slack server: ${SlackGuides.guides.map((guide) => guide.uri).join(", ")}.`,
+].join("\n")
 
 const ObjectSchema = Schema.Union([
   Schema.Struct({
@@ -52,7 +53,7 @@ const tools = Layer.effectDiscard(
             }),
             annotations: {
               readOnlyHint: !tool.posts,
-              destructiveHint: tool.name === "delete_message",
+              destructiveHint: tool.destructive,
               idempotentHint: !tool.posts,
               openWorldHint: true,
             },
@@ -109,7 +110,23 @@ const authentication = HttpRouter.middleware(
   }),
 ).layer
 
-export const layer = tools.pipe(
+const guides = Layer.effectDiscard(
+  Effect.forEach(
+    SlackGuides.guides,
+    (guide) =>
+      McpServer.registerResource({
+        uri: guide.uri,
+        name: guide.name,
+        description: guide.description,
+        mimeType: "text/markdown",
+        audience: ["assistant"],
+        content: Effect.succeed(guide.text),
+      }),
+    { discard: true },
+  ),
+)
+
+export const layer = Layer.merge(tools, guides).pipe(
   Layer.provideMerge(
     McpServer.layerHttp({
       name: "slack",

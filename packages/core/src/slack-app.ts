@@ -1,7 +1,7 @@
 export * as SlackApp from "./slack-app.js"
 
 import type { Auth } from "@ren/schema/auth"
-import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
+import { Config, Context, Effect, Layer, Option, Predicate, Redacted, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { ChannelSecrets } from "./channel-secrets.js"
 
@@ -21,11 +21,14 @@ export interface Settings {
 
 export const botScopes = [
   "app_mentions:read",
+  "canvases:read",
+  "canvases:write",
   "channels:history",
   "channels:join",
   "channels:read",
   "chat:write",
   "chat:write.public",
+  "emoji:read",
   "files:read",
   "files:write",
   "groups:history",
@@ -35,8 +38,12 @@ export const botScopes = [
   "im:write",
   "links:read",
   "links:write",
+  "mpim:history",
+  "mpim:read",
   "reactions:read",
   "reactions:write",
+  "search:read.files",
+  "search:read.public",
   "users:read",
   "users:read.email",
   "users.profile:read",
@@ -83,15 +90,14 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
 
   const post = <S extends Schema.Top>(
     method: string,
-    params: Readonly<Record<string, Param>>,
+    params: Readonly<Record<string, Param | undefined>>,
     schema: S,
     token?: Redacted.Redacted,
   ) => {
     const form = Object.fromEntries(
-      Object.entries(params).map(([key, value]) => [
-        key,
-        typeof value === "object" ? JSON.stringify(value) : String(value),
-      ]),
+      Object.entries(params).flatMap(([key, value]) =>
+        Predicate.isUndefined(value) ? [] : [[key, typeof value === "object" ? JSON.stringify(value) : String(value)]],
+      ),
     )
     const request = HttpClientRequest.post(`${app.api}/${method}`).pipe(
       HttpClientRequest.bodyUrlParams(form),

@@ -39,6 +39,8 @@ interface Reply {
   readonly text: string
   readonly bot_id?: string
   readonly files?: ReadonlyArray<object>
+  readonly thread_ts?: string
+  readonly reply_count?: number
 }
 
 export interface Posted {
@@ -53,6 +55,7 @@ interface Channel {
   readonly id: string
   readonly name: string
   readonly is_private: boolean
+  readonly is_mpim?: boolean
 }
 
 export interface Instance {
@@ -64,7 +67,8 @@ export interface Instance {
   readonly replies: Array<Reply>
   readonly threads: Map<string, Array<Posted>>
   readonly users: Map<string, User>
-  readonly files: Map<string, string>
+  readonly files: Map<string, string | Uint8Array<ArrayBuffer>>
+  readonly answers: Map<string, (params: Params) => object>
   readonly posted: Array<{ readonly method: string; readonly token: string; readonly params: Params }>
   readonly responses: Array<unknown>
   readonly options: {
@@ -196,11 +200,31 @@ const post = (state: State, name: string, token: string, params: Params) => {
   return answer({ ts })
 }
 
+const canned = (state: State, name: string, token: string, params: Params) => {
+  const reply = state.answers.get(name)
+  if (!reply) return
+  state.posted.push({ method: name, token, params })
+  const body = reply(params)
+  return "error" in body && typeof body.error === "string" ? refuse(body.error) : answer(body)
+}
+
+const reads: Readonly<Record<string, (state: State, params: Params) => Response>> = {
+  "conversations.open": (_, params) => answer({ channel: { id: `D${(params.users ?? "").replaceAll(",", "")}` } }),
+  "conversations.history": replies,
+  "conversations.replies": replies,
+  "conversations.list": conversations,
+  "conversations.info": (state, params) => {
+    const found = state.channels.find((channel) => channel.id === params.channel)
+    return found ? answer({ channel: found }) : refuse("channel_not_found")
+  },
+}
+
 const method = (state: State, name: string, token: string, params: Params, origin: string) => {
   if (name === "oauth.v2.access") return exchange(state, params)
   if (!known(state, token)) return refuse("invalid_auth")
-  const looked = lookup(state, name, params, origin)
-  if (looked) return looked
+  const found =
+    canned(state, name, token, params) ?? lookup(state, name, params, origin) ?? reads[name]?.(state, params)
+  if (found) return found
   switch (name) {
     case "auth.revoke":
       if (state.options.revokeError) return refuse(state.options.revokeError)
@@ -211,14 +235,6 @@ const method = (state: State, name: string, token: string, params: Params, origi
         upload_url: `${origin}/upload/F${state.uploads.size + 1}`,
         file_id: `F${state.uploads.size + 1}`,
       })
-    case "conversations.replies":
-      return replies(state, params)
-    case "conversations.list":
-      return conversations(state, params)
-    case "conversations.info": {
-      const found = state.channels.find((channel) => channel.id === params.channel)
-      return found ? answer({ channel: found }) : refuse("channel_not_found")
-    }
     default:
       return post(state, name, token, params)
   }
@@ -234,6 +250,7 @@ export const start = (): Instance => {
     threads: new Map(),
     users: new Map(),
     files: new Map(),
+    answers: new Map(),
     posted: [],
     responses: [],
     options: {
