@@ -47,6 +47,7 @@ const PullRequestEvent = Schema.Struct({
 const IssueEvent = Schema.Struct({
   action: Schema.String,
   installation: Schema.Struct({ id: Schema.Number }),
+  sender: Account,
   issue: Schema.Struct({ html_url: Schema.String, title: Schema.String, body: Schema.NullOr(Schema.String) }),
 })
 
@@ -202,14 +203,25 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       : ignore(`GitHub pull_request.closed names no pull request on ${web.host}`)
   }
   const mentionIn = (
-    body: { readonly action: string; readonly installation: { readonly id: number } },
+    body: {
+      readonly action: string
+      readonly installation: { readonly id: number }
+      readonly sender: typeof Account.Type
+    },
     htmlUrl: string,
     parts: ReadonlyArray<string | null | undefined>,
   ): Channel.Signal | undefined => {
     const url = mentionActions.has(body.action) ? webUrl(htmlUrl) : undefined
     const link = url ? TaskLink.classify(url) : undefined
     return url && link && (link.kind === "github_pr" || link.kind === "github_issue")
-      ? { kind: "mentioned", install: String(body.installation.id), link, url, text: parts.filter(Boolean).join("\n") }
+      ? {
+          kind: "mentioned",
+          install: String(body.installation.id),
+          link,
+          url,
+          sender: { accountId: String(body.sender.id), handle: body.sender.login },
+          text: parts.filter(Boolean).join("\n"),
+        }
       : undefined
   }
   const fromIssue = (body: typeof IssueEvent.Type): Channel.Parsed => {

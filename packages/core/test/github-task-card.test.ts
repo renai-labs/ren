@@ -7,6 +7,7 @@ import { GitHubApp } from "../src/github-app.js"
 import { GitHubTaskCard } from "../src/github-task-card.js"
 import { Task } from "../src/task.js"
 import { GitHubServer } from "./lib/github-server.js"
+import { Seed } from "./lib/seed.js"
 import { TaskFixture } from "./lib/task-fixture.js"
 
 const github = GitHubServer.start()
@@ -82,6 +83,33 @@ describe("GitHubTaskCard", () => {
       expect(github.patched.at(-1)).toMatchObject({
         path: `/repos/${repository}/issues/comments/${id}`,
         body: { body: expect.stringContaining("**Status:** In progress") },
+      })
+    }),
+  )
+
+  it.live("a parent that moves to another space edits the comments of the subtasks whose agent it clears", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const o = yield* TaskFixture.org
+      yield* installed(o)
+      yield* Seed.join(o.eng.id, o.ada.userId)
+      const repository = `acme/web-${crypto.randomUUID().slice(0, 8)}`
+      const parent = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Ship SSO" })
+      const before = writes()
+      yield* tasks.create(o.ada, {
+        spaceId: o.factory.id,
+        parentId: parent.id,
+        title: "Add the login page",
+        agentId: yield* o.agent("build"),
+        links: [`https://github.com/${repository}/issues/7`],
+      })
+      yield* Effect.promise(() => github.written(before + 1))
+      expect(github.posted.at(-1)?.body).toEqual({ body: expect.stringContaining("**Agent:** build") })
+      yield* tasks.assign(o.ada, parent.id, { spaceId: o.eng.id, start: "none" })
+      yield* Effect.promise(() => github.written(before + 2))
+      expect(github.patched.at(-1)).toMatchObject({
+        path: `/repos/${repository}/issues/comments/${github.comments.get(`/repos/${repository}/issues/7/comments`)?.at(0)?.id}`,
+        body: { body: expect.stringContaining("**Agent:** none") },
       })
     }),
   )

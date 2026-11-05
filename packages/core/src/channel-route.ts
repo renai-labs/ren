@@ -10,6 +10,7 @@ import type { Task } from "@ren/schema/task"
 import { and, eq, isNull } from "drizzle-orm"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "./access.js"
+import type { Actor } from "./actor.js"
 import { ChannelIdentity } from "./channel-identity.js"
 import { ChannelInstallQueries } from "./channel-install/queries.js"
 import { ChannelProvider } from "./channel-provider.js"
@@ -49,6 +50,10 @@ export interface Route {
 
 export interface Interface {
   readonly resolve: (event: Channel.Event) => Effect.Effect<Route, Refused | Unroutable | NotTriggered>
+  readonly actorOf: (
+    organizationId: Auth.OrganizationID,
+    from: Pick<Channel.Event, "provider" | "install" | "sender">,
+  ) => Effect.Effect<Option.Option<Actor.Info>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/ChannelRoute") {}
@@ -136,6 +141,28 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
+      actorOf: Effect.fn("ChannelRoute.actorOf")(function* (
+        organizationId: Auth.OrganizationID,
+        from: Pick<Channel.Event, "provider" | "install" | "sender">,
+      ) {
+        const sender = yield* identity.find(organizationId, from)
+        if (Option.isNone(sender)) return Option.none()
+        const found = (yield* database.db
+          .select({ role: Database.Schema.member.role })
+          .from(Database.Schema.member)
+          .where(
+            and(
+              eq(Database.Schema.member.organizationId, organizationId),
+              eq(Database.Schema.member.userId, sender.value),
+            ),
+          )
+          .pipe(Effect.orDie)).at(0)
+        return Option.map(Option.fromNullishOr(found), (member): Actor.Info => ({
+          userId: sender.value,
+          organizationId,
+          roles: member.role.split(","),
+        }))
+      }),
       resolve: Effect.fn("ChannelRoute.resolve")(function* (event: Channel.Event) {
         const found = (yield* database.db
           .select({

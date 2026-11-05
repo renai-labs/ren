@@ -42,6 +42,7 @@ export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assig
   ) => Effect.Effect<ReadonlyArray<Task.ID>>
   readonly linkMentioned: (
     organizationId: Auth.OrganizationID,
+    actor: Actor.Info | null,
     url: string,
     text: string,
   ) => Effect.Effect<ReadonlyArray<Task.ID>>
@@ -401,7 +402,13 @@ export const layer = Layer.effect(
           const factory = yield* TaskFactory.handOff(transaction, row.task, actor.agent?.agentId, input)
           if (factory._tag === "review") {
             const requested = yield* TaskFactory.requestReview(transaction, row.task, factory.reason)
-            return { hasAgent: false, agentChanged: false, start: undefined, review: requested ? factory.reason : null }
+            return {
+              hasAgent: false,
+              agentChanged: false,
+              start: undefined,
+              review: requested ? factory.reason : null,
+              subtasks: [],
+            }
           }
           const next = yield* nextAssignment(transaction, actor, row, {
             spaceId: input.spaceId,
@@ -436,6 +443,7 @@ export const layer = Layer.effect(
               },
             ])
           }
+          const moved: Array<Task.ID> = []
           if (next.spaceId !== row.task.space_id) {
             // oxlint-disable-next-line ren/no-comments -- access AC8: a moved task drops the labels of the space it leaves.
             yield* transaction.delete(Database.Schema.task_label).where(
@@ -483,6 +491,7 @@ export const layer = Layer.effect(
               .where(and(eq(Database.Schema.task.parent_id, id), isNull(Database.Schema.task.archived_at)))
               .orderBy(asc(Database.Schema.task.id))
               .for("update", { of: Database.Schema.task })
+            moved.push(...subtasks.map((subtask) => subtask.id))
             yield* Effect.forEach(subtasks, (subtask) =>
               Effect.gen(function* () {
                 yield* transaction
@@ -519,6 +528,7 @@ export const layer = Layer.effect(
             agentChanged: next.agentId !== row.task.agent_id,
             start: factory.start,
             review: null,
+            subtasks: moved,
           }
         }),
       )
@@ -531,7 +541,7 @@ export const layer = Layer.effect(
         })
       const start = input.start ?? assigned.start ?? (assigned.agentChanged ? "continue" : "none")
       if (start === "none" || !assigned.hasAgent) {
-        yield* cards.refresh(id)
+        yield* Effect.forEach([id, ...assigned.subtasks], cards.refresh, { discard: true })
         return { task: yield* read(actor, id), start: "none" }
       }
       const started = yield* launch(actor, id, start).pipe(
@@ -540,7 +550,7 @@ export const layer = Layer.effect(
           Effect.logWarning("The task’s agent did not start", error).pipe(Effect.as("failed" as const)),
         ),
       )
-      yield* cards.refresh(id)
+      yield* Effect.forEach([id, ...assigned.subtasks], cards.refresh, { discard: true })
       return { task: yield* read(actor, id), start: started }
     })
 
@@ -642,6 +652,7 @@ export const layer = Layer.effect(
       }),
       linkMentioned: Effect.fn("Task.linkMentioned")(function* (
         organizationId: Auth.OrganizationID,
+        actor: Actor.Info | null,
         url: string,
         text: string,
       ) {
@@ -680,25 +691,31 @@ export const layer = Layer.effect(
             .transaction((transaction) =>
               Effect.gen(function* () {
                 const target = { id: row.id, organizationId }
-                yield* transaction
-                  .select({ id: Database.Schema.task.id })
-                  .from(Database.Schema.task)
-                  .where(eq(Database.Schema.task.id, row.id))
-                  .for("update")
+                const where = eq(Database.Schema.task.id, row.id)
+                yield* actor
+                  ? TaskQueries.lockForWrite(transaction, access, actor, where, actions.update)
+                  : transaction
+                      .select({ id: Database.Schema.task.id })
+                      .from(Database.Schema.task)
+                      .where(where)
+                      .for("update")
                 const events = yield* editLinks(transaction, target, [url], [])
                 if (events.length === 0) return []
                 yield* transaction
                   .update(Database.Schema.task)
                   .set({ updated_at: sql`now()` })
                   .where(eq(Database.Schema.task.id, row.id))
-                yield* TaskTrail.record(transaction, target, null, events)
+                yield* TaskTrail.record(transaction, target, actor, events)
                 return [row.id]
               }),
             )
             .pipe(
-              Effect.catchTag("Primitive.Invalid", (error) =>
-                Effect.logWarning(`${url} was not linked to ${row.id}: ${error.message}`).pipe(Effect.as([])),
-              ),
+              Effect.catchTags({
+                "Primitive.Invalid": (error) =>
+                  Effect.logWarning(`${url} was not linked to ${row.id}: ${error.message}`).pipe(Effect.as([])),
+                "Primitive.NotFound": () => Effect.succeed([]),
+                "Primitive.Forbidden": () => Effect.succeed([]),
+              }),
               Effect.orDie,
             ),
         ).pipe(Effect.map((each) => each.flat()))
