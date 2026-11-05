@@ -21,7 +21,6 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
     editor.update(endpoint.id, (provider) => {
       provider.activation = "enabled"
       provider.package = protocol.package
-      // oxlint-disable-next-line ren/no-comments -- OpenCode's OpenAI plugin defaults to a WebSocket, which the inference service does not serve: every first turn waits for its retries.
       provider.settings = { ...provider.settings, baseURL: endpoint.baseUrl, transport: "http" }
       if (protocol.canonical) provider.canonical = protocol.canonical
       if (endpoint.headers) provider.headers = { ...provider.headers, ...endpoint.headers }

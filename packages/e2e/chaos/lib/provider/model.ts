@@ -2,9 +2,7 @@ export * as ModelProvider from "./model.js"
 
 import { StubModel } from "@ren/cell/testing"
 import { Option, Schema } from "effect"
-import { createHash } from "node:crypto"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
-import type { Duplex } from "node:stream"
 import { Wait } from "../wait.js"
 
 export type Step =
@@ -51,25 +49,6 @@ const ChatRequest = Schema.Struct({
 
 const decodeRequest = Schema.decodeUnknownOption(Schema.fromJsonString(ChatRequest))
 
-const ResponsesRequest = Schema.Struct({
-  model: Schema.String,
-  instructions: Schema.optional(Schema.String),
-  input: Schema.Array(Schema.Struct({ role: Schema.optional(Schema.String), content: Schema.optional(Content) })),
-})
-
-const decodeResponsesRequest = Schema.decodeUnknownOption(Schema.fromJsonString(ResponsesRequest))
-
-const fromResponses = (body: typeof ResponsesRequest.Type): typeof ChatRequest.Type => ({
-  model: body.model,
-  messages: [
-    ...(body.instructions === undefined ? [] : [{ role: "system", content: body.instructions }]),
-    ...body.input.map((item) => ({
-      role: item.role === "developer" ? "system" : (item.role ?? ""),
-      content: item.content,
-    })),
-  ],
-})
-
 const flatten = (content: typeof Content.Type | undefined) => {
   if (typeof content === "string") return content
   if (!content) return ""
@@ -102,7 +81,6 @@ export interface Instance {
     readonly down: (isDown: boolean) => void
   }
   readonly calls: ReadonlyArray<Call>
-  readonly upgrades: ReadonlyArray<string>
   readonly script: (steps?: ReadonlyArray<Step>) => Script
   readonly stop: () => Promise<void>
 }
@@ -136,46 +114,6 @@ const usage = frame({
 })
 
 const done = encoder.encode("data: [DONE]\n\n")
-
-const event = (data: { readonly type: string } & Record<string, unknown>) =>
-  encoder.encode(`event: ${data.type}\ndata: ${JSON.stringify(data)}\n\n`)
-
-async function* responsesText(step: Step): AsyncGenerator<Uint8Array, undefined> {
-  if (step.type !== "text") throw new Error(`the Responses route serves text and status steps, not ${step.type}`)
-  const value = step.text
-  const message = { type: "message", id: "msg_chaos", role: "assistant", status: "in_progress", content: [] }
-  yield event({ type: "response.output_item.added", output_index: 0, item: message })
-  yield* value
-    .split(/(?<= )/)
-    .map((word) => event({ type: "response.output_text.delta", item_id: message.id, output_index: 0, delta: word }))
-  yield event({
-    type: "response.output_item.done",
-    output_index: 0,
-    item: { ...message, status: "completed", content: [{ type: "output_text", text: value, annotations: [] }] },
-  })
-  yield event({
-    type: "response.completed",
-    response: {
-      id: "resp_chaos",
-      status: "completed",
-      usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
-    },
-  })
-  return undefined
-}
-
-const websocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-
-const refuseWebSocket = (request: IncomingMessage, socket: Duplex) => {
-  const accept = createHash("sha1")
-    .update(`${request.headers["sec-websocket-key"] ?? ""}${websocketGuid}`)
-    .digest("base64")
-  socket.write(
-    `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
-  )
-  // oxlint-disable-next-line ren/no-comments -- A close frame with code 1011 after the first request, as the inference service sends.
-  socket.once("data", () => socket.end(Uint8Array.of(0x88, 0x02, 0x03, 0xf3)))
-}
 
 const toolCall = (name: string, input: string) =>
   chunk({
@@ -219,19 +157,6 @@ async function* respond(step: Step, gate: Promise<void>): AsyncGenerator<Uint8Ar
   yield usage
   yield done
   return undefined
-}
-
-const routes: Readonly<
-  Record<
-    string,
-    {
-      readonly decode: (body: string) => Option.Option<typeof ChatRequest.Type>
-      readonly stream: (step: Step, gate: Promise<void>) => AsyncGenerator<Uint8Array, "cut" | undefined>
-    }
-  >
-> = {
-  "/chat/completions": { decode: decodeRequest, stream: respond },
-  "/responses": { decode: (body) => Option.map(decodeResponsesRequest(body), fromResponses), stream: responsesText },
 }
 
 const markerPattern = /chaos_[0-9a-f]{12}/g
@@ -296,8 +221,6 @@ settled.resolve()
 
 export const start = async (): Promise<Instance> => {
   const calls: Array<Call> = []
-  const upgrades: Array<string> = []
-  const upgraded = new Set<Duplex>()
   const scripts = new Map<string, Entry>()
 
   const info = { models: StubModel.defaultModels, isDown: false }
@@ -306,9 +229,8 @@ export const start = async (): Promise<Instance> => {
     response.end(info.isDown ? "{}" : JSON.stringify({ data: info.models }))
   }
   const chat = async (request: IncomingMessage, response: ServerResponse) => {
-    const route = Object.entries(routes).find((entry) => request.url?.endsWith(entry[0]))?.[1]
-    const decoded = route ? route.decode(await readBody(request)) : Option.none()
-    if (!route || Option.isNone(decoded)) {
+    const decoded = decodeRequest(await readBody(request))
+    if (!request.url?.endsWith("/chat/completions") || Option.isNone(decoded)) {
       response.writeHead(404)
       return void response.end()
     }
@@ -321,7 +243,7 @@ export const start = async (): Promise<Instance> => {
     const step = entry.steps[entry.calls.length] ?? text("done")
     calls.push(call)
     entry.calls.push(call)
-    if (step.type !== "status") return send(response, route.stream(step, entry.gate.promise))
+    if (step.type !== "status") return send(response, respond(step, entry.gate.promise))
     response.writeHead(step.status, { "content-type": "application/json", ...step.headers })
     response.end(JSON.stringify({ error: { message: `chaos provider status ${step.status}`, type: "chaos_error" } }))
   }
@@ -331,11 +253,6 @@ export const start = async (): Promise<Instance> => {
       ? modelInfo(response)
       : void chat(request, response).catch(() => response.socket?.destroy()),
   )
-  server.on("upgrade", (request: IncomingMessage, socket: Duplex) => {
-    upgrades.push(request.url ?? "")
-    upgraded.add(socket.once("close", () => upgraded.delete(socket)))
-    refuseWebSocket(request, socket)
-  })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
   const address = server.address()
 
@@ -350,7 +267,6 @@ export const start = async (): Promise<Instance> => {
       },
     },
     calls,
-    upgrades,
     script: (steps = [text("done")]) => {
       const marker = `chaos_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`
       const entry: Entry = { steps, calls: [], gate: Promise.withResolvers<void>() }
@@ -374,7 +290,6 @@ export const start = async (): Promise<Instance> => {
     stop: async () => {
       for (const entry of scripts.values()) entry.gate.resolve()
       server.closeAllConnections()
-      for (const socket of upgraded) socket.destroy()
       await new Promise((resolve) => server.close(resolve))
     },
   }
