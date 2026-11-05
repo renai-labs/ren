@@ -73,7 +73,7 @@ function DriveFileCard(props: {
       <AttachmentContent>
         <AttachmentTitle>{file.name}</AttachmentTitle>
         <AttachmentDescription className="tabular-nums">
-          {drive.deleted ? "Deleted from the drive" : formatBytes(file.size)}
+          {drive.deleted ? "Not in the drive" : formatBytes(file.size)}
         </AttachmentDescription>
       </AttachmentContent>
       {drive.deleted || thumbnail ? null : <AttachmentTrigger aria-label={`Open ${file.name}`} onClick={drive.open} />}

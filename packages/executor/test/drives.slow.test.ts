@@ -113,4 +113,38 @@ describe.skipIf(!DriveEnvironment.hasDocker)("drives.mount", () => {
       }),
     300_000,
   )
+
+  it.live(
+    "drives.uploaded answers once a file written on a drive is in the drive, at once for a file on no drive, and with rclone's error when the upload fails",
+    () =>
+      Effect.gen(function* () {
+        const environment = yield* started
+        const client = environment.client
+        const write = (path: string, text: string) =>
+          client["files.write"]({ path, bytes: new TextEncoder().encode(text) })
+        yield* client["drives.mount"]({
+          path: "/tmp/drives/space",
+          remote: remote("drive-key", "org_1/drives/spaces/spc_1/"),
+          access: "write",
+        })
+
+        yield* write("/tmp/drives/space/chats/ses_1/outputs/report.md", "made by the agent\n")
+        yield* client["drives.uploaded"]({ path: "/tmp/drives/space/chats/ses_1/outputs/report.md" })
+        expect(environment.exec("cat /tmp/s3/drives/org_1/drives/spaces/spc_1/chats/ses_1/outputs/report.md")).toBe(
+          "made by the agent",
+        )
+
+        yield* write("/tmp/elsewhere.md", "not on a drive\n")
+        yield* client["drives.uploaded"]({ path: "/tmp/elsewhere.md" })
+
+        environment.exec("pkill -9 -f '^rclone serve s3'")
+        yield* write("/tmp/drives/space/chats/ses_1/outputs/chart.md", "never stored\n")
+        const failed = yield* client["drives.uploaded"]({
+          path: "/tmp/drives/space/chats/ses_1/outputs/chart.md",
+        }).pipe(Effect.flip)
+        expect(failed._tag).toBe("MountError")
+        expect(failed.message).toContain("connection refused")
+      }),
+    300_000,
+  )
 })

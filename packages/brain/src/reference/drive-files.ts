@@ -89,6 +89,9 @@ export const show = Effect.fn("DriveFiles.show")(function* (
     })
   if (source !== target) yield* client["files.copy"]({ from: source, to: target }).pipe(Effect.mapError(failed))
   const info = yield* client["files.stat"]({ path: target }).pipe(Effect.mapError(failed))
+  yield* client["drives.uploaded"]({ path: target }).pipe(
+    Effect.mapError((error) => new Refused({ message: `${name} did not reach the space’s drive: ${error.message}` })),
+  )
   return { path, name, mime: Drive.typeOf(path), size: info.sizeBytes } satisfies SessionMessage.DriveFile
 })
 
