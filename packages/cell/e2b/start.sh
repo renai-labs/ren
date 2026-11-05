@@ -47,7 +47,7 @@ export REN_HOME="$home" PORT="${BRAIN_PORT:-4800}"
 cd "$home/workspace"
 watch() {
   missed=0
-  while sleep 10; do
+  while sleep 5; do
     if curl -s -o /dev/null -m 5 "http://127.0.0.1:$PORT/ren/state"; then
       missed=0
     else
