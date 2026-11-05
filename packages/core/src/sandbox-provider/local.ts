@@ -195,7 +195,7 @@ export const layer = (options: {
           if (!(yield* isAlive(binding.pid))) return "gone" as const
           return paused.has(binding.pid) ? ("paused" as const) : ("running" as const)
         }),
-        vitals: Effect.fn("LocalSandbox.vitals")(function* (raw) {
+        lastSample: Effect.fn("LocalSandbox.lastSample")(function* (raw) {
           const binding = yield* read(raw)
           const state = new TextDecoder()
             .decode(Bun.spawnSync(["ps", "-o", "stat=", "-p", String(binding.pid)]).stdout)
