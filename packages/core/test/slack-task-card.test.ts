@@ -58,6 +58,8 @@ const it = TaskFixture.harness(
   ),
 ).it
 
+const Button = Schema.Struct({ text: Schema.String, url: Schema.optionalKey(Schema.String) })
+
 const Entity = Schema.Struct({
   external_ref: Schema.Struct({ id: Schema.String }),
   entity_payload: Schema.Struct({
@@ -66,8 +68,8 @@ const Entity = Schema.Struct({
     custom_fields: Schema.Array(Schema.Struct({ key: Schema.String, value: Schema.Unknown })),
     actions: Schema.optionalKey(
       Schema.Struct({
-        primary_actions: Schema.optionalKey(Schema.Array(Schema.Struct({ text: Schema.String }))),
-        overflow_actions: Schema.optionalKey(Schema.Array(Schema.Struct({ text: Schema.String }))),
+        primary_actions: Schema.optionalKey(Schema.Array(Button)),
+        overflow_actions: Schema.optionalKey(Schema.Array(Button)),
       }),
     ),
   }),
@@ -155,6 +157,13 @@ const buttonsOf = (message: SlackServer.Posted | undefined) => {
   const actions = metadataOf(message)?.entities.at(0)?.entity_payload.actions
   return [actions?.primary_actions ?? [], actions?.overflow_actions ?? []].map((each) =>
     each.map((action) => action.text),
+  )
+}
+
+const linksOf = (message: SlackServer.Posted | undefined) => {
+  const actions = metadataOf(message)?.entities.at(0)?.entity_payload.actions
+  return [...(actions?.primary_actions ?? []), ...(actions?.overflow_actions ?? [])].flatMap((action) =>
+    action.url ? [[action.text, action.url]] : [],
   )
 }
 
@@ -429,6 +438,7 @@ describe("SlackTaskCard", () => {
         expect(card()[1]).toEqual(["Open in Ren", "Dismiss"])
         yield* click("UADA", "assign_to_me")
         yield* shows(["Open in Ren"])
+        expect(card()[1]).toEqual(["Dismiss"])
         expect((yield* tasks.get(o.ada, created.id)).ownerId).toBe(o.ada.userId)
         const before = slack.responses.length
         yield* click("UNOBODY", "dismiss")
@@ -440,6 +450,13 @@ describe("SlackTaskCard", () => {
         expect((yield* tasks.get(o.ada, created.id)).status).toBe("todo")
         yield* tasks.review(o.ada, created.id, { humanReview: true, reason: "Check the plan" })
         yield* shows(["Start build"])
+        expect(card()[1]).toEqual(["Open in Ren"])
+        yield* tasks.update(o.ada, created.id, { addLinks: ["https://github.com/acme/web/issues/7"] })
+        yield* until(() => card()[1]?.join() === "Open plan")
+        expect(linksOf(slack.threads.get(thread.key)?.at(0)).at(-1)).toEqual([
+          "Open plan",
+          "https://github.com/acme/web/issues/7",
+        ])
         yield* click("UADA", "approve")
         yield* shows(["Open in Ren"])
         const events = yield* database.db
@@ -448,6 +465,67 @@ describe("SlackTaskCard", () => {
           .where(eq(Database.Schema.task_event.task_id, created.id))
         expect(events.find((each) => each.data._tag === "reviewed")?.userId).toBe(o.ada.userId)
         expect((yield* tasks.get(o.ada, created.id)).humanReview).toBe(false)
+      }),
+  )
+  it.live(
+    "two Start clicks at once start one session; the card then shows the running, review, done and archived buttons",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const database = yield* Database.Service
+        const o = yield* TaskFixture.org
+        const found = yield* installed(o)
+        const actions = yield* actionsOf
+        const thread = threadIn(found.channel)
+        yield* database.db.insert(Database.Schema.account).values({
+          id: Auth.AccountID.create(),
+          providerId: "slack",
+          accountId: `${found.workspace}:UADA`,
+          userId: o.ada.userId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        const plan = yield* o.agent("plan")
+        const created = yield* tasks.create(o.ada, {
+          spaceId: o.factory.id,
+          title: "Ship SSO",
+          agentId: plan,
+          links: [thread.url],
+        })
+        const message = () => slack.threads.get(thread.key)?.at(0)
+        const card = () => buttonsOf(message())
+        const shows = (primary: ReadonlyArray<string>) => until(() => card()[0]?.join() === primary.join())
+        yield* shows(["Start"])
+        expect(card()[1]).toEqual(["Open in Ren", "Dismiss"])
+        const before = slack.responses.length
+        const click = actions.act(o.organizationId, {
+          kind: "card_action",
+          install: found.workspace,
+          sender: { accountId: `${found.workspace}:UADA` },
+          taskId: created.id,
+          action: "start",
+          responseUrl: `${slack.url}/response/UADA`,
+        })
+        yield* Effect.all([click, click], { concurrency: "unbounded" })
+        yield* until(() => slack.responses.length === before + 1)
+        expect(JSON.stringify(slack.responses.at(-1))).toContain("This task already started.")
+        yield* shows(["Open session"])
+        const sessions = yield* TaskFixture.sessions(created.id)
+        expect(sessions).toHaveLength(1)
+        expect(card()[1]).toEqual(["Request review", "Mark done"])
+        expect(linksOf(message())).toEqual([["Open session", `${app}/sessions/${sessions.at(0)?.sessionId}`]])
+        const pull = "https://github.com/acme/web/pull/41"
+        yield* tasks.update(o.ada, created.id, { addLinks: [pull] })
+        yield* tasks.review(o.ada, created.id, { humanReview: true, reason: "Check the PR" })
+        yield* shows(["Approve"])
+        expect(card()[1]).toEqual(["Open session", "Open PR"])
+        expect(linksOf(message()).at(-1)).toEqual(["Open PR", pull])
+        yield* tasks.update(o.ada, created.id, { status: "done" })
+        yield* shows(["Open in Ren"])
+        expect(card()[1]).toEqual(["Open PR"])
+        expect(linksOf(message()).at(0)).toEqual(["Open in Ren", `${app}/tasks/${created.identifier}`])
+        yield* tasks.archive(o.ada, created.id)
+        yield* until(() => card().flat().length === 0)
       }),
   )
 })

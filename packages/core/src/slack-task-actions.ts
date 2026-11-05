@@ -41,7 +41,7 @@ export const layer = Layer.effect(
       >
     > = {
       approve: (actor, id) => tasks.review(actor, id, { humanReview: false, decision: "approved" }),
-      start: (actor, id) => tasks.start(actor, id, { mode: "new" }),
+      start: (actor, id) => tasks.startOnce(actor, id),
       request_review: (actor, id) => tasks.review(actor, id, { humanReview: true, reason: "Requested in Slack." }),
       done: (actor, id) => tasks.update(actor, id, { status: "done" }),
       dismiss: (actor, id) => tasks.update(actor, id, { status: "dismissed" }),

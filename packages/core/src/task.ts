@@ -47,6 +47,10 @@ export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assig
     text: string,
   ) => Effect.Effect<ReadonlyArray<Task.ID>>
   readonly runEnded: (sessionId: Session.ID) => Effect.Effect<void>
+  readonly startOnce: (
+    actor: Actor.Info,
+    id: Task.ID,
+  ) => Effect.Effect<Task.Info, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid>
 }
 
 export const reviewStart: "continue" | "none" = "continue"
@@ -240,11 +244,16 @@ export const layer = Layer.effect(
       id: Task.ID,
       mode: Task.StartMode,
       review?: TaskStart.Review,
+      options: { readonly once: boolean } = { once: false },
     ) {
       const where = eq(Database.Schema.task.id, id)
       const planned = yield* database.transaction((transaction) =>
         Effect.gen(function* () {
-          const row = yield* TaskQueries.find(transaction, access, actor, where, actions.start)
+          const row = options.once
+            ? yield* TaskQueries.lockForWrite(transaction, access, actor, where, actions.start)
+            : yield* TaskQueries.find(transaction, access, actor, where, actions.start)
+          if (options.once && row.task.status !== "todo")
+            return yield* new Primitive.Conflict({ message: "This task already started." })
           const factory = yield* TaskFactory.read(transaction, row.task.space_id)
           const history = yield* TaskFactory.history(transaction, row.task.id)
           const runs = row.task.agent_id && TaskFactory.runs(factory, row.task.agent_id, history)
@@ -252,12 +261,22 @@ export const layer = Layer.effect(
             return yield* new Primitive.Conflict({
               message: `The task’s agent ran ${runs.used} of ${runs.max} times. A person must decide first.`,
             })
-          return {
-            plan: yield* TaskStart.plan(transaction, row, { mode, review, factory, history }),
-            task: row.task,
-          }
+          const plan = yield* TaskStart.plan(transaction, row, { mode, review, factory, history })
+          if (options.once)
+            yield* transaction
+              .update(Database.Schema.task)
+              .set({ status: "in_progress", updated_at: sql`now()` })
+              .where(where)
+          return { plan, task: row.task }
         }),
       )
+      const release = options.once
+        ? database.db
+            .update(Database.Schema.task)
+            .set({ status: "todo", updated_at: sql`now()` })
+            .where(and(where, eq(Database.Schema.task.status, "in_progress")))
+            .pipe(Effect.orDie)
+        : Effect.void
       const message = {
         messageId: Session.MessageID.create(),
         prompt: { text: planned.plan.text },
@@ -286,10 +305,12 @@ export const layer = Layer.effect(
                 "SessionRunner.NotFound": () =>
                   Effect.fail(new Primitive.Conflict({ message: "The task’s agent is no longer available." })),
               }),
+              Effect.onError(() => release),
             )
       return yield* database.transaction((transaction) =>
         Effect.gen(function* () {
-          const row = yield* TaskQueries.lockForWrite(transaction, access, actor, where, actions.start)
+          const locked = yield* TaskQueries.lockForWrite(transaction, access, actor, where, actions.start)
+          const row = options.once ? { ...locked, task: { ...locked.task, status: "todo" as const } } : locked
           if (!planned.plan.sessionId)
             yield* transaction
               .insert(Database.Schema.task_session)
@@ -1031,6 +1052,13 @@ export const layer = Layer.effect(
       handOff,
       start: Effect.fn("Task.start")(function* (actor: Actor.Info, id: Task.ID, input: Task.StartInput) {
         const started = yield* launch(actor, id, input.mode).pipe(
+          Effect.catchTags({ BrainUnavailable: Effect.die, BrainRejectedError: Effect.die }),
+        )
+        yield* cards.refresh(id)
+        return started
+      }),
+      startOnce: Effect.fn("Task.startOnce")(function* (actor: Actor.Info, id: Task.ID) {
+        const started = yield* launch(actor, id, "new", undefined, { once: true }).pipe(
           Effect.catchTags({ BrainUnavailable: Effect.die, BrainRejectedError: Effect.die }),
         )
         yield* cards.refresh(id)
