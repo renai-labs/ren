@@ -1,4 +1,5 @@
 import { afterAll, describe, expect } from "bun:test"
+import type { Channel } from "@ren/schema/channel"
 import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
@@ -282,16 +283,21 @@ describe("GitHub", () => {
       const parsed = yield* provider.parse(commented("issue_comment"))
       if (parsed._tag !== "Event") return yield* Effect.die(new Error("The mention did not parse"))
       const event = { ...parsed.event, install }
-      expect(yield* provider.context(event)).toEqual(
+      const textOf = (found: Channel.Event) =>
+        Effect.map(
+          provider.context(found),
+          Option.map((context) => context.text),
+        )
+      expect(yield* textOf(event)).toEqual(
         Option.some("Issue #12 “The deploy fails”, open\nTriggering comment: 456 (issue) by @octocat"),
       )
-      expect(yield* provider.context({ ...event, thread: { id: "8812:41" }, message: "review:789" })).toEqual(
+      expect(yield* textOf({ ...event, thread: { id: "8812:41" }, message: "review:789" })).toEqual(
         Option.some(
           "Pull request #41 “Fix the deploy”, draft, fix-deploy → main\nTriggering comment: 789 (review) by @hubot",
         ),
       )
       expect(
-        yield* provider.context({
+        yield* textOf({
           ...event,
           thread: { id: "8812:41" },
           message: "pull:41",

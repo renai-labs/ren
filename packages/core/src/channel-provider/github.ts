@@ -274,11 +274,13 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
         const triggering = found.comment
           ? `Triggering comment: ${subject.id} (${subject.kind})${author}`
           : `Ready for review, by @${event.sender.handle ?? event.sender.accountId}`
-        if (!issue.pull_request) return Option.some(`Issue #${number} “${issue.title}”, ${issue.state}\n${triggering}`)
+        if (!issue.pull_request)
+          return Option.some({ text: `Issue #${number} “${issue.title}”, ${issue.state}\n${triggering}`, files: [] })
         const pull = yield* read(`/pulls/${number}`, Pull)
-        return Option.some(
-          `Pull request #${number} “${pull.title}”, ${stateOf(pull)}, ${pull.head.ref} → ${pull.base.ref}\n${triggering}`,
-        )
+        return Option.some({
+          text: `Pull request #${number} “${pull.title}”, ${stateOf(pull)}, ${pull.head.ref} → ${pull.base.ref}\n${triggering}`,
+          files: [],
+        })
       },
       Effect.mapError((error) => new ChannelProvider.Unavailable({ message: error.message })),
     ),

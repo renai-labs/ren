@@ -77,6 +77,15 @@ const Message = Schema.Struct({
   ts: Schema.optionalKey(Schema.String),
   user: Schema.optionalKey(Schema.String),
   text: Schema.optionalKey(Schema.String),
+  files: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        name: Schema.optionalKey(Schema.String),
+        title: Schema.optionalKey(Schema.String),
+        mimetype: Schema.optionalKey(Schema.String),
+      }),
+    ),
+  ),
 })
 
 const Next = Schema.optionalKey(Schema.Struct({ next_cursor: Schema.optionalKey(Schema.String) }))
@@ -128,7 +137,15 @@ const disconnected = new Refused({
 })
 
 const messagesOf = (answer: typeof Messages.Type) =>
-  (answer.messages ?? []).map((found) => ({ ts: found.ts ?? null, userId: found.user ?? null, text: found.text ?? "" }))
+  (answer.messages ?? []).map((found) => ({
+    ts: found.ts ?? null,
+    userId: found.user ?? null,
+    text: found.text ?? "",
+    files: (found.files ?? []).map((file) => ({
+      name: file.name || file.title || "untitled",
+      mime: file.mimetype || "application/octet-stream",
+    })),
+  }))
 
 const userOf = (member: typeof Member.Type) => ({
   slackUserId: member.id,
