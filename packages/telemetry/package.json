@@ -10,8 +10,9 @@
   },
   "scripts": {
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "test": "bun test --only-failures",
-    "typecheck": "tsgo -b"
+    "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun test --only-failures",
+    "typecheck": "tsgo -b",
+    "test:all": "bun ../../script/signoff/record.ts bun test --only-failures"
   },
   "dependencies": {
     "effect": "catalog:",

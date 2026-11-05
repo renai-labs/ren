@@ -52,13 +52,6 @@
       "inputs": ["**", "!**/node_modules/**", "!.turbo/**"],
       "outputs": []
     },
-    "test": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/script/test.ts", "$TURBO_ROOT$/packages/test-harness/src/**"],
-      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
-      "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"],
-      "outputs": []
-    },
     "@ren/e2e#test": {
       "outputs": [],
       "cache": false
@@ -72,6 +65,18 @@
       "dependsOn": ["transit"],
       "env": ["PUBLIC_*"],
       "outputs": ["dist/**"]
+    },
+    "test:all": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/script/test.ts", "$TURBO_ROOT$/packages/test-harness/src/**"],
+      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
+      "outputs": [],
+      "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"],
+      "cache": false
     }
   }
 }

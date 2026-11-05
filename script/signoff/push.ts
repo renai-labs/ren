@@ -30,7 +30,7 @@ const tested = (
     ),
   )
 )
-  .filter((manifest) => manifest.scripts?.test !== undefined && manifest.name !== "@ren/e2e")
+  .filter((manifest) => manifest.scripts?.["test:all"] !== undefined && manifest.name !== "@ren/e2e")
   .map((manifest) => manifest.name)
   .toSorted()
 
@@ -85,9 +85,18 @@ const duration = (ms: number) =>
 await Promise.all(
   pushed.map(async (entry) => {
     const found = await runs(entry.tree)
-    const tests = entry.packages.map((name) => ({ name, run: find(found, name, "test") }))
+    const tests = entry.packages.map((name) => {
+      const all = find(found, name, "test:all")
+      const changed = find(found, name, "test")
+      return {
+        name,
+        run: all ?? (changed !== undefined && (changed.tests ?? 0) > 0 ? changed : undefined),
+        partial: all === undefined,
+      }
+    })
     const failed = tests.filter((test) => test.run?.passed === false).map((test) => test.name)
     const missing = tests.filter((test) => test.run === undefined).map((test) => test.name)
+    const partial = tests.filter((test) => test.run !== undefined && test.partial).map((test) => test.name)
     const passed = tests.reduce((total, test) => total + (test.run?.tests ?? 0), 0)
     const statuses = [
       ...blocking.map((name) => {
@@ -108,7 +117,8 @@ await Promise.all(
           if (failed.length > 0) return `Failed in ${failed.join(", ")}`
           if (missing.length > 0) return `Not run for ${missing.join(", ")}`
           if (tests.length === 0) return "No affected package has tests"
-          return `${passed} passed in ${tests.length} affected ${tests.length === 1 ? "package" : "packages"} on ${machine}`
+          const scope = partial.length === 0 ? "" : `, changed files only in ${partial.join(", ")}`
+          return `${passed} passed in ${tests.length} affected ${tests.length === 1 ? "package" : "packages"} on ${machine}${scope}`
         })(),
       },
     ]

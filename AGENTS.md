@@ -72,13 +72,12 @@ Lint enforces most style rules. Run `bun run check` and follow each message. The
 - Do not write placeholder tests, or tests that compare lists of keys, coverage matrices or specification text.
 - Do not use mocks or real-time waits. Use real dependencies, and use `TestClock`, a latch or an event that the test can see.
 - For a bug that has no fix, write a `test.todo` with the issue ID in its name. After the fix, run `bun test --todo` and change each `test.todo` that passes to `test`.
-- Run `bun run test` from the package directory. Tests cannot run from the repo root.
+- Run `bun run test` from the package directory. It runs the test files that import a file changed since the branch left `main`; `bun run test:all` runs them all.
 - A test that takes more than 5 seconds is slow. When you add or change a test, or any run shows a test that takes that long, move it to a `<name>.slow.test.ts` file beside the original and share its helpers through `test/lib`. `bun run test` prints only failures, so run `bun test <file>` to see each test's duration. `bun run test` skips `*.slow.test.ts` files unless `REN_SLOW=1` is set. A test that runs into its timeout is broken, not slow: fix it, do not move it.
 
 ## Checks
 
-- While you work, run `bun run check` from the repo root. It typechecks the packages changed since the branch left `main` and their dependents, lints the changed packages and runs the root rules, all through Turborepo's cache. `bun run check:all` is the full run with knip; the pre-push hook reuses or runs it, and attaches it and the latest affected test runs to the commit (`CONTRIBUTING.md`, Signoff). Run `bun run format` to fix formatting.
-- `bun run test:changed` from the repo root runs the test files that import a changed file, in each changed package, and names the dependents it did not run. In one package, `bun run test --changed` does the same.
-- A package's `test` script and the root `lint` and `typecheck` scripts go through `script/signoff/record.ts`. Keep it there when you change one.
+- Run `bun run check` from the repo root. It covers what changed since the branch left `main`; `bun run check:all` covers everything, and the pre-push hook reuses or runs it and attaches it and the latest test runs to the commit (`CONTRIBUTING.md`, Signoff). Run `bun run format` to fix formatting.
+- A package's `test:all` script and the root `lint` and `typecheck` scripts go through `script/signoff/record.ts`. Keep it there when you change one.
 - Run `bun typecheck` from a package directory to typecheck one package. Never run `tsc` directly.
 - Typecheck uses project references. A package's `tsconfig.src.json` emits declarations to `node_modules/.ts-dist`, and a dependent reads those instead of the package's source. `tsconfig.tests.json` covers `test` and `script`; `tsconfig.json` lists both. When you add a dependency between packages, add the reference to both files.
