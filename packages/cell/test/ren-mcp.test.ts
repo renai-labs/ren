@@ -19,6 +19,7 @@ import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeMcp } from "../src/harness/opencode/mcp.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { McpPeer } from "./lib/mcp.js"
+import { ManagedMcp } from "./lib/managed-mcp.js"
 import { Shared } from "./lib/shared.js"
 
 setDefaultTimeout(60_000)
@@ -101,13 +102,27 @@ const open = Effect.fnUntraced(function* (
 })
 
 const renAt = Effect.fnUntraced(function* (token = "host-1", tools: ReadonlyArray<string> = []) {
-  const peer = yield* McpPeer.make({ tools })
+  const peer = yield* ManagedMcp.make(tools)
   const current = yield* Ref.make(Option.some(token))
   const ren: OpenCodeMcp.RenAccess = { address: Effect.succeed(Option.some(peer.url)), token: Ref.get(current) }
   const last = (sessionId: string) =>
     peer.headers.findLast((headers) => headers.get(HostMcp.sessionHeader) === sessionId)
   return { peer, current, ren, last }
 })
+
+it.live("Ren and Slack tools survive a server restart without transport sessions", () =>
+  Effect.gen(function* () {
+    const ren = yield* renAt()
+    const opened = yield* open(Option.some(ren.ren), { channels: ["slack"] })
+    const sessionId = yield* opened.chat()
+    expect(yield* opened.call(sessionId, Option.some("usr_ada"))).toBe("first")
+    expect(yield* opened.call(sessionId, Option.none(), { tool: "slack.marker" })).toBe("first")
+    yield* ren.peer.restart
+    expect(yield* opened.call(sessionId, Option.none())).toBe("restarted")
+    expect(yield* opened.call(sessionId, Option.none(), { tool: "slack.marker" })).toBe("restarted")
+    expect(ren.peer.headers.some((headers) => headers.has("mcp-session-id"))).toBe(false)
+  }),
+)
 
 it.live("each chat calls Ren MCP with the host token, its own chat and the sender of its latest prompt", () =>
   Effect.gen(function* () {

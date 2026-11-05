@@ -191,6 +191,7 @@ export const make = Effect.fnUntraced(function* (input: {
         config: new Mcp.RemoteConfig({
           type: "remote",
           url: `${base}${HostMcp.path}`,
+          protocol: "2026-07-28",
           oauth: false,
           headers: { ...headers, ...(Option.isSome(current) && { [HostMcp.userHeader]: current.value.userID }) },
         }),
@@ -201,6 +202,7 @@ export const make = Effect.fnUntraced(function* (input: {
         config: new Mcp.RemoteConfig({
           type: "remote",
           url: `${base}${HostMcp.channelPath(provider)}`,
+          protocol: "2026-07-28",
           oauth: false,
           headers,
         }),
