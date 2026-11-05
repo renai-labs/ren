@@ -1,1 +1,0 @@
-ALTER TABLE "session_environment" ALTER COLUMN "environment_template_id" DROP NOT NULL;
