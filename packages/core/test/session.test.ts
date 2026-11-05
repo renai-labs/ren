@@ -157,7 +157,7 @@ describe("Session", () => {
             { id: created, identifier: "ACME-1", title: "Task 1", status: "todo" },
             { id: worked, identifier: "ACME-2", title: "Task 2", status: "todo" },
           ],
-          pullRequests: [{ url: "https://github.com/acme/web/pull/41", number: 41, title: null, state: null }],
+          pullRequests: [{ url: "https://github.com/acme/web/pull/41", number: 41 }],
           issues: [
             { kind: "github_issue", url: "https://github.com/acme/web/issues/30" },
             { kind: "linear_issue", url: "https://linear.app/acme/issue/ENG-7/login" },

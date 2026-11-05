@@ -1,6 +1,7 @@
 export * as Configured from "./configured.js"
 
 import { Shared } from "@ren/cell/testing"
+import type { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
@@ -41,16 +42,21 @@ export const runnerLayer = Layer.mergeAll(SessionRunner.layer, SessionSync.layer
   Layer.provideMerge(Testing.layer),
 )
 
-export const sessionLayer = Layer.mergeAll(Session.layer, Space.layer, SpaceProvisioning.layer).pipe(
-  Layer.provideMerge(SessionRunner.layer),
-  Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone))),
-  Layer.provideMerge(BrainRegistry.layer),
-  Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
-  Layer.provideMerge(Host.layer({}, models)),
-  Layer.provideMerge(models),
-  Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
-  Layer.provideMerge(Testing.layer),
-)
+export const sessionLayerWith = (
+  github: Layer.Layer<GitHubApp.Service, never, Database.Service> = GitHubApp.layerNone,
+) =>
+  Layer.mergeAll(Session.layer, Space.layer, SpaceProvisioning.layer).pipe(
+    Layer.provideMerge(SessionRunner.layer),
+    Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(github))),
+    Layer.provideMerge(BrainRegistry.layer),
+    Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
+    Layer.provideMerge(Host.layer({}, models)),
+    Layer.provideMerge(models),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
+    Layer.provideMerge(Testing.layer),
+  )
+
+export const sessionLayer = sessionLayerWith()
 
 export const page = { page: 1, pageSize: 50 }
 

@@ -3,6 +3,7 @@ export * as Session from "./session.js"
 import { Database } from "@ren/db/database"
 import { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
+import type { PullRequest as PullRequestSchema } from "@ren/schema/pull-request"
 import type { SessionLinks } from "@ren/schema/session/links"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
@@ -64,6 +65,10 @@ export type Interface = Primitive.Interface<typeof Session.definition> & {
   ) => Effect.Effect<SessionMessage.Page, Primitive.NotFound | Primitive.Invalid | Busy | PageTooLarge>
   readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
   readonly links: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionLinks.Info, Primitive.NotFound>
+  readonly pullRequests: (
+    actor: Actor.Info,
+    id: Session.ID,
+  ) => Effect.Effect<ReadonlyArray<PullRequestSchema.Info>, Primitive.NotFound>
   readonly prepare: (actor: Actor.Info, spaceId: Space.ID) => Effect.Effect<void, Primitive.NotFound>
   readonly retry: (
     actor: Actor.Info,
@@ -285,6 +290,80 @@ export const layer = Layer.effect(
         .pipe(Effect.timeoutOrElse({ duration: historyReadsWithin, orElse: () => Effect.fail(busy) }))
     })
 
+    const linked = Effect.fnUntraced(function* (actor: Actor.Info, id: Session.ID) {
+      const session = (yield* database.db
+        .select({ rootId: Database.Schema.agent_session.root_id })
+        .from(Database.Schema.agent_session)
+        .where(
+          and(
+            eq(Database.Schema.agent_session.id, id),
+            eq(Database.Schema.agent_session.organization_id, actor.organizationId),
+          ),
+        )
+        .pipe(Effect.orDie)).at(0)
+      if (!session) return yield* notFound
+      yield* read(actor, session.rootId)
+      return yield* database.transaction((transaction) =>
+        Effect.gen(function* () {
+          const tasks = yield* TaskQueries.select(transaction, actor)
+            .where(
+              and(
+                TaskQueries.visibleTo(access, actor),
+                or(
+                  eq(Database.Schema.task.created_by_session_id, id),
+                  inArray(
+                    Database.Schema.task.id,
+                    transaction
+                      .select({ id: Database.Schema.task_session.task_id })
+                      .from(Database.Schema.task_session)
+                      .where(eq(Database.Schema.task_session.session_id, id)),
+                  ),
+                ),
+              ),
+            )
+            .orderBy(asc(Database.Schema.task.created_at), asc(Database.Schema.task.number))
+          const links =
+            tasks.length === 0
+              ? []
+              : yield* transaction
+                  .select({
+                    kind: Database.Schema.task_link.kind,
+                    key: Database.Schema.task_link.key,
+                    url: Database.Schema.task_link.url,
+                  })
+                  .from(Database.Schema.task_link)
+                  .innerJoin(Database.Schema.task, eq(Database.Schema.task.id, Database.Schema.task_link.task_id))
+                  .where(
+                    inArray(
+                      Database.Schema.task_link.task_id,
+                      tasks.map((row) => row.task.id),
+                    ),
+                  )
+                  .orderBy(
+                    asc(Database.Schema.task.created_at),
+                    asc(Database.Schema.task.number),
+                    asc(Database.Schema.task_link.created_at),
+                    asc(Database.Schema.task_link.id),
+                  )
+          const threads = yield* transaction
+            .select({
+              provider: Database.Schema.channel_thread.provider,
+              url: Database.Schema.channel_thread.url,
+              place: Database.Schema.channel_thread.place_name,
+            })
+            .from(Database.Schema.channel_thread)
+            .where(
+              and(
+                eq(Database.Schema.channel_thread.session_id, id),
+                eq(Database.Schema.channel_thread.organization_id, actor.organizationId),
+              ),
+            )
+            .orderBy(asc(Database.Schema.channel_thread.created_at), asc(Database.Schema.channel_thread.id))
+          return { tasks, links: Array.dedupeWith(links, (a, b) => a.kind === b.kind && a.key === b.key), threads }
+        }),
+      )
+    })
+
     return Service.of({
       list: Effect.fn("Session.list")(function* (actor: Actor.Info, input: Session.ListInput) {
         return yield* database.transaction((transaction) =>
@@ -416,66 +495,7 @@ export const layer = Layer.effect(
       }),
       models: Effect.fn("Session.models")(models),
       links: Effect.fn("Session.links")(function* (actor: Actor.Info, id: Session.ID) {
-        yield* read(actor, id)
-        const found = yield* database.transaction((transaction) =>
-          Effect.gen(function* () {
-            const tasks = yield* TaskQueries.select(transaction, actor)
-              .where(
-                and(
-                  TaskQueries.visibleTo(access, actor),
-                  or(
-                    eq(Database.Schema.task.created_by_session_id, id),
-                    inArray(
-                      Database.Schema.task.id,
-                      transaction
-                        .select({ id: Database.Schema.task_session.task_id })
-                        .from(Database.Schema.task_session)
-                        .where(eq(Database.Schema.task_session.session_id, id)),
-                    ),
-                  ),
-                ),
-              )
-              .orderBy(asc(Database.Schema.task.created_at), asc(Database.Schema.task.number))
-            const links =
-              tasks.length === 0
-                ? []
-                : yield* transaction
-                    .select({
-                      kind: Database.Schema.task_link.kind,
-                      key: Database.Schema.task_link.key,
-                      url: Database.Schema.task_link.url,
-                    })
-                    .from(Database.Schema.task_link)
-                    .innerJoin(Database.Schema.task, eq(Database.Schema.task.id, Database.Schema.task_link.task_id))
-                    .where(
-                      inArray(
-                        Database.Schema.task_link.task_id,
-                        tasks.map((row) => row.task.id),
-                      ),
-                    )
-                    .orderBy(
-                      asc(Database.Schema.task.created_at),
-                      asc(Database.Schema.task.number),
-                      asc(Database.Schema.task_link.created_at),
-                      asc(Database.Schema.task_link.id),
-                    )
-            const threads = yield* transaction
-              .select({
-                provider: Database.Schema.channel_thread.provider,
-                url: Database.Schema.channel_thread.url,
-                place: Database.Schema.channel_thread.place_name,
-              })
-              .from(Database.Schema.channel_thread)
-              .where(
-                and(
-                  eq(Database.Schema.channel_thread.session_id, id),
-                  eq(Database.Schema.channel_thread.organization_id, actor.organizationId),
-                ),
-              )
-              .orderBy(asc(Database.Schema.channel_thread.created_at), asc(Database.Schema.channel_thread.id))
-            return { tasks, links: Array.dedupeWith(links, (a, b) => a.kind === b.kind && a.key === b.key), threads }
-          }),
-        )
+        const found = yield* linked(actor, id)
         return {
           tasks: found.tasks.map((row) => ({
             id: row.task.id,
@@ -483,9 +503,10 @@ export const layer = Layer.effect(
             title: row.task.title,
             status: row.task.status,
           })),
-          pullRequests: yield* pulls.read(
-            actor.organizationId,
-            found.links.filter((link) => link.kind === "github_pr").map((link) => link.url),
+          pullRequests: found.links.flatMap((link) =>
+            link.kind === "github_pr"
+              ? [{ url: link.url, number: Number(link.key.slice(link.key.lastIndexOf("#") + 1)) }]
+              : [],
           ),
           issues: found.links.flatMap((link) =>
             link.kind === "github_issue" || link.kind === "linear_issue" ? [{ kind: link.kind, url: link.url }] : [],
@@ -494,6 +515,13 @@ export const layer = Layer.effect(
             thread.url ? [{ provider: thread.provider, url: thread.url, place: thread.place }] : [],
           ),
         }
+      }),
+      pullRequests: Effect.fn("Session.pullRequests")(function* (actor: Actor.Info, id: Session.ID) {
+        const found = yield* linked(actor, id)
+        return yield* pulls.read(
+          actor.organizationId,
+          found.links.filter((link) => link.kind === "github_pr").map((link) => link.url),
+        )
       }),
       prepare: Effect.fn("Session.prepare")(function* (actor: Actor.Info, spaceId: Space.ID) {
         yield* visibleSpace(actor, spaceId)

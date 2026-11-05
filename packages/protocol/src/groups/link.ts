@@ -20,7 +20,21 @@ export const LinkGroup = HttpApiGroup.make("link")
         identifier: "session.links",
         summary: "List a chat’s links",
         description:
-          "Return the chat’s tasks, the pull requests and issues they link, and the chat’s channel threads. Ren reads each pull request’s state from GitHub on each call.",
+          "Return the chat’s tasks, the pull requests and issues they link, and the chat’s channel threads, as Ren stores them. A subagent’s chat reads through its root chat.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("session.pullRequests", "/sessions/:id/pull-requests", {
+      params: { id: Session.ID },
+      success: Schema.Array(PullRequest.Info),
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.pullRequests",
+        summary: "List a chat’s pull requests",
+        description:
+          "Return the pull requests of `session.links` with their title and state from GitHub. Ren reads GitHub on each call.",
       }),
     ),
   )

@@ -52,13 +52,26 @@ function LinkGroup(props: { label: string; rows: ReadonlyArray<LinkRow> }) {
   )
 }
 
-export function ChatActions(props: { sessionId: Session.ID; title: string; onArchive: () => Promise<unknown> }) {
+export function ChatActions(props: {
+  sessionId: Session.ID
+  archive: { readonly title: string; readonly onArchive: () => Promise<unknown> } | undefined
+}) {
   const { api } = RouterContext.useRouterContext()
   const navigate = useNavigate()
   const platform = Platform.usePlatform()
-  const [opened, setOpened] = useState(false)
+  const [open, setOpen] = useState(false)
   const [archiving, setArchiving] = useState(false)
-  const links = useQuery({ ...api.link.session.links.queryOptions({ id: props.sessionId }), enabled: opened }).data
+  const links = useQuery({
+    ...api.link.session.links.queryOptions({ id: props.sessionId }),
+    enabled: open,
+    staleTime: 0,
+  }).data
+  const pullRequests = useQuery({
+    ...api.link.session.pullRequests.queryOptions({ id: props.sessionId }),
+    enabled: open && (links?.pullRequests.length ?? 0) > 0,
+    staleTime: 0,
+  }).data
+  const pulls = new Map(pullRequests?.map((pull) => [pull.url, pull]))
   const write = platform.writeClipboardText
   const copyLink = () =>
     void write?.(window.location.href).then(
@@ -67,7 +80,7 @@ export function ChatActions(props: { sessionId: Session.ID; title: string; onArc
     )
   return (
     <>
-      <DropdownMenu onOpenChange={(open) => (open ? setOpened(true) : undefined)}>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger
           render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Chat actions" />}
         >
@@ -88,8 +101,8 @@ export function ChatActions(props: { sessionId: Session.ID; title: string; onArc
             label="Pull requests"
             rows={(links?.pullRequests ?? []).map((pull) => ({
               key: pull.url,
-              icon: <PullRequestIcon state={pull.state} />,
-              label: pull.title ?? repositoryOf(pull.url),
+              icon: <PullRequestIcon state={pulls.get(pull.url)?.state} />,
+              label: pulls.get(pull.url)?.title ?? repositoryOf(pull.url),
               shortcut: `#${pull.number}`,
               onClick: () => platform.openExternal(pull.url),
             }))}
@@ -127,34 +140,38 @@ export function ChatActions(props: { sessionId: Session.ID; title: string; onArc
             }))}
           />
           {write ? (
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={copyLink}>
+                <IconLink />
+                Copy link
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          ) : null}
+          {props.archive ? (
             <>
+              {write ? <DropdownMenuSeparator /> : null}
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={copyLink}>
-                  <IconLink />
-                  Copy link
+                <DropdownMenuItem variant="destructive" onClick={() => setArchiving(true)}>
+                  <IconArchive />
+                  Archive chat
                 </DropdownMenuItem>
               </DropdownMenuGroup>
-              <DropdownMenuSeparator />
             </>
           ) : null}
-          <DropdownMenuGroup>
-            <DropdownMenuItem variant="destructive" onClick={() => setArchiving(true)}>
-              <IconArchive />
-              Archive chat
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-      <ConfirmDialog
-        open={archiving}
-        onOpenChange={setArchiving}
-        confirmation={{
-          title: `Archive “${props.title}”?`,
-          description: "It leaves your chat list. Only the API can bring it back.",
-          action: "Archive",
-        }}
-        onConfirm={props.onArchive}
-      />
+      {props.archive ? (
+        <ConfirmDialog
+          open={archiving}
+          onOpenChange={setArchiving}
+          confirmation={{
+            title: `Archive “${props.archive.title}”?`,
+            description: "It leaves your chat list. Only the API can bring it back.",
+            action: "Archive",
+          }}
+          onConfirm={props.archive.onArchive}
+        />
+      ) : null}
     </>
   )
 }

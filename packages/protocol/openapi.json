@@ -6795,8 +6795,79 @@
             }
           }
         },
-        "description": "Return the chat’s tasks, the pull requests and issues they link, and the chat’s channel threads. Ren reads each pull request’s state from GitHub on each call.",
+        "description": "Return the chat’s tasks, the pull requests and issues they link, and the chat’s channel threads, as Ren stores them. A subagent’s chat reads through its root chat.",
         "summary": "List a chat’s links"
+      }
+    },
+    "/sessions/{id}/pull-requests": {
+      "get": {
+        "tags": ["link"],
+        "operationId": "session.pullRequests",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PullRequest.Info"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the pull requests of `session.links` with their title and state from GitHub. Ren reads GitHub on each call.",
+        "summary": "List a chat’s pull requests"
       }
     },
     "/tasks/{id}/pull-requests": {
@@ -18361,7 +18432,7 @@
           "pullRequests": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/PullRequest.Info"
+              "$ref": "#/components/schemas/SessionLinks.LinkedPullRequest"
             },
             "description": "The pull requests those tasks link."
           },
@@ -18396,6 +18467,22 @@
         },
         "required": ["kind", "url"],
         "additionalProperties": false
+      },
+      "SessionLinks.LinkedPullRequest": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["url", "number"],
+        "additionalProperties": false,
+        "description": "A pull request as Ren stores it. `session.pullRequests` adds its title and state from GitHub."
       },
       "SessionLinks.LinkedTask": {
         "type": "object",
