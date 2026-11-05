@@ -87,7 +87,7 @@ export const timing = {
   accessMargin: Duration.minutes(2),
   poll: Duration.seconds(1),
   probe: Duration.seconds(3),
-  fresh: Duration.seconds(30),
+  fresh: Duration.seconds(60),
   full: 0.95,
   failures: 3,
 }
@@ -425,16 +425,15 @@ export const layer = Layer.effect(
       )
     }).pipe(Effect.withErrorReporting, Effect.forkScoped)
 
-    // oxlint-disable-next-line ren/no-comments -- A ready brain that does not answer: the samples of its machine decide. A machine that still reports samples is alive, and only the brain's path or process is broken, so Ren keeps it. A frozen machine wakes as a resumed one does and is replaced when it does not answer (E132).
     const silent = Effect.fnUntraced(function* (row: Row, binding: Schema.Json) {
-      const vitals = yield* provider
-        .vitals(binding)
-        .pipe(
-          Effect.catch((error) =>
-            Effect.logWarning("The sandbox samples are unknown", error).pipe(Effect.as(Option.none())),
-          ),
-        )
-      const sample = Option.getOrUndefined(vitals)
+      const vitals = yield* provider.vitals(binding).pipe(
+        Effect.map(Option.some),
+        Effect.catch((error) =>
+          Effect.logWarning("The sandbox samples are unknown", error).pipe(Effect.as(Option.none())),
+        ),
+      )
+      if (Option.isNone(vitals)) return
+      const sample = Option.getOrUndefined(vitals.value)
       const logged = Effect.annotateLogs({
         "ren.brain.id": row.id,
         "ren.brain.generation": row.generation,
@@ -449,17 +448,12 @@ export const layer = Layer.effect(
         return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(logged)
       }
       const message = sample
-        ? `Brain ${row.id} does not answer, and its machine stopped at ${DateTime.formatIso(sample.at)} with ${Math.round(sample.memory * 100)}% of its memory and ${Math.round(sample.disk * 100)}% of its disk in use; Ren wakes it and replaces it if it stays silent`
-        : `Brain ${row.id} does not answer, and its machine reports no samples; Ren wakes it and replaces it if it stays silent`
+        ? `Brain ${row.id} does not answer, and its machine stopped at ${DateTime.formatIso(sample.at)} with ${Math.round(sample.memory * 100)}% of its memory and ${Math.round(sample.disk * 100)}% of its disk in use; Ren replaces it`
+        : `Brain ${row.id} does not answer, and its machine reports no samples; Ren replaces it`
       yield* Effect.logError(message, Cause.fail(new Frozen({ message, reason: reasonOf(sample) }))).pipe(logged)
-      yield* database.db
-        .update(brains)
-        .set({ phase: "waking" })
-        .where(and(eq(brains.id, row.id), eq(brains.generation, row.generation), eq(brains.phase, "ready")))
-        .pipe(Effect.orDie)
+      yield* lose({ brainId: row.id, generation: row.generation })
     })
 
-    // oxlint-disable-next-line ren/no-comments -- Runs only after a caller got no answer from the brain (E123), so a brain that answers costs nothing more.
     const check = Effect.fn("BrainLifecycle.check")(function* (brainId: Brain.ID) {
       const row = yield* read(brainId)
       if (!row.binding) return

@@ -159,7 +159,6 @@ const boot = Effect.gen(function* () {
       ),
     )
     .pipe(Scope.provide(scope))
-  // oxlint-disable-next-line ren/no-comments -- start.sh runs the executor, and so every tool, in ren-tools.slice (e2b/e2b.Dockerfile).
   const health = yield* SandboxHealth.make({
     state,
     memoryEvents: "/sys/fs/cgroup/ren.slice/ren-tools.slice/memory.events",

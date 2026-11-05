@@ -46,7 +46,6 @@ export interface Metered {
   readonly costMicroUsd: number
 }
 
-// oxlint-disable-next-line ren/no-comments -- The last sample that the sandbox's machine reported, as fractions of its memory and disk in use. A machine that is frozen sends no new samples.
 export interface Vitals {
   readonly at: DateTime.Utc
   readonly memory: number

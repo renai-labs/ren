@@ -39,7 +39,6 @@ export const make = (options: { readonly state: string; readonly memoryEvents: s
         Option.zipWith(now, before, (current, previous) => current - previous),
         () => 0,
       )
-      // oxlint-disable-next-line ren/no-comments -- A tool that runs out of memory is the user's workload at its limit, not a fault of Ren: it is counted, not reported as an error.
       if (killed > 0) yield* Metric.update(Observability.Metrics.toolsOutOfMemory, killed)
     }),
   )

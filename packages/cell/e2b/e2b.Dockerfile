@@ -19,8 +19,6 @@ COPY ren.tar.gz /tmp/ren.tar.gz
 RUN mkdir -p /opt/ren && tar -xzf /tmp/ren.tar.gz -C /opt/ren && rm /tmp/ren.tar.gz \
   && cd /opt/ren && bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts
 
-# start.sh runs the executor, and so every tool, in ren-tools.slice. When the tools use 85% of the memory, the
-# kernel stops the biggest tool, so the brain and E2B's envd keep the rest and the machine never freezes.
 RUN echo '[Slice]' >/etc/systemd/system/ren-tools.slice \
   && echo 'MemoryMax=85%' >>/etc/systemd/system/ren-tools.slice
 
