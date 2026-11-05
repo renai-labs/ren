@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { Provider } from "@opencode/schema/provider"
 import { SessionID } from "@opencode/schema/session-id"
 import { hostTokenHeader, type StartBody } from "@ren/host-api/brain-api"
 import { BrainRejectedError, ModelsNotConfiguredError, SessionNotStartedError } from "@ren/host-api/errors"
@@ -479,6 +480,27 @@ it.live("an anthropic endpoint becomes a provider with its efforts as variants, 
     expect(script.calls.map((call) => [call.path, call.authorization, call.apiKey])).toEqual([
       ["/v1/messages", "Bearer anthropic-key", null],
     ])
+  }),
+)
+
+it.live("an openai-responses endpoint named openai keeps the HTTP transport, not the OpenAI plugin's WebSocket", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    yield* brain.install({
+      endpoints: [
+        {
+          id: "openai",
+          protocol: "openai-responses",
+          baseUrl: Shared.stub().url,
+          apiKey: Shared.apiKey("openai-key", Date.now() + 3_600_000),
+          models: [{ id: "stub-gpt", limit }],
+        },
+      ],
+    })
+    expect(
+      (yield* brain.opencode.provider.get({ providerID: Provider.ID.make("openai") })).data.settings,
+    ).toMatchObject({ transport: "http" })
   }),
 )
 

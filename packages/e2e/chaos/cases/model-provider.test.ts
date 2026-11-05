@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
+import { BunBrain, Shared, StubModel } from "@ren/cell/testing"
+import { Brain } from "@ren/schema/brain"
 import { SessionDriver } from "../lib/drivers/session.js"
 import { Ledger } from "../lib/ledger.js"
 import { Platform } from "../lib/platform.js"
@@ -11,7 +13,7 @@ const retries = 10
 const windowMs = 5 * 60_000
 
 describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () => {
-  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Environment; sandbox?: BunBrain.Instance } = {}
 
   const current = () => {
     if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
@@ -23,7 +25,7 @@ describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () =
     lane.environment = await lane.stack.environment("model-provider")
   }, 180_000)
 
-  afterAll(() => lane.stack?.dispose())
+  afterAll(() => Promise.all([lane.sandbox?.dispose(), lane.stack?.dispose()]))
 
   const attached = () => current().stack.session({ environment: current().environment })
 
@@ -93,6 +95,33 @@ describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () =
     },
     180_000,
   )
+
+  test("on a sandbox brain, an OpenAI endpoint whose WebSocket closes with 1011 is never opened: the first turn is one HTTP call", async () => {
+    const stack = current().stack
+    const gpt = StubModel.modelEntry("openai", "chaos-gpt")
+    stack.provider.modelInfo.set([
+      ...StubModel.defaultModels,
+      { ...gpt, model_info: { ...gpt.model_info, mode: "responses" } },
+    ])
+    // oxlint-disable-next-line ren/no-comments -- A workerd cell never opens a model WebSocket; a sandbox brain does. The fault proxy refuses every upgrade, so the brain calls the stub itself.
+    lane.sandbox = await BunBrain.make(
+      { ...Shared.vars(stack.provider.url), REN_URL: stack.ren.url },
+      { brain: Brain.ID.create() },
+    )
+    const brain = lane.sandbox.brain
+    const session = await SessionDriver.make(
+      { kind: "bun", url: lane.sandbox.url, ren: stack.ren, brain: () => brain },
+      stack.provider,
+    )
+    const configured = await session.configureModels(
+      Shared.access({ openai: Shared.apiKey(Stack.freshKey("openai")) }, stack.provider.url),
+    )
+    expect(configured.status).toBe(204)
+    expect((await session.start({ model: { endpointId: "openai", modelId: "chaos-gpt" } })).status).toBe(200)
+    const turn = await session.turn([ModelProvider.text("over http")])
+    expect(SessionDriver.assistantTexts(await session.settled(90_000)).join("")).toContain("over http")
+    expect({ upgrades: stack.provider.upgrades, calls: turn.script.calls.length }).toEqual({ upgrades: [], calls: 1 })
+  })
 
   test("a turn longer than several short grants renews the key before each model call, with no client attached", async () => {
     const stack = current().stack
