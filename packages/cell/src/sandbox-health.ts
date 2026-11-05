@@ -20,13 +20,13 @@ const failure = (name: string, message: string) => Cause.die(Object.assign(new E
 export const make = (options: { readonly state: string; readonly memoryEvents?: string | undefined }) =>
   Effect.map(Effect.flatMap(oomKills(options.memoryEvents), Ref.make), (seen) =>
     Effect.gen(function* () {
-      const stuck = join(options.state, "brain.stuck")
-      const silence = yield* text(stuck)
-      if (Option.isSome(silence)) {
+      const stuckFile = join(options.state, "brain.stuck")
+      const stuckSeconds = yield* text(stuckFile)
+      if (Option.isSome(stuckSeconds)) {
         yield* Effect.promise(() =>
-          Promise.all([stuck, join(options.state, "brain.exit")].map((file) => rm(file, { force: true }))),
+          Promise.all([stuckFile, join(options.state, "brain.exit")].map((file) => rm(file, { force: true }))),
         )
-        const message = `The brain did not answer for ${silence.value.trim()} s; the sandbox restarted it`
+        const message = `The brain did not answer for ${stuckSeconds.value.trim()} s; the sandbox restarted it`
         yield* Effect.logError(message, failure("BrainStuck", message))
       }
       for (const process of ["brain", "executor"]) {
