@@ -2,11 +2,12 @@ import { afterAll, expect } from "bun:test"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { EnvironmentAccess } from "@ren/brain/environment/access"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { Probe } from "@ren/brain/testing"
 import { TestEnvironment, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, DateTime, Effect, Fiber, Layer, Option, Redacted, Schema } from "effect"
+import { Context, DateTime, Duration, Effect, Fiber, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { Cell } from "../src/cell.js"
@@ -172,6 +173,43 @@ it.effect("a Ren that accepts the request and never answers fails the access in 
     yield* Effect.promise(() => ren.reached(subject.brainId))
     yield* TestClock.adjust(HostToken.renAnswersWithin)
     expect((yield* Fiber.join(opening))._tag).toBe("EnvironmentAccess.Unavailable")
+  }),
+)
+
+it.effect("while Ren answers that the hand is starting, the access asks again every 2 seconds and gets it", () =>
+  Effect.gen(function* () {
+    const subject = yield* build()
+    const access = yield* accessFor(subject.sessionId)
+    const answers = [{ type: "starting" } as const, { type: "starting" } as const]
+    ren.answer(subject.sessionId, () => answers.shift() ?? { type: "access", access })
+    yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
+    const opening = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.forkScoped)
+    yield* Probe.advanceUntil(
+      Effect.sync(() => opening.pollUnsafe() !== undefined),
+      Duration.seconds(30),
+    )
+    expect((yield* Fiber.join(opening)).url.href).toBe(access.url.href)
+    expect(ren.accessCalls(subject.sessionId)).toBe(3)
+  }),
+)
+
+it.effect("a hand that is still starting after 3 minutes fails the access as unavailable", () =>
+  Effect.gen(function* () {
+    const subject = yield* build()
+    ren.answer(subject.sessionId, () => ({ type: "starting" }))
+    yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
+    const opening = yield* subject.access
+      .open(subject.sessionId, { unreachable: false })
+      .pipe(Effect.flip, Effect.forkScoped)
+    yield* Probe.advanceUntil(
+      Effect.sync(() => opening.pollUnsafe() !== undefined),
+      Duration.sum(HostAccess.handStartsWithin, Duration.seconds(30)),
+    )
+    const error = yield* Fiber.join(opening)
+    expect([error._tag, error.message]).toEqual([
+      "EnvironmentAccess.Unavailable",
+      "The hand did not start within 3 minutes",
+    ])
   }),
 )
 

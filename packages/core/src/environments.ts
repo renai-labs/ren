@@ -84,7 +84,7 @@ export interface Interface {
     subject: Subject,
     hand: Option.Option<Hand>,
     options?: { readonly unreachable?: boolean },
-  ) => Effect.Effect<Environment.Access, NotFound | Unavailable>
+  ) => Effect.Effect<Environment.Access, NotFound | Unavailable | Starting>
   readonly release: (subject: Subject) => Effect.Effect<void>
   readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
 }
@@ -98,6 +98,11 @@ export class Changed extends Schema.TaggedError<Changed>()("Environments.Changed
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Environments.Unavailable", {
   message: Schema.String,
 }) {}
+
+export class Starting extends Schema.TaggedError<Starting>()("Environments.Starting", { message: Schema.String }) {}
+
+// oxlint-disable-next-line ren/no-comments -- An access waits this long for a hand's machine, under the 10 s for which Ren's server keeps a quiet connection (server main.ts, idleTimeout). A hand that takes longer answers Starting, and the brain asks again.
+export const startingAfter = Duration.seconds(5)
 
 const templates = Database.Schema.environment_template
 const environments = Database.Schema.environment
@@ -421,20 +426,23 @@ export const layer = Layer.effect(
     })
     holder.run = hands.run
 
-    // oxlint-disable-next-line ren/no-comments -- An access waits for the machine's run that it started, then reads the machine again.
+    // oxlint-disable-next-line ren/no-comments -- An access waits up to startingAfter for the machine's run that it started, then reads the machine again.
     const ready = Effect.fnUntraced(function* (environmentId: Environment.ID) {
       const first = yield* hands.access(environmentId)
       if (first._tag === "Ready") return first.target
       const running = yield* FiberMap.get(runs, environmentId)
-      if (Option.isSome(running)) yield* Fiber.await(running.value)
-      return yield* hands.ready(environmentId)
+      if (Option.isSome(running)) yield* Fiber.await(running.value).pipe(Effect.timeoutOption(startingAfter))
+      const next = yield* hands.access(environmentId)
+      if (next._tag === "Ready") return next.target
+      if (next._tag === "Failed") return yield* new Unavailable({ message: next.reason })
+      return yield* new Starting({ message: `The environment ${environmentId} is ${next.phase}` })
     })
 
     const grantAccess = Effect.fnUntraced(function* (
       subject: Subject,
       hand: Option.Option<Hand>,
       options: { readonly unreachable?: boolean },
-    ): Effect.fn.Return<Environment.Access, NotFound | Unavailable> {
+    ): Effect.fn.Return<Environment.Access, NotFound | Unavailable | Starting> {
       if (Option.isSome(hand) && !(yield* isBound(subject))) {
         const exp = yield* expiry
         return {
@@ -468,11 +476,12 @@ export const layer = Layer.effect(
       // oxlint-disable-next-line ren/no-comments -- EN15: the brain could not reach this hand; a gone or frozen machine is replaced, a running one kept.
       if (options.unreachable) yield* hands.check(assigned.environmentId)
       const target = yield* ready(assigned.environmentId).pipe(
-        Effect.mapError(
-          (error) =>
+        Effect.catchTag("Environments.Unavailable", (error) =>
+          Effect.fail(
             new Unavailable({
               message: `The environment of session ${subject.sessionId} is unavailable: ${error.message}`,
             }),
+          ),
         ),
       )
       const exp = yield* expiry

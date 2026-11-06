@@ -8,7 +8,20 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { eq, sql } from "drizzle-orm"
-import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
+import {
+  ConfigProvider,
+  Context,
+  DateTime,
+  Deferred,
+  Effect,
+  Fiber,
+  Layer,
+  Option,
+  Redacted,
+  Ref,
+  Schema,
+} from "effect"
+import { TestClock } from "effect/testing"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { testEffect } from "./lib/effect.js"
@@ -204,6 +217,28 @@ describe("Environments", () => {
       }),
   )
 
+  it.effect(
+    "an access waits 5 s for a hand that is starting, then answers Starting; once the machine is made the next access gives it",
+    () =>
+      Effect.gen(function* () {
+        const entered = yield* Deferred.make<void>()
+        const made = yield* Deferred.make<void>()
+        const subject = yield* environmentsWith(
+          {},
+          { creating: Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(made))) },
+        )
+        const organizationId = yield* Seed.organization()
+        const session = yield* subjectIn(organizationId)
+        yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+        const first = yield* subject.environments.access(session, Option.none()).pipe(Effect.flip, Effect.forkScoped)
+        yield* Deferred.await(entered)
+        yield* TestClock.adjust(Environments.startingAfter)
+        expect((yield* Fiber.join(first))._tag).toBe("Environments.Starting")
+        yield* Deferred.succeed(made, undefined)
+        expect((yield* subject.environments.access(session, Option.none())).generation).toBe(1)
+      }),
+  )
+
   it.live(
     "a hand that the brain cannot reach and whose machine is gone is replaced once; the sessions on it get the next generation (EN15)",
     () =>
@@ -229,7 +264,7 @@ describe("Environments", () => {
   )
 
   it.live(
-    "a provider that fails 3 times gives Unavailable, and the timed retry starts it again (EN19, chaos row 33)",
+    "a provider that fails 3 times gives Unavailable to a caller that asks again while it is Starting, and the timed retry starts it again (EN19, chaos row 33)",
     () =>
       Effect.gen(function* () {
         const database = yield* Database.Service
@@ -238,7 +273,9 @@ describe("Environments", () => {
         const session = yield* subjectIn(organizationId)
         yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
         yield* Ref.set(subject.probe.failing, true)
-        const failed = yield* subject.environments.access(session, Option.none()).pipe(Effect.flip)
+        const failed = yield* subject.environments
+          .access(session, Option.none())
+          .pipe(Effect.flip, Effect.repeat({ while: (error) => error._tag === "Environments.Starting" }))
         expect([failed._tag, failed.message]).toEqual([
           "Environments.Unavailable",
           `The environment of session ${session.sessionId} is unavailable: the test provider fails`,

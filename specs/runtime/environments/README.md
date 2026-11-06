@@ -182,6 +182,7 @@ Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, c
 1. A remote hand is not behind the egress yet: it gets no placeholders that work.
 2. A remote hand does not update in place: a newer template config replaces it at its wake, and it keeps its executor version until it is replaced.
 3. A brain that boots with `REN_HAND_PLACEMENT=remote` replaces four OpenCode services so they run on the hand: `ToolOutput`, `FileSystem`, `Vcs` and `Snapshot`. A co-located brain keeps OpenCode's own services and today's three replacements (workspace driver, `rg`, `RenShell`; `workspace-driver.ts:81-95`). All of these live in one module of the OpenCode adapter (EN13, EN14).
+4. Built: Ren waits up to 5 s for a chat's hand (`Environments.startingAfter`), under the 10 s for which its server keeps a quiet connection. A hand that takes longer answers `EnvironmentStartingError`, and the brain asks again every 2 s for up to 3 min (`HostAccess.handStartsWithin`). A chat's first tool call waits while a new hand starts; it does not fail.
 
 ### Keep-alive and detection
 

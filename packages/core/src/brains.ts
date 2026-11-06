@@ -6,6 +6,7 @@ import type { StartBody, Synced } from "@ren/host-api/brain-api"
 import {
   BrainRejectedError,
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   GenerationRetiredError,
@@ -66,6 +67,7 @@ import { SpaceQueries } from "./space/queries.js"
 export {
   BrainRejectedError,
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   ModelsUnavailableError,
@@ -102,7 +104,10 @@ export interface Interface {
     host: CurrentHost["Service"],
     sessionId: Session.ID,
     options?: { readonly unreachable?: boolean },
-  ) => Effect.Effect<Environment.Access, EnvironmentNotFoundError | EnvironmentUnavailableError | ForbiddenError>
+  ) => Effect.Effect<
+    Environment.Access,
+    EnvironmentNotFoundError | EnvironmentUnavailableError | EnvironmentStartingError | ForbiddenError
+  >
   readonly releaseEnvironment: (
     host: CurrentHost["Service"],
     sessionId: Session.ID,
@@ -645,6 +650,7 @@ export const layer = Layer.effect(
             "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
             "Environments.Unavailable": (error) =>
               Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
+            "Environments.Starting": (error) => Effect.fail(new EnvironmentStartingError({ message: error.message })),
           }),
         )
       }),
