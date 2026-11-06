@@ -110,6 +110,7 @@ export const make = async () => {
 
   return {
     database,
+    root,
     ren,
     row,
     seeded,
