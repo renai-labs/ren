@@ -17,7 +17,7 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
-import { useCatalog } from "../../lib/use-catalog.js"
+import { useApps } from "../../lib/use-app.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { errorMessage } from "../../lib/errors.js"
 import { initials, plural } from "../../lib/format.js"
@@ -167,15 +167,16 @@ export function SpaceCard(props: { space: SpaceInfo }) {
     ...api["space-member"].list.queryOptions({ spaceId: space.id, status: "active", page: 1, pageSize: 3 }),
     enabled: space.kind !== "private" && space.membershipId !== null,
   })
-  const catalog = useCatalog()
-  const appsLoading = reach.isPending || catalog.loading
+  const appIds = [...new Set((reach.data?.profiles ?? []).map((profile) => profile.appId))]
+  const catalog = useApps(appIds)
+  const appsLoading = reach.isPending || catalog.pending
   const spaces = useSpaces().spaces
-  const apps = [...new Set((reach.data?.profiles ?? []).map((profile) => profile.appId))]
-    .filter((appId) => !isSpaceApp(catalog.appOf(appId), spaces))
+  const apps = appIds
+    .filter((appId) => !isSpaceApp(catalog.of(appId), spaces))
     .map((appId) => ({
       id: appId,
-      name: catalog.appOf(appId)?.name ?? appId,
-      image: catalog.appOf(appId)?.icon,
+      name: catalog.of(appId)?.name ?? appId,
+      image: catalog.of(appId)?.icon,
     }))
   const members = (people.data?.items ?? []).flatMap((member) =>
     member.status === "active" ? [{ id: member.id, name: member.name, image: member.image }] : [],

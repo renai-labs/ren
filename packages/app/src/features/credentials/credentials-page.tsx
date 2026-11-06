@@ -16,12 +16,13 @@ import { Page, PageFooter, PageTabsList, PageTabsTrigger, TableSample, useShapeI
 import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
-import { useCatalog } from "../../lib/use-catalog.js"
+import { useApp } from "../../lib/use-app.js"
+import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useMe } from "../../lib/use-me.js"
 import { useSpaces } from "../../lib/use-spaces.js"
-import { pageSize, currentPage, lastPageAfterRemoval, pageCount } from "../../lib/pagination.js"
-import { isSpaceApp, reach, usedIn } from "../../lib/apps.js"
+import { pageSize, currentPage, lastPageAfterRemoval } from "../../lib/pagination.js"
+import { fromApp, isSpaceApp, reach, usedIn } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
@@ -117,7 +118,6 @@ function CredentialKeys() {
 }
 
 function OrgApps() {
-  const catalog = useCatalog()
   const appsShapeId = useShapeId("apps")
   const search = route.useSearch()
   const navigate = route.useNavigate()
@@ -127,20 +127,27 @@ function OrgApps() {
   const { api } = RouterContext.useRouterContext()
   const deleteProfile = useMutation(api["app-profile-reach"]["app-profile"].delete.mutationOptions())
   const spaces = useSpaces().spaces
-  const used = catalog.apps.filter((app) => catalog.profilesOf(app.id).length > 0 && !isSpaceApp(app, spaces))
-  const page = Math.min(currentPage(search), pageCount(used.length, pageSize))
-  const app = opened ? catalog.appOf(opened) : undefined
+  const page = currentPage(search)
+  const list = useQuery({
+    ...api.app.list.queryOptions({ connected: true, page, pageSize }),
+    placeholderData: keepPreviousData,
+  })
+  const used = (list.data?.items ?? []).map(fromApp).filter((app) => !isSpaceApp(app, spaces))
+  const app = useApp(opened).app
+  const profiles = useAppProfiles(used.map((each) => each.id))
+  const accounts = useAppProfiles(app ? [app.id] : [])
+  const loading = list.isPending || profiles.pending
   return (
     <>
-      <Loading id={appsShapeId} loading={catalog.loading} label="Loading apps">
-        {catalog.loading ? (
+      <Loading id={appsShapeId} loading={loading} label="Loading apps">
+        {loading ? (
           <TableSample columns={["App", "Used in", "Status", ""]} />
         ) : (
           <AppsTable
-            rows={used.slice((page - 1) * pageSize, page * pageSize).map((each) => ({
+            rows={used.map((each) => ({
               app: each,
-              profiles: catalog.profilesOf(each.id),
-              usedIn: usedIn(catalog.profilesOf(each.id)),
+              profiles: profiles.of(each.id),
+              usedIn: usedIn(profiles.of(each.id)),
             }))}
             empty="No apps. Add one to a space from the Marketplace."
             onOpen={setOpened}
@@ -149,7 +156,7 @@ function OrgApps() {
         )}
       </Loading>
       <PageFooter>
-        <ListPagination page={page} pageSize={pageSize} total={used.length} noun="app" />
+        <ListPagination page={page} pageSize={pageSize} total={list.data?.total ?? 0} noun="app" />
       </PageFooter>
       <AppSheet app={app} onClose={() => setOpened(undefined)}>
         {app ? (
@@ -166,7 +173,7 @@ function OrgApps() {
                 New account
               </Button>
             }
-            profiles={catalog.profilesOf(app.id)}
+            profiles={accounts.of(app.id)}
             caption={reach}
             onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, edit: true })}
             action={(each) => (

@@ -33,6 +33,7 @@ import { Avatar, AvatarGroup, AvatarGroupCount } from "@ren/ui/avatar"
 import { Kbd } from "@ren/ui/kbd"
 import { Separator } from "@ren/ui/separator"
 import { Command, CommandGroup, CommandItem, CommandList } from "@ren/ui/command"
+import { Spinner } from "@ren/ui/spinner"
 import { useUploads, type Target } from "../../lib/use-uploads.js"
 import { DropOverlay, UploadChips } from "./attachments.js"
 import { MentionOverlay } from "@ren/ui/mention-overlay"
@@ -52,7 +53,7 @@ import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@ren/ui/p
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { RepositoriesDialog } from "./repositories-picker.js"
-import { useCatalog } from "../../lib/use-catalog.js"
+import { useApps } from "../../lib/use-app.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { gaps, isSpaceApp } from "../../lib/apps.js"
 import { useStep } from "../../lib/use-step.js"
@@ -105,7 +106,6 @@ function AddMenu(props: {
 
 function AppsStrip(props: { spaceId: string }) {
   const { api } = RouterContext.useRouterContext()
-  const catalog = useCatalog()
   const spaces = useSpaces()
   const spaceName = spaces.spaceName
   const space = spaces.spaces.find((each) => each.id === props.spaceId)
@@ -122,17 +122,19 @@ function AppsStrip(props: { spaceId: string }) {
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId }),
     retry: false,
   })
-  const profiles = (reach.data?.profiles ?? [])
-    .filter((profile) => !isSpaceApp(catalog.appOf(profile.appId), spaces.spaces))
+  const reached = reach.data?.profiles ?? []
+  const catalog = useApps(reached.map((profile) => profile.appId))
+  const profiles = reached
+    .filter((profile) => !isSpaceApp(catalog.of(profile.appId), spaces.spaces))
     .map((profile) => ({
       id: profile.id,
       appId: profile.appId,
       name: profile.name,
-      app: catalog.appOf(profile.appId)?.name ?? profile.appSlug,
-      icon: catalog.appOf(profile.appId)?.icon ?? undefined,
+      app: catalog.of(profile.appId)?.name ?? profile.appSlug,
+      icon: catalog.of(profile.appId)?.icon ?? undefined,
       gaps: gaps(profile),
     }))
-  if (reach.isPending) return null
+  if (reach.isPending || catalog.pending) return null
   const apps = [...new Map(profiles.map((profile) => [profile.app, profile.icon] as const))]
   const shown = apps.slice(0, 3)
   const missing = profiles.filter((profile) => profile.gaps.length > 0).length
@@ -355,7 +357,19 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
       )}
     >
       <CommandList className="max-h-72">
-        <CommandGroup heading={suggest.label}>
+        <CommandGroup
+          heading={
+            <span className="flex items-center justify-between gap-2">
+              {suggest.label}
+              {suggest.searching ? (
+                <span className="flex items-center gap-1">
+                  <Spinner aria-hidden className="size-3" />
+                  Searching all apps
+                </span>
+              ) : null}
+            </span>
+          }
+        >
           {suggest.items.map((item) => (
             <CommandItem
               key={item.value}

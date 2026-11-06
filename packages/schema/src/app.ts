@@ -121,9 +121,13 @@ export const TransferOwnershipInput = Schema.Struct({
 }).annotate({ identifier: "App.TransferOwnershipInput" })
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
-export const ListInput = Schema.Struct({ spaceId: Schema.optional(Space.ID), ...Pagination.fields(50) }).annotate({
-  identifier: "App.ListInput",
-})
+export const ListInput = Schema.Struct({
+  spaceId: Schema.optional(Space.ID),
+  connected: Schema.optional(Schema.Boolean).annotate({
+    description: "Only apps with a profile you can see, registry apps too. Without it, only the organization’s apps.",
+  }),
+  ...Pagination.fields(50),
+}).annotate({ identifier: "App.ListInput" })
 
 export const definition = Primitive.define({
   name: "app",
