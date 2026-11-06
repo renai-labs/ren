@@ -118,7 +118,7 @@ export const layer = Layer.effect(
         )
 
     const lose = Effect.fn("BrainLifecycle.lose")(function* (brainId: Brain.ID, generation: number, at: Date) {
-      yield* database
+      return yield* database
         .transaction((transaction) =>
           Effect.gen(function* () {
             const marked = yield* transaction
@@ -132,9 +132,10 @@ export const layer = Layer.effect(
                 ),
               )
               .returning({ id: brains.id })
-            if (marked.length === 0) return
+            if (marked.length === 0) return false
             yield* Effect.logWarning(`The sandbox of brain ${brainId} is gone; its busy chats are interrupted`)
             yield* interruptBusy(transaction, brainId, at)
+            return true
           }),
         )
         .pipe(Effect.orDie)
@@ -253,7 +254,9 @@ export const layer = Layer.effect(
 
     yield* provider.lost.pipe(
       Stream.runForEach((lost) =>
-        Schema.is(Brain.ID)(lost.id) ? machines.lose(lost.id, lost.generation) : Effect.void,
+        Schema.is(Brain.ID)(lost.id)
+          ? machines.lose({ id: lost.id, generation: lost.generation }, "its machine is gone")
+          : Effect.void,
       ),
       Effect.withErrorReporting,
       Effect.forkScoped,

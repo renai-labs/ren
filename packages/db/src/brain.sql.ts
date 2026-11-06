@@ -38,6 +38,11 @@ export const brain = pgTable(
     failure: text(),
     keep_alive_until: timestamp(),
     last_active_at: timestamp(),
+    // oxlint-disable-next-line ren/no-comments -- EN19: a failed brain starts again at its first access after retry_at; retries counts these starts since the last ready.
+    retry_at: timestamp(),
+    retries: integer().notNull().default(0),
+    // oxlint-disable-next-line ren/no-comments -- EN17: the first check that found the brain silent while its machine runs.
+    unanswered_since: timestamp(),
     last_progress_at: timestamp(),
     progress: jsonb().$type<Readonly<Record<string, string>>>(),
     created_at: timestamp().defaultNow().notNull(),
