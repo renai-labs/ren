@@ -55,8 +55,12 @@ jobs:
             exit 0
           fi
           echo "Last successful deploy: $base"
+          # The server image also holds the bundles of the brain and the executor (cell/e2b/bundle.ts).
           for part in server app site; do
-            affected=$(bun turbo query affected --packages "@ren/$part" --base "$base" --head "$GITHUB_SHA" | jq '.data.affectedPackages.length > 0')
+            packages="@ren/$part"
+            if [ "$part" = server ]; then packages="@ren/server @ren/cell @ren/executor"; fi
+            # shellcheck disable=SC2086
+            affected=$(bun turbo query affected --packages $packages --base "$base" --head "$GITHUB_SHA" | jq '.data.affectedPackages.length > 0')
             echo "$part=$affected" | tee -a "$GITHUB_OUTPUT"
           done
           if git diff --quiet "$base" "$GITHUB_SHA" -- repos/iron-proxy; then
