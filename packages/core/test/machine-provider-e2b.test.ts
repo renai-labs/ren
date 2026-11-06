@@ -2,6 +2,7 @@ import { afterAll, describe, expect } from "bun:test"
 import { BrainProvider } from "../src/brain-provider.js"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Space } from "@ren/schema/space"
 import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
@@ -17,6 +18,10 @@ interface Seen {
 }
 
 const seen: Array<Seen> = []
+
+// oxlint-disable-next-line ren/no-comments -- The tags of the E2B templates that the fake has built, and the status its next build ends with.
+const built = new Map<string, Array<string>>()
+const builds = { status: "ready" as "ready" | "error" }
 
 const newest = Date.parse("2026-10-29T12:00:00Z")
 
@@ -37,6 +42,37 @@ const runs = Array.from({ length: 250 }, (_, index) => ({
     pause_mode: "full",
   },
 }))
+
+// oxlint-disable-next-line ren/no-comments -- Fixed answers by path: a resume, a network update, and the template build API (tags, a build request, its steps and its status).
+const answers: Readonly<Record<string, () => Response>> = {
+  "/sandboxes/sbx_1/connect": () => Response.json({ sandboxID: "sbx_1" }),
+  "/sandboxes/sbx_1/network": () => new Response(null, { status: 204 }),
+  "/v3/templates": () => {
+    const requested = JSON.parse(seen.at(-1)?.body ?? "{}")
+    if (builds.status === "ready") built.set(requested.name, [...(built.get(requested.name) ?? []), ...requested.tags])
+    return Response.json({ templateID: "e2b_tpl", buildID: "bld_1" }, { status: 202 })
+  },
+  "/v2/templates/e2b_tpl/builds/bld_1": () => new Response(null, { status: 202 }),
+  "/templates/e2b_tpl/builds/bld_1/status": () =>
+    Response.json(
+      builds.status === "ready"
+        ? { status: "ready" }
+        : {
+            status: "error",
+            reason: { message: "step 2 failed", logEntries: [{ message: "E: Unable to locate package nope" }] },
+          },
+    ),
+}
+
+const tagsOf = (name: string) => () =>
+  built.has(name)
+    ? Response.json((built.get(name) ?? []).map((tag) => ({ tag })))
+    : new Response("not found", { status: 404 })
+
+const answerOf = (url: URL) => {
+  const name = url.pathname.match(/^\/templates\/([^/]+)\/tags$/)?.[1]
+  return name ? tagsOf(name) : answers[url.pathname]
+}
 
 // oxlint-disable-next-line ren/no-comments -- A local server answers as the E2B API and as envd. The client below sends every request here and keeps the host it meant in x-target-host.
 const e2b = Bun.serve({
@@ -62,9 +98,9 @@ const e2b = Bun.serve({
       )
     if (url.pathname === "/sandboxes" && request.method === "POST")
       return Response.json({ sandboxID: "sbx_1", domain: "e2b.test", envdAccessToken: "envd" })
-    if (url.pathname === "/sandboxes/sbx_1/connect") return Response.json({ sandboxID: "sbx_1" })
-    if (url.pathname === "/sandboxes/sbx_1/network") return new Response(null, { status: 204 })
     if (url.pathname === "/files") return Response.json([{ path: url.searchParams.get("path") }])
+    const answer = answerOf(url)
+    if (answer) return answer()
     if (url.pathname === "/events/sandboxes") {
       const offset = Number(url.searchParams.get("offset") ?? "0")
       return Response.json(runs.slice(offset, offset + Number(url.searchParams.get("limit"))))
@@ -183,6 +219,59 @@ describe("E2BSandbox with an egress", () => {
       })
       const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
       expect(JSON.parse(create?.body ?? "{}").network).toBeUndefined()
+    }),
+  )
+})
+
+describe("E2BSandbox template builds", () => {
+  const buildOf = Effect.map(BrainProvider.first, (provider) => Option.getOrThrow(provider.build))
+
+  it.live(
+    "a build starts from the system image with one RUN per package manager and per build command; the same config again gives its image at once (templates rule 4)",
+    () =>
+      Effect.gen(function* () {
+        const build = yield* buildOf
+        const environmentTemplateId = EnvironmentTemplate.ID.make("tpl_01ABCDEFGHJKMNPQRSTVWXYZ00")
+        const config = {
+          cpuCount: 4,
+          memoryMiB: 4096,
+          packages: { apt: ["ffmpeg"], pip: ["requests"] },
+          buildCommands: ["echo ready > ~/ready"],
+        }
+        seen.length = 0
+        builds.status = "ready"
+        const image = yield* build({ environmentTemplateId, config })
+        expect(image).toMatch(/^ren-template-01abcdefghjkmnpqrstvwxyz00:[0-9a-f]{16}$/)
+        const requested = seen.find((request) => request.path === "/v3/templates")
+        expect(JSON.parse(requested?.body ?? "{}")).toMatchObject({ cpuCount: 4, memoryMB: 4096 })
+        const steps = JSON.parse(
+          seen.find((request) => request.path === "/v2/templates/e2b_tpl/builds/bld_1")?.body ?? "{}",
+        )
+        expect(steps).toMatchObject({ fromTemplate: "ren-brain-dev", startCmd: "/opt/ren/start.sh" })
+        expect(steps.steps.map((step: { readonly args: ReadonlyArray<string> }) => step.args)).toEqual([
+          ["apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y 'ffmpeg'", "root"],
+          [
+            "(command -v pip3 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python3-pip)) && pip3 install --break-system-packages 'requests'",
+            "root",
+          ],
+          ["echo ready > ~/ready", "user"],
+        ])
+        seen.length = 0
+        expect(yield* build({ environmentTemplateId, config })).toBe(image)
+        expect(seen.some((request) => request.path === "/v3/templates")).toBe(false)
+      }),
+  )
+
+  it.live("a failed build fails with E2B's reason and the last lines of its log (templates rule 3)", () =>
+    Effect.gen(function* () {
+      const build = yield* buildOf
+      builds.status = "error"
+      const failed = yield* build({
+        environmentTemplateId: EnvironmentTemplate.ID.make("tpl_01ABCDEFGHJKMNPQRSTVWXYZ01"),
+        config: { packages: { apt: ["nope"] } },
+      }).pipe(Effect.flip)
+      builds.status = "ready"
+      expect(failed.message).toBe("step 2 failed\nE: Unable to locate package nope")
     }),
   )
 })
