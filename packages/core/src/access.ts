@@ -22,6 +22,7 @@ import { SessionPolicy } from "./session/policy.js"
 import { SettingsPolicy } from "./settings/policy.js"
 import { SpacePolicy } from "./space/policy.js"
 import { TaskPolicy } from "./task/policy.js"
+import { WebhookPolicy } from "./webhook/policy.js"
 
 // oxlint-disable-next-line ren/no-comments -- access §2: services pass facts; only policy documents decide.
 export interface Resource {
@@ -107,6 +108,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...ChannelInstallPolicy.documents,
   ...ChannelMappingPolicy.documents,
   ...SchedulePolicy.documents,
+  ...WebhookPolicy.documents,
   ...InfraPolicy.documents,
 ])
 
