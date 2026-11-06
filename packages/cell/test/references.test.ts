@@ -30,7 +30,7 @@ const open = (github: TestGitHub.Instance, references: ReadonlyArray<Reference.I
     ReferenceChat.open(
       { url, environmentId, directoryOf: (sessionId) => join(workspace, sessionId) },
       github,
-      references,
+      { references },
       drives,
     ),
   )

@@ -1,12 +1,13 @@
 export * as Schedule from "./schedule.js"
 
-import { DateTime, Duration, Effect, Option, Schema } from "effect"
+import { Duration, Effect, Schema } from "effect"
 import { Agent } from "./agent.js"
 import { Auth } from "./auth.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
 import { Session } from "./session.js"
+import { Settings } from "./settings.js"
 import { Space } from "./space.js"
 
 export const ID = Identifier.make("sch", "Schedule.ID")
@@ -24,12 +25,6 @@ export const Cron = Schema.String.check(
   }),
 ).annotate({ identifier: "Schedule.Cron" })
 
-export const TimeZone = Schema.String.check(
-  Schema.makeFilter(
-    (zone) => Option.isSome(DateTime.zoneMakeNamed(zone)) || 'Use an IANA time zone, for example "Europe/Berlin".',
-  ),
-).annotate({ identifier: "Schedule.TimeZone" })
-
 export const Message = Schema.Trim.check(
   Schema.isNonEmpty({ message: "Message is required." }),
   Schema.isMaxLength(maximumMessageLength, { message: `Use ${maximumMessageLength} characters or fewer.` }),
@@ -38,7 +33,9 @@ export const Message = Schema.Trim.check(
 export interface Recurring extends Schema.Schema.Type<typeof Recurring> {}
 export const Recurring = Schema.Struct({
   cron: Cron,
-  timeZone: TimeZone,
+  timeZone: Schema.optionalKey(Settings.TimeZone).annotate({
+    description: "Without it, the zone the schedule has, else the organization’s time zone.",
+  }),
   until: Schema.optionalKey(Schema.DateTimeUtc).annotate({ description: "The last time it may run." }),
 }).annotate({ identifier: "Schedule.Recurring" })
 
@@ -169,7 +166,7 @@ export const Declaration = Schema.Struct({
   name: Schema.optionalKey(Primitive.Name.annotate({ description: "Without it, the slug." })),
   agent: Schema.optionalKey(Agent.Name.annotate({ description: "Without it, the space’s default settings." })),
   cron: Cron,
-  timeZone: TimeZone,
+  timeZone: Settings.TimeZone,
   message: Message,
   until: Schema.optionalKey(Schema.DateTimeUtcFromString.annotate({ description: "The last time it runs, in UTC." })),
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(true))),

@@ -25,6 +25,7 @@ import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import {
   Clock,
+  DateTime,
   Deferred,
   Effect,
   Option,
@@ -103,6 +104,17 @@ interface Instance {
 }
 
 const attachedOf = Schema.decodeUnknownOption(Schema.Struct({ files: Schema.Array(SessionMessage.DriveFile) }))
+
+const sentAtOf = Schema.decodeUnknownOption(Schema.Struct({ sentAt: Schema.Number }))
+
+const zoned = (millis: number, timeZone: string) => DateTime.makeZonedUnsafe(millis, { timeZone })
+
+const sentAtNote = (millis: number, timeZone: string) => {
+  const local = zoned(millis, timeZone)
+  const time = DateTime.formatIsoOffset(local).replace(/\.\d{3}/u, "")
+  const day = DateTime.format(local, { weekday: "long", locale: "en-US" })
+  return `\n\n<sent_at time="${time}" day="${day}" />`
+}
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2 ends a turn with an execution event and does not publish session.idle.
 const turnEnded = (event: { readonly type: string; readonly data: unknown }) =>
@@ -528,11 +540,29 @@ export const make = (
               })
             }),
           )
+          yield* context.session.hook("prompt", (event) =>
+            Effect.map(Clock.currentTimeMillis, (millis) => {
+              event.metadata = { ...event.metadata, sentAt: millis }
+            }),
+          )
           yield* context.session.hook("context", (event) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
               const agent = Option.getOrUndefined(agentOf(event.agent))
               if (!agent) return
+              const now = zoned(yield* Clock.currentTimeMillis, agent.timezone)
               event.system.push(...agent.instructions.map((text) => ({ type: "text" as const, text })))
+              event.system.push({
+                type: "text",
+                text: `Timezone: ${agent.timezone} (UTC${DateTime.zonedOffsetIso(now)}). Each user message ends with <sent_at>, the local time it was sent.`,
+              })
+              event.messages = event.messages.map((message) => {
+                const sent = message.role === "user" ? Option.getOrUndefined(sentAtOf(message.metadata)) : undefined
+                if (!sent) return message
+                return Message.make({
+                  ...Struct.omit(message, ["content"]),
+                  content: [...message.content, Message.text(sentAtNote(sent.sentAt, agent.timezone))],
+                })
+              })
               const memory = Ref.getUnsafe(applied).memory
               if (isSession && event.sessionID === sessionId && Option.isSome(memory))
                 event.system.push({
@@ -589,6 +619,12 @@ export const make = (
           )
           yield* context.session.hook("prompt", (event) =>
             Effect.flatMap(Ref.get(shared.turnStarted), (started) => started(event.sessionID)),
+          )
+          yield* context.shell.hook("create.before", (event) =>
+            Effect.sync(() => {
+              const timezone = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.primary.timezone
+              if (timezone) event.env.TZ = timezone
+            }),
           )
           turns.ended.push((sessionID) => Effect.flatMap(Ref.get(shared.turnEnded), (ended) => ended(sessionID)))
           const instance: Instance = {

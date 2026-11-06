@@ -15,6 +15,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHe
 import { Spinner } from "@ren/ui/spinner"
 import { Textarea } from "@ren/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
+import { useMe } from "../lib/use-me.js"
 import { useNow } from "../lib/use-now.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { errorMessage } from "../lib/errors.js"
@@ -80,6 +81,9 @@ export function ScheduleSheet(props: {
   chat?: ScheduleChat | undefined
   onClose: () => void
 }) {
+  const { api } = RouterContext.useRouterContext()
+  const me = useMe()
+  const organization = useQuery(api["organization-settings"].get.queryOptions({ idOrSlug: me.organization.id }))
   const copy = sheetCopy(props.schedule, props.chat)
   return (
     <Sheet
@@ -93,13 +97,18 @@ export function ScheduleSheet(props: {
           <SheetTitle>{copy.title}</SheetTitle>
           <SheetDescription>{copy.description}</SheetDescription>
         </SheetHeader>
-        <ScheduleForm
-          key={props.version}
-          schedule={props.schedule}
-          spaceId={props.chat?.spaceId ?? props.spaceId}
-          chat={props.chat}
-          onClose={props.onClose}
-        />
+        {organization.isPending ? (
+          <Spinner aria-label="Loading the organization’s timezone" className="mx-auto my-8" />
+        ) : (
+          <ScheduleForm
+            key={props.version}
+            schedule={props.schedule}
+            spaceId={props.chat?.spaceId ?? props.spaceId}
+            chat={props.chat}
+            organizationTimezone={organization.data?.settings.timezone}
+            onClose={props.onClose}
+          />
+        )}
       </SheetContent>
     </Sheet>
   )
@@ -115,6 +124,7 @@ function ScheduleForm(props: {
   schedule: ScheduleInfo | undefined
   spaceId: string | undefined
   chat: ScheduleChat | undefined
+  organizationTimezone: string | undefined
   onClose: () => void
 }) {
   const { api, platform } = RouterContext.useRouterContext()
@@ -124,7 +134,9 @@ function ScheduleForm(props: {
   const [message, setMessage] = useState(initial.message)
   const [spaceId, setSpaceId] = useState(initial.spaceId)
   const [agentId, setAgentId] = useState(initial.agentId)
-  const [cadence, setCadence] = useState(() => cadenceOf(schedule?.when, TimeZone.current(platform.storage)))
+  const [cadence, setCadence] = useState(() =>
+    cadenceOf(schedule?.when, TimeZone.current(platform.storage, props.organizationTimezone)),
+  )
   const [error, setError] = useState("")
   const agents = useQuery({
     ...api.agent.list.queryOptions({ page: 1, pageSize: pickerPageSize, isSubagent: false, spaceId }),

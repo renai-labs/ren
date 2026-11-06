@@ -41,7 +41,7 @@ describe("InfraSpecs", () => {
       const infra = yield* InfraSpecs.Service
       const o = yield* org
       yield* organizationSettings.update(o.admin, o.organizationId, {
-        settings: { ...empty, instructions: "Be brief." },
+        settings: { ...empty, instructions: "Be brief.", timezone: "Asia/Kolkata" },
       })
       const eng = yield* spaces.create(o.admin, { name: "Engineering", slug: "engineering", description: "Builds." })
       yield* spaceSettings.update(o.admin, eng.id, { settings: { ...empty, instructions: "Ship it." } })
@@ -62,7 +62,7 @@ describe("InfraSpecs", () => {
       expect({ bindings: pulled.bindings, spec: pulled.spec }).toEqual({
         bindings: { organization: o.bindings.organization, spaces: {} },
         spec: {
-          org: { settings: { ...empty, instructions: "Be brief." } },
+          org: { settings: { ...empty, instructions: "Be brief.", timezone: "Asia/Kolkata" } },
           memory: { "memory.md": "" },
           spaces: {
             home: {
@@ -448,7 +448,10 @@ describe("InfraSpecs", () => {
           path: "deploy.yaml/spaces/gone",
           message: "deploy.yaml binds space “gone”, which the spec does not declare.",
         },
-        { path: "deploy.yaml/spaces/home/timezone", message: "Infra does not apply the timezone of a space yet." },
+        {
+          path: "deploy.yaml/spaces/home/timezone",
+          message: "Timezone is an organization setting. Set it in org.yaml.",
+        },
         { path: "deploy.yaml/spaces/home/webhooks", message: "Infra does not apply webhooks yet." },
         { path: "spaces/home/webhooks", message: "Infra does not apply webhooks yet." },
       ])

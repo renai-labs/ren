@@ -45,7 +45,7 @@ const open = Effect.gen(function* () {
       directoryOf: (sessionId) => `/tmp/chats/${sessionId}`,
     },
     github,
-    [],
+    {},
     drives,
   )
   return { environment, chat }

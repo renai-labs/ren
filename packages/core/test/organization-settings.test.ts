@@ -16,6 +16,7 @@ const it = testEffect(
 
 const settings = {
   instructions: "Never print secrets.",
+  timezone: "Asia/Kolkata",
   permissions: [{ action: "webfetch", resource: "*", effect: "ask" as const }],
   references: [],
 }

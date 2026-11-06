@@ -1,10 +1,13 @@
 import { useState } from "react"
+import { Struct } from "effect"
 import { Session } from "@ren/schema/session"
+import { Settings } from "@ren/schema/settings"
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import { InstructionsField } from "../../components/instructions-field.js"
 import { EditableText } from "../../components/editable-text.js"
 import { ModelPicker } from "../../components/model-picker.js"
+import { TimeZonePicker } from "../../components/time-zone-picker.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { useMe } from "../../lib/use-me.js"
@@ -25,23 +28,23 @@ export function GeneralSettingsPage() {
   const current = settings.data.settings
   const [instructions, setInstructions] = useState<string>()
   const draft = instructions ?? current.instructions ?? ""
-  const saveSettings = (patch: {
-    instructions?: string
-    model?: { endpointId: string; modelId: string; variant?: string }
-  }) =>
+  const saveSettings = (next: typeof current) =>
     update.mutateAsync(
-      { id: me.organization.id, settings: { ...current, ...patch } },
+      { id: me.organization.id, settings: next },
       { onError: (error) => toast.error("Couldn’t save the settings", { description: errorMessage(error) }) },
     )
-  useAutosave(instructions, current.instructions ?? "", (value) => saveSettings({ instructions: value }))
+  useAutosave(instructions, current.instructions ?? "", (value) => saveSettings({ ...current, instructions: value }))
   const model = current.model
   const organization = me.organization
   const canUpdate = settings.data.canUpdate
   const saving = update.isPending
   const chooseModel = (next: { id: string; providerID: string; variant?: string }) =>
     void saveSettings({
+      ...current,
       model: { endpointId: next.providerID, modelId: next.id, ...(next.variant && { variant: next.variant }) },
     })
+  const chooseTimezone = (timezone: string) =>
+    void saveSettings(timezone ? { ...current, timezone } : Struct.omit(current, ["timezone"]))
   const rename = async (name: string) => {
     const result = await auth.organization.update({ organizationId: me.organization.id, data: { name } })
     if (result.error !== null) {
@@ -84,6 +87,16 @@ export function GeneralSettingsPage() {
           </Row>,
           <Row key="name" title="Name">
             <EditableText value={organization.name} label="name" required readOnly={!canUpdate} onCommit={rename} />
+          </Row>,
+          <Row key="timezone" title="Timezone" description="Agents, shells and new schedules use it.">
+            <TimeZonePicker
+              unset={{ label: "Default", zone: Settings.defaultTimezone }}
+              value={current.timezone ?? ""}
+              variant="ghost"
+              className="gap-2 text-muted-foreground"
+              disabled={!canUpdate}
+              onChange={chooseTimezone}
+            />
           </Row>,
           <Row key="model" title="Default model" description="New chats start with it unless a space sets its own.">
             <ModelPicker

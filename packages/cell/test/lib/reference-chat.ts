@@ -9,6 +9,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Drive } from "@ren/schema/drive"
 import type { Environment } from "@ren/schema/environment"
 import type { Reference } from "@ren/schema/reference"
+import type { Settings } from "@ren/schema/settings"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Context, Effect, Layer, Option } from "effect"
@@ -32,7 +33,7 @@ export interface Place {
 export const open = Effect.fnUntraced(function* (
   place: Place,
   github: TestGitHub.Instance,
-  references: ReadonlyArray<Reference.Info>,
+  ren: Partial<Settings.Info>,
   drives?: Drive.Availability,
 ) {
   const stub = Shared.stub()
@@ -53,7 +54,7 @@ export const open = Effect.fnUntraced(function* (
     ChatSettings.Service,
   )
   yield* settings.save(
-    TestSettings.layers({ ren: { references } }),
+    TestSettings.layers({ ren }),
     drives ? [{ id: sessionId, agent: null, archived: false, drives }] : [],
   )
   const endpoints = Shared.access(undefined, stub.url).endpoints

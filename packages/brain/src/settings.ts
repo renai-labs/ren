@@ -7,7 +7,7 @@ import { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import { Settings } from "@ren/schema/settings"
-import { Array, Option, Result, Schema, Struct } from "effect"
+import { Array, Effect, Option, Result, Schema, Struct } from "effect"
 
 export class Unconfigured extends Schema.TaggedError<Unconfigured>()("BrainSettings.Unconfigured", {
   message: Schema.String,
@@ -22,6 +22,7 @@ export const Agent = Schema.Struct({
   model: Session.Model,
   defaultModels: Schema.optionalKey(ModelTypes.Defaults),
   steps: Schema.Int,
+  timezone: Schema.String.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(Settings.defaultTimezone))),
 }).annotate({ identifier: "BrainSettings.Agent" })
 
 export interface Resolved extends Schema.Schema.Type<typeof Resolved> {}
@@ -133,6 +134,7 @@ export const resolve = (
   const permissions = union(own.flatMap((settings) => settings.permissions))
   const steps = (all: ReadonlyArray<Settings.Info>) =>
     all.findLast((settings) => Boolean(settings.steps))?.steps ?? Settings.defaultSteps
+  const timezone = layers.organization.settings?.timezone ?? layers.ren.settings?.timezone ?? Settings.defaultTimezone
   return Result.succeed({
     primary: {
       name: primary.name,
@@ -142,6 +144,7 @@ export const resolve = (
       model: model.value,
       ...defaultModels(primary.settings),
       steps: steps(own),
+      timezone,
     },
     subagents: layers.agents
       .filter((agent) => agent.isSubagent)
@@ -154,6 +157,7 @@ export const resolve = (
             permissions: union([...permissions, ...agent.settings.permissions]),
             model: Option.getOrElse(available(lookup, agent.settings.model), () => model.value),
             steps: steps([...shared, agent.settings]),
+            timezone,
           },
           defaultModels(agent.settings),
         ),
