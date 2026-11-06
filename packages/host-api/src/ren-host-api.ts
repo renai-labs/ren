@@ -50,6 +50,10 @@ export const PullSession = Schema.Struct({
   progress: Schema.String.annotate({
     description: "An opaque counter from the harness. It changes when a turn makes progress.",
   }),
+  background: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "A process that the chat started still runs, such as a background shell. Ren keeps the machine awake for it (EN25). An older brain leaves it out.",
+  }),
 }).annotate({ identifier: "Host.PullSession" })
 
 export interface PullRequest extends Schema.Schema.Type<typeof PullRequest> {}

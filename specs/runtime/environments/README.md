@@ -199,9 +199,8 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 ### Keep-alive and detection
 
 1. Each `access` keeps a machine awake for 10 min. Each pull with progress during a turn keeps it awake for 30 min. A turn with no progress for 30 min gets no more time (today, `brain-lifecycle.ts:81-93`).
-2. While the executor reports a background process, Ren keeps the machine awake, up to 2 h after the last turn (EN25).
-3. Ren checks a machine when a call to it fails, and in the hourly cleanup. There is no sweeper (EN16).
-4. An unknown answer never destroys a machine: a provider error, an unreadable status or an unreadable version means keep (I11). Nothing is destroyed because a list does not show it (I12).
+2. Ren checks a machine when a call to it fails, and in the hourly cleanup. There is no sweeper (EN16).
+3. An unknown answer never destroys a machine: a provider error, an unreadable status or an unreadable version means keep (I11). Nothing is destroyed because a list does not show it (I12).
 
 ### Failure and recovery
 
@@ -228,7 +227,7 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 | `core/brain-host.ts`                   | A registry of brain providers instead of one `SANDBOX_PROVIDER`.                                                                                                                                                                                                                                                      |
 | `core/environments.ts`                 | Remote hand machines on `MachineLifecycle`; the "hand unreachable" check.                                                                                                                                                                                                                                             |
 | `core/environment-templates.ts`        | One build at a time per template; archive refused while in use.                                                                                                                                                                                                                                                       |
-| `environment-api`                      | The executor reports its running background processes. Later: a feature list in `hello`.                                                                                                                                                                                                                              |
+| `environment-api`                      | Later: a feature list in `hello`.                                                                                                                                                                                                                                                                                     |
 | `cell`                                 | One OpenCode hand-bridge module chosen by `REN_HAND_PLACEMENT`; the plugin refuses tools of a space with no hand.                                                                                                                                                                                                     |
 | `cell/e2b`, executor image             | Images without Ren code; `start.sh` pulls bundles and restarts one process at a time.                                                                                                                                                                                                                                 |
 | `server`                               | A bundle route; the start check for missing providers.                                                                                                                                                                                                                                                                |

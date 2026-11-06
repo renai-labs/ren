@@ -809,10 +809,18 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
             ),
             Stream.runHead,
           )
+          // oxlint-disable-next-line ren/no-comments -- EN25: a shell that still runs, such as one the agent put in the background, keeps the machine awake.
+          const background = yield* server
+            .shells(info.id, (shells) => shells.list())
+            .pipe(
+              Effect.map((shells) => shells.some((shell) => shell.status === "running")),
+              Effect.orElseSucceed(() => false),
+            )
           return {
             id: info.id,
             root: true,
             inbox,
+            background,
             progress: String(DateTime.toEpochMillis(info.time.updated)),
             unfinished: Option.isSome(lastRelevantMessage) && lastRelevantMessage.value.type !== "idle",
           }
@@ -828,7 +836,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         ...snapshots,
         ...active
           .filter((id) => !snapshots.some((session) => session.id === id))
-          .map((id) => ({ id, root: false, inbox: [], progress: "", unfinished: false })),
+          .map((id) => ({ id, root: false, inbox: [], background: false, progress: "", unfinished: false })),
       ].map((session) => {
         const questionAgesMs = forms
           .filter((form) => form.sessionID === session.id)
@@ -838,6 +846,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           root: session.root,
           active: active.includes(session.id),
           progress: session.progress,
+          background: session.background,
           unfinished: session.unfinished,
           questionAgeMs: questionAgesMs.reduce<number | undefined>(
             (oldest, ms) => Math.max(oldest ?? ms, ms),

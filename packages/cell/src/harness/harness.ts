@@ -25,6 +25,7 @@ interface SessionState extends Reconcile.Snapshot {
   readonly id: string
   readonly root: boolean
   readonly progress: string
+  readonly background: boolean
   readonly resend: (id: string) => Effect.Effect<void>
   readonly wait: (ms: number) => Effect.Effect<void>
   readonly interrupt: Effect.Effect<void>
