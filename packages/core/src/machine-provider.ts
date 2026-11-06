@@ -211,6 +211,8 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
       title: definition.title,
       description: definition.description,
       configSchema: Schema.decodeUnknownSync(Schema.Json)(Schema.toJsonSchemaDocument(definition.config)),
+      canLimitHosts: definition.canLimitHosts,
+      canColocate: definition.canColocate,
     },
     canEgress: definition.canEgress,
     canMount: definition.canMount,

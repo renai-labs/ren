@@ -266,6 +266,8 @@ describe("EnvironmentTemplates", () => {
           id: EnvironmentProvider.ID.make("test"),
           title: "Test",
           description: "Environments that live in the test’s memory.",
+          canLimitHosts: false,
+          canColocate: false,
           configSchema: {
             dialect: "draft-2020-12",
             schema: {

@@ -365,6 +365,8 @@ export type EnvironmentProviderInfo = {
   title: string
   description: string
   configSchema: JsonValue
+  canLimitHosts: boolean
+  canColocate: boolean
 }
 
 export type EnvironmentTemplateNetworking =
