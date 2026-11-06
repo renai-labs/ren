@@ -22,7 +22,7 @@ const RetentionRun = DurableRunner.make("Retention", {
 
 const chats = Database.Schema.agent_session
 
-// oxlint-disable-next-line ren/no-comments -- A chat goes 30 days after its last activity, with its subagent chats and transcript; a removed message row goes 30 days after its removal (E101, E102); a schedule run goes 30 days after its time (schedules S18).
+// oxlint-disable-next-line ren/no-comments -- A chat goes 30 days after its last activity, with its subagent chats and transcript; a removed message row goes 30 days after its removal (E101, E102); a schedule run goes 30 days after its time (schedules S18); a webhook delivery 30 days after it arrived (W12).
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -60,6 +60,10 @@ export const layer = Layer.effect(
       yield* database.db
         .delete(Database.Schema.schedule_run)
         .where(lt(Database.Schema.schedule_run.scheduled_at, cutoff))
+        .pipe(Effect.orDie)
+      yield* database.db
+        .delete(Database.Schema.webhook_delivery)
+        .where(lt(Database.Schema.webhook_delivery.received_at, cutoff))
         .pipe(Effect.orDie)
       yield* drives.sweep(cutoff)
       if (stale.length > 0) yield* Effect.logInfo(`Retention deleted ${stale.length} chats`)

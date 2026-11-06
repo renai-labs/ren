@@ -1,0 +1,2 @@
+DROP INDEX "webhook_delivery_webhook_id_event_id_uidx";--> statement-breakpoint
+CREATE UNIQUE INDEX "webhook_delivery_webhook_id_event_id_uidx" ON "webhook_delivery" ("webhook_id","event_id") WHERE "event_id" is not null and "outcome" <> 'duplicate';

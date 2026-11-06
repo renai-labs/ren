@@ -1652,6 +1652,40 @@ export const ScheduleRunList = (input: Command.Command.Config.Infer<typeof Comma
     (client, request) => client["schedule-run"]["list"]({ ...request.query }),
   )
 
+export const WebhookDeliveryList = (input: Command.Command.Config.Infer<typeof Commands.WebhookDeliveryList>) =>
+  Operation.run(
+    ClientApi.groups["webhook-delivery"].endpoints["webhook-delivery.list"],
+    {
+      query: {
+        webhookId: input["webhookId"],
+        outcome: input["outcome"],
+        page: input["page"],
+        pageSize: input["pageSize"],
+      },
+      labels: { webhookId: "<webhook>", outcome: "--outcome", page: "--page", pageSize: "--page-size" },
+      lookups: {
+        webhookId: (client, value) =>
+          client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook-delivery"]["list"]({ ...request.query }),
+  )
+
+export const WebhookDeliveryTest = (input: Command.Command.Config.Infer<typeof Commands.WebhookDeliveryTest>) =>
+  Operation.run(
+    ClientApi.groups["webhook-parser"].endpoints["webhook-delivery.test"],
+    {
+      payload: { webhookId: input["webhookId"], deliveryIds: input["deliveryIds"] },
+      input: input["input"],
+      labels: { webhookId: "--webhook", deliveryIds: "--delivery-ids" },
+      lookups: {
+        webhookId: (client, value) =>
+          client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook-parser"]["webhook-delivery"]["test"]({ ...request.payload }),
+  )
+
 export const MemoryList = (input: Command.Command.Config.Infer<typeof Commands.MemoryList>) =>
   Operation.run(
     ClientApi.groups["memory"].endpoints["memory.list"],

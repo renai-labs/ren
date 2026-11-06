@@ -750,6 +750,33 @@ export const ScheduleRunList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
+export const WebhookDeliveryList = {
+  webhookId: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  outcome: Flag.Literals("outcome", [
+    "recorded",
+    "throttled",
+    "answered",
+    "started",
+    "continued",
+    "ignored",
+    "duplicate",
+    "rejected",
+    "failed",
+  ]).pipe(Flag.optional, Flag.withDescription("`recorded`: the webhook was listening.")),
+  page: Flag.Finite("page").pipe(Flag.optional),
+  pageSize: Flag.Finite("page-size").pipe(Flag.optional),
+}
+
+export const WebhookDeliveryTest = {
+  webhookId: Flag.String("webhook").pipe(Flag.optional, Flag.withDescription("Webhook slug or ID")),
+  deliveryIds: Flag.String("delivery-ids").pipe(
+    Flag.atLeast(0),
+    Flag.withMetavar("list"),
+    Flag.withDescription("Without it, the last 20 requests. Separate values with commas."),
+  ),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const MemoryList = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
   prefix: Flag.String("prefix").pipe(
@@ -1416,6 +1443,18 @@ export const commands = [
         Command.withDescription("Show a webhook’s signing secret"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.WebhookRevealSigningSecret(input)),
+        ),
+      ),
+      Command.make("deliveries", WebhookDeliveryList).pipe(
+        Command.withDescription("List a webhook’s requests"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookDeliveryList(input)),
+        ),
+      ),
+      Command.make("test", WebhookDeliveryTest).pipe(
+        Command.withDescription("Test a parser on a webhook’s requests"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookDeliveryTest(input)),
         ),
       ),
     ]),

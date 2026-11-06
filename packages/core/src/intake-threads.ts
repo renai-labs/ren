@@ -6,7 +6,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Channel } from "@ren/schema/channel"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { and, eq, sql } from "drizzle-orm"
+import { and, eq, isNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Option } from "effect"
 
 export interface Owner {
@@ -28,6 +28,7 @@ export interface Interface {
     sessionId: Session.ID,
     owner: Owner,
   ) => Effect.Effect<Chat>
+  readonly open: (origin: Session.Origin, scope: string, threadKey: string) => Effect.Effect<Option.Option<Session.ID>>
   readonly take: (
     origin: Session.Origin,
     scope: string,
@@ -99,6 +100,15 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         const moved = yield* read
         return { sessionId: moved.sessionId, exists: Boolean(moved.created) }
+      }),
+      open: Effect.fn("IntakeThreads.open")(function* (origin: Session.Origin, scope: string, threadKey: string) {
+        const found = (yield* database.db
+          .select({ sessionId: thread.session_id })
+          .from(thread)
+          .innerJoin(session, and(eq(session.id, thread.session_id), isNull(session.archived_at)))
+          .where(and(eq(thread.origin, origin), eq(thread.scope, scope), eq(thread.thread, threadKey)))
+          .pipe(Effect.orDie)).at(0)
+        return Option.fromNullishOr(found?.sessionId)
       }),
       take: Effect.fn("IntakeThreads.take")(function* (
         origin: Session.Origin,

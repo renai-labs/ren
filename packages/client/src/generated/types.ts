@@ -138,6 +138,8 @@ export type ChannelProvider = "slack" | "linear" | "github"
 
 export type ScheduleOriginInfo = { scheduleId: string; name: string; scheduledAt: string }
 
+export type WebhookOriginInfo = { webhookId: string; name: string; deliveryId: string; receivedAt: string }
+
 export type TaskAssignmentInfo = { taskId: string; identifier: string; title: string; brief: string }
 
 export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
@@ -250,6 +252,19 @@ export type WebhookModeReason = "owner_left" | "agent_removed" | "parser_broken"
 export type WebhookHeaderName = string
 
 export type WebhookExpression = string
+
+export type WebhookDeliveryID = string
+
+export type WebhookDeliveryOutcome =
+  | "recorded"
+  | "throttled"
+  | "answered"
+  | "started"
+  | "continued"
+  | "ignored"
+  | "duplicate"
+  | "rejected"
+  | "failed"
 
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
@@ -654,6 +669,33 @@ export type WebhookSignature =
   | { kind: "standard" }
   | { kind: "stripe" }
 
+export type WebhookDeliveryTested = {
+  deliveryId: WebhookDeliveryID
+  outcome: "answered" | "started" | "continued" | "ignored" | "duplicate" | "rejected"
+  broken: boolean
+  reason: string | null
+  eventId: string | null
+  threadKey: string | null
+  title: string | null
+}
+
+export type WebhookDeliveryInfo = {
+  id: WebhookDeliveryID
+  webhookId: WebhookID
+  receivedAt: string
+  outcome: WebhookDeliveryOutcome
+  broken: boolean
+  reason: string | null
+  verified: boolean
+  eventId: string | null
+  threadKey: string | null
+  sessionId: SessionID | null
+  method: string
+  query: { [x: string]: string }
+  headers: { [x: string]: string }
+  body: string | null
+}
+
 export type CredentialInject =
   | { op: "replace"; in: [CredentialLocation, ...Array<CredentialLocation>] }
   | { op: "setHeader"; name: string; format: "Bearer {value}" | "Basic {basic}" | "{value}" }
@@ -880,6 +922,7 @@ export type SessionMessageUser = {
   sender?: SessionMessageSender
   channel?: ChannelOriginInfo
   schedule?: ScheduleOriginInfo
+  webhook?: WebhookOriginInfo
   task?: TaskAssignmentInfo
 }
 
@@ -982,6 +1025,10 @@ export type WebhookParser = {
   threadKey?: WebhookExpression
   title?: WebhookExpression
 }
+
+export type WebhookDeliveryTestResult = { items: Array<WebhookDeliveryTested> }
+
+export type WebhookDeliveryPage = { items: Array<WebhookDeliveryInfo>; page: number; pageSize: number; total: number }
 
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
 
@@ -6860,6 +6907,157 @@ export type WebhookSetSigningSecretOutput = WebhookSecret
 export type WebhookRevealSigningSecretInput = { readonly id: { readonly id: string }["id"] }
 
 export type WebhookRevealSigningSecretOutput = WebhookSecret
+
+export type WebhookDeliveryListInput = {
+  readonly webhookId: {
+    readonly webhookId: string
+    readonly outcome?:
+      | (
+          | "recorded"
+          | "throttled"
+          | "answered"
+          | "started"
+          | "continued"
+          | "ignored"
+          | "duplicate"
+          | "rejected"
+          | "failed"
+        )
+      | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["webhookId"]
+  readonly outcome?: {
+    readonly webhookId: string
+    readonly outcome?:
+      | (
+          | "recorded"
+          | "throttled"
+          | "answered"
+          | "started"
+          | "continued"
+          | "ignored"
+          | "duplicate"
+          | "rejected"
+          | "failed"
+        )
+      | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["outcome"]
+  readonly page: {
+    readonly webhookId: string
+    readonly outcome?:
+      | (
+          | "recorded"
+          | "throttled"
+          | "answered"
+          | "started"
+          | "continued"
+          | "ignored"
+          | "duplicate"
+          | "rejected"
+          | "failed"
+        )
+      | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly webhookId: string
+    readonly outcome?:
+      | (
+          | "recorded"
+          | "throttled"
+          | "answered"
+          | "started"
+          | "continued"
+          | "ignored"
+          | "duplicate"
+          | "rejected"
+          | "failed"
+        )
+      | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type WebhookDeliveryListOutput = WebhookDeliveryPage
+
+export type WebhookParserWebhookDeliveryTestInput = {
+  readonly webhookId: {
+    readonly webhookId: string
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly deliveryIds?: ReadonlyArray<string> | null
+  }["webhookId"]
+  readonly parser?: {
+    readonly webhookId: string
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly deliveryIds?: ReadonlyArray<string> | null
+  }["parser"]
+  readonly deliveryIds?: {
+    readonly webhookId: string
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly deliveryIds?: ReadonlyArray<string> | null
+  }["deliveryIds"]
+}
+
+export type WebhookParserWebhookDeliveryTestOutput = WebhookDeliveryTestResult
 
 export type CredentialListInput = {
   readonly owner?: {

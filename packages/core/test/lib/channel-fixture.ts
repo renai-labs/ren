@@ -8,6 +8,7 @@ import { ChannelInstall } from "@ren/schema/channel-install"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Session } from "@ren/schema/session"
 import { TaskLink } from "@ren/schema/task-link"
+import { WebhookOrigin } from "@ren/schema/webhook-origin"
 import { BunCrypto } from "@effect/platform-bun"
 import {
   Clock,
@@ -188,7 +189,10 @@ const providers = Effect.map(provider, (slack) => [
   Option.some<ChannelProvider.Provider>({ ...Struct.omit(slack, ["replyTool"]), id: "github" }),
 ])
 
-export const request = (body: string, signature = sign(body)): ChannelProvider.Request => ({
+export const request = (body: string, signature = sign(body)): Intake.Request => ({
+  method: "POST",
+  path: "/channels/slack",
+  query: {},
   headers: new Headers({ "x-signature": signature }),
   body,
 })
@@ -241,6 +245,7 @@ const Start = Schema.Struct({
       prompt: Session.Prompt,
       sender: Session.Sender,
       channel: Schema.optionalKey(ChannelOrigin.Info),
+      webhook: Schema.optionalKey(WebhookOrigin.Info),
       synthetic: Schema.optionalKey(Session.Synthetic),
     }),
   ),
@@ -251,6 +256,7 @@ const Send = Schema.Struct({
   prompt: Session.Prompt,
   delivery: Session.Delivery,
   channel: Schema.optionalKey(ChannelOrigin.Info),
+  webhook: Schema.optionalKey(WebhookOrigin.Info),
   synthetic: Schema.optionalKey(Session.Synthetic),
 })
 
@@ -262,6 +268,7 @@ export interface Delivered {
   readonly delivery?: Session.Delivery
   readonly interactive?: boolean
   readonly channel?: ChannelOrigin.Info
+  readonly webhook?: WebhookOrigin.Info
   readonly synthetic?: Session.Synthetic
 }
 

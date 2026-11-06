@@ -78,7 +78,8 @@ import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handle
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
-import { WebhookHandler } from "./handlers/api/webhook.js"
+import { WebhookDeliveryHandler, WebhookHandler, WebhookParserHandler } from "./handlers/api/webhook.js"
+import { WebhookRoutes } from "./webhook-routes.js"
 import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
@@ -184,6 +185,8 @@ export const layer = Layer.mergeAll(
         ScheduleHandler,
         ScheduleRunHandler,
         WebhookHandler,
+        WebhookDeliveryHandler,
+        WebhookParserHandler,
         CredentialHandler,
         CredentialConnectHandler,
         OAuthSessionHandler,
@@ -224,7 +227,7 @@ export const layer = Layer.mergeAll(
           Layer.provide(BrainRegistry.layer),
         ),
         schedules,
-        Webhooks.layer,
+        Webhooks.layer.pipe(Layer.provide(IntakeThreads.layer)),
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,
@@ -256,6 +259,11 @@ export const layer = Layer.mergeAll(
       Layer.provide(BrainRegistry.layer),
     ),
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
+  WebhookRoutes.layer.pipe(
+    Layer.provide(intake),
+    Layer.provide(SessionRunner.layer),
+    Layer.provide(BrainRegistry.layer),
+  ),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),
     Layer.provide([

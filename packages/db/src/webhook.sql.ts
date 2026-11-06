@@ -5,7 +5,7 @@ import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { Webhook } from "@ren/schema/webhook"
 import { WebhookDelivery } from "@ren/schema/webhook-delivery"
-import { isNotNull, isNull, sql } from "drizzle-orm"
+import { isNull, sql } from "drizzle-orm"
 import { boolean, check, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { agent } from "./agent.sql.js"
 import { organization, user } from "./auth.sql.js"
@@ -82,7 +82,10 @@ export const webhook_delivery = pgTable(
   },
   (table) => [
     index("webhook_delivery_webhook_id_received_at_idx").on(table.webhook_id, table.received_at),
-    uniqueIndex(webhookDeliveryEventConstraint).on(table.webhook_id, table.event_id).where(isNotNull(table.event_id)),
+    // oxlint-disable-next-line ren/no-comments -- One delivery for each event ID of a webhook; a duplicate keeps its event ID too, so it is not in the index.
+    uniqueIndex(webhookDeliveryEventConstraint)
+      .on(table.webhook_id, table.event_id)
+      .where(sql`${table.event_id} is not null and ${table.outcome} <> 'duplicate'`),
     check("webhook_delivery_outcome_check", sql`${table.outcome} in (${literals(WebhookDelivery.Outcome.literals)})`),
   ],
 )

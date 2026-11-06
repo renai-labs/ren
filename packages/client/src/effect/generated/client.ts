@@ -1347,6 +1347,41 @@ const adaptGroupWebhook = (raw: RawClient["webhook"]) => ({
   revealSigningSecret: EndpointWebhookRevealSigningSecret(raw),
 })
 
+type WebhookDeliveryListRequest = Parameters<RawClient["webhook-delivery"]["webhook-delivery.list"]>[0]
+type WebhookDeliveryListInput = {
+  readonly webhookId: WebhookDeliveryListRequest["query"]["webhookId"]
+  readonly outcome?: WebhookDeliveryListRequest["query"]["outcome"]
+  readonly page: WebhookDeliveryListRequest["query"]["page"]
+  readonly pageSize: WebhookDeliveryListRequest["query"]["pageSize"]
+}
+const EndpointWebhookDeliveryList = (raw: RawClient["webhook-delivery"]) => (input: WebhookDeliveryListInput) =>
+  raw["webhook-delivery.list"]({
+    query: {
+      webhookId: input["webhookId"],
+      outcome: input["outcome"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupWebhookDelivery = (raw: RawClient["webhook-delivery"]) => ({ list: EndpointWebhookDeliveryList(raw) })
+
+type WebhookParserWebhookDeliveryTestRequest = Parameters<RawClient["webhook-parser"]["webhook-delivery.test"]>[0]
+type WebhookParserWebhookDeliveryTestInput = {
+  readonly webhookId: WebhookParserWebhookDeliveryTestRequest["payload"]["webhookId"]
+  readonly parser?: WebhookParserWebhookDeliveryTestRequest["payload"]["parser"]
+  readonly deliveryIds?: WebhookParserWebhookDeliveryTestRequest["payload"]["deliveryIds"]
+}
+const EndpointWebhookParserWebhookDeliveryTest =
+  (raw: RawClient["webhook-parser"]) => (input: WebhookParserWebhookDeliveryTestInput) =>
+    raw["webhook-delivery.test"]({
+      payload: { webhookId: input["webhookId"], parser: input["parser"], deliveryIds: input["deliveryIds"] },
+    }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupWebhookParser = (raw: RawClient["webhook-parser"]) => ({
+  "webhook-delivery": { test: EndpointWebhookParserWebhookDeliveryTest(raw) },
+})
+
 type CredentialListRequest = Parameters<RawClient["credential"]["credential.list"]>[0]
 type CredentialListInput = {
   readonly owner?: CredentialListRequest["query"]["owner"]
@@ -1824,6 +1859,8 @@ const adaptClient = (raw: RawClient) => ({
   schedule: adaptGroupSchedule(raw["schedule"]),
   "schedule-run": adaptGroupScheduleRun(raw["schedule-run"]),
   webhook: adaptGroupWebhook(raw["webhook"]),
+  "webhook-delivery": adaptGroupWebhookDelivery(raw["webhook-delivery"]),
+  "webhook-parser": adaptGroupWebhookParser(raw["webhook-parser"]),
   credential: adaptGroupCredential(raw["credential"]),
   "credential-connect": adaptGroupCredentialConnect(raw["credential-connect"]),
   "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),

@@ -15,6 +15,8 @@ const Event = Schema.Struct({
   thread: Schema.String,
   at: Schema.DateFromString,
   text: Schema.String,
+  deadline: Schema.optionalKey(Schema.String),
+  target: Schema.optionalKey(Session.ID),
   organizationId: Auth.OrganizationID,
   spaceId: Space.ID,
   userId: Auth.UserID,
@@ -24,7 +26,11 @@ class Seen extends Context.Service<
   Seen,
   {
     readonly resolved: Array<unknown>
-    readonly outcomes: Array<{ readonly _tag: string; readonly sessionId: Session.ID | undefined }>
+    readonly outcomes: Array<{
+      readonly _tag: string
+      readonly sessionId: Session.ID | undefined
+      readonly reason?: string
+    }>
   }
 >()("@ren/core/test/Intake/Seen") {}
 
@@ -48,13 +54,19 @@ const source = Effect.gen(function* () {
           spaceId: event.spaceId,
           senderUserId: event.userId,
           requiresAgent: false,
+          ...(event.target && { targetSessionId: event.target }),
           takesThread: false,
         }
       }),
     promptOf: (event) => Effect.succeed({ prompt: { text: event.text } }),
+    deadlineOf: (event) => new Date(event.deadline ?? "9999-01-01T00:00:00Z"),
     report: (_event, outcome) =>
       Effect.sync(() => {
-        seen.outcomes.push({ _tag: outcome._tag, sessionId: "sessionId" in outcome ? outcome.sessionId : undefined })
+        seen.outcomes.push({
+          _tag: outcome._tag,
+          sessionId: "sessionId" in outcome ? outcome.sessionId : undefined,
+          ...(outcome._tag === "failed" && { reason: outcome.reason }),
+        })
       }),
   } satisfies Intake.Source<typeof Event.Type>
 })
@@ -104,6 +116,9 @@ describe("Intake", () => {
         const first = event("Jane signed up")
         const second = event("Jane upgraded")
         const request = (body: typeof Event.Type) => ({
+          method: "POST",
+          path: "/hooks",
+          query: {},
           headers: new Headers(),
           body: JSON.stringify(Schema.encodeSync(Event)(body)),
         })
@@ -122,5 +137,33 @@ describe("Intake", () => {
           { _tag: "continued", sessionId: accepted[0]?.sessionId },
         ])
       }),
+  )
+
+  it.live("a source with a deadline stops retrying at it, and reports the run as failed", () =>
+    Effect.gen(function* () {
+      const owner = yield* Seed.owner()
+      const intake = yield* Intake.Service
+      const seen = yield* Seen
+      const late = {
+        id: crypto.randomUUID(),
+        thread: "jane@acme.com",
+        at: new Date("2026-11-06T10:42:00Z"),
+        text: "Jane upgraded",
+        deadline: "2026-01-01T00:00:00Z",
+        target: Session.ID.create(),
+        organizationId: owner.organizationId,
+        spaceId: owner.spaceId,
+        userId: owner.createdBy,
+      }
+      yield* intake.receive("webhook", {
+        method: "POST",
+        path: "/hooks",
+        query: {},
+        headers: new Headers(),
+        body: JSON.stringify(Schema.encodeSync(Event)(late)),
+      })
+      yield* settled(late)
+      expect(seen.outcomes).toMatchObject([{ _tag: "failed", reason: "unavailable" }])
+    }),
   )
 })

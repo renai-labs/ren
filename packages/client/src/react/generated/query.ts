@@ -104,6 +104,8 @@ import type {
   WebhookRotateUrlInput,
   WebhookSetSigningSecretInput,
   WebhookRevealSigningSecretInput,
+  WebhookDeliveryListInput,
+  WebhookParserWebhookDeliveryTestInput,
   CredentialListInput,
   CredentialGetInput,
   CredentialCreateInput,
@@ -1120,6 +1122,32 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationKey: ["webhook", "revealSigningSecret"] as const,
             mutationFn: (input: WebhookRevealSigningSecretInput) => client["webhook"]["revealSigningSecret"](input),
           }),
+      },
+    },
+    "webhook-delivery": {
+      list: {
+        queryKey: (input?: WebhookDeliveryListInput) =>
+          input === undefined
+            ? (["webhook-delivery", "list"] as const)
+            : (["webhook-delivery", "list", input] as const),
+        queryOptions: (input: WebhookDeliveryListInput) =>
+          queryOptions({
+            queryKey: ["webhook-delivery", "list", input] as const,
+            queryFn: (context) => client["webhook-delivery"]["list"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    "webhook-parser": {
+      "webhook-delivery": {
+        test: {
+          mutationKey: () => ["webhook-parser", "webhook-delivery", "test"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["webhook-parser", "webhook-delivery", "test"] as const,
+              mutationFn: (input: WebhookParserWebhookDeliveryTestInput) =>
+                client["webhook-parser"]["webhook-delivery"]["test"](input),
+            }),
+        },
       },
     },
     credential: {

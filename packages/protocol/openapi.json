@@ -8728,6 +8728,159 @@
         }
       }
     },
+    "/webhook-deliveries": {
+      "get": {
+        "tags": ["webhook-delivery"],
+        "operationId": "webhook-delivery.list",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Webhook.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/WebhookDelivery.Outcome"
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WebhookDelivery.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDelivery.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the webhook-deliveries that the caller can see.",
+        "summary": "List webhook-deliveries"
+      }
+    },
+    "/webhook-deliveries/test": {
+      "post": {
+        "tags": ["webhook-parser"],
+        "operationId": "webhook-delivery.test",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WebhookDelivery.TestResult",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDelivery.TestResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run a parser, or the webhook’s own, on stored requests and return what each would do: answered, started, continued, ignored, duplicate or rejected, with the reason. Saves nothing.",
+        "summary": "Test a webhook parser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookDelivery.TestInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/credentials": {
       "get": {
         "tags": ["credential"],
@@ -20295,6 +20448,9 @@
           "schedule": {
             "$ref": "#/components/schemas/ScheduleOrigin.Info"
           },
+          "webhook": {
+            "$ref": "#/components/schemas/WebhookOrigin.Info"
+          },
           "task": {
             "$ref": "#/components/schemas/TaskAssignment.Info"
           }
@@ -22906,6 +23062,291 @@
         "additionalProperties": false,
         "description": "A change to the message, the parser or the agent makes you its owner."
       },
+      "WebhookDelivery.ID": {
+        "type": "string",
+        "pattern": "^whd_"
+      },
+      "WebhookDelivery.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/WebhookDelivery.ID"
+          },
+          "webhookId": {
+            "$ref": "#/components/schemas/Webhook.ID"
+          },
+          "receivedAt": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/WebhookDelivery.Outcome"
+          },
+          "broken": {
+            "type": "boolean",
+            "description": "A CEL expression of the parser ended in an error."
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the outcome, such as `filter: no such key`."
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "False for a request recorded before the signing secret was set."
+          },
+          "eventId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "threadKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Session.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat that it started or continued."
+          },
+          "method": {
+            "type": "string"
+          },
+          "query": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a rejected request."
+          }
+        },
+        "required": [
+          "id",
+          "webhookId",
+          "receivedAt",
+          "outcome",
+          "broken",
+          "reason",
+          "verified",
+          "eventId",
+          "threadKey",
+          "sessionId",
+          "method",
+          "query",
+          "headers",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "WebhookDelivery.Outcome": {
+        "type": "string",
+        "enum": [
+          "recorded",
+          "throttled",
+          "answered",
+          "started",
+          "continued",
+          "ignored",
+          "duplicate",
+          "rejected",
+          "failed"
+        ],
+        "description": "`recorded`: the webhook was listening. `throttled`: over 60 requests a minute. `answered`: a handshake. `started` or `continued`: a chat. `ignored`: the filter was false or broke. `duplicate`: an earlier request had its event ID. `rejected`: the signature was wrong, or the body too large. `failed`: the chat did not start."
+      },
+      "WebhookDelivery.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookDelivery.Info"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "WebhookDelivery.TestInput": {
+        "type": "object",
+        "properties": {
+          "webhookId": {
+            "$ref": "#/components/schemas/Webhook.ID"
+          },
+          "parser": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Webhook.Parser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, the parser of the webhook."
+          },
+          "deliveryIds": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WebhookDelivery.ID"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, the last 20 requests."
+          }
+        },
+        "required": ["webhookId"],
+        "additionalProperties": false
+      },
+      "WebhookDelivery.TestResult": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookDelivery.Tested"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
+      },
+      "WebhookDelivery.Tested": {
+        "type": "object",
+        "properties": {
+          "deliveryId": {
+            "$ref": "#/components/schemas/WebhookDelivery.ID"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["answered", "started", "continued", "ignored", "duplicate", "rejected"]
+          },
+          "broken": {
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eventId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "threadKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["deliveryId", "outcome", "broken", "reason", "eventId", "threadKey", "title"],
+        "additionalProperties": false,
+        "description": "What the parser would do with one recorded request."
+      },
+      "WebhookOrigin.Info": {
+        "type": "object",
+        "properties": {
+          "webhookId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "deliveryId": {
+            "type": "string",
+            "description": "The request in Ren, not the event ID of the provider."
+          },
+          "receivedAt": {
+            "type": "string",
+            "description": "When Ren received the request, as an ISO 8601 instant."
+          }
+        },
+        "required": ["webhookId", "name", "deliveryId", "receivedAt"],
+        "additionalProperties": false,
+        "description": "The webhook that sent a message, and the request that it came from."
+      },
       "WriteResult.Redirect": {
         "type": "object",
         "properties": {
@@ -23042,6 +23483,12 @@
     },
     {
       "name": "webhook"
+    },
+    {
+      "name": "webhook-delivery"
+    },
+    {
+      "name": "webhook-parser"
     },
     {
       "name": "credential"

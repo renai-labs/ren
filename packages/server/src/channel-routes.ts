@@ -3,9 +3,10 @@ export * as ChannelRoutes from "./channel-routes.js"
 import { ChannelInstalls } from "@ren/core/channel-installs"
 import { Intake } from "@ren/core/intake"
 import { Channel } from "@ren/schema/channel"
-import { Config, Effect, Option, Predicate, Schema } from "effect"
+import { Config, Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerResponse } from "effect/http"
 import { Auth } from "./auth.js"
+import { IntakeRequest } from "./intake-request.js"
 
 // oxlint-disable-next-line react-hooks/rules-of-hooks -- Effect's HttpRouter.use, not a React hook
 export const layer = HttpRouter.use((router) =>
@@ -19,11 +20,9 @@ export const layer = HttpRouter.use((router) =>
         const params = yield* HttpRouter.params
         const provider = Schema.decodeUnknownOption(Channel.Provider)(params.provider)
         if (Option.isNone(provider)) return HttpServerResponse.empty({ status: 404 })
-        const body = yield* request.text
-        const reply = yield* intake.receive(provider.value, { headers: new Headers(request.headers), body })
-        return Predicate.isUndefined(reply.body)
-          ? HttpServerResponse.empty({ status: reply.status })
-          : HttpServerResponse.jsonUnsafe(reply.body, { status: reply.status })
+        return IntakeRequest.response(
+          yield* intake.receive(provider.value, IntakeRequest.of(request, yield* request.text)),
+        )
       }).pipe(Effect.catchTag("HttpServerError", () => Effect.succeed(HttpServerResponse.empty({ status: 400 })))),
     )
     yield* router.add("GET", "/channels/:provider/callback", (request) =>

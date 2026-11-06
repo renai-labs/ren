@@ -5,22 +5,36 @@ import type { Auth } from "@ren/schema/auth"
 import type { Envelope as EnvelopeSchema } from "@ren/schema/envelope"
 import type { Space } from "@ren/schema/space"
 import { Webhook } from "@ren/schema/webhook"
-import { and, count, desc, eq, isNull, sql } from "drizzle-orm"
-import { Config, Context, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { WebhookDelivery } from "@ren/schema/webhook-delivery"
+import { and, count, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm"
+import { Config, Context, DateTime, Effect, Layer, Option, Redacted, Result, Schema } from "effect"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { Envelope } from "./envelope.js"
+import { IntakeThreads } from "./intake-threads.js"
 import { Primitive } from "./primitive.js"
 import { SpaceQueries } from "./space/queries.js"
 import { WebhookParser } from "./webhook-parser.js"
+import { WebhookSignature } from "./webhook-signature.js"
 import { WebhookPolicy } from "./webhook/policy.js"
 
-export type Interface = Primitive.Interface<typeof Webhook.definition>
+export type Interface = Primitive.Interface<typeof Webhook.definition> & {
+  readonly deliveries: Primitive.Interface<typeof WebhookDelivery.definition>["list"]
+  readonly test: (
+    actor: Actor.Info,
+    input: WebhookDelivery.TestInput,
+  ) => Effect.Effect<WebhookDelivery.TestResult, Primitive.NotFound>
+}
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Webhooks") {}
 
 const webhook = Database.Schema.webhook
+
+const delivery = Database.Schema.webhook_delivery
+
+// oxlint-disable-next-line ren/no-comments -- The ux spec's "Test on the last 20 requests".
+export const testedByDefault = 20
 
 type Row = typeof webhook.$inferSelect
 
@@ -40,7 +54,25 @@ const actions = {
   rotateUrl: Primitive.action(Webhook.definition, "rotateUrl"),
   setSigningSecret: Primitive.action(Webhook.definition, "setSigningSecret"),
   revealSigningSecret: Primitive.action(Webhook.definition, "revealSigningSecret"),
+  deliveries: Primitive.action(WebhookDelivery.definition, "list"),
 }
+
+const toDelivery = (row: typeof delivery.$inferSelect): WebhookDelivery.Info => ({
+  id: row.id,
+  webhookId: row.webhook_id,
+  receivedAt: DateTime.fromDateUnsafe(row.received_at),
+  outcome: row.outcome,
+  broken: row.broken,
+  reason: row.reason,
+  verified: row.verified,
+  eventId: row.event_id,
+  threadKey: row.thread_key,
+  sessionId: row.session_id,
+  method: row.method,
+  query: row.query,
+  headers: row.headers,
+  body: row.body,
+})
 
 const base64url = Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)
 
@@ -74,6 +106,23 @@ const ownerAfter = (row: Row, input: Webhook.UpdateInput, actor: Actor.Info) => 
   return isWritten || (goesLive && row.mode_reason === "owner_left") ? actor.userId : row.owner_id
 }
 
+// oxlint-disable-next-line ren/no-comments -- Whether a handshake answers a stored request: `handshake`, then `signedHandshake` with sign() for a verified request (W38).
+const handshakeOf = (
+  parser: Webhook.Parser,
+  values: WebhookParser.Values,
+  secret: Option.Option<string>,
+): Result.Result<boolean, string> => {
+  const plain = WebhookParser.handshake("handshake", parser.handshake, values)
+  if (Result.isFailure(plain) || Option.isSome(plain.success)) return Result.map(plain, Option.isSome)
+  if (Option.isNone(secret)) return Result.succeed(false)
+  return Result.map(
+    WebhookParser.handshake("signedHandshake", parser.signedHandshake, values, (text) =>
+      WebhookSignature.hmac(secret.value, text, "hex"),
+    ),
+    Option.isSome,
+  )
+}
+
 const invalid = (message: string, field: string) => new Primitive.Invalid({ message, field })
 
 export const layer = Layer.effect(
@@ -82,6 +131,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const envelope = yield* Envelope.Service
+    const threads = yield* IntakeThreads.Service
     const base = (yield* Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000"))).replace(/\/$/u, "")
 
     const open = (row: Row, column: "token" | "signing_secret", sealed: EnvelopeSchema.Sealed) =>
@@ -200,6 +250,72 @@ export const layer = Layer.effect(
     const secretOf = Effect.fnUntraced(function* (row: Row) {
       if (!row.signing_secret) return yield* new Primitive.Conflict({ message: "The webhook has no signing secret." })
       return Redacted.value(yield* open(row, "signing_secret", row.signing_secret))
+    })
+
+    const readable = Effect.fnUntraced(function* (actor: Actor.Info, id: Webhook.ID) {
+      const found = (yield* database.db
+        .select({ webhook, membershipId: WebhookPolicy.membership.id })
+        .from(webhook)
+        .leftJoin(WebhookPolicy.membership, membershipOf(actor))
+        .where(and(eq(webhook.id, id), visibleTo(actor)))
+        .pipe(Effect.orDie)).at(0)
+      if (
+        !found ||
+        !access.isAllowed({ actor, action: actions.deliveries, resource: WebhookPolicy.resource(found.membershipId) })
+      )
+        return yield* notFound
+      return found.webhook
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- What the parser would do with a stored request now, in the order of receive (spec section 3). It saves nothing.
+    const tested = Effect.fnUntraced(function* (
+      row: Row,
+      parser: Webhook.Parser,
+      secret: Option.Option<string>,
+      found: typeof delivery.$inferSelect,
+    ) {
+      const result = (
+        outcome: WebhookDelivery.Tested["outcome"],
+        fields: Partial<Omit<WebhookDelivery.Tested, "deliveryId" | "outcome">> = {},
+      ): WebhookDelivery.Tested => ({
+        deliveryId: found.id,
+        outcome,
+        broken: false,
+        reason: null,
+        eventId: null,
+        threadKey: null,
+        title: null,
+        ...fields,
+      })
+      if (found.outcome === "rejected") return result("rejected", { reason: found.reason })
+      const values = WebhookParser.valuesOf({ ...found, body: found.body ?? "" })
+      const handshaken = handshakeOf(parser, values, found.verified ? secret : Option.none())
+      if (Result.isFailure(handshaken)) return result("ignored", { broken: true, reason: handshaken.failure })
+      if (handshaken.success) return result("answered")
+      const parsed = WebhookParser.parsed(parser, values)
+      if (parsed._tag === "Ignored") return result("ignored", { broken: parsed.broken, reason: parsed.reason })
+      const keys = {
+        eventId: Option.getOrNull(parsed.eventId),
+        threadKey: Option.getOrNull(parsed.threadKey),
+        title: Option.getOrNull(parsed.title),
+      }
+      const earlier = keys.eventId
+        ? yield* database.db
+            .select({ id: delivery.id })
+            .from(delivery)
+            .where(
+              and(
+                eq(delivery.webhook_id, row.id),
+                eq(delivery.event_id, keys.eventId),
+                ne(delivery.id, found.id),
+                inArray(delivery.outcome, ["started", "continued", "failed"]),
+              ),
+            )
+            .pipe(Effect.orDie)
+        : []
+      if (earlier.length > 0) return result("duplicate", { ...keys, reason: "an earlier request had this event ID" })
+      const chat = keys.threadKey ? yield* threads.open("webhook", row.id, keys.threadKey) : Option.none()
+      return result(Option.isSome(chat) ? "continued" : "started", keys)
     })
 
     return Service.of({
@@ -370,6 +486,44 @@ export const layer = Layer.effect(
           }),
         )
         return { record, secret }
+      }),
+      deliveries: Effect.fn("Webhooks.deliveries")(function* (actor: Actor.Info, input: WebhookDelivery.ListInput) {
+        const empty = { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
+        if (Option.isNone(yield* Effect.option(readable(actor, input.webhookId)))) return empty
+        const where = and(
+          eq(delivery.webhook_id, input.webhookId),
+          input.outcome ? eq(delivery.outcome, input.outcome) : undefined,
+        )
+        const rows = yield* database.db
+          .select()
+          .from(delivery)
+          .where(where)
+          .orderBy(desc(delivery.received_at), desc(delivery.id))
+          .limit(input.pageSize)
+          .offset((input.page - 1) * input.pageSize)
+          .pipe(Effect.orDie)
+        const totals = yield* database.db.select({ total: count() }).from(delivery).where(where).pipe(Effect.orDie)
+        return { ...empty, items: rows.map(toDelivery), total: totals.at(0)?.total ?? 0 }
+      }),
+      test: Effect.fn("Webhooks.test")(function* (actor: Actor.Info, input: WebhookDelivery.TestInput) {
+        const row = yield* readable(actor, input.webhookId)
+        const found = yield* database.db
+          .select()
+          .from(delivery)
+          .where(
+            and(
+              eq(delivery.webhook_id, row.id),
+              input.deliveryIds ? inArray(delivery.id, input.deliveryIds) : undefined,
+            ),
+          )
+          .orderBy(desc(delivery.received_at), desc(delivery.id))
+          .limit(input.deliveryIds?.length ?? testedByDefault)
+          .pipe(Effect.orDie)
+        const secret = row.signing_secret
+          ? Option.some(Redacted.value(yield* open(row, "signing_secret", row.signing_secret)))
+          : Option.none<string>()
+        const parser = input.parser ?? decodeParser(row.parser)
+        return { items: yield* Effect.forEach(found, (each) => tested(row, parser, secret, each)) }
       }),
       revealSigningSecret: Effect.fn("Webhooks.revealSigningSecret")(function* (actor: Actor.Info, id: Webhook.ID) {
         return yield* database.transaction((transaction) =>

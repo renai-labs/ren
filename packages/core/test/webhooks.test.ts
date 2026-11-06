@@ -6,13 +6,14 @@ import { ConfigProvider, Effect, Layer, Schema } from "effect"
 import { Access } from "../src/access.js"
 import type { Actor } from "../src/actor.js"
 import { Envelope } from "../src/envelope.js"
+import { IntakeThreads } from "../src/intake-threads.js"
 import { Webhooks } from "../src/webhooks.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 
 const it = testEffect(
   Webhooks.layer.pipe(
-    Layer.provideMerge(Layer.mergeAll(Access.layer, Envelope.layerLocal)),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, Envelope.layerLocal, IntakeThreads.layer)),
     Layer.provideMerge(Testing.layer),
     Layer.provide(
       ConfigProvider.layer(

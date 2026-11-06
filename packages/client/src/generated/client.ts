@@ -208,6 +208,10 @@ import type {
   WebhookSetSigningSecretOutput,
   WebhookRevealSigningSecretInput,
   WebhookRevealSigningSecretOutput,
+  WebhookDeliveryListInput,
+  WebhookDeliveryListOutput,
+  WebhookParserWebhookDeliveryTestInput,
+  WebhookParserWebhookDeliveryTestOutput,
   CredentialListInput,
   CredentialListOutput,
   CredentialGetInput,
@@ -1825,6 +1829,41 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+    },
+    "webhook-delivery": {
+      list: (input: WebhookDeliveryListInput, requestOptions?: RequestOptions) =>
+        request<WebhookDeliveryListOutput>(
+          {
+            method: "GET",
+            path: `/webhook-deliveries`,
+            query: {
+              webhookId: input["webhookId"],
+              outcome: input["outcome"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "webhook-parser": {
+      "webhook-delivery": {
+        test: (input: WebhookParserWebhookDeliveryTestInput, requestOptions?: RequestOptions) =>
+          request<WebhookParserWebhookDeliveryTestOutput>(
+            {
+              method: "POST",
+              path: `/webhook-deliveries/test`,
+              body: { webhookId: input["webhookId"], parser: input["parser"], deliveryIds: input["deliveryIds"] },
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
     },
     credential: {
       list: (input: CredentialListInput, requestOptions?: RequestOptions) =>

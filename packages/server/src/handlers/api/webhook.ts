@@ -18,3 +18,21 @@ export const WebhookHandler = HttpApiBuilder.group(Api, "webhook", (handlers) =>
       .handle("webhook.revealSigningSecret", Primitive.action(webhooks.revealSigningSecret))
   }),
 )
+
+export const WebhookDeliveryHandler = HttpApiBuilder.group(Api, "webhook-delivery", (handlers) =>
+  Effect.gen(function* () {
+    const webhooks = yield* Webhooks.Service
+    return handlers.handle("webhook-delivery.list", Primitive.list(webhooks.deliveries))
+  }),
+)
+
+export const WebhookParserHandler = HttpApiBuilder.group(Api, "webhook-parser", (handlers) =>
+  Effect.gen(function* () {
+    const webhooks = yield* Webhooks.Service
+    return handlers.handle("webhook-delivery.test", (request) =>
+      Effect.flatMap(Primitive.currentActor, (actor) => webhooks.test(actor, request.payload)).pipe(
+        Effect.catchTag("Primitive.NotFound", Primitive.notFound),
+      ),
+    )
+  }),
+)

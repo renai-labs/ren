@@ -14,6 +14,7 @@ import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
 import { Intake } from "@ren/core/intake"
+import { WebhookIntake } from "@ren/core/webhook-intake"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
@@ -115,7 +116,7 @@ export const services = Layer.mergeAll(
     Layer.provide(ChannelIdentity.layer),
     Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),
   ),
-  Intake.sources(Effect.succeed([])),
+  Intake.sources(Effect.all([WebhookIntake.source])),
   ChannelNotice.layerLog,
   TaskCard.layerNone,
   SlackTaskCard.layerNone,

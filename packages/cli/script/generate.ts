@@ -318,6 +318,17 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     description: "List a schedule’s runs",
     arguments: ["scheduleId"],
   },
+  {
+    operation: "webhook-delivery.list",
+    path: ["webhook", "deliveries"],
+    description: "List a webhook’s requests",
+    arguments: ["webhookId"],
+  },
+  {
+    operation: "webhook-delivery.test",
+    path: ["webhook", "test"],
+    description: "Test a parser on a webhook’s requests",
+  },
   { operation: "memory.list", path: ["memory", "list"] },
   { operation: "memory.read", path: ["memory", "read"], arguments: ["path"] },
   { operation: "memory.write", path: ["memory", "write"], arguments: ["path"] },

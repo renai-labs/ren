@@ -5,7 +5,7 @@ import type { Agent } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { Context, Effect, Layer, Option, Result, Schema, Struct } from "effect"
+import { Clock, Context, Effect, Layer, Option, Result, Schema, Struct } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainHost } from "./brain-host.js"
 import { DurableRunner } from "./durable-runner.js"
@@ -13,6 +13,9 @@ import { IntakeThreads } from "./intake-threads.js"
 import { SessionRunner } from "./session/runner.js"
 
 export interface Request {
+  readonly method: string
+  readonly path: string
+  readonly query: Readonly<Record<string, string>>
   readonly headers: Headers
   readonly body: string
 }
@@ -20,6 +23,7 @@ export interface Request {
 export interface Reply {
   readonly status: number
   readonly body?: Schema.Json
+  readonly contentType?: string
 }
 
 export type Received<Event> =
@@ -38,6 +42,7 @@ export interface Route {
   readonly senderUserId: Auth.UserID
   readonly agentId?: Agent.ID
   readonly requiresAgent: boolean
+  readonly title?: string
   readonly targetSessionId?: Session.ID
   readonly takesThread: boolean
 }
@@ -49,7 +54,7 @@ export interface Ids {
 
 export type Message = Omit<Session.SendInput, "sessionId" | "messageId" | "delivery" | "sender">
 
-export type Failure = "rejected" | "brain_failed" | "agent_gone"
+export type Failure = "rejected" | "brain_failed" | "agent_gone" | "unavailable"
 
 export type Outcome<Resolved, Skip> =
   | { readonly _tag: "started" | "continued"; readonly route: Resolved; readonly sessionId: Session.ID }
@@ -72,6 +77,7 @@ export interface Source<Event, Resolved extends Route = Route, Skip = never> {
   resolve(event: Event): Effect.Effect<Resolved, Skip>
   promptOf(event: Event, route: Resolved, ids: Ids): Effect.Effect<Message>
   report(event: Event, outcome: Outcome<Resolved, Skip>): Effect.Effect<void>
+  deadlineOf?(event: Event): Date
 }
 
 type Any = Source<unknown, Route, unknown>
@@ -114,7 +120,7 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Intake") {}
 
 class Stopped extends Schema.TaggedError<Stopped>()("Intake.Stopped", {
-  reason: Schema.Literals(["rejected", "brain_failed", "agent_gone"]),
+  reason: Schema.Literals(["rejected", "brain_failed", "agent_gone", "unavailable"]),
   message: Schema.String,
   sessionId: Schema.optionalKey(Session.ID),
 }) {}
@@ -192,7 +198,13 @@ export const layer = Layer.effect(
               createdBy: route.senderUserId,
               origin: payload.origin,
             },
-            { sessionId: chat.sessionId, harness: "opencode", interactive: false, initialMessage: message },
+            {
+              sessionId: chat.sessionId,
+              harness: "opencode",
+              ...(route.title && { title: route.title }),
+              interactive: false,
+              initialMessage: message,
+            },
             options,
           )
           .pipe(Effect.as("started" as const))
@@ -228,7 +240,28 @@ export const layer = Layer.effect(
       const resolved = yield* Effect.result(source.resolve(event))
       if (Result.isFailure(resolved)) return yield* source.report(event, { _tag: "skipped", reason: resolved.failure })
       const route = resolved.success
-      yield* deliver(source, payload, event, route).pipe(
+      const deadline = source.deadlineOf?.(event)
+      // oxlint-disable-next-line ren/no-comments -- A source with a deadline tries again until it, then reports the run as failed (W46). Without one, the run tries again until it ends (DurableRunner.supervise).
+      const delivered = deadline
+        ? deliver(source, payload, event, route).pipe(
+            Effect.retry({
+              schedule: DurableRunner.retry,
+              while: (error) =>
+                Effect.map(
+                  Clock.currentTimeMillis,
+                  (now) => error._tag !== "Intake.Stopped" && now < deadline.getTime(),
+                ),
+            }),
+            Effect.catchIf(
+              (error) => error._tag !== "Intake.Stopped",
+              (error) =>
+                Effect.fail(
+                  new Stopped({ reason: "unavailable", message: `The chat did not take the event: ${error._tag}` }),
+                ),
+            ),
+          )
+        : deliver(source, payload, event, route)
+      yield* delivered.pipe(
         Effect.flatMap((outcome) => source.report(event, { ...outcome, route })),
         Effect.catchTag("Intake.Stopped", (error) =>
           Effect.logWarning(`A ${payload.origin} run stopped: ${error.message}`).pipe(
