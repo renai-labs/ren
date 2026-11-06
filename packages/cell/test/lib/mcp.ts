@@ -3,7 +3,7 @@ export * as McpPeer from "./mcp.js"
 import { App } from "@ren/schema/app"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { AppProfile } from "@ren/schema/app-profile"
-import { Deferred, Effect, Queue, Schema } from "effect"
+import { Deferred, Effect, Queue, Schema, Struct } from "effect"
 import { Shared } from "./shared.js"
 
 type Declaration = AppCatalog.McpEntry["declaration"]
@@ -11,7 +11,7 @@ type Declaration = AppCatalog.McpEntry["declaration"]
 export const catalog = (
   fingerprint: string,
   mcps: ReadonlyArray<
-    ({ readonly url: string } | { readonly transport: Declaration["transport"] }) & {
+    ({ readonly url: string } | { readonly transport: Declaration["transport"]; readonly url?: string }) & {
       readonly slug: string
       readonly auth?: Declaration["auth"]
       readonly timeouts?: Declaration["timeouts"]
@@ -39,6 +39,7 @@ export const catalog = (
         ? `MCP_${mcp.slug.toUpperCase().replaceAll("-", "_")}__${mcp.profile.slug.toUpperCase().replaceAll("-", "_")}`
         : null,
       ...(mcp.env && { env: mcp.env }),
+      ...("transport" in mcp && Struct.pick(mcp, ["url"])),
       declaration: {
         name: "Docs",
         description: "Docs",
