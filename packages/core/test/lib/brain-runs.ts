@@ -123,6 +123,19 @@ export const make = async () => {
           }),
         ),
       ),
+    replaced: (brainId: Brain.ID) =>
+      Effect.runPromise(
+        Effect.promise(() => row(brainId)).pipe(
+          Effect.repeat({
+            until: (found) => found.phase === "ready" && found.generation > 1,
+            schedule: Schedule.spaced("100 millis"),
+          }),
+          Effect.timeoutOrElse({
+            duration: "60 seconds",
+            orElse: () => Effect.die(new Error(`Brain ${brainId} did not get a new sandbox`)),
+          }),
+        ),
+      ),
     update: (brainId: Brain.ID, values: Partial<typeof Database.Schema.brain.$inferInsert>) =>
       database.runPromise(
         Effect.gen(function* () {

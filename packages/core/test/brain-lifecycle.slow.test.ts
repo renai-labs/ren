@@ -58,15 +58,40 @@ describe("brain runs", () => {
     await second.dispose()
   })
 
-  test("a sandbox that is gone marks its brain's busy chats interrupted and the brain replacing, with no access", async () => {
+  test("a sandbox that is gone interrupts its brain's busy chats, and the brain gets a new sandbox with no access", async () => {
     const found = await runs.seeded()
     const current = await runs.ren({ lostEvery: "50 millis" })
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
     const ready = await runs.reaches(found.brainId, "ready")
     await runs.busy(found.sessionId)
     process.kill(-BrainRuns.pidOf(ready.binding), "SIGKILL")
+    const replaced = await runs.replaced(found.brainId)
+    expect([replaced.generation, await runs.outcome(found.sessionId)]).toEqual([2, "interrupted"])
+    await current.dispose()
+  })
+
+  test("a brain that stops pulling while nobody uses it is checked, and its frozen sandbox is replaced with no access", async () => {
+    const found = await runs.seeded()
+    const current = await runs.ren({ lostEvery: "1 hour", config: { BRAIN_PULL_TIMEOUT: "3 seconds" } })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    const ready = await runs.reaches(found.brainId, "ready")
+    await runs.busy(found.sessionId)
+    process.kill(-BrainRuns.pidOf(ready.binding), "SIGSTOP")
+    const replaced = await runs.replaced(found.brainId)
+    expect([replaced.generation, await runs.outcome(found.sessionId)]).toEqual([2, "interrupted"])
+    await current.dispose()
+  })
+
+  test("a second lost sandbox within 30 minutes fails its brain's busy chats instead of interrupting them", async () => {
+    const found = await runs.seeded()
+    const current = await runs.ren({ lostEvery: "1 hour", config: { BRAIN_PULL_TIMEOUT: "3 seconds" } })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    const ready = await runs.reaches(found.brainId, "ready")
+    await runs.busy(found.sessionId)
+    await runs.update(found.brainId, { lost_at: new Date(Date.now() - 60_000) })
+    process.kill(-BrainRuns.pidOf(ready.binding), "SIGSTOP")
     await runs.reaches(found.brainId, "replacing")
-    expect(await runs.outcome(found.sessionId)).toBe("interrupted")
+    expect(await runs.outcome(found.sessionId)).toBe("failed")
     await current.dispose()
   })
 

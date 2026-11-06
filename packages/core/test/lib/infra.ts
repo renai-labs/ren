@@ -39,6 +39,7 @@ const runner = Layer.succeed(
     send: (input) => Effect.succeed({ messageId: input.messageId }),
     get: () => Effect.fail(new SessionRunner.NotFound({ message: "Session not found." })),
     onStartRejected: () => Effect.void,
+    onInterrupted: () => Effect.void,
   }),
 )
 

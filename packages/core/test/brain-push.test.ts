@@ -157,6 +157,7 @@ describe("BrainPush (HR10, HR12)", () => {
           hand: () => Effect.succeedNone,
           unavailable: () => Effect.void,
           retry: () => Effect.void,
+          onInterrupted: () => Effect.void,
         }),
       )
       const owner = yield* Seed.owner()
