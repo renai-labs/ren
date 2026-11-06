@@ -595,7 +595,7 @@ export const layer = Layer.effect(
       return { task: yield* read(actor, id), start: started }
     })
 
-    return Service.of({
+    const service = Service.of({
       list: Effect.fn("Task.list")(function* (actor: Actor.Info, input: Task.ListInput) {
         const linked = input.linkedTo && TaskLink.classify(input.linkedTo)
         const parent = TaskQueries.byParent(input.parentId)
@@ -1203,5 +1203,11 @@ export const layer = Layer.effect(
         return finished
       }),
     })
+
+    // oxlint-disable-next-line ren/no-comments -- A brain that lost its sandbox twice within half an hour fails its busy chats; for a task run that ends the run, so a person is asked as after an error.
+    yield* runner.onInterrupted((interrupted) =>
+      interrupted.repeated ? Effect.forEach(interrupted.sessionIds, service.runEnded, { discard: true }) : Effect.void,
+    )
+    return service
   }),
 )

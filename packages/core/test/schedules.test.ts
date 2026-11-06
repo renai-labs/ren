@@ -101,6 +101,7 @@ const runner = Layer.effect(
             })
           : Effect.fail(new SessionRunner.NotFound({ message: "Session not found." })),
       onStartRejected: (listener) => Effect.sync(() => void recorded.rejected.push(listener)),
+      onInterrupted: () => Effect.void,
     })
   }),
 )

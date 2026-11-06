@@ -38,6 +38,8 @@ export const brain = pgTable(
     keep_alive_until: timestamp(),
     last_active_at: timestamp(),
     last_progress_at: timestamp(),
+    last_pulled_at: timestamp(),
+    lost_at: timestamp(),
     progress: jsonb().$type<Readonly<Record<string, string>>>(),
     created_at: timestamp().defaultNow().notNull(),
   },
