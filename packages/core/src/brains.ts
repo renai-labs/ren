@@ -28,7 +28,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq, inArray, isNull } from "drizzle-orm"
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm"
 import {
   ByteSize,
   Cause,
@@ -174,6 +174,9 @@ export const StartRun = DurableRunner.make("StartRun", {
   idempotencyKey: (payload) =>
     `start:${payload.input.sessionId}:${payload.input.initialMessage?.messageId ?? ""}:${payload.epoch}`,
 })
+
+const replacedNotice =
+  "The machine was replaced during your turn. Workspace files are gone. Check the state before you repeat an action."
 
 const failedAsUnavailable = (cause: BrainHost.BrainFailed) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))
 
@@ -346,6 +349,51 @@ export const layer = Layer.effect(
           Effect.map((rows) => Option.fromNullishOr(rows.at(0)?.id)),
         )
 
+    const send = Effect.fn("Brains.send")(function* (input: Session.SendInput) {
+      yield* validatePrompt(input.prompt)
+      const session = yield* brainOf(input.sessionId)
+      const target = yield* brainHost.target(session.brainId).pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
+      const api = yield* client.brain(target)
+      return yield* call(
+        api.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
+      ).pipe(
+        Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))),
+        Effect.tapErrorTag("BrainUnavailable", () => brainHost.unavailable(session.brainId)),
+      )
+    })
+
+    const chats = Database.Schema.agent_session
+
+    const background = yield* Effect.scope
+    const continuing = new Set<Session.ID>()
+
+    // oxlint-disable-next-line ren/no-comments -- EN35, EN36: one message continues a chat that was busy, or had waiting messages, when its machine was replaced by force. The brain deduplicates by message id, so a second try after a crash sends nothing twice; a failed try stays marked for the next pull.
+    const continueChat = Effect.fnUntraced(function* (sessionId: Session.ID, messageId: Session.MessageID) {
+      const row = (yield* database.db
+        .select({ createdBy: chats.created_by })
+        .from(chats)
+        .where(and(eq(chats.id, sessionId), eq(chats.continue_message_id, messageId)))
+        .pipe(Effect.orDie)).at(0)
+      if (!row) return
+      yield* send({
+        sessionId,
+        messageId,
+        prompt: { text: replacedNotice },
+        delivery: "queue",
+        sender: { userId: row.createdBy },
+        synthetic: { description: "Ren continued the turn on a new machine.", source: "machine-replaced" },
+      }).pipe(
+        Effect.catchTag(["SessionNotStartedError", "BrainRejectedError"], (error) =>
+          Effect.logWarning(`The chat ${sessionId} cannot continue after the replace`, error),
+        ),
+      )
+      yield* database.db
+        .update(chats)
+        .set({ continue_message_id: null })
+        .where(and(eq(chats.id, sessionId), eq(chats.continue_message_id, messageId)))
+        .pipe(Effect.orDie)
+    })
+
     yield* DurableRunner.register(StartRun, (payload) =>
       DurableRunner.supervise(
         `start:${payload.input.sessionId}`,
@@ -400,20 +448,7 @@ export const layer = Layer.effect(
       ) {
         yield* Ref.update(rejectedListeners, (listeners) => [...listeners, listener])
       }),
-      send: Effect.fn("Brains.send")(function* (input: Session.SendInput) {
-        yield* validatePrompt(input.prompt)
-        const session = yield* brainOf(input.sessionId)
-        const target = yield* brainHost
-          .target(session.brainId)
-          .pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
-        const api = yield* client.brain(target)
-        return yield* call(
-          api.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
-        ).pipe(
-          Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))),
-          Effect.tapErrorTag("BrainUnavailable", () => brainHost.unavailable(session.brainId)),
-        )
-      }),
+      send,
       access: Effect.fn("Brains.access")(function* (
         sessionId: Session.ID,
         member: { readonly userId: Auth.UserID; readonly memberId: typeof Auth.MemberID.Type; readonly name?: string },
@@ -517,6 +552,29 @@ export const layer = Layer.effect(
           .where(eq(Database.Schema.brain.id, host.brainId))
           .pipe(Effect.orDie)
         yield* brainHost.observe(host.brainId, request.sessions)
+        // oxlint-disable-next-line ren/no-comments -- A pull is the first sign that a new machine is up: the chats that a forced replace interrupted continue now (EN35, EN36).
+        const waiting = yield* database.db
+          .select({ sessionId: chats.id, messageId: chats.continue_message_id })
+          .from(chats)
+          .where(and(eq(chats.brain_id, host.brainId), isNotNull(chats.continue_message_id)))
+          .pipe(Effect.orDie)
+        yield* Effect.forEach(
+          waiting.flatMap((each) =>
+            each.messageId && !continuing.has(each.sessionId)
+              ? [{ sessionId: each.sessionId, messageId: each.messageId }]
+              : [],
+          ),
+          (each) =>
+            Effect.sync(() => continuing.add(each.sessionId)).pipe(
+              Effect.andThen(continueChat(each.sessionId, each.messageId)),
+              Effect.catchCause((cause) =>
+                Effect.logWarning(`The chat ${each.sessionId} did not continue; the next pull tries again`, cause),
+              ),
+              Effect.ensuring(Effect.sync(() => continuing.delete(each.sessionId))),
+              Effect.forkIn(background),
+            ),
+          { discard: true },
+        )
         const roots = request.roots ?? []
         const kept =
           roots.length === 0

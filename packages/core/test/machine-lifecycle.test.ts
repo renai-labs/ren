@@ -77,6 +77,7 @@ const kind = Effect.gen(function* () {
           ? update(id, { phase: "replacing" }).pipe(Effect.as(true))
           : Effect.succeed(false),
       ),
+    isNeeded: () => Effect.succeed(true),
     ensure: (row) => (holder.run ? holder.run(row.id).pipe(Effect.ignore) : Effect.void),
     proxyFor: () => Effect.succeedNone,
     retire: () => Effect.void,
@@ -182,7 +183,7 @@ describe("MachineLifecycle", () => {
         expect(yield* memory.read(id)).toMatchObject({ phase: "ready", generation: 1 })
         yield* TestClock.adjust(Duration.minutes(5))
         yield* memory.machines.check(id)
-        expect((yield* memory.read(id)).phase).toBe("replacing")
+        expect(yield* memory.read(id)).toMatchObject({ phase: "ready", generation: 2 })
         expect(reports.filter((report) => report.includes("MachineLifecycle.Replaced"))).toHaveLength(1)
       }),
   )

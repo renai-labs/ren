@@ -115,10 +115,14 @@ export const make = async () => {
     row,
     seeded,
     newBrain: () => seeded().then((found) => found.brainId),
-    reaches: (brainId: Brain.ID, phase: Machine.Phase) =>
+    reaches: (brainId: Brain.ID, phase: Machine.Phase, options: { readonly generation?: number } = {}) =>
       Effect.runPromise(
         Effect.promise(() => row(brainId)).pipe(
-          Effect.repeat({ until: (found) => found.phase === phase, schedule: Schedule.spaced("100 millis") }),
+          Effect.repeat({
+            until: (found) =>
+              found.phase === phase && (options.generation === undefined || found.generation === options.generation),
+            schedule: Schedule.spaced("100 millis"),
+          }),
           Effect.timeoutOrElse({
             duration: "60 seconds",
             orElse: () => Effect.die(new Error(`Brain ${brainId} did not reach ${phase}`)),
