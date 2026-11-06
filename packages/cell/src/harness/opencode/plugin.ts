@@ -463,6 +463,11 @@ export const make = (
               })
             editor.default(resolved.primary.name)
           })
+          // oxlint-disable-next-line ren/no-comments -- EN23: a chat whose space has no hand now loses its file and shell tools at the next pull. A chat started with none never had them (deniedActions in harness.ts).
+          yield* tool.transform((editor) => {
+            if (Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.hasHand !== false) return
+            for (const id of OpenCodeEnvironmentTools.names) editor.remove(id)
+          })
           const references = yield* OpenCodeReferences.make({
             context,
             hasEnvironment,

@@ -9,6 +9,7 @@ import { Brain } from "@ren/schema/brain"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { Signature } from "@ren/schema/signature"
 import { eq, sql } from "drizzle-orm"
 import { Clock, ConfigProvider, Context, Duration, Effect, Fiber, Layer, Option, Queue, Redacted, Schema } from "effect"
@@ -283,6 +284,30 @@ describe("BrainHost pull", () => {
         name: "Acme",
       })
       expect((yield* brain.pull(host, request)).channels).toEqual(["slack"])
+    }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
+  )
+
+  it.live("a pull tells each chat whether its space has a hand now (EN23, chaos row 26)", () =>
+    Effect.gen(function* () {
+      const subject = yield* seeded
+      const database = yield* Database.Service
+      const brain = yield* Brains.Service
+      const host = {
+        brainId: Brain.ofSession(subject.sessionId),
+        organizationId: subject.owner.organizationId,
+        spaceId: subject.owner.spaceId,
+        generation: 1,
+      }
+      const hasHand = Effect.map(
+        brain.pull(host, { version: "test", keyIds: [], sessions: [] }),
+        (reply) => reply.chats.find((chat) => chat.id === subject.sessionId)?.hasHand,
+      )
+      const before = yield* hasHand
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ hand_placement: "none" })
+        .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+      expect([before, yield* hasHand]).toEqual([true, false])
     }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
   )
 
@@ -596,7 +621,7 @@ describe("BrainHost environments", () => {
   const startOn = (
     context: Effect.Success<ReturnType<typeof hostWith>>,
     subject: Effect.Success<typeof seeded>,
-    id: EnvironmentTemplate.ID | undefined,
+    hand: Space.Hand,
   ) =>
     Effect.gen(function* () {
       const database = yield* Database.Service
@@ -614,24 +639,29 @@ describe("BrainHost environments", () => {
           prompt: { text: "hello" },
           sender: { userId: subject.owner.createdBy },
         },
-        ...(id && { environmentTemplateId: id }),
+        hand,
       } satisfies Session.StartInput
       const placement = { organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, brainId }
       yield* Context.get(context, Brains.Service).start(input, placement)
       yield* Brains.StartRun.execute({ input, placement, epoch: 0 }).pipe(Effect.provideContext(context))
     })
 
-  it.live("a start gives the brain the chat's environment directory, also on a later start that names none", () =>
+  const remote = (environmentTemplateId: EnvironmentTemplate.ID) =>
+    ({ placement: "remote", environmentTemplateId }) as const
+
+  it.live("a remote hand gives the brain the chat's folder on it at every start; no hand gives none", () =>
     Effect.gen(function* () {
       const recording = yield* recordingCell()
       const host = yield* hostWith(recording.url)
       const subject = yield* seeded
       const environmentTemplateId = yield* Seed.environmentTemplate(subject.owner.organizationId)
-      yield* startOn(host, subject, environmentTemplateId)
-      yield* startOn(host, subject, undefined)
+      yield* startOn(host, subject, remote(environmentTemplateId))
+      yield* startOn(host, subject, remote(environmentTemplateId))
+      yield* startOn(host, yield* seeded, { placement: "none" })
       expect(recording.starts.map((input) => input.directory)).toEqual([
         `/workspace/${subject.sessionId}`,
         `/workspace/${subject.sessionId}`,
+        undefined,
       ])
     }),
   )
@@ -641,10 +671,10 @@ describe("BrainHost environments", () => {
       const recording = yield* recordingCell()
       const host = yield* hostWith(recording.url)
       const subject = yield* seeded
-      yield* startOn(host, subject, EnvironmentTemplate.ID.create())
+      yield* startOn(host, subject, remote(EnvironmentTemplate.ID.create()))
       expect(recording.starts).toEqual([])
-      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
-      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
+      yield* startOn(host, subject, remote(yield* Seed.environmentTemplate(subject.owner.organizationId)))
+      yield* startOn(host, subject, remote(yield* Seed.environmentTemplate(subject.owner.organizationId)))
       expect(recording.starts).toHaveLength(1)
     }),
   )
@@ -658,7 +688,7 @@ describe("BrainHost environments", () => {
         yield* Seed.environmentTemplate(subject.owner.organizationId),
         yield* Seed.environmentTemplate(subject.owner.organizationId),
       ]
-      yield* Effect.forEach(templates, (id) => startOn(host, subject, id), { concurrency: "unbounded" })
+      yield* Effect.forEach(templates, (id) => startOn(host, subject, remote(id)), { concurrency: "unbounded" })
       expect(recording.starts).toHaveLength(1)
     }),
   )
@@ -668,7 +698,7 @@ describe("BrainHost environments", () => {
       const recording = yield* recordingCell(422)
       const host = yield* hostWith(recording.url)
       const subject = yield* seeded
-      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
+      yield* startOn(host, subject, remote(yield* Seed.environmentTemplate(subject.owner.organizationId)))
       expect(recording.starts).toHaveLength(1)
       const database = yield* Database.Service
       expect(

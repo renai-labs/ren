@@ -11,7 +11,7 @@ import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
-import type { Space } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { Effect, Layer, ManagedRuntime, Redacted, Schema } from "effect"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
@@ -192,7 +192,7 @@ const start = async (input: { readonly withTemplate?: boolean; readonly first?: 
           sessionId,
           harness: "opencode",
           interactive: false,
-          ...(input.withTemplate !== false && { environmentTemplateId }),
+          hand: input.withTemplate === false ? Space.defaultHand : { placement: "remote", environmentTemplateId },
           ...(input.first && {
             initialMessage: {
               messageId: Session.MessageID.create(),

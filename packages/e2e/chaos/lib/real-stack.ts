@@ -31,7 +31,7 @@ import type { Agent as AgentSchema } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import type { Session as SessionSchema } from "@ren/schema/session"
-import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
+import { Space } from "@ren/schema/space"
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
@@ -182,15 +182,6 @@ export const start = async (options: {
           })),
         )
         .pipe(
-          Effect.andThen(
-            service.db.insert(Database.Schema.space_environment_template).values(
-              sandboxes.map((sandbox) => ({
-                id: SpaceEnvironmentTemplate.ID.create(),
-                space_id: owner.spaceId,
-                environment_template_id: sandbox.environmentTemplateId,
-              })),
-            ),
-          ),
           Effect.andThen(
             service.db.insert(Database.Schema.environment).values(
               sandboxes.map((sandbox) => ({
@@ -350,6 +341,7 @@ export const start = async (options: {
     },
   })
 
+  let creating: Promise<unknown> = Promise.resolve()
   const session = async (sessionOptions: SessionOptions = {}) => {
     const sessionId = Session.ID.create()
     const brainId = Brain.ofSession(sessionId)
@@ -358,25 +350,41 @@ export const start = async (options: {
       await ChaosModels.write(modelsFile, grants)
     }
     const environment = sessionOptions.environment === false ? undefined : (sessionOptions.environment ?? first)
-    const input = (startOptions: StartOptions = {}): SessionSchema.StartInput => ({
+    const hand: Space.Hand = environment
+      ? { placement: "remote", environmentTemplateId: environment.environmentTemplateId }
+      : Space.defaultHand
+    const input = (startOptions: StartOptions = {}): Omit<SessionSchema.StartInput, "hand"> => ({
       sessionId,
       harness: "opencode",
       interactive: startOptions.interactive ?? false,
-      ...(environment &&
-        !startOptions.withoutEnvironment && {
-          environmentTemplateId: environment.environmentTemplateId,
-        }),
       ...(startOptions.model && { model: startOptions.model }),
     })
     const startSession = (startOptions?: StartOptions) =>
-      core(Brains.Service.use((brain) => brain.start(input(startOptions), { ...owner, brainId })))
-    await core(
-      SessionRunner.Service.use((sessions) =>
-        sessions.create(owner, input(sessionOptions.start), {
-          ...(sessionOptions.agentId && { agentId: sessionOptions.agentId }),
-        }),
-      ),
-    )
+      core(
+        Brains.Service.use((brain) =>
+          brain.start(
+            { ...input(startOptions), hand: startOptions?.withoutEnvironment ? Space.defaultHand : hand },
+            { ...owner, brainId },
+          ),
+        ),
+      )
+    // oxlint-disable-next-line ren/no-comments -- A chat takes the hand of its space at creation, so the space has this session's hand while it is created; one creation at a time.
+    const created = creating
+      .then(
+        () =>
+          direct`UPDATE space SET hand_placement = ${hand.placement}, environment_template_id = ${hand.placement === "none" ? null : hand.environmentTemplateId} WHERE id = ${owner.spaceId}`,
+      )
+      .then(() =>
+        core(
+          SessionRunner.Service.use((sessions) =>
+            sessions.create(owner, input(sessionOptions.start), {
+              ...(sessionOptions.agentId && { agentId: sessionOptions.agentId }),
+            }),
+          ),
+        ),
+      )
+    creating = created.catch(() => undefined)
+    await created
     const access = await Wait.until(`the brain of ${sessionId} to be ready`, 120_000, async () => {
       const found = await core(
         Brains.Service.use((brain) => brain.access(sessionId, { userId: owner.createdBy, memberId: owner.memberId })),

@@ -30,12 +30,6 @@ import type {
   EnvironmentTemplateArchiveInput,
   EnvironmentTemplateArchiveOutput,
   EnvironmentProviderListOutput,
-  SpaceEnvironmentTemplateListInput,
-  SpaceEnvironmentTemplateListOutput,
-  SpaceEnvironmentTemplateCreateInput,
-  SpaceEnvironmentTemplateCreateOutput,
-  SpaceEnvironmentTemplateArchiveInput,
-  SpaceEnvironmentTemplateArchiveOutput,
   SpaceSettingsGetInput,
   SpaceSettingsGetOutput,
   SpaceSettingsUpdateInput,
@@ -414,6 +408,7 @@ export function make(options: ClientOptions) {
               description: input["description"],
               brainScope: input["brainScope"],
               brainProvider: input["brainProvider"],
+              hand: input["hand"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
@@ -554,43 +549,6 @@ export function make(options: ClientOptions) {
             path: `/environment-providers`,
             successStatus: 200,
             declaredStatuses: [401, 403],
-            empty: false,
-          },
-          requestOptions,
-        ),
-    },
-    "space-environment-template": {
-      list: (input: SpaceEnvironmentTemplateListInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentTemplateListOutput>(
-          {
-            method: "GET",
-            path: `/space-environment-templates`,
-            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-            successStatus: 200,
-            declaredStatuses: [401, 403],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      create: (input: SpaceEnvironmentTemplateCreateInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentTemplateCreateOutput>(
-          {
-            method: "POST",
-            path: `/space-environment-templates`,
-            body: { spaceId: input["spaceId"], environmentTemplateId: input["environmentTemplateId"] },
-            successStatus: 200,
-            declaredStatuses: [400, 401, 403, 404, 409],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      archive: (input: SpaceEnvironmentTemplateArchiveInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentTemplateArchiveOutput>(
-          {
-            method: "DELETE",
-            path: `/space-environment-templates/${encodeURIComponent(input.id)}`,
-            successStatus: 200,
-            declaredStatuses: [401, 403, 404, 409],
             empty: false,
           },
           requestOptions,

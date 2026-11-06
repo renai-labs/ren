@@ -210,6 +210,18 @@ export const layer = Layer.effect(
             if (found.archived_at) return { info: toInfo(found), isNew: false }
             if (!isAllowed(actor, actions.archive))
               return yield* new Primitive.Forbidden({ message: "You cannot archive this environment template." })
+            // oxlint-disable-next-line ren/no-comments -- EN24: a space never holds a hand that cannot run. A space update reads the template with a share lock, so the two wait for each other.
+            const users = yield* transaction
+              .select({ name: Database.Schema.space.name })
+              .from(Database.Schema.space)
+              .where(
+                and(eq(Database.Schema.space.environment_template_id, id), isNull(Database.Schema.space.archived_at)),
+              )
+              .orderBy(asc(Database.Schema.space.name))
+            if (users.length > 0)
+              return yield* new Primitive.Conflict({
+                message: `Spaces use this environment template: ${users.map((space) => space.name).join(", ")}. Pick another hand for them first.`,
+              })
             const updated = yield* transaction
               .update(table)
               .set({ archived_at: sql`now()`, updated_at: sql`now()` })

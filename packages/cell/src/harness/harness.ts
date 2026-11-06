@@ -158,7 +158,7 @@ export interface Chat {
 interface Transcript {
   readonly has: (chat: Session.ID) => Effect.Effect<boolean>
   readonly start: (
-    input: Session.StartInput & { readonly directory?: string },
+    input: Omit<Session.StartInput, "hand"> & { readonly directory?: string },
   ) => Effect.Effect<void, BrainRejectedError>
   readonly restore: (data: {
     readonly chat: Sync.RestoredChat

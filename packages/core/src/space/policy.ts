@@ -4,7 +4,6 @@ import { Auth } from "@ren/schema/auth"
 import type { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { Space } from "@ren/schema/space"
-import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { SpaceMember } from "@ren/schema/space-member"
 import type { Access } from "../access.js"
 
@@ -76,17 +75,6 @@ export const documents = [
         effect: "deny",
         roles: organizationRoles,
         when: [facts.private],
-      },
-    ],
-  },
-  {
-    resource: SpaceEnvironmentTemplate.definition.name,
-    rules: [
-      {
-        actions: Primitive.actions(SpaceEnvironmentTemplate.definition),
-        effect: "allow",
-        roles: organizationRoles,
-        when: [facts.member],
       },
     ],
   },
