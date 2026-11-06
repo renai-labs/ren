@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Auth } from "@ren/schema/auth"
+import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Space } from "@ren/schema/space"
 import { Clock, Duration, Effect, ErrorReporter, Fiber, Option, Schema } from "effect"
 import { TestClock } from "effect/testing"
@@ -22,6 +23,8 @@ const it = testEffect(
 
 const capacityFor = Duration.seconds(30)
 
+const templateId = EnvironmentTemplate.ID.create()
+
 // oxlint-disable-next-line ren/no-comments -- A kind of machine that lives in memory: its rows in a map, its provider a counter, its ready check and its probe two switches.
 const kind = Effect.gen(function* () {
   const rows = new Map<string, MachineLifecycle.Row<string>>()
@@ -31,7 +34,12 @@ const kind = Effect.gen(function* () {
     capacity: false,
     outdated: "current" as "current" | "update" | "replace",
     updates: true,
+    wanted: { image: Option.none(), hosts: Option.none() } as MachineLifecycle.Wanted,
+    system: "system",
   }
+  const images: Array<Option.Option<string>> = []
+  const networks: Array<Option.Option<ReadonlyArray<string>>> = []
+  const steps: Array<ReadonlyArray<string>> = []
   const updated: Array<string> = []
   const destroyed: Array<number> = []
   const made = { count: 0 }
@@ -43,10 +51,24 @@ const kind = Effect.gen(function* () {
     canMount: false,
     canSample: false,
     canColocate: true,
-    canLimitHosts: false,
-    config: Schema.Struct({}),
+    canLimitHosts: true,
+    template: "system",
+    config: Schema.Struct({
+      packages: Schema.Array(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
+    }),
     binding: Schema.Struct({ number: Schema.Int }),
-    create: () => {
+    // oxlint-disable-next-line ren/no-comments -- A config that only adds packages installs them in place; any other change needs a new machine.
+    stepsBetween: (from, to) =>
+      from.packages.every((name) => to.packages.includes(name))
+        ? Option.some(
+            to.packages
+              .filter((name) => !from.packages.includes(name))
+              .map((name) => ({ command: `install ${name}`, user: "root" as const })),
+          )
+        : Option.none(),
+    create: (input) => {
+      images.push(input.image)
+      networks.push(input.network.hosts)
       if (switches.capacity) {
         switches.capacity = false
         return Effect.fail(new MachineProvider.Capacity({ message: "no room", retryAfter: capacityFor }))
@@ -54,7 +76,11 @@ const kind = Effect.gen(function* () {
       made.count += 1
       return Effect.succeed({ binding: { number: made.count }, url: `http://machine-${made.count}.test` })
     },
-    connect: (binding) => Effect.succeed({ url: `http://machine-${binding.number}.test` }),
+    connect: (binding, network) =>
+      Effect.sync(() => {
+        networks.push(network.hosts)
+        return { url: `http://machine-${binding.number}.test` }
+      }),
     destroy: (binding) => Effect.sync(() => destroyed.push(binding.number)),
     status: () => Effect.succeed("running" as const),
   })
@@ -66,7 +92,7 @@ const kind = Effect.gen(function* () {
     name: "TestLifecycle",
     noun: "Machine",
     annotation: "machine",
-    providerOf: () => Effect.succeed(provider),
+    providerOf: () => Effect.sync(() => ({ ...provider, template: switches.system })),
     isBehindEgress: () => false,
     bootWithin: Duration.seconds(1),
     wakeWithin: Duration.seconds(1),
@@ -91,15 +117,17 @@ const kind = Effect.gen(function* () {
     proxyFor: () => Effect.succeedNone,
     retire: () => Effect.void,
     variables: () => Effect.succeed({}),
+    wants: () => Effect.sync(() => switches.wanted),
     created: () => Effect.void,
     target: (row) => Option.fromNullishOr(row.url),
     boot: () => Effect.sync(() => (switches.boots ? Option.none() : Option.some("The machine did not answer"))),
     wake: () => Effect.succeed(true),
     outdated: () => Effect.sync(() => switches.outdated),
-    updateInPlace: (row) =>
+    updateInPlace: (row, _target, applied) =>
       Effect.sync(() => {
         if (!switches.updates) return Option.some("the new version did not answer")
         updated.push(row.id)
+        steps.push(applied.map((step) => step.command))
         switches.outdated = "current"
         return Option.none()
       }),
@@ -115,6 +143,7 @@ const kind = Effect.gen(function* () {
       provider: null,
       binding: null,
       template: null,
+      template_config: null,
       egress: false,
       url: null,
       generation: 1,
@@ -132,7 +161,7 @@ const kind = Effect.gen(function* () {
     })
     return id
   }
-  return { machines, switches, destroyed, updated, read, update, add }
+  return { machines, switches, destroyed, updated, read, update, add, images, networks, steps }
 })
 
 describe("MachineLifecycle", () => {
@@ -291,5 +320,85 @@ describe("MachineLifecycle updates", () => {
       found.memory.switches.outdated = "current"
       expect(yield* found.memory.read(found.id)).toMatchObject({ generation: 2 })
     }),
+  )
+
+  const templateImage = (name: string, packages: ReadonlyArray<string>, environmentTemplateId = templateId) => ({
+    image: Option.some({ name, template: { environmentTemplateId, config: { packages } } }),
+    hosts: Option.some(["api.example.com"]),
+  })
+
+  it.effect(
+    "a template that only adds a package reaches an asleep machine in place at its wake, also a change made while it was created (templates rule 2, chaos rows 23, 29)",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kind
+        memory.switches.boots = true
+        memory.switches.wanted = templateImage("image-a", ["ffmpeg"])
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        memory.switches.wanted = templateImage("image-b", ["ffmpeg", "requests"])
+        yield* TestClock.adjust(Duration.minutes(11))
+        yield* memory.machines.access(id)
+        expect(memory.images).toEqual([Option.some("image-a")])
+        expect(memory.steps).toEqual([["install requests"]])
+        expect(memory.networks.at(-1)).toEqual(Option.some(["api.example.com"]))
+        expect(yield* memory.read(id)).toMatchObject({
+          phase: "ready",
+          generation: 1,
+          template: "image-b",
+          template_config: { environmentTemplateId: templateId, config: { packages: ["ffmpeg", "requests"] } },
+        })
+      }),
+  )
+
+  it.effect(
+    "a new system image replaces an asleep machine at its wake, but one that differs only in the dependencies built into it does not (EN26)",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kind
+        memory.switches.boots = true
+        memory.switches.system = "ren-brain:a1b2-d1"
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        const wakeOn = (system: string) =>
+          Effect.gen(function* () {
+            memory.switches.system = system
+            yield* TestClock.adjust(Duration.minutes(11))
+            yield* memory.machines.access(id)
+            return (yield* memory.read(id)).generation
+          })
+        expect(yield* wakeOn("ren-brain:a1b2-d2")).toBe(1)
+        expect(yield* wakeOn("ren-brain:c3d4-d2")).toBe(2)
+        expect((yield* memory.read(id)).template).toBe("ren-brain:c3d4-d2")
+      }),
+  )
+
+  it.effect(
+    "a removed package, another template or no template replaces the machine at its wake (templates rule 3)",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kind
+        memory.switches.boots = true
+        memory.switches.wanted = templateImage("image-a", ["ffmpeg", "requests"])
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        const wakeWith = (wanted: MachineLifecycle.Wanted) =>
+          Effect.gen(function* () {
+            memory.switches.wanted = wanted
+            yield* TestClock.adjust(Duration.minutes(11))
+            yield* memory.machines.access(id)
+            return (yield* memory.read(id)).generation
+          })
+        expect(yield* wakeWith(templateImage("image-b", ["ffmpeg"]))).toBe(2)
+        expect(yield* wakeWith(templateImage("image-c", ["ffmpeg", "git"], EnvironmentTemplate.ID.create()))).toBe(3)
+        expect(yield* wakeWith({ image: Option.none(), hosts: Option.none() })).toBe(4)
+        expect(memory.images).toEqual([
+          Option.some("image-a"),
+          Option.some("image-b"),
+          Option.some("image-c"),
+          Option.none(),
+        ])
+        expect(memory.steps).toEqual([])
+      }),
   )
 })

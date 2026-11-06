@@ -11,6 +11,7 @@ import { Space } from "@ren/schema/space"
 import { Effect, Layer, Option } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Docker } from "../src/machine-provider/docker.js"
+import { MachineProvider } from "../src/machine-provider.js"
 import { testEffect } from "./lib/effect.js"
 
 const hasDocker = Bun.spawnSync(["docker", "info"], { stdout: "ignore", stderr: "ignore" }).exitCode === 0
@@ -35,7 +36,8 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
           },
           config,
           variables: ExecutorVariables.make(environmentId, [TestEnvironment.keys.publicKey]),
-          proxy: Option.none(),
+          image: Option.none(),
+          network: MachineProvider.unrestricted,
         }
         const created = yield* Effect.all([provider.create(input), provider.create(input)], {
           concurrency: "unbounded",
@@ -43,7 +45,7 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
         const binding = created[0].binding
         expect(created[1].binding).toEqual(binding)
         yield* Effect.addFinalizer(() => provider.destroy(binding).pipe(Effect.ignore))
-        const url = new URL((yield* provider.connect(binding, Option.none())).url)
+        const url = new URL((yield* provider.connect(binding, MachineProvider.unrestricted)).url)
         const token = yield* EnvironmentToken.sign(TestEnvironment.keys.privateKey, {
           environment: environmentId,
           brain: Brain.ID.create(),
@@ -57,7 +59,9 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
         expect((yield* client["files.read"]({ path: "session/note.txt" })).bytes).toEqual(written)
         yield* provider.destroy(binding)
         yield* provider.destroy(binding)
-        expect((yield* provider.connect(binding, Option.none()).pipe(Effect.flip))._tag).toBe("MachineProvider.Gone")
+        expect((yield* provider.connect(binding, MachineProvider.unrestricted).pipe(Effect.flip))._tag).toBe(
+          "MachineProvider.Gone",
+        )
       }),
     180_000,
   )

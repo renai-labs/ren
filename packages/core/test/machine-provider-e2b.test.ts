@@ -7,6 +7,7 @@ import { Space } from "@ren/schema/space"
 import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { E2BSandbox } from "../src/machine-provider/e2b.js"
+import { MachineProvider } from "../src/machine-provider.js"
 import { testEffect } from "./lib/effect.js"
 
 interface Seen {
@@ -167,7 +168,8 @@ describe("E2BSandbox with an egress", () => {
         labels: { id: Brain.ID.make("brn_01"), generation: 1, ...owner },
         config: {},
         variables: { REN_BRAIN_ID: "brn_01" },
-        proxy: Option.some(proxy),
+        image: Option.none(),
+        network: { proxy: Option.some(proxy), hosts: Option.none() },
       })
       const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
       expect(JSON.parse(create?.body ?? "{}")).toMatchObject({ network })
@@ -176,7 +178,7 @@ describe("E2BSandbox with an egress", () => {
       expect(seen.some((request) => request.body.includes("BEGIN CERTIFICATE"))).toBe(true)
 
       seen.length = 0
-      yield* provider.connect(created.binding, Option.some(proxy))
+      yield* provider.connect(created.binding, { proxy: Option.some(proxy), hosts: Option.none() })
       const update = seen.find((request) => request.path === "/sandboxes/sbx_1/network")
       expect(update?.method).toBe("PUT")
       expect(JSON.parse(update?.body ?? "{}")).toEqual(network)
@@ -194,7 +196,8 @@ describe("E2BSandbox with an egress", () => {
         labels: { id: Brain.ID.make("brn_03"), generation: 1, ...owner },
         config: {},
         variables: {},
-        proxy: Option.none(),
+        image: Option.none(),
+        network: MachineProvider.unrestricted,
       })
       const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
       expect(JSON.parse(create?.body ?? "{}").metadata).toEqual({
@@ -215,7 +218,8 @@ describe("E2BSandbox with an egress", () => {
         labels: { id: Brain.ID.make("brn_02"), generation: 1, ...owner },
         config: {},
         variables: {},
-        proxy: Option.none(),
+        image: Option.none(),
+        network: MachineProvider.unrestricted,
       })
       const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
       expect(JSON.parse(create?.body ?? "{}").network).toBeUndefined()
@@ -273,6 +277,60 @@ describe("E2BSandbox template builds", () => {
       builds.status = "ready"
       expect(failed.message).toBe("step 2 failed\nE: Unable to locate package nope")
     }),
+  )
+})
+
+describe("E2BSandbox templates on a machine", () => {
+  it.live(
+    "a machine of a template starts from its image and gets its host list, with the apex of each wildcard (networking rules 3, 4)",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* BrainProvider.first
+        seen.length = 0
+        const created = yield* provider.create({
+          labels: { id: Brain.ID.make("brn_04"), generation: 1, ...owner },
+          config: {},
+          image: Option.some("ren-template-x:abc"),
+          variables: {},
+          network: { proxy: Option.some(proxy), hosts: Option.some(["api.example.com", "*.example.org"]) },
+        })
+        const create = JSON.parse(
+          seen.find((request) => request.path === "/sandboxes" && request.method === "POST")?.body ?? "{}",
+        )
+        const limited = { ...network, allowOut: ["api.example.com", "*.example.org", "example.org"] }
+        expect(create).toMatchObject({ templateID: "ren-template-x:abc", network: limited })
+        seen.length = 0
+        yield* provider.connect(created.binding, { proxy: Option.some(proxy), hosts: Option.some(["api.example.com"]) })
+        const update = seen.find((request) => request.path === "/sandboxes/sbx_1/network")
+        expect(JSON.parse(update?.body ?? "{}")).toEqual({ ...network, allowOut: ["api.example.com"] })
+      }),
+  )
+
+  it.effect(
+    "a config that only adds packages or build commands gives their steps; a removed package, a changed command or a new size gives none (templates rules 2, 3)",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* BrainProvider.first
+        const from = { packages: { apt: ["ffmpeg"] }, buildCommands: ["make"] }
+        expect(
+          provider.stepsBetween(from, {
+            packages: { apt: ["ffmpeg"], pip: ["requests"] },
+            buildCommands: ["make", "make test"],
+          }),
+        ).toEqual(
+          Option.some([
+            {
+              command:
+                "(command -v pip3 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python3-pip)) && pip3 install --break-system-packages 'requests'",
+              user: "root",
+            },
+            { command: "make test", user: "user" },
+          ]),
+        )
+        expect(provider.stepsBetween(from, { packages: {}, buildCommands: ["make"] })).toEqual(Option.none())
+        expect(provider.stepsBetween(from, { ...from, buildCommands: ["make all"] })).toEqual(Option.none())
+        expect(provider.stepsBetween(from, { ...from, cpuCount: 4, memoryMiB: 4096 })).toEqual(Option.none())
+      }),
   )
 })
 

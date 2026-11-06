@@ -9,6 +9,7 @@ import { Effect, Option, Schedule } from "effect"
 import { Brains } from "../src/brains.js"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
 import { E2BSandbox } from "../src/machine-provider/e2b.js"
+import { MachineProvider } from "../src/machine-provider.js"
 import { BrainRuns } from "./lib/brain-runs.js"
 
 setDefaultTimeout(120_000)
@@ -34,7 +35,8 @@ describe("brain runs", () => {
             },
             config: {},
             variables: {},
-            proxy: Option.none(),
+            image: Option.none(),
+            network: MachineProvider.unrestricted,
           }),
         ),
       ),

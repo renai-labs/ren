@@ -14,7 +14,7 @@ import { and, asc, count, eq, exists, inArray, isNull, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { Deployment } from "./deployment.js"
 import { EnvironmentProvider } from "./environment-provider.js"
-import type { MachineProvider } from "./machine-provider.js"
+import { MachineProvider } from "./machine-provider.js"
 import { Signer } from "./signer.js"
 
 interface Subject {
@@ -295,7 +295,8 @@ export const layer = Layer.effect(
               ...ExecutorVariables.make(assigned.environmentId, keys.publicKeys),
               ...sandboxVariables({ "ren.organization.id": subject.organizationId }),
             },
-            proxy: Option.none(),
+            image: Option.none(),
+            network: MachineProvider.unrestricted,
           })
           .pipe(
             Effect.mapError(unavailableBecause),
@@ -308,7 +309,7 @@ export const layer = Layer.effect(
                 .pipe(Effect.orDie),
             ),
           ))
-      const endpoint = yield* provider.value.connect(providerBinding, Option.none()).pipe(
+      const endpoint = yield* provider.value.connect(providerBinding, MachineProvider.unrestricted).pipe(
         Effect.map(Option.some),
         Effect.catchTag("MachineProvider.Gone", (gone) =>
           options.isRetry

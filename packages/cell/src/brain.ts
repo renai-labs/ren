@@ -149,7 +149,11 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
         ),
       )
       .handle("brain.update", (request) =>
-        handle(Effect.flatMap(CodeUpdate.Service, (code) => code.update(request.payload.bundles))),
+        handle(
+          Effect.flatMap(CodeUpdate.Service, (code) =>
+            code.update(request.payload.bundles, request.payload.steps ?? []),
+          ),
+        ),
       )
       .handle("brain.wake", () =>
         handle(

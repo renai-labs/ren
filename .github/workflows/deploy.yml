@@ -91,7 +91,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           mask-aws-account-id: true
 
-      # Builds only when no template with this hash exists, and then prints the existing tag.
+      # Builds only when no template with this hash exists, and then prints the existing tag. The image holds Ren's dependencies (EN26).
       - name: Build the brain template
         id: build
         env:
@@ -101,13 +101,15 @@ jobs:
           E2B_TEMPLATE_CPU: "8"
           E2B_TEMPLATE_MEMORY_MB: "8192"
           E2B_TEMPLATE_TOOLS: full
+          E2B_TEMPLATE_SEED: ${{ runner.temp }}/bundles
         run: |
           set -euo pipefail
+          bun packages/cell/e2b/bundle.ts "$E2B_TEMPLATE_SEED" >/dev/null
           E2B_API_KEY=$(aws secretsmanager get-secret-value --secret-id "$DEPLOY/deploy" --query SecretString --output text | jq -r .E2B_API_KEY)
           echo "::add-mask::$E2B_API_KEY"
           export E2B_API_KEY
           bun run --cwd packages/cell template:e2b | tee template.log
-          tag=$(sed -n -e 's/^E2B_TEMPLATE=\([^ ]*\).*/\1/p' -e 's/^\([^ ]*:[0-9a-f]*\) exists.*/\1/p' template.log | tail -1)
+          tag=$(sed -n -e 's/^E2B_TEMPLATE=\([^ ]*\).*/\1/p' -e 's/^\([^ ]*:[0-9a-f-]*\) exists.*/\1/p' template.log | tail -1)
           test -n "$tag"
           echo "tag=$tag" >>"$GITHUB_OUTPUT"
 
