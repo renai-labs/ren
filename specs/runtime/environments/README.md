@@ -6,7 +6,7 @@ References:
 
 - [`references/decisions.md`](references/decisions.md): each decision (EN1–EN47) and its reason.
 - [`references/chaos.md`](references/chaos.md): the invariants (I1–I13), the chaos test list, and how the tests run.
-- [`references/ren-v1.md`](references/ren-v1.md): the ren-v1 incidents that this design answers.
+- [`references/lessons.md`](references/lessons.md): lessons from an earlier version of Ren that this design answers.
 - [`references/ecs-brain.md`](references/ecs-brain.md): what OpenCode runs on the brain machine, and the spike for brains on ECS.
 - [`references/naming.md`](references/naming.md): the naming rules for this work.
 
@@ -173,11 +173,11 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 4. The brain and the executor have separate versions. Ren restarts only the process whose version changed, so most deploys keep background processes (EN27).
 5. Ren cancels a restart when a turn started after its decision, and waits until the brain is idle again (I13).
 6. When the OpenCode version changes, in either direction, the brain flushes sync, deletes its local OpenCode database, and restores it from Postgres. The files stay (EN28).
-7. Every command that Ren runs on an E2B machine through E2B's process API sets `timeout 0`. E2B's default kills a command after 60 s (ren-v1 `d573e5262`).
+7. Every command that Ren runs on an E2B machine through E2B's process API sets `timeout 0`. E2B's default stops a command after 60 s.
 8. A template has `provider`, `config`, `networking` and `sessionsPerEnvironment` (default 8, used only by remote). The E2B config is `cpuCount`, `memoryMiB`, `packages { apt, npm, pip, go }` and `buildCommands` (at most 50, each at most 4096 characters). The sizes are 1/1024, 2/2048 (default), 4/4096, 6/6144 and 8/8192.
 9. Saving a changed config queues a build. Each template runs at most one build. A save during a build waits, and when the build ends, the newest config builds. A result counts only while the template still has the config that it built (EN30).
 10. A template keeps `build_status` (`queued`, `building`, `ready`, `failed`), `image` (the last `ready` image) and `build_error`. Machines use the last `ready` image while a build runs or after it fails. A build that runs longer than 45 min fails. At start, Ren builds again a template that stays `queued` or `building` without a running build.
-11. The E2B build starts from Ren's system image and adds one `RUN` per package manager (ren-v1's commands), then one `RUN` per build command. CPU and memory are set at build time, because E2B fixes them per template.
+11. The E2B build starts from Ren's system image and adds one `RUN` per package manager, then one `RUN` per build command. CPU and memory are set at build time, because E2B fixes them per template.
 
 ### Networking
 

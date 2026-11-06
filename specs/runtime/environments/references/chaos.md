@@ -117,9 +117,9 @@ How each fault is made:
 | 41  | The egress restarts mid-turn                                | Report what OpenCode does with the dropped model request                       | live  |
 | 42  | E2B answers 429 or has no room                              | `capacity`, then recovers                                                      | live  |
 
-### From ren-v1
+### From earlier lessons
 
-See [`ren-v1.md`](ren-v1.md).
+See [`lessons.md`](lessons.md).
 
 | #   | Case                                                                   | Expected                                                  | Kind  |
 | --- | ---------------------------------------------------------------------- | --------------------------------------------------------- | ----- |
@@ -140,15 +140,13 @@ See [`ren-v1.md`](ren-v1.md).
 
 Rows 43 and 44 are the seeded runs and the soak (table above).
 
-## Restore sizes in prod
+## Restore fixture
 
-Measured read-only on 2026-11-06. A restore brings back one chat with all of its subagent chats (`cell/src/restore.ts:23`).
+A restore brings back one chat with all of its subagent chats (`cell/src/restore.ts:23`). Row 9 and row 51 use generated data of this shape:
 
-| Measure                          | Value                              |
-| -------------------------------- | ---------------------------------- |
-| Largest restore                  | 52 chats, 1,783 messages, 24 MB    |
-| Largest message                  | 2.8 MB                             |
-| Per top-level chat, own messages | p50 174 kB, p90 1.3 MB, p99 5.9 MB |
-| Largest space                    | 137 chats, 7,534 messages, 86 MB   |
-
-Row 9 uses fake data of the largest restore's shape, with one 2.8 MB message. No prod chat enters the repository.
+| Measure         | Value                           |
+| --------------- | ------------------------------- |
+| Chats           | 52 (one top-level, 51 subagent) |
+| Messages        | 1,783                           |
+| Size            | 24 MB                           |
+| Largest message | 2.8 MB                          |
