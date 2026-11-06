@@ -3,14 +3,12 @@ export * as BundleBuild from "./bundle.js"
 import { Bundle } from "@ren/schema/bundle"
 import { DateTime, Schema } from "effect"
 import { createHash } from "node:crypto"
-import { mkdir, mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, readlink, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { Stage } from "./stage.js"
 
-const Root = Schema.Struct({ packageManager: Schema.String })
-
-const encoder = new TextEncoder()
+const Runtime = Schema.Struct({ name: Schema.String, private: Schema.Boolean, type: Schema.String })
 
 const copy = (repository: string, tree: string, files: ReadonlyArray<string>) =>
   Promise.all(
@@ -29,7 +27,26 @@ const archive = async (tree: string, out: string, kind: Bundle.Kind, version: st
   return { kind, version, sha256 }
 }
 
-// oxlint-disable-next-line ren/no-comments -- Builds the three bundles into out, with manifest.json. The dependencies are every workspace manifest, bun.lock and the install for the machines' platform; their version changes only with those files and Bun's version. A machine copies the dependencies' tree and unpacks a source bundle into the copy.
+// oxlint-disable-next-line ren/no-comments -- The version of a tree is the hash of every path in it with the hash of its bytes, or a link's target. One file at a time: the tree has about 47,000 files.
+const versionOf = async (tree: string) =>
+  Stage.hash(
+    await Array.fromAsync(
+      (await readdir(tree, { recursive: true, withFileTypes: true })).filter((entry) => !entry.isDirectory()),
+      async (entry) => {
+        const path = join(entry.parentPath, entry.name)
+        return {
+          path: path.slice(tree.length + 1),
+          content: new TextEncoder().encode(
+            entry.isSymbolicLink()
+              ? await readlink(path)
+              : new Bun.CryptoHasher("sha256").update(await Bun.file(path).bytes()).digest("hex"),
+          ),
+        }
+      },
+    ),
+  )
+
+// oxlint-disable-next-line ren/no-comments -- Builds the three bundles into out, with manifest.json. The dependencies are the install for the machines' platform, with the manifests that the brain and the executor read at run time only, so their version changes only when what the machines run changes, not with each lockfile change (bun.lock changed 92 times in 30 days). A machine copies the dependencies' tree and unpacks a source bundle into the copy.
 export const build = async (repository: string, out: string) => {
   await mkdir(out, { recursive: true })
   const work = await mkdtemp(join(tmpdir(), "ren-bundles-"))
@@ -43,16 +60,28 @@ export const build = async (repository: string, out: string) => {
   )
     .flat()
     .toSorted()
-  const bun = Schema.decodeUnknownSync(Root)(
-    await Bun.file(join(repository, "package.json")).json(),
-  ).packageManager.replace(/^bun@/, "")
   const dependencies = join(work, "dependencies")
   await copy(repository, dependencies, manifests)
   await Bun.$`bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts --os linux --cpu x64`
     .cwd(dependencies)
     .quiet()
+  const sources = {
+    brain: await Stage.sources(repository, [Stage.entrypoints.brain]),
+    executor: await Stage.sources(repository, [Stage.entrypoints.executor]),
+  }
+  const used = new Set([...sources.brain, ...sources.executor].map((file) => file.split("/").slice(0, 2).join("/")))
+  await Promise.all(
+    manifests
+      .filter((path) => path !== "package.json" && path !== "bunfig.toml" && !used.has(dirname(path)))
+      .map((path) => rm(join(dependencies, path))),
+  )
+  const root = Schema.decodeUnknownSync(Runtime)(await Bun.file(join(repository, "package.json")).json())
+  await Bun.write(
+    join(dependencies, "package.json"),
+    `${JSON.stringify({ name: root.name, private: root.private, type: root.type }, null, 2)}\n`,
+  )
   const sourcesOf = async (kind: "brain" | "executor") => {
-    const files = await Stage.sources(repository, [Stage.entrypoints[kind]])
+    const files = sources[kind]
     const tree = join(work, kind)
     await copy(repository, tree, files)
     const entries = await Promise.all(
@@ -61,17 +90,7 @@ export const build = async (repository: string, out: string) => {
     return archive(tree, out, kind, Stage.hash(entries))
   }
   const bundles = [
-    await archive(
-      dependencies,
-      out,
-      "dependencies",
-      Stage.hash([
-        ...(await Promise.all(
-          manifests.map(async (path) => ({ path, content: await Bun.file(join(repository, path)).bytes() })),
-        )),
-        { path: "bun", content: encoder.encode(bun) },
-      ]),
-    ),
+    await archive(dependencies, out, "dependencies", await versionOf(dependencies)),
     await sourcesOf("brain"),
     await sourcesOf("executor"),
   ]
