@@ -7,8 +7,8 @@ import { eq } from "drizzle-orm"
 import { Effect, Option, Schedule } from "effect"
 import { Brains } from "../src/brains.js"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
-import { SandboxProvider } from "../src/sandbox-provider.js"
-import { E2BSandbox } from "../src/sandbox-provider/e2b.js"
+import { MachineProvider } from "../src/machine-provider.js"
+import { E2BSandbox } from "../src/machine-provider/e2b.js"
 import { BrainRuns } from "./lib/brain-runs.js"
 
 setDefaultTimeout(120_000)
@@ -23,13 +23,16 @@ describe("brain runs", () => {
   test("cleanup destroys a provider sandbox whose brain row does not exist", async () => {
     const current = await runs.ren()
     const created = await current.runPromise(
-      SandboxProvider.Service.use((provider) =>
+      MachineProvider.Brain.use((provider) =>
         provider.create({
-          brainId: Brain.ID.create(),
-          generation: 1,
-          organizationId: Auth.OrganizationID.create(),
-          spaceId: Space.ID.create(),
-          env: {},
+          labels: {
+            id: Brain.ID.create(),
+            generation: 1,
+            organizationId: Auth.OrganizationID.create(),
+            spaceId: Space.ID.create(),
+          },
+          config: {},
+          variables: {},
           proxy: Option.none(),
         }),
       ),

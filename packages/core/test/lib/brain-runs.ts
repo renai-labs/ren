@@ -14,7 +14,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Models } from "../../src/models.js"
-import type { SandboxProvider } from "../../src/sandbox-provider.js"
+import type { MachineProvider } from "../../src/machine-provider.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
 
@@ -57,7 +57,7 @@ export const make = async () => {
       readonly port?: number
       readonly around?: Parameters<typeof Host.serve>[1]
       readonly config?: Record<string, string>
-      readonly sandbox?: Layer.Layer<SandboxProvider.Service, unknown, HttpClient.HttpClient>
+      readonly sandbox?: Layer.Layer<MachineProvider.Brain, unknown, HttpClient.HttpClient>
       readonly keepBrains?: boolean
       readonly tracer?: Tracer.Tracer
     } = {},

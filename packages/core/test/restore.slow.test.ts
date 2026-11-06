@@ -17,7 +17,7 @@ import { Brains } from "../src/brains.js"
 import { GitHubApp } from "../src/github-app.js"
 import { Models } from "../src/models.js"
 import { PullRequest } from "../src/pull-request.js"
-import { SandboxProvider } from "../src/sandbox-provider.js"
+import { MachineProvider } from "../src/machine-provider.js"
 import { Session } from "../src/session.js"
 import { SessionRunner } from "../src/session/runner.js"
 import { TranscriptCodec } from "../src/transcript-codec.js"
@@ -129,9 +129,9 @@ const opened = Effect.fnUntraced(function* (text: string) {
       })
       return { status: response.status, body: Schema.decodeUnknownSync(Schema.Json)(await response.json()) }
     })
-  const provider = yield* SandboxProvider.Service
+  const provider = yield* MachineProvider.Brain
   const home = Schema.decodeUnknownSync(Schema.Struct({ home: Schema.String }))(
-    (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === brainId)?.binding,
+    (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === brainId)?.binding,
   ).home
   return { sessionId, messageId, brainId, owner, home, chat, raw, idle, synced, read }
 })
@@ -547,8 +547,8 @@ it.live(
       yield* chat.idle
       const before = yield* chat.read
       yield* chat.synced
-      const provider = yield* SandboxProvider.Service
-      const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === chat.brainId)
+      const provider = yield* MachineProvider.Brain
+      const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === chat.brainId)
       const home = Schema.decodeUnknownSync(Schema.Struct({ home: Schema.String }))(found?.binding).home
       const older = "0.0.1-older"
       yield* Host.restart(chat.brainId, async (folder) =>
@@ -578,8 +578,8 @@ it.live("a chat that Ren deleted leaves its brain's harness at the next pull", (
     const client = yield* BrainClient.Service
     const api = yield* client.brain(yield* host.target(chat.brainId).pipe(Effect.orDie))
     yield* api.brain["brain.wake"]().pipe(Effect.orDie)
-    const provider = yield* SandboxProvider.Service
-    const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === chat.brainId)
+    const provider = yield* MachineProvider.Brain
+    const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === chat.brainId)
     const home = Schema.decodeUnknownSync(Schema.Struct({ home: Schema.String }))(found?.binding).home
     expect(HarnessDb.hasChat(home, chat.sessionId)).toBe(false)
   }),

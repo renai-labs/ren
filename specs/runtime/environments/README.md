@@ -1,6 +1,6 @@
 # Brains, hands and machines: pending
 
-Status: not built. Today a brain runs in an E2B sandbox and runs its tools in the same sandbox. Environment templates, environments, the Docker provider and `Environments.bind` exist (`core/src/environment-templates.ts`, `core/src/environments.ts`, `core/src/environment-provider/docker.ts`), but no code picks a template for a chat. This spec replaces the draft in PR #197.
+Status: not built. Today a brain runs in an E2B sandbox and runs its tools in the same sandbox. Environment templates, environments, the Docker provider and `Environments.bind` exist (`core/src/environment-templates.ts`, `core/src/environments.ts`, `core/src/machine-provider/docker.ts`), but no code picks a template for a chat. Brain and environment providers share one contract, `MachineProvider` (`core/src/machine-provider.ts`). This spec replaces the draft in PR #197.
 
 References:
 
@@ -142,11 +142,10 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 ### Providers and families
 
 1. `MachineAccess` is the only contract that `Brains` and `Environments` call for a machine. Each family meets it (EN1).
-2. A managed provider has `create(image, size, network, env, labels)`, `connect`, `keepAlive`, `status`, `lastSample`, `list`, `destroy` and an optional `build`. Its flags are `canPause`, `canSample`, `canEgress`, `canLimitHosts`, `canColocate` and `canMount`. A step that a provider does not have does nothing: a Durable Object's `create` names it by id, and it never pauses (EN6).
-3. `SandboxProvider` and `EnvironmentProvider` become this one contract. Core never branches on a provider's name.
-4. Each managed machine carries labels: Ren's owner name, the kind (`brain` or `hand`), its id, its generation, its organization and its space. Every step finds its earlier work by kind, id and generation before it acts, so a step that runs twice makes one machine (EN34).
-5. The deployment registers its brain providers and hand providers. A space picks one of each. Ren refuses to start when a space or template names a provider that the deployment does not register; the error lists them (EN24).
-6. An attached machine connects out to Ren, and Ren relays the Brain API and the Environment API over that connection. Nothing in this work builds it (EN7).
+2. A managed provider is a `MachineProvider` (built). Later pull requests add `image`, `size` and `network` to `create`, an optional `build`, and the flags `canPause`, `canLimitHosts` and `canColocate`, each with its first caller. A step that a provider does not have does nothing: a Durable Object's `create` names it by id, and it never pauses (EN6). Core never branches on a provider's name.
+3. Each managed machine carries labels: Ren's owner name, the kind (`brain` or `hand`), its id, its generation, its organization and its space. Every step finds its earlier work by kind, id and generation before it acts, so a step that runs twice makes one machine (EN34).
+4. The deployment registers its brain providers and hand providers. A space picks one of each. Ren refuses to start when a space or template names a provider that the deployment does not register; the error lists them (EN24).
+5. An attached machine connects out to Ren, and Ren relays the Brain API and the Environment API over that connection. Nothing in this work builds it (EN7).
 
 ### Space settings
 
@@ -233,7 +232,7 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 | `schema/space-environment-template.ts` | Removed, with its protocol group, core service, policy and table.                                                                                                                                            |
 | `db`                                   | `space`: hand placement, template, brain provider. `environment_template`: networking, build fields. `brain` and `environment`: image, bundle versions, retry time. A table for the current bundle per kind. |
 | `core/machine-access.ts`               | New: the outer contract.                                                                                                                                                                                     |
-| `core/machine-provider.ts`             | New: the managed provider contract. `SandboxProvider` and `EnvironmentProvider` move to it. E2B REST calls live in one module.                                                                               |
+| `core/machine-provider.ts`             | `image`, `size` and `network` in `create`; `build`; the flags `canPause`, `canLimitHosts`, `canColocate`. E2B REST calls live in one module.                                                                 |
 | `core/machine-lifecycle.ts`            | New: the managed state machine, taken out of `BrainLifecycle`.                                                                                                                                               |
 | `core/brain-host.ts`                   | A registry of brain providers instead of one `SANDBOX_PROVIDER`.                                                                                                                                             |
 | `core/environments.ts`                 | Remote hand machines on `MachineLifecycle`; the "hand unreachable" check.                                                                                                                                    |
@@ -256,8 +255,8 @@ Each pull request is based on the one before it. Each one passes its own rows of
 | --- | --------------------------- | ------------------------------------------------------------------------------------------------------- |
 | 1   | `hand-design-spec`          | This spec.                                                                                              |
 | 2   | `shared-space-admins`       | Org admins update shared spaces.                                                                        |
-| 3   | `machine-provider-contract` | `MachineAccess` and the managed provider contract. No change in behaviour.                              |
-| 4   | `machine-lifecycle`         | `MachineLifecycle`, taken out of `BrainLifecycle`. No change in behaviour.                              |
+| 3   | `machine-provider-contract` | The managed provider contract. No change in behaviour.                                                  |
+| 4   | `machine-lifecycle`         | `MachineLifecycle`, taken out of `BrainLifecycle`, and `MachineAccess`. No change in behaviour.         |
 | 5   | `chaos-invariants`          | The seeded runs that check I1–I13, and the restore measurement.                                         |
 | 6   | `lifecycle-recovery`        | Timed retry, the 5-min replace, PostHog reports.                                                        |
 | 7   | `turn-recovery`             | Interrupted turns continue once, waiting messages after a replace, the 8 MB stand-in.                   |

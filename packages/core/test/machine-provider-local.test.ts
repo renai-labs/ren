@@ -6,8 +6,8 @@ import { Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { SandboxProvider } from "../src/sandbox-provider.js"
-import { LocalSandbox } from "../src/sandbox-provider/local.js"
+import { MachineProvider } from "../src/machine-provider.js"
+import { LocalSandbox } from "../src/machine-provider/local.js"
 import { testEffect } from "./lib/effect.js"
 
 const it = testEffect(Layer.empty)
@@ -29,14 +29,17 @@ it.live("a brain whose owner process dies is killed with its whole process group
     const owner = Bun.spawn(["sleep", "600"], { stdio: ["ignore", "ignore", "ignore"] })
     yield* Effect.addFinalizer(() => Effect.sync(() => owner.kill("SIGKILL")))
     const pids = yield* Effect.gen(function* () {
-      const provider = yield* SandboxProvider.Service
+      const provider = yield* MachineProvider.Brain
       const create = (generation: number) =>
         provider.create({
-          brainId: Brain.ID.create(),
-          generation,
-          organizationId: Auth.OrganizationID.create(),
-          spaceId: Space.ID.create(),
-          env: {},
+          labels: {
+            id: Brain.ID.create(),
+            generation,
+            organizationId: Auth.OrganizationID.create(),
+            spaceId: Space.ID.create(),
+          },
+          config: {},
+          variables: {},
           proxy: Option.none(),
         })
       const running = yield* create(1)

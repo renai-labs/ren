@@ -25,8 +25,8 @@ import { DurableRunner } from "../../src/durable-runner.js"
 import { EnvironmentProvider } from "../../src/environment-provider.js"
 import { Environments } from "../../src/environments.js"
 import type { Models } from "../../src/models.js"
-import { SandboxProvider } from "../../src/sandbox-provider.js"
-import { LocalSandbox } from "../../src/sandbox-provider/local.js"
+import { MachineProvider } from "../../src/machine-provider.js"
+import { LocalSandbox } from "../../src/machine-provider/local.js"
 import { Settings } from "../../src/settings.js"
 import { TestDrives } from "./drives.js"
 import { RenHostApiTest } from "./ren-host-api.js"
@@ -73,7 +73,7 @@ interface StackOptions<E, R> {
   readonly lostEvery?: Duration.Input
   readonly maxRunning?: number
   readonly template?: string
-  readonly sandbox?: Layer.Layer<SandboxProvider.Service, unknown, HttpClient.HttpClient>
+  readonly sandbox?: Layer.Layer<MachineProvider.Brain, unknown, HttpClient.HttpClient>
   readonly keepBrains?: boolean
 }
 
@@ -240,7 +240,7 @@ const serveSynced = (port: number) =>
 
 export const destroyBrains = Layer.effectDiscard(
   Effect.gen(function* () {
-    const provider = yield* SandboxProvider.Service
+    const provider = yield* MachineProvider.Brain
     yield* Effect.addFinalizer(() =>
       provider.list.pipe(
         Effect.flatMap((all) => Effect.forEach(all, (each) => provider.destroy(each.binding).pipe(Effect.ignore))),
@@ -334,8 +334,8 @@ const LocalBinding = Schema.Struct({ pid: Schema.Int, home: Schema.String })
 
 // oxlint-disable-next-line ren/no-comments -- Stops a local brain, changes its disk while no brain process runs, and lets the restart loop boot it again.
 export const restart = Effect.fnUntraced(function* (brainId: Brain.ID, change: (home: string) => Promise<unknown>) {
-  const provider = yield* SandboxProvider.Service
-  const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === brainId)
+  const provider = yield* MachineProvider.Brain
+  const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === brainId)
   if (!found) return yield* Effect.die(new Error(`Brain ${brainId} has no sandbox`))
   const binding = Schema.decodeUnknownSync(LocalBinding)(found.binding)
   const brains = () =>

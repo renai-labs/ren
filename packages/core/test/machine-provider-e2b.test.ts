@@ -4,8 +4,8 @@ import { Brain } from "@ren/schema/brain"
 import { Space } from "@ren/schema/space"
 import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
-import { E2BSandbox } from "../src/sandbox-provider/e2b.js"
-import { SandboxProvider } from "../src/sandbox-provider.js"
+import { E2BSandbox } from "../src/machine-provider/e2b.js"
+import { MachineProvider } from "../src/machine-provider.js"
 import { testEffect } from "./lib/effect.js"
 
 interface Seen {
@@ -125,13 +125,12 @@ const network = {
 describe("E2BSandbox with an egress", () => {
   it.live("create, resume and every network update carry the proxy login (C38), and the CA reaches the sandbox", () =>
     Effect.gen(function* () {
-      const provider = yield* SandboxProvider.Service
+      const provider = yield* MachineProvider.Brain
       seen.length = 0
       const created = yield* provider.create({
-        brainId: Brain.ID.make("brn_01"),
-        generation: 1,
-        ...owner,
-        env: { REN_BRAIN_ID: "brn_01" },
+        labels: { id: Brain.ID.make("brn_01"), generation: 1, ...owner },
+        config: {},
+        variables: { REN_BRAIN_ID: "brn_01" },
         proxy: Option.some(proxy),
       })
       const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
@@ -150,16 +149,15 @@ describe("E2BSandbox with an egress", () => {
 
   it.live("this Ren sees only the sandboxes of its E2B_OWNER, so its cleanup never destroys another Ren's", () =>
     Effect.gen(function* () {
-      const provider = yield* SandboxProvider.Service
+      const provider = yield* MachineProvider.Brain
       seen.length = 0
       expect((yield* provider.list).map((each) => each.binding)).toEqual([
         { sandboxId: "sbx_mine", domain: "e2b.test", port: 4800 },
       ])
       yield* provider.create({
-        brainId: Brain.ID.make("brn_03"),
-        generation: 1,
-        ...owner,
-        env: {},
+        labels: { id: Brain.ID.make("brn_03"), generation: 1, ...owner },
+        config: {},
+        variables: {},
         proxy: Option.none(),
       })
       const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
@@ -175,13 +173,12 @@ describe("E2BSandbox with an egress", () => {
 
   it.live("without an egress, a create sends no network config", () =>
     Effect.gen(function* () {
-      const provider = yield* SandboxProvider.Service
+      const provider = yield* MachineProvider.Brain
       seen.length = 0
       yield* provider.create({
-        brainId: Brain.ID.make("brn_02"),
-        generation: 1,
-        ...owner,
-        env: {},
+        labels: { id: Brain.ID.make("brn_02"), generation: 1, ...owner },
+        config: {},
+        variables: {},
         proxy: Option.none(),
       })
       const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
@@ -193,7 +190,7 @@ describe("E2BSandbox with an egress", () => {
 describe("E2BSandbox metering", () => {
   it.live("reads E2B's run events page by page, newest first, and stops at the page that reaches since", () =>
     Effect.gen(function* () {
-      const provider = yield* SandboxProvider.Service
+      const provider = yield* MachineProvider.Brain
       const reads = () => seen.filter((request) => request.path === "/events/sandboxes").map((request) => request.query)
       seen.length = 0
       expect(yield* provider.metered(Option.none())).toHaveLength(250)
