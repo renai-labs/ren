@@ -74,6 +74,11 @@ import { EgressControl } from "@ren/core/egress-control"
 import { EnvironmentNetwork } from "@ren/core/environment-network"
 import { AppResolve } from "@ren/core/app/resolve"
 
+const environmentNetwork = EnvironmentNetwork.layer.pipe(Layer.provide(AppResolve.layer))
+
+// oxlint-disable-next-line ren/no-comments -- Remote hands need what brains need: Ren's code and the host list of their template.
+const environments = Environments.layer.pipe(Layer.provide([Bundles.layer, environmentNetwork]))
+
 const host = Layer.unwrap(
   Effect.gen(function* () {
     const provider = yield* Config.Literals(["local", "e2b", "cell"], "SANDBOX_PROVIDER").pipe(
@@ -94,7 +99,7 @@ const host = Layer.unwrap(
           // oxlint-disable-next-line ren/no-comments -- An E2B brain without the egress would fetch the real model key, and in e2b-space the agent's code runs in the same sandbox, so the server does not start without EGRESS_PROXY_ADDRESS.
           Layer.provide(provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig),
           Layer.provide(Bundles.layer),
-          Layer.provide(EnvironmentNetwork.layer.pipe(Layer.provide(AppResolve.layer))),
+          Layer.provide(environmentNetwork),
         ),
       ),
       Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),
@@ -159,7 +164,11 @@ const observability = Layer.mergeAll(
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([
     Layer.mergeAll(
-      Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provideMerge(host), Layer.provide(CredentialEnv.layer)),
+      Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(
+        Layer.provideMerge(host),
+        Layer.provideMerge(environments),
+        Layer.provide(CredentialEnv.layer),
+      ),
       Retention.layer,
       RenInferenceRemoval.layer,
       BillingEnrollment.layer.pipe(Layer.provide(Billing.layerConfig)),
@@ -177,7 +186,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provide([BrainClient.layer, Settings.layer]),
-  Layer.provide([models, Environments.layer, GitHubApp.layer, Integrations.layer]),
+  Layer.provide([models, GitHubApp.layer, Integrations.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provide(
     Layer.unwrap(

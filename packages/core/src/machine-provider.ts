@@ -284,9 +284,18 @@ const executorAskedEvery = Duration.millis(200)
 
 const executorReadyWithin = Duration.seconds(30)
 
+// oxlint-disable-next-line ren/no-comments -- The executor answers an unsigned call itself, with 401. A 5xx comes from in front of it: E2B's edge answers 502 for a sandbox or a port that is not there.
+export const executorAnswers = (http: HttpClient.HttpClient, url: URL) =>
+  http
+    .execute(HttpClientRequest.post(EnvironmentClient.rpcUrl(url)))
+    .pipe(
+      Effect.flatMap((response) =>
+        response.status < 500 ? Effect.void : Effect.fail(new Error(`${url} answered ${response.status}`)),
+      ),
+    )
+
 export const waitForExecutor = (http: HttpClient.HttpClient, url: URL, within = executorReadyWithin) =>
-  http.execute(HttpClientRequest.post(EnvironmentClient.rpcUrl(url))).pipe(
-    Effect.asVoid,
+  executorAnswers(http, url).pipe(
     Effect.timeout(executorAnswersWithin),
     Effect.retry({ schedule: Schedule.spaced(executorAskedEvery) }),
     Effect.timeout(within),

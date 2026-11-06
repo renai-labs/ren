@@ -26,8 +26,7 @@ import {
   Schema,
   Struct,
 } from "effect"
-import { HttpClient, HttpClientRequest } from "effect/http"
-import { EnvironmentClient } from "@ren/environment-api/environment-client"
+import { HttpClient } from "effect/http"
 import { Bundles } from "./bundles.js"
 import { Deployment } from "./deployment.js"
 import { EnvironmentNetwork } from "./environment-network.js"
@@ -412,7 +411,7 @@ export const layer = Layer.effect(
       boot: () => Effect.succeedNone,
       wake: () => Effect.succeed(true),
       answers: (target) =>
-        http.execute(HttpClientRequest.post(EnvironmentClient.rpcUrl(new URL(target.url)))).pipe(
+        MachineProvider.executorAnswers(http, new URL(target.url)).pipe(
           Effect.timeoutOption(MachineLifecycle.timing.probeTimeout),
           Effect.option,
           Effect.map((answered) => Option.isSome(answered) && Option.isSome(answered.value)),
