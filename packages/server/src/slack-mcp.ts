@@ -128,13 +128,15 @@ const guides = Layer.effectDiscard(
 
 export const layer = Layer.merge(tools, guides).pipe(
   Layer.provideMerge(
-    McpServer.layerHttp({
-      name: "slack",
-      version: "0.0.0",
-      instructions,
-      path,
-      protocols: [McpProtocol.v2026_07_28, McpProtocol.v2025_11_25, McpProtocol.v2025_06_18],
-    }),
+    Layer.fresh(
+      McpServer.layerHttp({
+        name: "slack",
+        version: "0.0.0",
+        instructions,
+        path,
+        protocols: [McpProtocol.v2026_07_28, McpProtocol.v2025_11_25, McpProtocol.v2025_06_18],
+      }),
+    ),
   ),
   Layer.provide(authentication),
   Layer.provide(Actor.layer),

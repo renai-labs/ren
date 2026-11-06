@@ -70,6 +70,7 @@ describe("Slack MCP", () => {
         const listed = yield* send(headers, "tools/list")
         expect(listed.status).toBe(200)
         expect(listed.text).toContain('"name":"send_message"')
+        expect(listed.text).not.toContain('"name":"me_get"')
         const guide = yield* send(headers, "resources/read", { uri: "slack://guides/messaging" })
         expect(guide.text).toContain("# Writing Slack messages")
         const called = yield* send(headers, "tools/call", { name: "list_user_channels", arguments: {} })
