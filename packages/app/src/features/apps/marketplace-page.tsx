@@ -2,7 +2,7 @@ import { AppListingSample } from "../../components/app-list.js"
 import { Loading } from "@ren/ui/loading"
 import { useState, type ReactNode } from "react"
 import { EmptyState } from "../../components/empty-state.js"
-import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { Button } from "@ren/ui/button"
 import { IconPlus } from "@tabler/icons-react"
@@ -34,16 +34,53 @@ const route = getRouteApi("/_authed/_shell/marketplace")
 const matches = (app: { name: string; description: string }, query: string) =>
   `${app.name} ${app.description}`.toLowerCase().includes(query.trim().toLowerCase())
 
-function InstalledApps(props: { apps: ReadonlyArray<CatalogApp>; row: (app: CatalogApp) => ReactNode }) {
+function useConnectedApps() {
+  const { client } = RouterContext.useRouterContext()
+  const spaces = useSpaces().spaces
+  const pages = useInfiniteQuery({
+    queryKey: ["app", "list", "connected", { pageSize: pickerPageSize }] as const,
+    queryFn: (context) =>
+      client.app.list(
+        { connected: true, page: context.pageParam, pageSize: pickerPageSize },
+        { signal: context.signal },
+      ),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page * last.pageSize < last.total ? last.page + 1 : undefined),
+  })
+  const loaded = (pages.data?.pages ?? []).flatMap((page) => page.items).map(fromApp)
+  const apps = loaded.filter((app) => !isSpaceApp(app, spaces))
+  const rest = (more: boolean): Promise<unknown> =>
+    more ? pages.fetchNextPage().then((next) => rest(next.hasNextPage)) : Promise.resolve()
+  return {
+    apps,
+    total: (pages.data?.pages.at(0)?.total ?? 0) - (loaded.length - apps.length),
+    pending: pages.isPending,
+    loadAll: () => void rest(pages.hasNextPage),
+  }
+}
+
+function InstalledApps(props: {
+  apps: ReadonlyArray<CatalogApp>
+  total: number
+  onAll: () => void
+  row: (app: CatalogApp) => ReactNode
+}) {
   const [all, setAll] = useState(false)
   return (
-    <AppSection title="Installed" count={props.apps.length}>
-      {all || props.apps.length <= 5 ? (
+    <AppSection title="Installed" count={props.total}>
+      {all || props.total <= 5 ? (
         props.apps.map(props.row)
       ) : (
         <>
           {props.apps.slice(0, 5).map(props.row)}
-          <SeeAllRow apps={props.apps.slice(5)} onOpen={() => setAll(true)} />
+          <SeeAllRow
+            apps={props.apps.slice(5)}
+            more={props.total - 5}
+            onOpen={() => {
+              setAll(true)
+              props.onAll()
+            }}
+          />
         </>
       )}
     </AppSection>
@@ -52,6 +89,8 @@ function InstalledApps(props: { apps: ReadonlyArray<CatalogApp>; row: (app: Cata
 
 function AppListing(props: {
   inUse: ReadonlyArray<CatalogApp>
+  installed: number
+  onAll: () => void
   rest: ReadonlyArray<CatalogApp>
   query: string
   row: (app: CatalogApp) => ReactNode
@@ -60,7 +99,14 @@ function AppListing(props: {
     return <EmptyState>{props.query ? `Nothing matches “${props.query.trim()}”` : "No apps yet"}</EmptyState>
   return (
     <div className="flex flex-col gap-10">
-      {props.inUse.length > 0 ? <InstalledApps apps={props.inUse} row={props.row} /> : null}
+      {props.inUse.length > 0 ? (
+        <InstalledApps
+          apps={props.inUse}
+          total={props.query ? props.inUse.length : props.installed}
+          onAll={props.onAll}
+          row={props.row}
+        />
+      ) : null}
       {props.rest.length > 0 ? <AppSection title="All apps">{props.rest.map(props.row)}</AppSection> : null}
     </div>
   )
@@ -128,12 +174,12 @@ export function MarketplacePage() {
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
-  const connected = useQuery(api.app.list.queryOptions({ connected: true, page: 1, pageSize: pickerPageSize }))
+  const connected = useConnectedApps()
   const browse = (registry.data?.items ?? []).map(fromRegistry)
-  const usedApps = (connected.data?.items ?? []).map(fromApp).filter((app) => !isSpaceApp(app, spaces.spaces))
+  const usedApps = connected.apps
   const used = new Set(usedApps.map((app) => app.id))
   const profiles = useAppProfiles([...usedApps, ...browse].map((app) => app.id))
-  const loading = registry.isPending || connected.isPending
+  const loading = registry.isPending || connected.pending
   const navigate = route.useNavigate()
   const opened = search.app
   const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
@@ -175,6 +221,8 @@ export function MarketplacePage() {
         ) : (
           <AppListing
             inUse={usedApps.filter((each) => matches(each, query))}
+            installed={connected.total}
+            onAll={connected.loadAll}
             rest={browse.filter((each) => !used.has(each.id))}
             query={query}
             row={row}

@@ -38,11 +38,9 @@ export type Added = (added: { app: App; profileId?: string | undefined; space: T
 
 export function useAddition(app: App, onAdded: Added) {
   const { api } = RouterContext.useRouterContext()
-  const [choosing, setChoosing] = useState<Target>()
+  const [choosing, setChoosing] = useState<{ space: Target; shared: ReadonlyArray<AppProfile> }>()
   const access = useMutation({ ...api["app-profile"].access.mutationOptions() })
-  const shared = useAppProfiles([app.id])
-    .of(app.id)
-    .filter((profile) => profile.kind === "shared")
+  const profiles = useAppProfiles([])
   const done = (profileId: string | undefined, space: Target) => {
     setChoosing(undefined)
     if (!profileId) {
@@ -61,14 +59,22 @@ export function useAddition(app: App, onAdded: Added) {
     )
   }
   return {
-    add: (space: Target) => (shared.length > 0 ? setChoosing(space) : done(undefined, space)),
+    add: (space: Target) =>
+      void profiles.load(app.id).then(
+        (found) => {
+          const shared = found.filter((profile) => profile.kind === "shared")
+          if (shared.length > 0) setChoosing({ space, shared })
+          else done(undefined, space)
+        },
+        (error: unknown) => toast.error(`Couldn’t load ${app.name} accounts`, { description: errorMessage(error) }),
+      ),
     dialog: choosing ? (
       <ChooseProfile
         app={app}
-        space={choosing}
-        shared={shared}
-        onUse={(profile) => done(profile.id, choosing)}
-        onCreate={() => done(undefined, choosing)}
+        space={choosing.space}
+        shared={choosing.shared}
+        onUse={(profile) => done(profile.id, choosing.space)}
+        onCreate={() => done(undefined, choosing.space)}
         onClose={() => setChoosing(undefined)}
       />
     ) : null,

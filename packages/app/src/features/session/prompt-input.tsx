@@ -542,7 +542,8 @@ export function PromptInput(props: {
   const choose = (value: string) => {
     const result = props.suggest?.onChoose(value, text, textarea.current?.selectionStart ?? text.length)
     if (!result) return
-    change(Composer.withText(draft, result.text))
+    const next = Composer.withText(draft, result.text)
+    change(result.mention ? Composer.withMention(next, result.mention) : next)
     place(result.text, result.cursor)
   }
   const suggest = props.suggest

@@ -6,6 +6,7 @@ import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { DateTime } from "effect"
 import { Composer } from "../src/composer.js"
+import { Mentions } from "../src/mentions.js"
 
 const draft = (text: string, pasted: ReadonlyArray<string> = []): Composer.Draft => ({
   text,
@@ -80,6 +81,20 @@ describe("Composer draft", () => {
       ...draft(""),
       messageId: SessionMessage.ID.make("msg_1"),
     })
+  })
+
+  test("keeps the apps a draft mentions across a reload, so its send names them by slug", () => {
+    const notion = { id: "app_1", slug: "notion", name: "Notion", description: "Notes", icon: null, brandColor: null }
+    const mentioned = Composer.withMention(
+      draft(Mentions.insert("Ask @noti", Mentions.fromApp(notion), 4, 9).text),
+      notion,
+    )
+    const reloaded = Composer.decode(Composer.encode(mentioned))
+    const apps = Composer.mentions(reloaded).map(Mentions.fromApp)
+    expect(Mentions.resolve(reloaded.text, Mentions.tokens(reloaded.text, apps)).text).toBe("Ask @notion ")
+    expect(Composer.mentions(Composer.restore(Composer.empty, mentioned, SessionMessage.ID.make("msg_1")))).toEqual([
+      notion,
+    ])
   })
 
   test("a failed send with files comes back with them, and reuses its message ID only while the text is unchanged", () => {
