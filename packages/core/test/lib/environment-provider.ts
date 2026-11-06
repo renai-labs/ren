@@ -63,6 +63,8 @@ export const make = (
           return yield* endpoint(binding.environmentId)
         }),
       destroy: (binding) => Ref.update(destroyed, (all) => [...all, binding.environmentId]),
+      status: (binding) =>
+        Effect.map(Ref.get(gone), (all) => (all.has(binding.environmentId) ? ("gone" as const) : ("running" as const))),
       ...(build && { build: (input: { readonly config: typeof Config.Type }) => build(input.config) }),
     })
     return { provisions, destroyed, gone, failing, provider } satisfies Probe

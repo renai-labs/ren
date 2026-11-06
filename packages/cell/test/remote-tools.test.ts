@@ -52,10 +52,10 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
     EnvironmentAccess.Service,
     EnvironmentAccess.Service.of({
       release: () => Effect.void,
-      open: (sessionId) =>
+      open: (sessionId, options) =>
         Ref.update(opens, (count) => count + 1).pipe(
           Effect.andThen(beforeOpen),
-          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
+          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId, options)),
         ),
     }),
   )

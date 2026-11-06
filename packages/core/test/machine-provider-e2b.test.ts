@@ -165,7 +165,7 @@ describe("E2BSandbox with an egress", () => {
       const provider = yield* BrainProvider.first
       seen.length = 0
       const created = yield* provider.create({
-        labels: { id: Brain.ID.make("brn_01"), generation: 1, ...owner },
+        labels: { kind: "brain", id: Brain.ID.make("brn_01"), generation: 1, ...owner },
         config: {},
         variables: { REN_BRAIN_ID: "brn_01" },
         image: Option.none(),
@@ -193,7 +193,7 @@ describe("E2BSandbox with an egress", () => {
         { sandboxId: "sbx_mine", domain: "e2b.test", port: 4800 },
       ])
       yield* provider.create({
-        labels: { id: Brain.ID.make("brn_03"), generation: 1, ...owner },
+        labels: { kind: "brain", id: Brain.ID.make("brn_03"), generation: 1, ...owner },
         config: {},
         variables: {},
         image: Option.none(),
@@ -204,6 +204,7 @@ describe("E2BSandbox with an egress", () => {
         owner: "ren-test-a",
         brain: "brn_03",
         generation: "1",
+        kind: "brain",
         organization: "org_01",
         space: "spc_01",
       })
@@ -215,7 +216,7 @@ describe("E2BSandbox with an egress", () => {
       const provider = yield* BrainProvider.first
       seen.length = 0
       yield* provider.create({
-        labels: { id: Brain.ID.make("brn_02"), generation: 1, ...owner },
+        labels: { kind: "brain", id: Brain.ID.make("brn_02"), generation: 1, ...owner },
         config: {},
         variables: {},
         image: Option.none(),
@@ -288,7 +289,7 @@ describe("E2BSandbox templates on a machine", () => {
         const provider = yield* BrainProvider.first
         seen.length = 0
         const created = yield* provider.create({
-          labels: { id: Brain.ID.make("brn_04"), generation: 1, ...owner },
+          labels: { kind: "brain", id: Brain.ID.make("brn_04"), generation: 1, ...owner },
           config: {},
           image: Option.some("ren-template-x:abc"),
           variables: {},

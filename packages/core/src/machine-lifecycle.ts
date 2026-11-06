@@ -76,8 +76,9 @@ export interface TemplateConfig {
   readonly config: Schema.Json
 }
 
-// oxlint-disable-next-line ren/no-comments -- What the owner wants for its machine now: a template's image (none: the provider's own), and the hosts it may reach (none: any).
+// oxlint-disable-next-line ren/no-comments -- What the owner wants for its machine now: the provider config of a new machine, a template's image (none: the provider's own), and the hosts it may reach (none: any).
 export interface Wanted {
+  readonly config: Schema.Json
   readonly image: Option.Option<{ readonly name: string; readonly template: TemplateConfig }>
   readonly hosts: Option.Option<ReadonlyArray<string>>
 }
@@ -87,6 +88,7 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly name: string
   readonly noun: string
   readonly annotation: string
+  readonly kind: MachineProvider.Labels["kind"]
   // oxlint-disable-next-line ren/no-comments -- The provider of the row's machine: the one that made it, or for a new machine the one its owner chose.
   readonly providerOf: (row: R) => Effect.Effect<MachineProvider.Provider>
   readonly isBehindEgress: (provider: MachineProvider.Provider) => boolean
@@ -239,8 +241,14 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const wanted = yield* definition.wants(row)
     const created = yield* provider
       .create({
-        labels: { id: row.id, generation: row.generation, organizationId: row.organization_id, spaceId: row.space_id },
-        config: {},
+        labels: {
+          kind: definition.kind,
+          id: row.id,
+          generation: row.generation,
+          organizationId: row.organization_id,
+          spaceId: row.space_id,
+        },
+        config: wanted.config,
         image: Option.map(wanted.image, (image) => image.name),
         // oxlint-disable-next-line ren/no-comments -- Behind an egress, the machine calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49).
         variables: { ...(yield* definition.variables(row)), ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },

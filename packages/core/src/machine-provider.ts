@@ -27,6 +27,7 @@ export type Status = "running" | "paused" | "gone"
 
 // oxlint-disable-next-line ren/no-comments -- The labels every machine carries (EN34). A provider finds the machine an earlier create made by its id and generation, so two creates make one machine.
 export interface Labels {
+  readonly kind: "brain" | "hand"
   readonly id: string
   readonly generation: number
   readonly organizationId: Auth.OrganizationID
@@ -122,6 +123,8 @@ interface Definition<Config, Binding> {
   // oxlint-disable-next-line ren/no-comments -- Whether it can keep a machine to a list of hosts (a template's `limited` networking).
   readonly canLimitHosts: boolean
   readonly template?: string
+  // oxlint-disable-next-line ren/no-comments -- The folder where a remote hand of this provider keeps one folder per chat (EN42).
+  readonly workspace?: string
   readonly config: Schema.Codec<Config, unknown>
   readonly binding: Schema.Codec<Binding, unknown>
   readonly create: (
@@ -153,6 +156,7 @@ export interface Provider {
   readonly canColocate: boolean
   readonly canLimitHosts: boolean
   readonly template: string | null
+  readonly workspace: Option.Option<string>
   readonly check: (config: unknown) => Effect.Effect<Schema.Json, InvalidConfig>
   readonly create: (input: CreateInput<Schema.Json>) => Effect.Effect<Created, Failed | Capacity>
   readonly connect: (
@@ -220,6 +224,7 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
     canColocate: definition.canColocate,
     canLimitHosts: definition.canLimitHosts,
     template: definition.template ?? null,
+    workspace: Option.fromUndefinedOr(definition.workspace),
     check: (value) =>
       Schema.decodeUnknownEffect(config)(value).pipe(
         Effect.flatMap(Schema.encodeEffect(config)),
@@ -279,15 +284,14 @@ const executorAskedEvery = Duration.millis(200)
 
 const executorReadyWithin = Duration.seconds(30)
 
-export const waitForExecutor = (http: HttpClient.HttpClient, url: URL) =>
+export const waitForExecutor = (http: HttpClient.HttpClient, url: URL, within = executorReadyWithin) =>
   http.execute(HttpClientRequest.post(EnvironmentClient.rpcUrl(url))).pipe(
     Effect.asVoid,
     Effect.timeout(executorAnswersWithin),
     Effect.retry({ schedule: Schedule.spaced(executorAskedEvery) }),
-    Effect.timeout(executorReadyWithin),
+    Effect.timeout(within),
     Effect.mapError(
-      () =>
-        new Failed({ message: `The executor at ${url} did not answer within ${Duration.format(executorReadyWithin)}` }),
+      () => new Failed({ message: `The executor at ${url} did not answer within ${Duration.format(within)}` }),
     ),
   )
 

@@ -177,6 +177,14 @@ const EnvironmentsGroup = HttpApiGroup.make("environments")
   .add(
     HttpApiEndpoint.post("environments.access", "/host/sessions/:id/environment/access", {
       params: SessionParams,
+      query: Schema.Struct({
+        unreachable: Schema.optional(
+          Schema.Literals(["true", "false"]).annotate({
+            description:
+              "`true` when the brain could not reach the session’s environment at its last URL; Ren checks its machine first (EN15).",
+          }),
+        ),
+      }),
       success: Environment.Access,
       error: [EnvironmentNotFoundError, EnvironmentUnavailableError],
     }).annotateMerge(

@@ -83,10 +83,12 @@ export const layer = Layer.effect(
     const http = yield* HttpClient.HttpClient
     const liveEntries = new Map<Session.ID, SynchronizedRef.SynchronizedRef<Environment.Access>>()
     const renDown = new Map<Session.ID, { readonly untilMs: number; readonly error: Unavailable }>()
+    // oxlint-disable-next-line ren/no-comments -- EN15: sessions whose environment gave no answer; their next access asks Ren to check the machine.
+    const unanswered = new Set<Session.ID>()
     const openAccess = Effect.fn("EnvironmentConnections.openAccess")(function* (sessionId: Session.ID) {
       const down = renDown.get(sessionId)
       if (down && (yield* Clock.currentTimeMillis) < down.untilMs) return yield* down.error
-      return yield* environmentAccess.open(sessionId).pipe(
+      return yield* environmentAccess.open(sessionId, { unreachable: unanswered.has(sessionId) }).pipe(
         Effect.mapError((error) =>
           error._tag === "EnvironmentAccess.NotFound"
             ? new Unavailable({
@@ -100,7 +102,12 @@ export const layer = Layer.effect(
                 message: `Ren does not answer: ${error.message}`,
               }),
         ),
-        Effect.tap(() => Effect.sync(() => renDown.delete(sessionId))),
+        Effect.tap(() =>
+          Effect.sync(() => {
+            renDown.delete(sessionId)
+            unanswered.delete(sessionId)
+          }),
+        ),
         Effect.tapError((error) =>
           error.reason === "ren_unavailable"
             ? Effect.map(Clock.currentTimeMillis, (now) =>
@@ -157,7 +164,7 @@ export const layer = Layer.effect(
           const client = yield* EnvironmentClient.make({
             url: access.url,
             token: Effect.map(freshAccess, (latest) => Redacted.value(latest.token)),
-            onNoAnswer: invalidateSelf,
+            onNoAnswer: Effect.sync(() => unanswered.add(sessionId)).pipe(Effect.andThen(invalidateSelf)),
             onRefused: (token) => Ref.set(refusedToken, token),
           }).pipe(Effect.provideService(HttpClient.HttpClient, http))
           const unreachableBecause = (cause: { readonly _tag: string; readonly message: string }) =>
@@ -172,7 +179,12 @@ export const layer = Layer.effect(
                   reason: "unreachable",
                   message: `The environment at ${access.url} does not answer: ${cause.message}`,
                 })
-          const hello = yield* client["executor.hello"]().pipe(Effect.mapError(unreachableBecause))
+          const hello = yield* client["executor.hello"]().pipe(
+            Effect.mapError(unreachableBecause),
+            Effect.tapError((error) =>
+              error.reason === "unreachable" ? Effect.sync(() => unanswered.add(sessionId)) : Effect.void,
+            ),
+          )
           if (hello.protocol !== EnvironmentApi.protocol)
             return yield* new Unavailable({
               sessionId,

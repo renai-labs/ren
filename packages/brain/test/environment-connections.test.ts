@@ -593,6 +593,23 @@ it.live("a session that has no access or a dead sandbox leaves the connection of
   }),
 )
 
+it.live("after its environment gave no answer, a session's next access asks Ren to check the machine (EN15)", () =>
+  Effect.gen(function* () {
+    const relay = yield* Relay.make(Relay.portOf(yield* TestEnvironment.url))
+    const access = yield* accessAt(relay.url)
+    const asked = yield* Ref.make<ReadonlyArray<boolean>>([])
+    const environments = yield* environmentsWith(
+      opening((_id, options) => Ref.update(asked, (all) => [...all, options.unreachable]).pipe(Effect.as(access))),
+    )
+    const connection = yield* environments.connect(sessionId)
+    yield* relay.refuse(true)
+    yield* relay.cut
+    yield* connection.client["files.stat"]({ path: folder() }).pipe(Effect.flip)
+    expect((yield* environments.connect(sessionId).pipe(Effect.flip)).reason).toBe("unreachable")
+    expect(yield* Ref.get(asked)).toEqual([false, true])
+  }),
+)
+
 it.effect("a connection outlives its token and still reaches the processes it started", () =>
   Effect.gen(function* () {
     const sandbox = yield* Probe.make()

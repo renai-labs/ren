@@ -29,6 +29,7 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
         const environmentId = Environment.ID.create()
         const input = {
           labels: {
+            kind: "hand" as const,
             id: environmentId,
             generation: 1,
             organizationId: Auth.OrganizationID.create(),

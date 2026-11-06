@@ -41,6 +41,11 @@ const networkOf = (network: MachineProvider.Network) => {
 
 const createTimeout = Duration.minutes(10)
 
+const handBootWithin = Duration.minutes(2)
+
+// oxlint-disable-next-line ren/no-comments -- EN42: every hand on E2B, co-located or remote, keeps its chats' folders here.
+const workspace = "/home/user/workspace"
+
 const Binding = Schema.Struct({
   sandboxId: Schema.NonEmptyString,
   domain: Schema.NonEmptyString,
@@ -323,14 +328,17 @@ export const provider = Effect.gen(function* () {
     canColocate: true,
     canLimitHosts: true,
     template: config.template,
+    workspace,
     config: TemplateConfig,
     binding: Binding,
     stepsBetween,
     create: Effect.fn("E2BSandbox.create")(function* (input) {
-      const metadata = { brain: input.labels.id, generation: String(input.labels.generation) }
+      // oxlint-disable-next-line ren/no-comments -- EN34: the kind label keeps hands apart from brains; Ren reaches a brain at its port and a remote hand at its executor's.
+      const metadata = { brain: input.labels.id, generation: String(input.labels.generation), kind: input.labels.kind }
+      const port = input.labels.kind === "hand" ? EnvironmentApi.port : config.port
       const existing = (yield* list(metadata, "running,paused")).at(0)
       if (existing) {
-        const binding = { sandboxId: existing.sandboxID, domain: config.domain, port: config.port }
+        const binding = { sandboxId: existing.sandboxID, domain: config.domain, port }
         yield* updateNetwork(binding, input.network).pipe(
           Effect.catchTag("MachineProvider.Gone", (error) => Effect.fail(failed("network")(error))),
         )
@@ -361,8 +369,11 @@ export const provider = Effect.gen(function* () {
           Schema.decodeUnknownEffect(Schema.fromJsonString(Created))(text).pipe(Effect.mapError(failed("create"))),
         ),
       )
-      const binding = { sandboxId: created.sandboxID, domain: created.domain ?? config.domain, port: config.port }
+      const binding = { sandboxId: created.sandboxID, domain: created.domain ?? config.domain, port }
       yield* configure(binding, Option.fromNullishOr(created.envdAccessToken), input.variables, input.network.proxy)
+      // oxlint-disable-next-line ren/no-comments -- A remote hand is ready when its executor answers; its first start downloads the bundles.
+      if (input.labels.kind === "hand")
+        yield* MachineProvider.waitForExecutor(http, new URL(urlOf(binding)), handBootWithin)
       return { binding, url: urlOf(binding) }
     }),
     connect: Effect.fn("E2BSandbox.connect")(function* (binding, network) {
@@ -375,6 +386,7 @@ export const provider = Effect.gen(function* () {
       if (response.status === 404) return yield* gone(binding)
       yield* body("connect", response)
       yield* updateNetwork(binding, network)
+      if (binding.port === EnvironmentApi.port) yield* MachineProvider.waitForExecutor(http, new URL(urlOf(binding)))
       return { url: urlOf(binding) }
     }),
     // oxlint-disable-next-line ren/no-comments -- The image is a tag of the template's own E2B template, named by a hash of the system image and the config, so a config built before gives its image at once.
@@ -530,7 +542,7 @@ export const provider = Effect.gen(function* () {
         ]
       })
     }),
-    hand: () => ({ url: `http://127.0.0.1:${EnvironmentApi.port}`, workspace: "/home/user/workspace" }),
+    hand: () => ({ url: `http://127.0.0.1:${EnvironmentApi.port}`, workspace }),
     list: list({}, "running,paused").pipe(
       Effect.map((sandboxes) =>
         sandboxes.flatMap((sandbox) => {
