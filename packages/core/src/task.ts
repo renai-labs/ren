@@ -79,9 +79,9 @@ const reminder = {
   description: "Reminder: hand off the task",
   source: "task",
   text:
-    "Your run ended without a handoff. When your part is complete, hand off with `task_assign` to one of the agents " +
-    "in your brief. When a person must decide, call `task_review` with the reason. If you still work, continue. " +
-    "The next run that ends without one of these asks a person to review.",
+    "Your run ended without a handoff. When your part is complete, hand off with `task_assign` to the agent in your " +
+    "brief that fits, or finish with `task_review` when the work is done or a person must decide. If you still " +
+    "work, continue. The next run that ends without one of these asks a person to review.",
 }
 
 const refKey = (ref: TaskLink.Ref) => `${ref.kind}\u0000${ref.key}`
