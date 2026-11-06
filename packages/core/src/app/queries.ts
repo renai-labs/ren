@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import { App } from "@ren/schema/app"
 import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm"
 import { DateTime, Effect } from "effect"
-import type { Access } from "../access.js"
+import { Access } from "../access.js"
 import { Actor } from "../actor.js"
 import { AgentQueries } from "../agent/queries.js"
 import { AppProfilePolicy } from "./profile-policy.js"
@@ -122,6 +122,10 @@ export const profileWhere = (actor: Actor.Info): ReadonlyMap<string, SQL> => {
     ],
   ])
 }
+
+// oxlint-disable-next-line ren/no-comments -- The app has a profile that the actor may list, by the same policy as AppProfiles.list.
+export const hasVisibleProfile = (actor: Actor.Info, plan: Access.Plan) =>
+  sql<boolean>`exists (select 1 from app_profile where app_profile.app_id = ${Database.Schema.app}.id and app_profile.organization_id = ${actor.organizationId} and ${Access.where(plan, profileWhere(actor))})`
 
 export const find = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
