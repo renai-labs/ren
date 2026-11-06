@@ -38,6 +38,19 @@ const runs = Array.from({ length: 250 }, (_, index) => ({
   },
 }))
 
+// oxlint-disable-next-line ren/no-comments -- E2B's sandbox list for each state filter: twelve of this Ren's sandboxes run, more than any count limit would allow.
+const listed: Readonly<Record<string, ReadonlyArray<unknown>>> = {
+  running: Array.from({ length: 12 }, (_, index) => ({
+    sandboxID: `sbx_busy_${index}`,
+    state: "running",
+    metadata: { owner: "ren-test-a", brain: `brn_busy_${index}` },
+  })),
+  "running,paused": [
+    { sandboxID: "sbx_mine", state: "running", metadata: { owner: "ren-test-a", brain: "brn_01" } },
+    { sandboxID: "sbx_theirs", state: "running", metadata: { owner: "ren-v2-dev", brain: "brn_02" } },
+  ],
+}
+
 // oxlint-disable-next-line ren/no-comments -- A local server answers as the E2B API and as envd. The client below sends every request here and keeps the host it meant in x-target-host.
 const e2b = Bun.serve({
   hostname: "127.0.0.1",
@@ -53,12 +66,7 @@ const e2b = Bun.serve({
     })
     if (url.pathname === "/v2/sandboxes")
       return Response.json(
-        url.searchParams.get("metadata")?.includes("brain=")
-          ? []
-          : [
-              { sandboxID: "sbx_mine", state: "running", metadata: { owner: "ren-test-a", brain: "brn_01" } },
-              { sandboxID: "sbx_theirs", state: "running", metadata: { owner: "ren-v2-dev", brain: "brn_02" } },
-            ],
+        url.searchParams.get("metadata")?.includes("brain=") ? [] : listed[String(url.searchParams.get("state"))],
       )
     if (url.pathname === "/sandboxes" && request.method === "POST")
       return Response.json({ sandboxID: "sbx_1", domain: "e2b.test", envdAccessToken: "envd" })
@@ -186,6 +194,21 @@ describe("E2BSandbox with an egress", () => {
       })
       const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
       expect(JSON.parse(create?.body ?? "{}").network).toBeUndefined()
+    }),
+  )
+
+  it.live("a create does not wait for this Ren's other running sandboxes; only E2B's 429 makes it wait", () =>
+    Effect.gen(function* () {
+      const provider = yield* SandboxProvider.Service
+      seen.length = 0
+      yield* provider.create({
+        brainId: Brain.ID.make("brn_04"),
+        generation: 1,
+        ...owner,
+        env: {},
+        proxy: Option.none(),
+      })
+      expect(seen.some((request) => request.path === "/sandboxes" && request.method === "POST")).toBe(true)
     }),
   )
 })
