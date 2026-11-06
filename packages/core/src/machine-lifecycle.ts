@@ -143,10 +143,14 @@ const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 const imageOf = (wanted: Wanted, provider: MachineProvider.Provider) =>
   Option.match(wanted.image, { onNone: () => provider.template, onSome: (image) => image.name })
 
+// oxlint-disable-next-line ren/no-comments -- A system image's tag can end with the version of Ren's dependencies built into it (`<name>:<system>-<dependencies>`, cell/e2b/stage.ts). They only save start.sh a download, so a machine on other dependencies is not outdated by its image; the bundles update them in place (EN26).
+const systemOf = (image: string) => image.replace(/(:[^:-]*)-[^:]*$/, "$1")
+
 // oxlint-disable-next-line ren/no-comments -- EN22: the steps that bring a machine to the image its owner wants, in place: none needed, the steps between two configs of its template, or none possible (a replace; templates rule 3).
 const stepsTo = <Id extends string>(row: Row<Id>, wanted: Wanted, provider: MachineProvider.Provider) => {
   const image = imageOf(wanted, provider)
-  if (!image || !row.template || row.template === image) return Option.some<ReadonlyArray<MachineProvider.Step>>([])
+  if (!image || !row.template || systemOf(row.template) === systemOf(image))
+    return Option.some<ReadonlyArray<MachineProvider.Step>>([])
   const from = row.template_config
   return Option.flatMap(
     Option.filter(wanted.image, (found) => from?.environmentTemplateId === found.template.environmentTemplateId),

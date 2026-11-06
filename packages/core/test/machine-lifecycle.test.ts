@@ -35,6 +35,7 @@ const kind = Effect.gen(function* () {
     outdated: "current" as "current" | "update" | "replace",
     updates: true,
     wanted: { image: Option.none(), hosts: Option.none() } as MachineLifecycle.Wanted,
+    system: "system",
   }
   const images: Array<Option.Option<string>> = []
   const networks: Array<Option.Option<ReadonlyArray<string>>> = []
@@ -91,7 +92,7 @@ const kind = Effect.gen(function* () {
     name: "TestLifecycle",
     noun: "Machine",
     annotation: "machine",
-    providerOf: () => Effect.succeed(provider),
+    providerOf: () => Effect.sync(() => ({ ...provider, template: switches.system })),
     isBehindEgress: () => false,
     bootWithin: Duration.seconds(1),
     wakeWithin: Duration.seconds(1),
@@ -347,6 +348,28 @@ describe("MachineLifecycle updates", () => {
           template: "image-b",
           template_config: { environmentTemplateId: templateId, config: { packages: ["ffmpeg", "requests"] } },
         })
+      }),
+  )
+
+  it.effect(
+    "a new system image replaces an asleep machine at its wake, but one that differs only in the dependencies built into it does not (EN26)",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kind
+        memory.switches.boots = true
+        memory.switches.system = "ren-brain:a1b2-d1"
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        const wakeOn = (system: string) =>
+          Effect.gen(function* () {
+            memory.switches.system = system
+            yield* TestClock.adjust(Duration.minutes(11))
+            yield* memory.machines.access(id)
+            return (yield* memory.read(id)).generation
+          })
+        expect(yield* wakeOn("ren-brain:a1b2-d2")).toBe(1)
+        expect(yield* wakeOn("ren-brain:c3d4-d2")).toBe(2)
+        expect((yield* memory.read(id)).template).toBe("ren-brain:c3d4-d2")
       }),
   )
 
