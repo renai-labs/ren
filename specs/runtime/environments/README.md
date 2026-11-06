@@ -210,7 +210,6 @@ Built: `EnvironmentTemplate.Networking`, and `limited` only on a provider with `
 | `core/environments.ts`     | Remote hand machines on `MachineLifecycle`; the "hand unreachable" check.                                                                                                                |
 | `environment-api`          | Later: a feature list in `hello`.                                                                                                                                                        |
 | `cell`                     | One OpenCode hand-bridge module chosen by `REN_HAND_PLACEMENT`.                                                                                                                          |
-| `app`                      | Settings → Environments; space settings for the hand (the brain provider choice stays hidden while one exists).                                                                          |
 | `infra/aws`                | A memory alarm for the server.                                                                                                                                                           |
 
 Run `bun run generate` after the protocol changes.
