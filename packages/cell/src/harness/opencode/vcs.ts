@@ -50,6 +50,17 @@ const statusOf = (chunk: string): FileDiff.Info["status"] => {
   return "modified"
 }
 
+export const diffsOf = (text: string) =>
+  VcsPatch.splitGitPatch({
+    text,
+    truncated: new TextEncoder().encode(text).length > VcsPatch.MAX_TOTAL_PATCH_BYTES,
+  }).flatMap((chunk): ReadonlyArray<FileDiff.Info> => {
+    const file = VcsPatch.fileFromPatchChunk(chunk)
+    if (!file) return []
+    const counts = VcsPatch.countPatch(chunk)
+    return [{ file, patch: chunk, additions: counts.additions, deletions: counts.deletions, status: statusOf(chunk) }]
+  })
+
 // oxlint-disable-next-line ren/no-comments -- OpenCode's git provider runs git on the brain's machine (`vcs.ts:261`). With a remote hand, the workspace panel's branch and diff come from git on the hand (EN13). Plugins add no providers here, so `transform` keeps nothing, as in OpenCode's workerd profile.
 const layer = (spawnerOf: (workspaceId: Workspace.ID) => ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
   Layer.effect(
@@ -94,18 +105,7 @@ const layer = (spawnerOf: (workspaceId: Workspace.ID) => ChildProcessSpawner.Chi
           const fields = yield* run(mode, options?.context ?? VcsPatch.PATCH_CONTEXT_LINES)
           if (fields.at(0) === "error") return yield* new Vcs.DiffError({ message: fields.at(1) ?? "git failed" })
           if (fields.at(0) !== "git") return []
-          const text = fields.slice(3).join("\u0000")
-          return VcsPatch.splitGitPatch({
-            text,
-            truncated: new TextEncoder().encode(text).length > VcsPatch.MAX_TOTAL_PATCH_BYTES,
-          }).flatMap((chunk) => {
-            const file = VcsPatch.fileFromPatchChunk(chunk)
-            if (!file) return []
-            const counts = VcsPatch.countPatch(chunk)
-            return [
-              { file, patch: chunk, additions: counts.additions, deletions: counts.deletions, status: statusOf(chunk) },
-            ]
-          })
+          return diffsOf(fields.slice(3).join("\u0000"))
         }),
       })
     }),

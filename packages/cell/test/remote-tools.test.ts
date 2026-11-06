@@ -12,7 +12,7 @@ import { Session } from "@ren/schema/session"
 import { Shell } from "@ren/schema/shell"
 import { Context, Deferred, Effect, Exit, Fiber, Layer, Option, Ref, Schedule, Schema, Scope, Stream } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
-import { mkdtemp, realpath, stat } from "node:fs/promises"
+import { mkdtemp, realpath, rm, stat } from "node:fs/promises"
 import { createServer, type Socket } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -663,7 +663,67 @@ for (const place of places) {
         ])
       }),
   )
+
+  place.it.live(
+    `V3 a revert with files to a turn that changed a file on ${place.name} lists the file and restores it`,
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* open(Effect.void, { isRemoteHand: place.isRemoteHand })
+        const session = yield* begin(opened, {
+          folderOf: place.folderOf,
+          prepare: async (directory) => {
+            await Bun.write(place.real(join(directory, "kept.txt")), "kept\n")
+            await git(place.real(directory), "init", "-q", "-b", "main")
+          },
+        })
+        const file = join(place.folderOf(session.sessionId), "notes.txt")
+        const first = stub.script({ tool: { name: "write", input: { path: file, content: "one\n" } } })
+        yield* session.send(first)
+        yield* Effect.promise(() => first.called(2))
+        const second = stub.script({ tool: { name: "write", input: { path: file, content: "two\n" } } })
+        const sent = yield* session.send(second)
+        yield* Effect.promise(() => second.called(2))
+        yield* opened.host.client.session.wait({ sessionID: SessionID.make(session.sessionId) }).pipe(Effect.orDie)
+        const staged = yield* opened.host.sessions.revert.stage({
+          sessionID: SessionID.make(session.sessionId),
+          messageID: SessionMessage.ID.make(sent.messageId),
+          files: true,
+        })
+        expect([staged.files?.map((diff) => diff.file), yield* text(place.real(file))]).toEqual([
+          ["notes.txt"],
+          "one\n",
+        ])
+      }),
+  )
 }
+
+// oxlint-disable-next-line ren/no-comments -- A new hand machine starts with no snapshots, but the chat keeps the trees of the old one.
+hand.live("a revert on a remote hand that lost its snapshots fails and keeps the file", () =>
+  Effect.gen(function* () {
+    const opened = yield* open(Effect.void, { isRemoteHand: true })
+    const session = yield* begin(opened, {
+      folderOf: handFolder,
+      prepare: async (directory) => {
+        await Bun.write(onHand(join(directory, "kept.txt")), "kept\n")
+        await git(onHand(directory), "init", "-q", "-b", "main")
+      },
+    })
+    const file = join(handFolder(session.sessionId), "notes.txt")
+    const written = stub.script({ tool: { name: "write", input: { path: file, content: "one\n" } } })
+    const sent = yield* session.send(written)
+    yield* Effect.promise(() => written.called(2))
+    yield* opened.host.client.session.wait({ sessionID: SessionID.make(session.sessionId) }).pipe(Effect.orDie)
+    yield* Effect.promise(() => rm(join(String(process.env.XDG_DATA_HOME), "ren", "snapshot"), { recursive: true }))
+    const staged = yield* opened.host.sessions.revert
+      .stage({
+        sessionID: SessionID.make(session.sessionId),
+        messageID: SessionMessage.ID.make(sent.messageId),
+        files: true,
+      })
+      .pipe(Effect.exit)
+    expect([Exit.isFailure(staged), yield* text(onHand(file))]).toEqual([true, "one\n"])
+  }),
+)
 
 it.live(
   "a client cannot run a command in the cell: the shell refuses a location without a sandbox, and nothing runs",
@@ -707,28 +767,6 @@ it.live("V1 a note written to the session while a tool call runs reaches the mod
     // oxlint-disable-next-line ren/no-comments -- The note is the newest user message, so the stub cannot match this call to the script by its marker.
     const next = yield* Effect.promise(() => stub.waitFor((call) => JSON.stringify(call.body.messages).includes(note)))
     expect(lastToolResult(next)).toBe(JSON.stringify("done\n"))
-  }),
-)
-
-// oxlint-disable-next-line ren/no-comments -- OpenCode's snapshots track the cell's folder, not the sandbox, so a revert sees no file changes (D51 defers it).
-it.live("V3 a revert with files to a turn that changed a file on the sandbox lists no files and leaves the file", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* begin(opened)
-    const file = join(workspace, `${crypto.randomUUID()}.txt`)
-    const first = stub.script({ tool: { name: "write", input: { path: file, content: "one\n" } } })
-    yield* session.send(first)
-    yield* Effect.promise(() => first.called(2))
-    const second = stub.script({ tool: { name: "write", input: { path: file, content: "two\n" } } })
-    const sent = yield* session.send(second)
-    yield* Effect.promise(() => second.called(2))
-    yield* opened.host.client.session.wait({ sessionID: SessionID.make(session.sessionId) }).pipe(Effect.orDie)
-    const staged = yield* opened.host.sessions.revert.stage({
-      sessionID: SessionID.make(session.sessionId),
-      messageID: SessionMessage.ID.make(sent.messageId),
-      files: true,
-    })
-    expect([staged.files, yield* text(file)]).toEqual([[], "two\n"])
   }),
 )
 

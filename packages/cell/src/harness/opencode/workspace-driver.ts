@@ -4,6 +4,7 @@ import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { FileSystem } from "@opencode/core/filesystem"
 import { RipgrepBinary } from "@opencode/core/ripgrep/binary"
 import { Shell } from "@opencode/core/shell"
+import { Snapshot } from "@opencode/core/snapshot"
 import { ToolOutput } from "@opencode/core/tool-output"
 import { Vcs } from "@opencode/core/vcs"
 import { WorkspaceDriver } from "@opencode/core/workspace/driver"
@@ -19,6 +20,7 @@ import { Session } from "@ren/schema/session"
 import { Effect, Layer } from "effect"
 import { RenFileSystem } from "./filesystem.js"
 import { RenShell } from "./shell.js"
+import { RenSnapshot } from "./snapshot.js"
 import { RenToolOutput } from "./tool-output.js"
 import { RenVcs } from "./vcs.js"
 
@@ -84,7 +86,7 @@ export const session = (connections: EnvironmentConnections.Interface, sessionId
   return { spawner: environment.spawner, spawnerWith: environment.spawnerWith, overrides: files(environment.files) }
 }
 
-// oxlint-disable-next-line ren/no-comments -- A brain with a remote hand also moves OpenCode's saved tool output, workspace panel files and git to the hand, because they use the brain's disk (EN13). A co-located brain keeps OpenCode's own: its disk is the hand's.
+// oxlint-disable-next-line ren/no-comments -- A brain with a remote hand also moves OpenCode's saved tool output, workspace panel files, git and snapshots to the hand, because they use the brain's disk (EN13). A co-located brain keeps OpenCode's own: its disk is the hand's.
 export const replacements = (
   connections: EnvironmentConnections.Interface,
   options: { readonly isRemoteHand?: boolean } = {},
@@ -96,6 +98,7 @@ export const replacements = (
           ToolOutput.node.replace(RenToolOutput.node((workspaceId) => environmentOf(workspaceId).overrides)),
           FileSystem.node.replace(RenFileSystem.node((workspaceId) => environmentOf(workspaceId).overrides)),
           Vcs.node.replace(RenVcs.node((workspaceId) => environmentOf(workspaceId).spawner)),
+          Snapshot.node.replace(RenSnapshot.node((workspaceId) => environmentOf(workspaceId).spawner)),
         ]
       : []),
     WorkspaceDriver.node.replace(
