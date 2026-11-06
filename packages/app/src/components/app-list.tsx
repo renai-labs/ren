@@ -125,6 +125,7 @@ export function AppRow(props: {
 
 export function SeeAllRow(props: {
   apps: ReadonlyArray<{ id: string; name: string; icon?: string | null }>
+  more?: number | undefined
   onOpen: () => void
 }) {
   return (
@@ -155,7 +156,7 @@ export function SeeAllRow(props: {
             See all
           </Button>
         </ItemTitle>
-        <ItemDescription>{plural(props.apps.length, "more app")}</ItemDescription>
+        <ItemDescription>{plural(props.more ?? props.apps.length, "more app")}</ItemDescription>
       </ItemContent>
     </Item>
   )

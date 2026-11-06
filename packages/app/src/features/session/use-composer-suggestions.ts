@@ -3,7 +3,7 @@ import { ClientCommand, Composer, Mentions } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import { AsyncResult } from "effect/reactivity"
-import { fromApp, fromRegistry, isSpaceApp, mentionColor, type CatalogApp } from "../../lib/apps.js"
+import { fromApp, fromRegistry, isSpaceApp, mentionColor } from "../../lib/apps.js"
 import { pageSize, pickerPageSize } from "../../lib/pagination.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import type { MentionMark } from "@ren/ui/mention-overlay"
@@ -27,7 +27,11 @@ export interface Suggest {
   readonly active: string | undefined
   readonly onCursor: (text: string, cursor: number) => void
   readonly onKey: (press: Composer.SuggestionPress) => boolean
-  readonly onChoose: (value: string, text: string, cursor: number) => { text: string; cursor: number } | undefined
+  readonly onChoose: (
+    value: string,
+    text: string,
+    cursor: number,
+  ) => { text: string; cursor: number; mention?: Composer.MentionedApp | undefined } | undefined
   readonly onClose: () => void
   readonly marks: (text: string) => ReadonlyArray<MentionMark>
   readonly unmention: (
@@ -42,6 +46,7 @@ const listed = <A>(result: AsyncResult.AsyncResult<ReadonlyArray<A>, unknown>) =
 export function useComposerSuggestions(input: {
   root: Session.ID
   spaceId: string | undefined
+  mentions: ReadonlyArray<Composer.MentionedApp>
   commands: boolean
   client: Readonly<Record<ClientCommand.ID, boolean>>
   onClient: (id: ClientCommand.ID) => void
@@ -50,14 +55,15 @@ export function useComposerSuggestions(input: {
   const brain = input.commands ? offered : []
   const core = useSuggestions({
     spaceId: input.spaceId,
+    mentions: input.mentions,
     commands: (query) => ClientCommand.suggestions(ClientCommand.offered(input.client), brain, query),
     onClient: input.onClient,
   })
   return { ...core, slash: (text: string) => Composer.slash(text, brain) }
 }
 
-export const useMentionSuggestions = (spaceId: string | undefined) =>
-  useSuggestions({ spaceId, commands: () => [], onClient: () => undefined })
+export const useMentionSuggestions = (spaceId: string | undefined, mentions: ReadonlyArray<Composer.MentionedApp>) =>
+  useSuggestions({ spaceId, mentions, commands: () => [], onClient: () => undefined })
 
 function useRepositoryMentions(spaceId: string | undefined): ReadonlyArray<Mentions.Item> {
   const { api } = RouterContext.useRouterContext()
@@ -74,7 +80,7 @@ function useRepositoryMentions(spaceId: string | undefined): ReadonlyArray<Menti
   }))
 }
 
-function useAppMentions(query: string | undefined) {
+function useAppMentions(query: string | undefined, mentions: ReadonlyArray<Composer.MentionedApp>) {
   const { api } = RouterContext.useRouterContext()
   const spaces = useSpaces().spaces
   const own = useQuery(api.app.list.queryOptions({ page: 1, pageSize: pickerPageSize }))
@@ -83,29 +89,29 @@ function useAppMentions(query: string | undefined) {
     enabled: query !== undefined,
     placeholderData: keepPreviousData,
   })
-  const [chosen, setChosen] = useState<ReadonlyArray<CatalogApp>>([])
-  const byId = new Map(
+  const byId = new Map<string, Composer.MentionedApp>(
     [
-      ...(own.data?.items ?? []).map(fromApp),
-      ...chosen,
+      ...(own.data?.items ?? []).map(fromApp).filter((app) => !isSpaceApp(app, spaces)),
+      ...mentions,
       ...(query === undefined ? [] : (found.data?.items ?? []).map(fromRegistry)),
     ].map((app) => [app.id, app]),
   )
   return {
     byId,
-    items: [...byId.values()]
-      .filter((app) => !isSpaceApp(app, spaces))
-      .map((app): Mentions.Item => ({
-        kind: "app",
-        id: app.id,
-        label: app.name,
-        handle: app.slug,
-        description: app.description,
-      })),
+    items: [...byId.values()].map(Mentions.fromApp),
     searching: query !== undefined && found.isFetching,
-    choose: (appId: string) => {
+    mentionOf: (appId: string): Composer.MentionedApp | undefined => {
       const app = byId.get(appId)
-      if (app) setChosen((previous) => [...previous.filter((each) => each.id !== app.id), app])
+      return (
+        app && {
+          id: app.id,
+          slug: app.slug,
+          name: app.name,
+          description: app.description,
+          icon: app.icon,
+          brandColor: app.brandColor,
+        }
+      )
     },
   }
 }
@@ -117,13 +123,14 @@ const suggestionLabel = (trigger: Composer.Trigger | undefined, options: { repos
 
 function useSuggestions(input: {
   spaceId: string | undefined
+  mentions: ReadonlyArray<Composer.MentionedApp>
   commands: (query: string) => ReadonlyArray<ClientCommand.Suggestion>
   onClient: (id: ClientCommand.ID) => void
 }) {
   const [trigger, setTrigger] = useState<Composer.Trigger>()
   const [active, setActive] = useState<string>()
   const query = trigger?.kind === "mention" ? trigger.query.toLowerCase() : undefined
-  const apps = useAppMentions(query)
+  const apps = useAppMentions(query, input.mentions)
   const appById = apps.byId
   const repositories = useRepositoryMentions(input.spaceId)
   const connectors = [...apps.items, ...repositories]
@@ -184,8 +191,10 @@ function useSuggestions(input: {
       }
       const item = mentionable.find((entry) => Mentions.key(entry) === value)
       if (!item || trigger?.kind !== "mention") return
-      if (item.kind === "app") apps.choose(item.id)
-      return Mentions.insert(text, item, trigger.start, cursor)
+      return {
+        ...Mentions.insert(text, item, trigger.start, cursor),
+        mention: item.kind === "app" ? apps.mentionOf(item.id) : undefined,
+      }
     },
     onClose: close,
     marks: (text) =>

@@ -44,7 +44,7 @@ export function HomePage() {
   const prepare = useMutation(api.chat.prepare.mutationOptions())
   const [prepared, setPrepared] = useState<ReadonlySet<string>>(() => new Set())
   const create = useMutation(api.session.create.mutationOptions())
-  const mentions = useMentionSuggestions(spaceId)
+  const mentions = useMentionSuggestions(spaceId, Composer.mentions(draft))
   const suggest = mentions.suggest
   const starting = create.isPending
   const modelsLoading = models.loading
