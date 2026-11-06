@@ -28,7 +28,7 @@ import { DurableRunner } from "./durable-runner.js"
 import { Deployment } from "./deployment.js"
 import { Environments } from "./environments.js"
 import { SandboxEgress } from "./sandbox-egress.js"
-import { SandboxProvider } from "./sandbox-provider.js"
+import { MachineProvider } from "./machine-provider.js"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("BrainLifecycle.Unavailable", {
   message: Schema.String,
@@ -63,7 +63,7 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainLifecycle") {}
 
 // oxlint-disable-next-line ren/no-comments -- The brain's own machine as an environment. It is behind the egress when its brain is (R19).
-export interface Hand extends SandboxProvider.Hand {
+export interface Hand extends MachineProvider.Hand {
   readonly egress: boolean
   readonly canMount: boolean
 }
@@ -94,7 +94,7 @@ export const timing = {
 
 type Row = typeof Database.Schema.brain.$inferSelect
 
-const reasonOf = (sample: SandboxProvider.Sample | undefined) => {
+const reasonOf = (sample: MachineProvider.Sample | undefined) => {
   if (sample && sample.memory >= timing.fullShare) return "memory" as const
   if (sample && sample.disk >= timing.fullShare) return "disk" as const
   return "unknown" as const
@@ -112,7 +112,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const provider = yield* SandboxProvider.Service
+    const provider = yield* MachineProvider.Brain
     const client = yield* BrainClient.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const environments = yield* Environments.Service
@@ -192,7 +192,7 @@ export const layer = Layer.effect(
     })
 
     // oxlint-disable-next-line ren/no-comments -- Capacity is not a failure (E88): the brain shows "waiting for capacity", and the step that hit it runs again after Retry-After.
-    const waitForCapacity = Effect.fnUntraced(function* (row: Row, error: SandboxProvider.Capacity) {
+    const waitForCapacity = Effect.fnUntraced(function* (row: Row, error: MachineProvider.Capacity) {
       yield* Effect.logWarning(`Waiting for capacity: ${error.message}`)
       yield* update(row.id, { phase: "capacity" })
       yield* Effect.sleep(error.retryAfter)
@@ -205,26 +205,29 @@ export const layer = Layer.effect(
     const create = Effect.fnUntraced(function* (row: Row) {
       const proxy = behindEgress
         ? yield* egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id })
-        : Option.none<SandboxProvider.Proxy>()
+        : Option.none<MachineProvider.Proxy>()
       const created = yield* provider
         .create({
-          brainId: row.id,
-          generation: row.generation,
-          organizationId: row.organization_id,
-          spaceId: row.space_id,
+          labels: {
+            id: row.id,
+            generation: row.generation,
+            organizationId: row.organization_id,
+            spaceId: row.space_id,
+          },
+          config: {},
           // oxlint-disable-next-line ren/no-comments -- Behind an egress, the brain calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49).
-          env: { ...(yield* env(row)), ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },
+          variables: { ...(yield* env(row)), ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },
           proxy,
         })
         .pipe(
           Effect.map(Option.some),
-          Effect.catchTag("SandboxProvider.Capacity", (error) =>
-            waitForCapacity(row, error).pipe(Effect.as(Option.none<SandboxProvider.Created>())),
+          Effect.catchTag("MachineProvider.Capacity", (error) =>
+            waitForCapacity(row, error).pipe(Effect.as(Option.none<MachineProvider.Created>())),
           ),
         )
       if (Option.isNone(created)) return false
       yield* update(row.id, {
-        provider: provider.kind,
+        provider: provider.info.id,
         binding: created.value.binding,
         template: provider.template,
         egress: Option.isSome(proxy),
@@ -291,11 +294,11 @@ export const layer = Layer.effect(
       }
       const proxy = behindEgress
         ? yield* egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id })
-        : Option.none<SandboxProvider.Proxy>()
+        : Option.none<MachineProvider.Proxy>()
       const connected = yield* provider.connect(row.binding, proxy).pipe(
         Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
-        Effect.catchTag("SandboxProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
-        Effect.catchTag("SandboxProvider.Capacity", (error) =>
+        Effect.catchTag("MachineProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
+        Effect.catchTag("MachineProvider.Capacity", (error) =>
           waitForCapacity(row, error).pipe(Effect.as({ _tag: "Waited" } as const)),
         ),
       )
@@ -375,7 +378,10 @@ export const layer = Layer.effect(
       return false
     })
 
-    const lose = Effect.fn("BrainLifecycle.lose")(function* (lost: SandboxProvider.Lost) {
+    const lose = Effect.fn("BrainLifecycle.lose")(function* (lost: {
+      readonly brainId: Brain.ID
+      readonly generation: number
+    }) {
       yield* database
         .transaction((transaction) =>
           Effect.gen(function* () {
@@ -398,7 +404,13 @@ export const layer = Layer.effect(
         .pipe(Effect.orDie)
     })
 
-    yield* provider.lost.pipe(Stream.runForEach(lose), Effect.withErrorReporting, Effect.forkScoped)
+    yield* provider.lost.pipe(
+      Stream.runForEach((lost) =>
+        Schema.is(Brain.ID)(lost.id) ? lose({ brainId: lost.id, generation: lost.generation }) : Effect.void,
+      ),
+      Effect.withErrorReporting,
+      Effect.forkScoped,
+    )
 
     // oxlint-disable-next-line ren/no-comments -- At boot, Ren reaches each running brain once, so its server token carries Ren's current address (E119). Asleep brains learn it at their wake.
     yield* Effect.gen(function* () {
@@ -521,12 +533,14 @@ export const layer = Layer.effect(
         (row) => rest(row).pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of brain ${row.id} failed`, error))),
         { discard: true },
       )
-      const listed = yield* provider.list.pipe(
+      const listed = (yield* provider.list.pipe(
         Effect.catch((error) =>
           Effect.logWarning("Cleanup could not list sandboxes", error).pipe(
-            Effect.as<ReadonlyArray<SandboxProvider.Listed>>([]),
+            Effect.as<ReadonlyArray<MachineProvider.Listed>>([]),
           ),
         ),
+      )).flatMap((each) =>
+        Schema.is(Brain.ID)(each.id) ? [{ binding: each.binding, brainId: each.id, generation: each.generation }] : [],
       )
       const known = new Map(
         (yield* database.db
@@ -605,7 +619,7 @@ export const layer = Layer.effect(
             startKinds[first.phase] ?? (first.binding ? "resume" : "new"),
           )
       }).pipe(
-        Effect.catchTag("SandboxProvider.Failed", (error) =>
+        Effect.catchTag("MachineProvider.Failed", (error) =>
           read(brainId).pipe(
             Effect.flatMap((row) =>
               row.phase === "creating" || row.phase === "booting" || row.phase === "waking"
@@ -641,7 +655,7 @@ export const layer = Layer.effect(
     const touch = Effect.fnUntraced(function* (row: Row) {
       yield* update(row.id, { last_active_at: yield* now })
       yield* keepAlive(row, timing.idle).pipe(
-        Effect.catchTag("SandboxProvider.Gone", () =>
+        Effect.catchTag("MachineProvider.Gone", () =>
           update(row.id, { phase: "replacing" }).pipe(Effect.andThen(ensure(row.id))),
         ),
         Effect.catch((error) => Effect.logWarning("keepAlive failed", error)),

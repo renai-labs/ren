@@ -177,7 +177,7 @@ export const start = async (options: {
             organization_id: owner.organizationId,
             name: sandbox.environment.label,
             provider: ChaosEnvironments.providerId,
-            config: {},
+            config: { environmentTemplateId: sandbox.environmentTemplateId },
             sessions_per_environment: EnvironmentTemplate.maximumSessionsPerEnvironment,
           })),
         )

@@ -19,6 +19,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Brains } from "../src/brains.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
+import { MachineProvider } from "../src/machine-provider.js"
 import { Environments } from "../src/environments.js"
 import { Models } from "../src/models.js"
 import { TestProvider } from "./lib/environment-provider.js"
@@ -97,10 +98,8 @@ const stackOf = async (config: CoreConfig) => {
         const on = placed.get(environmentId) ?? config.target
         placed.set(environmentId, on)
         return disposed.has(on)
-          ? Effect.fail(
-              new EnvironmentProvider.Gone({ message: `the machine of environment ${environmentId} is gone` }),
-            )
-          : Effect.promise(() => on.serve(environmentId)).pipe(Effect.map((url) => ({ url: new URL(url) })))
+          ? Effect.fail(new MachineProvider.Gone({ message: `the machine of environment ${environmentId} is gone` }))
+          : Effect.promise(() => on.serve(environmentId)).pipe(Effect.map((url) => ({ url })))
       },
     }),
   )

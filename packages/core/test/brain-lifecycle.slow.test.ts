@@ -12,7 +12,7 @@ import { Brains } from "../src/brains.js"
 import { BrainClient } from "../src/brain-client.js"
 import { BrainHost } from "../src/brain-host.js"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
-import { SandboxProvider } from "../src/sandbox-provider.js"
+import { MachineProvider } from "../src/machine-provider.js"
 import { BrainRuns } from "./lib/brain-runs.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
 import { Host } from "./lib/host.js"
@@ -22,7 +22,7 @@ setDefaultTimeout(120_000)
 const runs = await BrainRuns.make()
 
 const pause = (binding: Schema.Json) =>
-  SandboxProvider.Service.use((provider) =>
+  MachineProvider.Brain.use((provider) =>
     provider
       .keepAlive(binding, Duration.millis(1))
       .pipe(
@@ -53,8 +53,8 @@ describe("brain runs", () => {
     await second.runPromise(Effect.void)
     const ready = await runs.reaches(brainId, "ready")
     expect(ready.binding).toEqual(booting.binding)
-    const sandboxes = await second.runPromise(SandboxProvider.Service.use((provider) => provider.list))
-    expect(sandboxes.filter((each) => each.brainId === brainId)).toHaveLength(1)
+    const sandboxes = await second.runPromise(MachineProvider.Brain.use((provider) => provider.list))
+    expect(sandboxes.filter((each) => each.id === brainId)).toHaveLength(1)
     await second.dispose()
   })
 
@@ -399,7 +399,7 @@ describe("brain runs", () => {
     )
     expect((await runs.row(awake.brainId)).keep_alive_until).toEqual(before.keep_alive_until)
     expect(
-      await runtime.runPromise(SandboxProvider.Service.use((provider) => Effect.orDie(provider.status(pausedBinding)))),
+      await runtime.runPromise(MachineProvider.Brain.use((provider) => Effect.orDie(provider.status(pausedBinding)))),
     ).toBe("paused")
     await runtime.dispose()
   })

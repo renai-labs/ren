@@ -1,8 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import { OpenCode } from "@opencode/client"
 import { FakeRen, TestSettings, TestToken } from "@ren/cell/testing"
-import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
-import { SandboxProvider } from "@ren/core/sandbox-provider"
+import { E2BSandbox } from "@ren/core/machine-provider/e2b"
+import { MachineProvider } from "@ren/core/machine-provider"
 const hostTokenHeader = "ren-host-token"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
@@ -48,8 +48,8 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
   test("a push does not resume a paused brain; the wake applies the settings and reads the models of the pause", async () => {
     const provider = ManagedRuntime.make(E2BSandbox.layer.pipe(Layer.provide(FetchHttpClient.layer)))
     cleanups.push(() => provider.dispose())
-    const sandbox = <A, E>(use: (service: SandboxProvider.Interface) => Effect.Effect<A, E>) =>
-      provider.runPromise(SandboxProvider.Service.use(use))
+    const sandbox = <A, E>(use: (service: MachineProvider.Provider) => Effect.Effect<A, E>) =>
+      provider.runPromise(MachineProvider.Brain.use(use))
     const key = await LiteLLM.generate({ duration: "2h", models: [small] })
     cleanups.push(() => LiteLLM.remove(key))
     const ren = FakeRen.start({ port: renPort })
@@ -59,11 +59,9 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
     ren.settings(TestSettings.layers({ ren: { model: { endpointId: "anthropic", modelId: "claude-haiku-5-5" } } }))
     const created = await sandbox((service) =>
       service.create({
-        brainId: brain,
-        generation: 1,
-        organizationId: Auth.OrganizationID.create(),
-        spaceId: Space.ID.create(),
-        env: {
+        labels: { id: brain, generation: 1, organizationId: Auth.OrganizationID.create(), spaceId: Space.ID.create() },
+        config: {},
+        variables: {
           REN_URL: renTunnel,
           REN_BRAIN_ID: brain,
           REN_BRAIN_GENERATION: "1",

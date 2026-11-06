@@ -6,7 +6,7 @@ import { ConfigProvider, Effect, Fiber, Latch, Layer, Option } from "effect"
 import { HttpClient, HttpClientResponse, UrlParams } from "effect/http"
 import { DurableRunner } from "../src/durable-runner.js"
 import { SandboxUsage } from "../src/sandbox-usage.js"
-import { E2BSandbox } from "../src/sandbox-provider/e2b.js"
+import { E2BSandbox } from "../src/machine-provider/e2b.js"
 import { Usage } from "../src/usage.js"
 import { testEffect } from "./lib/effect.js"
 
