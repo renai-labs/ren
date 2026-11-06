@@ -32,6 +32,7 @@ import { Deployment } from "./deployment.js"
 import { EnvironmentNetwork } from "./environment-network.js"
 import { EnvironmentProvider } from "./environment-provider.js"
 import { MachineLifecycle } from "./machine-lifecycle.js"
+import { SandboxEgress } from "./sandbox-egress.js"
 import { MachineProvider } from "./machine-provider.js"
 import { Signer } from "./signer.js"
 
@@ -117,6 +118,7 @@ interface Target {
   readonly environmentId: Environment.ID
   readonly url: string
   readonly generation: number
+  readonly egress: boolean
 }
 
 const isSessionOf = (subject: Subject) =>
@@ -136,6 +138,9 @@ export const layer = Layer.effect(
     })
     const database = yield* Database.Service
     const registry = yield* EnvironmentProvider.Registry
+    // oxlint-disable-next-line ren/no-comments -- A remote hand goes through the egress as a brain does, with its own proxy login, so its processes get placeholders that work (C2). A Ren without the service runs no egress.
+    const sandboxEgress = Option.getOrElse(yield* Effect.serviceOption(SandboxEgress.Service), () => SandboxEgress.none)
+    const isBehindEgress = (provider: MachineProvider.Provider) => sandboxEgress.enabled && provider.canEgress
     const sandboxVariables = yield* Deployment.sandboxVariables
     // oxlint-disable-next-line ren/no-comments -- EN42: a chat's folder on a remote hand is fixed when the chat starts, from the provider's workspace.
     const directoryOf = (provider: MachineProvider.Provider, sessionId: Session.ID) =>
@@ -316,7 +321,7 @@ export const layer = Layer.effect(
       annotation: "environment",
       kind: "hand",
       providerOf,
-      isBehindEgress: () => false,
+      isBehindEgress,
       bootWithin: MachineLifecycle.timing.boot,
       wakeWithin: MachineLifecycle.timing.wake,
       read,
@@ -355,8 +360,12 @@ export const layer = Layer.effect(
           ),
           { onlyIfMissing: true },
         ).pipe(Effect.asVoid),
-      proxyFor: () => Effect.succeedNone,
-      retire: () => Effect.void,
+      proxyFor: (row) =>
+        sandboxEgress.proxyFor({
+          workload: { kind: "hand", id: row.id, generation: row.generation },
+          organizationId: row.organization_id,
+        }),
+      retire: (environmentId) => sandboxEgress.retire({ kind: "hand", id: environmentId }),
       variables: Effect.fnUntraced(function* (row) {
         const keys = yield* signingKeys
         const bundles = Option.isSome(code)
@@ -412,6 +421,7 @@ export const layer = Layer.effect(
           environmentId: row.id,
           url,
           generation: row.generation,
+          egress: row.egress,
         })),
       boot: () => Effect.succeedNone,
       wake: () => Effect.succeed(true),
@@ -497,7 +507,7 @@ export const layer = Layer.effect(
         ),
         expiresAt: DateTime.makeUnsafe(exp * 1000),
         generation: target.generation,
-        egress: provider.value.canEgress,
+        egress: target.egress,
         // oxlint-disable-next-line ren/no-comments -- R49, R59: the folder beside the session folders, which every session on the environment shares.
         sharedDirectory: `${Option.getOrElse(provider.value.workspace, () => config.directory)}/.ren`,
       } satisfies Environment.Access
@@ -570,7 +580,7 @@ export const layer = Layer.effect(
                   Option.flatMap(Option.fromNullishOr(providers.get(sessionId)), registry.get),
                   (provider) => ({
                     canMount: provider.canMount,
-                    egress: provider.canEgress,
+                    egress: isBehindEgress(provider),
                   }),
                 )
               : Option.map(hand, (found) => ({ canMount: found.canMount, egress: found.egress }))
