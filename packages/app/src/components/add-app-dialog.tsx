@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { IconPlus, IconSearch } from "@tabler/icons-react"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
@@ -7,15 +7,13 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-grou
 import { useAddition, type Added } from "./add-to-space.js"
 import { AppRow } from "./app-list.js"
 import { Loading } from "@ren/ui/loading"
-import { useCatalog } from "../lib/use-catalog.js"
 import { AppRegistryPages } from "../lib/app-registry.js"
-import { fromRegistry, isSpaceApp } from "../lib/apps.js"
+import { fromApp, fromRegistry, isSpaceApp, type CatalogApp } from "../lib/apps.js"
+import { pickerPageSize } from "../lib/pagination.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { useDebouncedValue } from "../lib/use-debounced-value.js"
 import { RouterContext } from "../lib/router-context.js"
 import { cn } from "cn"
-
-type CatalogApp = ReturnType<typeof useCatalog>["apps"][number]
 
 function AddAppRow(props: { app: CatalogApp; space: { id: string; name: string }; onAdded: Added }) {
   const addition = useAddition(props.app, props.onAdded)
@@ -88,18 +86,17 @@ function AppResults(props: {
   added: ReadonlySet<string>
   onAdded: Added
 }) {
-  const { client } = RouterContext.useRouterContext()
+  const { api, client } = RouterContext.useRouterContext()
   const needle = useDebouncedValue(props.query.trim(), 200)
-  const catalog = useCatalog()
   const spaces = useSpaces().spaces
   const pages = useInfiniteQuery(AppRegistryPages.options(client, needle))
+  const apps = useQuery(api.app.list.queryOptions({ page: 1, pageSize: pickerPageSize }))
   const registry = (pages.data?.pages ?? []).flatMap((page) => page.items).map(fromRegistry)
-  const listed = new Set(registry.map((app) => app.id))
-  const own = catalog.apps.filter(
-    (app) => app.source !== "registry" && !listed.has(app.id) && !isSpaceApp(app, spaces) && matches(app, props.query),
-  )
+  const own = (apps.data?.items ?? [])
+    .map(fromApp)
+    .filter((app) => !isSpaceApp(app, spaces) && matches(app, props.query))
   const found = [...own, ...registry].filter((app) => !props.added.has(app.id))
-  const loading = pages.isPending || catalog.loading
+  const loading = pages.isPending || apps.isPending
   return (
     <div
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a list of Item rows; Item renders a div

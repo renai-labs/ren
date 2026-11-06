@@ -55,9 +55,14 @@ export interface Callback {
   readonly errorDescription?: string
 }
 
-export type Outcome =
+type Settled =
   | { readonly ok: true; readonly label: string; readonly sameAccountAs: Option.Option<string> }
   | { readonly ok: false; readonly reason: string }
+
+export type Outcome = Settled & {
+  readonly app: Option.Option<{ readonly name: string; readonly icon: string | null }>
+  readonly space: Option.Option<string>
+}
 
 export interface Interface {
   readonly connect: (
@@ -627,11 +632,11 @@ export const layer = Layer.effect(
           .set({ status: "expired" })
           .where(eq(sessions.id, taken.id))
           .pipe(Effect.orDie)
-        return Option.some<Outcome>({ ok: false, reason: "StateInvalid: expired" })
+        return Option.some<Settled>({ ok: false, reason: "StateInvalid: expired" })
       }
       if (Option.exists(browser, (userId) => userId !== taken.initiator_user_id))
         return Option.some(yield* fail(taken.id, "StateInvalid: other_user"))
-      return Option.none<Outcome>()
+      return Option.none<Settled>()
     })
 
     const complete = (taken: Session, sameAccountAs: Option.Option<string>) =>
@@ -641,12 +646,49 @@ export const layer = Layer.effect(
         .where(eq(sessions.id, taken.id))
         .pipe(Effect.orDie, Effect.as({ ok: true as const, label: taken.label, sameAccountAs }))
 
+    const shownOf = Effect.fnUntraced(function* (profileId: AppProfile.ID | null) {
+      if (!profileId) return { app: Option.none(), space: Option.none<string>() }
+      const app = (yield* database.db
+        .select({ name: Database.Schema.app.name, icon: Database.Schema.app.icon })
+        .from(Database.Schema.app_profile)
+        .innerJoin(Database.Schema.app, eq(Database.Schema.app.id, Database.Schema.app_profile.app_id))
+        .where(eq(Database.Schema.app_profile.id, profileId))
+        .pipe(Effect.orDie)).at(0)
+      const spaces = yield* database.db
+        .select({ name: Database.Schema.space.name })
+        .from(Database.Schema.app_profile_space)
+        .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.app_profile_space.space_id))
+        .where(eq(Database.Schema.app_profile_space.profile_id, profileId))
+        .pipe(Effect.orDie)
+      return {
+        app: Option.fromNullishOr(app),
+        space: Option.fromNullishOr(spaces.length === 1 ? spaces.at(0)?.name : null),
+      }
+    })
+
     // oxlint-disable-next-line ren/no-comments -- §7 rule 9: `state` is consumed once (ren-v1 bug 13); an expired or another person's sign-in fails. A provider session goes to ProviderConnect (profiles.md §14 rule 5).
     const callback = Effect.fn("OAuth.callback")(function* (input: Callback, browser: Option.Option<Auth.UserID>) {
       const now = yield* Clock.currentTimeMillis
       const consumed = yield* consume(input.state, now)
-      if (Result.isFailure(consumed)) return { ok: false as const, reason: consumed.failure }
+      if (Result.isFailure(consumed))
+        return {
+          ok: false as const,
+          reason: consumed.failure,
+          app: Option.none(),
+          space: Option.none(),
+        } satisfies Outcome
       const taken = consumed.success
+      const shown = yield* shownOf(taken.profile_id)
+      const settled: Settled = yield* settle(taken, input, now, browser)
+      return { ...settled, ...shown } satisfies Outcome
+    }, Observability.Trace.connectorCallback)
+
+    const settle = Effect.fnUntraced(function* (
+      taken: Session,
+      input: Callback,
+      now: number,
+      browser: Option.Option<Auth.UserID>,
+    ) {
       const refused = yield* gate(taken, now, browser)
       if (Option.isSome(refused)) return refused.value
       const valid = yield* stillValid(taken)
@@ -662,7 +704,7 @@ export const layer = Layer.effect(
       }
       if (Result.isFailure(valid)) return yield* fail(taken.id, valid.failure)
       return yield* finishOAuth(taken, input, valid.success, now)
-    }, Observability.Trace.connectorCallback)
+    })
 
     const finishOAuth = Effect.fnUntraced(function* (
       taken: Session,

@@ -322,7 +322,12 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
           made_for: ProfileItems.madeFor(found.declaration),
         })
         const outcome = yield* service.callback({ state, code: "c1" }, Option.none())
-        expect(outcome).toMatchObject({ ok: true, label: LABEL })
+        expect(outcome).toMatchObject({
+          ok: true,
+          label: LABEL,
+          app: Option.some({ name: found.app.name, icon: found.app.icon }),
+          space: Option.some("Team"),
+        })
         const saved = yield* stored(LABEL)
         expect(saved?.row).toMatchObject({
           id: session.credential_id,
@@ -342,6 +347,8 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
         expect(yield* service.callback({ state, code: "c1" }, Option.none())).toEqual({
           ok: false,
           reason: "StateInvalid: used",
+          app: Option.none(),
+          space: Option.none(),
         })
       }),
   )
@@ -360,11 +367,11 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
         const gone = yield* setup()
         const deleted = yield* connect(gone)
         yield* profiles.delete(gone.actor, gone.profile.id)
-        expect(yield* callback(deleted)).toEqual({ ok: false, reason: "This profile was deleted." })
+        expect(yield* callback(deleted)).toMatchObject({ ok: false, reason: "This profile was deleted." })
         const lost = yield* setup()
         const started = yield* connect(lost)
         yield* database.db.delete(Database.Schema.member).where(eq(Database.Schema.member.userId, lost.actor.userId))
-        expect(yield* callback(started)).toEqual({ ok: false, reason: "You can no longer use this profile." })
+        expect(yield* callback(started)).toMatchObject({ ok: false, reason: "You can no longer use this profile." })
         const dropped = yield* setup()
         const before = yield* connect(dropped)
         yield* apps.update(dropped.actor, dropped.app.id, {
@@ -375,7 +382,7 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
           dependsOn: [],
           expectedRevision: dropped.app.revision,
         })
-        expect(yield* callback(before)).toEqual({ ok: false, reason: "The app no longer declares this MCP." })
+        expect(yield* callback(before)).toMatchObject({ ok: false, reason: "The app no longer declares this MCP." })
         expect(yield* stored(LABEL)).toBeUndefined()
       }),
   )
@@ -397,12 +404,12 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
         if (!("redirectUrl" in other)) return yield* Effect.die(new Error("expected a redirect"))
         const state = (url: URL) => url.searchParams.get("state") ?? ""
         expect((yield* service.callback({ state: state(first), code: "c" }, Option.none())).ok).toBe(true)
-        expect(yield* service.callback({ state: state(new URL(other.redirectUrl)), code: "c" }, Option.none())).toEqual(
-          {
-            ok: false,
-            reason: "Ada connected this first.",
-          },
-        )
+        expect(
+          yield* service.callback({ state: state(new URL(other.redirectUrl)), code: "c" }, Option.none()),
+        ).toMatchObject({
+          ok: false,
+          reason: "Ada connected this first.",
+        })
         expect((yield* stored(LABEL))?.row.account_user_id).toBe(found.actor.userId)
       }),
   )
@@ -469,7 +476,7 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
           error: "access_denied",
           errorDescription: "The person said no",
         })
-        expect(denied).toEqual({ ok: false, reason: "The person said no" })
+        expect(denied).toMatchObject({ ok: false, reason: "The person said no" })
       }),
   )
 

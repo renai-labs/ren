@@ -17,7 +17,7 @@ it.live(
       server.activeAfterReads = 0
       const started = yield* ComposioTest.connect(yield* ComposioTest.setup())
       const accountId = [...server.accounts.keys()].at(-1) ?? ""
-      expect(yield* ComposioTest.callback(started.state)).toEqual({
+      expect(yield* ComposioTest.callback(started.state)).toMatchObject({
         ok: false,
         reason: "The provider did not finish the connection.",
       })

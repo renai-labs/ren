@@ -14,7 +14,8 @@ import { ListPagination } from "../../components/list-pagination.js"
 import { currentPage, pageCount, pageSize } from "../../lib/pagination.js"
 import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
-import { useCatalog } from "../../lib/use-catalog.js"
+import { useApp, useApps } from "../../lib/use-app.js"
+import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { errorMessage } from "../../lib/errors.js"
 import { caption, source } from "../../lib/apps.js"
 import { useSpace } from "./use-space.js"
@@ -74,7 +75,6 @@ function SpaceAppAccounts(props: {
 export function SpaceAppsTab() {
   const { api } = RouterContext.useRouterContext()
   const space = useSpace()
-  const catalog = useCatalog()
   const shapeId = useShapeId("apps")
   const reach = useQuery({
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: space.id }),
@@ -88,13 +88,15 @@ export function SpaceAppsTab() {
   const [profile, setProfile] = useState<ProfileTarget>()
   const reached = reach.data?.profiles ?? []
   const byApp = Map.groupBy(reached, (each) => each.appId)
-  const app = opened ? catalog.appOf(opened) : undefined
+  const catalog = useApps([...byApp.keys()])
+  const app = useApp(opened).app
+  const elsewhere = useAppProfiles(app ? [app.id] : [])
   const here: ReadonlyArray<AppProfileInfo> = app ? (byApp.get(app.id) ?? []) : []
   const from = { spaceId: space.id, name: space.name, members: space.memberCount, private: space.kind === "private" }
   const change = (input: { id: string; add?: string[]; remove?: string[] }, title: string) =>
     access.mutateAsync(input, { onError: (error) => toast.error(title, { description: errorMessage(error) }) })
   const rows = [...byApp].flatMap(([appId, profiles]) => {
-    const each = catalog.appOf(appId)
+    const each = catalog.of(appId)
     return each
       ? [{ app: each, profiles, usedIn: [...new Set(profiles.map((one) => source(one, space.id)))].join(", ") }]
       : []
@@ -115,8 +117,8 @@ export function SpaceAppsTab() {
           onAdded={(added) => setProfile({ appId: added.app.id, profileId: added.profileId, from })}
         />
       </div>
-      <Loading id={shapeId} loading={reach.isPending || catalog.loading} label="Loading apps">
-        {reach.isPending || catalog.loading ? (
+      <Loading id={shapeId} loading={reach.isPending || catalog.pending} label="Loading apps">
+        {reach.isPending || catalog.pending ? (
           <TableSample columns={["App", "Used in", "Status", ""]} count={3} />
         ) : (
           <AppsTable
@@ -135,8 +137,8 @@ export function SpaceAppsTab() {
           <SpaceAppAccounts
             spaceId={space.id}
             here={here}
-            elsewhere={catalog
-              .profilesOf(app.id)
+            elsewhere={elsewhere
+              .of(app.id)
               .filter((each) => each.kind === "shared" && !here.some((own) => own.id === each.id))}
             onNew={() => setProfile({ appId: app.id, from })}
             onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, from })}

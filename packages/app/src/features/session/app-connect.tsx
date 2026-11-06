@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { IconChevronDown, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
+import { Loading } from "@ren/ui/loading"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +19,8 @@ import { ProfileDialog, type ProfileTarget } from "../../components/profile-dial
 import type { AppProfileInfo as AppProfile } from "@ren/client"
 import { gaps, type CatalogApp } from "../../lib/apps.js"
 import { plural } from "../../lib/format.js"
-import { useCatalog } from "../../lib/use-catalog.js"
+import { useApps } from "../../lib/use-app.js"
+import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -59,7 +61,7 @@ function UseHere(props: { elsewhere: ReadonlyArray<AppProfile>; onUse: (profile:
 }
 
 type CardProps = {
-  app: CatalogApp
+  app: Pick<CatalogApp, "name" | "icon" | "source">
   connected: number
   elsewhere: ReadonlyArray<AppProfile>
   onConnect: () => void
@@ -159,11 +161,40 @@ function useUseHere(space: { id: string; name: string; kind: string; memberCount
 }
 
 function ConnectCards(props: { appIds: ReadonlyArray<string>; spaceId: string | undefined; always?: boolean }) {
+  const catalog = useApps(props.appIds)
+  if (catalog.pending)
+    return (
+      <Loading label="Loading app">
+        <ConnectCard
+          app={{ name: "App", icon: null, source: "custom" }}
+          connected={0}
+          elsewhere={[]}
+          onConnect={() => undefined}
+          onAdd={() => undefined}
+          onManage={() => undefined}
+          onUse={() => undefined}
+        />
+      </Loading>
+    )
+  return (
+    <ConnectList
+      apps={props.appIds.flatMap((appId) => catalog.of(appId) ?? [])}
+      spaceId={props.spaceId}
+      always={props.always}
+    />
+  )
+}
+
+function ConnectList(props: {
+  apps: ReadonlyArray<CatalogApp>
+  spaceId: string | undefined
+  always?: boolean | undefined
+}) {
   const { api } = RouterContext.useRouterContext()
-  const catalog = useCatalog()
+  const apps = props.apps
+  const others = useAppProfiles(apps.map((app) => app.id))
   const spaces = useSpaces().spaces
   const space = spaces.find((each) => each.id === props.spaceId)
-  const apps = catalog.apps.filter((app) => props.appIds.includes(app.id))
   const reach = useQuery({
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId ?? "" }),
     enabled: props.spaceId !== undefined && apps.length > 0,
@@ -188,8 +219,8 @@ function ConnectCards(props: { appIds: ReadonlyArray<string>; spaceId: string | 
     profiles.find((profile) => profile.appId === appId && gaps(profile).length > 0)?.id
   const here = new Set(profiles.map((profile) => profile.id))
   const elsewhere = (appId: string) =>
-    catalog
-      .profilesOf(appId)
+    others
+      .of(appId)
       .filter((profile) => !here.has(profile.id) && gaps(profile).length === 0)
       .toSorted((a, b) => Number(b.canAccess) - Number(a.canAccess))
   return (

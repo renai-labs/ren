@@ -322,8 +322,13 @@ export const AppList = (input: Command.Command.Config.Infer<typeof Commands.AppL
   Operation.run(
     ClientApi.groups["app"].endpoints["app.list"],
     {
-      query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-      labels: { spaceId: "--space", page: "--page", pageSize: "--page-size" },
+      query: {
+        spaceId: input["spaceId"],
+        connected: input["connected"],
+        page: input["page"],
+        pageSize: input["pageSize"],
+      },
+      labels: { spaceId: "--space", connected: "--connected", page: "--page", pageSize: "--page-size" },
       lookups: {
         spaceId: (client, value) =>
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),

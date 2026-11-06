@@ -883,7 +883,12 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/apps`,
-            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            query: {
+              spaceId: input["spaceId"],
+              connected: input["connected"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
             successStatus: 200,
             declaredStatuses: [401, 403],
             empty: false,

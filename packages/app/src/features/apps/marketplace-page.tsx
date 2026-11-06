@@ -12,11 +12,20 @@ import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { Page, useShapeId } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { useCatalog } from "../../lib/use-catalog.js"
+import { useApp } from "../../lib/use-app.js"
+import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useSpaces } from "../../lib/use-spaces.js"
-import { pageSize, currentPage } from "../../lib/pagination.js"
-import { audience, connectLabel, fromRegistry, isSpaceApp, needsAttention, type CatalogApp } from "../../lib/apps.js"
+import { pageSize, currentPage, pickerPageSize } from "../../lib/pagination.js"
+import {
+  audience,
+  connectLabel,
+  fromApp,
+  fromRegistry,
+  isSpaceApp,
+  needsAttention,
+  type CatalogApp,
+} from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
@@ -59,7 +68,6 @@ function AppListing(props: {
 
 function MarketplaceSheet(props: {
   app: CatalogApp | undefined
-  profiles: ReturnType<ReturnType<typeof useCatalog>["profilesOf"]>
   onAdded: Added
   onProfile: (target: ProfileTarget) => void
   onClose: () => void
@@ -71,16 +79,13 @@ function MarketplaceSheet(props: {
       action={app ? <AddToSpace app={app} primary onAdded={props.onAdded} /> : null}
       onClose={props.onClose}
     >
-      {app ? <AppAccounts appId={app.id} profiles={props.profiles} onProfile={props.onProfile} /> : null}
+      {app ? <AppAccounts appId={app.id} onProfile={props.onProfile} /> : null}
     </AppSheet>
   )
 }
 
-function AppAccounts(props: {
-  appId: string
-  profiles: ReturnType<ReturnType<typeof useCatalog>["profilesOf"]>
-  onProfile: (target: ProfileTarget) => void
-}) {
+function AppAccounts(props: { appId: string; onProfile: (target: ProfileTarget) => void }) {
+  const profiles = useAppProfiles([props.appId]).of(props.appId)
   return (
     <AccountList
       title="Accounts"
@@ -95,7 +100,7 @@ function AppAccounts(props: {
           New account
         </Button>
       }
-      profiles={props.profiles}
+      profiles={profiles}
       caption={audience}
       onOpen={(each) => props.onProfile({ appId: each.appId, profileId: each.id, edit: true })}
       action={(each) => {
@@ -114,7 +119,6 @@ export function MarketplacePage() {
   const { api } = RouterContext.useRouterContext()
   const search = route.useSearch()
   const page = currentPage(search)
-  const catalog = useCatalog()
   const spaces = useSpaces()
   const shapeId = useShapeId("apps")
   const [query, setQuery] = useState("")
@@ -124,17 +128,17 @@ export function MarketplacePage() {
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
-  const loading = registry.isPending || catalog.loading
+  const connected = useQuery(api.app.list.queryOptions({ connected: true, page: 1, pageSize: pickerPageSize }))
   const browse = (registry.data?.items ?? []).map(fromRegistry)
-  const usedApps = catalog.apps.filter(
-    (app) => catalog.profilesOf(app.id).length > 0 && !isSpaceApp(app, spaces.spaces),
-  )
+  const usedApps = (connected.data?.items ?? []).map(fromApp).filter((app) => !isSpaceApp(app, spaces.spaces))
   const used = new Set(usedApps.map((app) => app.id))
+  const profiles = useAppProfiles([...usedApps, ...browse].map((app) => app.id))
+  const loading = registry.isPending || connected.isPending
   const navigate = route.useNavigate()
   const opened = search.app
   const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
   const [profile, setProfile] = useState<ProfileTarget>()
-  const app = opened ? (browse.find((each) => each.id === opened) ?? catalog.appOf(opened)) : undefined
+  const app = useApp(opened).app
   const added: Added = (added) =>
     setProfile({
       appId: added.app.id,
@@ -152,7 +156,7 @@ export function MarketplacePage() {
         name={each.name}
         icon={each.icon}
         caption={each.description}
-        attention={needsAttention(catalog.profilesOf(each.id))}
+        attention={needsAttention(profiles.of(each.id))}
         onOpen={() => setOpened(each.id)}
         action={<AddToSpace app={each} onAdded={added} />}
       />
@@ -177,13 +181,7 @@ export function MarketplacePage() {
           />
         )}
       </Loading>
-      <MarketplaceSheet
-        app={app}
-        profiles={app ? catalog.profilesOf(app.id) : []}
-        onAdded={added}
-        onProfile={setProfile}
-        onClose={() => setOpened(undefined)}
-      />
+      <MarketplaceSheet app={app} onAdded={added} onProfile={setProfile} onClose={() => setOpened(undefined)} />
       {profile ? <ProfileDialog {...profile} onClose={() => setProfile(undefined)} /> : null}
     </Page>
   )
