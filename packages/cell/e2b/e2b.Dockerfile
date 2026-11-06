@@ -20,7 +20,7 @@ RUN mkdir -p /opt/ren && tar -xzf /tmp/ren.tar.gz -C /opt/ren && rm /tmp/ren.tar
   && cd /opt/ren && bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts
 
 RUN echo '[Slice]' >/etc/systemd/system/ren-tools.slice \
-  && echo 'MemoryMax=85%' >>/etc/systemd/system/ren-tools.slice
+  && echo 'MemoryMax=70%' >>/etc/systemd/system/ren-tools.slice
 
 COPY start.sh /opt/ren/start.sh
 RUN chmod 0755 /opt/ren/start.sh \
