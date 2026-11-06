@@ -13959,6 +13959,11 @@
           "$ref": "#/components/schemas/EnvironmentProvider.Info"
         }
       },
+      "EnvironmentTemplate.BuildStatus": {
+        "type": "string",
+        "enum": ["queued", "building", "ready", "failed"],
+        "description": "The state of the latest build of the image. A provider that builds no image is ready at once."
+      },
       "EnvironmentTemplate.CreateInput": {
         "type": "object",
         "properties": {
@@ -13988,6 +13993,9 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 100
+          },
+          "networking": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.Networking_1"
           }
         },
         "required": ["name", "provider", "config"],
@@ -14009,6 +14017,9 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 100
+          },
+          "networking": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.Networking_1"
           }
         },
         "required": ["provider", "config"],
@@ -14049,6 +14060,34 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "networking": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.Networking"
+          },
+          "buildStatus": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.BuildStatus"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last image that built. Machines use it while a later build runs or after it fails."
+          },
+          "buildError": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the latest build failed."
+          },
           "createdAt": {
             "type": "string"
           },
@@ -14074,11 +14113,99 @@
           "provider",
           "config",
           "sessionsPerEnvironment",
+          "networking",
+          "buildStatus",
+          "image",
+          "buildError",
           "createdAt",
           "updatedAt",
           "archivedAt"
         ],
         "additionalProperties": false
+      },
+      "EnvironmentTemplate.Networking": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["unrestricted"]
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["limited"]
+              },
+              "allowPackageManagers": {
+                "type": "boolean",
+                "description": "Allow the hosts of npm, PyPI, the Debian and Ubuntu mirrors and the Go module proxy."
+              },
+              "allowMcpServers": {
+                "type": "boolean",
+                "description": "Allow the hosts of the MCP servers of the space."
+              },
+              "allowedHosts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/HostName.Pattern"
+                },
+                "maxItems": 100
+              }
+            },
+            "required": ["type", "allowPackageManagers", "allowMcpServers", "allowedHosts"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "Where a machine of the template can connect. A limited machine always reaches the hosts of the credentials of its space."
+      },
+      "EnvironmentTemplate.Networking_1": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["unrestricted"]
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["limited"]
+              },
+              "allowPackageManagers": {
+                "type": "boolean",
+                "description": "Allow the hosts of npm, PyPI, the Debian and Ubuntu mirrors and the Go module proxy."
+              },
+              "allowMcpServers": {
+                "type": "boolean",
+                "description": "Allow the hosts of the MCP servers of the space."
+              },
+              "allowedHosts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/HostName.Pattern"
+                },
+                "maxItems": 100
+              }
+            },
+            "required": ["type", "allowPackageManagers", "allowMcpServers", "allowedHosts"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "Where a machine of the template can connect. A limited machine always reaches the hosts of the credentials of its space."
       },
       "EnvironmentTemplate.Page": {
         "type": "object",
@@ -14140,7 +14267,7 @@
           "config": {
             "anyOf": [
               {
-                "description": "Applies to environments made after the change. Running environments keep their config."
+                "description": "A changed config queues a build. A machine gets the new image when it wakes."
               },
               {
                 "type": "null"
@@ -14153,6 +14280,16 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "networking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentTemplate.Networking"
               },
               {
                 "type": "null"
@@ -14313,6 +14450,12 @@
             "enum": ["ok"]
           }
         ]
+      },
+      "HostName.Pattern": {
+        "type": "string",
+        "maxLength": 253,
+        "pattern": "^(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]*[a-z0-9]$",
+        "description": "A host name, or `*.<domain>` for its subdomains."
       },
       "Infra.Applied": {
         "type": "object",

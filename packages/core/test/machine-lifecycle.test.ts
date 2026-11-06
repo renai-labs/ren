@@ -43,6 +43,7 @@ const kind = Effect.gen(function* () {
     canMount: false,
     canSample: false,
     canColocate: true,
+    canLimitHosts: false,
     config: Schema.Struct({}),
     binding: Schema.Struct({ number: Schema.Int }),
     create: () => {

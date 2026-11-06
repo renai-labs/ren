@@ -149,9 +149,7 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 
 ### Space settings
 
-Built: `Space.Hand` (`schema/space.ts`), its checks in `Space.update` (EN3, EN24, EN45), `SessionRunner.create`, and the refused archive of a template in use (`core/src/environment-templates.ts`). New spaces get co-located with no template.
-
-1. A space cannot pick a template that has never built (`image` is null).
+Built: `Space.Hand` (`schema/space.ts`), its checks in `Space.update` (EN3, EN24, EN44, EN45), `SessionRunner.create`, and the refused archive of a template in use (`core/src/environment-templates.ts`). New spaces get co-located with no template.
 
 ### When a change applies
 
@@ -165,20 +163,19 @@ Built: `Space.Hand` (`schema/space.ts`), its checks in `Space.update` (EN3, EN24
 
 Ren's code reaches machines as bundles, not in images (EN26-EN29; `cell/e2b/bundle.ts`, `cell/e2b/start.sh`, `core/src/bundles.ts`). A template image holds the system and the template's packages only.
 
-1. A template has `provider`, `config`, `networking` and `sessionsPerEnvironment` (default 8, used only by remote). The E2B config is `cpuCount`, `memoryMiB`, `packages { apt, npm, pip, go }` and `buildCommands` (at most 50, each at most 4096 characters). The sizes are 1/1024, 2/2048 (default), 4/4096, 6/6144 and 8/8192.
-2. Saving a changed config queues a build. Each template runs at most one build. A save during a build waits, and when the build ends, the newest config builds. A result counts only while the template still has the config that it built (EN30).
-3. A template keeps `build_status` (`queued`, `building`, `ready`, `failed`), `image` (the last `ready` image) and `build_error`. Machines use the last `ready` image while a build runs or after it fails. A build that runs longer than 45 min fails. At start, Ren builds again a template that stays `queued` or `building` without a running build.
-4. The E2B build starts from Ren's system image and adds one `RUN` per package manager, then one `RUN` per build command. CPU and memory are set at build time, because E2B fixes them per template.
+Built: the template fields, the E2B config and its build (`core/src/machine-provider/e2b.ts`), one build at a time per template and its status (`core/src/environment-templates.ts`, EN30, EN44).
+
+1. Machines use the last `ready` image while a build runs or after it fails.
 
 ### Networking
 
-1. `networking` is `{ type: "unrestricted" }` or `{ type: "limited", allowPackageManagers, allowMcpServers, allowedHosts }`, with at most 100 `allowedHosts`.
-2. `limited` needs a provider with `canLimitHosts`. E2B has it; Docker does not.
-3. Core makes the host list: `allowedHosts`; the package manager hosts when `allowPackageManagers` is set; the hosts of the space's MCP servers when `allowMcpServers` is set; the hosts of the credentials that the space can use, always. For `*.example.com`, the list also has `example.com`.
-4. A co-located machine also runs the brain, so its list also has Ren's own hosts: the server, inference and the egress (EN40).
-5. E2B gets the list as `allowOut`, with `denyOut: ["0.0.0.0/0"]` and the egress proxy. E2B checks the HTTP `Host` and the TLS SNI before the traffic reaches the egress.
-6. Every `connect` sends the current list, so a change reaches a running machine at its next access. E2B refuses a network update of a paused sandbox, so Ren never sends one before `connect`.
-7. The egress keeps only its credential checks.
+Built: `EnvironmentTemplate.Networking`, and `limited` only on a provider with `canLimitHosts`.
+
+1. Core makes the host list: `allowedHosts`; the package manager hosts when `allowPackageManagers` is set; the hosts of the space's MCP servers when `allowMcpServers` is set; the hosts of the credentials that the space can use, always. For `*.example.com`, the list also has `example.com`.
+2. A co-located machine also runs the brain, so its list also has Ren's own hosts: the server, inference and the egress (EN40).
+3. E2B gets the list as `allowOut`, with `denyOut: ["0.0.0.0/0"]` and the egress proxy. E2B checks the HTTP `Host` and the TLS SNI before the traffic reaches the egress.
+4. Every `connect` sends the current list, so a change reaches a running machine at its next access. E2B refuses a network update of a paused sandbox, so Ren never sends one before `connect`.
+5. The egress keeps only its credential checks.
 
 ### Remote hands
 
@@ -197,7 +194,7 @@ Ren's code reaches machines as bundles, not in images (EN26-EN29; `cell/e2b/bund
 ### Failure and recovery
 
 1. Three failures in a row, of any kind, put a machine in `failed` (EN18).
-2. Ren sends a PostHog error report, with the reason, when a build fails (EN38). Failed machines, capacity and forced replaces report today (`machine-lifecycle.ts`).
+2. Failed machines, capacity, forced replaces and failed builds send a PostHog error report with the reason (EN38; `machine-lifecycle.ts`, `environment-templates.ts`).
 
 ### Ren server
 
@@ -207,18 +204,16 @@ Ren's code reaches machines as bundles, not in images (EN26-EN29; `cell/e2b/bund
 
 ## 4. Contract changes
 
-| Where                            | Change                                                                                                                                                                                                                                  |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schema/environment-template.ts` | `networking`; `Info` gets `buildStatus`, `image`, `buildError`.                                                                                                                                                                         |
-| `db`                             | `environment_template`: networking, build fields. `environment`: the columns of `MachineLifecycle.Row`. `brain` and `environment`: image. `environment`: bundle versions. `environment`: the retry and silence columns that `brain` has |
-| `core/machine-access.ts`         | `release`, `status` and `retire`, each with its first caller. Today: `ensure`, `access`, `check`, `retry`.                                                                                                                              |
-| `core/machine-provider.ts`       | `image`, `size` and `network` in `create`; `build`; the flags `canPause` and `canLimitHosts`. E2B REST calls live in one module.                                                                                                        |
-| `core/environments.ts`           | Remote hand machines on `MachineLifecycle`; the "hand unreachable" check.                                                                                                                                                               |
-| `core/environment-templates.ts`  | One build at a time per template; archive refused while in use.                                                                                                                                                                         |
-| `environment-api`                | Later: a feature list in `hello`.                                                                                                                                                                                                       |
-| `cell`                           | One OpenCode hand-bridge module chosen by `REN_HAND_PLACEMENT`.                                                                                                                                                                         |
-| `app`                            | Settings → Environments; space settings for the hand (the brain provider choice stays hidden while one exists).                                                                                                                         |
-| `infra/aws`                      | A memory alarm for the server.                                                                                                                                                                                                          |
+| Where                      | Change                                                                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db`                       | `environment`: the columns of `MachineLifecycle.Row`. `brain` and `environment`: image. `environment`: bundle versions. `environment`: the retry and silence columns that `brain` has |
+| `core/machine-access.ts`   | `release`, `status` and `retire`, each with its first caller. Today: `ensure`, `access`, `check`, `retry`.                                                                            |
+| `core/machine-provider.ts` | `image`, `size` and `network` in `create`; the flag `canPause`. Built: `build`, `canLimitHosts`.                                                                                      |
+| `core/environments.ts`     | Remote hand machines on `MachineLifecycle`; the "hand unreachable" check.                                                                                                             |
+| `environment-api`          | Later: a feature list in `hello`.                                                                                                                                                     |
+| `cell`                     | One OpenCode hand-bridge module chosen by `REN_HAND_PLACEMENT`.                                                                                                                       |
+| `app`                      | Settings → Environments; space settings for the hand (the brain provider choice stays hidden while one exists).                                                                       |
+| `infra/aws`                | A memory alarm for the server.                                                                                                                                                        |
 
 Run `bun run generate` after the protocol changes.
 

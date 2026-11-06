@@ -26,6 +26,10 @@ export type SpaceAssignmentID = string
 
 export type EnvironmentProviderID = string
 
+export type HostNamePattern = string
+
+export type EnvironmentTemplateBuildStatus = "queued" | "building" | "ready" | "failed"
+
 export type SessionModel = { endpointId: string; modelId: string; variant?: string }
 
 export type ModelTypesModelRef = { providerId: string; modelId: string }
@@ -356,25 +360,16 @@ export type SpaceMemberPending = {
   archivedAt: string | null
 }
 
-export type EnvironmentTemplateInfo = {
-  id: EnvironmentTemplateID
-  organizationId: AuthOrganizationID
-  name: string
-  description: string | null
-  provider: EnvironmentProviderID
-  config: JsonValue
-  sessionsPerEnvironment: number
-  createdAt: string
-  updatedAt: string
-  archivedAt: string | null
-}
-
 export type EnvironmentProviderInfo = {
   id: EnvironmentProviderID
   title: string
   description: string
   configSchema: JsonValue
 }
+
+export type EnvironmentTemplateNetworking =
+  | { type: "unrestricted" }
+  | { type: "limited"; allowPackageManagers: boolean; allowMcpServers: boolean; allowedHosts: Array<HostNamePattern> }
 
 export type ModelTypesDefaults = {
   image_generation?: ModelTypesModelRef
@@ -771,14 +766,24 @@ export type FactoryEntry = { agentId: string; maxRuns?: number; to?: Array<Facto
 
 export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
 
-export type EnvironmentTemplatePage = {
-  items: Array<EnvironmentTemplateInfo>
-  page: number
-  pageSize: number
-  total: number
-}
-
 export type EnvironmentProviderInfos = Array<EnvironmentProviderInfo>
+
+export type EnvironmentTemplateInfo = {
+  id: EnvironmentTemplateID
+  organizationId: AuthOrganizationID
+  name: string
+  description: string | null
+  provider: EnvironmentProviderID
+  config: JsonValue
+  sessionsPerEnvironment: number
+  networking: EnvironmentTemplateNetworking
+  buildStatus: EnvironmentTemplateBuildStatus
+  image: string | null
+  buildError: string | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
 
 export type PermissionRuleList = Array<PermissionRule>
 
@@ -981,6 +986,13 @@ export type InsightsResult = { rows: Array<InsightsRow> }
 export type FactoryInfo = { maxHandoffs?: number; agents: Array<FactoryEntry> }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
+
+export type EnvironmentTemplatePage = {
+  items: Array<EnvironmentTemplateInfo>
+  page: number
+  pageSize: number
+  total: number
+}
 
 export type SettingsInfo = {
   instructions?: string
@@ -1628,6 +1640,14 @@ export type EnvironmentTemplateCreateInput = {
     readonly provider: string
     readonly config: JsonValue
     readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
   }["name"]
   readonly description?: {
     readonly name: string
@@ -1635,6 +1655,14 @@ export type EnvironmentTemplateCreateInput = {
     readonly provider: string
     readonly config: JsonValue
     readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
   }["description"]
   readonly provider: {
     readonly name: string
@@ -1642,6 +1670,14 @@ export type EnvironmentTemplateCreateInput = {
     readonly provider: string
     readonly config: JsonValue
     readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
   }["provider"]
   readonly config: {
     readonly name: string
@@ -1649,6 +1685,14 @@ export type EnvironmentTemplateCreateInput = {
     readonly provider: string
     readonly config: JsonValue
     readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
   }["config"]
   readonly sessionsPerEnvironment: {
     readonly name: string
@@ -1656,7 +1700,30 @@ export type EnvironmentTemplateCreateInput = {
     readonly provider: string
     readonly config: JsonValue
     readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
   }["sessionsPerEnvironment"]
+  readonly networking: {
+    readonly name: string
+    readonly description?: string | null
+    readonly provider: string
+    readonly config: JsonValue
+    readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
+  }["networking"]
 }
 
 export type EnvironmentTemplateCreateOutput = EnvironmentTemplateInfo
@@ -1668,25 +1735,86 @@ export type EnvironmentTemplateUpdateInput = {
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
     readonly sessionsPerEnvironment?: number | undefined
+    readonly networking?:
+      | (
+          | { readonly type: "unrestricted" }
+          | {
+              readonly type: "limited"
+              readonly allowPackageManagers: boolean
+              readonly allowMcpServers: boolean
+              readonly allowedHosts: ReadonlyArray<string>
+            }
+        )
+      | undefined
   }["name"]
   readonly description?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
     readonly sessionsPerEnvironment?: number | undefined
+    readonly networking?:
+      | (
+          | { readonly type: "unrestricted" }
+          | {
+              readonly type: "limited"
+              readonly allowPackageManagers: boolean
+              readonly allowMcpServers: boolean
+              readonly allowedHosts: ReadonlyArray<string>
+            }
+        )
+      | undefined
   }["description"]
   readonly config?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
     readonly sessionsPerEnvironment?: number | undefined
+    readonly networking?:
+      | (
+          | { readonly type: "unrestricted" }
+          | {
+              readonly type: "limited"
+              readonly allowPackageManagers: boolean
+              readonly allowMcpServers: boolean
+              readonly allowedHosts: ReadonlyArray<string>
+            }
+        )
+      | undefined
   }["config"]
   readonly sessionsPerEnvironment?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
     readonly sessionsPerEnvironment?: number | undefined
+    readonly networking?:
+      | (
+          | { readonly type: "unrestricted" }
+          | {
+              readonly type: "limited"
+              readonly allowPackageManagers: boolean
+              readonly allowMcpServers: boolean
+              readonly allowedHosts: ReadonlyArray<string>
+            }
+        )
+      | undefined
   }["sessionsPerEnvironment"]
+  readonly networking?: {
+    readonly name?: string | undefined
+    readonly description?: string | null | undefined
+    readonly config?: JsonValue | undefined
+    readonly sessionsPerEnvironment?: number | undefined
+    readonly networking?:
+      | (
+          | { readonly type: "unrestricted" }
+          | {
+              readonly type: "limited"
+              readonly allowPackageManagers: boolean
+              readonly allowMcpServers: boolean
+              readonly allowedHosts: ReadonlyArray<string>
+            }
+        )
+      | undefined
+  }["networking"]
 }
 
 export type EnvironmentTemplateUpdateOutput = EnvironmentTemplateInfo
@@ -7468,6 +7596,14 @@ export type InfraPullInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -7804,6 +7940,14 @@ export type InfraPullInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -8140,6 +8284,14 @@ export type InfraPullInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -8481,6 +8633,14 @@ export type InfraPlanInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -8817,6 +8977,14 @@ export type InfraPlanInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -9153,6 +9321,14 @@ export type InfraPlanInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -9494,6 +9670,14 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -9832,6 +10016,14 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -10170,6 +10362,14 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -10508,6 +10708,14 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -10846,6 +11054,14 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
