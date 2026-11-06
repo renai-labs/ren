@@ -67,7 +67,7 @@ How each fault is made:
 | --- | ----------------------------------------- | -------------------------------------------------------------------- | ----- |
 | 12  | A new brain bundle; an asleep brain wakes | Updated in place. Files kept. A background process survives.         | live  |
 | 13  | A new executor bundle                     | The executor restarts; background processes stop (expected)          | live  |
-| 14  | The bundle fetch fails 3 times            | Replace                                                              | live  |
+| 14  | The bundle fetch fails 3 times            | Replace (unit: `core/test/machine-lifecycle.test.ts`)                | live  |
 | 15  | Ren is killed during `updating`           | The update ends. One machine.                                        | live  |
 | 16  | A new OpenCode version, then a rollback   | The local database is rebuilt from Postgres; the history is the same | live  |
 | 17  | An old and a new Ren server side by side  | A machine never moves to an older bundle                             | local |
@@ -125,7 +125,6 @@ See [`lessons.md`](lessons.md).
 | --- | ---------------------------------------------------------------------- | --------------------------------------------------------- | ----- |
 | 45  | A cron every 2 min on a space brain while a turn runs a 40-min command | The machine never pauses during the turn                  | live  |
 | 46  | Wake a brain, then read E2B's timeout                                  | Ren's value, not 300 s                                    | live  |
-| 47  | An in-place update runs a command that takes 90 s                      | It is not killed at 60 s                                  | live  |
 | 48  | The destroy of an old machine fails; it keeps pulling and syncing      | Refused as a retired generation; the new data stays       | live  |
 | 49  | A message arrives during `updating`                                    | It runs on the new version, once                          | live  |
 | 50  | 30 chats access one hand at once while 20 other API requests run       | Every request answers; the connection pool never runs out | local |

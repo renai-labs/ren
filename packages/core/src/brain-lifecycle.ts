@@ -5,12 +5,14 @@ import { Database } from "@ren/db/database"
 import type { State as BrainState } from "@ren/host-api/brain-api"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
+import type { Bundle } from "@ren/schema/bundle"
 import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
 import { and, eq, exists, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
+import { Bundles } from "./bundles.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Deployment } from "./deployment.js"
 import { Environments } from "./environments.js"
@@ -58,6 +60,7 @@ export const layer = Layer.effect(
     const engine = yield* WorkflowEngine.WorkflowEngine
     const environments = yield* Environments.Service
     const egress = yield* SandboxEgress.Service
+    const code = yield* Bundles.Service
     const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(
       Config.withDefault(MachineLifecycle.timing.wake),
     )
@@ -173,6 +176,25 @@ export const layer = Layer.effect(
         .pipe(Effect.orDie)
     })
 
+    // oxlint-disable-next-line ren/no-comments -- The current bundles, the dependencies first, when this Ren serves bundles; none for a host whose image or folder holds Ren's code.
+    const wanted = Effect.map(Effect.forEach(["dependencies", "brain", "executor"] as const, code.current), (found) =>
+      Option.all(found),
+    )
+    const versionsOf = (bundles: ReadonlyArray<Bundle.Info>) => {
+      const version = (kind: Bundle.Kind) => bundles.find((bundle) => bundle.kind === kind)?.version ?? ""
+      return { dependencies: version("dependencies"), brain: version("brain"), executor: version("executor") }
+    }
+    const withTokens = (bundles: ReadonlyArray<Bundle.Info>) =>
+      Effect.forEach(bundles, (bundle) =>
+        Effect.map(code.token(bundle), (token) => ({
+          kind: bundle.kind,
+          version: bundle.version,
+          sha256: bundle.sha256,
+          token,
+        })),
+      )
+    const treeOf = (versions: Readonly<Record<Bundle.Kind, string>>) => `${versions.brain}-${versions.dependencies}`
+
     // oxlint-disable-next-line ren/no-comments -- A brain goes behind the egress when this Ren runs one and its provider can route a sandbox through it. The answer is kept on the row (egress); every later step reads the row, never the setting.
     const isBehindEgress = egress.enabled && provider.canEgress
 
@@ -228,6 +250,7 @@ export const layer = Layer.effect(
         egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id }),
       retire: egress.retire,
       variables: Effect.fnUntraced(function* (row) {
+        const bundles = yield* wanted
         return {
           REN_URL: client.renUrl,
           REN_BRAIN_ID: row.id,
@@ -240,9 +263,20 @@ export const layer = Layer.effect(
             "ren.brain.generation": String(row.generation),
           }),
           ...(yield* environments.executorVariables(Environment.ofBrain(row.id))),
+          ...(Option.isSome(bundles) && {
+            REN_BUNDLES: (yield* withTokens(bundles.value))
+              .map((bundle) => [bundle.kind, bundle.version, bundle.sha256, bundle.token].join(":"))
+              .join(" "),
+          }),
         }
       }),
-      created: (brainId) => update(brainId, { key_ids: client.publicKeys.map((key) => key.id) }),
+      created: Effect.fnUntraced(function* (brainId) {
+        const bundles = yield* wanted
+        yield* update(brainId, {
+          key_ids: client.publicKeys.map((key) => key.id),
+          bundles: Option.match(bundles, { onNone: () => null, onSome: versionsOf }),
+        })
+      }),
       target: targetOf,
       boot: Effect.fnUntraced(function* (target, within) {
         const api = yield* client.brain(target)
@@ -289,6 +323,40 @@ export const layer = Layer.effect(
           `Brain ${target.brainId} answers but did not confirm its wake within ${Duration.format(within)}`,
         )
         return true
+      }),
+      outdated: Effect.fnUntraced(function* (row) {
+        const bundles = yield* wanted
+        if (Option.isNone(bundles)) return "current" as const
+        if (!row.bundles) return "replace" as const
+        const versions = versionsOf(bundles.value)
+        return (["dependencies", "brain", "executor"] as const).every((kind) => row.bundles?.[kind] === versions[kind])
+          ? ("current" as const)
+          : ("update" as const)
+      }),
+      // oxlint-disable-next-line ren/no-comments -- The brain unpacks the bundles and restarts what changed; the update counts when the brain answers with the new version within the boot time (EN27).
+      updateInPlace: Effect.fnUntraced(function* (row, target) {
+        const bundles = yield* wanted
+        if (Option.isNone(bundles)) return Option.none()
+        const api = yield* client.brain(target)
+        const sent = yield* api.brain["brain.update"]({ payload: { bundles: yield* withTokens(bundles.value) } }).pipe(
+          Effect.timeoutOption(bootWithin),
+          Effect.map((answered) => (Option.isSome(answered) ? Option.none() : Option.some("the brain did not answer"))),
+          Effect.catch((error) => Effect.succeed(Option.some(error.message))),
+        )
+        if (Option.isSome(sent)) return sent
+        const tree = treeOf(versionsOf(bundles.value))
+        const answered = yield* api.brain["brain.state"]().pipe(
+          Effect.flatMap((state) =>
+            state.version === tree ? Effect.succeed(state) : Effect.fail(new Error(`still ${state.version}`)),
+          ),
+          Effect.retry({ schedule: Schedule.spaced(MachineLifecycle.timing.poll) }),
+          Effect.timeoutOption(bootWithin),
+          Effect.option,
+        )
+        if (Option.isNone(answered) || Option.isNone(answered.value))
+          return Option.some(`the brain did not answer with version ${tree} within ${Duration.format(bootWithin)}`)
+        yield* update(row.id, { bundles: versionsOf(bundles.value) })
+        return Option.none()
       }),
       answers: (target) =>
         client.brain(target).pipe(

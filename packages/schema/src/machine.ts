@@ -6,6 +6,7 @@ export const Phase = Schema.Literals([
   "creating",
   "booting",
   "resuming",
+  "updating",
   "waking",
   "replacing",
   "ready",

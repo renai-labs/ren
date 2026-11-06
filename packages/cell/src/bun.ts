@@ -4,6 +4,7 @@ import type { OpenCodeSync } from "@ren/brain/opencode-sync"
 import { Observability } from "@ren/schema/observability"
 import { Session } from "@ren/schema/session"
 import { PostHog } from "@ren/telemetry/posthog"
+import { BrainRejectedError } from "@ren/host-api/errors"
 import {
   Deferred,
   Duration,
@@ -44,6 +45,7 @@ import { HotReload } from "./hot-reload.js"
 import { Reconcile } from "./reconcile.js"
 import { Scheduler } from "./scheduler.js"
 import { Sync } from "./sync.js"
+import { CodeUpdate } from "./code-update.js"
 
 const vars = Schema.decodeUnknownSync(Env.Vars)(process.env)
 const brainId = vars.REN_BRAIN_ID
@@ -106,6 +108,42 @@ const info = Layer.succeed(
   }),
 )
 
+const restartAfter = "500 millis"
+
+// oxlint-disable-next-line ren/no-comments -- start.sh unpacks the bundles and restarts the executor when its version changed. The brain stops itself after it answered when its own version changed; start.sh starts the new one, and the brain's SIGTERM handler flushes sync first.
+const codeUpdate = (options: { readonly home: string; readonly script: string; readonly version: string }) =>
+  Layer.succeed(
+    CodeUpdate.Service,
+    CodeUpdate.Service.of({
+      update: Effect.fn("CodeUpdate.update")(function* (bundles: ReadonlyArray<CodeUpdate.Bundled>) {
+        const prepared = yield* Effect.promise(async () => {
+          const child = Bun.spawn(
+            [
+              "sh",
+              options.script,
+              "prepare",
+              bundles.map((bundle) => [bundle.kind, bundle.version, bundle.sha256, bundle.token].join(":")).join(" "),
+            ],
+            { env: { ...process.env, HOME: options.home }, stdout: "ignore", stderr: "pipe" },
+          )
+          return { code: await child.exited, error: await new Response(child.stderr).text() }
+        })
+        if (prepared.code !== 0)
+          return yield* new BrainRejectedError({
+            message: `The bundles did not unpack: ${prepared.error.slice(0, 500)}`,
+          })
+        const current: string = yield* Effect.promise(() =>
+          Bun.file(join(options.home, ".ren", "brain.version")).text(),
+        )
+        if (current.trim() !== options.version)
+          yield* Effect.sleep(restartAfter).pipe(
+            Effect.andThen(Effect.sync(() => process.kill(process.pid, "SIGTERM"))),
+            Effect.forkDetach,
+          )
+      }),
+    }),
+  )
+
 const base = Layer.mergeAll(Cell.activityLayer, Cell.hostLayer).pipe(
   Layer.provideMerge(Layer.succeed(BrainStorage.Service, storage)),
   Layer.provideMerge(info),
@@ -114,6 +152,13 @@ const base = Layer.mergeAll(Cell.activityLayer, Cell.hostLayer).pipe(
 const runtime = ManagedRuntime.make(
   Layer.mergeAll(Brain.layer, Chat.layer, Scheduler.layer).pipe(
     Layer.provideMerge(Restore.layer),
+    Layer.provideMerge(
+      codeUpdate({
+        home,
+        script: process.env.REN_START_SCRIPT ?? "/opt/ren/start.sh",
+        version: vars.REN_BRAIN_VERSION ?? manifest.version,
+      }),
+    ),
     Layer.provideMerge(HotReload.layer),
     Layer.provideMerge(
       OpenCodeHarness.layerProcess(harnessDatabase, {
