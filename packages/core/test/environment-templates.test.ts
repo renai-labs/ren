@@ -9,7 +9,7 @@ import { EnvironmentTemplates } from "../src/environment-templates.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { Space } from "../src/space.js"
-import { SpaceEnvironmentTemplate } from "../src/space/environment-template.js"
+import { BrainProvider } from "../src/brain-provider.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/environment-provider.js"
@@ -18,17 +18,23 @@ import { Signer } from "../src/signer.js"
 
 const probe = await Effect.runPromise(TestProvider.make())
 
+const brains = [
+  Effect.map(TestProvider.make({ canColocate: true }), (each) => each.provider),
+  Effect.map(TestProvider.make({ id: "remote-only" }), (each) => each.provider),
+] as const
+
 const key = await Effect.runPromise(Signature.generate("environments"))
 
 const it = testEffect(
   Layer.mergeAll(
     EnvironmentTemplates.layer,
-    SpaceEnvironmentTemplate.layer,
     Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
     Space.layer,
     SpaceProvisioning.layer,
   ).pipe(
-    Layer.provideMerge(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
+    Layer.provideMerge(
+      Layer.mergeAll(EnvironmentProvider.layer([Effect.succeed(probe.provider)]), BrainProvider.layer(brains)),
+    ),
     Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
     Layer.provideMerge(Testing.layer),
     Layer.provide(
@@ -122,60 +128,90 @@ describe("EnvironmentTemplates", () => {
   )
 
   it.live(
-    "a member of a space links an org environment template to it; archiving the link ends its sessions' access",
+    "a member of a space picks an organization's template as its remote hand, or none (space settings rules 1, 5)",
     () =>
       Effect.gen(function* () {
         const templates = yield* EnvironmentTemplates.Service
-        const links = yield* SpaceEnvironmentTemplate.Service
-        const environments = yield* Environments.Service
+        const spaces = yield* Space.Service
         const setup = yield* team()
         const grace = yield* user(setup.organizationId)
         const made = yield* templates.create(setup.admin, input)
-        const link = { spaceId: setup.space.id, environmentTemplateId: made.id }
-        expect((yield* links.create(grace, link).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
-        const linked = yield* links.create(setup.ada, link)
-        expect((yield* links.create(setup.ada, link).pipe(Effect.flip))._tag).toBe("Primitive.Conflict")
-        expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([linked])
-        expect((yield* links.list(grace, { ...page, spaceId: setup.space.id })).items).toEqual([])
-        const session = yield* Seed.subject(setup.organizationId, setup.space.id)
-        yield* environments.bind(session, made.id)
-        yield* environments.access(session, Option.none())
-        expect((yield* links.archive(setup.ada, linked.id)).archivedAt).not.toBeNull()
-        expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([])
-        expect((yield* environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe(
-          "Environments.NotFound",
+        expect(setup.space.hand).toEqual({ placement: "colocated", environmentTemplateId: null })
+        const remote = { placement: "remote", environmentTemplateId: made.id } as const
+        expect((yield* spaces.update(grace, setup.space.id, { hand: remote }).pipe(Effect.flip))._tag).toBe(
+          "Primitive.NotFound",
         )
+        expect((yield* spaces.update(setup.ada, setup.space.id, { hand: remote })).hand).toEqual(remote)
+        expect((yield* spaces.update(setup.ada, setup.space.id, { hand: { placement: "none" } })).hand).toEqual({
+          placement: "none",
+        })
+        const foreign = yield* templates.create((yield* team()).admin, input)
+        expect(
+          yield* spaces
+            .update(setup.ada, setup.space.id, { hand: { placement: "remote", environmentTemplateId: foreign.id } })
+            .pipe(Effect.flip),
+        ).toMatchObject({ _tag: "Primitive.Invalid", field: "hand" })
       }),
   )
 
-  it.live("a space cannot link another organization's environment template", () =>
+  it.live(
+    "co-located needs a brain provider that can co-locate and a template of that provider; a brain provider change that breaks it is refused (EN3, EN24, chaos row 28)",
+    () =>
+      Effect.gen(function* () {
+        const templates = yield* EnvironmentTemplates.Service
+        const spaces = yield* Space.Service
+        const setup = yield* team()
+        const made = yield* templates.create(setup.admin, input)
+        const colocated = { placement: "colocated", environmentTemplateId: made.id } as const
+        expect((yield* spaces.update(setup.ada, setup.space.id, { hand: colocated })).hand).toEqual(colocated)
+        expect(
+          yield* spaces.update(setup.ada, setup.space.id, { brainProvider: "remote-only" }).pipe(Effect.flip),
+        ).toMatchObject({ _tag: "Primitive.Invalid", field: "brainProvider" })
+        const moved = yield* spaces.update(setup.ada, setup.space.id, {
+          brainProvider: "remote-only",
+          hand: { placement: "remote", environmentTemplateId: made.id },
+        })
+        expect(moved.brainProvider).toBe("remote-only")
+        expect(
+          yield* spaces
+            .update(setup.ada, setup.space.id, { hand: { placement: "colocated", environmentTemplateId: null } })
+            .pipe(Effect.flip),
+        ).toMatchObject({ _tag: "Primitive.Invalid", field: "hand" })
+        yield* spaces.update(setup.ada, setup.space.id, {
+          brainProvider: null,
+          hand: { placement: "colocated", environmentTemplateId: null },
+        })
+        const other = yield* Seed.environmentTemplate(setup.organizationId, { provider: "other" })
+        expect(
+          yield* spaces
+            .update(setup.ada, setup.space.id, { hand: { placement: "colocated", environmentTemplateId: other } })
+            .pipe(Effect.flip),
+        ).toMatchObject({ _tag: "Primitive.Invalid", field: "hand" })
+      }),
+  )
+
+  it.live("archiving a template that a space uses is refused, with the spaces (EN24, chaos row 22)", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
-      const links = yield* SpaceEnvironmentTemplate.Service
+      const spaces = yield* Space.Service
       const setup = yield* team()
-      const elsewhere = yield* team()
-      const foreign = yield* templates.create(elsewhere.admin, input)
-      expect(
-        (yield* links
-          .create(setup.ada, { spaceId: setup.space.id, environmentTemplateId: foreign.id })
-          .pipe(Effect.flip))._tag,
-      ).toBe("Primitive.NotFound")
-      expect(
-        (yield* links
-          .create(elsewhere.admin, { spaceId: setup.space.id, environmentTemplateId: foreign.id })
-          .pipe(Effect.flip))._tag,
-      ).toBe("Primitive.NotFound")
+      const made = yield* templates.create(setup.admin, input)
+      yield* spaces.update(setup.ada, setup.space.id, { hand: { placement: "remote", environmentTemplateId: made.id } })
+      expect(yield* templates.archive(setup.admin, made.id).pipe(Effect.flip)).toMatchObject({
+        _tag: "Primitive.Conflict",
+        message: "Spaces use this environment template: Team. Pick another hand for them first.",
+      })
+      yield* spaces.update(setup.ada, setup.space.id, { hand: { placement: "none" } })
+      expect((yield* templates.archive(setup.admin, made.id)).archivedAt).not.toBeNull()
     }),
   )
 
   it.live("archiving hides an environment template, ends its sessions' access and destroys its environments", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
-      const links = yield* SpaceEnvironmentTemplate.Service
       const environments = yield* Environments.Service
       const setup = yield* team()
       const made = yield* templates.create(setup.admin, input)
-      yield* links.create(setup.ada, { spaceId: setup.space.id, environmentTemplateId: made.id })
       const session = yield* Seed.subject(setup.organizationId, setup.space.id)
       yield* environments.bind(session, made.id)
       yield* environments.access(session, Option.none())

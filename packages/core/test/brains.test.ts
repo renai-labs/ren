@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Brain } from "@ren/schema/brain"
+import { Space } from "@ren/schema/space"
 import { Clock, Duration, Effect, Queue, Schema } from "effect"
 import { TestClock } from "effect/testing"
 import { Testing } from "@ren/db/testing"
@@ -55,7 +56,7 @@ describe("Brains on the cell host", () => {
           const brains = yield* Brains.Service
           yield* brains
             .start(
-              { sessionId, harness: "opencode", interactive: true },
+              { sessionId, harness: "opencode", interactive: true, hand: Space.defaultHand },
               { ...owner, brainId: Brain.ofSession(sessionId) },
             )
             .pipe(Effect.forkChild)

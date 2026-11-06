@@ -22,6 +22,7 @@ export const make = (
     readonly id?: string
     readonly egress?: boolean
     readonly canMount?: boolean
+    readonly canColocate?: boolean
     readonly endpoint?: (environmentId: Environment.ID) => Effect.Effect<{ readonly url: string }, MachineProvider.Gone>
   } = {},
 ) =>
@@ -41,7 +42,7 @@ export const make = (
       canEgress: options.egress ?? false,
       canMount: options.canMount ?? false,
       canSample: false,
-      canColocate: false,
+      canColocate: options.canColocate ?? false,
       config: Config,
       binding: Schema.Struct({ environmentId: Environment.ID }),
       create: (input) =>

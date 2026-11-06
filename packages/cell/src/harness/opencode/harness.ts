@@ -571,6 +571,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                 agent: chat.agent,
                 model: Option.fromUndefinedOr(picked),
                 drives: chat.drives,
+                hasHand: chat.hasHand,
                 defaultModels: saved?.defaultModels,
               },
               lookup,
@@ -673,7 +674,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                 server,
                 settings,
                 {
-                  ...Struct.omit(input, ["environmentTemplateId", "directory"]),
+                  ...Struct.omit(input, ["directory"]),
                   ...(input.directory && { directory: Environment.Directory.make(input.directory) }),
                 },
                 state.modelCatalogs,

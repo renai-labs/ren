@@ -44,6 +44,18 @@ const docsOf = (github: TestGitHub.Instance): Reference.Info => ({
   description: "Product docs",
 })
 
+it.live("a chat whose space has no hand now loses its file and shell tools at the next pull (EN23, chaos row 26)", () =>
+  Effect.gen(function* () {
+    const chat = yield* open(yield* fresh(), [])
+    const before = yield* chat.turn(stub.script(), 1)
+    yield* chat.pull([], { hasHand: false })
+    const after = yield* chat.turn(stub.script(), 1)
+    expect(
+      [before.tools, after.tools].map((tools) => ["read", "shell"].filter((tool) => tools.includes(tool))),
+    ).toEqual([["read", "shell"], []])
+  }),
+)
+
 it.live("a chat reads a file of a public reference with the read tool, at a path with the commit", () =>
   Effect.gen(function* () {
     const github = yield* fresh()

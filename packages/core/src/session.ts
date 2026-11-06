@@ -420,7 +420,7 @@ export const layer = Layer.effect(
           )
         )
           return yield* modelNotFound
-        const start: Session.StartInput = {
+        const start: Omit<Session.StartInput, "hand"> = {
           sessionId: input.id,
           harness: "opencode",
           interactive: true,
@@ -451,11 +451,17 @@ export const layer = Layer.effect(
                 const existing = yield* sessions.get(input.id).pipe(Effect.orDie)
                 if (existing.createdBy !== actor.userId || existing.spaceId !== input.spaceId)
                   return yield* new Primitive.Conflict({ message: "A session with this ID already exists." })
-                return yield* brain.start(start, {
-                  organizationId: actor.organizationId,
-                  spaceId: input.spaceId,
-                  brainId: existing.brainId,
-                })
+                const stored = yield* Schema.decodeUnknownEffect(Session.StartInput)(
+                  (yield* read(actor, input.id)).session.start_input ?? { sessionId: input.id, harness: "opencode" },
+                ).pipe(Effect.orDie)
+                return yield* brain.start(
+                  { ...start, hand: stored.hand },
+                  {
+                    organizationId: actor.organizationId,
+                    spaceId: input.spaceId,
+                    brainId: existing.brainId,
+                  },
+                )
               }),
             ),
             Effect.catchTags({

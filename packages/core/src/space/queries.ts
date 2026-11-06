@@ -29,6 +29,20 @@ export const where: ReadonlyMap<string, SQL> = new Map([
   [SessionPolicy.facts.spaceMember, isNotNull(membership.id)],
 ])
 
+export const hand = (
+  row: Pick<typeof Database.Schema.space.$inferSelect, "hand_placement" | "environment_template_id">,
+): Space.Hand => {
+  if (row.hand_placement === "none") return { placement: "none" }
+  if (row.hand_placement === "remote" && row.environment_template_id)
+    return { placement: "remote", environmentTemplateId: row.environment_template_id }
+  return { placement: "colocated", environmentTemplateId: row.environment_template_id }
+}
+
+export const handColumns = (hand: Space.Hand) => ({
+  hand_placement: hand.placement,
+  environment_template_id: hand.placement === "none" ? null : hand.environmentTemplateId,
+})
+
 export const slugs = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   organizationId: Auth.OrganizationID,

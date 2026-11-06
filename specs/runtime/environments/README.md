@@ -1,6 +1,6 @@
 # Brains, hands and machines: pending
 
-Status: not built. Today a brain runs in an E2B sandbox and runs its tools in the same sandbox. Environment templates, environments, the Docker provider and `Environments.bind` exist (`core/src/environment-templates.ts`, `core/src/environments.ts`, `core/src/machine-provider/docker.ts`), but no code picks a template for a chat. Brain and environment providers share one contract, `MachineProvider` (`core/src/machine-provider.ts`). This spec replaces the draft in PR #197.
+Status: in progress. Today a brain runs in an E2B sandbox and runs its tools in the same sandbox. Environment templates, environments and the Docker provider exist (`core/src/environment-templates.ts`, `core/src/environments.ts`, `core/src/machine-provider/docker.ts`). A space picks its hand in `space.hand`, and a chat keeps the hand of its space at creation (`core/src/session/runner.ts`). Brain and environment providers share one contract, `MachineProvider` (`core/src/machine-provider.ts`). This spec replaces the draft in PR #197.
 
 References:
 
@@ -149,19 +149,16 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 
 ### Space settings
 
-1. `space.hand` is `{ placement: "colocated", environmentTemplateId: null | id }`, `{ placement: "remote", environmentTemplateId }` or `{ placement: "none" }`. New spaces get co-located with no template. It replaces the `SpaceEnvironmentTemplate` link table.
-2. Co-located is possible only when the space's brain provider has `canColocate`, and its template must be of that provider (EN3). A brain provider change that makes co-located impossible is refused until the space picks remote or none (EN24).
-3. A space cannot pick a template that has never built (`image` is null).
-4. `SessionRunner.create` reads `space.hand` once and puts it in `Session.StartInput`. No other caller builds it.
-5. Only space members change `space.hand`, the brain provider and `brainScope`. An org admin joins a shared space first (EN45).
-6. Only org admins create, edit and archive templates. Archiving a template that a space uses is refused, with the list of spaces (EN24).
+Built: `Space.Hand` (`schema/space.ts`), its checks in `Space.update` (EN3, EN24, EN45), `SessionRunner.create`, and the refused archive of a template in use (`core/src/environment-templates.ts`). New spaces get co-located with no template.
+
+1. A space cannot pick a template that has never built (`image` is null).
 
 ### When a change applies
 
 1. A machine is outdated when its image, bundle, provider or placement differs from what its space wants now. Ren checks this only in `resuming`, so a machine changes only when it wakes from sleep. Several changes before a wake count as the last one (EN21).
 2. In `resuming`, Ren updates in place when it can: a newer bundle, or a template change that only adds packages or build commands. The files stay (EN22, EN27).
 3. Ren replaces the machine for a new CPU or memory size, a removed package, a different provider, a placement change, or an in-place step that failed 3 times.
-4. Hand → none: the plugin refuses file and shell tool calls of existing chats at the next pull, with "this space has no hand now". None → hand: only new chats get tools, because the brain fixes a chat's workspace link when it creates the chat (`cell/src/harness/opencode/harness.ts:167-180`) (EN23).
+4. Hand → none: at the next pull, the existing chats lose their file and shell tools (built: `PullChat.hasHand`, the Ren plugin). None → hand: only new chats get tools, because the brain fixes a chat's workspace link when it creates the chat (EN23).
 5. A change to `brainScope` applies to new chats only.
 
 ### Templates
@@ -210,21 +207,18 @@ Ren's code reaches machines as bundles, not in images (EN26-EN29; `cell/e2b/bund
 
 ## 4. Contract changes
 
-| Where                                  | Change                                                                                                                                                                                                                                                                     |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schema/space.ts`                      | `hand` in `Info` and `UpdateInput`.                                                                                                                                                                                                                                        |
-| `schema/session.ts`                    | `StartInput.environmentTemplateId` becomes `hand`.                                                                                                                                                                                                                         |
-| `schema/environment-template.ts`       | `networking`; `Info` gets `buildStatus`, `image`, `buildError`.                                                                                                                                                                                                            |
-| `schema/space-environment-template.ts` | Removed, with its protocol group, core service, policy and table.                                                                                                                                                                                                          |
-| `db`                                   | `space`: hand placement, template. `environment_template`: networking, build fields. `environment`: the columns of `MachineLifecycle.Row`. `brain` and `environment`: image. `environment`: bundle versions. `environment`: the retry and silence columns that `brain` has |
-| `core/machine-access.ts`               | `release`, `status` and `retire`, each with its first caller. Today: `ensure`, `access`, `check`, `retry`.                                                                                                                                                                 |
-| `core/machine-provider.ts`             | `image`, `size` and `network` in `create`; `build`; the flags `canPause` and `canLimitHosts`. E2B REST calls live in one module.                                                                                                                                           |
-| `core/environments.ts`                 | Remote hand machines on `MachineLifecycle`; the "hand unreachable" check.                                                                                                                                                                                                  |
-| `core/environment-templates.ts`        | One build at a time per template; archive refused while in use.                                                                                                                                                                                                            |
-| `environment-api`                      | Later: a feature list in `hello`.                                                                                                                                                                                                                                          |
-| `cell`                                 | One OpenCode hand-bridge module chosen by `REN_HAND_PLACEMENT`; the plugin refuses tools of a space with no hand.                                                                                                                                                          |
-| `app`                                  | Settings → Environments; space settings for the hand (the brain provider choice stays hidden while one exists).                                                                                                                                                            |
-| `infra/aws`                            | A memory alarm for the server.                                                                                                                                                                                                                                             |
+| Where                            | Change                                                                                                                                                                                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema/environment-template.ts` | `networking`; `Info` gets `buildStatus`, `image`, `buildError`.                                                                                                                                                                         |
+| `db`                             | `environment_template`: networking, build fields. `environment`: the columns of `MachineLifecycle.Row`. `brain` and `environment`: image. `environment`: bundle versions. `environment`: the retry and silence columns that `brain` has |
+| `core/machine-access.ts`         | `release`, `status` and `retire`, each with its first caller. Today: `ensure`, `access`, `check`, `retry`.                                                                                                                              |
+| `core/machine-provider.ts`       | `image`, `size` and `network` in `create`; `build`; the flags `canPause` and `canLimitHosts`. E2B REST calls live in one module.                                                                                                        |
+| `core/environments.ts`           | Remote hand machines on `MachineLifecycle`; the "hand unreachable" check.                                                                                                                                                               |
+| `core/environment-templates.ts`  | One build at a time per template; archive refused while in use.                                                                                                                                                                         |
+| `environment-api`                | Later: a feature list in `hello`.                                                                                                                                                                                                       |
+| `cell`                           | One OpenCode hand-bridge module chosen by `REN_HAND_PLACEMENT`.                                                                                                                                                                         |
+| `app`                            | Settings → Environments; space settings for the hand (the brain provider choice stays hidden while one exists).                                                                                                                         |
+| `infra/aws`                      | A memory alarm for the server.                                                                                                                                                                                                          |
 
 Run `bun run generate` after the protocol changes.
 
@@ -245,7 +239,7 @@ Each pull request is based on the one before it. Each one passes its own rows of
 | 9   | `bundle-update`             | Images without Ren code; `updating`; the OpenCode version rule.                                         |
 | 10  | `brain-provider-registry`   | Brain providers with `canColocate`; the space's choice, hidden.                                         |
 | 11  | `space-hand-choice`         | `space.hand`, `SessionRunner`, tools refused with no hand, the refusals of §3.                          |
-| 12  | `template-image-build`      | Networking, build status, one build at a time, E2B builds from the system image.                        |
+| 12  | `template-image-build`      | Networking, build status, one build at a time, E2B builds from the system image; no never-built hand.   |
 | 13  | `colocated-template-brain`  | The brain machine from the template image; Ren's hosts in `limited`; packages in place.                 |
 | 14  | `environments-settings-ui`  | Settings → Environments and the space's hand settings.                                                  |
 | 15  | `remote-e2b-hand`           | Remote hand machines on `MachineLifecycle`, seats, the unreachable check, the remote option in the app. |

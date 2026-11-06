@@ -3,6 +3,7 @@ export * as Space from "./space.js"
 import { Schema } from "effect"
 import { Auth } from "./auth.js"
 import { Brain } from "./brain.js"
+import { EnvironmentTemplate } from "./environment-template.js"
 import { Factory } from "./factory.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
@@ -24,6 +25,24 @@ export const Kind = Schema.Literals(["shared", "private"]).annotate({
 })
 export type Kind = typeof Kind.Type
 
+export const Hand = Schema.Union([
+  Schema.Struct({
+    placement: Schema.Literal("colocated"),
+    environmentTemplateId: Schema.NullOr(EnvironmentTemplate.ID).annotate({
+      description: "A template of the space’s brain provider. Null: Ren’s system image.",
+    }),
+  }),
+  Schema.Struct({ placement: Schema.Literal("remote"), environmentTemplateId: EnvironmentTemplate.ID }),
+  Schema.Struct({ placement: Schema.Literal("none") }),
+]).annotate({
+  identifier: "Space.Hand",
+  description:
+    "Where the space’s chats run file and shell tools: on the brain’s own machine, on machines of a template that chats share, or nowhere. A change reaches a machine when it wakes; a chat started with none never gets tools.",
+})
+export type Hand = typeof Hand.Type
+
+export const defaultHand: Hand = { placement: "colocated", environmentTemplateId: null }
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
@@ -42,6 +61,7 @@ export const Info = Schema.Struct({
     description:
       "The brain provider the space chose. Null: the deployment’s first one. The app hides the choice while the deployment has one.",
   }),
+  hand: Hand,
   memberCount: Schema.Int,
   membershipId: Schema.NullOr(MembershipID),
   factory: Factory.Info,
@@ -79,6 +99,7 @@ export const UpdateInput = Schema.Struct({
   description: Schema.optional(Schema.NullOr(Schema.String)),
   brainScope: Schema.optional(Brain.Scope),
   brainProvider: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
+  hand: Schema.optional(Hand),
 }).annotate({ identifier: "Space.UpdateInput" })
 
 export const definition = Primitive.define({

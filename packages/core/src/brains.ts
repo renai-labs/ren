@@ -302,19 +302,21 @@ export const layer = Layer.effect(
           message: `The creator of ${input.sessionId} can no longer see its space`,
         })
       const target = yield* brainHost.target(placement.brainId)
-      const requested = input.environmentTemplateId
-      const binding = requested
-        ? Option.some(
-            yield* environments
-              .bind({ ...subject, spaceId: placement.spaceId }, requested)
-              .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
-          )
-        : Option.map(
-            yield* environments.findDirectory(subject, yield* handOf(placement.brainId, target.generation)),
-            (directory) => ({ directory, isNew: false }),
-          )
+      const hand = input.hand
+      const colocated =
+        hand.placement === "colocated"
+          ? yield* environments.findDirectory(subject, yield* handOf(placement.brainId, target.generation))
+          : Option.none()
+      const binding =
+        hand.placement === "remote"
+          ? Option.some(
+              yield* environments
+                .bind({ ...subject, spaceId: placement.spaceId }, hand.environmentTemplateId)
+                .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
+            )
+          : Option.map(colocated, (directory) => ({ directory, isNew: false }))
       const payload = {
-        ...Struct.omit(input, ["environmentTemplateId"]),
+        ...Struct.omit(input, ["hand"]),
         ...Option.match(binding, { onNone: () => ({}), onSome: (found) => ({ directory: found.directory }) }),
       } satisfies StartBody
       const api = yield* client.brain(target)
@@ -593,6 +595,12 @@ export const layer = Layer.effect(
         const channels = yield* database
           .transaction((transaction) => ChannelInstallQueries.servers(transaction, host.organizationId, host.spaceId))
           .pipe(Effect.orDie)
+        // oxlint-disable-next-line ren/no-comments -- EN23: a space with no hand refuses the file and shell tools of its existing chats at their next pull.
+        const hasHand = (yield* database.db
+          .select({ placement: Database.Schema.space.hand_placement })
+          .from(Database.Schema.space)
+          .where(eq(Database.Schema.space.id, host.spaceId))
+          .pipe(Effect.orDie)).some((row) => row.placement !== "none")
         return {
           publicKeys: client.publicKeys,
           ...Option.match(inference, { onNone: () => ({}), onSome: (found) => ({ inference: found }) }),
@@ -602,11 +610,12 @@ export const layer = Layer.effect(
           memory: yield* Memory.roots(database.db, host).pipe(Effect.orDie),
           chats: pulled.chats.map((chat) => {
             const capability = capabilities.get(chat.id)
-            if (!capability) return chat
+            if (!capability) return { id: chat.id, agent: chat.agent, archived: chat.archived, hasHand }
             return {
               id: chat.id,
               agent: chat.agent,
               archived: chat.archived,
+              hasHand,
               drives: drives.availability(host, capability),
             }
           }),
