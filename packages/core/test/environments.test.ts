@@ -23,6 +23,7 @@ import {
 } from "effect"
 import { TestClock } from "effect/testing"
 import { CredentialCallers } from "../src/credential-callers.js"
+import { EnvironmentNetwork } from "../src/environment-network.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { testEffect } from "./lib/effect.js"
@@ -58,13 +59,16 @@ const noExecutor = Layer.succeed(
 const environmentsWith = Effect.fnUntraced(function* (
   config: Readonly<Record<string, string>> = {},
   options: Parameters<typeof TestProvider.make>[0] = {},
-  ren: { readonly hasEgress?: boolean } = {},
+  ren: {
+    readonly hasEgress?: boolean
+    readonly network?: Layer.Layer<EnvironmentNetwork.Service>
+  } = {},
 ) {
   const probe = yield* TestProvider.make(options)
   const context = yield* Layer.build(
     Layer.fresh(
       Environments.layer.pipe(
-        Layer.provide([Signer.layerLocal, noExecutor]),
+        Layer.provide([Signer.layerLocal, noExecutor, ren.network ?? Layer.empty]),
         Layer.provide(ren.hasEgress ? Layer.empty : SandboxEgress.layerNone),
         Layer.provideMerge(TestSandboxEgress.layer),
       ),
@@ -175,7 +179,10 @@ describe("Environments", () => {
           const session = yield* subjectIn(organizationId)
           yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
           const access = yield* subject.environments.access(session, Option.none())
-          const proxy = Option.flatten(Option.fromNullishOr((yield* Ref.get(subject.probe.proxies)).at(0)))
+          const proxy = Option.flatMap(
+            Option.fromNullishOr((yield* Ref.get(subject.probe.networks)).at(0)),
+            (network) => network.proxy,
+          )
           const verified = Option.isSome(proxy)
             ? yield* subject.callers.verify({
                 kind: "ProxyLogin",
@@ -205,6 +212,36 @@ describe("Environments", () => {
           verified: undefined,
         })
       }),
+  )
+
+  it.live("a limited remote hand also reaches Ren's server, where it fetches Ren's code at its start", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const subject = yield* environmentsWith(
+        { REN_URL: "https://ren.example.com" },
+        { canLimitHosts: true },
+        { network: EnvironmentNetwork.layerNone },
+      )
+      const organizationId = yield* Seed.organization()
+      const session = yield* subjectIn(organizationId)
+      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+      yield* database.db
+        .update(Database.Schema.environment_template)
+        .set({
+          networking: {
+            type: "limited",
+            allowPackageManagers: false,
+            allowMcpServers: false,
+            allowedHosts: ["api.example.com"],
+          },
+        })
+        .where(eq(Database.Schema.environment_template.id, environmentTemplateId))
+      yield* subject.environments.bind(session, environmentTemplateId)
+      yield* subject.environments.access(session, Option.none())
+      expect((yield* Ref.get(subject.probe.networks)).map((network) => network.hosts)).toEqual([
+        Option.some(["api.example.com", "ren.example.com"]),
+      ])
+    }),
   )
 
   it.live("a configured token lifetime is the access's lifetime", () =>
