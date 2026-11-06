@@ -25,6 +25,7 @@
     "@aws-sdk/client-sts": "catalog:",
     "@aws-sdk/s3-presigned-post": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
+    "@bufbuild/cel": "catalog:",
     "@effect/sql-pg": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@ren/db": "workspace:*",

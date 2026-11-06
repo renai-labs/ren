@@ -1,0 +1,384 @@
+export * as Webhooks from "./webhooks.js"
+
+import { Database } from "@ren/db/database"
+import type { Auth } from "@ren/schema/auth"
+import type { Envelope as EnvelopeSchema } from "@ren/schema/envelope"
+import type { Space } from "@ren/schema/space"
+import { Webhook } from "@ren/schema/webhook"
+import { and, count, desc, eq, isNull, sql } from "drizzle-orm"
+import { Config, Context, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Access } from "./access.js"
+import { Actor } from "./actor.js"
+import { AgentQueries } from "./agent/queries.js"
+import { Envelope } from "./envelope.js"
+import { Primitive } from "./primitive.js"
+import { SpaceQueries } from "./space/queries.js"
+import { WebhookParser } from "./webhook-parser.js"
+import { WebhookPolicy } from "./webhook/policy.js"
+
+export type Interface = Primitive.Interface<typeof Webhook.definition>
+
+export class Service extends Context.Service<Service, Interface>()("@ren/core/Webhooks") {}
+
+const webhook = Database.Schema.webhook
+
+type Row = typeof webhook.$inferSelect
+
+const notFound = new Primitive.NotFound({ message: "Webhook not found." })
+
+const isID = Schema.is(Webhook.ID)
+
+const decodeParser = Schema.decodeUnknownSync(Webhook.Parser)
+
+const encodeParser = Schema.encodeSync(Webhook.Parser)
+
+const actions = {
+  get: Primitive.action(Webhook.definition, "get"),
+  create: Primitive.action(Webhook.definition, "create"),
+  update: Primitive.action(Webhook.definition, "update"),
+  archive: Primitive.action(Webhook.definition, "archive"),
+  rotateUrl: Primitive.action(Webhook.definition, "rotateUrl"),
+  setSigningSecret: Primitive.action(Webhook.definition, "setSigningSecret"),
+  revealSigningSecret: Primitive.action(Webhook.definition, "revealSigningSecret"),
+}
+
+const base64url = Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)
+
+// oxlint-disable-next-line ren/no-comments -- 32 random bytes: the URL token (W17) and a secret that Ren makes (W18).
+const random = () => base64url(crypto.getRandomValues(new Uint8Array(32)))
+
+// oxlint-disable-next-line ren/no-comments -- W16: each sealed column has its own context, so a token cannot be read as the signing secret.
+export const contextOf = (
+  row: Pick<Row, "id" | "organization_id">,
+  column: "token" | "signing_secret",
+): EnvelopeSchema.Context => ({ organizationId: row.organization_id, kind: "webhook", id: `${row.id}:${column}` })
+
+// oxlint-disable-next-line ren/no-comments -- W20: a webhook whose signature checks the sender goes live only with a signing secret.
+export const needsSecret = (parser: Webhook.Parser) => parser.signature.kind !== "none"
+
+const membershipOf = (actor: Actor.Info) =>
+  and(
+    eq(WebhookPolicy.membership.space_id, webhook.space_id),
+    eq(WebhookPolicy.membership.user_id, actor.userId),
+    isNull(WebhookPolicy.membership.archived_at),
+    Actor.fenced(actor, WebhookPolicy.membership.space_id),
+  )
+
+// oxlint-disable-next-line ren/no-comments -- W10: a change to the message, the parser or the agent, or a switch to live after owner_left, makes the actor the owner.
+const ownerAfter = (row: Row, input: Webhook.UpdateInput, actor: Actor.Info) => {
+  const isWritten = [input.message, input.parser, input.agentId].some(
+    // ast-grep-ignore: no-nullish-comparison, -- a null agent is a change: it clears the agent
+    (value) => value !== undefined,
+  )
+  const goesLive = input.mode === "live" && row.mode !== "live"
+  return isWritten || (goesLive && row.mode_reason === "owner_left") ? actor.userId : row.owner_id
+}
+
+const invalid = (message: string, field: string) => new Primitive.Invalid({ message, field })
+
+export const layer = Layer.effect(
+  Service,
+  Effect.gen(function* () {
+    const database = yield* Database.Service
+    const access = yield* Access.Service
+    const envelope = yield* Envelope.Service
+    const base = (yield* Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000"))).replace(/\/$/u, "")
+
+    const open = (row: Row, column: "token" | "signing_secret", sealed: EnvelopeSchema.Sealed) =>
+      envelope.open(sealed, contextOf(row, column)).pipe(Effect.orDie)
+
+    const seal = (row: Pick<Row, "id" | "organization_id">, column: "token" | "signing_secret", value: string) =>
+      envelope.seal(Redacted.make(value), contextOf(row, column)).pipe(Effect.orDie)
+
+    const toInfo = Effect.fnUntraced(function* (row: Row) {
+      const token = yield* open(row, "token", row.token)
+      return {
+        id: row.id,
+        spaceId: row.space_id,
+        slug: row.slug,
+        name: row.name,
+        url: `${base}/webhooks/${row.id}/${Redacted.value(token)}`,
+        ownerId: row.owner_id,
+        agentId: row.agent_id,
+        mode: row.mode,
+        modeReason: row.mode_reason,
+        message: row.message,
+        parser: decodeParser(row.parser),
+        hasSigningSecret: Boolean(row.signing_secret),
+        createdAt: DateTime.fromDateUnsafe(row.created_at),
+        updatedAt: DateTime.fromDateUnsafe(row.updated_at),
+        archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
+      } satisfies Webhook.Info
+    })
+
+    const written = (rows: ReadonlyArray<Row>) => {
+      const row = rows.at(0)
+      return row ? toInfo(row) : Effect.fail(notFound)
+    }
+
+    const visibleTo = (actor: Actor.Info) =>
+      and(
+        eq(webhook.organization_id, actor.organizationId),
+        isNull(webhook.archived_at),
+        Access.where(access.plan(actor, actions.get), WebhookPolicy.where),
+      )
+
+    const find = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      id: Webhook.ID,
+      action: string,
+    ) {
+      const found = (yield* transaction
+        .select({ webhook, membershipId: WebhookPolicy.membership.id })
+        .from(webhook)
+        .leftJoin(WebhookPolicy.membership, membershipOf(actor))
+        .where(and(eq(webhook.id, id), visibleTo(actor)))
+        .for("update", { of: webhook })).at(0)
+      if (!found) return yield* notFound
+      if (!access.isAllowed({ actor, action, resource: WebhookPolicy.resource(found.membershipId) }))
+        return yield* new Primitive.Forbidden({ message: "You cannot change this webhook." })
+      return found.webhook
+    })
+
+    const agentUsable = Effect.fnUntraced(function* (
+      transaction: Pick<Database.Transaction, "select">,
+      placement: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
+      agentId: NonNullable<Row["agent_id"]>,
+    ) {
+      const found = yield* transaction
+        .select({ id: Database.Schema.agent.id })
+        .from(Database.Schema.agent)
+        .where(
+          and(
+            eq(Database.Schema.agent.id, agentId),
+            AgentQueries.isUsableIn(placement.spaceId, placement.organizationId),
+          ),
+        )
+      return found.length > 0
+    })
+
+    const parserOf = (parser: Webhook.Parser) =>
+      Option.match(WebhookParser.check(parser), {
+        onNone: () => Effect.succeed(parser),
+        onSome: (problem) => Effect.fail(invalid(`${problem.field}: ${problem.message}`, `parser.${problem.field}`)),
+      })
+
+    // oxlint-disable-next-line ren/no-comments -- Spec section 7: before a webhook goes live, its owner and its agent must be in the space, and a signature that needs a secret must have one.
+    const liveProblem = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      row: Pick<Row, "organization_id" | "space_id" | "agent_id" | "signing_secret">,
+      ownerId: Auth.UserID,
+      parser: Webhook.Parser,
+    ) {
+      if (needsSecret(parser) && !row.signing_secret)
+        return Option.some("Set the signing secret before the webhook goes live.")
+      if (!(yield* SpaceQueries.actsIn(transaction, access, row.organization_id, row.space_id, ownerId)))
+        return Option.some("The owner is not in the space.")
+      if (
+        row.agent_id &&
+        !(yield* agentUsable(transaction, { organizationId: row.organization_id, spaceId: row.space_id }, row.agent_id))
+      )
+        return Option.some("Pick an agent of the space first.")
+      return Option.none<string>()
+    })
+
+    const change = (
+      name: string,
+      action: string,
+      write: (transaction: Database.Transaction, row: Row) => Effect.Effect<ReadonlyArray<Row>, unknown>,
+    ) =>
+      Effect.fn(name)(function* (actor: Actor.Info, id: Webhook.ID) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const row = yield* find(transaction, actor, id, action)
+            return yield* written(yield* write(transaction, row).pipe(Effect.orDie))
+          }),
+        )
+      })
+
+    const secretOf = Effect.fnUntraced(function* (row: Row) {
+      if (!row.signing_secret) return yield* new Primitive.Conflict({ message: "The webhook has no signing secret." })
+      return Redacted.value(yield* open(row, "signing_secret", row.signing_secret))
+    })
+
+    return Service.of({
+      list: Effect.fn("Webhooks.list")(function* (actor: Actor.Info, input: Webhook.ListInput) {
+        const where = and(visibleTo(actor), input.spaceId ? eq(webhook.space_id, input.spaceId) : undefined)
+        const found = yield* database
+          .transaction((transaction) =>
+            Effect.gen(function* () {
+              const rows = yield* transaction
+                .select({ webhook })
+                .from(webhook)
+                .leftJoin(WebhookPolicy.membership, membershipOf(actor))
+                .where(where)
+                .orderBy(desc(webhook.created_at), desc(webhook.id))
+                .limit(input.pageSize)
+                .offset((input.page - 1) * input.pageSize)
+              const totals = yield* transaction
+                .select({ total: count() })
+                .from(webhook)
+                .leftJoin(WebhookPolicy.membership, membershipOf(actor))
+                .where(where)
+              return { rows, total: totals.at(0)?.total ?? 0 }
+            }),
+          )
+          .pipe(Effect.orDie)
+        return {
+          items: yield* Effect.forEach(found.rows, (row) => toInfo(row.webhook)),
+          page: input.page,
+          pageSize: input.pageSize,
+          total: found.total,
+        }
+      }),
+      get: Effect.fn("Webhooks.get")(function* (actor: Actor.Info, idOrSlug: string) {
+        if (!isID(idOrSlug)) return yield* notFound
+        const found = (yield* database.db
+          .select({ webhook })
+          .from(webhook)
+          .leftJoin(WebhookPolicy.membership, membershipOf(actor))
+          .where(and(eq(webhook.id, idOrSlug), visibleTo(actor)))
+          .pipe(Effect.orDie)).at(0)
+        if (!found) return yield* notFound
+        return yield* toInfo(found.webhook)
+      }),
+      create: Effect.fn("Webhooks.create")(function* (actor: Actor.Info, input: Webhook.CreateInput) {
+        const parser = yield* parserOf(input.parser ?? decodeParser({}))
+        // oxlint-disable-next-line ren/no-comments -- W3: a webhook created in a chat runs on the agent of that chat, unless the input names one.
+        const agentId = input.agentId ?? (actor.agent?.spaceId === input.spaceId ? actor.agent.agentId : undefined)
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const space = (yield* transaction
+              .select({ id: Database.Schema.space.id, membershipId: SpaceQueries.membership.id })
+              .from(Database.Schema.space)
+              .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+              .where(
+                and(
+                  eq(Database.Schema.space.id, input.spaceId),
+                  eq(Database.Schema.space.organization_id, actor.organizationId),
+                  isNull(Database.Schema.space.archived_at),
+                ),
+              )).at(0)
+            if (!space?.membershipId) return yield* new Primitive.NotFound({ message: "Space not found." })
+            if (
+              !access.isAllowed({
+                actor,
+                action: actions.create,
+                resource: WebhookPolicy.resource(space.membershipId),
+              })
+            )
+              return yield* new Primitive.Forbidden({ message: "You cannot add webhooks to this space." })
+            const placement = { organizationId: actor.organizationId, spaceId: input.spaceId }
+            if (agentId && !(yield* agentUsable(transaction, placement, agentId)))
+              return yield* new Primitive.NotFound({ message: "Agent not found." })
+            const taken = yield* transaction
+              .select({ slug: webhook.slug })
+              .from(webhook)
+              .where(and(eq(webhook.space_id, input.spaceId), isNull(webhook.archived_at)))
+            const id = Webhook.ID.create()
+            const rows = yield* transaction
+              .insert(webhook)
+              .values({
+                id,
+                organization_id: actor.organizationId,
+                space_id: input.spaceId,
+                slug: yield* Primitive.slugFor(input, "webhook", new Set(taken.map((row) => row.slug))),
+                name: input.name,
+                owner_id: actor.userId,
+                agent_id: agentId ?? null,
+                message: input.message,
+                parser: encodeParser(parser),
+                token: yield* seal({ id, organization_id: actor.organizationId }, "token", random()),
+                created_by: actor.userId,
+              })
+              .returning()
+            return yield* written(rows)
+          }),
+        )
+      }),
+      update: Effect.fn("Webhooks.update")(function* (actor: Actor.Info, id: Webhook.ID, input: Webhook.UpdateInput) {
+        const parser = input.parser ? yield* parserOf(input.parser) : undefined
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const row = yield* find(transaction, actor, id, actions.update)
+            if (
+              input.agentId &&
+              !(yield* agentUsable(
+                transaction,
+                { organizationId: row.organization_id, spaceId: row.space_id },
+                input.agentId,
+              ))
+            )
+              return yield* new Primitive.NotFound({ message: "Agent not found." })
+            const ownerId = ownerAfter(row, input, actor)
+            // ast-grep-ignore: no-nullish-comparison, -- null clears the agent; undefined leaves it
+            const next = { ...row, agent_id: input.agentId === undefined ? row.agent_id : input.agentId }
+            if (input.mode === "live") {
+              const problem = yield* liveProblem(transaction, next, ownerId, parser ?? decodeParser(row.parser))
+              if (Option.isSome(problem)) return yield* invalid(problem.value, "mode")
+            }
+            const rows = yield* transaction
+              .update(webhook)
+              .set({
+                name: input.name,
+                message: input.message,
+                agent_id: input.agentId,
+                ...(parser && { parser: encodeParser(parser) }),
+                ...(input.mode && { mode: input.mode, mode_reason: null }),
+                owner_id: ownerId,
+                updated_at: sql`now()`,
+              })
+              .where(eq(webhook.id, id))
+              .returning()
+            return yield* written(rows)
+          }),
+        )
+      }),
+      archive: change("Webhooks.archive", actions.archive, (transaction, row) =>
+        transaction
+          .update(webhook)
+          .set({ archived_at: sql`now()`, updated_at: sql`now()` })
+          .where(eq(webhook.id, row.id))
+          .returning(),
+      ),
+      rotateUrl: change("Webhooks.rotateUrl", actions.rotateUrl, (transaction, row) =>
+        Effect.gen(function* () {
+          return yield* transaction
+            .update(webhook)
+            .set({ token: yield* seal(row, "token", random()), updated_at: sql`now()` })
+            .where(eq(webhook.id, row.id))
+            .returning()
+        }),
+      ),
+      setSigningSecret: Effect.fn("Webhooks.setSigningSecret")(function* (
+        actor: Actor.Info,
+        id: Webhook.ID,
+        input: Webhook.SigningSecretInput,
+      ) {
+        const secret = input.secret ?? random()
+        const record = yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const row = yield* find(transaction, actor, id, actions.setSigningSecret)
+            return yield* written(
+              yield* transaction
+                .update(webhook)
+                .set({ signing_secret: yield* seal(row, "signing_secret", secret), updated_at: sql`now()` })
+                .where(eq(webhook.id, row.id))
+                .returning(),
+            )
+          }),
+        )
+        return { record, secret }
+      }),
+      revealSigningSecret: Effect.fn("Webhooks.revealSigningSecret")(function* (actor: Actor.Info, id: Webhook.ID) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const row = yield* find(transaction, actor, id, actions.revealSigningSecret)
+            return { record: yield* toInfo(row), secret: yield* secretOf(row) }
+          }),
+        )
+      }),
+    })
+  }),
+)

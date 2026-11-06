@@ -192,6 +192,22 @@ import type {
   ScheduleRunOutput,
   ScheduleRunListInput,
   ScheduleRunListOutput,
+  WebhookListInput,
+  WebhookListOutput,
+  WebhookGetInput,
+  WebhookGetOutput,
+  WebhookCreateInput,
+  WebhookCreateOutput,
+  WebhookUpdateInput,
+  WebhookUpdateOutput,
+  WebhookArchiveInput,
+  WebhookArchiveOutput,
+  WebhookRotateUrlInput,
+  WebhookRotateUrlOutput,
+  WebhookSetSigningSecretInput,
+  WebhookSetSigningSecretOutput,
+  WebhookRevealSigningSecretInput,
+  WebhookRevealSigningSecretOutput,
   CredentialListInput,
   CredentialListOutput,
   CredentialGetInput,
@@ -1696,6 +1712,115 @@ export function make(options: ClientOptions) {
             query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
             successStatus: 200,
             declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    webhook: {
+      list: (input: WebhookListInput, requestOptions?: RequestOptions) =>
+        request<WebhookListOutput>(
+          {
+            method: "GET",
+            path: `/webhooks`,
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: WebhookGetInput, requestOptions?: RequestOptions) =>
+        request<WebhookGetOutput>(
+          {
+            method: "GET",
+            path: `/webhooks/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: WebhookCreateInput, requestOptions?: RequestOptions) =>
+        request<WebhookCreateOutput>(
+          {
+            method: "POST",
+            path: `/webhooks`,
+            body: {
+              spaceId: input["spaceId"],
+              name: input["name"],
+              slug: input["slug"],
+              message: input["message"],
+              parser: input["parser"],
+              agentId: input["agentId"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: WebhookUpdateInput, requestOptions?: RequestOptions) =>
+        request<WebhookUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/webhooks/${encodeURIComponent(input.id)}`,
+            body: {
+              name: input["name"],
+              message: input["message"],
+              parser: input["parser"],
+              agentId: input["agentId"],
+              mode: input["mode"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: WebhookArchiveInput, requestOptions?: RequestOptions) =>
+        request<WebhookArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/webhooks/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      rotateUrl: (input: WebhookRotateUrlInput, requestOptions?: RequestOptions) =>
+        request<WebhookRotateUrlOutput>(
+          {
+            method: "POST",
+            path: `/webhooks/${encodeURIComponent(input.id)}/rotateUrl`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      setSigningSecret: (input: WebhookSetSigningSecretInput, requestOptions?: RequestOptions) =>
+        request<WebhookSetSigningSecretOutput>(
+          {
+            method: "POST",
+            path: `/webhooks/${encodeURIComponent(input.id)}/setSigningSecret`,
+            body: { secret: input["secret"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      revealSigningSecret: (input: WebhookRevealSigningSecretInput, requestOptions?: RequestOptions) =>
+        request<WebhookRevealSigningSecretOutput>(
+          {
+            method: "POST",
+            path: `/webhooks/${encodeURIComponent(input.id)}/revealSigningSecret`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
             empty: false,
           },
           requestOptions,

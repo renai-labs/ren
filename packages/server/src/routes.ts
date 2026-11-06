@@ -28,6 +28,7 @@ import { Memory } from "@ren/core/memory"
 import { OrganizationSettings } from "@ren/core/organization-settings"
 import { ScheduleTrigger } from "@ren/core/schedule-trigger"
 import { Schedules } from "@ren/core/schedules"
+import { Webhooks } from "@ren/core/webhooks"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
@@ -77,6 +78,7 @@ import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handle
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
+import { WebhookHandler } from "./handlers/api/webhook.js"
 import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
@@ -181,6 +183,7 @@ export const layer = Layer.mergeAll(
         LabelHandler,
         ScheduleHandler,
         ScheduleRunHandler,
+        WebhookHandler,
         CredentialHandler,
         CredentialConnectHandler,
         OAuthSessionHandler,
@@ -221,6 +224,7 @@ export const layer = Layer.mergeAll(
           Layer.provide(BrainRegistry.layer),
         ),
         schedules,
+        Webhooks.layer,
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,

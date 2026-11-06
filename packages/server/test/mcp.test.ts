@@ -23,6 +23,8 @@ afterEach(() => setSystemTime())
 
 const Space = Schema.Struct({ id: Schema.String })
 
+const Tools = Schema.Struct({ tools: Schema.Array(Schema.Struct({ name: Schema.String })) })
+
 const initialize = {
   jsonrpc: "2.0",
   id: 1,
@@ -193,6 +195,25 @@ describe("Ren MCP tools", () => {
     expect(created).toMatchObject({ isError: false, structuredContent: { name: "Launch" } })
     expect(await call("space_update", { id, name: "Launch week" })).toMatchObject({ isError: false })
     expect(await call("space_get", { idOrSlug: id })).toMatchObject({ structuredContent: { name: "Launch week" } })
+  })
+
+  test("creates a listening webhook with a tool and returns its URL; the signing secret has no tool (W17, W18)", async () => {
+    const caller = await accessToken(app, "webhooks@example.com")
+    const space = Schema.decodeUnknownSync(Space)(
+      await (await call(app, caller.cookie, "POST", "/spaces", { name: "Growth" })).json(),
+    )
+    const created = await result(
+      await modern(app, caller.token, "tools/call", {
+        name: "webhook_create",
+        arguments: { spaceId: space.id, name: "PostHog signups", message: "Research this person’s company." },
+      }),
+    )
+    expect(created).toMatchObject({
+      isError: false,
+      structuredContent: { mode: "listening", url: expect.stringMatching(/\/webhooks\/whk_[^/]+\/[\w-]{32,}$/u) },
+    })
+    const listed = Schema.decodeUnknownSync(Tools)(await result(await modern(app, caller.token, "tools/list")))
+    expect(listed.tools.filter((tool) => tool.name.startsWith("webhook_") && tool.name.includes("secret"))).toEqual([])
   })
 
   test("runs a tool with the organization and the role of its token", async () => {

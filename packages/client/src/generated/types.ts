@@ -241,6 +241,16 @@ export type ScheduleRunReason =
   | "agent_removed"
   | "chat_archived"
 
+export type WebhookID = string
+
+export type WebhookMode = "listening" | "live"
+
+export type WebhookModeReason = "owner_left" | "agent_removed" | "parser_broken"
+
+export type WebhookHeaderName = string
+
+export type WebhookExpression = string
+
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
 export type CredentialLocation = "header" | "query" | "path"
@@ -637,6 +647,13 @@ export type ScheduleRunInfo = {
   sessionId: SessionID
 }
 
+export type WebhookSignature =
+  | { kind: "none" }
+  | { kind: "header"; header: WebhookHeaderName }
+  | { kind: "hmac"; header: WebhookHeaderName; encoding: "hex" | "base64"; prefix?: string }
+  | { kind: "standard" }
+  | { kind: "stripe" }
+
 export type CredentialInject =
   | { op: "replace"; in: [CredentialLocation, ...Array<CredentialLocation>] }
   | { op: "setHeader"; name: string; format: "Bearer {value}" | "Basic {basic}" | "{value}" }
@@ -956,6 +973,16 @@ export type ScheduleInfo = {
 
 export type ScheduleRunPage = { items: Array<ScheduleRunInfo>; page: number; pageSize: number; total: number }
 
+export type WebhookParser = {
+  signature?: WebhookSignature
+  handshake?: WebhookExpression
+  signedHandshake?: WebhookExpression
+  filter?: WebhookExpression
+  eventId?: WebhookExpression
+  threadKey?: WebhookExpression
+  title?: WebhookExpression
+}
+
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
 
 export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
@@ -1092,6 +1119,24 @@ export type TaskEventInfo = {
 
 export type SchedulePage = { items: Array<ScheduleInfo>; page: number; pageSize: number; total: number }
 
+export type WebhookInfo = {
+  id: WebhookID
+  spaceId: SpaceID
+  slug: PrimitiveSlug
+  name: string
+  url: string
+  ownerId: AuthUserID
+  agentId: AgentID | null
+  mode: WebhookMode
+  modeReason: WebhookModeReason | null
+  message: string
+  parser: WebhookParser
+  hasSigningSecret: boolean
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
 export type ChannelMappingPage = { items: Array<ChannelMappingInfo>; page: number; pageSize: number; total: number }
 
 export type ChannelPlaceInfo = {
@@ -1206,6 +1251,10 @@ export type SessionMessageTool = {
 export type TaskActivityInfo =
   | { id: TaskEventID; type: "event"; event: TaskEventInfo }
   | { id: TaskCommentID; type: "comment"; comment: TaskCommentInfo }
+
+export type WebhookPage = { items: Array<WebhookInfo>; page: number; pageSize: number; total: number }
+
+export type WebhookSecret = { record: WebhookInfo; secret: string }
 
 export type ChannelPlacePage = { items: Array<ChannelPlaceInfo>; page: number; pageSize: number; total: number }
 
@@ -6480,6 +6529,337 @@ export type ScheduleRunListInput = {
 }
 
 export type ScheduleRunListOutput = ScheduleRunPage
+
+export type WebhookListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type WebhookListOutput = WebhookPage
+
+export type WebhookGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type WebhookGetOutput = WebhookInfo
+
+export type WebhookCreateInput = {
+  readonly spaceId: {
+    readonly spaceId: string
+    readonly name: string
+    readonly slug?: string | null
+    readonly message: string
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null
+  }["spaceId"]
+  readonly name: {
+    readonly spaceId: string
+    readonly name: string
+    readonly slug?: string | null
+    readonly message: string
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null
+  }["name"]
+  readonly slug?: {
+    readonly spaceId: string
+    readonly name: string
+    readonly slug?: string | null
+    readonly message: string
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null
+  }["slug"]
+  readonly message: {
+    readonly spaceId: string
+    readonly name: string
+    readonly slug?: string | null
+    readonly message: string
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null
+  }["message"]
+  readonly parser?: {
+    readonly spaceId: string
+    readonly name: string
+    readonly slug?: string | null
+    readonly message: string
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null
+  }["parser"]
+  readonly agentId?: {
+    readonly spaceId: string
+    readonly name: string
+    readonly slug?: string | null
+    readonly message: string
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null
+  }["agentId"]
+}
+
+export type WebhookCreateOutput = WebhookInfo
+
+export type WebhookUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["name"]
+  readonly message?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["message"]
+  readonly parser?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["parser"]
+  readonly agentId?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["agentId"]
+  readonly mode?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["mode"]
+}
+
+export type WebhookUpdateOutput = WebhookInfo
+
+export type WebhookArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type WebhookArchiveOutput = WebhookInfo
+
+export type WebhookRotateUrlInput = { readonly id: { readonly id: string }["id"] }
+
+export type WebhookRotateUrlOutput = WebhookInfo
+
+export type WebhookSetSigningSecretInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly secret?: { readonly secret?: string | undefined }["secret"]
+}
+
+export type WebhookSetSigningSecretOutput = WebhookSecret
+
+export type WebhookRevealSigningSecretInput = { readonly id: { readonly id: string }["id"] }
+
+export type WebhookRevealSigningSecretOutput = WebhookSecret
 
 export type CredentialListInput = {
   readonly owner?: {

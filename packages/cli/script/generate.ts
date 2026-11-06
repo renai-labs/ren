@@ -168,6 +168,19 @@ const resources: ReadonlyArray<Resource> = [
     descriptions: { pause: "Pause a schedule", resume: "Resume a schedule", run: "Run a schedule now" },
   },
   {
+    group: "webhook",
+    about: "Manage webhooks",
+    path: ["webhook"],
+    name: "webhook",
+    one: "a webhook",
+    many: "webhooks",
+    descriptions: {
+      rotateUrl: "Replace a webhook’s URL",
+      setSigningSecret: "Set a webhook’s signing secret",
+      revealSigningSecret: "Show a webhook’s signing secret",
+    },
+  },
+  {
     group: "credential",
     about: "Manage credentials",
     path: ["credential"],
@@ -251,6 +264,7 @@ const references: Readonly<
   taskId: { operation: "task.get", title: "Task" },
   parentId: { operation: "task.get", title: "Parent task" },
   scheduleId: { operation: "schedule.get", title: "Schedule" },
+  webhookId: { operation: "webhook.get", title: "Webhook" },
   environmentTemplateId: { operation: "environment-template.get", title: "Environment template", name: "template" },
   profileId: { operation: "app-profile.get", title: "App profile" },
 }

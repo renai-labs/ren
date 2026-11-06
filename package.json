@@ -46,6 +46,7 @@
       "@aws-sdk/s3-presigned-post": "3.1154.0",
       "@aws-sdk/s3-request-presigner": "3.1154.0",
       "@babel/core": "7.29.7",
+      "@bufbuild/cel": "0.6.1",
       "@base-ui/react": "1.8.0",
       "@better-auth/cimd": "1.7.7",
       "@better-auth/drizzle-adapter": "1.7.7",

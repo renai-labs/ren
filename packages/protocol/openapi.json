@@ -8054,6 +8054,680 @@
         "summary": "List schedule-runs"
       }
     },
+    "/webhooks": {
+      "get": {
+        "tags": ["webhook"],
+        "operationId": "webhook.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                }
+              ],
+              "description": "Without it, the webhooks of every space you are in."
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the webhooks that the caller can see.",
+        "summary": "List webhooks"
+      },
+      "post": {
+        "tags": ["webhook"],
+        "operationId": "webhook.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one webhook.",
+        "summary": "Create webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Webhook.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/webhooks/{idOrSlug}": {
+      "get": {
+        "tags": ["webhook"],
+        "operationId": "webhook.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one webhook by ID or slug.",
+        "summary": "Get webhook"
+      }
+    },
+    "/webhooks/{id}": {
+      "patch": {
+        "tags": ["webhook"],
+        "operationId": "webhook.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Webhook.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one webhook.",
+        "summary": "Update webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Webhook.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["webhook"],
+        "operationId": "webhook.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Webhook.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one webhook and return it. Archiving an archived webhook returns it unchanged.",
+        "summary": "Archive webhook"
+      }
+    },
+    "/webhooks/{id}/rotateUrl": {
+      "post": {
+        "tags": ["webhook"],
+        "operationId": "webhook.rotateUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Webhook.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the rotateUrl action on one webhook.",
+        "summary": "rotateUrl webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Webhook.NoInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/webhooks/{id}/setSigningSecret": {
+      "post": {
+        "tags": ["webhook"],
+        "operationId": "webhook.setSigningSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Webhook.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook.Secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook.Secret"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the setSigningSecret action on one webhook.",
+        "summary": "setSigningSecret webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Webhook.SigningSecretInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/webhooks/{id}/revealSigningSecret": {
+      "post": {
+        "tags": ["webhook"],
+        "operationId": "webhook.revealSigningSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Webhook.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook.Secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook.Secret"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the revealSigningSecret action on one webhook.",
+        "summary": "revealSigningSecret webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Webhook.NoInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/credentials": {
       "get": {
         "tags": ["credential"],
@@ -12401,6 +13075,11 @@
         "type": "string",
         "pattern": "^usr_",
         "description": "The person who last wrote its instruction. Each run sends the message as this person."
+      },
+      "Auth.UserID_2": {
+        "type": "string",
+        "pattern": "^usr_",
+        "description": "The person who last changed the message, the parser or the agent. Chats run as this person."
       },
       "Brain.Scope": {
         "type": "string",
@@ -17273,6 +17952,12 @@
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
         "description": "Unique among the live schedules of its space. A new name does not change it."
       },
+      "Primitive.Slug_7": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Unique among the live webhooks of its space."
+      },
       "PullRequest.Info": {
         "type": "object",
         "properties": {
@@ -21762,6 +22447,59 @@
         "type": "string",
         "enum": ["ren", "customer"]
       },
+      "Webhook.CreateInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.Slug_1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, Ren makes one from the name and adds -2, -3, … when it is taken."
+          },
+          "message": {
+            "$ref": "#/components/schemas/Webhook.MessageEncoded"
+          },
+          "parser": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Webhook.Parser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, every request starts a chat."
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An agent of the space. Without it, ren."
+          }
+        },
+        "required": ["spaceId", "name", "message"],
+        "additionalProperties": false,
+        "description": "A new webhook is listening: it records requests and starts no chat until it is live."
+      },
       "Webhook.Declaration": {
         "type": "object",
         "properties": {
@@ -21778,6 +22516,395 @@
         },
         "required": ["purpose"],
         "additionalProperties": false
+      },
+      "Webhook.Expression": {
+        "type": "string",
+        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+        "minLength": 1,
+        "maxLength": 1000,
+        "description": "Before the signature check: a map { status, contentType?, body } answers the request; null goes on."
+      },
+      "Webhook.Expression_1": {
+        "type": "string",
+        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+        "minLength": 1,
+        "maxLength": 1000,
+        "description": "After the signature check, with sign(text): a map answers the request; null goes on."
+      },
+      "Webhook.Expression_2": {
+        "type": "string",
+        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+        "minLength": 1,
+        "maxLength": 1000,
+        "description": "A bool. Without it, every request starts or continues a chat."
+      },
+      "Webhook.Expression_3": {
+        "type": "string",
+        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+        "minLength": 1,
+        "maxLength": 1000,
+        "description": "A string: the provider’s ID of the event. Ren drops a duplicate."
+      },
+      "Webhook.Expression_4": {
+        "type": "string",
+        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+        "minLength": 1,
+        "maxLength": 1000,
+        "description": "A string. Requests with the same key go into the same chat."
+      },
+      "Webhook.Expression_5": {
+        "type": "string",
+        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+        "minLength": 1,
+        "maxLength": 1000,
+        "description": "A string: the title of a new chat."
+      },
+      "Webhook.HeaderName": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$"
+      },
+      "Webhook.ID": {
+        "type": "string",
+        "pattern": "^whk_"
+      },
+      "Webhook.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Webhook.ID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "slug": {
+            "$ref": "#/components/schemas/Primitive.Slug_7"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "The address that the provider sends requests to. It holds a token."
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Auth.UserID_2"
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null: chats run on ren."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Webhook.Mode"
+          },
+          "modeReason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Webhook.ModeReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "parser": {
+            "$ref": "#/components/schemas/Webhook.Parser"
+          },
+          "hasSigningSecret": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "spaceId",
+          "slug",
+          "name",
+          "url",
+          "ownerId",
+          "agentId",
+          "mode",
+          "modeReason",
+          "message",
+          "parser",
+          "hasSigningSecret",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Webhook.MessageEncoded": {
+        "type": "string"
+      },
+      "Webhook.Mode": {
+        "type": "string",
+        "enum": ["listening", "live"],
+        "description": "`listening`: Ren records each request and starts no chat. `live`: the parser starts or continues chats."
+      },
+      "Webhook.ModeReason": {
+        "type": "string",
+        "enum": ["owner_left", "agent_removed", "parser_broken"],
+        "description": "Why Ren switched the webhook to listening. `owner_left`: its owner left the space. `agent_removed`: its agent left the space. `parser_broken`: 5 requests in a row broke the parser."
+      },
+      "Webhook.NoInput": {
+        "not": {
+          "type": "null"
+        }
+      },
+      "Webhook.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Webhook.Info"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "Webhook.Parser": {
+        "type": "object",
+        "properties": {
+          "signature": {
+            "$ref": "#/components/schemas/Webhook.Signature"
+          },
+          "handshake": {
+            "$ref": "#/components/schemas/Webhook.Expression"
+          },
+          "signedHandshake": {
+            "$ref": "#/components/schemas/Webhook.Expression_1"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/Webhook.Expression_2"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Webhook.Expression_3"
+          },
+          "threadKey": {
+            "$ref": "#/components/schemas/Webhook.Expression_4"
+          },
+          "title": {
+            "$ref": "#/components/schemas/Webhook.Expression_5"
+          }
+        },
+        "additionalProperties": false,
+        "description": "The CEL expressions that tell what a request does."
+      },
+      "Webhook.Secret": {
+        "type": "object",
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/Webhook.Info"
+          },
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": ["record", "secret"],
+        "additionalProperties": false
+      },
+      "Webhook.Signature": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["none"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false,
+            "description": "The URL token only."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["header"]
+              },
+              "header": {
+                "$ref": "#/components/schemas/Webhook.HeaderName"
+              }
+            },
+            "required": ["kind", "header"],
+            "additionalProperties": false,
+            "description": "The header is equal to the signing secret."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["hmac"]
+              },
+              "header": {
+                "$ref": "#/components/schemas/Webhook.HeaderName"
+              },
+              "encoding": {
+                "type": "string",
+                "enum": ["hex", "base64"]
+              },
+              "prefix": {
+                "type": "string",
+                "description": "Text before the digest, such as sha256=."
+              }
+            },
+            "required": ["kind", "header", "encoding"],
+            "additionalProperties": false,
+            "description": "HMAC-SHA256 of the body with the signing secret, in the header."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["standard"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false,
+            "description": "The Standard Webhooks spec (Svix, Clerk, Resend). Refuses a request older than 5 minutes."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["stripe"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false,
+            "description": "The stripe-signature header. Refuses a request older than 5 minutes."
+          }
+        ],
+        "description": "How Ren checks the sender of a request."
+      },
+      "Webhook.SigningSecretInput": {
+        "type": "object",
+        "properties": {
+          "secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The secret that the provider gave. Without it, Ren makes one and returns it once."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Webhook.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Webhook.MessageEncoded"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parser": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Webhook.Parser"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Webhook.Mode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`live` needs the owner and the agent in the space, and a signing secret when the signature needs one."
+          }
+        },
+        "additionalProperties": false,
+        "description": "A change to the message, the parser or the agent makes you its owner."
       },
       "WriteResult.Redirect": {
         "type": "object",
@@ -21912,6 +23039,9 @@
     },
     {
       "name": "schedule-run"
+    },
+    {
+      "name": "webhook"
     },
     {
       "name": "credential"

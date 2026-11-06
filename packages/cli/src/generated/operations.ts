@@ -1041,6 +1041,125 @@ export const ScheduleRun = (input: Command.Command.Config.Infer<typeof Commands.
     (client, request) => client["schedule"]["run"]({ ...request.params, ...request.payload }),
   )
 
+export const WebhookList = (input: Command.Command.Config.Infer<typeof Commands.WebhookList>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.list"],
+    {
+      query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+      labels: { spaceId: "--space", page: "--page", pageSize: "--page-size" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["list"]({ ...request.query }),
+  )
+
+export const WebhookGet = (input: Command.Command.Config.Infer<typeof Commands.WebhookGet>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.get"],
+    { params: { idOrSlug: input["idOrSlug"] }, labels: { idOrSlug: "<webhook>" } },
+    (client, request) => client["webhook"]["get"]({ ...request.params }),
+  )
+
+export const WebhookCreate = (input: Command.Command.Config.Infer<typeof Commands.WebhookCreate>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.create"],
+    {
+      payload: {
+        spaceId: input["spaceId"],
+        name: input["name"],
+        slug: input["slug"],
+        message: input["message"],
+        agentId: input["agentId"],
+      },
+      input: input["input"],
+      labels: { spaceId: "--space", name: "--name", slug: "--slug", message: "--message", agentId: "--agent" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        agentId: (client, value) =>
+          client["agent"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["create"]({ ...request.payload }),
+  )
+
+export const WebhookUpdate = (input: Command.Command.Config.Infer<typeof Commands.WebhookUpdate>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.update"],
+    {
+      params: { id: input["id"] },
+      payload: { name: input["name"], message: input["message"], agentId: input["agentId"], mode: input["mode"] },
+      input: input["input"],
+      labels: { id: "<webhook>", name: "--name", message: "--message", agentId: "--agent", mode: "--mode" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        agentId: (client, value) =>
+          client["agent"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["update"]({ ...request.params, ...request.payload }),
+  )
+
+export const WebhookArchive = (input: Command.Command.Config.Infer<typeof Commands.WebhookArchive>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.archive"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<webhook>" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["archive"]({ ...request.params }),
+  )
+
+export const WebhookRotateUrl = (input: Command.Command.Config.Infer<typeof Commands.WebhookRotateUrl>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.rotateUrl"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<webhook>" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["rotateUrl"]({ ...request.params, ...request.payload }),
+  )
+
+export const WebhookSetSigningSecret = (input: Command.Command.Config.Infer<typeof Commands.WebhookSetSigningSecret>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.setSigningSecret"],
+    {
+      params: { id: input["id"] },
+      payload: { secret: input["secret"] },
+      input: input["input"],
+      labels: { id: "<webhook>", secret: "--secret" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["setSigningSecret"]({ ...request.params, ...request.payload }),
+  )
+
+export const WebhookRevealSigningSecret = (
+  input: Command.Command.Config.Infer<typeof Commands.WebhookRevealSigningSecret>,
+) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.revealSigningSecret"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<webhook>" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["revealSigningSecret"]({ ...request.params, ...request.payload }),
+  )
+
 export const CredentialList = (input: Command.Command.Config.Infer<typeof Commands.CredentialList>) =>
   Operation.run(
     ClientApi.groups["credential"].endpoints["credential.list"],

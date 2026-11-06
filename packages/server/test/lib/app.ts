@@ -76,6 +76,10 @@ export const hostToken = Effect.fnUntraced(function* (
   })
 })
 
+const envelopeKeys = JSON.stringify([
+  { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
+])
+
 export const config = {
   BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
   BETTER_AUTH_URL: "http://localhost:4000",
@@ -94,6 +98,7 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
       SIGNUP_MX_CHECK: "false",
       CELL_URL: "http://127.0.0.1:9",
       BRAIN_KEYS: brainKeys,
+      ENVELOPE_KEYS: envelopeKeys,
       ...TestDrives.config,
       ...overrides,
     }),
