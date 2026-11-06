@@ -161,7 +161,7 @@ Built for brain machines (EN21, EN22, EN27): `MachineLifecycle` compares the mac
 
 ### Templates
 
-Ren's code reaches machines as bundles, not in images (EN26-EN29; `cell/e2b/bundle.ts`, `cell/e2b/start.sh`, `core/src/bundles.ts`). A template image holds the system and the template's packages only.
+Ren's code reaches machines as bundles, not in images (EN26-EN29; `cell/e2b/bundle.ts`, `cell/e2b/start.sh`, `core/src/bundles.ts`). A template image holds the system and the template's packages only. The deploy builds Ren's system image with the current dependencies bundle in it, and the image's tag ends with their version (`<name>:<system>-<dependencies>`, `cell/e2b/stage.ts`, `E2B_TEMPLATE_SEED`): a new machine downloads only the sources. Ren ignores that part of a tag when it compares a machine's image (`machine-lifecycle.ts`, `systemOf`), so new dependencies never replace a machine; its bundles update them in place.
 
 Built: the template fields, the E2B config and its build (`core/src/machine-provider/e2b.ts`), one build at a time per template and its status (`core/src/environment-templates.ts`, EN30, EN44).
 

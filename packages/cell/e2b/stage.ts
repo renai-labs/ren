@@ -1,7 +1,8 @@
 export * as Stage from "./stage.js"
 
 import { Sandbox, Template, defaultBuildLogger } from "e2b"
-import { Schema } from "effect"
+import { Bundle } from "@ren/schema/bundle"
+import { Option, Schema } from "effect"
 import { createHash } from "node:crypto"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -16,6 +17,10 @@ const Options = Schema.Struct({
   E2B_TEMPLATE_MEMORY_MB: Schema.optionalKey(Schema.NumberFromString),
   E2B_TEMPLATE_TOOLS: Schema.optionalKey(Schema.Literals(["base", "full"])),
   E2B_TEMPLATE_OWNER: Schema.optionalKey(Schema.String),
+  E2B_TEMPLATE_SEED: Schema.optionalKey(Schema.String).annotate({
+    description:
+      "A folder of Ren’s bundles (bun e2b/bundle.ts <folder>). The image then holds their dependencies, so a new machine downloads only the sources (EN26).",
+  }),
 })
 
 const options = Schema.decodeUnknownSync(Options)(Bun.env)
@@ -67,13 +72,19 @@ export const hash = (entries: ReadonlyArray<{ readonly path: string; readonly co
     .digest("hex")
     .slice(0, 16)
 
-// oxlint-disable-next-line ren/no-comments -- The image holds no Ren code, so the smoke run checks the system it gives: start.sh and Bun.
-const smoke = async (tag: string) => {
+// oxlint-disable-next-line ren/no-comments -- The image holds no Ren code, so the smoke run checks the system it gives: start.sh, Bun, and the seeded dependencies.
+const smoke = async (tag: string, seeded: Option.Option<string>) => {
   const sandbox = await Sandbox.create(tag, { metadata: { owner, smoke: "true" }, timeoutMs: 300_000 })
-  const checked = await sandbox.commands.run("test -x /opt/ren/start.sh && bun --version", { timeoutMs: 60_000 }).then(
-    (result) => result.exitCode === 0,
-    () => false,
-  )
+  const ready = Option.match(seeded, {
+    onNone: () => "",
+    onSome: (version) => ` && test -e /home/user/.ren/code/dependencies/${version}/.ready`,
+  })
+  const checked = await sandbox.commands
+    .run(`test -x /opt/ren/start.sh && bun --version${ready}`, { timeoutMs: 60_000 })
+    .then(
+      (result) => result.exitCode === 0,
+      () => false,
+    )
   await sandbox.kill()
   return checked
 }
@@ -97,17 +108,43 @@ if (import.meta.main) {
     { path: "bun", content: new TextEncoder().encode(bun) },
     { path: "size", content: new TextEncoder().encode(`${size.cpuCount}/${size.memoryMB}`) },
   ])
-  const tag = `${name}:${version}`
+  const seed = options.E2B_TEMPLATE_SEED
+  const dependencies =
+    seed === undefined
+      ? Option.none()
+      : Option.map(
+          Option.fromNullishOr(
+            Schema.decodeUnknownSync(Bundle.Manifest)(await Bun.file(join(seed, "manifest.json")).json()).bundles.find(
+              (bundle) => bundle.kind === "dependencies",
+            ),
+          ),
+          (bundle) => ({ file: join(seed, Bundle.fileOf(bundle)), version: bundle.version }),
+        )
+  // oxlint-disable-next-line ren/no-comments -- The dependencies' version ends the tag, after a hyphen; Ren ignores it when it compares a machine's image (machine-lifecycle.ts, systemOf).
+  const tagged = Option.match(dependencies, { onNone: () => version, onSome: (found) => `${version}-${found.version}` })
+  const tag = `${name}:${tagged}`
   const dirty = (await Bun.$`git status --porcelain`.cwd(root).text()).trim().length > 0
   const tags = await Template.getTags(name).catch(() => [])
-  if (tags.some((each) => each.tag === version)) {
+  if (tags.some((each) => each.tag === tagged)) {
     await rm(context, { recursive: true, force: true })
     process.stdout.write(`${tag} exists; nothing to build\n`)
     process.exit(0)
   }
   await Bun.write(join(context, "start.sh"), Bun.file(join(import.meta.dir, "start.sh")))
   const parts = await Promise.all(dockerfiles.map((file) => Bun.file(join(import.meta.dir, file)).text()))
-  const dockerfile = `${parts.join("\n").replace(/^FROM oven\/bun:.*$/m, `FROM oven/bun:${bun}`)}\n`
+  const seeded = Option.match(dependencies, {
+    onNone: () => [],
+    onSome: (found) => {
+      const target = `/home/user/.ren/code/dependencies/${found.version}`
+      return [
+        "COPY dependencies.tar.gz /tmp/dependencies.tar.gz",
+        `RUN mkdir -p ${target} && tar -xzf /tmp/dependencies.tar.gz -C ${target} && touch ${target}/.ready && rm /tmp/dependencies.tar.gz && chown -R user:user /home/user/.ren`,
+      ]
+    },
+  })
+  if (Option.isSome(dependencies))
+    await Bun.write(join(context, "dependencies.tar.gz"), Bun.file(dependencies.value.file))
+  const dockerfile = `${[...parts, ...seeded].join("\n").replace(/^FROM oven\/bun:.*$/m, `FROM oven/bun:${bun}`)}\n`
   await Template.build(
     Template({ fileContextPath: context })
       .fromDockerfile(dockerfile)
@@ -116,7 +153,12 @@ if (import.meta.main) {
     { ...size, onBuildLogs: defaultBuildLogger() },
   )
   await rm(context, { recursive: true, force: true })
-  if (!(await smoke(tag))) {
+  if (
+    !(await smoke(
+      tag,
+      Option.map(dependencies, (found) => found.version),
+    ))
+  ) {
     process.stderr.write(`The smoke sandbox of ${tag} did not run start.sh and Bun; do not use this tag\n`)
     process.exit(1)
   }
