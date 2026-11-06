@@ -41,9 +41,14 @@ const Manifest = Schema.Struct({
 const Root = Schema.Struct({ packageManager: Schema.String })
 
 // oxlint-disable-next-line ren/no-comments -- Follows imports at any depth (ren-v1 INV-105). A file that no entry point imports never reaches the image, so its change never rebuilds the template.
-export const sources = async (repository: string) => {
+export const entrypoints = { brain: "packages/cell/src/bun.ts", executor: "packages/executor/src/main.ts" } as const
+
+export const sources = async (
+  repository: string,
+  files: ReadonlyArray<string> = [entrypoints.brain, entrypoints.executor],
+) => {
   const build = await Bun.build({
-    entrypoints: ["packages/cell/src/bun.ts", "packages/executor/src/main.ts"].map((file) => join(repository, file)),
+    entrypoints: files.map((file) => join(repository, file)),
     target: "bun",
     metafile: true,
     plugins: [

@@ -61,6 +61,9 @@ import { SignInHandler } from "./handlers/api/sign-in.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { ChannelRoutes } from "./channel-routes.js"
+import { BundleRoutes } from "./bundle-routes.js"
+import { Bundles } from "@ren/core/bundles"
+import { Signer } from "@ren/core/signer"
 import { OAuthApps } from "@ren/core/oauth-apps"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
 import { HealthHandler } from "./handlers/api/health.js"
@@ -241,6 +244,7 @@ export const layer = Layer.mergeAll(
     RenMcp.layer,
     SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
+    BundleRoutes.layer.pipe(Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal)))),
     ChannelRoutes.layer.pipe(
       Layer.provide(Channels.layer),
       Layer.provide(SlackTaskActions.layer),
