@@ -45,6 +45,7 @@ function useChatSuggestions(input: {
   reverted: boolean
   model: SessionModel.Ref | undefined
   spaceId: string | undefined
+  mentions: ReadonlyArray<Composer.MentionedApp>
 }) {
   const compact = ChatReact.useAction(input.root, (opened, next: SessionModel.Ref | undefined) => opened.compact(next))
   const revert = ChatReact.useAction(input.root, (opened, id: SessionMessage.ID) => opened.revert(id))
@@ -58,6 +59,7 @@ function useChatSuggestions(input: {
   const suggestions = useComposerSuggestions({
     root: input.root,
     spaceId: input.spaceId,
+    mentions: input.mentions,
     commands: input.capabilities?.commands !== false,
     client: {
       "model.choose": false,
@@ -209,6 +211,7 @@ export function useChat(
     reverted,
     model,
     spaceId,
+    mentions: Composer.mentions(draft),
   })
   const bootStatus = bootStatusOf(connection, boot)
   return {
