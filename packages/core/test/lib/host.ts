@@ -64,6 +64,23 @@ export const freePort = Effect.promise(async () => {
   return port
 })
 
+// oxlint-disable-next-line ren/no-comments -- The local brain provider of a stack, for a test that wraps it.
+export const local = (options: {
+  readonly root: string
+  readonly lostEvery?: Duration.Input
+  readonly maxRunning?: number
+  readonly template?: string
+}) =>
+  LocalSandbox.layer({
+    entry,
+    executor,
+    root: options.root,
+    owner: process.pid,
+    ...(options.lostEvery && { lostEvery: options.lostEvery }),
+    ...(options.maxRunning && { maxRunning: options.maxRunning }),
+    ...(options.template && { template: options.template }),
+  })
+
 interface StackOptions<E, R> {
   readonly port: number
   readonly root: string
@@ -90,20 +107,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
       ),
     ),
     Layer.provideMerge(
-      (options.keepBrains ? Layer.empty : destroyBrains).pipe(
-        Layer.provideMerge(
-          options.sandbox ??
-            LocalSandbox.layer({
-              entry,
-              executor,
-              root: options.root,
-              owner: process.pid,
-              ...(options.lostEvery && { lostEvery: options.lostEvery }),
-              ...(options.maxRunning && { maxRunning: options.maxRunning }),
-              ...(options.template && { template: options.template }),
-            }),
-        ),
-      ),
+      (options.keepBrains ? Layer.empty : destroyBrains).pipe(Layer.provideMerge(options.sandbox ?? local(options))),
     ),
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
     Layer.provide(Settings.layer),
