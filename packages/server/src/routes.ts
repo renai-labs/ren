@@ -15,7 +15,9 @@ import { ChannelMappings } from "@ren/core/channel-mappings"
 import { SlackBot } from "@ren/core/slack-bot"
 import { SlackTaskActions } from "@ren/core/slack-task-actions"
 import { ChannelTurns } from "@ren/core/channel-turns"
-import { Channels } from "@ren/core/channels"
+import { ChannelEventRun } from "@ren/core/channel-event-run"
+import { Intake } from "@ren/core/intake"
+import { IntakeThreads } from "@ren/core/intake-threads"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { InfraSpecs } from "@ren/core/infra-specs"
@@ -136,6 +138,8 @@ const schedules = Schedules.layer.pipe(
 )
 
 // oxlint-disable-next-line ren/no-comments -- Api only (MCP may stream SSE); gzip only (Bun's brotli blocks the event loop).
+const intake = Intake.layer.pipe(Layer.provide(IntakeThreads.layer))
+
 const Compression = HttpRouter.middleware(
   Effect.gen(function* () {
     const platform = yield* HttpPlatform.HttpPlatform
@@ -242,7 +246,7 @@ export const layer = Layer.mergeAll(
     SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
     ChannelRoutes.layer.pipe(
-      Layer.provide(Channels.layer),
+      Layer.provide(Layer.merge(intake, ChannelEventRun.layer.pipe(Layer.provide(intake)))),
       Layer.provide(SlackTaskActions.layer),
       Layer.provide([Task.layer.pipe(Layer.provideMerge(SessionRunner.layer)), ChannelInstalls.layer]),
       Layer.provide(BrainRegistry.layer),

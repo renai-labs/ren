@@ -9,13 +9,15 @@ import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { and, eq, inArray, sql } from "drizzle-orm"
 import { Deferred, Effect, Layer, Option, Schedule } from "effect"
+import { ChannelEventRun } from "../src/channel-event-run.js"
 import { ChannelIdentity } from "../src/channel-identity.js"
 import { ChannelInstalls } from "../src/channel-installs.js"
 import { ChannelMappings } from "../src/channel-mappings.js"
 import { ChannelRoute } from "../src/channel-route.js"
 import { ChannelTurns } from "../src/channel-turns.js"
-import { Channels } from "../src/channels.js"
+import { Intake } from "../src/intake.js"
 import { Drives } from "../src/drives.js"
+import { DurableRunner } from "../src/durable-runner.js"
 import { Task } from "../src/task.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
 import { testEffect } from "./lib/effect.js"
@@ -86,9 +88,9 @@ describe("Channels", () => {
     "an unknown provider answers 404, a body that does not parse 400, an ignored event 200, and a handshake its body",
     () =>
       Effect.gen(function* () {
-        const channels = yield* Channels.Service
+        const intake = yield* Intake.Service
         const body = JSON.stringify({ type: "handshake", challenge: "c1" })
-        expect(yield* channels.receive("telegram", ChannelFixture.request(body))).toEqual({ status: 404 })
+        expect(yield* intake.receive("linear", ChannelFixture.request(body))).toEqual({ status: 404 })
         expect(yield* ChannelFixture.receive(`{"type":"event"`)).toEqual({ status: 400 })
         expect(yield* ChannelFixture.receive(JSON.stringify({ type: "ignore" }))).toEqual({ status: 200 })
         expect(yield* ChannelFixture.receive(body)).toEqual({ status: 200, body: { challenge: "c1" } })
@@ -128,7 +130,7 @@ describe("Channels", () => {
       expect(sessions).toHaveLength(1)
       expect(accepted).toEqual([expect.objectContaining({ kind: "start", sessionId: sessions[0]?.id })])
       expect(yield* ChannelFixture.threads).toMatchObject([
-        { provider: "slack", install: subject.install, thread: found.thread.id, session_id: sessions[0]?.id },
+        { origin: "slack", scope: subject.install, thread: found.thread.id, session_id: sessions[0]?.id },
       ])
     }),
   )
@@ -194,9 +196,9 @@ describe("Channels", () => {
       ])
       expect(
         yield* database.db
-          .select({ data: Database.Schema.channel_thread.data })
-          .from(Database.Schema.channel_thread)
-          .where(eq(Database.Schema.channel_thread.session_id, sessionId)),
+          .select({ data: Database.Schema.intake_thread.data })
+          .from(Database.Schema.intake_thread)
+          .where(eq(Database.Schema.intake_thread.session_id, sessionId)),
       ).toEqual([{ data: { slack: { actionToken: "12345.98765.abcd" } } }])
     }),
   )
@@ -479,9 +481,9 @@ describe("ChannelTurns", () => {
       const database = yield* Database.Service
       const thread = yield* threadOf(subject)
       yield* database.db
-        .update(Database.Schema.channel_thread)
+        .update(Database.Schema.intake_thread)
         .set({ last_reply_at: new Date() })
-        .where(eq(Database.Schema.channel_thread.session_id, thread.sessionId))
+        .where(eq(Database.Schema.intake_thread.session_id, thread.sessionId))
       yield* turnEnded(subject, thread.sessionId, { idle: 1, outcome: "succeeded", messages: [fromChannel, answered] })
       expect((yield* ChannelFixture.Cell).accepted.filter((delivered) => delivered.synthetic)).toEqual([])
     }),
@@ -492,11 +494,11 @@ describe("ChannelTurns", () => {
       const subject = yield* routed
       const database = yield* Database.Service
       const sessionId = yield* started(subject.owner)
-      yield* database.db.insert(Database.Schema.channel_thread).values({
+      yield* database.db.insert(Database.Schema.intake_thread).values({
         id: Channel.ThreadID.create(),
         organization_id: subject.owner.organizationId,
-        provider: "github",
-        install: subject.install,
+        origin: "github",
+        scope: subject.install,
         thread: "123:7",
         session_id: sessionId,
         place_name: "acme/api",
@@ -671,10 +673,10 @@ describe("ChannelRoute", () => {
             .select({ spaceId: Database.Schema.agent_session.space_id })
             .from(Database.Schema.agent_session)
             .innerJoin(
-              Database.Schema.channel_thread,
-              eq(Database.Schema.channel_thread.session_id, Database.Schema.agent_session.id),
+              Database.Schema.intake_thread,
+              eq(Database.Schema.intake_thread.session_id, Database.Schema.agent_session.id),
             )
-            .where(eq(Database.Schema.channel_thread.thread, "D01:1712.33")),
+            .where(eq(Database.Schema.intake_thread.thread, "D01:1712.33")),
         ).toEqual([{ spaceId: own }])
         yield* database.db
           .update(Database.Schema.space)
@@ -1424,6 +1426,20 @@ describe("Channels on brains", () => {
           text: `I couldn’t start working on your message. Please try again. [Open in Ren](${ChannelFixture.app}/sessions/${sessionId})`,
         },
       ])
+    }),
+  )
+})
+
+describe("ChannelEventRun", () => {
+  it.live("a ChannelEvent run that Ren stored before Intake starts its chat through Intake", () =>
+    Effect.gen(function* () {
+      const found = ChannelFixture.event((yield* routed).install)
+      yield* DurableRunner.ensure(ChannelEventRun.Run, {
+        event: found,
+        messageId: Session.MessageID.create(),
+        sessionId: Session.ID.create(),
+      })
+      expect(yield* ChannelFixture.accepted(1)).toMatchObject([{ kind: "start", prompt: { text: found.text } }])
     }),
   )
 })

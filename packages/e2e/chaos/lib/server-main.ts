@@ -5,6 +5,7 @@ import { Brains } from "@ren/core/brains"
 import { BrainPush } from "@ren/core/brain-push"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelProvider } from "@ren/core/channel-provider"
+import { Intake } from "@ren/core/intake"
 import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
@@ -80,6 +81,7 @@ HttpRouter.serve(Routes.layer).pipe(
       Layer.provide(ChannelIdentity.layer),
       Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),
     ),
+    Intake.sources(Effect.succeed([])),
     ChannelNotice.layerLog,
     TaskCard.layerNone,
     SlackTaskCard.layerNone,

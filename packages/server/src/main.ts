@@ -62,6 +62,7 @@ import { FetchHttpClient, HttpRouter } from "effect/http"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { EgressRoutes } from "./egress.js"
+import { IntakeSources } from "./intake-sources.js"
 import { Routes } from "./routes.js"
 import { Signer } from "@ren/core/signer"
 import { SlackApp } from "@ren/core/slack-app"
@@ -147,6 +148,7 @@ const observability = Layer.mergeAll(
 )
 
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
+  Layer.provide(IntakeSources.layer),
   Layer.provide([
     Layer.mergeAll(
       Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provideMerge(host), Layer.provide(CredentialEnv.layer)),

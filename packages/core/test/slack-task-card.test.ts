@@ -141,11 +141,11 @@ const threaded = Effect.fnUntraced(function* (
   sessionId?: Session.ID,
 ) {
   const database = yield* Database.Service
-  yield* database.db.insert(Database.Schema.channel_thread).values({
+  yield* database.db.insert(Database.Schema.intake_thread).values({
     id: Channel.ThreadID.create(),
     organization_id: o.organizationId,
-    provider: "slack",
-    install: workspace,
+    origin: "slack",
+    scope: workspace,
     thread: key,
     session_id:
       sessionId ??

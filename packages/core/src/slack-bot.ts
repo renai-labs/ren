@@ -380,7 +380,7 @@ export const layer = Layer.effect(
     const slack = yield* SlackApp.Service
     const registry = yield* ChannelProvider.Registry
     const drives = yield* Drives.Service
-    const thread = Database.Schema.channel_thread
+    const thread = Database.Schema.intake_thread
     const spaces = Database.Schema.space
     const accounts = Database.Schema.account
 
@@ -448,8 +448,8 @@ export const layer = Layer.effect(
         .values({
           id: Channel.ThreadID.create(),
           organization_id: connection.actor.organizationId,
-          provider: "slack",
-          install: connection.workspace,
+          origin: "slack",
+          scope: connection.workspace,
           thread: `${channel}:${root}`,
           session_id: connection.actor.agent.sessionId,
         })
@@ -605,7 +605,7 @@ export const layer = Layer.effect(
       const name = latest.place_name ?? latest.thread
       const charts = yield* provider.value
         .send(
-          { install: latest.install, place: name, thread: latest.thread, message: latest.last_message ?? "" },
+          { install: latest.scope, place: name, thread: latest.thread, message: latest.last_message ?? "" },
           input.message,
           input.charts,
         )
@@ -712,7 +712,7 @@ export const layer = Layer.effect(
       },
     ) {
       const attached = yield* attachments(connection, input.files ?? [])
-      const current = Option.filter(yield* latestThread(connection), (found) => found.provider === "slack")
+      const current = Option.filter(yield* latestThread(connection), (found) => found.origin === "slack")
       if (!input.channel_id) {
         if (Option.isNone(current)) return yield* new Refused({ message: noThread })
         return yield* reply(connection, current.value, input, attached)
@@ -1032,7 +1032,7 @@ export const layer = Layer.effect(
           const target = input.channel_id
             ? { channel: input.channel_id, ts: input.message_ts }
             : Option.match(
-                Option.filter(yield* latestThread(connection), (found) => found.provider === "slack"),
+                Option.filter(yield* latestThread(connection), (found) => found.origin === "slack"),
                 { onNone: () => undefined, onSome: (found) => placeOf(found.thread) },
               )
           if (!target) return yield* new Refused({ message: noThread })
@@ -1094,8 +1094,8 @@ export const layer = Layer.effect(
             .where(
               and(
                 eq(thread.session_id, connection.actor.agent.sessionId),
-                eq(thread.provider, "slack"),
-                eq(thread.install, connection.workspace),
+                eq(thread.origin, "slack"),
+                eq(thread.scope, connection.workspace),
                 isNotNull(thread.last_message_at),
               ),
             )
@@ -1438,7 +1438,7 @@ export const layer = Layer.effect(
             input.channel_id ??
             Option.getOrUndefined(
               Option.map(
-                Option.filter(yield* latestThread(connection), (found) => found.provider === "slack"),
+                Option.filter(yield* latestThread(connection), (found) => found.origin === "slack"),
                 (found) => placeOf(found.thread).channel,
               ),
             )

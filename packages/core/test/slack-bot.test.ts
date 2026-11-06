@@ -119,11 +119,11 @@ const slackThread = Effect.fnUntraced(function* (
   options: { readonly thread?: string; readonly data?: Channel.ThreadData; readonly createdAt?: Date } = {},
 ) {
   const database = yield* Database.Service
-  yield* database.db.insert(Database.Schema.channel_thread).values({
+  yield* database.db.insert(Database.Schema.intake_thread).values({
     id: Channel.ThreadID.create(),
     organization_id: owner.organizationId,
-    provider: "slack",
-    install: workspace,
+    origin: "slack",
+    scope: workspace,
     thread: options.thread ?? "C07:1712.33",
     session_id: sessionId,
     place_name: "eng",
@@ -204,9 +204,9 @@ describe("SlackBot", () => {
         })
         expect(slack.posted.at(-1)?.params.blocks).toContain('"type":"data_visualization"')
         yield* database.db
-          .update(Database.Schema.channel_thread)
+          .update(Database.Schema.intake_thread)
           .set({ last_reply_at: null })
-          .where(eq(Database.Schema.channel_thread.session_id, sessionId))
+          .where(eq(Database.Schema.intake_thread.session_id, sessionId))
         expect(
           yield* bot.call(asAgent(owner, sessionId), "send_message", {
             channel_id: "C07",
@@ -216,9 +216,9 @@ describe("SlackBot", () => {
         ).toEqual(answer)
         expect(
           yield* database.db
-            .select({ repliedAt: Database.Schema.channel_thread.last_reply_at })
-            .from(Database.Schema.channel_thread)
-            .where(eq(Database.Schema.channel_thread.session_id, sessionId)),
+            .select({ repliedAt: Database.Schema.intake_thread.last_reply_at })
+            .from(Database.Schema.intake_thread)
+            .where(eq(Database.Schema.intake_thread.session_id, sessionId)),
         ).toEqual([{ repliedAt: expect.any(Date) }])
         expect(yield* bot.call(asAgent(owner, sessionId), "read_thread", {})).toMatchObject({
           messages: [{ text: "Done." }, { text: "Here are the models." }, { text: "Also this." }],
@@ -308,12 +308,12 @@ describe("SlackBot", () => {
         })
         expect(
           yield* database.db
-            .select({ sessionId: Database.Schema.channel_thread.session_id })
-            .from(Database.Schema.channel_thread)
+            .select({ sessionId: Database.Schema.intake_thread.session_id })
+            .from(Database.Schema.intake_thread)
             .where(
               and(
-                eq(Database.Schema.channel_thread.install, install.workspace),
-                eq(Database.Schema.channel_thread.thread, `C09:${ts}`),
+                eq(Database.Schema.intake_thread.scope, install.workspace),
+                eq(Database.Schema.intake_thread.thread, `C09:${ts}`),
               ),
             ),
         ).toEqual([{ sessionId }])

@@ -137,15 +137,15 @@ describe("Session", () => {
         yield* task(3, hidden, id, ["https://github.com/acme/web/pull/99"])
         yield* task(4, owner.spaceId, null, ["https://github.com/acme/web/pull/7"])
         yield* database.db.insert(Database.Schema.task_session).values({ task_id: worked, session_id: id })
-        yield* database.db.insert(Database.Schema.channel_thread).values(
+        yield* database.db.insert(Database.Schema.intake_thread).values(
           [
             { thread: "C07:1760000000.000100", url: "https://acme.slack.com/archives/C07/p1760000000000100" },
             { thread: "C07:1760000000.000200", url: null },
           ].map((row) => ({
             id: Channel.ThreadID.create(),
             organization_id: owner.organizationId,
-            provider: "slack" as const,
-            install: "T01",
+            origin: "slack" as const,
+            scope: "T01",
             thread: row.thread,
             url: row.url,
             session_id: id,

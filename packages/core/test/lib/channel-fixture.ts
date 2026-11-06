@@ -38,9 +38,12 @@ import { GitHubApp } from "../../src/github-app.js"
 import { Envelope } from "../../src/envelope.js"
 import { PersonCredentials } from "../../src/person-credentials.js"
 import { ChannelRoute } from "../../src/channel-route.js"
-import { Channels } from "../../src/channels.js"
+import { ChannelEventRun } from "../../src/channel-event-run.js"
+import { ChannelIntake } from "../../src/channel-intake.js"
 import { DurableRunner } from "../../src/durable-runner.js"
 import { Drives } from "../../src/drives.js"
+import { Intake } from "../../src/intake.js"
+import { IntakeThreads } from "../../src/intake-threads.js"
 import { Models } from "../../src/models.js"
 import { PullRequest } from "../../src/pull-request.js"
 import { SessionRunner } from "../../src/session/runner.js"
@@ -406,12 +409,27 @@ const onCell = <A, E, R, RE, RR>(
     Layer.provideMerge(cell),
   )
 
-export const cellLayer = onCell(Layer.mergeAll(Channels.layer, ChannelTurns.layer), DurableRunner.layerMemory).pipe(
+const intakeOf = <E, R>(sources: Layer.Layer<Intake.Sources, E, R>) =>
+  Intake.layer.pipe(Layer.provide(sources), Layer.provide(IntakeThreads.layer))
+
+const channels = intakeOf(
+  Intake.sources(
+    Effect.gen(function* () {
+      const registry = yield* ChannelProvider.Registry
+      return yield* Effect.forEach(registry.providers, ChannelIntake.source)
+    }),
+  ),
+).pipe((intake) => Layer.merge(intake, ChannelEventRun.layer.pipe(Layer.provide(intake))))
+
+export const intakeLayer = <E, R>(sources: Layer.Layer<Intake.Sources, E, R>) =>
+  onCell(intakeOf(sources), DurableRunner.layerMemory).pipe(Layer.provideMerge(Testing.layer))
+
+export const cellLayer = onCell(Layer.mergeAll(channels, ChannelTurns.layer), DurableRunner.layerMemory).pipe(
   Layer.provideMerge(Testing.layer),
 )
 
 export const unstoredLayer = onCell(
-  Channels.layer.pipe(
+  channels.pipe(
     Layer.provide(
       Layer.effect(
         WorkflowEngine.WorkflowEngine,
@@ -430,7 +448,7 @@ export const unstoredLayer = onCell(
 
 export const durableLayer = (options: { readonly held: boolean }) =>
   onCell(
-    Channels.layer,
+    channels,
     ClusterWorkflowEngine.layer.pipe(
       Layer.provideMerge(SingleRunner.layer({ shardingConfig: { entityTerminationTimeout: "100 millis" } })),
       Layer.provide(BunCrypto.layer),
@@ -438,7 +456,7 @@ export const durableLayer = (options: { readonly held: boolean }) =>
     options,
   )
 
-export const sandboxLayer = Channels.layer.pipe(
+export const sandboxLayer = channels.pipe(
   Layer.provideMerge(core(false)),
   Layer.provideMerge(Host.layer({}, models)),
   Layer.provideMerge(Testing.layer),
@@ -458,16 +476,19 @@ export const quickly = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.flatMap(Clock.Clock, (live) => effect.pipe(Effect.provideService(Clock.Clock, quick(live))))
 
 export const receive = (body: string, signature?: string) =>
-  Channels.Service.pipe(Effect.flatMap((channels) => quickly(channels.receive("slack", request(body, signature)))))
+  Intake.Service.pipe(Effect.flatMap((intake) => quickly(intake.receive("slack", request(body, signature)))))
 
 export const settled = (found: Channel.Event) =>
   Effect.gen(function* () {
-    const executionId = yield* Channels.EventRun.executionId({
-      event: found,
+    const executionId = yield* Intake.Run.executionId({
+      origin: found.provider,
+      scope: found.install,
+      eventId: found.eventId,
+      event: Schema.encodeSync(Channel.Event)(found),
       messageId: Session.MessageID.create(),
       sessionId: Session.ID.create(),
     })
-    yield* Channels.EventRun.poll(executionId).pipe(
+    yield* Intake.Run.poll(executionId).pipe(
       Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("20 millis") }),
       Effect.timeoutOrElse({
         duration: "20 seconds",
@@ -495,11 +516,11 @@ export const thread = Effect.fnUntraced(function* (
   sessionId: Session.ID,
 ) {
   const database = yield* Database.Service
-  yield* database.db.insert(Database.Schema.channel_thread).values({
+  yield* database.db.insert(Database.Schema.intake_thread).values({
     id: Channel.ThreadID.create(),
     organization_id: organizationId,
-    provider: found.provider,
-    install: found.install,
+    origin: found.provider,
+    scope: found.install,
     thread: found.thread.id,
     session_id: sessionId,
   })
@@ -507,5 +528,5 @@ export const thread = Effect.fnUntraced(function* (
 
 export const threads = Effect.gen(function* () {
   const database = yield* Database.Service
-  return yield* database.db.select().from(Database.Schema.channel_thread)
+  return yield* database.db.select().from(Database.Schema.intake_thread)
 })

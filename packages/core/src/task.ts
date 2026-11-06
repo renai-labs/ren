@@ -937,15 +937,15 @@ export const layer = Layer.effect(
               : []
             const threads = actor.agent
               ? yield* transaction
-                  .select({ url: Database.Schema.channel_thread.url })
-                  .from(Database.Schema.channel_thread)
+                  .select({ url: Database.Schema.intake_thread.url })
+                  .from(Database.Schema.intake_thread)
                   .where(
                     and(
-                      eq(Database.Schema.channel_thread.session_id, actor.agent.sessionId),
-                      isNotNull(Database.Schema.channel_thread.url),
+                      eq(Database.Schema.intake_thread.session_id, actor.agent.sessionId),
+                      isNotNull(Database.Schema.intake_thread.url),
                     ),
                   )
-                  .orderBy(asc(Database.Schema.channel_thread.created_at))
+                  .orderBy(asc(Database.Schema.intake_thread.created_at))
                   .limit(Task.maximumLinks - (input.links?.length ?? 0))
               : []
             const links = yield* editLinks(

@@ -45,7 +45,7 @@ export const layer = Layer.effect(
     const runner = yield* SessionRunner.Service
     const brains = yield* Brains.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
-    const thread = Database.Schema.channel_thread
+    const thread = Database.Schema.intake_thread
     const opencode = Database.Schema.opencode_session
     const message = Database.Schema.opencode_message
     const session = Database.Schema.agent_session
@@ -80,7 +80,7 @@ export const layer = Layer.effect(
         )
 
     const targetOf = (found: typeof thread.$inferSelect): ChannelProvider.Target => ({
-      install: found.install,
+      install: found.scope,
       place: found.place_name ?? found.thread,
       thread: found.thread,
       message: found.last_message ?? "",
@@ -104,7 +104,7 @@ export const layer = Layer.effect(
       if (failed) {
         const error = yield* latestOf(payload.sessionId, "assistant")
         return yield* notices.notice({
-          provider: found.thread.provider,
+          provider: found.provider.id,
           target,
           reason: reasonOf(Option.match(error, { onNone: () => null, onSome: (row) => row.errorType })),
           sessionId: payload.sessionId,
@@ -123,7 +123,7 @@ export const layer = Layer.effect(
         yield* runner.send({
           sessionId: payload.sessionId,
           messageId: Session.MessageID.create(),
-          prompt: { text: reminder.text(found.thread.provider, tool) },
+          prompt: { text: reminder.text(found.provider.id, tool) },
           delivery: "queue",
           sender: { userId: found.createdBy },
           synthetic: { description: reminder.description, source: reminder.source },
@@ -141,7 +141,7 @@ export const layer = Layer.effect(
         .pipe(Effect.orDie)).at(0)
       const latest = yield* latestOf(sessionId, "user")
       const current = yield* threadOf(sessionId)
-      const provider = Option.flatMap(current, (found) => registry.get(found.provider))
+      const provider = Option.flatMap(current, (found) => registry.get(found.origin))
       if (row && Option.isSome(current) && Option.isSome(provider) && Option.isSome(latest) && latest.value.fromChannel)
         yield* end(payload, {
           outcome: row.outcome,
@@ -155,13 +155,13 @@ export const layer = Layer.effect(
     yield* brains.onStartRejected((sessionId) =>
       Effect.gen(function* () {
         const current = yield* threadOf(sessionId)
-        const provider = Option.flatMap(current, (found) => registry.get(found.provider))
+        const provider = Option.flatMap(current, (found) => registry.get(found.origin))
         if (Option.isNone(current) || Option.isNone(provider)) return
         const target = targetOf(current.value)
         yield* provider.value
           .progress(target, "failed")
           .pipe(Effect.catchCause((cause) => Effect.logWarning("A channel progress could not be sent", cause)))
-        yield* notices.notice({ provider: current.value.provider, target, reason: "brain_failed", sessionId })
+        yield* notices.notice({ provider: provider.value.id, target, reason: "brain_failed", sessionId })
       }),
     )
 

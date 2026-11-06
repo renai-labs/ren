@@ -111,12 +111,12 @@ describe("Task", () => {
       const o = yield* org
       const build = yield* o.agentIn(o.ada, o.factory.id)
       const thread = "https://acme.slack.com/archives/C07/p1712000000000100"
-      yield* database.db.insert(Database.Schema.channel_thread).values(
+      yield* database.db.insert(Database.Schema.intake_thread).values(
         ["C07:1712.000100", "C07:1712.000200"].map((id, index) => ({
           id: Channel.ThreadID.create(),
           organization_id: o.organizationId,
-          provider: "slack" as const,
-          install: "T01",
+          origin: "slack" as const,
+          scope: "T01",
           thread: id,
           session_id: build.agent.sessionId,
           url: index === 0 ? thread : null,

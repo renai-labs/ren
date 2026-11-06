@@ -13,6 +13,7 @@ import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
+import { Intake } from "@ren/core/intake"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
@@ -109,6 +110,7 @@ export const services = Layer.mergeAll(
     Layer.provide(ChannelIdentity.layer),
     Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),
   ),
+  Intake.sources(Effect.succeed([])),
   ChannelNotice.layerLog,
   TaskCard.layerNone,
   SlackTaskCard.layerNone,

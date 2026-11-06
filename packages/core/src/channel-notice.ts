@@ -78,7 +78,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const registry = yield* ChannelProvider.Registry
     const app = (yield* Config.String("APP_URL").pipe(Effect.orDie)).replace(/\/$/u, "")
-    const thread = Database.Schema.channel_thread
+    const thread = Database.Schema.intake_thread
     const link = Database.Schema.task_link
     const cards = yield* SlackTaskCard.Service
     const send = (provider: Channel.Provider, target: ChannelProvider.Target, text: string, about: string) =>
@@ -101,7 +101,7 @@ export const layer = Layer.effect(
           thread,
           and(
             eq(thread.organization_id, link.organization_id),
-            eq(thread.provider, "slack"),
+            eq(thread.origin, "slack"),
             eq(sql`upper(${thread.thread})`, link.key),
           ),
         )
