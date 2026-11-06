@@ -448,16 +448,10 @@ export const layer = Layer.effect(
           progress: Object.fromEntries(sessions.map((session) => [session.id, session.progress])),
           ...(progressed && { last_progress_at: at }),
         })
-        const moving =
-          busy.length > 0 &&
-          Option.exists(
-            Option.fromNullishOr(lastProgress),
-            (last) => at.getTime() - last.getTime() < Duration.toMillis(MachineLifecycle.timing.stuck),
-          )
-        if (moving)
-          yield* machines
-            .keepAlive(row, MachineLifecycle.timing.busy)
-            .pipe(Effect.catch((error) => Effect.logWarning("keepAlive failed", error)))
+        yield* machines.keepAwake(
+          { ...row, last_progress_at: lastProgress },
+          { isBusy: busy.length > 0, hasBackground: sessions.some((session) => session.background === true) },
+        )
       }),
       cleanup,
       hand: Effect.fn("BrainLifecycle.hand")(function* (brainId: Brain.ID) {

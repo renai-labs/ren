@@ -30,6 +30,8 @@ export const timing = {
   idle: Duration.minutes(10),
   busy: Duration.minutes(30),
   stuck: Duration.minutes(30),
+  // oxlint-disable-next-line ren/no-comments -- EN25: a background process keeps a machine awake until this long after its last turn's progress.
+  background: Duration.hours(2),
   accessMargin: Duration.minutes(2),
   poll: Duration.seconds(1),
   probeTimeout: Duration.seconds(3),
@@ -60,6 +62,7 @@ export interface Row<Id extends string> {
   readonly failure: string | null
   readonly keep_alive_until: Date | null
   readonly last_active_at: Date | null
+  readonly last_progress_at: Date | null
   readonly retry_at: Date | null
   readonly retries: number
   readonly unanswered_since: Date | null
@@ -135,6 +138,25 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   // oxlint-disable-next-line ren/no-comments -- EN38: Ren sends an error report when a machine fails, waits for capacity, or is replaced by force.
   const report = (row: Pick<R, "id" | "generation">, error: Failed | Replaced | MachineProvider.Capacity) =>
     ErrorReporter.report(Cause.fail(error)).pipe(annotate(row))
+
+  // oxlint-disable-next-line ren/no-comments -- The keep-alive from what runs on the machine: a turn with progress in the last 30 min keeps it 30 min more; a background process keeps it until 2 h after the last turn's progress (EN25).
+  const keepAwake = Effect.fnUntraced(function* (
+    row: R,
+    activity: { readonly isBusy: boolean; readonly hasBackground: boolean },
+  ) {
+    if (!row.last_progress_at) return
+    const at = (yield* now).getTime()
+    const last = row.last_progress_at.getTime()
+    const turnMs = activity.isBusy && at - last < Duration.toMillis(timing.stuck) ? Duration.toMillis(timing.busy) : 0
+    const backgroundMs = activity.hasBackground
+      ? Math.min(Duration.toMillis(timing.busy), last + Duration.toMillis(timing.background) - at)
+      : 0
+    const windowMs = Math.max(turnMs, backgroundMs)
+    if (windowMs <= 0) return
+    yield* keepAlive(row, Duration.millis(windowMs)).pipe(
+      Effect.catch((error) => Effect.logWarning("keepAlive failed", error)),
+    )
+  })
 
   const fail = Effect.fnUntraced(function* (row: R, reason: string, next: Machine.Phase) {
     const failures = row.failures + 1
@@ -446,7 +468,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
 
   return {
     run,
-    keepAlive,
+    keepAwake,
     lose,
     rest,
     access,

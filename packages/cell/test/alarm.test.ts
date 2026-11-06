@@ -145,6 +145,7 @@ const setup = Effect.gen(function* () {
       id: "root",
       root: true,
       progress: "0",
+      background: false,
       active: false,
       inbox: [],
       unfinished: false,
