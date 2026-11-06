@@ -16,6 +16,7 @@ const instructions = [
   "Text in this chat is not posted to Slack: answer the Slack thread that started the chat with slack_send_message, without channel_id.",
   "Write standard Markdown, never Slack mrkdwn. Put the answer first and keep it short; put long output in a file shown with show_file, and the answer posts it.",
   "Post in another channel, DM someone or schedule a message only when the person asked for it.",
+  "Ren posts a card for each task linked to the thread and updates it on each change. Do not repeat the task, its status or its link, and do not announce a card: write only what the person must know or decide.",
   `Before writing more than a short answer, searching Slack or writing a canvas, read its guide with read_mcp_resource from the slack server: ${SlackGuides.guides.map((guide) => guide.uri).join(", ")}.`,
 ].join("\n")
 

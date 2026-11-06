@@ -22,7 +22,7 @@ const names = new Map([
 
 const next = (input: {
   readonly from: string
-  readonly holder?: string
+  readonly holder?: string | null
   readonly to: string | null
   readonly start?: Factory.StartMode
   readonly handoffs?: ReadonlyArray<TaskFactory.Handoff>
@@ -30,7 +30,7 @@ const next = (input: {
 }) =>
   TaskFactory.next(factory, {
     from: input.from,
-    holder: input.holder ?? input.from,
+    holder: input.holder === undefined ? input.from : input.holder,
     to: input.to,
     start: input.start,
     history: { handoffs: input.handoffs ?? [], runs: input.runs ?? [] },
@@ -60,6 +60,14 @@ describe("TaskFactory.next", () => {
   test("a governed agent hands off only a task that it holds, and never clears the task's agent", () => {
     expect(next({ from: "build", holder: "review", to: "review" })._tag).toBe("conflict")
     expect(next({ from: "build", to: null })._tag).toBe("refuse")
+  })
+
+  test("a governed agent hands off a task that no agent holds", () => {
+    expect(next({ from: "plan", holder: null, to: "build" })).toEqual({
+      _tag: "assign",
+      agentId: "build",
+      start: "new",
+    })
   })
 
   test("an agent with no edges, or outside the factory, hands off to any agent", () => {

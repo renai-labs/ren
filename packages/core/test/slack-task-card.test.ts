@@ -202,7 +202,8 @@ describe("SlackTaskCard", () => {
         })
         yield* until(() => slack.threads.get(mapped.key)?.length === 1 && slack.threads.get(other.key)?.length === 1)
         const card = slack.threads.get(mapped.key)?.at(0)
-        expect(card?.text).toContain("Fix the deploy")
+        expect(card?.text).toContain(`*<${app}/tasks/${created.identifier}|${created.identifier}>*`)
+        expect(card?.text).not.toContain("To do")
         expect(metadataOf(card)?.event_payload).toEqual({ task_id: created.id, kind: "card" })
         expect(metadataOf(card)?.entities.map((entity) => entity.entity_payload.attributes.title.text)).toEqual([
           "Fix the deploy",
@@ -219,7 +220,7 @@ describe("SlackTaskCard", () => {
   )
 
   it.live(
-    "review and done notices tag the person with the card, except from the thread's own session; later changes edit their card and keep their text",
+    "a review notice tags the person with the card, except from the thread's own session; later changes edit its card and keep its text",
     () =>
       Effect.gen(function* () {
         const tasks = yield* Task.Service
@@ -244,17 +245,15 @@ describe("SlackTaskCard", () => {
         const messages = () => slack.threads.get(thread.key) ?? []
         yield* until(() => statusOf(metadataOf(messages().at(1))?.entities.at(0)) === "Needs review")
         expect(messages().at(1)?.text).toBe(
-          `<@UADA> Needs a person: Check the plan <${app}/tasks/${created.id}|Open the task>`,
+          `<@UADA> Needs review: Check the plan <${app}/tasks/${created.id}|Open the task>`,
         )
         expect(metadataOf(messages().at(1))?.event_payload.kind).toBe("notice")
         yield* tasks.update(o.ada, created.id, { status: "done" })
         yield* until(() => messages().every((message) => statusOf(metadataOf(message)?.entities.at(0)) === "Done"))
-        expect(messages().at(0)?.text).toContain("Ship SSO · Done")
-        expect(
-          messages()
-            .slice(1)
-            .map((message) => message.text.split(" <")[0]),
-        ).toEqual(["<@UADA> Needs a person: Check the plan", "<@UADA> Done."])
+        expect(messages().map((message) => message.text.split(" <")[0])).toEqual([
+          `\u200B*<${app}/tasks/${created.identifier}|${created.identifier}>*\u200B`,
+          "<@UADA> Needs review: Check the plan",
+        ])
       }),
   )
 
@@ -282,7 +281,7 @@ describe("SlackTaskCard", () => {
         ),
       )
       const notice = slack.threads.get(thread.key)?.at(1)
-      expect(notice?.text.startsWith("<@UMAIL> Needs a person: Look")).toBe(true)
+      expect(notice?.text.startsWith("<@UMAIL> Needs review: Look")).toBe(true)
       expect(notice?.metadata).toBeUndefined()
     }),
   )

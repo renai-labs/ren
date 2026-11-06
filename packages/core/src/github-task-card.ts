@@ -5,6 +5,7 @@ import type { Task } from "@ren/schema/task"
 import { and, asc, eq, inArray } from "drizzle-orm"
 import { Config, Context, Effect, Layer, Option, Schema } from "effect"
 import { GitHubApp } from "./github-app.js"
+import { TaskCardSync } from "./task-card-sync.js"
 
 export interface Interface {
   readonly refresh: (taskId: Task.ID) => Effect.Effect<void>
@@ -63,14 +64,14 @@ const bodyOf = (
       : []),
   ].join("\n\n")
 
-// oxlint-disable-next-line ren/no-comments -- The caller does not wait for GitHub. A failure leaves the comment stale until the next change, and two changes at one moment can post two comments.
+// oxlint-disable-next-line ren/no-comments -- The caller does not wait for GitHub. A failure leaves the comment stale until the next change.
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
     const github = yield* GitHubApp.Service
     const app = (yield* Config.String("APP_URL").pipe(Effect.orDie)).replace(/\/$/u, "")
-    const scope = yield* Effect.scope
+    const background = TaskCardSync.make(yield* Effect.scope, "GitHub cards")
     const task = Database.Schema.task
     const link = Database.Schema.task_link
     const session = Database.Schema.task_session
@@ -165,13 +166,7 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      refresh: (taskId) =>
-        sync(taskId).pipe(
-          Effect.catchCause((cause) => Effect.logWarning(`The GitHub cards of ${taskId} were not written`, cause)),
-          Effect.withSpan("GitHubTaskCard.refresh"),
-          Effect.forkIn(scope),
-          Effect.asVoid,
-        ),
+      refresh: (taskId) => background(taskId, sync(taskId).pipe(Effect.withSpan("GitHubTaskCard.refresh"))),
     })
   }),
 )

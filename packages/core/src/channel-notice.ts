@@ -24,16 +24,9 @@ export interface Review {
   readonly sessionId?: Session.ID | undefined
 }
 
-export interface Done {
-  readonly organizationId: Auth.OrganizationID
-  readonly taskId: Task.ID
-  readonly sessionId?: Session.ID | undefined
-}
-
 export interface Interface {
   readonly notice: (notice: Notice) => Effect.Effect<void>
   readonly review: (review: Review) => Effect.Effect<void>
-  readonly done: (done: Done) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/ChannelNotice") {}
@@ -68,7 +61,6 @@ export const layerLog = Layer.succeed(
       ),
     review: (review) =>
       Effect.logInfo(`Task review requested: ${review.reason}`).pipe(Effect.annotateLogs({ task: review.taskId })),
-    done: (done) => Effect.logInfo("Task done").pipe(Effect.annotateLogs({ task: done.taskId })),
   }),
 )
 
@@ -93,7 +85,7 @@ export const layer = Layer.effect(
               ),
             ),
       })
-    const post = Effect.fnUntraced(function* (about: Done, text: string) {
+    const post = Effect.fnUntraced(function* (about: Review, text: string) {
       const threads = yield* database.db
         .selectDistinct({ thread: link.key })
         .from(link)
@@ -126,10 +118,7 @@ export const layer = Layer.effect(
         yield* send(notice.provider, notice.target, textOf(notice, app), notice.reason)
       }),
       review: Effect.fn("ChannelNotice.review")(function* (review: Review) {
-        yield* post(review, `Needs a person: ${review.reason} [Open the task](${app}/tasks/${review.taskId})`)
-      }),
-      done: Effect.fn("ChannelNotice.done")(function* (done: Done) {
-        yield* post(done, `Done. [Open the task](${app}/tasks/${done.taskId})`)
+        yield* post(review, `Needs review: ${review.reason} [Open the task](${app}/tasks/${review.taskId})`)
       }),
     })
   }),
