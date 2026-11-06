@@ -20,6 +20,7 @@ import { EnvironmentNetwork } from "./environment-network.js"
 import { Environments } from "./environments.js"
 import type { MachineAccess } from "./machine-access.js"
 import { MachineLifecycle } from "./machine-lifecycle.js"
+import { Models } from "./models.js"
 import { BrainProvider } from "./brain-provider.js"
 import { MachineProvider } from "./machine-provider.js"
 import { SandboxEgress } from "./sandbox-egress.js"
@@ -75,10 +76,11 @@ export const layer = Layer.effect(
     )
     const sandboxVariables = yield* Deployment.sandboxVariables
     const network = yield* EnvironmentNetwork.Service
-    // oxlint-disable-next-line ren/no-comments -- EN40: a co-located machine runs the brain too, so a limited host list also has Ren's server and inference.
+    const models = yield* Models.Service
+    // oxlint-disable-next-line ren/no-comments -- EN40: a co-located machine runs the brain too, so a limited host list also has Ren's server and the inference address that brains are given, which can differ from Ren's own.
     const renHosts = [
       client.renUrl,
-      ...Option.toArray(yield* Config.option(Config.String("REN_INFERENCE_URL"))),
+      ...Option.toArray(Option.map(yield* models.inference, (found) => found.baseUrl)),
     ].flatMap((url) => Option.toArray(Option.fromNullishOr(URL.parse(url)?.hostname)))
 
     const read = (brainId: Brain.ID) =>
