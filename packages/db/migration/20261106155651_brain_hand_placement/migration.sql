@@ -1,0 +1,1 @@
+ALTER TABLE "brain" ADD COLUMN "hand_placement" text;

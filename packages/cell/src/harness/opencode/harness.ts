@@ -419,7 +419,7 @@ type Opener = (
   apps: Option.Option<AppCatalog.Info>,
   channels: ReadonlyArray<Channel.Provider>,
   ren: Option.Option<OpenCodeMcp.RenAccess>,
-  host: { readonly egress: boolean; readonly sources: GitSources.Interface },
+  host: { readonly egress: boolean; readonly isRemoteHand: boolean; readonly sources: GitSources.Interface },
 ) => Effect.Effect<OpenCodeServer.Instance, Error, Scope.Scope>
 
 const layerWith = (opener: Opener) =>
@@ -468,6 +468,7 @@ const layerWith = (opener: Opener) =>
                 ren,
                 {
                   egress: cell.vars.REN_EGRESS === "1",
+                  isRemoteHand: cell.vars.REN_HAND_PLACEMENT === "remote",
                   sources,
                 },
               )
@@ -508,6 +509,7 @@ export const layerProcess = (database: string, confinement: RenPlugin.Confinemen
       egress: host.egress,
       sources: host.sources,
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
+      isRemoteHand: host.isRemoteHand,
       confinement,
       makeDirectory: (directory) => Effect.promise(() => mkdir(directory, { recursive: true })),
     }),

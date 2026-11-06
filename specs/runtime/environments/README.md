@@ -181,8 +181,10 @@ Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, c
 
 1. A remote hand is not behind the egress yet: it gets no placeholders that work.
 2. A remote hand does not update in place: a newer template config replaces it at its wake, and it keeps its executor version until it is replaced.
-3. A brain that boots with `REN_HAND_PLACEMENT=remote` replaces four OpenCode services so they run on the hand: `ToolOutput`, `FileSystem`, `Vcs` and `Snapshot`. A co-located brain keeps OpenCode's own services and today's three replacements (workspace driver, `rg`, `RenShell`; `workspace-driver.ts:81-95`). All of these live in one module of the OpenCode adapter (EN13, EN14).
-4. Built: Ren waits up to 5 s for a chat's hand (`Environments.startingAfter`), under the 10 s for which its server keeps a quiet connection. A hand that takes longer answers `EnvironmentStartingError`, and the brain asks again every 2 s for up to 3 min (`HostAccess.handStartsWithin`). A chat's first tool call waits while a new hand starts; it does not fail.
+3. Built: a brain made for a remote hand (`brain.hand_placement`, `REN_HAND_PLACEMENT=remote`) runs OpenCode's `ToolOutput`, `FileSystem` and `Vcs` on the hand (`cell/src/harness/opencode/workspace-driver.ts`, EN13, EN14). A change of the space's hand to or from remote replaces the brain at its wake. `Snapshot` is still on the brain's disk, so revert finds no file changes on a remote hand.
+4. A chat keeps its hand when its space changes the hand, but the space's brain is made for the new hand. Then that chat's saved tool output, files and diff read the other machine's disk. This is accepted: a change of hand moves the chats.
+5. On a remote hand, `Vcs` gives the branches and the diff only; its status, branch list and review base are empty.
+6. Built: Ren waits up to 5 s for a chat's hand (`Environments.startingAfter`), under the 10 s for which its server keeps a quiet connection. A hand that takes longer answers `EnvironmentStartingError`, and the brain asks again every 2 s for up to 3 min (`HostAccess.handStartsWithin`). A chat's first tool call waits while a new hand starts; it does not fail.
 
 ### Keep-alive and detection
 
@@ -209,7 +211,6 @@ Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, c
 | `core/machine-access.ts`   | `release`, `status` and `retire`, each with its first caller. Today: `ensure`, `access`, `check`, `retry`.                                              |
 | `core/machine-provider.ts` | `size` in `create` for a provider that sizes a machine there; the flag `canPause`. Built: `image`, `network`, `build`, `stepsBetween`, `canLimitHosts`. |
 | `environment-api`          | Later: a feature list in `hello`.                                                                                                                       |
-| `cell`                     | One OpenCode hand-bridge module chosen by `REN_HAND_PLACEMENT`.                                                                                         |
 | `infra/aws`                | A memory alarm for the server.                                                                                                                          |
 
 Run `bun run generate` after the protocol changes.

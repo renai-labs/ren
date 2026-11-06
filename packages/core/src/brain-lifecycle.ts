@@ -8,7 +8,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Bundle } from "@ren/schema/bundle"
 import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
-import type { Space } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { and, eq, exists, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { WorkflowEngine } from "effect/workflow"
@@ -238,6 +238,16 @@ export const layer = Layer.effect(
           })
         : chosen(row.space_id)
 
+    // oxlint-disable-next-line ren/no-comments -- A brain is made for its space's hand at create. A brain for a remote hand runs OpenCode's tool output, files and git on the hand; a change to or from remote replaces the brain at its wake, so the choice at boot holds for the process's life (EN13).
+    const handPlacement = Effect.fnUntraced(function* (spaceId: Space.ID) {
+      const found = (yield* database.db
+        .select({ placement: Database.Schema.space.hand_placement })
+        .from(Database.Schema.space)
+        .where(eq(Database.Schema.space.id, spaceId))
+        .pipe(Effect.orDie)).at(0)
+      return found?.placement ?? Space.defaultHand.placement
+    })
+
     // oxlint-disable-next-line ren/no-comments -- A co-located hand with a template: the machine runs the template's last image that built, and keeps to its host list (EN3, networking rules 1, 2).
     const wants = Effect.fnUntraced(function* (row: Row) {
       const templates = Database.Schema.environment_template
@@ -340,6 +350,7 @@ export const layer = Layer.effect(
             "ren.brain.generation": String(row.generation),
           }),
           ...(yield* environments.executorVariables(Environment.ofBrain(row.id))),
+          ...((yield* handPlacement(row.space_id)) === "remote" && { REN_HAND_PLACEMENT: "remote" }),
           ...(Option.isSome(bundles) && {
             REN_BUNDLES: (yield* withTokens(bundles.value))
               .map((bundle) => [bundle.kind, bundle.version, bundle.sha256, bundle.token].join(":"))
@@ -350,6 +361,7 @@ export const layer = Layer.effect(
       created: Effect.fnUntraced(function* (brainId) {
         const bundles = yield* wanted
         yield* update(brainId, {
+          hand_placement: yield* handPlacement((yield* read(brainId)).space_id),
           key_ids: client.publicKeys.map((key) => key.id),
           bundles: Option.match(bundles, { onNone: () => null, onSome: versionsOf }),
         })
@@ -403,6 +415,8 @@ export const layer = Layer.effect(
       }),
       outdated: Effect.fnUntraced(function* (row) {
         if (row.provider && row.provider !== (yield* chosen(row.space_id)).info.id) return "replace" as const
+        if ((row.hand_placement === "remote") !== ((yield* handPlacement(row.space_id)) === "remote"))
+          return "replace" as const
         const bundles = yield* wanted
         if (Option.isNone(bundles)) return "current" as const
         if (!row.bundles) return "replace" as const
