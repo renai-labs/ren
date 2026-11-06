@@ -1,8 +1,9 @@
 import { expect } from "bun:test"
 import type { App as AppSchema } from "@ren/schema/app"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import { App } from "../src/app.js"
 import { AppProfiles } from "../src/app/profiles.js"
+import { AppRegistry } from "../src/app/registry.js"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { testEffect } from "./lib/effect.js"
@@ -45,6 +46,34 @@ it.live("read access follows reach, while edits and transfers keep owner checks"
     yield* members.create(admin, { spaceId: target, userId: owner.userId })
     yield* apps.transferOwnership(owner, app.id, { spaceId: target })
     expect((yield* apps.update(consumer, app.id, edit)).name).toBe("Changed")
+  }),
+)
+
+it.live("connected lists every app with a profile the actor sees, registry apps too", () =>
+  Effect.gen(function* () {
+    const apps = yield* App.Service
+    const registry = yield* AppRegistry.Service
+    const members = yield* SpaceMember.Service
+    const organizationId = yield* Seed.organization()
+    const admin = yield* ProfilesFixture.user(organizationId, "Root", "admin")
+    const member = yield* ProfilesFixture.user(organizationId, "Bob")
+    const shared = yield* ProfilesFixture.space(admin, "Shared")
+    yield* ProfilesFixture.app(admin, admin.personal, "hidden")
+    const published = yield* registry.publish({
+      apps: ["linear", "notion"].map((slug) =>
+        Schema.decodeUnknownSync(AppRegistry.Publication)({ slug, name: slug, description: slug, listing: {} }),
+      ),
+    })
+    const notion = published.apps.find((app) => app.slug === "notion")
+    if (!notion) return yield* Effect.die(new Error("Publication returned no notion app"))
+    yield* ProfilesFixture.profile(admin, { appId: notion.appId, slug: "team", kind: "shared", spaceIds: [shared] })
+    const slugs = (actor: typeof admin, input: { readonly connected?: boolean }) =>
+      Effect.map(apps.list(actor, { page: 1, pageSize: 50, ...input }), (page) => page.items.map((app) => app.slug))
+    expect(yield* slugs(member, {})).toEqual([])
+    expect(yield* slugs(member, { connected: true })).toEqual([])
+    yield* members.create(admin, { spaceId: shared, userId: member.userId })
+    expect(yield* slugs(member, { connected: true })).toEqual(["notion"])
+    expect(yield* slugs(admin, { connected: true })).toEqual(["hidden", "notion"])
   }),
 )
 

@@ -488,13 +488,19 @@ const adaptGroupAgent = (raw: RawClient["agent"]) => ({
 type AppListRequest = Parameters<RawClient["app"]["app.list"]>[0]
 type AppListInput = {
   readonly spaceId?: AppListRequest["query"]["spaceId"]
+  readonly connected?: AppListRequest["query"]["connected"]
   readonly page: AppListRequest["query"]["page"]
   readonly pageSize: AppListRequest["query"]["pageSize"]
 }
 const EndpointAppList = (raw: RawClient["app"]) => (input: AppListInput) =>
-  raw["app.list"]({ query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+  raw["app.list"]({
+    query: {
+      spaceId: input["spaceId"],
+      connected: input["connected"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
 
 type AppGetRequest = Parameters<RawClient["app"]["app.get"]>[0]
 type AppGetInput = { readonly idOrSlug: AppGetRequest["params"]["idOrSlug"] }

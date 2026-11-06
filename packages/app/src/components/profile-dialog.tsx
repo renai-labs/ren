@@ -25,7 +25,8 @@ import { Switch } from "@ren/ui/switch"
 import { AccountAccess } from "./account-actions.js"
 import { AppIcon } from "./app-icon.js"
 import { Row, Rows } from "./page.js"
-import { useCatalog } from "../lib/use-catalog.js"
+import { useApp, useApps } from "../lib/use-app.js"
+import { useAppProfiles } from "../lib/use-app-profiles.js"
 import { useSignIn } from "../lib/use-sign-in.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { useMe } from "../lib/use-me.js"
@@ -90,19 +91,20 @@ function stepOf(input: { creating: boolean; edit: boolean; section: "edit" | "co
 
 export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
   const { api } = RouterContext.useRouterContext()
-  const app = useCatalog().appOf(props.appId)
+  const found = useApp(props.appId)
   const [profileId, setProfileId] = useState(props.profileId)
   const [waiting, setWaiting] = useState(false)
   const [replacing, setReplacing] = useState(false)
   const [section, setSection] = useState<"edit" | "connection">("edit")
   const [back, setBack] = useState(false)
-  const found = useQuery({
+  const profile = useQuery({
     ...api["app-profile"].get.queryOptions({ idOrSlug: profileId ?? "" }),
     enabled: Boolean(profileId),
     refetchOnWindowFocus: "always",
     refetchInterval: waiting ? 2000 : false,
   })
-  if (!app) return null
+  const app = found.app
+  if (!app && !found.pending) return null
   const creating = !profileId
   const fresh = !props.profileId
   const step = stepOf({ creating, edit: Boolean(props.edit), section })
@@ -138,21 +140,27 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
           </Button>
         ) : null}
         <div key={step} className={cn("flex flex-1 flex-col", stepMotion({ fresh, creating, step, back }))}>
-          <ProfileStep
-            app={app}
-            profile={found.data}
-            step={step}
-            from={props.from}
-            replacing={replacing}
-            waiting={waiting}
-            onCreated={(created) => setProfileId(created.id)}
-            onConnection={() => go("connection")}
-            onClose={props.onClose}
-            onDone={props.edit ? () => go("edit") : props.onClose}
-            onReplace={() => setReplacing(true)}
-            onSaved={() => setReplacing(false)}
-            onWaiting={() => setWaiting(true)}
-          />
+          {app ? (
+            <ProfileStep
+              app={app}
+              profile={profile.data}
+              step={step}
+              from={props.from}
+              replacing={replacing}
+              waiting={waiting}
+              onCreated={(created) => setProfileId(created.id)}
+              onConnection={() => go("connection")}
+              onClose={props.onClose}
+              onDone={props.edit ? () => go("edit") : props.onClose}
+              onReplace={() => setReplacing(true)}
+              onSaved={() => setReplacing(false)}
+              onWaiting={() => setWaiting(true)}
+            />
+          ) : (
+            <Screen app={{ name: "", icon: null }} title="Loading app" description="" action={null}>
+              <SkeletonRows count={2} label="Loading app" />
+            </Screen>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -208,7 +216,7 @@ function ProfileStep(props: {
 }
 
 function Screen(props: {
-  app: App
+  app: Pick<App, "name" | "icon">
   title: string
   description: string
   children?: ReactNode
@@ -411,19 +419,21 @@ function EditStep(props: { app: App; profile: AppProfile; onConnection: () => vo
 
 function DependenciesField(props: { profile: AppProfile }) {
   const { api } = RouterContext.useRouterContext()
-  const catalog = useCatalog()
-  const link = useMutation(api["app-profile"].link.mutationOptions())
   const profile = props.profile
+  const appIds = profile.links.map((each) => each.appId)
+  const apps = useApps(appIds)
+  const profiles = useAppProfiles(appIds)
+  const link = useMutation(api["app-profile"].link.mutationOptions())
   if (profile.links.length === 0) return null
   return (
     <Field className="text-left">
       <FieldLabel>Dependencies</FieldLabel>
       <div className="flex flex-col gap-2">
         {profile.links.map((each) => {
-          const app = catalog.appOf(each.appId)
+          const app = apps.of(each.appId)
           const name = app?.name ?? "App"
-          const options = catalog
-            .profilesOf(each.appId)
+          const options = profiles
+            .of(each.appId)
             .filter(
               (option) => option.kind === "shared" || (profile.kind === "private" && option.userId === profile.userId),
             )
@@ -496,7 +506,7 @@ function createDescription(from: From | undefined) {
 
 function CreateStep(props: { app: App; from: From | undefined; onCreated: (profile: AppProfile) => void }) {
   const { api } = RouterContext.useRouterContext()
-  const others = useCatalog().profilesOf(props.app.id)
+  const others = useAppProfiles([props.app.id]).of(props.app.id)
   const user = useMe().user.name
   const spaces = useSpaces().joined.filter((space) => space.kind !== "private")
   const create = useMutation({ ...api["app-profile"].create.mutationOptions() })

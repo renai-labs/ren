@@ -3,11 +3,11 @@ import { ClientCommand, Composer, Mentions } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import { AsyncResult } from "effect/reactivity"
-import { useCatalog } from "../../lib/use-catalog.js"
-import { isSpaceApp, mentionColor } from "../../lib/apps.js"
+import { fromApp, fromRegistry, isSpaceApp, mentionColor, type CatalogApp } from "../../lib/apps.js"
+import { pageSize, pickerPageSize } from "../../lib/pagination.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import type { MentionMark } from "@ren/ui/mention-overlay"
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Repositories } from "../../lib/repositories.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -22,6 +22,7 @@ interface SuggestionItem {
 export interface Suggest {
   readonly open: boolean
   readonly label: string
+  readonly searching: boolean
   readonly items: ReadonlyArray<SuggestionItem>
   readonly active: string | undefined
   readonly onCursor: (text: string, cursor: number) => void
@@ -73,6 +74,42 @@ function useRepositoryMentions(spaceId: string | undefined): ReadonlyArray<Menti
   }))
 }
 
+function useAppMentions(query: string | undefined) {
+  const { api } = RouterContext.useRouterContext()
+  const spaces = useSpaces().spaces
+  const own = useQuery(api.app.list.queryOptions({ page: 1, pageSize: pickerPageSize }))
+  const found = useQuery({
+    ...api["app-registry"].list.queryOptions({ page: 1, pageSize, ...(query && { query }) }),
+    enabled: query !== undefined,
+    placeholderData: keepPreviousData,
+  })
+  const [chosen, setChosen] = useState<ReadonlyArray<CatalogApp>>([])
+  const byId = new Map(
+    [
+      ...(own.data?.items ?? []).map(fromApp),
+      ...chosen,
+      ...(query === undefined ? [] : (found.data?.items ?? []).map(fromRegistry)),
+    ].map((app) => [app.id, app]),
+  )
+  return {
+    byId,
+    items: [...byId.values()]
+      .filter((app) => !isSpaceApp(app, spaces))
+      .map((app): Mentions.Item => ({
+        kind: "app",
+        id: app.id,
+        label: app.name,
+        handle: app.slug,
+        description: app.description,
+      })),
+    searching: query !== undefined && found.isFetching,
+    choose: (appId: string) => {
+      const app = byId.get(appId)
+      if (app) setChosen((previous) => [...previous.filter((each) => each.id !== app.id), app])
+    },
+  }
+}
+
 const suggestionLabel = (trigger: Composer.Trigger | undefined, options: { repositories: boolean }) => {
   if (trigger?.kind === "command") return "Commands"
   return options.repositories ? "Apps and repositories" : "Apps"
@@ -86,21 +123,10 @@ function useSuggestions(input: {
   const [trigger, setTrigger] = useState<Composer.Trigger>()
   const [active, setActive] = useState<string>()
   const query = trigger?.kind === "mention" ? trigger.query.toLowerCase() : undefined
-  const spaces = useSpaces().spaces
-  const catalog = useCatalog().apps
-  const appById = new Map(catalog.map((app) => [app.id, app]))
-  const apps = catalog.filter((app) => !isSpaceApp(app, spaces))
+  const apps = useAppMentions(query)
+  const appById = apps.byId
   const repositories = useRepositoryMentions(input.spaceId)
-  const connectors = [
-    ...apps.map((app): Mentions.Item => ({
-      kind: "app",
-      id: app.id,
-      label: app.name,
-      handle: app.slug,
-      description: app.description,
-    })),
-    ...repositories,
-  ]
+  const connectors = [...apps.items, ...repositories]
   const runnable = trigger?.kind === "command" ? input.commands(trigger.query) : []
   const mentionable =
     query === undefined
@@ -129,8 +155,9 @@ function useSuggestions(input: {
     setActive(undefined)
   }
   const suggest: Suggest = {
-    open: trigger !== undefined && items.length > 0,
+    open: trigger !== undefined && (items.length > 0 || apps.searching),
     label: suggestionLabel(trigger, { repositories: repositories.length > 0 }),
+    searching: apps.searching,
     items,
     active: current,
     onCursor: (text, cursor) => {
@@ -157,6 +184,7 @@ function useSuggestions(input: {
       }
       const item = mentionable.find((entry) => Mentions.key(entry) === value)
       if (!item || trigger?.kind !== "mention") return
+      if (item.kind === "app") apps.choose(item.id)
       return Mentions.insert(text, item, trigger.start, cursor)
     },
     onClose: close,

@@ -137,6 +137,10 @@ export const AgentTransferOwnership = {
 
 export const AppList = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  connected: Flag.Boolean("connected").pipe(
+    Flag.optional,
+    Flag.withDescription("Only apps with a profile you can see, registry apps too."),
+  ),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }

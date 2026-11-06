@@ -3031,6 +3031,20 @@
             "required": false
           },
           {
+            "name": "connected",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": ["true", "false"]
+                }
+              ],
+              "description": "Only apps with a profile you can see, registry apps too. Without it, only the organization’s apps."
+            },
+            "required": false
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
