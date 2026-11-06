@@ -8,6 +8,7 @@ References:
 - [`references/chaos.md`](references/chaos.md): the invariants (I1–I13), the chaos test list, and how the tests run.
 - [`references/ren-v1.md`](references/ren-v1.md): the ren-v1 incidents that this design answers.
 - [`references/ecs-brain.md`](references/ecs-brain.md): what OpenCode runs on the brain machine, and the spike for brains on ECS.
+- [`references/naming.md`](references/naming.md): the naming rules for this work.
 
 Words:
 
@@ -273,7 +274,43 @@ Each pull request is based on the one before it. Each one passes its own rows of
 | 18  | `remote-hand-snapshot`      | `Snapshot` on the hand: revert works on a remote hand.                                                  |
 | 19  | `soak-and-alarms`           | The 1-hour soak, the memory alarm, the load test.                                                       |
 
-## 6. Later
+## 6. How to build it
+
+These rules apply to every pull request of §5, together with the root `AGENTS.md`, the `AGENTS.md` of each package that a change touches, and the `effect` skill.
+
+### Open source
+
+1. This repository is public. Spec, code, tests, fixtures, logs, commit messages and pull request descriptions contain no secrets, keys, tokens, internal host names, account ids, customer data, personal data, production data, or content of private repositories.
+2. Secrets reach a process only through its environment, set from the deployment's secret store. They never appear in a file in the repository.
+3. A test that needs data shaped like production uses data that it makes, with the same shape (sizes and counts). Production data never enters the repository.
+
+### Design first
+
+1. Classify each problem before you change code: design flaw, code bug, missed edge case, or test bug.
+2. Fix a design flaw in the design. Stop, change this spec, then change the code. Do not work around a design flaw in code. Find design flaws while you build, not after a review.
+3. If the spec does not fit the code, stop and change the spec first.
+4. Each change traces to a rule, a contract change or a chaos row of this spec. No drive-by refactors or renames.
+
+### Simple and minimal
+
+1. Keep the code simple to read and as small as possible.
+2. Swappable parts stay behind their seam (§2). Core never asks which vendor, provider or harness it has. A provider says what it can do with a flag; core reads the flag.
+3. No speculative abstraction. Add a contract method or a flag only with its first real user.
+4. Do not handle a case that an earlier check already makes impossible. Validate input once at its boundary, then trust its type.
+5. Do not write what Effect, Bun, Node or OpenCode already give. Read their source first (`repos/effect`, OpenCode's repository). Examples: `Schedule` and `Effect.retry` for retries, `Clock` and `TestClock` for time, `Semaphore`, `RcMap` and `Cache` for shared resources, `Schema` for every boundary, `Config` for settings, `DurableRunner` (Effect `Workflow`) for runs that survive a restart, `Bun.file`, `Bun.spawn` and `Bun.CryptoHasher` for files, processes and hashes, and OpenCode's own services on a co-located brain (EN13).
+6. Before a new pattern or helper, look for one in this repository, then in `repos/effect` and OpenCode.
+
+### Names
+
+Follow [`references/naming.md`](references/naming.md). The repository's `AGENTS.md` wins over it. For this work:
+
+1. Full words: `environment`, not `env`, in new names. `terminal`, not `pty`.
+2. One word for one meaning: "machine" is a computer that runs a brain or a hand; "hand" is where tools run (`environment` in code); "sandbox" is a machine at a provider; "seat" is one chat on a remote hand.
+3. Booleans read as conditions and match their neighbours: `canColocate` beside `canMount`.
+4. A `Duration` carries its unit: `keepAlive(binding, duration)`. A number has the unit in its name: `timeoutMs`.
+5. Errors are named after what happened: `NotReady` for a template with no `ready` image, not `BuildError`.
+
+## 7. Later
 
 1. A sweeper that watches each brain's pulls, to find a silent brain before anyone uses it.
 2. An "Apply now" button that replaces a machine at once.
