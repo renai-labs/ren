@@ -14,6 +14,7 @@ import { and, asc, count, eq, exists, inArray, isNull, type SQLWrapper, sql } fr
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { Deployment } from "./deployment.js"
 import { EnvironmentProvider } from "./environment-provider.js"
+import type { MachineProvider } from "./machine-provider.js"
 import { Signer } from "./signer.js"
 
 interface Subject {
@@ -97,6 +98,9 @@ const isAvailable = (organizationId: Auth.OrganizationID, spaceId: SQLWrapper) =
       )})`,
     ),
   )
+
+// oxlint-disable-next-line ren/no-comments -- An environment never gets a new machine under its id: a replace makes a new environment, so its machine is always the first generation.
+const machineGeneration = 1
 
 const isSessionOf = (subject: Subject) =>
   and(
@@ -243,6 +247,7 @@ export const layer = Layer.effect(
             providerBinding: environment.at(0)?.binding ?? null,
             generation: session.generation,
             brainId: session.brainId,
+            spaceId: session.spaceId,
           }
         }),
       )
@@ -295,22 +300,28 @@ export const layer = Layer.effect(
         })
       const keys = yield* signingKeys
       const assigned = yield* assign(subject)
-      const unavailableBecause = (error: EnvironmentProvider.Failed) =>
+      const unavailableBecause = (error: MachineProvider.Failed | MachineProvider.Capacity) =>
         new Unavailable({ message: `The environment of session ${subject.sessionId} is unavailable: ${error.message}` })
       const providerBinding =
         assigned.providerBinding ??
         (yield* provider.value
-          .provision({
-            environmentId: assigned.environmentId,
-            environmentTemplateId: assigned.template.id,
+          .create({
+            labels: {
+              id: assigned.environmentId,
+              generation: machineGeneration,
+              organizationId: subject.organizationId,
+              spaceId: assigned.spaceId,
+            },
             config: assigned.template.config,
             variables: {
               ...ExecutorVariables.make(assigned.environmentId, keys.publicKeys),
               ...sandboxVariables({ "ren.organization.id": subject.organizationId }),
             },
+            proxy: Option.none(),
           })
           .pipe(
             Effect.mapError(unavailableBecause),
+            Effect.map((created) => created.binding),
             Effect.tap((made) =>
               database.db
                 .update(environments)
@@ -319,20 +330,22 @@ export const layer = Layer.effect(
                 .pipe(Effect.orDie),
             ),
           ))
-      const endpoint = yield* provider.value.connect(providerBinding).pipe(
+      const endpoint = yield* provider.value.connect(providerBinding, Option.none()).pipe(
         Effect.map(Option.some),
-        Effect.catchTag("EnvironmentProvider.Gone", (gone) =>
+        Effect.catchTag("MachineProvider.Gone", (gone) =>
           options.isRetry
             ? Effect.fail(new Unavailable({ message: gone.message }))
             : replace(assigned.environmentId).pipe(Effect.as(Option.none())),
         ),
-        Effect.catchTag("EnvironmentProvider.Failed", (error) => Effect.fail(unavailableBecause(error))),
+        Effect.catchTag(["MachineProvider.Failed", "MachineProvider.Capacity"], (error) =>
+          Effect.fail(unavailableBecause(error)),
+        ),
       )
       if (Option.isNone(endpoint)) return yield* grantAccess(subject, hand, { isRetry: true })
       const exp = yield* expiry
       return {
         directory: directoryOf(subject.sessionId),
-        url: endpoint.value.url,
+        url: new URL(endpoint.value.url),
         token: Redacted.make(
           yield* signToken({
             environment: assigned.environmentId,
@@ -342,7 +355,7 @@ export const layer = Layer.effect(
         ),
         expiresAt: DateTime.makeUnsafe(exp * 1000),
         generation: assigned.generation,
-        egress: provider.value.egress,
+        egress: provider.value.canEgress,
         // oxlint-disable-next-line ren/no-comments -- R49, R59: the folder beside the session folders, which every session on the environment shares.
         sharedDirectory: `${config.directory}/.ren`,
       } satisfies Environment.Access
@@ -420,7 +433,7 @@ export const layer = Layer.effect(
                   Option.flatMap(Option.fromNullishOr(providers.get(sessionId)), registry.get),
                   (provider) => ({
                     canMount: provider.canMount,
-                    egress: provider.egress,
+                    egress: provider.canEgress,
                   }),
                 )
               : Option.map(hand, (found) => ({ canMount: found.canMount, egress: found.egress }))

@@ -6,11 +6,11 @@ import { desc, eq } from "drizzle-orm"
 import { Array, Clock, Context, DateTime, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { DurableRunner } from "./durable-runner.js"
-import { SandboxProvider } from "./sandbox-provider.js"
+import { MachineProvider } from "./machine-provider.js"
 import { Usage } from "./usage.js"
 
 export interface Interface {
-  readonly sweep: Effect.Effect<void, SandboxProvider.Failed | Usage.Unavailable>
+  readonly sweep: Effect.Effect<void, MachineProvider.Failed | Usage.Unavailable>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SandboxUsage") {}
@@ -30,7 +30,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const provider = yield* SandboxProvider.Service
+    const provider = yield* MachineProvider.Brain
     const usage = yield* Usage.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const sweeping = yield* Semaphore.make(1)
@@ -39,7 +39,7 @@ export const layer = Layer.effect(
       const newest = yield* database.db
         .select({ time: events.time })
         .from(events)
-        .where(eq(events.source, provider.kind))
+        .where(eq(events.source, provider.info.id))
         .orderBy(desc(events.time))
         .limit(1)
         .pipe(Effect.orDie)
@@ -52,7 +52,7 @@ export const layer = Layer.effect(
         (batch) =>
           usage.record(
             batch.map((span) => ({
-              source: provider.kind,
+              source: provider.info.id,
               id: span.id,
               type: "sandbox.compute",
               time: span.endedAt,
@@ -61,7 +61,7 @@ export const layer = Layer.effect(
               brain: span.brainId,
               space: span.spaceId,
               payer: "ren",
-              provider: provider.kind,
+              provider: provider.info.id,
               cost_micro_usd: span.costMicroUsd,
               data: {
                 sandbox_id: span.sandboxId,

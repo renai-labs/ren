@@ -1,6 +1,7 @@
 export * as ChaosEnvironments from "./environments.js"
 
 import { EnvironmentProvider } from "@ren/core/environment-provider"
+import { MachineProvider } from "@ren/core/machine-provider"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Config, Effect, Schema } from "effect"
 
@@ -16,26 +17,34 @@ const provider = Effect.gen(function* () {
     Effect.flatMap(Schema.decodeUnknownEffect(File)),
     Effect.orDie,
   )
-  return EnvironmentProvider.make({
+  return MachineProvider.make({
     id: providerId,
     title: "Chaos",
     description: "The chaos lane’s containers, behind its fault proxies.",
-    egress: false,
+    canEgress: false,
     canMount: false,
-    config: Schema.Struct({}),
+    canSample: false,
+    config: Schema.Struct({ environmentTemplateId: EnvironmentTemplate.ID }),
     binding: Schema.Struct({ environmentTemplateId: EnvironmentTemplate.ID, generation: Schema.Int }),
-    provision: (input) =>
-      Effect.map(read, (file) => ({
-        environmentTemplateId: input.environmentTemplateId,
-        generation: file[input.environmentTemplateId]?.generation ?? 0,
-      })),
+    create: (input) =>
+      Effect.flatMap(read, (file) => {
+        const entry = file[input.config.environmentTemplateId]
+        return entry
+          ? Effect.succeed({
+              binding: { environmentTemplateId: input.config.environmentTemplateId, generation: entry.generation },
+              url: entry.url,
+            })
+          : Effect.fail(
+              new MachineProvider.Failed({ message: `No chaos container of ${input.config.environmentTemplateId}` }),
+            )
+      }),
     connect: (binding) =>
       Effect.flatMap(read, (file) => {
         const entry = file[binding.environmentTemplateId]
         return entry && entry.generation === binding.generation
-          ? Effect.succeed({ url: new URL(entry.url) })
+          ? Effect.succeed({ url: entry.url })
           : Effect.fail(
-              new EnvironmentProvider.Gone({
+              new MachineProvider.Gone({
                 message: `The chaos container of ${binding.environmentTemplateId} was replaced`,
               }),
             )

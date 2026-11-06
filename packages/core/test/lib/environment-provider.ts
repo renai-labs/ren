@@ -3,6 +3,7 @@ export * as TestProvider from "./environment-provider.js"
 import { Environment } from "@ren/schema/environment"
 import { Effect, Ref, Schema } from "effect"
 import { EnvironmentProvider } from "../../src/environment-provider.js"
+import { MachineProvider } from "../../src/machine-provider.js"
 
 const Config = Schema.Struct({
   label: Schema.NonEmptyString.annotate({ title: "Label", description: "A name for the test environments." }),
@@ -13,7 +14,7 @@ interface Probe {
   readonly destroyed: Ref.Ref<ReadonlyArray<Environment.ID>>
   readonly gone: Ref.Ref<ReadonlySet<Environment.ID>>
   readonly failing: Ref.Ref<boolean>
-  readonly provider: EnvironmentProvider.Provider
+  readonly provider: MachineProvider.Provider
 }
 
 export const make = (
@@ -21,9 +22,7 @@ export const make = (
     readonly id?: string
     readonly egress?: boolean
     readonly canMount?: boolean
-    readonly endpoint?: (
-      environmentId: Environment.ID,
-    ) => Effect.Effect<EnvironmentProvider.Endpoint, EnvironmentProvider.Gone>
+    readonly endpoint?: (environmentId: Environment.ID) => Effect.Effect<{ readonly url: string }, MachineProvider.Gone>
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -33,27 +32,28 @@ export const make = (
     const failing = yield* Ref.make(false)
     const endpoint =
       options.endpoint ??
-      ((environmentId: Environment.ID): Effect.Effect<EnvironmentProvider.Endpoint, EnvironmentProvider.Gone> =>
-        Effect.succeed({ url: new URL(`http://${environmentId.toLowerCase()}.test`) }))
-    const provider = EnvironmentProvider.make({
+      ((environmentId: Environment.ID): Effect.Effect<{ readonly url: string }, MachineProvider.Gone> =>
+        Effect.succeed({ url: `http://${environmentId.toLowerCase()}.test/` }))
+    const provider = MachineProvider.make({
       id: EnvironmentProvider.ID.make(options.id ?? "test"),
       title: "Test",
       description: "Environments that live in the test’s memory.",
-      egress: options.egress ?? false,
+      canEgress: options.egress ?? false,
       canMount: options.canMount ?? false,
+      canSample: false,
       config: Config,
       binding: Schema.Struct({ environmentId: Environment.ID }),
-      provision: (input) =>
+      create: (input) =>
         Effect.gen(function* () {
-          if (yield* Ref.get(failing))
-            return yield* new EnvironmentProvider.Failed({ message: "the test provider fails" })
-          yield* Ref.update(provisions, (all) => [...all, input.environmentId])
-          return { environmentId: input.environmentId }
+          if (yield* Ref.get(failing)) return yield* new MachineProvider.Failed({ message: "the test provider fails" })
+          const environmentId = Environment.ID.make(input.labels.id)
+          yield* Ref.update(provisions, (all) => [...all, environmentId])
+          return { binding: { environmentId }, url: `http://${environmentId.toLowerCase()}.test/` }
         }),
       connect: (binding) =>
         Effect.gen(function* () {
           if ((yield* Ref.get(gone)).has(binding.environmentId))
-            return yield* new EnvironmentProvider.Gone({ message: `environment ${binding.environmentId} is gone` })
+            return yield* new MachineProvider.Gone({ message: `environment ${binding.environmentId} is gone` })
           return yield* endpoint(binding.environmentId)
         }),
       destroy: (binding) => Ref.update(destroyed, (all) => [...all, binding.environmentId]),

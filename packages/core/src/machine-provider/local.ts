@@ -1,12 +1,12 @@
 export * as LocalSandbox from "./local.js"
 
-import { Brain } from "@ren/schema/brain"
 import { DateTime, Duration, Effect, FiberMap, Layer, Option, Schema, Stream } from "effect"
 import { spawn } from "node:child_process"
 import { mkdir, readdir, rm } from "node:fs/promises"
 import { createServer } from "node:net"
 import { join } from "node:path"
-import { SandboxProvider } from "../sandbox-provider.js"
+import { EnvironmentProvider } from "../environment-provider.js"
+import { MachineProvider } from "../machine-provider.js"
 
 const loop = (entry: string, file: string) =>
   `while true; do bun ${JSON.stringify(entry)} >>${JSON.stringify(`${file}.log`)} 2>&1 || echo "$?" >${JSON.stringify(`${file}.exit`)}; sleep 1; done`
@@ -16,12 +16,11 @@ const Binding = Schema.Struct({
   port: Schema.Int,
   handPort: Schema.Int,
   home: Schema.String,
-  brainId: Brain.ID,
+  brainId: Schema.String,
   generation: Schema.Int,
 })
 type Binding = typeof Binding.Type
 
-const decodeBinding = Schema.decodeUnknownEffect(Binding)
 const BindingFile = Schema.fromJsonString(Binding)
 
 const isAlive = (pid: number) =>
@@ -32,9 +31,9 @@ const isAlive = (pid: number) =>
 
 const signal = (pid: number, name: NodeJS.Signals) => Effect.try(() => process.kill(-pid, name)).pipe(Effect.ignore)
 
-const freePort = Effect.callback<number, SandboxProvider.Failed>((resume) => {
+const freePort = Effect.callback<number, MachineProvider.Failed>((resume) => {
   const server = createServer()
-  server.once("error", (error) => resume(Effect.fail(new SandboxProvider.Failed({ message: error.message }))))
+  server.once("error", (error) => resume(Effect.fail(new MachineProvider.Failed({ message: error.message }))))
   server.listen(0, "127.0.0.1", () => {
     const address = server.address()
     const port = typeof address === "object" && address ? address.port : 0
@@ -54,14 +53,13 @@ export const layer = (options: {
   readonly owner?: number
 }) =>
   Layer.effect(
-    SandboxProvider.Service,
+    MachineProvider.Brain,
     Effect.gen(function* () {
       const timers = yield* FiberMap.make<number>()
       const paused = new Set<number>()
       const failed = (error: unknown) =>
-        new SandboxProvider.Failed({ message: error instanceof Error ? error.message : String(error) })
-      const read = (binding: Schema.Json) => decodeBinding(binding).pipe(Effect.mapError(failed))
-      const homeOf = (brainId: Brain.ID, generation: number) => join(options.root, `${brainId}-${generation}`)
+        new MachineProvider.Failed({ message: error instanceof Error ? error.message : String(error) })
+      const homeOf = (brainId: string, generation: number) => join(options.root, `${brainId}-${generation}`)
       const bindingFile = (home: string) => join(home, ".ren", "sandbox.json")
       const stored = (home: string) =>
         Effect.promise(() =>
@@ -73,20 +71,24 @@ export const layer = (options: {
         Effect.flatMap(isAlive(binding.pid), (alive) =>
           alive
             ? Effect.void
-            : Effect.fail(new SandboxProvider.Gone({ message: `Brain process ${binding.pid} is gone` })),
+            : Effect.fail(new MachineProvider.Gone({ message: `Brain process ${binding.pid} is gone` })),
         )
 
-      return SandboxProvider.Service.of({
-        kind: "local",
+      return MachineProvider.make({
+        id: EnvironmentProvider.ID.make("local"),
+        title: "Local",
+        description: "A process on the machine that runs Ren.",
         canEgress: true,
         canMount: false,
         canSample: true,
-        template: options.template ?? null,
+        ...(options.template && { template: options.template }),
+        config: Schema.Struct({}),
+        binding: Binding,
         create: Effect.fn("LocalSandbox.create")(function* (input) {
-          const home = homeOf(input.brainId, input.generation)
+          const home = homeOf(input.labels.id, input.labels.generation)
           const existing = yield* stored(home)
           if (Option.isSome(existing) && (yield* isAlive(existing.value.pid)))
-            return { binding: Schema.encodeSync(Binding)(existing.value), url: urlOf(existing.value) }
+            return { binding: existing.value, url: urlOf(existing.value) }
           if (options.maxRunning) {
             const names = yield* Effect.promise(() => readdir(options.root).catch(() => []))
             const found = yield* Effect.forEach(names, (name) => stored(join(options.root, name)))
@@ -95,7 +97,7 @@ export const layer = (options: {
               (each) => Effect.map(isAlive(each.pid), (alive) => alive && !paused.has(each.pid)),
             )
             if (running.length >= options.maxRunning)
-              return yield* new SandboxProvider.Capacity({
+              return yield* new MachineProvider.Capacity({
                 message: `${running.length} local brains run; the limit is ${options.maxRunning}`,
                 retryAfter: Duration.seconds(1),
               })
@@ -131,14 +133,14 @@ export const layer = (options: {
                 EXECUTOR_WORKSPACE: join(home, "workspace"),
                 ...Option.match(input.proxy, {
                   onNone: () => ({}),
-                  onSome: (proxy) => SandboxProvider.proxyEnv(proxy, join(state, "egress-ca.pem")),
+                  onSome: (proxy) => MachineProvider.proxyEnv(proxy, join(state, "egress-ca.pem")),
                 }),
-                ...input.env,
+                ...input.variables,
               },
             },
           )
           child.unref()
-          if (!child.pid) return yield* new SandboxProvider.Failed({ message: "The brain process did not start" })
+          if (!child.pid) return yield* new MachineProvider.Failed({ message: "The brain process did not start" })
           // oxlint-disable-next-line ren/no-comments -- A brain outlives Ren's process on purpose, but not its owner's (a test run): when the owner is gone, a watcher in its own process group kills the brain's group. SIGKILL also ends a paused (stopped) brain.
           if (options.owner)
             spawn(
@@ -154,22 +156,20 @@ export const layer = (options: {
             port,
             handPort,
             home,
-            brainId: input.brainId,
-            generation: input.generation,
+            brainId: input.labels.id,
+            generation: input.labels.generation,
           }
           yield* Effect.promise(() => Bun.write(bindingFile(home), Schema.encodeSync(BindingFile)(binding)))
-          return { binding: Schema.encodeSync(Binding)(binding), url: urlOf(binding) }
+          return { binding, url: urlOf(binding) }
         }),
-        connect: Effect.fn("LocalSandbox.connect")(function* (raw) {
-          const binding = yield* read(raw)
+        connect: Effect.fn("LocalSandbox.connect")(function* (binding) {
           yield* live(binding)
           yield* FiberMap.remove(timers, binding.pid)
           yield* signal(binding.pid, "SIGCONT")
           paused.delete(binding.pid)
           return { url: urlOf(binding) }
         }),
-        keepAlive: Effect.fn("LocalSandbox.keepAlive")(function* (raw, duration) {
-          const binding = yield* read(raw)
+        keepAlive: Effect.fn("LocalSandbox.keepAlive")(function* (binding, duration) {
           yield* live(binding)
           yield* FiberMap.run(
             timers,
@@ -182,30 +182,27 @@ export const layer = (options: {
             ),
           )
         }),
-        destroy: Effect.fn("LocalSandbox.destroy")(function* (raw) {
-          const binding = yield* read(raw)
+        destroy: Effect.fn("LocalSandbox.destroy")(function* (binding) {
           yield* FiberMap.remove(timers, binding.pid)
           yield* signal(binding.pid, "SIGCONT")
           yield* signal(binding.pid, "SIGKILL")
           paused.delete(binding.pid)
           yield* Effect.promise(() => rm(binding.home, { recursive: true, force: true }))
         }),
-        status: Effect.fn("LocalSandbox.status")(function* (raw) {
-          const binding = yield* read(raw)
+        status: Effect.fn("LocalSandbox.status")(function* (binding) {
           if (!(yield* isAlive(binding.pid))) return "gone" as const
           return paused.has(binding.pid) ? ("paused" as const) : ("running" as const)
         }),
-        lastSample: Effect.fn("LocalSandbox.lastSample")(function* (raw) {
-          const binding = yield* read(raw)
+        lastSample: Effect.fn("LocalSandbox.lastSample")(function* (binding) {
           const state = new TextDecoder()
             .decode(Bun.spawnSync(["ps", "-o", "stat=", "-p", String(binding.pid)]).stdout)
             .trim()
           if (state === "" || state.startsWith("T")) return Option.none()
           return Option.some({ at: yield* DateTime.now, memory: 0, disk: 0 })
         }),
-        hand: Effect.fn("LocalSandbox.hand")(function* (raw) {
-          const binding = yield* read(raw)
-          return { url: `http://127.0.0.1:${binding.handPort}`, workspace: join(binding.home, "workspace") }
+        hand: (binding) => ({
+          url: `http://127.0.0.1:${binding.handPort}`,
+          workspace: join(binding.home, "workspace"),
         }),
         lost: Stream.tick(options.lostEvery ?? "2 seconds").pipe(
           Stream.mapEffect(() =>
@@ -216,8 +213,8 @@ export const layer = (options: {
               const dead = yield* Effect.filter(bindings, (binding) =>
                 Effect.map(isAlive(binding.pid), (alive) => !alive),
               )
-              return dead.map((binding): SandboxProvider.Lost => ({
-                brainId: binding.brainId,
+              return dead.map((binding): MachineProvider.Lost => ({
+                id: binding.brainId,
                 generation: binding.generation,
               }))
             }),
@@ -229,17 +226,10 @@ export const layer = (options: {
           const found = yield* Effect.forEach(names, (name) => stored(join(options.root, name)))
           return found.flatMap((binding) =>
             Option.isSome(binding)
-              ? [
-                  {
-                    binding: Schema.encodeSync(Binding)(binding.value),
-                    brainId: binding.value.brainId,
-                    generation: binding.value.generation,
-                  },
-                ]
+              ? [{ binding: binding.value, id: binding.value.brainId, generation: binding.value.generation }]
               : [],
           )
         }),
-        metered: () => Effect.succeed([]),
       })
     }),
   )

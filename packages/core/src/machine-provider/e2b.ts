@@ -4,9 +4,10 @@ import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Space } from "@ren/schema/space"
-import { Config, DateTime, Duration, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
+import { Config, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
-import { SandboxProvider } from "../sandbox-provider.js"
+import { EnvironmentProvider } from "../environment-provider.js"
+import { MachineProvider } from "../machine-provider.js"
 
 // oxlint-disable-next-line ren/no-comments -- Sandboxes are tagged with the Ren that made them. One E2B team can serve several Rens (developers); each lists, counts and cleans up only its own (E2B_OWNER).
 export const defaultOwner = "ren-v2-dev"
@@ -18,7 +19,7 @@ const envFile = "/home/user/.ren/brain.env"
 export const caFile = "/home/user/.ren/egress-ca.pem"
 
 // oxlint-disable-next-line ren/no-comments -- E2B sends host names to the proxy only when a domain entry allows the connection; `*` with a deny of all IP ranges sends every connection to the proxy by name (README §11a rows 1 and 2). An update replaces the whole config, so each one repeats the proxy.
-const networkOf = (proxy: SandboxProvider.Proxy) => ({
+const networkOf = (proxy: MachineProvider.Proxy) => ({
   allowOut: ["*"],
   denyOut: ["0.0.0.0/0"],
   egressProxy: { address: proxy.address, username: proxy.username, password: Redacted.value(proxy.password) },
@@ -90,12 +91,12 @@ const Measured = Schema.Struct({
 const pageSize = 100
 
 const failed = (operation: string) => (error: { readonly message: string }) =>
-  new SandboxProvider.Failed({ message: `E2B ${operation}: ${error.message}` })
+  new MachineProvider.Failed({ message: `E2B ${operation}: ${error.message}` })
 
 const quote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`
 
 export const layer = Layer.effect(
-  SandboxProvider.Service,
+  MachineProvider.Brain,
   Effect.gen(function* () {
     const config = yield* Config.all({
       key: Config.Redacted("E2B_API_KEY"),
@@ -119,28 +120,26 @@ export const layer = Layer.effect(
       ),
     )
     const urlOf = (binding: Binding) => `https://${binding.port}-${binding.sandboxId}.${binding.domain}`
-    const read = (binding: Schema.Json) =>
-      Schema.decodeUnknownEffect(Binding)(binding).pipe(Effect.mapError(failed("binding")))
     const body = Effect.fnUntraced(function* (operation: string, response: HttpClientResponse.HttpClientResponse) {
       const text = yield* response.text.pipe(Effect.mapError(failed(operation)))
       if (response.status >= 200 && response.status < 300) return text
       if (response.status === 429)
-        return yield* new SandboxProvider.Capacity({
+        return yield* new MachineProvider.Capacity({
           message: `E2B ${operation} answered 429: ${text.slice(0, 300)}`,
           retryAfter: Duration.seconds(Number(response.headers["retry-after"] ?? "10") || 10),
         })
-      return yield* new SandboxProvider.Failed({
+      return yield* new MachineProvider.Failed({
         message: `E2B ${operation} answered ${response.status}: ${text.slice(0, 300)}`,
       })
     })
     const strict = (operation: string, response: HttpClientResponse.HttpClientResponse) =>
       body(operation, response).pipe(
-        Effect.catchTag("SandboxProvider.Capacity", (error) => Effect.fail(failed(operation)(error))),
+        Effect.catchTag("MachineProvider.Capacity", (error) => Effect.fail(failed(operation)(error))),
       )
     const send = (operation: string, request: HttpClientRequest.HttpClientRequest) =>
       api.execute(request).pipe(Effect.timeout("60 seconds"), Effect.mapError(failed(operation)))
     const gone = (binding: Binding) =>
-      new SandboxProvider.Gone({ message: `E2B sandbox ${binding.sandboxId} does not exist` })
+      new MachineProvider.Gone({ message: `E2B sandbox ${binding.sandboxId} does not exist` })
     const list = (metadata: Readonly<Record<string, string>>, state: string) =>
       send(
         "list",
@@ -196,7 +195,7 @@ export const layer = Layer.effect(
       binding: Binding,
       accessToken: Option.Option<string>,
       env: Readonly<Record<string, string>>,
-      proxy: Option.Option<SandboxProvider.Proxy>,
+      proxy: Option.Option<MachineProvider.Proxy>,
     ) {
       const ca = Option.flatMap(proxy, (found) => found.ca)
       if (Option.isSome(ca)) yield* upload(binding, accessToken, caFile, ca.value)
@@ -207,7 +206,7 @@ export const layer = Layer.effect(
     })
     const updateNetwork = Effect.fn("E2BSandbox.updateNetwork")(function* (
       binding: Binding,
-      proxy: Option.Option<SandboxProvider.Proxy>,
+      proxy: Option.Option<MachineProvider.Proxy>,
     ) {
       if (Option.isNone(proxy)) return
       const response = yield* send(
@@ -220,25 +219,29 @@ export const layer = Layer.effect(
       yield* strict("network", response)
     })
 
-    return SandboxProvider.Service.of({
-      kind: "e2b",
+    return MachineProvider.make({
+      id: EnvironmentProvider.ID.make("e2b"),
+      title: "E2B",
+      description: "A sandbox at E2B.",
       canEgress: true,
       canMount: true,
       canSample: true,
       template: config.template,
+      config: Schema.Struct({}),
+      binding: Binding,
       create: Effect.fn("E2BSandbox.create")(function* (input) {
-        const metadata = { brain: input.brainId, generation: String(input.generation) }
+        const metadata = { brain: input.labels.id, generation: String(input.labels.generation) }
         const existing = (yield* list(metadata, "running,paused")).at(0)
         if (existing) {
           const binding = { sandboxId: existing.sandboxID, domain: config.domain, port: config.port }
           yield* updateNetwork(binding, input.proxy).pipe(
-            Effect.catchTag("SandboxProvider.Gone", (error) => Effect.fail(failed("network")(error))),
+            Effect.catchTag("MachineProvider.Gone", (error) => Effect.fail(failed("network")(error))),
           )
-          return { binding: Schema.encodeSync(Binding)(binding), url: urlOf(binding) }
+          return { binding, url: urlOf(binding) }
         }
         const running = yield* list({}, "running")
         if (running.length >= config.maxRunning)
-          return yield* new SandboxProvider.Capacity({
+          return yield* new MachineProvider.Capacity({
             message: `${running.length} development sandboxes run; the limit is ${config.maxRunning} (SANDBOX_MAX_RUNNING)`,
             retryAfter: Duration.seconds(30),
           })
@@ -250,8 +253,8 @@ export const layer = Layer.effect(
               timeout: Duration.toSeconds(createTimeout),
               autoPause: true,
               secure: true,
-              metadata: { owner, ...metadata, organization: input.organizationId, space: input.spaceId },
-              envVars: input.env,
+              metadata: { owner, ...metadata, organization: input.labels.organizationId, space: input.labels.spaceId },
+              envVars: input.variables,
               ...Option.match(input.proxy, { onNone: () => ({}), onSome: (proxy) => ({ network: networkOf(proxy) }) }),
             }),
           ),
@@ -262,11 +265,10 @@ export const layer = Layer.effect(
           ),
         )
         const binding = { sandboxId: created.sandboxID, domain: created.domain ?? config.domain, port: config.port }
-        yield* configure(binding, Option.fromNullishOr(created.envdAccessToken), input.env, input.proxy)
-        return { binding: Schema.encodeSync(Binding)(binding), url: urlOf(binding) }
+        yield* configure(binding, Option.fromNullishOr(created.envdAccessToken), input.variables, input.proxy)
+        return { binding, url: urlOf(binding) }
       }),
-      connect: Effect.fn("E2BSandbox.connect")(function* (raw, proxy) {
-        const binding = yield* read(raw)
+      connect: Effect.fn("E2BSandbox.connect")(function* (binding, proxy) {
         const response = yield* send(
           "connect",
           HttpClientRequest.post(`/sandboxes/${binding.sandboxId}/connect`).pipe(
@@ -278,8 +280,7 @@ export const layer = Layer.effect(
         yield* updateNetwork(binding, proxy)
         return { url: urlOf(binding) }
       }),
-      keepAlive: Effect.fn("E2BSandbox.keepAlive")(function* (raw, duration) {
-        const binding = yield* read(raw)
+      keepAlive: Effect.fn("E2BSandbox.keepAlive")(function* (binding, duration) {
         const response = yield* send(
           "timeout",
           HttpClientRequest.post(`/sandboxes/${binding.sandboxId}/timeout`).pipe(
@@ -289,14 +290,12 @@ export const layer = Layer.effect(
         if (response.status === 404) return yield* gone(binding)
         yield* strict("timeout", response)
       }),
-      destroy: Effect.fn("E2BSandbox.destroy")(function* (raw) {
-        const binding = yield* read(raw)
+      destroy: Effect.fn("E2BSandbox.destroy")(function* (binding) {
         const response = yield* send("kill", HttpClientRequest.delete(`/sandboxes/${binding.sandboxId}`))
         if (response.status === 404) return
         yield* strict("kill", response)
       }),
-      status: Effect.fn("E2BSandbox.status")(function* (raw) {
-        const binding = yield* read(raw)
+      status: Effect.fn("E2BSandbox.status")(function* (binding) {
         const response = yield* send("info", HttpClientRequest.get(`/sandboxes/${binding.sandboxId}`))
         if (response.status === 404) return "gone" as const
         const text = yield* strict("info", response)
@@ -305,8 +304,7 @@ export const layer = Layer.effect(
         )
         return detail.state === "paused" ? ("paused" as const) : ("running" as const)
       }),
-      lastSample: Effect.fn("E2BSandbox.lastSample")(function* (raw) {
-        const binding = yield* read(raw)
+      lastSample: Effect.fn("E2BSandbox.lastSample")(function* (binding) {
         const since = DateTime.subtractDuration(yield* DateTime.now, sampleWindow)
         const response = yield* send(
           "metrics",
@@ -326,7 +324,7 @@ export const layer = Layer.effect(
               undefined,
             ),
           ),
-          (last): SandboxProvider.Sample => ({
+          (last): MachineProvider.Sample => ({
             at: DateTime.makeUnsafe(last.timestampUnix * 1000),
             memory: share(last.memUsed, last.memTotal),
             disk: share(last.diskUsed, last.diskTotal),
@@ -335,7 +333,7 @@ export const layer = Layer.effect(
       }),
       metered: Effect.fn("E2BSandbox.metered")(function* (since) {
         const older = (run: Run) => Option.exists(since, (time) => DateTime.isLessThan(run.timestamp, time))
-        const runsFrom = (offset: number): Effect.Effect<ReadonlyArray<Run>, SandboxProvider.Failed> =>
+        const runsFrom = (offset: number): Effect.Effect<ReadonlyArray<Run>, MachineProvider.Failed> =>
           Effect.flatMap(page(offset), (runs) =>
             runs.length < pageSize || runs.some(older)
               ? Effect.succeed(runs)
@@ -367,8 +365,7 @@ export const layer = Layer.effect(
           ]
         })
       }),
-      lost: Stream.empty,
-      hand: () => Effect.succeed({ url: `http://127.0.0.1:${EnvironmentApi.port}`, workspace: "/home/user/workspace" }),
+      hand: () => ({ url: `http://127.0.0.1:${EnvironmentApi.port}`, workspace: "/home/user/workspace" }),
       list: list({}, "running,paused").pipe(
         Effect.map((sandboxes) =>
           sandboxes.flatMap((sandbox) => {
@@ -376,12 +373,8 @@ export const layer = Layer.effect(
             if (Option.isNone(brain)) return []
             return [
               {
-                binding: Schema.encodeSync(Binding)({
-                  sandboxId: sandbox.sandboxID,
-                  domain: config.domain,
-                  port: config.port,
-                }),
-                brainId: brain.value,
+                binding: { sandboxId: sandbox.sandboxID, domain: config.domain, port: config.port },
+                id: brain.value,
                 generation: Number(sandbox.metadata?.generation ?? "0"),
               },
             ]

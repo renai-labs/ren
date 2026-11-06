@@ -6,14 +6,14 @@ import { Config, Context, Effect, Layer, Option, Redacted } from "effect"
 import { CredentialCallers } from "./credential-callers.js"
 import { EgressControl } from "./egress-control.js"
 import { Envelope } from "./envelope.js"
-import type { SandboxProvider } from "./sandbox-provider.js"
+import type { MachineProvider } from "./machine-provider.js"
 
 export interface Interface {
   readonly proxyFor: (brain: {
     readonly brainId: Brain.ID
     readonly generation: number
     readonly organizationId: Auth.OrganizationID
-  }) => Effect.Effect<Option.Option<SandboxProvider.Proxy>>
+  }) => Effect.Effect<Option.Option<MachineProvider.Proxy>>
   readonly retire: (brainId: Brain.ID) => Effect.Effect<void>
   readonly enabled: boolean
 }
