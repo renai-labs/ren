@@ -59,6 +59,9 @@ const needsSecret = (signature: WebhookSignature | undefined) => (signature?.kin
 export const canGoLive = (webhook: Pick<WebhookInfo, "parser" | "hasSigningSecret">) =>
   !needsSecret(webhook.parser.signature) || webhook.hasSigningSecret
 
+// oxlint-disable-next-line ren/no-comments -- Requests arrive from outside Ren with no push to the app, so a view of deliveries reads them again while it is open.
+export const refreshEvery = 5_000
+
 export const listInput = (spaceId: string) => ({ spaceId, page: 1, pageSize: 50 })
 
 export const ren = "ren"

@@ -36,6 +36,7 @@ test("a member creates a webhook with the form, sees its first request recorded,
   expect((await send(signup("first@acme.com"))).status()).toBe(202)
   await page.getByRole("tab", { name: /Deliveries/u }).click()
   await expect(page.getByRole("cell", { name: "Recorded" })).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByRole("tab", { name: "Deliveries 1" })).toBeVisible({ timeout: 10_000 })
 
   await page.getByRole("switch", { name: "Start chats from Signups" }).click()
   await expect(page.getByRole("switch", { name: "Start chats from Signups" })).toBeChecked()

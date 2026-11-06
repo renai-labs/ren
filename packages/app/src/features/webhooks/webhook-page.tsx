@@ -58,6 +58,7 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
   const total = useQuery({
     ...api["webhook-delivery"].list.queryOptions({ webhookId: props.webhook.id, page: 1, pageSize: 1 }),
     select: (page) => page.total,
+    refetchInterval: Webhooks.refreshEvery,
   })
   const webhook = props.webhook
   const live = webhook.mode === "live"

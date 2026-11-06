@@ -30,9 +30,6 @@ const any = "any"
 
 const pageSize = 50
 
-// oxlint-disable-next-line ren/no-comments -- Requests arrive from outside Ren with no push to the app, so the list reads them again while it is open.
-const refreshEvery = 5_000
-
 const outcomeItems = [
   { value: any, label: "Any outcome" },
   ...Object.entries(Webhooks.outcomes).map((entry) => ({ value: entry[0], label: entry[1].label })),
@@ -53,7 +50,7 @@ export function WebhookDeliveries(props: { webhook: WebhookInfo }) {
       ...(outcome && { outcome }),
     }),
     placeholderData: keepPreviousData,
-    refetchInterval: refreshEvery,
+    refetchInterval: Webhooks.refreshEvery,
   })
   const items = deliveries.data?.items ?? []
   const selected = items.find((item) => item.id === search.delivery)
@@ -116,7 +113,7 @@ function DeliveriesToolbar(props: { webhook: WebhookInfo; outcome: WebhookDelive
   const count = (outcome: WebhookDeliveryOutcome) => ({
     ...api["webhook-delivery"].list.queryOptions({ webhookId: props.webhook.id, outcome, page: 1, pageSize: 1 }),
     select: (page: { readonly total: number }) => page.total,
-    refetchInterval: refreshEvery,
+    refetchInterval: Webhooks.refreshEvery,
   })
   const recorded = useQuery(count("recorded"))
   const throttled = useQuery(count("throttled"))
