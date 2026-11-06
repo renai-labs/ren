@@ -20,7 +20,10 @@ import { DurableRunner } from "../../src/durable-runner.js"
 import { EgressControl } from "../../src/egress-control.js"
 import { Envelope } from "../../src/envelope.js"
 import { InfraSpecs } from "../../src/infra-specs.js"
+import { Intake } from "../../src/intake.js"
+import { IntakeThreads } from "../../src/intake-threads.js"
 import { Memory } from "../../src/memory.js"
+import { Models } from "../../src/models.js"
 import { OAuthFetch } from "../../src/oauth-fetch.js"
 import { OrganizationSettings } from "../../src/organization-settings.js"
 import { ReferenceCheck } from "../../src/reference-check.js"
@@ -30,6 +33,8 @@ import { SessionRunner } from "../../src/session/runner.js"
 import { Space } from "../../src/space.js"
 import { SpaceMember } from "../../src/space/member.js"
 import { SpaceSettings } from "../../src/space/settings.js"
+import { Webhooks } from "../../src/webhooks.js"
+import { Host } from "./host.js"
 import { Seed } from "./seed.js"
 
 const runner = Layer.succeed(
@@ -55,6 +60,15 @@ export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>
         ChannelMappings.layer,
         Memory.layer,
         Schedules.layer.pipe(Layer.provide(ScheduleTrigger.layerPostgres), Layer.provide(runner)),
+        Webhooks.layer.pipe(
+          Layer.provide(
+            Intake.layer.pipe(
+              Layer.provide([Intake.sources(Effect.succeed([])), runner]),
+              Layer.provide(Host.cellLayer({ CELL_URL: "http://127.0.0.1:9" }, Models.layerNone, Host.noTemplates)),
+            ),
+          ),
+          Layer.provide(IntakeThreads.layer),
+        ),
       ),
     ),
     Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer, Credentials.layer)),

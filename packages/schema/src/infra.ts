@@ -5,7 +5,6 @@ import { Agent } from "./agent.js"
 import { App } from "./app.js"
 import { AppProfile } from "./app-profile.js"
 import { Channel } from "./channel.js"
-import { Credential } from "./credential.js"
 import { EnvironmentTemplate } from "./environment-template.js"
 import { Factory } from "./factory.js"
 import { FactoryCheck } from "./factory-check.js"
@@ -250,9 +249,6 @@ export const SpaceBindings = Schema.Struct({
   profiles: Schema.Record(Primitive.Slug, Schema.Array(AppProfile.Slug))
     .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({})))
     .annotate({ description: "For each app, the slugs of its shared profiles that list this space." }),
-  webhooks: Schema.Record(Primitive.Slug, Schema.Struct({ secret: Credential.Ref })).pipe(
-    Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
-  ),
 }).annotate({ identifier: "Infra.SpaceBindings" })
 
 export interface Bindings extends Schema.Schema.Type<typeof Bindings> {}
@@ -268,6 +264,7 @@ export const Kind = Schema.Literals([
   "membership",
   "app",
   "schedule",
+  "webhook",
   "channel",
   "profile",
   "memory",
@@ -299,7 +296,7 @@ export const Change = Schema.Struct({
   kind: Kind,
   path: Schema.String.annotate({
     description:
-      "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
+      "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
   }),
   from: Schema.optionalKey(Schema.String.annotate({ description: "The path before a rename or a move." })),
   fields: Schema.Array(Schema.String).annotate({ description: "The fields that an update changes." }),
@@ -380,6 +377,7 @@ export const PulledSpace = Schema.Struct({
   agents: Schema.Record(Agent.Name, Agent.Declaration),
   apps: Schema.Record(Primitive.Slug, PulledApp),
   schedules: Schema.Record(Primitive.Slug, PulledSchedule),
+  webhooks: Schema.Record(Primitive.Slug, Webhook.Declaration),
   channels: Schema.Record(Primitive.Slug, Channel.Declaration),
   memory: PulledMemory,
   uses: Uses,

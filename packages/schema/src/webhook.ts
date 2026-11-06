@@ -168,10 +168,12 @@ const NoInput = Schema.Struct({}).annotate({ identifier: "Webhook.NoInput" })
 
 const Secret = WriteResult.Secret(Info).annotate({ identifier: "Webhook.Secret" })
 
+// oxlint-disable-next-line ren/no-comments -- One webhook in `webhooks.yaml`: the parser fields sit next to the message, as in the spec. It has no mode: apply creates a listening webhook, and the mode is live state (W24).
 export const Declaration = Schema.Struct({
+  name: Schema.optionalKey(Primitive.Name.annotate({ description: "Without it, the slug." })),
   agent: Schema.optionalKey(Agent.Name.annotate({ description: "Without it, the webhook runs on the ren agent." })),
-  purpose: Schema.NonEmptyString,
-  enabled: Schema.Boolean.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(true))),
+  message: Message,
+  ...Parser.fields,
 }).annotate({ identifier: "Webhook.Declaration" })
 export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
 

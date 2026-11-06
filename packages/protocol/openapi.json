@@ -14639,11 +14639,6 @@
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
         "description": "The managed MCP provider that holds the account of a `route` credential."
       },
-      "Credential.Ref": {
-        "type": "string",
-        "minLength": 1,
-        "description": "The name of a credential that is connected in Ren. A value is never in a file."
-      },
       "Credential.RemoveInput": {
         "not": {
           "type": "null"
@@ -15560,7 +15555,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
+            "description": "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
           },
           "from": {
             "type": "string",
@@ -15647,7 +15642,18 @@
       },
       "Infra.Kind": {
         "type": "string",
-        "enum": ["organization", "space", "agent", "membership", "app", "schedule", "channel", "profile", "memory"]
+        "enum": [
+          "organization",
+          "space",
+          "agent",
+          "membership",
+          "app",
+          "schedule",
+          "webhook",
+          "channel",
+          "profile",
+          "memory"
+        ]
       },
       "Infra.Lock": {
         "type": "object",
@@ -16087,6 +16093,17 @@
               "$ref": "#/components/schemas/Infra.PulledSchedule"
             }
           },
+          "webhooks": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Webhook.Declaration"
+            }
+          },
           "channels": {
             "type": "object",
             "propertyNames": {
@@ -16105,7 +16122,7 @@
             "$ref": "#/components/schemas/Infra.Uses"
           }
         },
-        "required": ["name", "settings", "agents", "apps", "schedules", "channels", "uses"],
+        "required": ["name", "settings", "agents", "apps", "schedules", "webhooks", "channels", "uses"],
         "additionalProperties": false
       },
       "Infra.SpaceBindings": {
@@ -16137,24 +16154,6 @@
               "items": {
                 "$ref": "#/components/schemas/AppProfile.Slug"
               }
-            }
-          },
-          "webhooks": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string",
-              "maxLength": 64,
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-            },
-            "additionalProperties": {
-              "type": "object",
-              "properties": {
-                "secret": {
-                  "$ref": "#/components/schemas/Credential.Ref"
-                }
-              },
-              "required": ["secret"],
-              "additionalProperties": false
             }
           }
         },
@@ -22738,18 +22737,42 @@
       "Webhook.Declaration": {
         "type": "object",
         "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Without it, the slug."
+          },
           "agent": {
             "$ref": "#/components/schemas/Agent.Name_2"
           },
-          "purpose": {
-            "type": "string",
-            "minLength": 1
+          "message": {
+            "$ref": "#/components/schemas/Webhook.MessageEncoded"
           },
-          "enabled": {
-            "type": "boolean"
+          "signature": {
+            "$ref": "#/components/schemas/Webhook.Signature"
+          },
+          "handshake": {
+            "$ref": "#/components/schemas/Webhook.Expression"
+          },
+          "signedHandshake": {
+            "$ref": "#/components/schemas/Webhook.Expression_1"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/Webhook.Expression_2"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/Webhook.Expression_3"
+          },
+          "threadKey": {
+            "$ref": "#/components/schemas/Webhook.Expression_4"
+          },
+          "title": {
+            "$ref": "#/components/schemas/Webhook.Expression_5"
           }
         },
-        "required": ["purpose"],
+        "required": ["message"],
         "additionalProperties": false
       },
       "Webhook.Expression": {

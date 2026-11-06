@@ -319,6 +319,7 @@ export type InfraKind =
   | "membership"
   | "app"
   | "schedule"
+  | "webhook"
   | "channel"
   | "profile"
   | "memory"
@@ -1028,6 +1029,19 @@ export type WebhookParser = {
   title?: WebhookExpression
 }
 
+export type WebhookDeclaration = {
+  name?: string
+  agent?: AgentName
+  message: string
+  signature?: WebhookSignature
+  handshake?: WebhookExpression
+  signedHandshake?: WebhookExpression
+  filter?: WebhookExpression
+  eventId?: WebhookExpression
+  threadKey?: WebhookExpression
+  title?: WebhookExpression
+}
+
 export type WebhookDeliveryTestResult = { items: Array<WebhookDeliveryTested> }
 
 export type WebhookDeliveryPage = { items: Array<WebhookDeliveryInfo>; page: number; pageSize: number; total: number }
@@ -1372,6 +1386,7 @@ export type InfraPulledSpace = {
   agents: { [x: AgentName]: AgentDeclaration }
   apps: { [x: PrimitiveSlug]: InfraPulledApp }
   schedules: { [x: PrimitiveSlug]: InfraPulledSchedule }
+  webhooks: { [x: PrimitiveSlug]: WebhookDeclaration }
   channels: { [x: PrimitiveSlug]: ChannelDeclaration }
   memory?: MemoryFiles
   uses: InfraUses
@@ -7978,7 +7993,28 @@ export type InfraPullInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -8032,7 +8068,6 @@ export type InfraPullInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     } | null
@@ -8314,7 +8349,28 @@ export type InfraPullInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -8368,7 +8424,6 @@ export type InfraPullInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     } | null
@@ -8650,7 +8705,28 @@ export type InfraPullInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -8704,7 +8780,6 @@ export type InfraPullInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     } | null
@@ -8991,7 +9066,28 @@ export type InfraPlanInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -9045,7 +9141,6 @@ export type InfraPlanInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -9327,7 +9422,28 @@ export type InfraPlanInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -9381,7 +9497,6 @@ export type InfraPlanInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -9663,7 +9778,28 @@ export type InfraPlanInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -9717,7 +9853,6 @@ export type InfraPlanInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -10004,7 +10139,28 @@ export type InfraApplyInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -10058,7 +10214,6 @@ export type InfraApplyInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -10342,7 +10497,28 @@ export type InfraApplyInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -10396,7 +10572,6 @@ export type InfraApplyInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -10680,7 +10855,28 @@ export type InfraApplyInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -10734,7 +10930,6 @@ export type InfraApplyInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -11018,7 +11213,28 @@ export type InfraApplyInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -11072,7 +11288,6 @@ export type InfraApplyInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -11356,7 +11571,28 @@ export type InfraApplyInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]: {
+              readonly name?: string
+              readonly agent?: string
+              readonly message: string
+              readonly signature?:
+                | { readonly kind: "none" }
+                | { readonly kind: "header"; readonly header: string }
+                | {
+                    readonly kind: "hmac"
+                    readonly header: string
+                    readonly encoding: "hex" | "base64"
+                    readonly prefix?: string
+                  }
+                | { readonly kind: "standard" }
+                | { readonly kind: "stripe" }
+              readonly handshake?: string
+              readonly signedHandshake?: string
+              readonly filter?: string
+              readonly eventId?: string
+              readonly threadKey?: string
+              readonly title?: string
+            }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -11410,7 +11646,6 @@ export type InfraApplyInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }

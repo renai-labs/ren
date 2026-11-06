@@ -143,6 +143,12 @@ const schedules = Schedules.layer.pipe(
 // oxlint-disable-next-line ren/no-comments -- Api only (MCP may stream SSE); gzip only (Bun's brotli blocks the event loop).
 const intake = Intake.layer.pipe(Layer.provide(IntakeThreads.layer))
 
+const webhooks = Webhooks.layer.pipe(
+  Layer.provide([intake, IntakeThreads.layer]),
+  Layer.provide(SessionRunner.layer),
+  Layer.provide(BrainRegistry.layer),
+)
+
 const Compression = HttpRouter.middleware(
   Effect.gen(function* () {
     const platform = yield* HttpPlatform.HttpPlatform
@@ -220,6 +226,7 @@ export const layer = Layer.mergeAll(
             ChannelMappings.layer,
             Memory.layer,
             schedules,
+            webhooks,
           ]),
         ),
         Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
@@ -227,11 +234,7 @@ export const layer = Layer.mergeAll(
           Layer.provide(BrainRegistry.layer),
         ),
         schedules,
-        Webhooks.layer.pipe(
-          Layer.provide([intake, IntakeThreads.layer]),
-          Layer.provide(SessionRunner.layer),
-          Layer.provide(BrainRegistry.layer),
-        ),
+        webhooks,
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,
