@@ -2154,12 +2154,25 @@ export type AgentTransferOwnershipOutput = AgentInfo
 export type AppListInput = {
   readonly spaceId?: {
     readonly spaceId?: string | undefined
+    readonly connected?: boolean | undefined
     readonly page: number
     readonly pageSize: number
   }["spaceId"]
-  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly connected?: {
+    readonly spaceId?: string | undefined
+    readonly connected?: boolean | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["connected"]
+  readonly page: {
+    readonly spaceId?: string | undefined
+    readonly connected?: boolean | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
   readonly pageSize: {
     readonly spaceId?: string | undefined
+    readonly connected?: boolean | undefined
     readonly page: number
     readonly pageSize: number
   }["pageSize"]

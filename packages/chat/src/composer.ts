@@ -13,6 +13,16 @@ import { ClientCommand } from "./client-command.js"
 export interface Pasted extends Schema.Schema.Type<typeof Pasted> {}
 export const Pasted = Schema.Struct({ id: Schema.String, text: Schema.String })
 
+export interface MentionedApp extends Schema.Schema.Type<typeof MentionedApp> {}
+export const MentionedApp = Schema.Struct({
+  id: Schema.String,
+  slug: Schema.String,
+  name: Schema.String,
+  description: Schema.String,
+  icon: Schema.NullOr(Schema.String),
+  brandColor: Schema.NullOr(Schema.String),
+})
+
 export interface Draft extends Schema.Schema.Type<typeof Draft> {}
 export const Draft = Schema.Struct({
   text: Schema.String,
@@ -22,6 +32,7 @@ export const Draft = Schema.Struct({
   messageId: Schema.optionalKey(SessionMessage.ID),
   files: Schema.optionalKey(Schema.Array(SessionMessage.DriveFile)),
   chat: Schema.optionalKey(Schema.Struct({ sessionId: Session.ID, spaceId: Schema.String })),
+  mentions: Schema.optionalKey(Schema.Array(MentionedApp)),
 })
 
 export const empty: Draft = { text: "", pasted: [] }
@@ -37,6 +48,13 @@ export const isBlank = (draft: Pick<Draft, "text" | "pasted">) => message(draft)
 
 export const files = (draft: Draft) => draft.files ?? []
 
+export const mentions = (draft: Draft) => draft.mentions ?? []
+
+export const withMention = (draft: Draft, app: MentionedApp): Draft => ({
+  ...draft,
+  mentions: [...mentions(draft).filter((item) => item.id !== app.id), app],
+})
+
 export const decode = (raw: string | undefined): Draft => Option.getOrElse(decodeStored(raw), () => empty)
 
 export const encode = (draft: Draft) =>
@@ -50,6 +68,7 @@ export const messageID = (draft: Draft) => (draft.retry ? retryID(draft) : draft
 export const restore = (current: Draft, sent: Draft, id: SessionMessage.ID): Draft => {
   if (isBlank(current) && files(current).length === 0) return { ...sent, retry: { id, text: message(sent) } }
   const merged = [...files(sent), ...files(current)]
+  const apps = [...mentions(sent), ...mentions(current)]
   const messageId = current.messageId ?? sent.messageId
   const chat = current.chat ?? sent.chat
   return {
@@ -57,6 +76,7 @@ export const restore = (current: Draft, sent: Draft, id: SessionMessage.ID): Dra
     text: [sent.text, current.text].filter((item) => item.trim().length > 0).join("\n\n"),
     pasted: [...sent.pasted, ...current.pasted],
     ...(merged.length > 0 && { files: merged }),
+    ...(apps.length > 0 && { mentions: apps }),
     ...(messageId && { messageId }),
     ...(chat && { chat }),
   }

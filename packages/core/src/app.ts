@@ -9,6 +9,7 @@ import { Context, Effect, Layer } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { AppPolicy } from "./app/policy.js"
+import { AppProfilePolicy } from "./app/profile-policy.js"
 import { AppProfiles } from "./app/profiles.js"
 import { AppQueries } from "./app/queries.js"
 import { AppValidation } from "./app/validation.js"
@@ -35,15 +36,14 @@ export const layer = Layer.effect(
                 app: Database.Schema.app,
                 isOwnerMember: AppQueries.isOwnerMember(actor),
                 isSpaceMember: AppQueries.isSpaceMember(actor),
+                isListed: AppQueries.isListed,
               })
               .from(Database.Schema.app)
               .where(
                 and(
-                  input.spaceId
-                    ? and(
-                        eq(Database.Schema.app.owner_space_id, input.spaceId),
-                        eq(Database.Schema.app.organization_id, actor.organizationId),
-                      )
+                  input.spaceId ? eq(Database.Schema.app.owner_space_id, input.spaceId) : undefined,
+                  input.connected
+                    ? AppQueries.hasVisibleProfile(actor, access.plan(actor, AppProfilePolicy.actions.list))
                     : eq(Database.Schema.app.organization_id, actor.organizationId),
                   isNull(Database.Schema.app.archived_at),
                 ),

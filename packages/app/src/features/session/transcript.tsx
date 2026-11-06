@@ -81,7 +81,7 @@ import { ImageLightbox } from "../../components/image-lightbox.js"
 import { withAppMentions } from "@ren/ui/app-mention"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { ChannelOrigin } from "./channel-origin.js"
-import { useCatalog } from "../../lib/use-catalog.js"
+import { useMentionedApps } from "../../lib/use-app.js"
 import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
@@ -142,7 +142,11 @@ type Block =
     }
   | { readonly kind: "reply"; readonly key: string; readonly tool: SessionMessage.Tool }
   | { readonly kind: "file"; readonly key: string; readonly file: SessionMessage.DriveFile }
-  | { readonly kind: "connect"; readonly key: string; readonly appId: string; readonly spaceId: string }
+  | {
+      readonly kind: "connect"
+      readonly key: string
+      readonly connects: ReadonlyArray<{ readonly appId: string; readonly spaceId: string }>
+    }
   | { readonly kind: "row"; readonly key: string; readonly row: TimelineRow.Row }
 
 const streaming = (message: SessionMessage.Info | undefined) => message?.type === "assistant" && !message.time.completed
@@ -193,8 +197,8 @@ function partBlock(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessag
 
 function toolBlock(content: SessionMessage.Tool, key: string): Block | undefined {
   if (ChannelReply.shown(content)) return { kind: "reply", key, tool: content }
-  const connect = Option.getOrUndefined(AppConnect.of(content))
-  if (connect) return { kind: "connect", key, ...connect }
+  const connects = AppConnect.of(content)
+  if (connects.length > 0) return { kind: "connect", key, connects }
   const shown = Option.getOrUndefined(ShownFile.of(content))
   return shown && { kind: "file", key, file: shown }
 }
@@ -437,7 +441,7 @@ function UserBody(props: { message: SessionMessage.User; spaceId: string | undef
 
 function UserText(props: { message: SessionMessage.User; spaceId: string | undefined }) {
   const parts = splitPasted(props.message.text)
-  const apps = useCatalog().apps
+  const apps = useMentionedApps(parts.typed)
   const files = props.message.files ?? []
   const uploads = props.message.uploads ?? []
   return (
@@ -1078,7 +1082,7 @@ function SmoothMarkdown(props: {
 }
 
 function AnswerBlock(props: { text: string; streaming: boolean; copy: string | undefined }) {
-  const apps = useCatalog().apps
+  const apps = useMentionedApps(props.text)
   return (
     <Message>
       <MessageContent>
@@ -1144,7 +1148,13 @@ function BlockView(props: {
     return (
       <Message>
         <MessageContent>
-          <AppConnectCard appId={block.appId} spaceId={block.spaceId} />
+          {block.connects.map((connect) => (
+            <AppConnectCard
+              key={`${connect.appId}:${connect.spaceId}`}
+              appId={connect.appId}
+              spaceId={connect.spaceId}
+            />
+          ))}
         </MessageContent>
       </Message>
     )
