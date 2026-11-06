@@ -5,6 +5,7 @@ import { inArray } from "drizzle-orm"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { DateTime, Duration, Effect, Option, Schedule, type Schema, Tracer } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -128,6 +129,7 @@ describe("brain runs", () => {
       sessionId: found.sessionId,
       harness: "opencode" as const,
       interactive: false,
+      hand: Space.defaultHand,
       initialMessage: {
         messageId: Session.MessageID.create(),
         prompt: { text: `${script.marker} hello` },

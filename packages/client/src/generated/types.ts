@@ -16,17 +16,15 @@ export type PrimitiveSlug = string
 
 export type BrainScope = "session" | "space"
 
+export type EnvironmentTemplateID = string
+
 export type SpaceMembershipID = string
 
 export type FactoryStartMode = "new" | "continue"
 
 export type SpaceAssignmentID = string
 
-export type EnvironmentTemplateID = string
-
 export type EnvironmentProviderID = string
-
-export type SpaceEnvironmentTemplateID = string
 
 export type SessionModel = { endpointId: string; modelId: string; variant?: string }
 
@@ -330,6 +328,11 @@ export type AppProfileSkipped = { kind: "mcps" | "skills" | "env"; slug: string;
 
 export type AppListingCategories = { [x: PrimitiveSlug]: Array<PrimitiveSlug> }
 
+export type SpaceHand =
+  | { placement: "colocated"; environmentTemplateId: EnvironmentTemplateID | null }
+  | { placement: "remote"; environmentTemplateId: EnvironmentTemplateID }
+  | { placement: "none" }
+
 export type SpaceMemberActive = {
   id: SpaceMembershipID
   spaceId: SpaceID
@@ -371,14 +374,6 @@ export type EnvironmentProviderInfo = {
   title: string
   description: string
   configSchema: JsonValue
-}
-
-export type SpaceEnvironmentTemplateInfo = {
-  id: SpaceEnvironmentTemplateID
-  spaceId: SpaceID
-  environmentTemplateId: EnvironmentTemplateID
-  createdAt: string
-  archivedAt: string | null
 }
 
 export type ModelTypesDefaults = {
@@ -785,13 +780,6 @@ export type EnvironmentTemplatePage = {
 
 export type EnvironmentProviderInfos = Array<EnvironmentProviderInfo>
 
-export type SpaceEnvironmentTemplatePage = {
-  items: Array<SpaceEnvironmentTemplateInfo>
-  page: number
-  pageSize: number
-  total: number
-}
-
 export type PermissionRuleList = Array<PermissionRule>
 
 export type ReferenceList = Array<ReferenceInfo>
@@ -1116,6 +1104,7 @@ export type SpaceInfo = {
   description: string | null
   brainScope: BrainScope
   brainProvider: string | null
+  hand: SpaceHand
   memberCount: number
   membershipId: SpaceMembershipID | null
   factory: FactoryInfo
@@ -1434,6 +1423,13 @@ export type SpaceUpdateInput = {
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brainProvider?: string | null | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
   }["factory"]
   readonly name?: {
     readonly factory?: {
@@ -1453,6 +1449,13 @@ export type SpaceUpdateInput = {
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brainProvider?: string | null | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
   }["name"]
   readonly description?: {
     readonly factory?: {
@@ -1472,6 +1475,13 @@ export type SpaceUpdateInput = {
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brainProvider?: string | null | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
   }["description"]
   readonly brainScope?: {
     readonly factory?: {
@@ -1491,6 +1501,13 @@ export type SpaceUpdateInput = {
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brainProvider?: string | null | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
   }["brainScope"]
   readonly brainProvider?: {
     readonly factory?: {
@@ -1510,7 +1527,40 @@ export type SpaceUpdateInput = {
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brainProvider?: string | null | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
   }["brainProvider"]
+  readonly hand?: {
+    readonly factory?: {
+      readonly maxHandoffs?: number
+      readonly agents: ReadonlyArray<{
+        readonly agentId: string
+        readonly maxRuns?: number
+        readonly to?: ReadonlyArray<{
+          readonly agentId: string
+          readonly max?: number
+          readonly else?: string
+          readonly start?: "new" | "continue"
+        }>
+      }>
+    } | null
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly brainScope?: ("session" | "space") | null
+    readonly brainProvider?: string | null | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
+  }["hand"]
 }
 
 export type SpaceUpdateOutput = SpaceInfo
@@ -1646,28 +1696,6 @@ export type EnvironmentTemplateArchiveInput = { readonly id: { readonly id: stri
 export type EnvironmentTemplateArchiveOutput = EnvironmentTemplateInfo
 
 export type EnvironmentProviderListOutput = EnvironmentProviderInfos
-
-export type SpaceEnvironmentTemplateListInput = {
-  readonly spaceId: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["spaceId"]
-  readonly page: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["page"]
-  readonly pageSize: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["pageSize"]
-}
-
-export type SpaceEnvironmentTemplateListOutput = SpaceEnvironmentTemplatePage
-
-export type SpaceEnvironmentTemplateCreateInput = {
-  readonly spaceId: { readonly spaceId: string; readonly environmentTemplateId: string }["spaceId"]
-  readonly environmentTemplateId: {
-    readonly spaceId: string
-    readonly environmentTemplateId: string
-  }["environmentTemplateId"]
-}
-
-export type SpaceEnvironmentTemplateCreateOutput = SpaceEnvironmentTemplateInfo
-
-export type SpaceEnvironmentTemplateArchiveInput = { readonly id: { readonly id: string }["id"] }
-
-export type SpaceEnvironmentTemplateArchiveOutput = SpaceEnvironmentTemplateInfo
 
 export type SpaceSettingsGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
 

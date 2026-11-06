@@ -111,6 +111,10 @@ export const PullChat = Schema.Struct({
   drives: Schema.optionalKey(Drive.Availability).annotate({
     description: "Omitted for a chat without an environment, and by a Ren without drives.",
   }),
+  hasHand: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "False when the chat’s space has no hand now: the chat gets no file and shell tools (EN23). Omitted by an older Ren: true.",
+  }),
 }).annotate({ identifier: "Host.PullChat" })
 
 export interface PullReply extends Schema.Schema.Type<typeof PullReply> {}

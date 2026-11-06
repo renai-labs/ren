@@ -10,7 +10,7 @@ import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { and, asc, count, eq, exists, inArray, isNull, type SQLWrapper, sql } from "drizzle-orm"
+import { and, asc, count, eq, exists, inArray, isNull, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { Deployment } from "./deployment.js"
 import { EnvironmentProvider } from "./environment-provider.js"
@@ -82,22 +82,10 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Environments
 const templates = Database.Schema.environment_template
 const environments = Database.Schema.environment
 const sessions = Database.Schema.session_environment
-const spaceEnvironmentTemplates = Database.Schema.space_environment_template
 const spaces = Database.Schema.space
 
-const isAvailable = (organizationId: Auth.OrganizationID, spaceId: SQLWrapper) =>
-  and(
-    eq(templates.organization_id, organizationId),
-    isNull(templates.archived_at),
-    exists(
-      sql`(select 1 from ${spaceEnvironmentTemplates} inner join ${spaces} on ${spaces.id} = ${spaceEnvironmentTemplates.space_id} where ${and(
-        eq(spaceEnvironmentTemplates.space_id, spaceId),
-        eq(spaceEnvironmentTemplates.environment_template_id, templates.id),
-        isNull(spaceEnvironmentTemplates.archived_at),
-        isNull(spaces.archived_at),
-      )})`,
-    ),
-  )
+const isAvailable = (organizationId: Auth.OrganizationID) =>
+  and(eq(templates.organization_id, organizationId), isNull(templates.archived_at))
 
 // oxlint-disable-next-line ren/no-comments -- An environment never gets a new machine under its id: a replace makes a new environment, so its machine is always the first generation.
 const machineGeneration = 1
@@ -152,12 +140,7 @@ export const layer = Layer.effect(
       const rows = yield* database.db
         .select({ provider: templates.provider })
         .from(templates)
-        .where(
-          and(
-            eq(templates.id, environmentTemplateId),
-            isAvailable(placement.organizationId, sql`${placement.spaceId}`),
-          ),
-        )
+        .where(and(eq(templates.id, environmentTemplateId), isAvailable(placement.organizationId)))
         .pipe(Effect.orDie)
       const provider = Option.flatMap(Option.fromNullishOr(rows.at(0)), (row) => registry.get(row.provider))
       if (Option.isNone(provider))
@@ -192,17 +175,12 @@ export const layer = Layer.effect(
           const templateRows = yield* transaction
             .select()
             .from(templates)
-            .where(
-              and(
-                eq(templates.id, session.environmentTemplateId),
-                isAvailable(subject.organizationId, sql`${session.spaceId}`),
-              ),
-            )
+            .where(and(eq(templates.id, session.environmentTemplateId), isAvailable(subject.organizationId)))
             .for("update", { of: templates })
           const template = templateRows.at(0)
           if (!template)
             return yield* new NotFound({
-              message: `The environment template of session ${subject.sessionId} is archived or no longer linked to its space`,
+              message: `The environment template of session ${subject.sessionId} is archived`,
             })
           const existing = session.environmentId
             ? Option.some(session.environmentId)
@@ -397,9 +375,7 @@ export const layer = Layer.effect(
           .select({ environmentTemplateId: sessions.environment_template_id, provider: templates.provider })
           .from(sessions)
           .innerJoin(templates, eq(templates.id, sessions.environment_template_id))
-          .where(
-            and(eq(sessions.session_id, subject.sessionId), isAvailable(subject.organizationId, sessions.space_id)),
-          )
+          .where(and(eq(sessions.session_id, subject.sessionId), isAvailable(subject.organizationId)))
           .pipe(Effect.orDie)
         return Option.flatMap(Option.fromNullishOr(rows.at(0)), (row) =>
           Option.map(registry.get(row.provider), () => directoryOf(subject.sessionId)),
@@ -418,10 +394,7 @@ export const layer = Layer.effect(
                 .from(sessions)
                 .leftJoin(
                   templates,
-                  and(
-                    eq(templates.id, sessions.environment_template_id),
-                    isAvailable(organizationId, sessions.space_id),
-                  ),
+                  and(eq(templates.id, sessions.environment_template_id), isAvailable(organizationId)),
                 )
                 .where(inArray(sessions.session_id, [...sessionIds]))
                 .pipe(Effect.orDie)

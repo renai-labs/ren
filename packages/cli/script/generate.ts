@@ -46,21 +46,6 @@ const resources: ReadonlyArray<Resource> = [
     descriptions: { create: "Add an agent to a space", archive: "Remove an agent from a space" },
   },
   {
-    group: "space-environment-template",
-    about: "Manage the environment templates of a space",
-    path: ["space", "environment"],
-    name: "environment",
-    one: "a space environment",
-    many: "a space’s environment templates",
-    alias: "environments",
-    parent: "spaceId",
-    verbs: { create: "add", archive: "remove" },
-    descriptions: {
-      create: "Add an environment template to a space",
-      archive: "Remove an environment template from a space",
-    },
-  },
-  {
     group: "space-settings",
     about: "Manage a space’s settings",
     path: ["space", "settings"],
@@ -251,7 +236,6 @@ const references: Readonly<
   taskId: { operation: "task.get", title: "Task" },
   parentId: { operation: "task.get", title: "Parent task" },
   scheduleId: { operation: "schedule.get", title: "Schedule" },
-  environmentTemplateId: { operation: "environment-template.get", title: "Environment template", name: "template" },
   profileId: { operation: "app-profile.get", title: "App profile" },
 }
 

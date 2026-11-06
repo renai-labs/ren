@@ -1201,247 +1201,6 @@
         "summary": "List environment providers"
       }
     },
-    "/space-environment-templates": {
-      "get": {
-        "tags": ["space-environment-template"],
-        "operationId": "space-environment-template.list",
-        "parameters": [
-          {
-            "name": "spaceId",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/Space.ID"
-            },
-            "required": true
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
-            },
-            "required": false
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
-            },
-            "required": false
-          }
-        ],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceEnvironmentTemplate.Page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Page"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Return one page of the space-environment-templates that the caller can see.",
-        "summary": "List space-environment-templates"
-      },
-      "post": {
-        "tags": ["space-environment-template"],
-        "operationId": "space-environment-template.create",
-        "parameters": [],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceEnvironmentTemplate.Info",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Info"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "ConflictError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConflictErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Create one space-environment-template.",
-        "summary": "Create space-environment-template",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SpaceEnvironmentTemplate.CreateInput"
-              }
-            }
-          },
-          "required": true
-        }
-      }
-    },
-    "/space-environment-templates/{id}": {
-      "delete": {
-        "tags": ["space-environment-template"],
-        "operationId": "space-environment-template.archive",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "schema": {
-              "$ref": "#/components/schemas/SpaceEnvironmentTemplate.ID"
-            },
-            "required": true
-          }
-        ],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceEnvironmentTemplate.Info",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Info"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "ConflictError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConflictErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Archive one space-environment-template and return it. Archiving an archived space-environment-template returns it unchanged.",
-        "summary": "Archive space-environment-template"
-      }
-    },
     "/space-settings/{idOrSlug}": {
       "get": {
         "tags": ["space-settings"],
@@ -19913,6 +19672,58 @@
         "required": ["name"],
         "additionalProperties": false
       },
+      "Space.Hand": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "placement": {
+                "type": "string",
+                "enum": ["colocated"]
+              },
+              "environmentTemplateId": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/EnvironmentTemplate.ID"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "A template of the space’s brain provider. Null: Ren’s system image."
+              }
+            },
+            "required": ["placement", "environmentTemplateId"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "placement": {
+                "type": "string",
+                "enum": ["remote"]
+              },
+              "environmentTemplateId": {
+                "$ref": "#/components/schemas/EnvironmentTemplate.ID"
+              }
+            },
+            "required": ["placement", "environmentTemplateId"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "placement": {
+                "type": "string",
+                "enum": ["none"]
+              }
+            },
+            "required": ["placement"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "Where the space’s chats run file and shell tools: on the brain’s own machine, on machines of a template that chats share, or nowhere. A change reaches a machine when it wakes; a chat started with none never gets tools."
+      },
       "Space.ID": {
         "type": "string",
         "pattern": "^spc_"
@@ -19986,6 +19797,9 @@
             ],
             "description": "The brain provider the space chose. Null: the deployment’s first one. The app hides the choice while the deployment has one."
           },
+          "hand": {
+            "$ref": "#/components/schemas/Space.Hand"
+          },
           "memberCount": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -20047,6 +19861,7 @@
           "description",
           "brainScope",
           "brainProvider",
+          "hand",
           "memberCount",
           "membershipId",
           "factory",
@@ -20160,46 +19975,11 @@
                 "type": "null"
               }
             ]
-          }
-        },
-        "additionalProperties": false
-      },
-      "SpaceEnvironmentTemplate.CreateInput": {
-        "type": "object",
-        "properties": {
-          "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
           },
-          "environmentTemplateId": {
-            "$ref": "#/components/schemas/EnvironmentTemplate.ID"
-          }
-        },
-        "required": ["spaceId", "environmentTemplateId"],
-        "additionalProperties": false
-      },
-      "SpaceEnvironmentTemplate.ID": {
-        "type": "string",
-        "pattern": "^spe_"
-      },
-      "SpaceEnvironmentTemplate.Info": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/SpaceEnvironmentTemplate.ID"
-          },
-          "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
-          },
-          "environmentTemplateId": {
-            "$ref": "#/components/schemas/EnvironmentTemplate.ID"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "archivedAt": {
+          "hand": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Space.Hand"
               },
               {
                 "type": "null"
@@ -20207,35 +19987,6 @@
             ]
           }
         },
-        "required": ["id", "spaceId", "environmentTemplateId", "createdAt", "archivedAt"],
-        "additionalProperties": false
-      },
-      "SpaceEnvironmentTemplate.Page": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Info"
-            }
-          },
-          "page": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "pageSize": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "total": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
       },
       "SpaceMember.Active": {
@@ -21879,9 +21630,6 @@
     },
     {
       "name": "environmentProvider"
-    },
-    {
-      "name": "space-environment-template"
     },
     {
       "name": "space-settings"
