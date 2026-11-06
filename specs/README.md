@@ -27,6 +27,7 @@ Generated clients follow the protocol `HttpApi`.
 | [usage.md](usage.md)                                                 | The billing check, reconciliation, an automated usage e2e case, the PostHog and billing loops, cleanup of finished durable runs |
 | [runtime/README.md](runtime/README.md)                               | The `FeatureFlags` service and the flag list                                                                                    |
 | [runtime/e2b-brain/README.md](runtime/e2b-brain/README.md)           | Harness-neutral sync, restore leftovers, live E2B tests, retries                                                                |
+| [runtime/environments/README.md](runtime/environments/README.md)     | Brain and hand providers, co-located and remote hands, templates, bundles, machine lifecycle and recovery                       |
 | [runtime/hot-reload/README.md](runtime/hot-reload/README.md)         | Tests not written, a model key per brain                                                                                        |
 | [runtime/channels/README.md](runtime/channels/README.md)             | Linear, Slack task card and onboarding, GitHub live checks                                                                      |
 | [runtime/credentials/README.md](runtime/credentials/README.md)       | `oauth-session.complete`, KMS, traffic the egress cannot inject                                                                 |
