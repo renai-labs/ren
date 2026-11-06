@@ -13948,9 +13948,17 @@
           },
           "configSchema": {
             "description": "A JSON Schema document (draft 2020-12) of the provider’s config."
+          },
+          "canLimitHosts": {
+            "type": "boolean",
+            "description": "Its machines can keep to a list of hosts."
+          },
+          "canColocate": {
+            "type": "boolean",
+            "description": "Its machines can run a brain and its tools on one machine: its templates can be co-located hands."
           }
         },
-        "required": ["id", "title", "description", "configSchema"],
+        "required": ["id", "title", "description", "configSchema", "canLimitHosts", "canColocate"],
         "additionalProperties": false
       },
       "EnvironmentProvider.Infos": {
