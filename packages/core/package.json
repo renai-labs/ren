@@ -12,6 +12,7 @@
   "scripts": {
     "print-policies": "bun run script/print-policies.ts",
     "publish-apps": "bun run script/publish-apps.ts",
+    "slack-manifest": "bun run script/slack-manifest.ts",
     "ren:settings": "bun run script/ren-settings.ts",
     "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun ../../script/test.ts",
     "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/brain-host.test.ts test/environment-lifecycle.test.ts",

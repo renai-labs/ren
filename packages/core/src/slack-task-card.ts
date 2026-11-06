@@ -11,6 +11,7 @@ import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stream } from
 import { Slack } from "./channel-provider/slack.js"
 import type { ChannelSecrets } from "./channel-secrets.js"
 import { SlackApp } from "./slack-app.js"
+import { SlackManifest } from "./slack-manifest.js"
 
 type LinksShared = Extract<Channel.Signal, { readonly kind: "links_shared" }>
 
@@ -376,7 +377,7 @@ export const layer = Layer.effect(
     const entityOf = (card: Card, options: { readonly titled: boolean; readonly detailed: boolean }) => {
       const activity = Option.getOrUndefined(card.activity)
       return {
-        entity_type: "slack#/entities/task",
+        entity_type: SlackManifest.taskEntity,
         url: urlOf(card),
         external_ref: { id: card.id },
         entity_payload: {
