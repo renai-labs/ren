@@ -4,6 +4,7 @@ import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
+import type { Machine } from "@ren/schema/machine"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
@@ -113,7 +114,7 @@ export const make = async () => {
     row,
     seeded,
     newBrain: () => seeded().then((found) => found.brainId),
-    reaches: (brainId: Brain.ID, phase: Brain.Phase) =>
+    reaches: (brainId: Brain.ID, phase: Machine.Phase) =>
       Effect.runPromise(
         Effect.promise(() => row(brainId)).pipe(
           Effect.repeat({ until: (found) => found.phase === phase, schedule: Schedule.spaced("100 millis") }),

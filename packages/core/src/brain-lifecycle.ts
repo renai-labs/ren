@@ -8,55 +8,24 @@ import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
 import { and, eq, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
-import {
-  Cause,
-  Clock,
-  Config,
-  Context,
-  DateTime,
-  Duration,
-  Effect,
-  Layer,
-  Option,
-  Schedule,
-  Schema,
-  Stream,
-} from "effect"
+import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Deployment } from "./deployment.js"
 import { Environments } from "./environments.js"
-import { SandboxEgress } from "./sandbox-egress.js"
+import type { MachineAccess } from "./machine-access.js"
+import { MachineLifecycle } from "./machine-lifecycle.js"
 import { MachineProvider } from "./machine-provider.js"
+import { SandboxEgress } from "./sandbox-egress.js"
 
-export class Unavailable extends Schema.TaggedError<Unavailable>()("BrainLifecycle.Unavailable", {
-  message: Schema.String,
-}) {}
+export type Access = MachineAccess.Access<BrainClient.Target>
 
-export class Unreachable extends Schema.TaggedError<Unreachable>()("BrainLifecycle.Unreachable", {
-  message: Schema.String,
-}) {}
-
-export class Frozen extends Schema.TaggedError<Frozen>()("BrainLifecycle.Frozen", {
-  message: Schema.String,
-  reason: Schema.Literals(["memory", "disk", "unknown"]),
-}) {}
-
-export type Access =
-  | { readonly _tag: "Ready"; readonly target: BrainClient.Target }
-  | { readonly _tag: "Starting"; readonly phase: string }
-  | { readonly _tag: "Failed"; readonly reason: string }
-
-export interface Interface {
-  readonly ensure: (brainId: Brain.ID) => Effect.Effect<void>
-  readonly access: (brainId: Brain.ID) => Effect.Effect<Access>
-  readonly ready: (brainId: Brain.ID) => Effect.Effect<BrainClient.Target, Unavailable>
+export interface Interface extends MachineAccess.Interface<Brain.ID, BrainClient.Target> {
+  readonly ready: (brainId: Brain.ID) => Effect.Effect<BrainClient.Target, MachineLifecycle.Unavailable>
   readonly awake: (brainId: Brain.ID) => Effect.Effect<Option.Option<BrainClient.Target>>
-  readonly retry: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) => Effect.Effect<void>
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Hand>>
-  readonly check: (brainId: Brain.ID) => Effect.Effect<void>
   readonly cleanup: Effect.Effect<void>
 }
 
@@ -78,35 +47,7 @@ const BrainRun = DurableRunner.make("BrainRun", {
   idempotencyKey: (payload) => `brain:${payload.brainId}:${payload.epoch}`,
 })
 
-export const timing = {
-  boot: Duration.seconds(120),
-  wake: Duration.seconds(60),
-  idle: Duration.minutes(10),
-  busy: Duration.minutes(30),
-  stuck: Duration.minutes(30),
-  accessMargin: Duration.minutes(2),
-  poll: Duration.seconds(1),
-  probeTimeout: Duration.seconds(3),
-  sampleMaxAge: Duration.seconds(60),
-  fullShare: 0.95,
-  failures: 3,
-}
-
-type Row = typeof Database.Schema.brain.$inferSelect
-
-const reasonOf = (sample: MachineProvider.Sample | undefined) => {
-  if (sample && sample.memory >= timing.fullShare) return "memory" as const
-  if (sample && sample.disk >= timing.fullShare) return "disk" as const
-  return "unknown" as const
-}
-
 const brains = Database.Schema.brain
-
-const startKinds: Readonly<Partial<Record<Brain.Phase, string>>> = {
-  creating: "new",
-  booting: "new",
-  replacing: "replace",
-}
 
 export const layer = Layer.effect(
   Service,
@@ -117,8 +58,12 @@ export const layer = Layer.effect(
     const engine = yield* WorkflowEngine.WorkflowEngine
     const environments = yield* Environments.Service
     const egress = yield* SandboxEgress.Service
-    const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(Config.withDefault(timing.wake))
-    const bootWithin = yield* Config.Duration("BRAIN_BOOT_TIMEOUT").pipe(Config.withDefault(timing.boot))
+    const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(
+      Config.withDefault(MachineLifecycle.timing.wake),
+    )
+    const bootWithin = yield* Config.Duration("BRAIN_BOOT_TIMEOUT").pipe(
+      Config.withDefault(MachineLifecycle.timing.boot),
+    )
     const sandboxVariables = yield* Deployment.sandboxVariables
 
     const read = (brainId: Brain.ID) =>
@@ -139,6 +84,8 @@ export const layer = Layer.effect(
     const update = (brainId: Brain.ID, values: Partial<typeof brains.$inferInsert>) =>
       database.db.update(brains).set(values).where(eq(brains.id, brainId)).pipe(Effect.orDie, Effect.asVoid)
 
+    type Row = typeof brains.$inferSelect
+
     const targetOf = (row: Row): Option.Option<BrainClient.Target> =>
       row.url
         ? Option.some({
@@ -152,188 +99,6 @@ export const layer = Layer.effect(
         : Option.none()
 
     const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
-
-    const keepAlive = Effect.fnUntraced(function* (row: Row, window: Duration.Duration) {
-      if (!row.binding) return
-      const at = yield* now
-      const left = row.keep_alive_until ? row.keep_alive_until.getTime() - at.getTime() : 0
-      if (left > Duration.toMillis(window) / 2) return
-      yield* provider.keepAlive(row.binding, window)
-      yield* update(row.id, { keep_alive_until: new Date(at.getTime() + Duration.toMillis(window)) })
-    })
-
-    const fail = Effect.fnUntraced(function* (row: Row, reason: string, next: Brain.Phase) {
-      const failures = row.failures + 1
-      yield* Effect.logWarning(`Brain ${row.id} failed (${failures}/${timing.failures}): ${reason}`)
-      yield* update(row.id, {
-        failures,
-        failure: reason,
-        phase: failures >= timing.failures ? "failed" : next,
-      })
-    })
-
-    const waitFor = <A, E>(effect: Effect.Effect<A, E>, within: Duration.Duration) =>
-      effect.pipe(Effect.retry({ schedule: Schedule.spaced(timing.poll) }), Effect.timeoutOption(within))
-
-    const env = Effect.fnUntraced(function* (row: Row) {
-      return {
-        REN_URL: client.renUrl,
-        REN_BRAIN_ID: row.id,
-        REN_BRAIN_GENERATION: String(row.generation),
-        BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(client.publicKeys),
-        ...sandboxVariables({
-          "ren.organization.id": row.organization_id,
-          "ren.space.id": row.space_id,
-          "ren.brain.id": row.id,
-          "ren.brain.generation": String(row.generation),
-        }),
-        ...(yield* environments.executorVariables(Environment.ofBrain(row.id))),
-      }
-    })
-
-    // oxlint-disable-next-line ren/no-comments -- Capacity is not a failure (E88): the brain shows "waiting for capacity", and the step that hit it runs again after Retry-After.
-    const waitForCapacity = Effect.fnUntraced(function* (row: Row, error: MachineProvider.Capacity) {
-      yield* Effect.logWarning(`Waiting for capacity: ${error.message}`)
-      yield* update(row.id, { phase: "capacity" })
-      yield* Effect.sleep(error.retryAfter)
-      yield* update(row.id, { phase: row.phase })
-    })
-
-    // oxlint-disable-next-line ren/no-comments -- A brain goes behind the egress when this Ren runs one and its provider can route a sandbox through it. The answer is kept on the row (egress); every later step reads the row, never the setting.
-    const behindEgress = egress.enabled && provider.canEgress
-
-    const create = Effect.fnUntraced(function* (row: Row) {
-      const proxy = behindEgress
-        ? yield* egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id })
-        : Option.none<MachineProvider.Proxy>()
-      const created = yield* provider
-        .create({
-          labels: {
-            id: row.id,
-            generation: row.generation,
-            organizationId: row.organization_id,
-            spaceId: row.space_id,
-          },
-          config: {},
-          // oxlint-disable-next-line ren/no-comments -- Behind an egress, the brain calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49).
-          variables: { ...(yield* env(row)), ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },
-          proxy,
-        })
-        .pipe(
-          Effect.map(Option.some),
-          Effect.catchTag("MachineProvider.Capacity", (error) =>
-            waitForCapacity(row, error).pipe(Effect.as(Option.none<MachineProvider.Created>())),
-          ),
-        )
-      if (Option.isNone(created)) return false
-      yield* update(row.id, {
-        provider: provider.info.id,
-        binding: created.value.binding,
-        template: provider.template,
-        egress: Option.isSome(proxy),
-        url: created.value.url,
-        key_ids: client.publicKeys.map((key) => key.id),
-        phase: "booting",
-        keep_alive_until: new Date((yield* now).getTime() + Duration.toMillis(Duration.minutes(10))),
-      })
-      return false
-    })
-
-    const boot = Effect.fnUntraced(function* (row: Row) {
-      const target = Option.getOrUndefined(targetOf(row))
-      if (!target) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
-      const api = yield* client.brain(target)
-      const answered = { last: Option.none<BrainState>() }
-      // oxlint-disable-next-line ren/no-comments -- Ready means the brain answers and has reached Ren with a pull, so a brain whose path to Ren is broken (egress, CA, DNS) fails with that reason instead of looking ready (M1; ren-v1 INV-15). An older brain does not report pulledAt.
-      const state = yield* waitFor(
-        api.brain["brain.state"]().pipe(
-          Effect.tap((found) =>
-            Effect.sync(() => {
-              answered.last = Option.some(found)
-            }),
-          ),
-          Effect.flatMap((found) =>
-            // ast-grep-ignore: no-nullish-comparison, -- null is "not yet pulled"; an older brain leaves pulledAt out and is not waited for
-            found.pulledAt === null
-              ? Effect.fail(new Unavailable({ message: "not reached Ren" }))
-              : Effect.succeed(found),
-          ),
-        ),
-        bootWithin,
-      )
-      if (Option.isNone(state)) {
-        if (row.binding) yield* provider.destroy(row.binding).pipe(Effect.ignore)
-        yield* fail(
-          row,
-          Option.isSome(answered.last)
-            ? `The brain answers but did not reach Ren within ${Duration.format(bootWithin)}`
-            : `The brain did not answer within ${Duration.format(bootWithin)}`,
-          "creating",
-        )
-        yield* update(row.id, { binding: null, url: null })
-        return false
-      }
-      yield* update(row.id, { phase: "ready", failures: 0, failure: null })
-      yield* keepAlive(yield* read(row.id), timing.idle)
-      return true
-    })
-
-    const resume = Effect.fnUntraced(function* (row: Row) {
-      if (!row.binding) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
-      // oxlint-disable-next-line ren/no-comments -- An asleep brain on an older build moves to the current one by a replace (E120). Only this step checks, so a running brain is never replaced for its build.
-      if (row.template && provider.template && row.template !== provider.template) {
-        yield* Effect.logInfo(`Brain ${row.id} runs build ${row.template}; Ren replaces it with ${provider.template}`)
-        return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
-      }
-      // oxlint-disable-next-line ren/no-comments -- A brain built for the other egress mode would get the wrong keys; it moves to the current one by a replace, as for a build (E120).
-      if (row.egress !== behindEgress) {
-        yield* Effect.logInfo(
-          `Brain ${row.id} was created ${row.egress ? "behind" : "without"} the egress; Ren replaces it`,
-        )
-        return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
-      }
-      const proxy = behindEgress
-        ? yield* egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id })
-        : Option.none<MachineProvider.Proxy>()
-      const connected = yield* provider.connect(row.binding, proxy).pipe(
-        Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
-        Effect.catchTag("MachineProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
-        Effect.catchTag("MachineProvider.Capacity", (error) =>
-          waitForCapacity(row, error).pipe(Effect.as({ _tag: "Waited" } as const)),
-        ),
-      )
-      if (connected._tag === "Waited") return false
-      if (connected._tag === "Gone") return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
-      yield* update(row.id, { url: connected.url, keep_alive_until: null })
-      yield* keepAlive({ ...row, keep_alive_until: null }, timing.idle)
-      yield* update(row.id, { phase: "waking" })
-      return false
-    })
-
-    const wake = Effect.fnUntraced(function* (row: Row) {
-      const target = Option.getOrUndefined(targetOf(row))
-      if (!target) return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
-      const api = yield* client.brain(target)
-      const woke = yield* api.brain["brain.wake"]().pipe(
-        Effect.retry({ schedule: Schedule.spaced(timing.poll) }),
-        Effect.timeoutOption(wakeWithin),
-      )
-      // oxlint-disable-next-line ren/no-comments -- A slow wake is not a dead brain: Ren replaces it only when /ren/state does not answer either (E132).
-      if (Option.isNone(woke)) {
-        const answers = yield* api.brain["brain.state"]().pipe(Effect.timeoutOption("10 seconds"), Effect.option)
-        if (Option.isNone(answers) || Option.isNone(answers.value)) {
-          yield* Effect.logWarning(
-            `Brain ${row.id} did not confirm its wake in time and does not answer; Ren replaces it`,
-          )
-          return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
-        }
-        yield* Effect.logWarning(
-          `Brain ${row.id} answers but did not confirm its wake within ${Duration.format(wakeWithin)}`,
-        )
-      }
-      yield* update(row.id, { phase: "ready", failures: 0, failure: null })
-      return true
-    })
 
     const interruptBusy = (transaction: Database.Transaction, brainId: Brain.ID, at: Date) =>
       transaction
@@ -352,36 +117,7 @@ export const layer = Layer.effect(
           ),
         )
 
-    const replace = Effect.fnUntraced(function* (row: Row) {
-      yield* database
-        .transaction((transaction) =>
-          Effect.gen(function* () {
-            yield* transaction
-              .update(brains)
-              .set({
-                generation: sql`${brains.generation} + 1`,
-                binding: null,
-                url: null,
-                keep_alive_until: null,
-                phase: "creating",
-              })
-              .where(eq(brains.id, row.id))
-            yield* interruptBusy(transaction, row.id, yield* now)
-          }),
-        )
-        .pipe(Effect.orDie)
-      yield* egress.retire(row.id)
-      if (row.binding)
-        yield* provider
-          .destroy(row.binding)
-          .pipe(Effect.catch((error) => Effect.logWarning("Destroying the replaced sandbox failed", error)))
-      return false
-    })
-
-    const lose = Effect.fn("BrainLifecycle.lose")(function* (lost: {
-      readonly brainId: Brain.ID
-      readonly generation: number
-    }) {
+    const lose = Effect.fn("BrainLifecycle.lose")(function* (brainId: Brain.ID, generation: number, at: Date) {
       yield* database
         .transaction((transaction) =>
           Effect.gen(function* () {
@@ -390,23 +126,134 @@ export const layer = Layer.effect(
               .set({ phase: "replacing" })
               .where(
                 and(
-                  eq(brains.id, lost.brainId),
-                  eq(brains.generation, lost.generation),
+                  eq(brains.id, brainId),
+                  eq(brains.generation, generation),
                   notInArray(brains.phase, ["creating", "replacing"]),
                 ),
               )
               .returning({ id: brains.id })
             if (marked.length === 0) return
-            yield* Effect.logWarning(`The sandbox of brain ${lost.brainId} is gone; its busy chats are interrupted`)
-            yield* interruptBusy(transaction, lost.brainId, yield* now)
+            yield* Effect.logWarning(`The sandbox of brain ${brainId} is gone; its busy chats are interrupted`)
+            yield* interruptBusy(transaction, brainId, at)
           }),
         )
         .pipe(Effect.orDie)
     })
 
+    // oxlint-disable-next-line ren/no-comments -- A brain goes behind the egress when this Ren runs one and its provider can route a sandbox through it. The answer is kept on the row (egress); every later step reads the row, never the setting.
+    const isBehindEgress = egress.enabled && provider.canEgress
+
+    const machines = MachineLifecycle.make({
+      name: "BrainLifecycle",
+      noun: "Brain",
+      annotation: "brain",
+      provider,
+      isBehindEgress,
+      bootWithin,
+      wakeWithin,
+      read,
+      update,
+      replace: (row, at) =>
+        database
+          .transaction((transaction) =>
+            Effect.gen(function* () {
+              yield* transaction
+                .update(brains)
+                .set({
+                  generation: sql`${brains.generation} + 1`,
+                  binding: null,
+                  url: null,
+                  keep_alive_until: null,
+                  phase: "creating",
+                })
+                .where(eq(brains.id, row.id))
+              yield* interruptBusy(transaction, row.id, at)
+            }),
+          )
+          .pipe(Effect.orDie),
+      lose,
+      ensure: (row) =>
+        DurableRunner.ensure(BrainRun, { brainId: row.id, epoch: row.run_epoch }).pipe(
+          Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+        ),
+      proxyFor: (row) =>
+        egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id }),
+      retire: egress.retire,
+      variables: Effect.fnUntraced(function* (row) {
+        return {
+          REN_URL: client.renUrl,
+          REN_BRAIN_ID: row.id,
+          REN_BRAIN_GENERATION: String(row.generation),
+          BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(client.publicKeys),
+          ...sandboxVariables({
+            "ren.organization.id": row.organization_id,
+            "ren.space.id": row.space_id,
+            "ren.brain.id": row.id,
+            "ren.brain.generation": String(row.generation),
+          }),
+          ...(yield* environments.executorVariables(Environment.ofBrain(row.id))),
+        }
+      }),
+      created: (brainId) => update(brainId, { key_ids: client.publicKeys.map((key) => key.id) }),
+      target: targetOf,
+      boot: Effect.fnUntraced(function* (target, within) {
+        const api = yield* client.brain(target)
+        const answered = { last: Option.none<BrainState>() }
+        // oxlint-disable-next-line ren/no-comments -- Ready means the brain answers and has reached Ren with a pull, so a brain whose path to Ren is broken (egress, CA, DNS) fails with that reason instead of looking ready (M1; ren-v1 INV-15). An older brain does not report pulledAt.
+        const state = yield* api.brain["brain.state"]().pipe(
+          Effect.tap((found) =>
+            Effect.sync(() => {
+              answered.last = Option.some(found)
+            }),
+          ),
+          Effect.flatMap((found) =>
+            // ast-grep-ignore: no-nullish-comparison, -- null is "not yet pulled"; an older brain leaves pulledAt out and is not waited for
+            found.pulledAt === null
+              ? Effect.fail(new MachineLifecycle.Unavailable({ message: "not reached Ren" }))
+              : Effect.succeed(found),
+          ),
+          Effect.retry({ schedule: Schedule.spaced(MachineLifecycle.timing.poll) }),
+          Effect.timeoutOption(within),
+        )
+        if (Option.isSome(state)) return Option.none()
+        return Option.some(
+          Option.isSome(answered.last)
+            ? `The brain answers but did not reach Ren within ${Duration.format(within)}`
+            : `The brain did not answer within ${Duration.format(within)}`,
+        )
+      }),
+      wake: Effect.fnUntraced(function* (target, within) {
+        const api = yield* client.brain(target)
+        const woke = yield* api.brain["brain.wake"]().pipe(
+          Effect.retry({ schedule: Schedule.spaced(MachineLifecycle.timing.poll) }),
+          Effect.timeoutOption(within),
+        )
+        if (Option.isSome(woke)) return true
+        // oxlint-disable-next-line ren/no-comments -- A slow wake is not a dead brain: Ren replaces it only when /ren/state does not answer either (E132).
+        const answers = yield* api.brain["brain.state"]().pipe(Effect.timeoutOption("10 seconds"), Effect.option)
+        if (Option.isNone(answers) || Option.isNone(answers.value)) {
+          yield* Effect.logWarning(
+            `Brain ${target.brainId} did not confirm its wake in time and does not answer; Ren replaces it`,
+          )
+          return false
+        }
+        yield* Effect.logWarning(
+          `Brain ${target.brainId} answers but did not confirm its wake within ${Duration.format(within)}`,
+        )
+        return true
+      }),
+      answers: (target) =>
+        client.brain(target).pipe(
+          Effect.flatMap((api) => api.brain["brain.state"]()),
+          Effect.timeoutOption(MachineLifecycle.timing.probeTimeout),
+          Effect.option,
+          Effect.map((answered) => Option.isSome(answered) && Option.isSome(answered.value)),
+        ),
+    })
+
     yield* provider.lost.pipe(
       Stream.runForEach((lost) =>
-        Schema.is(Brain.ID)(lost.id) ? lose({ brainId: lost.id, generation: lost.generation }) : Effect.void,
+        Schema.is(Brain.ID)(lost.id) ? machines.lose(lost.id, lost.generation) : Effect.void,
       ),
       Effect.withErrorReporting,
       Effect.forkScoped,
@@ -427,7 +274,7 @@ export const layer = Layer.effect(
             onSome: (target) =>
               client.brain(target).pipe(
                 Effect.flatMap((api) => api.brain["brain.state"]()),
-                Effect.timeout(timing.wake),
+                Effect.timeout(MachineLifecycle.timing.wake),
                 Effect.catchCause((cause) =>
                   Effect.logWarning(`Brain ${row.id} did not answer Ren's boot call`, cause),
                 ),
@@ -436,76 +283,6 @@ export const layer = Layer.effect(
         { concurrency: 8, discard: true },
       )
     }).pipe(Effect.withErrorReporting, Effect.forkScoped)
-
-    const replaceIfFrozen = Effect.fnUntraced(function* (row: Row, binding: Schema.Json) {
-      if (!provider.canSample) {
-        const message = `Brain ${row.id} does not answer, and its provider reports no samples of its machine; Ren keeps it`
-        return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(
-          Effect.annotateLogs({ "ren.brain.id": row.id, "ren.brain.generation": row.generation }),
-        )
-      }
-      const found = yield* provider.lastSample(binding).pipe(
-        Effect.tapError((error) => Effect.logWarning("The sandbox samples are unknown", error)),
-        Effect.option,
-      )
-      if (Option.isNone(found)) return
-      const sample = Option.getOrUndefined(found.value)
-      const logged = Effect.annotateLogs({
-        "ren.brain.id": row.id,
-        "ren.brain.generation": row.generation,
-        ...(sample && {
-          "ren.sandbox.sampled_at": DateTime.formatIso(sample.at),
-          "ren.sandbox.memory": sample.memory,
-          "ren.sandbox.disk": sample.disk,
-        }),
-      })
-      if (sample && Duration.isLessThan(DateTime.distance(sample.at, yield* DateTime.now), timing.sampleMaxAge)) {
-        const message = `Brain ${row.id} does not answer, but its machine runs; Ren keeps it`
-        return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(logged)
-      }
-      const message = sample
-        ? `Brain ${row.id} does not answer, and its machine stopped at ${DateTime.formatIso(sample.at)} with ${Math.round(sample.memory * 100)}% of its memory and ${Math.round(sample.disk * 100)}% of its disk in use; Ren replaces it`
-        : `Brain ${row.id} does not answer, and its machine reports no samples; Ren replaces it`
-      yield* Effect.logError(message, Cause.fail(new Frozen({ message, reason: reasonOf(sample) }))).pipe(logged)
-      yield* lose({ brainId: row.id, generation: row.generation })
-    })
-
-    const check = Effect.fn("BrainLifecycle.check")(function* (brainId: Brain.ID) {
-      const row = yield* read(brainId)
-      if (!row.binding) return
-      const target = Option.filter(targetOf(row), () => row.phase === "ready")
-      const answered = Option.isSome(target)
-        ? yield* client.brain(target.value).pipe(
-            Effect.flatMap((api) => api.brain["brain.state"]()),
-            Effect.timeoutOption(timing.probeTimeout),
-            Effect.option,
-          )
-        : Option.none()
-      if (Option.isSome(answered) && Option.isSome(answered.value)) return
-      const status = yield* provider.status(row.binding).pipe(
-        Effect.tapError((error) => Effect.logWarning("The sandbox status is unknown", error)),
-        Effect.option,
-      )
-      if (Option.isNone(status)) return
-      if (status.value === "gone") return yield* lose({ brainId, generation: row.generation })
-      if (row.phase !== "ready") return
-      // oxlint-disable-next-line ren/no-comments -- A paused sandbox wakes; it is never replaced here (E123).
-      if (status.value === "paused") return yield* update(row.id, { phase: "resuming" })
-      yield* replaceIfFrozen(row, row.binding)
-    })
-
-    const rest = Effect.fnUntraced(function* (row: Pick<Row, "id" | "generation" | "binding">) {
-      if (!row.binding) return
-      yield* egress.retire(row.id)
-      yield* provider.destroy(row.binding)
-      yield* update(row.id, {
-        generation: row.generation + 1,
-        binding: null,
-        url: null,
-        keep_alive_until: null,
-        phase: "creating",
-      })
-    })
 
     const cleanup = Effect.gen(function* () {
       const chats = Database.Schema.agent_session
@@ -530,7 +307,10 @@ export const layer = Layer.effect(
         .pipe(Effect.orDie)
       yield* Effect.forEach(
         resting,
-        (row) => rest(row).pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of brain ${row.id} failed`, error))),
+        (row) =>
+          machines
+            .rest(row)
+            .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of brain ${row.id} failed`, error))),
         { discard: true },
       )
       const listed = (yield* provider.list.pipe(
@@ -568,7 +348,7 @@ export const layer = Layer.effect(
         .innerJoin(Database.Schema.opencode_session, eq(Database.Schema.opencode_session.session_id, chats.id))
         .where(isNotNull(Database.Schema.opencode_session.time_suspended))
         .pipe(Effect.orDie)
-      yield* Effect.forEach(busy, (each) => check(each.brainId), { discard: true })
+      yield* Effect.forEach(busy, (each) => machines.check(each.brainId), { discard: true })
     }).pipe(Effect.withSpan("BrainLifecycle.cleanup"))
 
     yield* DurableRunner.register(CleanupRun, (payload) => DurableRunner.supervise(`cleanup:${payload.day}`, cleanup))
@@ -583,58 +363,12 @@ export const layer = Layer.effect(
       Effect.forkScoped,
     )
 
-    const settle = Effect.fnUntraced(function* (row: Row) {
-      const at = yield* now
-      if (row.keep_alive_until && row.keep_alive_until.getTime() > at.getTime()) return true
-      return yield* update(row.id, { phase: row.binding ? "resuming" : "creating" }).pipe(Effect.as(false))
-    })
-
-    const phases = {
-      creating: create,
-      booting: boot,
-      resuming: resume,
-      waking: wake,
-      replacing: replace,
-      ready: settle,
-      failed: () => Effect.succeed(true),
-      capacity: (row) => update(row.id, { phase: row.binding ? "resuming" : "creating" }).pipe(Effect.as(false)),
-    } satisfies Record<Brain.Phase, (row: Row) => Effect.Effect<boolean, unknown>>
-
-    const step = Effect.fn("BrainLifecycle.step")(function* (brainId: Brain.ID) {
-      const row = yield* read(brainId)
-      return yield* phases[row.phase](row)
-    })
-
-    const run = (brainId: Brain.ID) =>
-      Effect.gen(function* () {
-        const first = yield* read(brainId)
-        let worked = false
-        while (!(yield* step(brainId))) {
-          worked = true
-          yield* Effect.yieldNow
-        }
-        if (worked)
-          yield* Effect.annotateCurrentSpan(
-            "ren.brain.start_kind",
-            startKinds[first.phase] ?? (first.binding ? "resume" : "new"),
-          )
-      }).pipe(
-        Effect.catchTag("MachineProvider.Failed", (error) =>
-          read(brainId).pipe(
-            Effect.flatMap((row) =>
-              row.phase === "creating" || row.phase === "booting" || row.phase === "waking"
-                ? fail(row, error.message, row.phase)
-                : Effect.void,
-            ),
-            Effect.andThen(Effect.fail(error)),
-          ),
-        ),
-      )
-
     yield* DurableRunner.register(BrainRun, (payload) =>
       DurableRunner.supervise(
         `brain:${payload.brainId}`,
-        run(payload.brainId).pipe(Observability.Trace.brainRun, Effect.annotateSpans("ren.brain.id", payload.brainId)),
+        machines
+          .run(payload.brainId)
+          .pipe(Observability.Trace.brainRun, Effect.annotateSpans("ren.brain.id", payload.brainId)),
       ).pipe(
         Effect.andThen(
           database.db
@@ -646,80 +380,13 @@ export const layer = Layer.effect(
       ),
     )
 
-    const ensure = (brainId: Brain.ID) =>
-      read(brainId).pipe(
-        Effect.flatMap((row) => DurableRunner.ensure(BrainRun, { brainId, epoch: row.run_epoch })),
-        Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-      )
-
-    const touch = Effect.fnUntraced(function* (row: Row) {
-      yield* update(row.id, { last_active_at: yield* now })
-      yield* keepAlive(row, timing.idle).pipe(
-        Effect.catchTag("MachineProvider.Gone", () =>
-          update(row.id, { phase: "replacing" }).pipe(Effect.andThen(ensure(row.id))),
-        ),
-        Effect.catch((error) => Effect.logWarning("keepAlive failed", error)),
-      )
-    })
-
-    const access = Effect.fn("BrainLifecycle.access")(function* (brainId: Brain.ID) {
-      const row = yield* read(brainId)
-      const at = yield* now
-      const target = targetOf(row)
-      if (
-        row.phase === "ready" &&
-        Option.isSome(target) &&
-        row.keep_alive_until &&
-        row.keep_alive_until.getTime() > at.getTime()
-      ) {
-        if (row.keep_alive_until.getTime() - at.getTime() <= Duration.toMillis(timing.accessMargin))
-          yield* touch({ ...row, keep_alive_until: null })
-        else yield* touch(row)
-        return { _tag: "Ready", target: target.value } as const
-      }
-      if (row.phase === "failed") return { _tag: "Failed", reason: row.failure ?? "The brain failed" } as const
-      yield* ensure(brainId)
-      const shown: Partial<Record<Brain.Phase, string>> = { ready: "resuming", capacity: "waiting for capacity" }
-      return { _tag: "Starting", phase: shown[row.phase] ?? row.phase } as const
-    })
-
     return Service.of({
-      ensure,
-      access,
-      // oxlint-disable-next-line ren/no-comments -- HR12: reads the row only. It never calls ensure or touch, so it never resumes a paused sandbox or extends a keep-alive. A brain past its keep-alive may be paused, so it has no target.
-      awake: Effect.fn("BrainLifecycle.awake")(function* (brainId: Brain.ID) {
-        const row = yield* read(brainId)
-        const at = yield* now
-        return row.phase === "ready" && row.keep_alive_until && row.keep_alive_until.getTime() > at.getTime()
-          ? targetOf(row)
-          : Option.none()
-      }),
-      ready: Effect.fn("BrainLifecycle.ready")(function* (brainId: Brain.ID) {
-        const wait = Effect.gen(function* () {
-          const result = yield* access(brainId)
-          if (result._tag === "Ready") return Option.some(result.target)
-          if (result._tag === "Failed") return yield* new Unavailable({ message: result.reason })
-          return Option.none<BrainClient.Target>()
-        }).pipe(Effect.withTracerEnabled(false))
-        return yield* wait.pipe(
-          Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced(timing.poll) }),
-          Effect.flatMap((found) =>
-            Option.isSome(found)
-              ? Effect.succeed(found.value)
-              : Effect.fail(new Unavailable({ message: `Brain ${brainId} did not get ready` })),
-          ),
-        )
-      }),
-      retry: Effect.fn("BrainLifecycle.retry")(function* (brainId: Brain.ID) {
-        const row = yield* read(brainId)
-        if (row.phase === "failed")
-          yield* update(brainId, {
-            phase: row.binding ? "resuming" : "creating",
-            failures: 0,
-            run_epoch: row.run_epoch + 1,
-          })
-        yield* ensure(brainId)
-      }),
+      ensure: machines.ensure,
+      access: machines.access,
+      check: machines.check,
+      retry: machines.retry,
+      awake: machines.awake,
+      ready: machines.ready,
       observe: Effect.fn("BrainLifecycle.observe")(function* (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) {
         const row = yield* read(brainId)
         const at = yield* now
@@ -735,13 +402,14 @@ export const layer = Layer.effect(
           busy.length > 0 &&
           Option.exists(
             Option.fromNullishOr(lastProgress),
-            (last) => at.getTime() - last.getTime() < Duration.toMillis(timing.stuck),
+            (last) => at.getTime() - last.getTime() < Duration.toMillis(MachineLifecycle.timing.stuck),
           )
         if (moving)
-          yield* keepAlive(row, timing.busy).pipe(Effect.catch((error) => Effect.logWarning("keepAlive failed", error)))
+          yield* machines
+            .keepAlive(row, MachineLifecycle.timing.busy)
+            .pipe(Effect.catch((error) => Effect.logWarning("keepAlive failed", error)))
       }),
       cleanup,
-      check,
       hand: Effect.fn("BrainLifecycle.hand")(function* (brainId: Brain.ID) {
         const row = yield* read(brainId)
         if (!row.binding) return Option.none()
