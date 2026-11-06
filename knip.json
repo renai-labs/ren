@@ -14,6 +14,7 @@
         "src/worker.ts",
         "src/bun.ts",
         "e2b/stage.ts",
+        "e2b/bundle.ts",
         "test/lib/environment-worker.ts",
         "test/lib/sync-storage-worker.ts",
         "test/lib/crash-host.ts",
