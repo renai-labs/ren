@@ -3,7 +3,7 @@ export * as MachineLifecycle from "./machine-lifecycle.js"
 import type { Auth } from "@ren/schema/auth"
 import type { Machine } from "@ren/schema/machine"
 import type { Space } from "@ren/schema/space"
-import { Cause, Clock, DateTime, Duration, Effect, Option, Schedule, Schema } from "effect"
+import { Cause, Clock, DateTime, Duration, Effect, ErrorReporter, Option, Schedule, Schema } from "effect"
 import type { MachineAccess } from "./machine-access.js"
 import { MachineProvider } from "./machine-provider.js"
 
@@ -14,6 +14,10 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("MachineLifec
 export class Unreachable extends Schema.TaggedError<Unreachable>()("MachineLifecycle.Unreachable", {
   message: Schema.String,
 }) {}
+
+export class Failed extends Schema.TaggedError<Failed>()("MachineLifecycle.Failed", { message: Schema.String }) {}
+
+export class Replaced extends Schema.TaggedError<Replaced>()("MachineLifecycle.Replaced", { message: Schema.String }) {}
 
 export class Frozen extends Schema.TaggedError<Frozen>()("MachineLifecycle.Frozen", {
   message: Schema.String,
@@ -32,6 +36,11 @@ export const timing = {
   sampleMaxAge: Duration.seconds(60),
   fullShare: 0.95,
   failures: 3,
+  // oxlint-disable-next-line ren/no-comments -- EN19: the waits before a failed machine starts again at its next access: 10 min, 30 min, then every hour.
+  retries: [Duration.minutes(10), Duration.minutes(30), Duration.hours(1)],
+  // oxlint-disable-next-line ren/no-comments -- EN17: a machine that runs but whose brain gives no answer for this long is replaced. A check later than `silentCount` after the first one starts the count again, because the brain may have answered in between.
+  silent: Duration.minutes(5),
+  silentCount: Duration.minutes(10),
 }
 
 // oxlint-disable-next-line ren/no-comments -- The columns of a managed machine's row. Each kind of machine keeps them in its own table under these names.
@@ -51,6 +60,9 @@ export interface Row<Id extends string> {
   readonly failure: string | null
   readonly keep_alive_until: Date | null
   readonly last_active_at: Date | null
+  readonly retry_at: Date | null
+  readonly retries: number
+  readonly unanswered_since: Date | null
 }
 
 export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
@@ -66,8 +78,8 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly update: (id: Id, values: Partial<Row<Id>>) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- In one transaction: the next generation, no binding, url or keep-alive, `creating`, and the kind's own work, such as interrupting busy chats.
   readonly replace: (row: R, at: Date) => Effect.Effect<void>
-  // oxlint-disable-next-line ren/no-comments -- Marks the machine of this generation `replacing`, unless it is already creating or replacing, and does the kind's own work in the same transaction.
-  readonly lose: (id: Id, generation: number, at: Date) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- Marks the machine of this generation `replacing`, unless it is already creating or replacing, and does the kind's own work in the same transaction. True when it marked it.
+  readonly lose: (id: Id, generation: number, at: Date) => Effect.Effect<boolean>
   // oxlint-disable-next-line ren/no-comments -- Starts the kind's durable run for the row's run epoch, which calls `run`.
   readonly ensure: (row: R) => Effect.Effect<void>
   readonly proxyFor: (row: R) => Effect.Effect<Option.Option<MachineProvider.Proxy>>
@@ -103,7 +115,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const noun = definition.noun
   const read = definition.read
   const update = definition.update
-  const annotate = (row: R) =>
+  const annotate = (row: Pick<R, "id" | "generation">) =>
     Effect.annotateLogs({
       [`ren.${definition.annotation}.id`]: row.id,
       [`ren.${definition.annotation}.generation`]: row.generation,
@@ -118,15 +130,31 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     yield* update(row.id, { keep_alive_until: new Date(at.getTime() + Duration.toMillis(window)) })
   })
 
+  // oxlint-disable-next-line ren/no-comments -- EN38: Ren sends an error report when a machine fails, waits for capacity, or is replaced by force.
+  const report = (row: Pick<R, "id" | "generation">, error: Failed | Replaced | MachineProvider.Capacity) =>
+    ErrorReporter.report(Cause.fail(error)).pipe(annotate(row))
+
   const fail = Effect.fnUntraced(function* (row: R, reason: string, next: Machine.Phase) {
     const failures = row.failures + 1
     yield* Effect.logWarning(`${noun} ${row.id} failed (${failures}/${timing.failures}): ${reason}`)
-    yield* update(row.id, { failures, failure: reason, phase: failures >= timing.failures ? "failed" : next })
+    if (failures < timing.failures) return yield* update(row.id, { failures, failure: reason, phase: next })
+    const wait = timing.retries[Math.min(row.retries, timing.retries.length - 1)] ?? Duration.hours(1)
+    yield* update(row.id, {
+      failures,
+      failure: reason,
+      phase: "failed",
+      retry_at: new Date((yield* now).getTime() + Duration.toMillis(wait)),
+    })
+    yield* report(row, new Failed({ message: `${noun} ${row.id} failed: ${reason}` }))
   })
+
+  const ready = (row: R) =>
+    update(row.id, { phase: "ready", failures: 0, failure: null, retries: 0, retry_at: null, unanswered_since: null })
 
   // oxlint-disable-next-line ren/no-comments -- Capacity is not a failure (E88): the machine shows "waiting for capacity", and the step that hit it runs again after Retry-After.
   const waitForCapacity = Effect.fnUntraced(function* (row: R, error: MachineProvider.Capacity) {
     yield* Effect.logWarning(`Waiting for capacity: ${error.message}`)
+    yield* report(row, error)
     yield* update(row.id, { phase: "capacity" })
     yield* Effect.sleep(error.retryAfter)
     yield* update(row.id, { phase: row.phase })
@@ -175,7 +203,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       yield* update(row.id, { binding: null, url: null })
       return false
     }
-    yield* update(row.id, { phase: "ready", failures: 0, failure: null })
+    yield* ready(row)
     yield* keepAlive(yield* read(row.id), timing.idle)
     return true
   })
@@ -202,7 +230,10 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       ),
     )
     if (connected._tag === "Waited") return false
-    if (connected._tag === "Gone") return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+    if (connected._tag === "Gone") {
+      yield* report(row, new Replaced({ message: `${noun} ${row.id} is gone at its wake` }))
+      return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+    }
     yield* update(row.id, { url: connected.url, keep_alive_until: null })
     yield* keepAlive({ ...row, keep_alive_until: null }, timing.idle)
     yield* update(row.id, { phase: "waking" })
@@ -213,7 +244,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const target = Option.getOrUndefined(definition.target(row))
     if (!target || !(yield* definition.wake(target, definition.wakeWithin)))
       return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
-    yield* update(row.id, { phase: "ready", failures: 0, failure: null })
+    yield* ready(row)
     return true
   })
 
@@ -227,7 +258,10 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     return false
   })
 
-  const lose = (id: Id, generation: number) => Effect.flatMap(now, (at) => definition.lose(id, generation, at))
+  const lose = Effect.fnUntraced(function* (row: Pick<R, "id" | "generation">, reason: string) {
+    if (yield* definition.lose(row.id, row.generation, yield* now))
+      yield* report(row, new Replaced({ message: `${noun} ${row.id}: ${reason}` }))
+  })
 
   const replaceIfFrozen = Effect.fnUntraced(function* (row: R, binding: Schema.Json) {
     if (!provider.canSample) {
@@ -261,23 +295,38 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       ? `${noun} ${row.id} does not answer, and its machine stopped at ${DateTime.formatIso(sample.at)} with ${Math.round(sample.memory * 100)}% of its memory and ${Math.round(sample.disk * 100)}% of its disk in use; Ren replaces it`
       : `${noun} ${row.id} does not answer, and its machine reports no samples; Ren replaces it`
     yield* logged(Effect.logError(message, Cause.fail(new Frozen({ message, reason: reasonOf(sample) }))))
-    yield* lose(row.id, row.generation)
+    yield* lose(row, "its machine stopped")
+  })
+
+  // oxlint-disable-next-line ren/no-comments -- Counts how long a running machine's brain has given no answer, from the first check that found it silent (EN17).
+  const isSilent = Effect.fnUntraced(function* (row: R) {
+    const at = yield* now
+    const since =
+      row.unanswered_since && at.getTime() - row.unanswered_since.getTime() < Duration.toMillis(timing.silentCount)
+        ? row.unanswered_since
+        : at
+    if (since !== row.unanswered_since) yield* update(row.id, { unanswered_since: since })
+    return at.getTime() - since.getTime() >= Duration.toMillis(timing.silent)
   })
 
   const check = Effect.fn(`${name}.check`)(function* (id: Id) {
     const row = yield* read(id)
     if (!row.binding) return
     const target = Option.filter(definition.target(row), () => row.phase === "ready")
-    if (Option.isSome(target) && (yield* definition.answers(target.value))) return
+    if (Option.isSome(target) && (yield* definition.answers(target.value))) {
+      if (row.unanswered_since) yield* update(row.id, { unanswered_since: null })
+      return
+    }
     const status = yield* provider.status(row.binding).pipe(
       Effect.tapError((error) => Effect.logWarning("The sandbox status is unknown", error)),
       Effect.option,
     )
     if (Option.isNone(status)) return
-    if (status.value === "gone") return yield* lose(id, row.generation)
+    if (status.value === "gone") return yield* lose(row, "its machine is gone")
     if (row.phase !== "ready") return
     // oxlint-disable-next-line ren/no-comments -- A paused machine wakes; it is never replaced here (E123).
     if (status.value === "paused") return yield* update(row.id, { phase: "resuming" })
+    if (yield* isSilent(row)) return yield* lose(row, `its brain gave no answer for ${Duration.format(timing.silent)}`)
     yield* replaceIfFrozen(row, row.binding)
   })
 
@@ -346,6 +395,16 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
 
   const ensure = (id: Id) => Effect.flatMap(read(id), definition.ensure)
 
+  // oxlint-disable-next-line ren/no-comments -- Starts a failed machine's steps again under a new run epoch, with no failures.
+  const restart = (row: R, retries: number) =>
+    update(row.id, {
+      phase: row.binding ? "resuming" : "creating",
+      failures: 0,
+      run_epoch: row.run_epoch + 1,
+      retries,
+      retry_at: null,
+    })
+
   const touch = Effect.fnUntraced(function* (row: R) {
     yield* update(row.id, { last_active_at: yield* now })
     yield* keepAlive(row, timing.idle).pipe(
@@ -373,8 +432,9 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       )
       return { _tag: "Ready", target: target.value } as const
     }
-    if (row.phase === "failed")
+    if (row.phase === "failed" && !(row.retry_at && row.retry_at.getTime() <= at.getTime()))
       return { _tag: "Failed", reason: row.failure ?? `The ${noun.toLowerCase()} failed` } as const
+    if (row.phase === "failed") yield* restart(row, row.retries + 1)
     yield* ensure(id)
     const shown: Partial<Record<Machine.Phase, string>> = { ready: "resuming", capacity: "waiting for capacity" }
     return { _tag: "Starting", phase: shown[row.phase] ?? row.phase } as const
@@ -414,8 +474,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     }),
     retry: Effect.fn(`${name}.retry`)(function* (id: Id) {
       const row = yield* read(id)
-      if (row.phase === "failed")
-        yield* update(id, { phase: row.binding ? "resuming" : "creating", failures: 0, run_epoch: row.run_epoch + 1 })
+      if (row.phase === "failed") yield* restart(row, 0)
       yield* ensure(id)
     }),
   }
