@@ -6,6 +6,7 @@ import type { Workload } from "@ren/schema/workload"
 import { Context, Effect, Layer, Option } from "effect"
 import { AppProfiles } from "./app/profiles.js"
 import { AppResolve } from "./app/resolve.js"
+import { CredentialSource } from "./credential-source.js"
 import { Credentials } from "./credentials.js"
 
 // oxlint-disable-next-line ren/no-comments -- Networking rule 1: npm, PyPI and its file host, the Debian and Ubuntu mirrors, and the Go module proxy with its checksum database.
@@ -51,6 +52,8 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const credentials = yield* Credentials.Service
+    // oxlint-disable-next-line ren/no-comments -- Stored credentials and the ones Ren mints for the workload, such as its space's drive, as the egress resolves them.
+    const sources = yield* CredentialSource.Service
     const profiles = yield* AppProfiles.Service
     const resolve = yield* AppResolve.Service
     return Service.of({
@@ -62,7 +65,7 @@ export const layer = Layer.effect(
         const scope = yield* credentials.scopeOf(workload)
         if (Option.isNone(scope)) return Option.some([...new Set(ofTemplate(networking))])
         const reached = yield* profiles.reachable(scope.value)
-        const candidates = yield* credentials.candidates(
+        const candidates = yield* sources.candidates(
           scope.value,
           reached.map((profile) => profile.id),
         )
