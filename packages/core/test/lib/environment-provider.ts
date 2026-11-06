@@ -23,6 +23,8 @@ export const make = (
     readonly egress?: boolean
     readonly canMount?: boolean
     readonly canColocate?: boolean
+    readonly canLimitHosts?: boolean
+    readonly build?: (config: typeof Config.Type) => Effect.Effect<string, MachineProvider.Failed>
     readonly endpoint?: (environmentId: Environment.ID) => Effect.Effect<{ readonly url: string }, MachineProvider.Gone>
   } = {},
 ) =>
@@ -35,6 +37,7 @@ export const make = (
       options.endpoint ??
       ((environmentId: Environment.ID): Effect.Effect<{ readonly url: string }, MachineProvider.Gone> =>
         Effect.succeed({ url: `http://${environmentId.toLowerCase()}.test/` }))
+    const build = options.build
     const provider = MachineProvider.make({
       id: EnvironmentProvider.ID.make(options.id ?? "test"),
       title: "Test",
@@ -43,6 +46,7 @@ export const make = (
       canMount: options.canMount ?? false,
       canSample: false,
       canColocate: options.canColocate ?? false,
+      canLimitHosts: options.canLimitHosts ?? false,
       config: Config,
       binding: Schema.Struct({ environmentId: Environment.ID }),
       create: (input) =>
@@ -59,6 +63,7 @@ export const make = (
           return yield* endpoint(binding.environmentId)
         }),
       destroy: (binding) => Ref.update(destroyed, (all) => [...all, binding.environmentId]),
+      ...(build && { build: (input: { readonly config: typeof Config.Type }) => build(input.config) }),
     })
     return { provisions, destroyed, gone, failing, provider } satisfies Probe
   })

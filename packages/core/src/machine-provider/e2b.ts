@@ -1,10 +1,12 @@
 export * as E2BSandbox from "./e2b.js"
 
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { App } from "@ren/schema/app"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { Identifier } from "@ren/schema/identifier"
 import { Space } from "@ren/schema/space"
-import { Config, DateTime, Duration, Effect, Option, Redacted, Schema } from "effect"
+import { Config, DateTime, Duration, Effect, Option, Redacted, Schedule, Schema } from "effect"
 import { HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import { EnvironmentProvider } from "../environment-provider.js"
 import { MachineProvider } from "../machine-provider.js"
@@ -89,6 +91,65 @@ const Measured = Schema.Struct({
 })
 
 const pageSize = 100
+
+// oxlint-disable-next-line ren/no-comments -- A template's config (templates rule 1). E2B fixes CPU and memory when it builds an image, so they are build settings. A brain without a template decodes {} to the defaults.
+const TemplateConfig = Schema.Struct({
+  cpuCount: Schema.Literals([1, 2, 4, 6, 8])
+    .annotate({ title: "CPUs", description: "E2B fixes the size of a machine when it builds the image." })
+    .pipe(Schema.withDecodingDefaultKey(Effect.succeed(2 as const))),
+  memoryMiB: Schema.Literals([1024, 2048, 4096, 6144, 8192])
+    .annotate({ title: "Memory (MiB)" })
+    .pipe(Schema.withDecodingDefaultKey(Effect.succeed(2048 as const))),
+  ...App.Environment.fields,
+}).annotate({ title: "E2B" })
+
+const Tags = Schema.Array(Schema.Struct({ tag: Schema.String }))
+
+const Requested = Schema.Struct({ templateID: Schema.String, buildID: Schema.String })
+
+const BuildStatus = Schema.Struct({
+  status: Schema.String,
+  reason: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        message: Schema.optional(Schema.String),
+        logEntries: Schema.optional(Schema.NullOr(Schema.Array(Schema.Struct({ message: Schema.String })))),
+      }),
+    ),
+  ),
+})
+
+const buildCheckedEvery = Duration.seconds(5)
+
+const logLinesShown = 8
+
+const startCommand = "/opt/ren/start.sh"
+
+const quoteAll = (names: ReadonlyArray<string> | undefined) => (names ?? []).map(quote).join(" ")
+
+// oxlint-disable-next-line ren/no-comments -- Templates rule 4: one RUN per package manager, as root, which installs the manager when the system image lacks it; then one RUN per build command, as the sandbox user.
+const stepsOf = (config: typeof TemplateConfig.Type) => {
+  const root = (command: string) => ({ type: "RUN", args: [command, "root"], force: false })
+  const apt = "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y"
+  const packages = config.packages
+  return [
+    ...(packages.apt?.length ? [root(`${apt} ${quoteAll(packages.apt)}`)] : []),
+    ...(packages.npm?.length
+      ? [root(`(command -v npm || (${apt} nodejs npm)) && npm install -g ${quoteAll(packages.npm)}`)]
+      : []),
+    ...(packages.pip?.length
+      ? [
+          root(
+            `(command -v pip3 || (${apt} python3-pip)) && pip3 install --break-system-packages ${quoteAll(packages.pip)}`,
+          ),
+        ]
+      : []),
+    ...(packages.go?.length
+      ? [root(`(command -v go || (${apt} golang-go)) && GOBIN=/usr/local/bin go install ${quoteAll(packages.go)}`)]
+      : []),
+    ...config.buildCommands.map((command) => ({ type: "RUN", args: [command, "user"], force: false })),
+  ]
+}
 
 const failed = (operation: string) => (error: { readonly message: string }) =>
   new MachineProvider.Failed({ message: `E2B ${operation}: ${error.message}` })
@@ -225,8 +286,9 @@ export const provider = Effect.gen(function* () {
     canMount: true,
     canSample: true,
     canColocate: true,
+    canLimitHosts: true,
     template: config.template,
-    config: Schema.Struct({}),
+    config: TemplateConfig,
     binding: Binding,
     create: Effect.fn("E2BSandbox.create")(function* (input) {
       const metadata = { brain: input.labels.id, generation: String(input.labels.generation) }
@@ -278,6 +340,70 @@ export const provider = Effect.gen(function* () {
       yield* body("connect", response)
       yield* updateNetwork(binding, proxy)
       return { url: urlOf(binding) }
+    }),
+    // oxlint-disable-next-line ren/no-comments -- The image is a tag of the template's own E2B template, named by a hash of the system image and the config, so a config built before gives its image at once.
+    build: Effect.fn("E2BSandbox.build")(function* (input) {
+      const name = `ren-template-${Identifier.suffix(input.environmentTemplateId).toLowerCase()}`
+      const tag = new Bun.CryptoHasher("sha256")
+        .update(`${config.template}\0${JSON.stringify(input.config)}`)
+        .digest("hex")
+        .slice(0, 16)
+      const decode =
+        <A>(operation: string, schema: Schema.Codec<A, unknown>) =>
+        (text: string) =>
+          Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(text).pipe(Effect.mapError(failed(operation)))
+      const tags = yield* send("tags", HttpClientRequest.get(`/templates/${name}/tags`))
+      if (
+        tags.status === 200 &&
+        (yield* tags.text.pipe(Effect.mapError(failed("tags")), Effect.flatMap(decode("tags", Tags)))).some(
+          (existing) => existing.tag === tag,
+        )
+      )
+        return `${name}:${tag}`
+      const requested = yield* send(
+        "build",
+        HttpClientRequest.post("/v3/templates").pipe(
+          HttpClientRequest.bodyJsonUnsafe({
+            name,
+            tags: [tag],
+            cpuCount: input.config.cpuCount,
+            memoryMB: input.config.memoryMiB,
+          }),
+        ),
+      ).pipe(
+        Effect.flatMap((response) => strict("build", response)),
+        Effect.flatMap(decode("build", Requested)),
+      )
+      const build = `/templates/${requested.templateID}/builds/${requested.buildID}`
+      yield* send(
+        "build",
+        HttpClientRequest.post(`/v2${build}`).pipe(
+          HttpClientRequest.bodyJsonUnsafe({
+            fromTemplate: config.template,
+            steps: stepsOf(input.config),
+            startCmd: startCommand,
+            readyCmd: `pgrep -f ${startCommand}`,
+            force: false,
+          }),
+        ),
+      ).pipe(Effect.flatMap((response) => strict("build", response)))
+      const finished = yield* send("build status", HttpClientRequest.get(`${build}/status`)).pipe(
+        Effect.flatMap((response) => strict("build status", response)),
+        Effect.flatMap(decode("build status", BuildStatus)),
+        Effect.repeat({
+          schedule: Schedule.spaced(buildCheckedEvery),
+          until: (status) => status.status === "ready" || status.status === "error",
+        }),
+      )
+      // oxlint-disable-next-line ren/no-comments -- The last lines of the build log say which package or command failed; the admin sees them as the template's build error.
+      if (finished.status === "error")
+        return yield* new MachineProvider.Failed({
+          message: [
+            finished.reason?.message ?? "The build failed",
+            ...(finished.reason?.logEntries ?? []).slice(-logLinesShown).map((entry) => entry.message),
+          ].join("\n"),
+        })
+      return `${name}:${tag}`
     }),
     keepAlive: Effect.fn("E2BSandbox.keepAlive")(function* (binding, duration) {
       const response = yield* send(

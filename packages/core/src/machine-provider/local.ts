@@ -80,6 +80,7 @@ export const provider = (options: {
       canMount: false,
       canSample: true,
       canColocate: true,
+      canLimitHosts: false,
       ...(options.template && { template: options.template }),
       config: Schema.Struct({}),
       binding: Binding,
