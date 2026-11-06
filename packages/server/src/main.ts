@@ -71,6 +71,8 @@ import { SlackApp } from "@ren/core/slack-app"
 import { SlackTaskCard } from "@ren/core/slack-task-card"
 import { TaskCard } from "@ren/core/task-card"
 import { EgressControl } from "@ren/core/egress-control"
+import { EnvironmentNetwork } from "@ren/core/environment-network"
+import { AppResolve } from "@ren/core/app/resolve"
 
 const host = Layer.unwrap(
   Effect.gen(function* () {
@@ -92,6 +94,7 @@ const host = Layer.unwrap(
           // oxlint-disable-next-line ren/no-comments -- An E2B brain without the egress would fetch the real model key, and in e2b-space the agent's code runs in the same sandbox, so the server does not start without EGRESS_PROXY_ADDRESS.
           Layer.provide(provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig),
           Layer.provide(Bundles.layer),
+          Layer.provide(EnvironmentNetwork.layer.pipe(Layer.provide(AppResolve.layer))),
         ),
       ),
       Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),

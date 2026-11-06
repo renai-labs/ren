@@ -8,9 +8,18 @@ export interface Bundled extends Bundle.Info {
   readonly token: string
 }
 
-// oxlint-disable-next-line ren/no-comments -- How a machine takes newer bundles of Ren's code at a wake (EN27). Only a machine that runs start.sh can; any other host is replaced instead.
+// oxlint-disable-next-line ren/no-comments -- A command of the machine's template, as root or as the machine's user (EN22).
+export interface Step {
+  readonly command: string
+  readonly user: "root" | "user"
+}
+
+// oxlint-disable-next-line ren/no-comments -- How a machine takes newer bundles of Ren's code and its template's new steps at a wake (EN22, EN27). Only a machine that runs start.sh can; any other host is replaced instead.
 export interface Interface {
-  readonly update: (bundles: ReadonlyArray<Bundled>) => Effect.Effect<void, BrainRejectedError>
+  readonly update: (
+    bundles: ReadonlyArray<Bundled>,
+    steps: ReadonlyArray<Step>,
+  ) => Effect.Effect<void, BrainRejectedError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/cell/CodeUpdate") {}

@@ -20,12 +20,24 @@ const envFile = "/home/user/.ren/brain.env"
 
 export const caFile = "/home/user/.ren/egress-ca.pem"
 
-// oxlint-disable-next-line ren/no-comments -- E2B sends host names to the proxy only when a domain entry allows the connection; `*` with a deny of all IP ranges sends every connection to the proxy by name (README §11a rows 1 and 2). An update replaces the whole config, so each one repeats the proxy.
-const networkOf = (proxy: MachineProvider.Proxy) => ({
-  allowOut: ["*"],
-  denyOut: ["0.0.0.0/0"],
-  egressProxy: { address: proxy.address, username: proxy.username, password: Redacted.value(proxy.password) },
-})
+// oxlint-disable-next-line ren/no-comments -- E2B sends host names to the proxy only when a domain entry allows the connection; `*` with a deny of all IP ranges sends every connection to the proxy by name (README §11a rows 1 and 2). A host list allows only its hosts, and `*.x.com` also allows `x.com` (networking rule 3). An update replaces the whole config, so each one repeats the proxy. None: E2B's default, any host.
+const networkOf = (network: MachineProvider.Network) => {
+  if (Option.isNone(network.proxy) && Option.isNone(network.hosts)) return Option.none()
+  const allowOut = Option.match(network.hosts, {
+    onNone: () => ["*"],
+    onSome: (hosts) => [...new Set(hosts.flatMap((host) => (host.startsWith("*.") ? [host, host.slice(2)] : [host])))],
+  })
+  return Option.some({
+    allowOut,
+    denyOut: ["0.0.0.0/0"],
+    ...Option.match(network.proxy, {
+      onNone: () => ({}),
+      onSome: (proxy) => ({
+        egressProxy: { address: proxy.address, username: proxy.username, password: Redacted.value(proxy.password) },
+      }),
+    }),
+  })
+}
 
 const createTimeout = Duration.minutes(10)
 
@@ -128,8 +140,8 @@ const startCommand = "/opt/ren/start.sh"
 const quoteAll = (names: ReadonlyArray<string> | undefined) => (names ?? []).map(quote).join(" ")
 
 // oxlint-disable-next-line ren/no-comments -- Templates rule 4: one RUN per package manager, as root, which installs the manager when the system image lacks it; then one RUN per build command, as the sandbox user.
-const stepsOf = (config: typeof TemplateConfig.Type) => {
-  const root = (command: string) => ({ type: "RUN", args: [command, "root"], force: false })
+const stepsOf = (config: Pick<typeof TemplateConfig.Type, "packages" | "buildCommands">) => {
+  const root = (command: string): MachineProvider.Step => ({ command, user: "root" })
   const apt = "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y"
   const packages = config.packages
   return [
@@ -147,8 +159,29 @@ const stepsOf = (config: typeof TemplateConfig.Type) => {
     ...(packages.go?.length
       ? [root(`(command -v go || (${apt} golang-go)) && GOBIN=/usr/local/bin go install ${quoteAll(packages.go)}`)]
       : []),
-    ...config.buildCommands.map((command) => ({ type: "RUN", args: [command, "user"], force: false })),
+    ...config.buildCommands.map((command): MachineProvider.Step => ({ command, user: "user" })),
   ]
+}
+
+const managers = ["apt", "npm", "pip", "go"] as const
+
+// oxlint-disable-next-line ren/no-comments -- Templates rules 2 and 3: a config that keeps the size, keeps every package and only appends build commands changes a machine in place, with the steps of what it adds.
+const stepsBetween = (from: typeof TemplateConfig.Type, to: typeof TemplateConfig.Type) => {
+  const added = (manager: (typeof managers)[number]) =>
+    (to.packages[manager] ?? []).filter((name) => !(from.packages[manager] ?? []).includes(name))
+  const keeps =
+    from.cpuCount === to.cpuCount &&
+    from.memoryMiB === to.memoryMiB &&
+    managers.every((manager) => (from.packages[manager] ?? []).every((name) => to.packages[manager]?.includes(name))) &&
+    from.buildCommands.every((command, index) => to.buildCommands[index] === command)
+  return keeps
+    ? Option.some(
+        stepsOf({
+          packages: Object.fromEntries(managers.map((manager) => [manager, added(manager)])),
+          buildCommands: to.buildCommands.slice(from.buildCommands.length),
+        }),
+      )
+    : Option.none()
 }
 
 const failed = (operation: string) => (error: { readonly message: string }) =>
@@ -263,15 +296,17 @@ export const provider = Effect.gen(function* () {
       .join("\n")
     yield* upload(binding, accessToken, envFile, `${content}\n`)
   })
+  // oxlint-disable-next-line ren/no-comments -- Networking rule 4: every connect sends the current host list. E2B refuses a network update of a paused sandbox, so it comes after connect.
   const updateNetwork = Effect.fn("E2BSandbox.updateNetwork")(function* (
     binding: Binding,
-    proxy: Option.Option<MachineProvider.Proxy>,
+    network: MachineProvider.Network,
   ) {
-    if (Option.isNone(proxy)) return
+    const rules = networkOf(network)
+    if (Option.isNone(rules)) return
     const response = yield* send(
       "network",
       HttpClientRequest.put(`/sandboxes/${binding.sandboxId}/network`).pipe(
-        HttpClientRequest.bodyJsonUnsafe(networkOf(proxy.value)),
+        HttpClientRequest.bodyJsonUnsafe(rules.value),
       ),
     )
     if (response.status === 404) return yield* gone(binding)
@@ -290,12 +325,13 @@ export const provider = Effect.gen(function* () {
     template: config.template,
     config: TemplateConfig,
     binding: Binding,
+    stepsBetween,
     create: Effect.fn("E2BSandbox.create")(function* (input) {
       const metadata = { brain: input.labels.id, generation: String(input.labels.generation) }
       const existing = (yield* list(metadata, "running,paused")).at(0)
       if (existing) {
         const binding = { sandboxId: existing.sandboxID, domain: config.domain, port: config.port }
-        yield* updateNetwork(binding, input.proxy).pipe(
+        yield* updateNetwork(binding, input.network).pipe(
           Effect.catchTag("MachineProvider.Gone", (error) => Effect.fail(failed("network")(error))),
         )
         return { binding, url: urlOf(binding) }
@@ -310,13 +346,13 @@ export const provider = Effect.gen(function* () {
         "create",
         HttpClientRequest.post("/sandboxes").pipe(
           HttpClientRequest.bodyJsonUnsafe({
-            templateID: config.template,
+            templateID: Option.getOrElse(input.image, () => config.template),
             timeout: Duration.toSeconds(createTimeout),
             autoPause: true,
             secure: true,
             metadata: { owner, ...metadata, organization: input.labels.organizationId, space: input.labels.spaceId },
             envVars: input.variables,
-            ...Option.match(input.proxy, { onNone: () => ({}), onSome: (proxy) => ({ network: networkOf(proxy) }) }),
+            ...Option.match(networkOf(input.network), { onNone: () => ({}), onSome: (network) => ({ network }) }),
           }),
         ),
       )
@@ -326,10 +362,10 @@ export const provider = Effect.gen(function* () {
         ),
       )
       const binding = { sandboxId: created.sandboxID, domain: created.domain ?? config.domain, port: config.port }
-      yield* configure(binding, Option.fromNullishOr(created.envdAccessToken), input.variables, input.proxy)
+      yield* configure(binding, Option.fromNullishOr(created.envdAccessToken), input.variables, input.network.proxy)
       return { binding, url: urlOf(binding) }
     }),
-    connect: Effect.fn("E2BSandbox.connect")(function* (binding, proxy) {
+    connect: Effect.fn("E2BSandbox.connect")(function* (binding, network) {
       const response = yield* send(
         "connect",
         HttpClientRequest.post(`/sandboxes/${binding.sandboxId}/connect`).pipe(
@@ -338,7 +374,7 @@ export const provider = Effect.gen(function* () {
       )
       if (response.status === 404) return yield* gone(binding)
       yield* body("connect", response)
-      yield* updateNetwork(binding, proxy)
+      yield* updateNetwork(binding, network)
       return { url: urlOf(binding) }
     }),
     // oxlint-disable-next-line ren/no-comments -- The image is a tag of the template's own E2B template, named by a hash of the system image and the config, so a config built before gives its image at once.
@@ -380,7 +416,11 @@ export const provider = Effect.gen(function* () {
         HttpClientRequest.post(`/v2${build}`).pipe(
           HttpClientRequest.bodyJsonUnsafe({
             fromTemplate: config.template,
-            steps: stepsOf(input.config),
+            steps: stepsOf(input.config).map((step) => ({
+              type: "RUN",
+              args: [step.command, step.user],
+              force: false,
+            })),
             startCmd: startCommand,
             readyCmd: `pgrep -f ${startCommand}`,
             force: false,

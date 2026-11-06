@@ -1,6 +1,7 @@
 export * as MachineLifecycle from "./machine-lifecycle.js"
 
 import type { Auth } from "@ren/schema/auth"
+import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import type { Machine } from "@ren/schema/machine"
 import type { Space } from "@ren/schema/space"
 import { Cause, Clock, DateTime, Duration, Effect, ErrorReporter, Option, Schedule, Schema } from "effect"
@@ -52,7 +53,9 @@ export interface Row<Id extends string> {
   readonly space_id: Space.ID
   readonly provider: string | null
   readonly binding: Schema.Json | null
+  // oxlint-disable-next-line ren/no-comments -- The image the machine runs, and the template config it was built from when it is a template's image.
   readonly template: string | null
+  readonly template_config: TemplateConfig | null
   readonly egress: boolean
   readonly url: string | null
   readonly generation: number
@@ -66,6 +69,17 @@ export interface Row<Id extends string> {
   readonly retry_at: Date | null
   readonly retries: number
   readonly unanswered_since: Date | null
+}
+
+export interface TemplateConfig {
+  readonly environmentTemplateId: EnvironmentTemplate.ID
+  readonly config: Schema.Json
+}
+
+// oxlint-disable-next-line ren/no-comments -- What the owner wants for its machine now: a template's image (none: the provider's own), and the hosts it may reach (none: any).
+export interface Wanted {
+  readonly image: Option.Option<{ readonly name: string; readonly template: TemplateConfig }>
+  readonly hosts: Option.Option<ReadonlyArray<string>>
 }
 
 export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
@@ -91,6 +105,7 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly proxyFor: (row: R) => Effect.Effect<Option.Option<MachineProvider.Proxy>>
   readonly retire: (id: Id) => Effect.Effect<void>
   readonly variables: (row: R) => Effect.Effect<Readonly<Record<string, string>>>
+  readonly wants: (row: R) => Effect.Effect<Wanted>
   // oxlint-disable-next-line ren/no-comments -- The kind's own columns of a new machine, written before the machine's, so a crash between the two leaves a row that creates again.
   readonly created: (id: Id) => Effect.Effect<void>
   readonly target: (row: R) => Option.Option<Target>
@@ -101,8 +116,12 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly answers: (target: Target) => Effect.Effect<boolean>
   // oxlint-disable-next-line ren/no-comments -- Whether the machine's code is current when it wakes: `update` in place, or `replace` when it cannot be updated in place (EN22, EN27).
   readonly outdated: (row: R) => Effect.Effect<"current" | "update" | "replace">
-  // oxlint-disable-next-line ren/no-comments -- The in-place update of a woken machine: none when the new version answers, or the reason it did not.
-  readonly updateInPlace: (row: R, target: Target) => Effect.Effect<Option.Option<string>, E>
+  // oxlint-disable-next-line ren/no-comments -- The in-place update of a woken machine: Ren's code when it is outdated, then the steps to its template's new config. None when it worked, or the reason it did not.
+  readonly updateInPlace: (
+    row: R,
+    target: Target,
+    steps: ReadonlyArray<MachineProvider.Step>,
+  ) => Effect.Effect<Option.Option<string>, E>
 }
 
 const reasonOf = (sample: MachineProvider.Sample | undefined) => {
@@ -120,6 +139,20 @@ const startKinds: Readonly<Partial<Record<Machine.Phase, string>>> = {
 const afterResume = { current: "waking", update: "updating", replace: "replacing" } as const
 
 const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
+
+const imageOf = (wanted: Wanted, provider: MachineProvider.Provider) =>
+  Option.match(wanted.image, { onNone: () => provider.template, onSome: (image) => image.name })
+
+// oxlint-disable-next-line ren/no-comments -- EN22: the steps that bring a machine to the image its owner wants, in place: none needed, the steps between two configs of its template, or none possible (a replace; templates rule 3).
+const stepsTo = <Id extends string>(row: Row<Id>, wanted: Wanted, provider: MachineProvider.Provider) => {
+  const image = imageOf(wanted, provider)
+  if (!image || !row.template || row.template === image) return Option.some<ReadonlyArray<MachineProvider.Step>>([])
+  const from = row.template_config
+  return Option.flatMap(
+    Option.filter(wanted.image, (found) => from?.environmentTemplateId === found.template.environmentTemplateId),
+    (found) => (from ? provider.stepsBetween(from.config, found.template.config) : Option.none()),
+  )
+}
 
 export const make = <Id extends string, R extends Row<Id>, Target, E>(definition: Definition<Id, R, Target, E>) => {
   const name = definition.name
@@ -199,13 +232,15 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const create = Effect.fnUntraced(function* (row: R) {
     const provider = yield* definition.providerOf(row)
     const proxy = yield* proxyOf(row, provider)
+    const wanted = yield* definition.wants(row)
     const created = yield* provider
       .create({
         labels: { id: row.id, generation: row.generation, organizationId: row.organization_id, spaceId: row.space_id },
         config: {},
+        image: Option.map(wanted.image, (image) => image.name),
         // oxlint-disable-next-line ren/no-comments -- Behind an egress, the machine calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49).
         variables: { ...(yield* definition.variables(row)), ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },
-        proxy,
+        network: { proxy, hosts: wanted.hosts },
       })
       .pipe(
         Effect.map(Option.some),
@@ -218,7 +253,8 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     yield* update(row.id, {
       provider: provider.info.id,
       binding: created.value.binding,
-      template: provider.template,
+      template: imageOf(wanted, provider),
+      template_config: Option.match(wanted.image, { onNone: () => null, onSome: (image) => image.template }),
       egress: Option.isSome(proxy),
       url: created.value.url,
       phase: "booting",
@@ -246,9 +282,13 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const resume = Effect.fnUntraced(function* (row: R) {
     if (!row.binding) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
     const provider = yield* definition.providerOf(row)
-    // oxlint-disable-next-line ren/no-comments -- An asleep machine on an older build moves to the current one by a replace (E120). Only this step checks, so a running machine is never replaced for its build.
-    if (row.template && provider.template && row.template !== provider.template) {
-      yield* Effect.logInfo(`${noun} ${row.id} runs build ${row.template}; Ren replaces it with ${provider.template}`)
+    // oxlint-disable-next-line ren/no-comments -- An asleep machine on another image moves to the wanted one at its wake: in place when its template's steps can, or by a replace (E120, EN21). Only this step checks, so a running machine is never changed for its image.
+    const wanted = yield* definition.wants(row)
+    const steps = stepsTo(row, wanted, provider)
+    if (Option.isNone(steps)) {
+      yield* Effect.logInfo(
+        `${noun} ${row.id} runs image ${row.template}; Ren replaces it with ${imageOf(wanted, provider)}`,
+      )
       return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
     }
     // oxlint-disable-next-line ren/no-comments -- A machine built for the other egress mode would get the wrong keys; it moves to the current one by a replace, as for a build (E120).
@@ -258,13 +298,15 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       )
       return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
     }
-    const connected = yield* provider.connect(row.binding, yield* proxyOf(row, provider)).pipe(
-      Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
-      Effect.catchTag("MachineProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
-      Effect.catchTag("MachineProvider.Capacity", (error) =>
-        waitForCapacity(row, error).pipe(Effect.as({ _tag: "Waited" } as const)),
-      ),
-    )
+    const connected = yield* provider
+      .connect(row.binding, { proxy: yield* proxyOf(row, provider), hosts: wanted.hosts })
+      .pipe(
+        Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
+        Effect.catchTag("MachineProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
+        Effect.catchTag("MachineProvider.Capacity", (error) =>
+          waitForCapacity(row, error).pipe(Effect.as({ _tag: "Waited" } as const)),
+        ),
+      )
     if (connected._tag === "Waited") return false
     if (connected._tag === "Gone") {
       yield* report(row, new Replaced({ message: `${noun} ${row.id} is gone at its wake` }))
@@ -275,17 +317,29 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const code = yield* definition.outdated(row)
     if (code === "replace")
       yield* Effect.logInfo(`${noun} ${row.id} runs code that cannot update in place; Ren replaces it`)
-    yield* update(row.id, { phase: afterResume[code] })
+    yield* update(row.id, { phase: code === "current" && steps.value.length > 0 ? "updating" : afterResume[code] })
     return false
   })
 
   // oxlint-disable-next-line ren/no-comments -- EN27: three failed updates replace the machine; its failures count from zero again on the new one.
   const updating = Effect.fnUntraced(function* (row: R) {
     const target = Option.getOrUndefined(definition.target(row))
-    if (!target) return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
-    const failure = yield* definition.updateInPlace(row, target)
+    const provider = yield* definition.providerOf(row)
+    const wanted = yield* definition.wants(row)
+    const steps = stepsTo(row, wanted, provider)
+    if (!target || Option.isNone(steps)) return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+    const failure = yield* definition.updateInPlace(row, target, steps.value)
     if (Option.isNone(failure))
-      return yield* update(row.id, { phase: "waking", failures: 0, failure: null }).pipe(Effect.as(false))
+      return yield* update(row.id, {
+        phase: "waking",
+        failures: 0,
+        failure: null,
+        template: imageOf(wanted, provider),
+        template_config: Option.match(wanted.image, {
+          onNone: () => row.template_config,
+          onSome: (image) => image.template,
+        }),
+      }).pipe(Effect.as(false))
     const failures = row.failures + 1
     yield* Effect.logWarning(`${noun} ${row.id} did not update (${failures}/${timing.failures}): ${failure.value}`)
     yield* update(

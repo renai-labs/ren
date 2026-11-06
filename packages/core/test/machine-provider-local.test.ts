@@ -8,6 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { LocalSandbox } from "../src/machine-provider/local.js"
+import { MachineProvider } from "../src/machine-provider.js"
 import { testEffect } from "./lib/effect.js"
 
 const it = testEffect(Layer.empty)
@@ -40,7 +41,8 @@ it.live("a brain whose owner process dies is killed with its whole process group
           },
           config: {},
           variables: {},
-          proxy: Option.none(),
+          image: Option.none(),
+          network: MachineProvider.unrestricted,
         })
       const running = yield* create(1)
       const paused = yield* create(2)

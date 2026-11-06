@@ -2,7 +2,7 @@ export * as BrainLifecycle from "./brain-lifecycle.js"
 
 import { Observability } from "@ren/schema/observability"
 import { Database } from "@ren/db/database"
-import type { State as BrainState } from "@ren/host-api/brain-api"
+import type { State as BrainState, UpdateBody } from "@ren/host-api/brain-api"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import type { Bundle } from "@ren/schema/bundle"
@@ -16,6 +16,7 @@ import { BrainClient } from "./brain-client.js"
 import { Bundles } from "./bundles.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Deployment } from "./deployment.js"
+import { EnvironmentNetwork } from "./environment-network.js"
 import { Environments } from "./environments.js"
 import type { MachineAccess } from "./machine-access.js"
 import { MachineLifecycle } from "./machine-lifecycle.js"
@@ -53,6 +54,9 @@ const BrainRun = DurableRunner.make("BrainRun", {
 
 const brains = Database.Schema.brain
 
+// oxlint-disable-next-line ren/no-comments -- Package installs at a wake can take minutes; a build that runs longer fails (templates rule 3).
+const stepsWithin = Duration.minutes(10)
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -70,6 +74,12 @@ export const layer = Layer.effect(
       Config.withDefault(MachineLifecycle.timing.boot),
     )
     const sandboxVariables = yield* Deployment.sandboxVariables
+    const network = yield* EnvironmentNetwork.Service
+    // oxlint-disable-next-line ren/no-comments -- EN40: a co-located machine runs the brain too, so a limited host list also has Ren's server and inference.
+    const renHosts = [
+      client.renUrl,
+      ...Option.toArray(yield* Config.option(Config.String("REN_INFERENCE_URL"))),
+    ].flatMap((url) => Option.toArray(Option.fromNullishOr(URL.parse(url)?.hostname)))
 
     const read = (brainId: Brain.ID) =>
       database.db
@@ -196,6 +206,10 @@ export const layer = Layer.effect(
         })),
       )
     const treeOf = (versions: Readonly<Record<Bundle.Kind, string>>) => `${versions.brain}-${versions.dependencies}`
+    const isCurrent = (row: Row, bundles: ReadonlyArray<Bundle.Info>) => {
+      const versions = versionsOf(bundles)
+      return (["dependencies", "brain", "executor"] as const).every((kind) => row.bundles?.[kind] === versions[kind])
+    }
 
     // oxlint-disable-next-line ren/no-comments -- A brain goes behind the egress when this Ren runs one and its provider can route a sandbox through it. The answer is kept on the row (egress); every later step reads the row, never the setting.
     const isBehindEgress = (provider: MachineProvider.Provider) => egress.enabled && provider.canEgress
@@ -221,6 +235,40 @@ export const layer = Layer.effect(
             onSome: Effect.succeed,
           })
         : chosen(row.space_id)
+
+    // oxlint-disable-next-line ren/no-comments -- A co-located hand with a template: the machine runs the template's last image that built, and keeps to its host list (EN3, networking rules 1, 2).
+    const wants = Effect.fnUntraced(function* (row: Row) {
+      const templates = Database.Schema.environment_template
+      const found = (yield* database.db
+        .select({
+          placement: Database.Schema.space.hand_placement,
+          id: templates.id,
+          image: templates.image,
+          config: templates.image_config,
+          networking: templates.networking,
+        })
+        .from(Database.Schema.space)
+        .leftJoin(
+          templates,
+          and(eq(templates.id, Database.Schema.space.environment_template_id), isNull(templates.archived_at)),
+        )
+        .where(eq(Database.Schema.space.id, row.space_id))
+        .pipe(Effect.orDie)).at(0)
+      if (found?.placement !== "colocated" || !found.id || !found.networking)
+        return { image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.Wanted
+      const template = { environmentTemplateId: found.id, config: found.config }
+      const hosts = yield* network.hostsOf({ kind: "brain", id: row.id, generation: row.generation }, found.networking)
+      return {
+        image: Option.map(
+          Option.all({ name: Option.fromNullishOr(found.image), config: Option.fromNullishOr(template.config) }),
+          (built) => ({
+            name: built.name,
+            template: { environmentTemplateId: template.environmentTemplateId, config: built.config },
+          }),
+        ),
+        hosts: Option.map(hosts, (list) => [...new Set([...list, ...renHosts])]),
+      } satisfies MachineLifecycle.Wanted
+    })
 
     const machines = MachineLifecycle.make({
       name: "BrainLifecycle",
@@ -273,6 +321,7 @@ export const layer = Layer.effect(
       proxyFor: (row) =>
         egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id }),
       retire: egress.retire,
+      wants,
       variables: Effect.fnUntraced(function* (row) {
         const bundles = yield* wanted
         return {
@@ -353,35 +402,39 @@ export const layer = Layer.effect(
         const bundles = yield* wanted
         if (Option.isNone(bundles)) return "current" as const
         if (!row.bundles) return "replace" as const
-        const versions = versionsOf(bundles.value)
-        return (["dependencies", "brain", "executor"] as const).every((kind) => row.bundles?.[kind] === versions[kind])
-          ? ("current" as const)
-          : ("update" as const)
+        return isCurrent(row, bundles.value) ? ("current" as const) : ("update" as const)
       }),
-      // oxlint-disable-next-line ren/no-comments -- The brain unpacks the bundles and restarts what changed; the update counts when the brain answers with the new version within the boot time (EN27).
-      updateInPlace: Effect.fnUntraced(function* (row, target) {
+      // oxlint-disable-next-line ren/no-comments -- The brain unpacks the bundles and restarts what changed; the update counts when the brain answers with the new version within the boot time (EN27). Then, on its current code, it runs its template's new steps (EN22).
+      updateInPlace: Effect.fnUntraced(function* (row, target, steps) {
         const bundles = yield* wanted
-        if (Option.isNone(bundles)) return Option.none()
         const api = yield* client.brain(target)
-        const sent = yield* api.brain["brain.update"]({ payload: { bundles: yield* withTokens(bundles.value) } }).pipe(
-          Effect.timeoutOption(bootWithin),
-          Effect.map((answered) => (Option.isSome(answered) ? Option.none() : Option.some("the brain did not answer"))),
-          Effect.catch((error) => Effect.succeed(Option.some(error.message))),
-        )
-        if (Option.isSome(sent)) return sent
-        const tree = treeOf(versionsOf(bundles.value))
-        const answered = yield* api.brain["brain.state"]().pipe(
-          Effect.flatMap((state) =>
-            state.version === tree ? Effect.succeed(state) : Effect.fail(new Error(`still ${state.version}`)),
-          ),
-          Effect.retry({ schedule: Schedule.spaced(MachineLifecycle.timing.poll) }),
-          Effect.timeoutOption(bootWithin),
-          Effect.option,
-        )
-        if (Option.isNone(answered) || Option.isNone(answered.value))
-          return Option.some(`the brain did not answer with version ${tree} within ${Duration.format(bootWithin)}`)
-        yield* update(row.id, { bundles: versionsOf(bundles.value) })
-        return Option.none()
+        const send = (payload: typeof UpdateBody.Type, within: Duration.Duration) =>
+          api.brain["brain.update"]({ payload }).pipe(
+            Effect.timeoutOption(within),
+            Effect.map((answered) =>
+              Option.isSome(answered) ? Option.none() : Option.some("the brain did not answer"),
+            ),
+            Effect.catch((error) => Effect.succeed(Option.some(error.message))),
+          )
+        const current = Option.isSome(bundles) ? yield* withTokens(bundles.value) : []
+        if (Option.isSome(bundles) && !isCurrent(row, bundles.value)) {
+          const sent = yield* send({ bundles: current }, bootWithin)
+          if (Option.isSome(sent)) return sent
+          const tree = treeOf(versionsOf(bundles.value))
+          const answered = yield* api.brain["brain.state"]().pipe(
+            Effect.flatMap((state) =>
+              state.version === tree ? Effect.succeed(state) : Effect.fail(new Error(`still ${state.version}`)),
+            ),
+            Effect.retry({ schedule: Schedule.spaced(MachineLifecycle.timing.poll) }),
+            Effect.timeoutOption(bootWithin),
+            Effect.option,
+          )
+          if (Option.isNone(answered) || Option.isNone(answered.value))
+            return Option.some(`the brain did not answer with version ${tree} within ${Duration.format(bootWithin)}`)
+          yield* update(row.id, { bundles: versionsOf(bundles.value) })
+        }
+        if (steps.length === 0) return Option.none()
+        return yield* send({ bundles: current, steps }, stepsWithin)
       }),
       answers: (target) =>
         client.brain(target).pipe(

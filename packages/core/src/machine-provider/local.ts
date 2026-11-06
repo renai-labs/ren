@@ -113,7 +113,7 @@ export const provider = (options: {
         const port = yield* freePort
         const handPort = yield* freePort
         const state = join(home, ".ren")
-        const ca = Option.flatMap(input.proxy, (proxy) => proxy.ca)
+        const ca = Option.flatMap(input.network.proxy, (proxy) => proxy.ca)
         if (Option.isSome(ca)) yield* Effect.promise(() => Bun.write(join(state, "egress-ca.pem"), ca.value))
         const child = spawn(
           "sh",
@@ -131,7 +131,7 @@ export const provider = (options: {
               PORT: String(port),
               EXECUTOR_HOST: "127.0.0.1",
               EXECUTOR_WORKSPACE: join(home, "workspace"),
-              ...Option.match(input.proxy, {
+              ...Option.match(input.network.proxy, {
                 onNone: () => ({}),
                 onSome: (proxy) => MachineProvider.proxyEnv(proxy, join(state, "egress-ca.pem")),
               }),

@@ -25,6 +25,7 @@ import { SandboxEgress } from "../../src/sandbox-egress.js"
 import { Drives } from "../../src/drives.js"
 import { DurableRunner } from "../../src/durable-runner.js"
 import { EnvironmentProvider } from "../../src/environment-provider.js"
+import { EnvironmentNetwork } from "../../src/environment-network.js"
 import { Environments } from "../../src/environments.js"
 import type { Models } from "../../src/models.js"
 import { LocalSandbox } from "../../src/machine-provider/local.js"
@@ -102,7 +103,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
     Layer.provideMerge(BrainHost.layerSandbox),
     Layer.provideMerge(
       BrainLifecycle.layer.pipe(
-        Layer.provide(SandboxEgress.layerNone),
+        Layer.provide(Layer.mergeAll(SandboxEgress.layerNone, EnvironmentNetwork.layerNone)),
         Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal))),
       ),
     ),
