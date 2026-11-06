@@ -200,7 +200,7 @@ Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, c
 
 ### Ren server
 
-1. One Ren server runs. `DurableRunner` uses Effect's `SingleRunner`, which is single-process. Ren gets a memory alarm and a load test (EN31).
+1. One Ren server runs. `DurableRunner` uses Effect's `SingleRunner`, which is single-process (EN31). Built: the load test of chaos row 58 (`e2e/script/sync-load.ts`). Measured on the local stack (macOS), 20 brains each syncing 8,387,746 bytes at once: Ren's memory peaked at 1030 MB and 1063 MB in two runs (from 270 MB and 224 MB, all 20 sent within 2 s), above the server's default 1024 MB (`infra/aws/variables.tf`), and was back under 150 MB 30 s later; about 40 MB per upload. Accepted for now (user, 2026-11-07); see §7.
 2. Environment tokens last 15 min. While Ren is down, a tool call uses the token it has. After Ren is back, the next call gets a new token within 30 s (EN32).
 3. Version N and version N-1 work together in both directions: Ren and the brain, and the brain and the executor (EN33).
 
@@ -212,7 +212,6 @@ Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, c
 | `core/machine-access.ts`   | `release`, `status` and `retire`, each with its first caller. Today: `ensure`, `access`, `check`, `retry`.                                              |
 | `core/machine-provider.ts` | `size` in `create` for a provider that sizes a machine there; the flag `canPause`. Built: `image`, `network`, `build`, `stepsBetween`, `canLimitHosts`. |
 | `environment-api`          | Later: a feature list in `hello`.                                                                                                                       |
-| `infra/aws`                | A memory alarm for the server.                                                                                                                          |
 
 Run `bun run generate` after the protocol changes.
 
@@ -240,7 +239,7 @@ Each pull request is based on the one before it. Each one passes its own rows of
 | 16  | `remote-hand-services`      | `REN_HAND_PLACEMENT`; `ToolOutput`, `FileSystem` and `Vcs` on the hand.                                 |
 | 17  | `remote-hand-egress`        | A remote hand behind the egress, with its space's credentials.                                          |
 | 18  | `remote-hand-snapshot`      | `Snapshot` on the hand: revert works on a remote hand.                                                  |
-| 19  | `soak-and-alarms`           | The 1-hour soak, the memory alarm, the load test.                                                       |
+| 19  | `soak-and-alarms`           | The load test (chaos row 58). The soak and rows 38, 39 run with the full suite before the last merge.   |
 
 ## 6. How to build it
 
@@ -290,3 +289,5 @@ Follow [`references/naming.md`](references/naming.md). The repository's `AGENTS.
 8. A harness-neutral transcript (e2b-brain E30), then Pi.
 9. A feature list in `executor.hello`, and a tool list built from it.
 10. UDP DNS to `8.8.8.8` leaves outside the firewall and the egress (E2B docs). Close it with `dnsServers` and a resolver that Ren runs.
+11. A memory alarm for the server. Infra has no notification target yet (no SNS topic), so an alarm would tell no one.
+12. Ren's memory under many large syncs at once (row 58 failed against 1024 MB): handle at most a few `uploadMessages` at once and answer 503 to the rest (brains retry), or a larger server.
