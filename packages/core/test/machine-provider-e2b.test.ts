@@ -352,3 +352,26 @@ describe("E2BSandbox metering", () => {
     }),
   )
 })
+
+describe("E2BSandbox hands", () => {
+  it.live("E2B's 502 for a sandbox that is not there is not an executor's answer; the executor's own 401 is", () =>
+    Effect.gen(function* () {
+      const edge = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: (request) =>
+          new URL(request.url).pathname.startsWith("/gone/")
+            ? Response.json({ message: "The sandbox was not found", code: 502 }, { status: 502 })
+            : Response.json({ _tag: "UnauthorizedError", message: "Authentication required" }, { status: 401 }),
+      })
+      yield* Effect.addFinalizer(() => Effect.promise(() => edge.stop(true)))
+      const http = yield* HttpClient.HttpClient
+      const answers = (path: string) =>
+        MachineProvider.executorAnswers(http, new URL(path, edge.url)).pipe(
+          Effect.as(true),
+          Effect.orElseSucceed(() => false),
+        )
+      expect([yield* answers("/gone/"), yield* answers("/")]).toEqual([false, true])
+    }).pipe(Effect.scoped, Effect.provide(FetchHttpClient.layer)),
+  )
+})
