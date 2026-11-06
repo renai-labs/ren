@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test"
 import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
-import { Duration, Effect, ErrorReporter, Fiber, Option, Schema } from "effect"
+import { Clock, Duration, Effect, ErrorReporter, Fiber, Option, Schema } from "effect"
 import { TestClock } from "effect/testing"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { MachineLifecycle } from "../src/machine-lifecycle.js"
@@ -107,6 +107,7 @@ const kind = Effect.gen(function* () {
       failure: null,
       keep_alive_until: null,
       last_active_at: null,
+      last_progress_at: null,
       retry_at: null,
       retries: 0,
       unanswered_since: null,
@@ -114,7 +115,7 @@ const kind = Effect.gen(function* () {
     })
     return id
   }
-  return { machines, switches, destroyed, read, add }
+  return { machines, switches, destroyed, read, update, add }
 })
 
 describe("MachineLifecycle", () => {
@@ -201,5 +202,33 @@ describe("MachineLifecycle", () => {
       expect(yield* memory.read(id)).toMatchObject({ phase: "ready", failures: 0 })
       expect(reports.filter((report) => report.includes("no room"))).toHaveLength(1)
     }),
+  )
+})
+
+describe("MachineLifecycle keep-awake", () => {
+  it.effect(
+    "a background process keeps an idle machine awake up to 2 h after the last turn's progress, and no longer (EN25)",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kind
+        memory.switches.boots = true
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        const lastTurn = new Date(yield* Clock.currentTimeMillis)
+        yield* memory.update(id, { last_progress_at: lastTurn })
+        const awakeUntil = Effect.map(memory.read(id), (row) => row.keep_alive_until?.getTime() ?? 0)
+        const keep = Effect.flatMap(memory.read(id), (row) =>
+          memory.machines.keepAwake(row, { isBusy: false, hasBackground: true }),
+        )
+        yield* TestClock.adjust(Duration.minutes(60))
+        yield* keep
+        expect(yield* awakeUntil).toBe(lastTurn.getTime() + Duration.toMillis(Duration.minutes(90)))
+        yield* TestClock.adjust(Duration.minutes(55))
+        yield* keep
+        expect(yield* awakeUntil).toBe(lastTurn.getTime() + Duration.toMillis(Duration.hours(2)))
+        yield* TestClock.adjust(Duration.minutes(10))
+        yield* keep
+        expect(yield* awakeUntil).toBe(lastTurn.getTime() + Duration.toMillis(Duration.hours(2)))
+      }),
   )
 })

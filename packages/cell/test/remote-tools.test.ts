@@ -439,6 +439,32 @@ it.live("a background command's output file on the sandbox grows while the comma
   }),
 )
 
+it.live(
+  "a chat with a shell that still runs after its turn reports a background process, and stops after the shell ends (EN25)",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const session = yield* begin(opened)
+      const background = opened.harness.sessions.pipe(
+        Effect.map((states) => states.find((state) => String(state.id) === session.sessionId)?.background),
+      )
+      expect(yield* background).toBe(false)
+      const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+      yield* session.turn(
+        stub.script({
+          tool: { name: "shell", input: { command: `echo $$ > ${pidFile}; exec sleep 30`, background: true } },
+        }),
+      )
+      const pid = yield* Pid.read(pidFile)
+      expect(yield* background).toBe(true)
+      process.kill(pid, "SIGKILL")
+      yield* background.pipe(
+        Effect.repeat({ until: (found) => found === false, schedule: Schedule.spaced(100) }),
+        Effect.timeout("10 seconds"),
+      )
+    }),
+)
+
 it.live("the Chat API lists the shells that still run, reads a shell's output from a cursor, and stops one", () =>
   Effect.gen(function* () {
     const opened = yield* open()

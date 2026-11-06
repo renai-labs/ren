@@ -79,6 +79,7 @@ export const layer = Layer.effect(
               id: Session.ID.make(session.id),
               busy: session.active,
               progress: session.progress,
+              background: session.background,
             })),
             roots: sessions.filter((session) => session.root).map((session) => Session.ID.make(session.id)),
           },
