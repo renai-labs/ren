@@ -49,6 +49,17 @@ export const botScopes = [
   "users.profile:read",
 ]
 
+export const botEvents = [
+  "app_mention",
+  "app_uninstalled",
+  "entity_details_requested",
+  "link_shared",
+  "message.im",
+  "tokens_revoked",
+]
+
+export const userScopes = ["email", "openid", "profile"]
+
 export const maxFileBytes = 32 * 1024 * 1024
 
 const timeLimit = "10 seconds"
