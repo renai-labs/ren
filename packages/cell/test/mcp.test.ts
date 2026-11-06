@@ -86,7 +86,7 @@ it.live("two profiles of one app are two servers, each with its own placeholder;
   }),
 )
 
-it.effect("a local entry runs with its declared env and the profile's placeholders; a header MCP sends its field", () =>
+it.effect("a local entry gets its env placeholders, a header MCP its field, a provider MCP only its path", () =>
   Effect.sync(() => {
     const catalog = McpPeer.catalog("local", [
       {
@@ -101,15 +101,24 @@ it.effect("a local entry runs with its declared env and the profile's placeholde
         auth: { type: "header", name: "X-Api-Key", credential: "apiKey" },
         profile: { slug: "acme", name: "Acme client" },
       },
+      {
+        slug: "gmail",
+        transport: { type: "provider", provider: "composio", integration: "gmail" },
+        url: "https://composio.example.com/ren:MCP_GMAIL__ACME/",
+        auth: { type: "oauth", tokenEndpointAuth: "none" },
+        profile: { slug: "acme", name: "Acme client" },
+      },
     ])
     const rendered = OpenCodeMcp.servers(Option.some(catalog), { local: true, speakerHeaders: {} })
     expect(rendered.map((server) => [server.name, server.config])).toMatchObject([
       ["sheets__acme", { type: "local", environment: { MODE: "read", SHEETS_KEY: "ren:SHEETS_KEY__ACME" } }],
       ["crm__acme", { type: "remote", headers: { "X-Api-Key": "ren:MCP_CRM__ACME.apiKey" } }],
+      ["gmail__acme", { type: "remote", url: "https://composio.example.com/ren:MCP_GMAIL__ACME/" }],
     ])
+    expect(rendered.find((server) => server.name === "gmail__acme")?.config).not.toHaveProperty("headers")
     expect(
       OpenCodeMcp.servers(Option.some(catalog), { local: false, speakerHeaders: {} }).map((server) => server.name),
-    ).toEqual(["crm__acme"])
+    ).toEqual(["crm__acme", "gmail__acme"])
   }),
 )
 
