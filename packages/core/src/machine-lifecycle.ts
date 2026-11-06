@@ -1,0 +1,422 @@
+export * as MachineLifecycle from "./machine-lifecycle.js"
+
+import type { Auth } from "@ren/schema/auth"
+import type { Machine } from "@ren/schema/machine"
+import type { Space } from "@ren/schema/space"
+import { Cause, Clock, DateTime, Duration, Effect, Option, Schedule, Schema } from "effect"
+import type { MachineAccess } from "./machine-access.js"
+import { MachineProvider } from "./machine-provider.js"
+
+export class Unavailable extends Schema.TaggedError<Unavailable>()("MachineLifecycle.Unavailable", {
+  message: Schema.String,
+}) {}
+
+export class Unreachable extends Schema.TaggedError<Unreachable>()("MachineLifecycle.Unreachable", {
+  message: Schema.String,
+}) {}
+
+export class Frozen extends Schema.TaggedError<Frozen>()("MachineLifecycle.Frozen", {
+  message: Schema.String,
+  reason: Schema.Literals(["memory", "disk", "unknown"]),
+}) {}
+
+export const timing = {
+  boot: Duration.seconds(120),
+  wake: Duration.seconds(60),
+  idle: Duration.minutes(10),
+  busy: Duration.minutes(30),
+  stuck: Duration.minutes(30),
+  accessMargin: Duration.minutes(2),
+  poll: Duration.seconds(1),
+  probeTimeout: Duration.seconds(3),
+  sampleMaxAge: Duration.seconds(60),
+  fullShare: 0.95,
+  failures: 3,
+}
+
+// oxlint-disable-next-line ren/no-comments -- The columns of a managed machine's row. Each kind of machine keeps them in its own table under these names.
+export interface Row<Id extends string> {
+  readonly id: Id
+  readonly organization_id: Auth.OrganizationID
+  readonly space_id: Space.ID
+  readonly provider: string | null
+  readonly binding: Schema.Json | null
+  readonly template: string | null
+  readonly egress: boolean
+  readonly url: string | null
+  readonly generation: number
+  readonly run_epoch: number
+  readonly phase: Machine.Phase
+  readonly failures: number
+  readonly failure: string | null
+  readonly keep_alive_until: Date | null
+  readonly last_active_at: Date | null
+}
+
+export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
+  // oxlint-disable-next-line ren/no-comments -- Names the kind in spans (`BrainLifecycle.step`), in messages (`Brain brn_…`) and in log annotations (`ren.brain.id`).
+  readonly name: string
+  readonly noun: string
+  readonly annotation: string
+  readonly provider: MachineProvider.Provider
+  readonly isBehindEgress: boolean
+  readonly bootWithin: Duration.Duration
+  readonly wakeWithin: Duration.Duration
+  readonly read: (id: Id) => Effect.Effect<R>
+  readonly update: (id: Id, values: Partial<Row<Id>>) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- In one transaction: the next generation, no binding, url or keep-alive, `creating`, and the kind's own work, such as interrupting busy chats.
+  readonly replace: (row: R, at: Date) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- Marks the machine of this generation `replacing`, unless it is already creating or replacing, and does the kind's own work in the same transaction.
+  readonly lose: (id: Id, generation: number, at: Date) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- Starts the kind's durable run for the row's run epoch, which calls `run`.
+  readonly ensure: (row: R) => Effect.Effect<void>
+  readonly proxyFor: (row: R) => Effect.Effect<Option.Option<MachineProvider.Proxy>>
+  readonly retire: (id: Id) => Effect.Effect<void>
+  readonly variables: (row: R) => Effect.Effect<Readonly<Record<string, string>>>
+  // oxlint-disable-next-line ren/no-comments -- The kind's own columns of a new machine, written before the machine's, so a crash between the two leaves a row that creates again.
+  readonly created: (id: Id) => Effect.Effect<void>
+  readonly target: (row: R) => Option.Option<Target>
+  // oxlint-disable-next-line ren/no-comments -- The kind's ready check: none when the machine is ready within the time, or the reason it is not.
+  readonly boot: (target: Target, within: Duration.Duration) => Effect.Effect<Option.Option<string>, E>
+  // oxlint-disable-next-line ren/no-comments -- The kind's wake call after a resume. It ends within the time with true, or with whether the machine still answers.
+  readonly wake: (target: Target, within: Duration.Duration) => Effect.Effect<boolean, E>
+  readonly answers: (target: Target) => Effect.Effect<boolean>
+}
+
+const reasonOf = (sample: MachineProvider.Sample | undefined) => {
+  if (sample && sample.memory >= timing.fullShare) return "memory" as const
+  if (sample && sample.disk >= timing.fullShare) return "disk" as const
+  return "unknown" as const
+}
+
+const startKinds: Readonly<Partial<Record<Machine.Phase, string>>> = {
+  creating: "new",
+  booting: "new",
+  replacing: "replace",
+}
+
+const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
+
+export const make = <Id extends string, R extends Row<Id>, Target, E>(definition: Definition<Id, R, Target, E>) => {
+  const provider = definition.provider
+  const name = definition.name
+  const noun = definition.noun
+  const read = definition.read
+  const update = definition.update
+  const annotate = (row: R) =>
+    Effect.annotateLogs({
+      [`ren.${definition.annotation}.id`]: row.id,
+      [`ren.${definition.annotation}.generation`]: row.generation,
+    })
+
+  const keepAlive = Effect.fnUntraced(function* (row: R, window: Duration.Duration) {
+    if (!row.binding) return
+    const at = yield* now
+    const left = row.keep_alive_until ? row.keep_alive_until.getTime() - at.getTime() : 0
+    if (left > Duration.toMillis(window) / 2) return
+    yield* provider.keepAlive(row.binding, window)
+    yield* update(row.id, { keep_alive_until: new Date(at.getTime() + Duration.toMillis(window)) })
+  })
+
+  const fail = Effect.fnUntraced(function* (row: R, reason: string, next: Machine.Phase) {
+    const failures = row.failures + 1
+    yield* Effect.logWarning(`${noun} ${row.id} failed (${failures}/${timing.failures}): ${reason}`)
+    yield* update(row.id, { failures, failure: reason, phase: failures >= timing.failures ? "failed" : next })
+  })
+
+  // oxlint-disable-next-line ren/no-comments -- Capacity is not a failure (E88): the machine shows "waiting for capacity", and the step that hit it runs again after Retry-After.
+  const waitForCapacity = Effect.fnUntraced(function* (row: R, error: MachineProvider.Capacity) {
+    yield* Effect.logWarning(`Waiting for capacity: ${error.message}`)
+    yield* update(row.id, { phase: "capacity" })
+    yield* Effect.sleep(error.retryAfter)
+    yield* update(row.id, { phase: row.phase })
+  })
+
+  const proxyOf = (row: R) =>
+    definition.isBehindEgress ? definition.proxyFor(row) : Effect.succeed(Option.none<MachineProvider.Proxy>())
+
+  const create = Effect.fnUntraced(function* (row: R) {
+    const proxy = yield* proxyOf(row)
+    const created = yield* provider
+      .create({
+        labels: { id: row.id, generation: row.generation, organizationId: row.organization_id, spaceId: row.space_id },
+        config: {},
+        // oxlint-disable-next-line ren/no-comments -- Behind an egress, the machine calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49).
+        variables: { ...(yield* definition.variables(row)), ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },
+        proxy,
+      })
+      .pipe(
+        Effect.map(Option.some),
+        Effect.catchTag("MachineProvider.Capacity", (error) =>
+          waitForCapacity(row, error).pipe(Effect.as(Option.none<MachineProvider.Created>())),
+        ),
+      )
+    if (Option.isNone(created)) return false
+    yield* definition.created(row.id)
+    yield* update(row.id, {
+      provider: provider.info.id,
+      binding: created.value.binding,
+      template: provider.template,
+      egress: Option.isSome(proxy),
+      url: created.value.url,
+      phase: "booting",
+      keep_alive_until: new Date((yield* now).getTime() + Duration.toMillis(Duration.minutes(10))),
+    })
+    return false
+  })
+
+  const boot = Effect.fnUntraced(function* (row: R) {
+    const target = Option.getOrUndefined(definition.target(row))
+    if (!target) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
+    const failure = yield* definition.boot(target, definition.bootWithin)
+    if (Option.isSome(failure)) {
+      if (row.binding) yield* provider.destroy(row.binding).pipe(Effect.ignore)
+      yield* fail(row, failure.value, "creating")
+      yield* update(row.id, { binding: null, url: null })
+      return false
+    }
+    yield* update(row.id, { phase: "ready", failures: 0, failure: null })
+    yield* keepAlive(yield* read(row.id), timing.idle)
+    return true
+  })
+
+  const resume = Effect.fnUntraced(function* (row: R) {
+    if (!row.binding) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
+    // oxlint-disable-next-line ren/no-comments -- An asleep machine on an older build moves to the current one by a replace (E120). Only this step checks, so a running machine is never replaced for its build.
+    if (row.template && provider.template && row.template !== provider.template) {
+      yield* Effect.logInfo(`${noun} ${row.id} runs build ${row.template}; Ren replaces it with ${provider.template}`)
+      return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+    }
+    // oxlint-disable-next-line ren/no-comments -- A machine built for the other egress mode would get the wrong keys; it moves to the current one by a replace, as for a build (E120).
+    if (row.egress !== definition.isBehindEgress) {
+      yield* Effect.logInfo(
+        `${noun} ${row.id} was created ${row.egress ? "behind" : "without"} the egress; Ren replaces it`,
+      )
+      return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+    }
+    const connected = yield* provider.connect(row.binding, yield* proxyOf(row)).pipe(
+      Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
+      Effect.catchTag("MachineProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
+      Effect.catchTag("MachineProvider.Capacity", (error) =>
+        waitForCapacity(row, error).pipe(Effect.as({ _tag: "Waited" } as const)),
+      ),
+    )
+    if (connected._tag === "Waited") return false
+    if (connected._tag === "Gone") return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+    yield* update(row.id, { url: connected.url, keep_alive_until: null })
+    yield* keepAlive({ ...row, keep_alive_until: null }, timing.idle)
+    yield* update(row.id, { phase: "waking" })
+    return false
+  })
+
+  const wake = Effect.fnUntraced(function* (row: R) {
+    const target = Option.getOrUndefined(definition.target(row))
+    if (!target || !(yield* definition.wake(target, definition.wakeWithin)))
+      return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+    yield* update(row.id, { phase: "ready", failures: 0, failure: null })
+    return true
+  })
+
+  const replace = Effect.fnUntraced(function* (row: R) {
+    yield* definition.replace(row, yield* now)
+    yield* definition.retire(row.id)
+    if (row.binding)
+      yield* provider
+        .destroy(row.binding)
+        .pipe(Effect.catch((error) => Effect.logWarning("Destroying the replaced sandbox failed", error)))
+    return false
+  })
+
+  const lose = (id: Id, generation: number) => Effect.flatMap(now, (at) => definition.lose(id, generation, at))
+
+  const replaceIfFrozen = Effect.fnUntraced(function* (row: R, binding: Schema.Json) {
+    if (!provider.canSample) {
+      const message = `${noun} ${row.id} does not answer, and its provider reports no samples of its machine; Ren keeps it`
+      return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(annotate(row))
+    }
+    const found = yield* provider.lastSample(binding).pipe(
+      Effect.tapError((error) => Effect.logWarning("The sandbox samples are unknown", error)),
+      Effect.option,
+    )
+    if (Option.isNone(found)) return
+    const sample = Option.getOrUndefined(found.value)
+    const logged = (effect: Effect.Effect<void>) =>
+      effect.pipe(
+        annotate(row),
+        Effect.annotateLogs(
+          sample
+            ? {
+                "ren.sandbox.sampled_at": DateTime.formatIso(sample.at),
+                "ren.sandbox.memory": sample.memory,
+                "ren.sandbox.disk": sample.disk,
+              }
+            : {},
+        ),
+      )
+    if (sample && Duration.isLessThan(DateTime.distance(sample.at, yield* DateTime.now), timing.sampleMaxAge)) {
+      const message = `${noun} ${row.id} does not answer, but its machine runs; Ren keeps it`
+      return yield* logged(Effect.logError(message, Cause.fail(new Unreachable({ message }))))
+    }
+    const message = sample
+      ? `${noun} ${row.id} does not answer, and its machine stopped at ${DateTime.formatIso(sample.at)} with ${Math.round(sample.memory * 100)}% of its memory and ${Math.round(sample.disk * 100)}% of its disk in use; Ren replaces it`
+      : `${noun} ${row.id} does not answer, and its machine reports no samples; Ren replaces it`
+    yield* logged(Effect.logError(message, Cause.fail(new Frozen({ message, reason: reasonOf(sample) }))))
+    yield* lose(row.id, row.generation)
+  })
+
+  const check = Effect.fn(`${name}.check`)(function* (id: Id) {
+    const row = yield* read(id)
+    if (!row.binding) return
+    const target = Option.filter(definition.target(row), () => row.phase === "ready")
+    if (Option.isSome(target) && (yield* definition.answers(target.value))) return
+    const status = yield* provider.status(row.binding).pipe(
+      Effect.tapError((error) => Effect.logWarning("The sandbox status is unknown", error)),
+      Effect.option,
+    )
+    if (Option.isNone(status)) return
+    if (status.value === "gone") return yield* lose(id, row.generation)
+    if (row.phase !== "ready") return
+    // oxlint-disable-next-line ren/no-comments -- A paused machine wakes; it is never replaced here (E123).
+    if (status.value === "paused") return yield* update(row.id, { phase: "resuming" })
+    yield* replaceIfFrozen(row, row.binding)
+  })
+
+  // oxlint-disable-next-line ren/no-comments -- Ends a machine that nothing uses: destroys it and leaves the row at the next generation, `creating`.
+  const rest = Effect.fnUntraced(function* (row: Pick<R, "id" | "generation" | "binding">) {
+    if (!row.binding) return
+    yield* definition.retire(row.id)
+    yield* provider.destroy(row.binding)
+    yield* update(row.id, {
+      generation: row.generation + 1,
+      binding: null,
+      url: null,
+      keep_alive_until: null,
+      phase: "creating",
+    })
+  })
+
+  const settle = Effect.fnUntraced(function* (row: R) {
+    const at = yield* now
+    if (row.keep_alive_until && row.keep_alive_until.getTime() > at.getTime()) return true
+    return yield* update(row.id, { phase: row.binding ? "resuming" : "creating" }).pipe(Effect.as(false))
+  })
+
+  const phases = {
+    creating: create,
+    booting: boot,
+    resuming: resume,
+    waking: wake,
+    replacing: replace,
+    ready: settle,
+    failed: () => Effect.succeed(true),
+    capacity: (row) => update(row.id, { phase: row.binding ? "resuming" : "creating" }).pipe(Effect.as(false)),
+  } satisfies Record<Machine.Phase, (row: R) => Effect.Effect<boolean, unknown>>
+
+  const step = Effect.fn(`${name}.step`)(function* (id: Id) {
+    const row = yield* read(id)
+    return yield* phases[row.phase](row)
+  })
+
+  // oxlint-disable-next-line ren/no-comments -- The body of the kind's durable run: steps until the machine is ready or failed.
+  const run = (id: Id) =>
+    Effect.gen(function* () {
+      const first = yield* read(id)
+      let worked = false
+      while (!(yield* step(id))) {
+        worked = true
+        yield* Effect.yieldNow
+      }
+      if (worked)
+        yield* Effect.annotateCurrentSpan(
+          `ren.${definition.annotation}.start_kind`,
+          startKinds[first.phase] ?? (first.binding ? "resume" : "new"),
+        )
+    }).pipe(
+      Effect.catchIf(Schema.is(MachineProvider.Failed), (error) =>
+        read(id).pipe(
+          Effect.flatMap((row) =>
+            row.phase === "creating" || row.phase === "booting" || row.phase === "waking"
+              ? fail(row, error.message, row.phase)
+              : Effect.void,
+          ),
+          Effect.andThen(Effect.fail(error)),
+        ),
+      ),
+    )
+
+  const ensure = (id: Id) => Effect.flatMap(read(id), definition.ensure)
+
+  const touch = Effect.fnUntraced(function* (row: R) {
+    yield* update(row.id, { last_active_at: yield* now })
+    yield* keepAlive(row, timing.idle).pipe(
+      Effect.catchTag("MachineProvider.Gone", () =>
+        update(row.id, { phase: "replacing" }).pipe(Effect.andThen(ensure(row.id))),
+      ),
+      Effect.catch((error) => Effect.logWarning("keepAlive failed", error)),
+    )
+  })
+
+  const access = Effect.fn(`${name}.access`)(function* (id: Id): Effect.fn.Return<MachineAccess.Access<Target>> {
+    const row = yield* read(id)
+    const at = yield* now
+    const target = definition.target(row)
+    if (
+      row.phase === "ready" &&
+      Option.isSome(target) &&
+      row.keep_alive_until &&
+      row.keep_alive_until.getTime() > at.getTime()
+    ) {
+      yield* touch(
+        row.keep_alive_until.getTime() - at.getTime() <= Duration.toMillis(timing.accessMargin)
+          ? { ...row, keep_alive_until: null }
+          : row,
+      )
+      return { _tag: "Ready", target: target.value } as const
+    }
+    if (row.phase === "failed")
+      return { _tag: "Failed", reason: row.failure ?? `The ${noun.toLowerCase()} failed` } as const
+    yield* ensure(id)
+    const shown: Partial<Record<Machine.Phase, string>> = { ready: "resuming", capacity: "waiting for capacity" }
+    return { _tag: "Starting", phase: shown[row.phase] ?? row.phase } as const
+  })
+
+  return {
+    run,
+    keepAlive,
+    lose,
+    rest,
+    access,
+    ensure,
+    check,
+    // oxlint-disable-next-line ren/no-comments -- HR12: reads the row only. It never calls ensure or touch, so it never resumes a paused machine or extends a keep-alive. A machine past its keep-alive may be paused, so it has no target.
+    awake: Effect.fn(`${name}.awake`)(function* (id: Id) {
+      const row = yield* read(id)
+      const at = yield* now
+      return row.phase === "ready" && row.keep_alive_until && row.keep_alive_until.getTime() > at.getTime()
+        ? definition.target(row)
+        : Option.none()
+    }),
+    ready: Effect.fn(`${name}.ready`)(function* (id: Id) {
+      const wait = Effect.gen(function* () {
+        const result = yield* access(id)
+        if (result._tag === "Ready") return Option.some(result.target)
+        if (result._tag === "Failed") return yield* new Unavailable({ message: result.reason })
+        return Option.none<Target>()
+      }).pipe(Effect.withTracerEnabled(false))
+      return yield* wait.pipe(
+        Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced(timing.poll) }),
+        Effect.flatMap((found) =>
+          Option.isSome(found)
+            ? Effect.succeed(found.value)
+            : Effect.fail(new Unavailable({ message: `${noun} ${id} did not get ready` })),
+        ),
+      )
+    }),
+    retry: Effect.fn(`${name}.retry`)(function* (id: Id) {
+      const row = yield* read(id)
+      if (row.phase === "failed")
+        yield* update(id, { phase: row.binding ? "resuming" : "creating", failures: 0, run_epoch: row.run_epoch + 1 })
+      yield* ensure(id)
+    }),
+  }
+}

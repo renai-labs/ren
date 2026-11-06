@@ -1,5 +1,6 @@
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
+import type { Machine } from "@ren/schema/machine"
 import { Space } from "@ren/schema/space"
 import { sql } from "drizzle-orm"
 import type { Schema } from "effect"
@@ -32,7 +33,7 @@ export const brain = pgTable(
     url: text(),
     generation: integer().notNull().default(1),
     run_epoch: integer().notNull().default(0),
-    phase: text().$type<Brain.Phase>().notNull().default("creating"),
+    phase: text().$type<Machine.Phase>().notNull().default("creating"),
     failures: integer().notNull().default(0),
     failure: text(),
     keep_alive_until: timestamp(),
