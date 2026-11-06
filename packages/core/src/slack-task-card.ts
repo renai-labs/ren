@@ -12,6 +12,7 @@ import { Slack } from "./channel-provider/slack.js"
 import type { ChannelSecrets } from "./channel-secrets.js"
 import { SlackApp } from "./slack-app.js"
 import { SlackManifest } from "./slack-manifest.js"
+import { TaskCardSync } from "./task-card-sync.js"
 
 type LinksShared = Extract<Channel.Signal, { readonly kind: "links_shared" }>
 
@@ -221,7 +222,7 @@ const detailFields = (app: string, card: Card, options: { readonly titled: boole
   ]
 }
 
-// oxlint-disable-next-line ren/no-comments -- Slack shows a card to everyone in the channel, so the title and the details show only in a channel that maps to the task's space. The caller does not wait for Slack; a failure leaves a card stale until the next change, and two changes at one moment can post two cards.
+// oxlint-disable-next-line ren/no-comments -- Slack shows a card to everyone in the channel, so the title and the details show only in a channel that maps to the task's space. The caller does not wait for Slack; a failure leaves a card stale until the next change.
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -231,6 +232,7 @@ export const layer = Layer.effect(
     const client = slack.client.value
     const app = (yield* Config.String("APP_URL").pipe(Effect.orDie)).replace(/\/$/u, "")
     const scope = yield* Effect.scope
+    const serial = TaskCardSync.make(scope, "Slack cards")
     const task = Database.Schema.task
     const agent = Database.Schema.agent
     const user = Database.Schema.user
@@ -406,12 +408,7 @@ export const layer = Layer.effect(
       entities: [entityOf(card, { titled: options.titled, detailed: false })],
     })
 
-    const cardText = (card: Card, options: { readonly titled: boolean }) =>
-      [
-        `**[${card.identifier}](${urlOf(card)})**`,
-        ...(options.titled ? [card.title] : []),
-        `· ${card.archived ? "Archived" : statusText[card.status]}`,
-      ].join(" ")
+    const cardText = (card: Card) => `**[${card.identifier}](${urlOf(card)})**`
 
     const installOf = (organizationId: Auth.OrganizationID) =>
       slack.installOf(organizationId).pipe(
@@ -483,7 +480,7 @@ export const layer = Layer.effect(
                   channel: thread.channel,
                   thread_ts: thread.ts,
                   unfurl_links: false,
-                  ...Slack.message(cardText(card, { titled })),
+                  ...Slack.message(cardText(card)),
                   metadata: metadataOf(card, { kind: "card", titled }),
                 },
                 Posted,
@@ -499,7 +496,7 @@ export const layer = Layer.effect(
                     ts: message.ts,
                     ...(message.metadata?.event_payload?.kind === "notice"
                       ? { text: message.text ?? "", ...(message.blocks && { blocks: message.blocks }) }
-                      : Slack.message(cardText(card, { titled }))),
+                      : Slack.message(cardText(card))),
                     metadata: metadataOf(card, {
                       kind: message.metadata?.event_payload?.kind === "notice" ? "notice" : "card",
                       titled,
@@ -638,7 +635,7 @@ export const layer = Layer.effect(
       )
 
     return Service.of({
-      refresh: (taskId) => background("refresh", taskId, sync(taskId)),
+      refresh: (taskId) => serial(taskId, sync(taskId).pipe(Effect.withSpan("SlackTaskCard.refresh"))),
       post: (notice) =>
         post(notice).pipe(
           Effect.catchCause((cause) =>

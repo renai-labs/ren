@@ -75,6 +75,15 @@ const actions = {
 
 const closed: ReadonlySet<Task.Status> = new Set(["done", "dismissed"])
 
+const reminder = {
+  description: "Reminder: hand off the task",
+  source: "task",
+  text:
+    "Your run ended without a handoff. When your part is complete, hand off with `task_assign` to one of the agents " +
+    "in your brief. When a person must decide, call `task_review` with the reason. If you still work, continue. " +
+    "The next run that ends without one of these asks a person to review.",
+}
+
 const refKey = (ref: TaskLink.Ref) => `${ref.kind}\u0000${ref.key}`
 
 const identifier = /^(?<prefix>.+)-(?<number>\d+)$/u
@@ -235,6 +244,7 @@ export const layer = Layer.effect(
     const notices = yield* ChannelNotice.Service
     const cards = yield* TaskCard.Service
     const pulls = yield* PullRequest.Service
+    const reminded = new Map<Session.ID, TaskEvent.ID>()
 
     const reread = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Task.ID) {
       const rows = yield* TaskQueries.select(transaction, actor).where(eq(Database.Schema.task.id, id))
@@ -675,13 +685,7 @@ export const layer = Layer.effect(
           )
           .pipe(
             Effect.orDie,
-            Effect.tap((done) =>
-              Effect.forEach(
-                done,
-                (taskId) => Effect.andThen(notices.done({ organizationId, taskId }), cards.refresh(taskId)),
-                { discard: true },
-              ),
-            ),
+            Effect.tap((done) => Effect.forEach(done, cards.refresh, { discard: true })),
           )
       }),
       linkMentioned: Effect.fn("Task.linkMentioned")(function* (
@@ -756,7 +760,7 @@ export const layer = Layer.effect(
         yield* Effect.forEach(linked, cards.refresh, { discard: true })
         return linked
       }),
-      // oxlint-disable-next-line ren/no-comments -- A governed agent's run must end with a handoff or a review request, else a person must look. Lock first, then read the trail, so the check sees what committed while it waited. OpenCode keeps a session's last idle, so only an idle after the run's start counts.
+      // oxlint-disable-next-line ren/no-comments -- A governed agent's run must end with a handoff or a review request. The first quiet end reminds the agent once; the next one, or an error, asks a person. Lock first, then read the trail, so the check sees what committed while it waited. OpenCode keeps a session's last idle, so only an idle after the run's start counts.
       runEnded: Effect.fn("Task.runEnded")(function* (sessionId: Session.ID) {
         const opencode = Database.Schema.opencode_session
         const started = alias(Database.Schema.task_event, "started_event")
@@ -770,6 +774,7 @@ export const layer = Layer.effect(
                   outcome: opencode.idle_outcome,
                   idle: opencode.time_idle,
                   agent: Database.Schema.agent.name,
+                  createdBy: Database.Schema.agent_session.created_by,
                 })
                 .from(opencode)
                 .innerJoin(Database.Schema.agent_session, eq(Database.Schema.agent_session.id, opencode.session_id))
@@ -820,25 +825,53 @@ export const layer = Layer.effect(
                       ),
                     )
                     .limit(1)
-                  if (quiet.length === 0) return []
+                  const run = quiet.at(0)
+                  if (!run) return []
+                  if (row.outcome === "succeeded" && reminded.get(sessionId) !== run.id) {
+                    reminded.set(sessionId, run.id)
+                    return [{ _tag: "remind" as const, sessionId, createdBy: row.createdBy }]
+                  }
                   const reason =
                     row.outcome === "failed"
                       ? `${row.agent} stopped with an error.`
                       : `${row.agent} ended its run without a handoff.`
                   const requested = yield* TaskFactory.requestReview(transaction, row.task, reason)
-                  return requested ? [{ organizationId: row.task.organization_id, taskId: row.task.id, reason }] : []
+                  return requested
+                    ? [
+                        {
+                          _tag: "review" as const,
+                          organizationId: row.task.organization_id,
+                          taskId: row.task.id,
+                          reason,
+                        },
+                      ]
+                    : []
                 }),
-              ).pipe(Effect.map((reviews) => reviews.flat()))
+              ).pipe(Effect.map((outcomes) => outcomes.flat()))
             }),
           )
           .pipe(
-            Effect.flatMap((reviews) =>
+            Effect.flatMap((outcomes) =>
               Effect.forEach(
-                reviews,
-                (review) => Effect.andThen(notices.review(review), cards.refresh(review.taskId)),
-                {
-                  discard: true,
-                },
+                outcomes,
+                (outcome) =>
+                  outcome._tag === "remind"
+                    ? runner
+                        .send({
+                          sessionId: outcome.sessionId,
+                          messageId: Session.MessageID.create(),
+                          prompt: { text: reminder.text },
+                          delivery: "queue",
+                          sender: { userId: outcome.createdBy },
+                          synthetic: { description: reminder.description, source: reminder.source },
+                        })
+                        .pipe(
+                          Effect.catchCause((cause) =>
+                            Effect.logWarning(`The handoff reminder of ${sessionId} was not sent`, cause),
+                          ),
+                        )
+                    : Effect.andThen(notices.review(outcome), cards.refresh(outcome.taskId)),
+                { discard: true },
               ),
             ),
             Effect.catchCause((cause) => Effect.logError(`The task run of ${sessionId} could not be checked`, cause)),
@@ -889,7 +922,11 @@ export const layer = Layer.effect(
         const created = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* TaskQueries.writableSpace(transaction, access, actor, input.spaceId, actions.create)
-            yield* TaskQueries.checkAssignment(transaction, actor.organizationId, input.spaceId, input)
+            const agentId = yield* TaskFactory.holder(transaction, input.spaceId, actor.agent?.agentId, input.agentId)
+            yield* TaskQueries.checkAssignment(transaction, actor.organizationId, input.spaceId, {
+              agentId,
+              ownerId: input.ownerId,
+            })
             const parent = yield* TaskQueries.lockParent(transaction, access, actor, input.parentId)
             if (parent && parent.task.space_id !== input.spaceId)
               return yield* new Primitive.Invalid({ message: "A subtask is in its parent’s space.", field: "parentId" })
@@ -920,7 +957,7 @@ export const layer = Layer.effect(
               status: input.status,
               priority: input.priority,
               due_at: input.dueAt && DateTime.toDateUtc(input.dueAt),
-              agent_id: input.agentId,
+              agent_id: agentId,
               owner_id: input.ownerId,
               created_by_user_id: by.userId,
               created_by_agent_id: by.agentId,
@@ -1021,20 +1058,9 @@ export const layer = Layer.effect(
                 })
                 .where(eq(Database.Schema.task.id, id))
             yield* TaskTrail.record(transaction, task, actor, events)
-            return {
-              task: yield* reread(transaction, actor, id),
-              changed: events.length > 0,
-              done: status === "done",
-              organizationId: row.task.organization_id,
-            }
+            return { task: yield* reread(transaction, actor, id), changed: events.length > 0 }
           }),
         )
-        if (updated.done)
-          yield* notices.done({
-            organizationId: updated.organizationId,
-            taskId: id,
-            sessionId: actor.agent?.sessionId,
-          })
         if (updated.changed) yield* cards.refresh(id)
         return updated.task
       }),

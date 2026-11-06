@@ -301,6 +301,25 @@ describe("Task factory", () => {
       }),
   )
 
+  it.live("a governed agent becomes the agent of a task it creates, and hands off a task that no agent holds", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const activity = yield* TaskActivity.Service
+      const f = yield* factory
+      const planner = TaskFixture.actingAs(f.o.ada, f.o.factory.id, f.plan, f.builder.agent.sessionId)
+      const own = yield* tasks.create(f.builder, { spaceId: f.o.factory.id, title: "Build it" })
+      expect(own.agentId).toBe(f.build)
+      expect((yield* tasks.create(planner, { spaceId: f.o.factory.id, title: "Plan it" })).agentId).toBeNull()
+      const unheld = yield* tasks.create(f.o.ada, { spaceId: f.o.factory.id, title: "Ship" })
+      expect(yield* tasks.assign(f.builder, unheld.id, { agentId: f.review, start: "none" })).toMatchObject({
+        agentId: f.review,
+      })
+      expect((yield* activity.list(f.o.ada, { taskId: unheld.id, ...page })).items.at(-1)).toMatchObject({
+        event: { data: { _tag: "assigned", fromAgentId: null, toAgentId: f.review } },
+      })
+    }),
+  )
+
   it.live("an edge at its max sends the task to its else agent, with a note that says why", () =>
     Effect.gen(function* () {
       const tasks = yield* Task.Service
@@ -327,7 +346,7 @@ describe("Task factory", () => {
   )
 
   it.live(
-    "a governed agent's run that ends with no handoff asks a person; a handoff, an interruption, an earlier turn or an agent with no edges does not",
+    "a governed agent's run that ends with no handoff gets one reminder, then asks a person; an error, a handoff, an interruption, an earlier turn or an agent with no edges does not",
     () =>
       Effect.gen(function* () {
         const database = yield* Database.Service
@@ -376,10 +395,13 @@ describe("Task factory", () => {
             idle_outcome: outcome,
           })
           yield* tasks.runEnded(sessionId)
-          return yield* tasks.get(f.o.ada, task.id)
+          return { ...(yield* tasks.get(f.o.ada, task.id)), sessionId }
         })
         const review = (task: TaskSchema.Info) => ({ humanReview: task.humanReview, reason: task.humanReviewReason })
-        expect(review(yield* ran(f.builder, "succeeded"))).toEqual({
+        const quiet = yield* ran(f.builder, "succeeded")
+        expect(quiet.humanReview).toBe(false)
+        yield* tasks.runEnded(quiet.sessionId)
+        expect(review(yield* tasks.get(f.o.ada, quiet.id))).toEqual({
           humanReview: true,
           reason: "build ended its run without a handoff.",
         })

@@ -175,7 +175,8 @@ export const CreateInput = Schema.Struct({
   links: Schema.optional(Links),
   dueAt: Schema.optional(Schema.DateTimeUtc),
   agentId: Schema.optional(Agent.ID).annotate({
-    description: "The agent that has the task. Creating never starts it.",
+    description:
+      "The agent that has the task. Creating never starts it. Without it, an agent of the space’s factory that creates the task holds it.",
   }),
   ownerId: Schema.optional(Auth.UserID).annotate({ description: "The person responsible for the task." }),
   parentId: Schema.optional(ID).annotate({ description: parentDescription }),
@@ -237,7 +238,7 @@ export const ReviewInput = Schema.Union([
     humanReview: Schema.Literal(true),
     reason: Reason.annotate({
       description:
-        "Why a person must act, and what to look at. Ren posts it, with a link to the task, to each Slack thread the task links, except the one this session answers.",
+        "Why a person must act, and what to look at. Ren posts it as a “Needs review” line, with a link to the task, to each Slack thread the task links, except the one this session answers. Do not post it again yourself.",
     }),
   }),
   Schema.Struct({

@@ -37,6 +37,8 @@ Code blocks take a language (\`\`\`python) for highlighting. Tables use | betwee
 - Leave blank lines between ideas. Write three or more items as a list.
 - Bold the names, dates, deadlines and actions that a reader scans for.
 - Put a numeric comparison in charts, at most 2 per message: Ren posts each as a native Slack chart.
+- Say only what the thread does not show. Ren posts a card for each task linked to the thread, with its title, status and link, and a “Needs review” line when a person must act: do not repeat them, and do not announce that a task exists or waits for approval.
+- Lead with what the person must decide or do. No opener (“I created…”, “I filed this as…”) and no recap of the plan: link to it as [plan](url).
 
 ## Threads and channels
 

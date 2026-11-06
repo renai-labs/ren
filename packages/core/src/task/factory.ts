@@ -91,7 +91,8 @@ export const next = (
   }
   const options = choices(factory, input.from, input.history)
   if (!options) return input.to ? target(input.to, input.start) : { _tag: "assign", agentId: null, start: undefined }
-  if (input.from !== input.holder) return { _tag: "conflict", message: "Only the task’s agent can hand it off." }
+  if (input.holder && input.from !== input.holder)
+    return { _tag: "conflict", message: "Only the task’s agent can hand it off." }
   const edge = options.to.find((candidate) => candidate.agentId === input.to)
   if (!edge)
     return {
@@ -209,6 +210,16 @@ export const handOff = Effect.fnUntraced(function* (
     start: decided.start,
     note: decided.note,
   }
+})
+
+export const holder = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  spaceId: Space.ID,
+  caller: Agent.ID | undefined,
+  agentId: Agent.ID | undefined,
+) {
+  if (!Predicate.isUndefined(agentId) || !caller) return agentId
+  return isGoverned(yield* read(transaction, spaceId), caller) ? caller : undefined
 })
 
 export const requestReview = Effect.fnUntraced(function* (
