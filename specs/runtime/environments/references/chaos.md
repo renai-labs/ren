@@ -4,13 +4,13 @@ The tests of [the spec](../README.md). Each pull request adds the rows that its 
 
 ## How the tests run
 
-| Kind   | Where                                                                                                    | Time                                         |
-| ------ | -------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| Unit   | `core` tests with real Postgres and `TestClock`. No real waits.                                          | the package's `bun run test`                 |
-| Local  | `packages/e2e/chaos` with the local or Docker provider and the fault proxy (`chaos/lib/faults/proxy.ts`) | `bun run chaos`                              |
-| Live   | The local `ren-stack` with brains and hands in real E2B sandboxes behind the real egress                 | the user approves the sandboxes once per run |
-| Seeded | Random orders of the events below, replayed from a seed, on the local provider. Each run checks I1–I13.  | each pull request                            |
-| Soak   | 1 hour live, with fewer kinds of events. Checks I1–I13.                                                  | before the last merge                        |
+| Kind   | Where                                                                                                                                                                                                                                                   | Time                                         |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| Unit   | `core` tests with real Postgres and `TestClock`. No real waits.                                                                                                                                                                                         | the package's `bun run test`                 |
+| Local  | `packages/e2e/chaos` with the local or Docker provider and the fault proxy (`chaos/lib/faults/proxy.ts`)                                                                                                                                                | `bun run chaos`                              |
+| Live   | The local `ren-stack` with brains and hands in real E2B sandboxes behind the real egress                                                                                                                                                                | the user approves the sandboxes once per run |
+| Seeded | Random orders of the events below, replayed from a seed, on the local provider (`core/test/machine-lifecycle.seeded.slow.test.ts`). It checks I1, I2, I3, I11 and I12; each pull request that builds the behaviour of another invariant adds its check. | each pull request                            |
+| Soak   | 1 hour live, with fewer kinds of events. Checks I1–I13.                                                                                                                                                                                                 | before the last merge                        |
 
 How each fault is made:
 
@@ -47,19 +47,19 @@ How each fault is made:
 
 ### Brain machine
 
-| #   | Case                                                                | Expected                                                                                       | Kind        |
-| --- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------- |
-| 1   | The brain does not answer within 120 s, 3 times                     | `failed`; the timed retry at 10 min reaches `ready`                                            | unit + live |
-| 2   | E2B API errors for 10 s during a boot                               | `failed` (known limit, EN18); the timed retry recovers                                         | live        |
-| 3   | The machine is killed mid-turn                                      | Next use: Gone, replace. The turn continues once, the notice shows, waiting messages are sent. | live        |
-| 4   | The brain process is stopped for 70 s                               | `start.sh` restarts it. No replace.                                                            | live        |
-| 5   | The brain and `start.sh` are stopped for 6 min                      | Replaced (EN17)                                                                                | live        |
-| 6   | Ren → brain cut for 6 min while the brain still pulls               | Replaced (known risk, EN17)                                                                    | live        |
-| 7   | A tool uses too much memory                                         | The tools' cap stops it. The brain answers. No replace.                                        | live        |
-| 8   | The disk is full                                                    | The brain answers or is replaced. It never stays stuck.                                        | live        |
-| 9   | A restore of 52 chats, 1,783 messages, 24 MB (fake data, see below) | Report the import time and the longest stall of the brain's thread. It must be under 60 s.     | live        |
-| 10  | One 9 MB message                                                    | It syncs as a stand-in; the rest of the chat syncs (EN37)                                      | local       |
-| 11  | The keep-alive ends while idle, then a wake                         | Files kept                                                                                     | live        |
+| #   | Case                                                                | Expected                                                                                                                                                                         | Kind         |
+| --- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | The brain does not answer within 120 s, 3 times                     | `failed`; the timed retry at 10 min reaches `ready`                                                                                                                              | unit + live  |
+| 2   | E2B API errors for 10 s during a boot                               | `failed` (known limit, EN18); the timed retry recovers                                                                                                                           | live         |
+| 3   | The machine is killed mid-turn                                      | Next use: Gone, replace. The turn continues once, the notice shows, waiting messages are sent.                                                                                   | live         |
+| 4   | The brain process is stopped for 70 s                               | `start.sh` restarts it. No replace.                                                                                                                                              | live         |
+| 5   | The brain and `start.sh` are stopped for 6 min                      | Replaced (EN17)                                                                                                                                                                  | live         |
+| 6   | Ren → brain cut for 6 min while the brain still pulls               | Replaced (known risk, EN17)                                                                                                                                                      | live         |
+| 7   | A tool uses too much memory                                         | The tools' cap stops it. The brain answers. No replace.                                                                                                                          | live         |
+| 8   | The disk is full                                                    | The brain answers or is replaced. It never stays stuck.                                                                                                                          | live         |
+| 9   | A restore of 52 chats, 1,783 messages, 24 MB (fake data, see below) | Report the import time and the longest stall of the brain's thread. It must be under 60 s. The import into OpenCode is measured locally (`cell/test/restore-size.slow.test.ts`). | local + live |
+| 10  | One 9 MB message                                                    | It syncs as a stand-in; the rest of the chat syncs (EN37)                                                                                                                        | local        |
+| 11  | The keep-alive ends while idle, then a wake                         | Files kept                                                                                                                                                                       | live         |
 
 ### Bundles
 
