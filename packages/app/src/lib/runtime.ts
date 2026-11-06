@@ -31,6 +31,8 @@ const invalidates: Readonly<Record<string, ReadonlyArray<string>>> = {
   credential: ["credential", "app-profile", "app-profile-reach"],
   "credential-connect": ["app-profile", "app-profile-reach"],
   schedule: ["schedule", "schedule-run"],
+  webhook: ["webhook", "webhook-delivery"],
+  "webhook-parser": ["webhook-delivery"],
   "channel-mapping": ["channel-mapping", "channel-connect"],
   "channel-install": ["channel-install", "channel-mapping", "channel-connect"],
   chat: [],
