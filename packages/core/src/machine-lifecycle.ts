@@ -73,8 +73,9 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly name: string
   readonly noun: string
   readonly annotation: string
-  readonly provider: MachineProvider.Provider
-  readonly isBehindEgress: boolean
+  // oxlint-disable-next-line ren/no-comments -- The provider of the row's machine: the one that made it, or for a new machine the one its owner chose.
+  readonly providerOf: (row: R) => Effect.Effect<MachineProvider.Provider>
+  readonly isBehindEgress: (provider: MachineProvider.Provider) => boolean
   readonly bootWithin: Duration.Duration
   readonly wakeWithin: Duration.Duration
   readonly read: (id: Id) => Effect.Effect<R>
@@ -121,7 +122,6 @@ const afterResume = { current: "waking", update: "updating", replace: "replacing
 const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
 export const make = <Id extends string, R extends Row<Id>, Target, E>(definition: Definition<Id, R, Target, E>) => {
-  const provider = definition.provider
   const name = definition.name
   const noun = definition.noun
   const read = definition.read
@@ -137,6 +137,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const at = yield* now
     const left = row.keep_alive_until ? row.keep_alive_until.getTime() - at.getTime() : 0
     if (left > Duration.toMillis(window) / 2) return
+    const provider = yield* definition.providerOf(row)
     yield* provider.keepAlive(row.binding, window)
     yield* update(row.id, { keep_alive_until: new Date(at.getTime() + Duration.toMillis(window)) })
   })
@@ -190,11 +191,14 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     yield* update(row.id, { phase: row.phase })
   })
 
-  const proxyOf = (row: R) =>
-    definition.isBehindEgress ? definition.proxyFor(row) : Effect.succeed(Option.none<MachineProvider.Proxy>())
+  const proxyOf = (row: R, provider: MachineProvider.Provider) =>
+    definition.isBehindEgress(provider)
+      ? definition.proxyFor(row)
+      : Effect.succeed(Option.none<MachineProvider.Proxy>())
 
   const create = Effect.fnUntraced(function* (row: R) {
-    const proxy = yield* proxyOf(row)
+    const provider = yield* definition.providerOf(row)
+    const proxy = yield* proxyOf(row, provider)
     const created = yield* provider
       .create({
         labels: { id: row.id, generation: row.generation, organizationId: row.organization_id, spaceId: row.space_id },
@@ -228,6 +232,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     if (!target) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
     const failure = yield* definition.boot(target, definition.bootWithin)
     if (Option.isSome(failure)) {
+      const provider = yield* definition.providerOf(row)
       if (row.binding) yield* provider.destroy(row.binding).pipe(Effect.ignore)
       yield* fail(row, failure.value, "creating")
       yield* update(row.id, { binding: null, url: null })
@@ -240,19 +245,20 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
 
   const resume = Effect.fnUntraced(function* (row: R) {
     if (!row.binding) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
+    const provider = yield* definition.providerOf(row)
     // oxlint-disable-next-line ren/no-comments -- An asleep machine on an older build moves to the current one by a replace (E120). Only this step checks, so a running machine is never replaced for its build.
     if (row.template && provider.template && row.template !== provider.template) {
       yield* Effect.logInfo(`${noun} ${row.id} runs build ${row.template}; Ren replaces it with ${provider.template}`)
       return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
     }
     // oxlint-disable-next-line ren/no-comments -- A machine built for the other egress mode would get the wrong keys; it moves to the current one by a replace, as for a build (E120).
-    if (row.egress !== definition.isBehindEgress) {
+    if (row.egress !== definition.isBehindEgress(provider)) {
       yield* Effect.logInfo(
         `${noun} ${row.id} was created ${row.egress ? "behind" : "without"} the egress; Ren replaces it`,
       )
       return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
     }
-    const connected = yield* provider.connect(row.binding, yield* proxyOf(row)).pipe(
+    const connected = yield* provider.connect(row.binding, yield* proxyOf(row, provider)).pipe(
       Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
       Effect.catchTag("MachineProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
       Effect.catchTag("MachineProvider.Capacity", (error) =>
@@ -302,6 +308,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const replace = Effect.fnUntraced(function* (row: R) {
     yield* definition.replace(row, yield* now)
     yield* definition.retire(row.id)
+    const provider = yield* definition.providerOf(row)
     if (row.binding)
       yield* provider
         .destroy(row.binding)
@@ -317,6 +324,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   })
 
   const replaceIfFrozen = Effect.fnUntraced(function* (row: R, binding: Schema.Json) {
+    const provider = yield* definition.providerOf(row)
     if (!provider.canSample) {
       const message = `${noun} ${row.id} does not answer, and its provider reports no samples of its machine; Ren keeps it`
       return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(annotate(row))
@@ -366,6 +374,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const row = yield* read(id)
     if (!row.binding) return
     const target = Option.filter(definition.target(row), () => row.phase === "ready")
+    const provider = yield* definition.providerOf(row)
     if (Option.isSome(target) && (yield* definition.answers(target.value))) {
       if (row.unanswered_since) yield* update(row.id, { unanswered_since: null })
       return
@@ -384,9 +393,10 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   })
 
   // oxlint-disable-next-line ren/no-comments -- Ends a machine that nothing uses: destroys it and leaves the row at the next generation, `creating`.
-  const rest = Effect.fnUntraced(function* (row: Pick<R, "id" | "generation" | "binding">) {
+  const rest = Effect.fnUntraced(function* (row: R) {
     if (!row.binding) return
     yield* definition.retire(row.id)
+    const provider = yield* definition.providerOf(row)
     yield* provider.destroy(row.binding)
     yield* update(row.id, {
       generation: row.generation + 1,

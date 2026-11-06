@@ -13,6 +13,7 @@ import { Access } from "./access.js"
 import { CredentialOffboarding } from "./credential/offboarding.js"
 import { EgressControl } from "./egress-control.js"
 import { AppQueries } from "./app/queries.js"
+import { BrainProvider } from "./brain-provider.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
@@ -105,6 +106,7 @@ export const layer = Layer.effect(
           name: row.space.name,
           description: canRead ? row.space.description : null,
           brainScope: row.space.brain_scope,
+          brainProvider: row.space.brain_provider,
           memberCount: row.memberCount,
           membershipId: row.membershipId,
           factory: canRead ? TaskFactory.keep(row.space.factory, row.usable) : Factory.empty,
@@ -210,6 +212,15 @@ export const layer = Layer.effect(
             if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource })) {
               return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
             }
+            // oxlint-disable-next-line ren/no-comments -- A space names only a brain provider this deployment registers, or Ren would not start (EN24).
+            if (input.brainProvider) {
+              const registry = yield* Effect.serviceOption(BrainProvider.Registry)
+              if (Option.isSome(registry) && Option.isNone(registry.value.get(input.brainProvider)))
+                return yield* new Primitive.Invalid({
+                  message: `This Ren has no brain provider ${input.brainProvider}; it has ${registry.value.providers.map((provider) => provider.info.id).join(", ")}`,
+                  field: "brainProvider",
+                })
+            }
             if (input.factory) {
               const problem = FactoryCheck.problems(input.factory).at(0)
               if (problem) return yield* new Primitive.Invalid({ message: problem, field: "factory" })
@@ -235,6 +246,7 @@ export const layer = Layer.effect(
                 name: input.name,
                 description: input.description,
                 brain_scope: input.brainScope,
+                brain_provider: input.brainProvider,
                 factory: input.factory,
                 updated_at: sql`now()`,
               })

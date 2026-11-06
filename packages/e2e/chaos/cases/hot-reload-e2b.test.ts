@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { BrainProvider } from "@ren/core/brain-provider"
 import { OpenCode } from "@opencode/client"
 import { FakeRen, TestSettings, TestToken } from "@ren/cell/testing"
 import { E2BSandbox } from "@ren/core/machine-provider/e2b"
@@ -46,10 +47,12 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
   }, 120_000)
 
   test("a push does not resume a paused brain; the wake applies the settings and reads the models of the pause", async () => {
-    const provider = ManagedRuntime.make(E2BSandbox.layer.pipe(Layer.provide(FetchHttpClient.layer)))
+    const provider = ManagedRuntime.make(
+      BrainProvider.layer([E2BSandbox.provider]).pipe(Layer.provide(FetchHttpClient.layer)),
+    )
     cleanups.push(() => provider.dispose())
     const sandbox = <A, E>(use: (service: MachineProvider.Provider) => Effect.Effect<A, E>) =>
-      provider.runPromise(MachineProvider.Brain.use(use))
+      provider.runPromise(BrainProvider.first.pipe(Effect.flatMap(use)))
     const key = await LiteLLM.generate({ duration: "2h", models: [small] })
     cleanups.push(() => LiteLLM.remove(key))
     const ren = FakeRen.start({ port: renPort })

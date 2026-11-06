@@ -1,4 +1,5 @@
 import { expect } from "bun:test"
+import { BrainProvider } from "../src/brain-provider.js"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Space } from "@ren/schema/space"
@@ -6,7 +7,6 @@ import { Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { MachineProvider } from "../src/machine-provider.js"
 import { LocalSandbox } from "../src/machine-provider/local.js"
 import { testEffect } from "./lib/effect.js"
 
@@ -29,7 +29,7 @@ it.live("a brain whose owner process dies is killed with its whole process group
     const owner = Bun.spawn(["sleep", "600"], { stdio: ["ignore", "ignore", "ignore"] })
     yield* Effect.addFinalizer(() => Effect.sync(() => owner.kill("SIGKILL")))
     const pids = yield* Effect.gen(function* () {
-      const provider = yield* MachineProvider.Brain
+      const provider = yield* BrainProvider.first
       const create = (generation: number) =>
         provider.create({
           labels: {
@@ -51,7 +51,11 @@ it.live("a brain whose owner process dies is killed with its whole process group
       return yield* Effect.forEach([running, paused], (created) =>
         Effect.map(Schema.decodeUnknownEffect(Pid)(created.binding), (binding) => binding.pid),
       )
-    }).pipe(Effect.provide(LocalSandbox.layer({ entry: idle, executor: idle, root, owner: owner.pid })))
+    }).pipe(
+      Effect.provide(
+        BrainProvider.layer([LocalSandbox.provider({ entry: idle, executor: idle, root, owner: owner.pid })]),
+      ),
+    )
     expect(yield* Effect.forEach(pids, groupAlive)).toEqual([true, true])
     owner.kill("SIGKILL")
     yield* Effect.forEach(pids, groupAlive).pipe(

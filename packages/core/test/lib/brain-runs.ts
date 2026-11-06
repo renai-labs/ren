@@ -1,5 +1,6 @@
 export * as BrainRuns from "./brain-runs.js"
 
+import { BrainProvider } from "../../src/brain-provider.js"
 import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
@@ -15,7 +16,6 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Models } from "../../src/models.js"
-import type { MachineProvider } from "../../src/machine-provider.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
 
@@ -58,7 +58,7 @@ export const make = async () => {
       readonly port?: number
       readonly around?: Parameters<typeof Host.serve>[1]
       readonly config?: Record<string, string>
-      readonly sandbox?: Layer.Layer<MachineProvider.Brain, unknown, HttpClient.HttpClient>
+      readonly sandbox?: Layer.Layer<BrainProvider.Registry, unknown, HttpClient.HttpClient>
       readonly keepBrains?: boolean
       readonly tracer?: Tracer.Tracer
     } = {},

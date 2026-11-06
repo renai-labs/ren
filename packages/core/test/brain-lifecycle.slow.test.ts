@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
+import { BrainProvider } from "../src/brain-provider.js"
 import { Database } from "@ren/db/database"
 import { inArray } from "drizzle-orm"
 import { Auth } from "@ren/schema/auth"
@@ -12,7 +13,6 @@ import { Brains } from "../src/brains.js"
 import { BrainClient } from "../src/brain-client.js"
 import { BrainHost } from "../src/brain-host.js"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
-import { MachineProvider } from "../src/machine-provider.js"
 import { BrainRuns } from "./lib/brain-runs.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
 import { Host } from "./lib/host.js"
@@ -22,7 +22,7 @@ setDefaultTimeout(120_000)
 const runs = await BrainRuns.make()
 
 const pause = (binding: Schema.Json) =>
-  MachineProvider.Brain.use((provider) =>
+  Effect.flatMap(BrainProvider.first, (provider) =>
     provider
       .keepAlive(binding, Duration.millis(1))
       .pipe(
@@ -53,7 +53,7 @@ describe("brain runs", () => {
     await second.runPromise(Effect.void)
     const ready = await runs.reaches(brainId, "ready")
     expect(ready.binding).toEqual(booting.binding)
-    const sandboxes = await second.runPromise(MachineProvider.Brain.use((provider) => provider.list))
+    const sandboxes = await second.runPromise(BrainProvider.first.pipe(Effect.flatMap((provider) => provider.list)))
     expect(sandboxes.filter((each) => each.id === brainId)).toHaveLength(1)
     await second.dispose()
   })
@@ -399,7 +399,9 @@ describe("brain runs", () => {
     )
     expect((await runs.row(awake.brainId)).keep_alive_until).toEqual(before.keep_alive_until)
     expect(
-      await runtime.runPromise(MachineProvider.Brain.use((provider) => Effect.orDie(provider.status(pausedBinding)))),
+      await runtime.runPromise(
+        BrainProvider.first.pipe(Effect.flatMap((provider) => Effect.orDie(provider.status(pausedBinding)))),
+      ),
     ).toBe("paused")
     await runtime.dispose()
   })

@@ -27,6 +27,7 @@ export const SpaceUpdate = {
   name: Flag.String("name").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
   brainScope: Flag.Literals("brain-scope", ["session", "space"]).pipe(Flag.optional),
+  brainProvider: Flag.String("brain-provider").pipe(Flag.optional),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 

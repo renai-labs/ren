@@ -100,6 +100,7 @@ export const provider = Effect.gen(function* () {
     canEgress: false,
     canMount: false,
     canSample: false,
+    canColocate: false,
     config: Config,
     binding: Binding,
     create: Effect.fn("Docker.create")(function* (input) {

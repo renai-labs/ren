@@ -1,0 +1,1 @@
+ALTER TABLE "space" ADD COLUMN "brain_provider" text;
