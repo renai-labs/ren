@@ -67,6 +67,7 @@ export interface Options {
   readonly sources?: GitSources.Interface
   readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
   readonly egress?: boolean
+  readonly isRemoteHand?: boolean
 }
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
@@ -118,7 +119,13 @@ export const openProcess = Effect.fn("OpenCodeServer.openProcess")(function* (
           models: { fetch: false },
           fs: { filewatcher: false, fff: false },
         },
-        [...replacements, ...Option.match(connections, { onNone: () => [], onSome: RenWorkspaceDriver.replacements })],
+        [
+          ...replacements,
+          ...Option.match(connections, {
+            onNone: () => [],
+            onSome: (found) => RenWorkspaceDriver.replacements(found, { isRemoteHand: options.isRemoteHand ?? false }),
+          }),
+        ],
       ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     refreshKey,

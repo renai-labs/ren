@@ -44,7 +44,19 @@ const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 const accessTo = (url: string, sessionId: Session.ID) =>
   TestEnvironment.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
 
-const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effect.void) {
+// oxlint-disable-next-line ren/no-comments -- A hand on another machine: its executor keeps each path under handRoot, so the brain finds none of the chat's files on its own disk.
+const handRoot = await realpath(await mkdtemp(join(tmpdir(), "ren-hand-")))
+const hand = testEffect(
+  TestEnvironment.layer({ environmentId, workspace: handRoot, executor: TestEnvironment.rooted(handRoot) }),
+)
+const handWorkspace = `/ren-hand-${crypto.randomUUID()}`
+const handFolder = (sessionId: Session.ID) => join(handWorkspace, sessionId)
+const onHand = (path: string) => join(handRoot, path)
+
+const open = Effect.fnUntraced(function* (
+  beforeOpen: Effect.Effect<void> = Effect.void,
+  options: { readonly isRemoteHand?: boolean } = {},
+) {
   const context = yield* Layer.build(TestAccess.memory(new Map()))
   const memory = Context.get(context, TestAccess.Memory)
   const opens = yield* Ref.make(0)
@@ -74,7 +86,10 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
           models: { fetch: false },
           fs: { filewatcher: false, fff: false },
         },
-        [...replacements, ...RenWorkspaceDriver.replacements(environments)],
+        [
+          ...replacements,
+          ...RenWorkspaceDriver.replacements(environments, { isRemoteHand: options.isRemoteHand ?? false }),
+        ],
       ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     () => Effect.succeedNone,
@@ -128,15 +143,25 @@ const begin = Effect.fnUntraced(function* (
     readonly agent?: string
     readonly url?: string
     readonly prepare?: (directory: string) => Promise<void>
+    readonly folderOf?: (sessionId: Session.ID) => string
   } = {},
 ) {
   const sessionId = Session.ID.create()
   const onEnvironment = options.onEnvironment ?? true
+  const directory = (options.folderOf ?? folder)(sessionId)
   if (onEnvironment)
-    yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* TestEnvironment.url), sessionId))
+    yield* opened.memory.set(
+      sessionId,
+      yield* TestEnvironment.access({
+        url: options.url ?? (yield* TestEnvironment.url),
+        environmentId,
+        brain: Brain.ofSession(sessionId),
+        directory,
+      }),
+    )
   const prepare = options.prepare
-  if (prepare) yield* Effect.promise(() => prepare(folder(sessionId)))
-  yield* restart(opened.harness, sessionId, onEnvironment ? folder(sessionId) : undefined, options.agent)
+  if (prepare) yield* Effect.promise(() => prepare(directory))
+  yield* restart(opened.harness, sessionId, onEnvironment ? directory : undefined, options.agent)
   const send = (script: StubModel.Script) => sendTo(opened.harness, sessionId, script)
   return {
     sessionId,
@@ -549,83 +574,96 @@ it.live("a client runs a command on the session's sandbox, follows its output an
   }),
 )
 
-it.live(
-  "the Chat API lists a folder on the sandbox and reads its files: text as utf8, anything else as base64, and the start of a large file",
-  () =>
-    Effect.gen(function* () {
-      const opened = yield* open()
-      const session = yield* begin(opened, {
-        prepare: (directory) =>
-          Promise.all([
-            Bun.write(join(directory, "notes.md"), "# Notes ✓\n"),
-            Bun.write(join(directory, "src/image.bin"), new Uint8Array([137, 80, 0, 255])),
-            Bun.write(join(directory, "src/large.txt"), "a".repeat(2 * 1024 * 1024)),
-          ]).then(() => undefined),
-      })
-      const chat = opened.harness.chat
-      expect(yield* chat.listFiles(session.sessionId, undefined)).toEqual([
-        { path: "src/", type: "directory" },
-        { path: "notes.md", type: "file" },
-      ])
-      expect(yield* chat.listFiles(session.sessionId, "src/")).toEqual([
-        { path: "src/image.bin", type: "file" },
-        { path: "src/large.txt", type: "file" },
-      ])
-      expect(yield* chat.readFile(session.sessionId, "notes.md")).toEqual({
-        path: "notes.md",
-        mime: "text/markdown",
-        size: 12,
-        encoding: "utf8",
-        content: "# Notes ✓\n",
-        truncated: false,
-      })
-      expect(yield* chat.readFile(session.sessionId, "src/image.bin")).toMatchObject({
-        encoding: "base64",
-        content: "iVAA/w==",
-        truncated: false,
-      })
-      const large = yield* chat.readFile(session.sessionId, "src/large.txt")
-      expect([large.size, large.content.length, large.truncated]).toEqual([2 * 1024 * 1024, 1024 * 1024, true])
-      expect(
-        (yield* Effect.all([
-          chat.readFile(session.sessionId, "missing.md").pipe(Effect.flip),
-          chat.listFiles(session.sessionId, "missing/").pipe(Effect.flip),
-        ])).map((error) => error._tag),
-      ).toEqual(["Harness.NotFound", "Harness.NotFound"])
-    }),
-)
+// oxlint-disable-next-line ren/no-comments -- The workspace panel reads the chat's hand: the brain's own machine (co-located), or another machine through the Environment API (remote, EN13).
+const places = [
+  { name: "the sandbox", it, isRemoteHand: false, folderOf: folder, real: (path: string) => path },
+  { name: "a remote hand", it: hand, isRemoteHand: true, folderOf: handFolder, real: onHand },
+] as const
 
-it.live(
-  "the Chat API reads the session's repository on the sandbox: its branch, and a diff that includes a file nobody added yet",
-  () =>
-    Effect.gen(function* () {
-      const opened = yield* open()
-      const git = (directory: string, ...args: ReadonlyArray<string>) =>
-        Bun.spawn(["git", "-c", "user.email=ren@example.com", "-c", "user.name=Ren", ...args], { cwd: directory })
-          .exited
-      const session = yield* begin(opened, {
-        prepare: async (directory) => {
-          await Bun.write(join(directory, "kept.txt"), "one\n")
-          await git(directory, "init", "-q", "-b", "main")
-          await git(directory, "add", ".")
-          await git(directory, "commit", "-qm", "first")
-        },
-      })
-      const directory = folder(session.sessionId)
-      yield* Effect.promise(() =>
-        Promise.all([Bun.write(join(directory, "kept.txt"), "two\n"), Bun.write(join(directory, "new.txt"), "new\n")]),
-      )
-      const chat = opened.harness.chat
-      expect(yield* chat.vcs(session.sessionId)).toEqual({
-        provider: "git",
-        branch: { current: "main", default: "main" },
-      })
-      expect(yield* chat.vcsDiff(session.sessionId, { mode: "working" })).toMatchObject([
-        { file: "kept.txt", status: "modified", additions: 1, deletions: 1 },
-        { file: "new.txt", status: "added", additions: 1, deletions: 0 },
-      ])
-    }),
-)
+const git = (directory: string, ...args: ReadonlyArray<string>) =>
+  Bun.spawn(["git", "-c", "user.email=ren@example.com", "-c", "user.name=Ren", ...args], { cwd: directory }).exited
+
+for (const place of places) {
+  place.it.live(
+    `the Chat API lists a folder on ${place.name} and reads its files: text as utf8, anything else as base64, and the start of a large file`,
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* open(Effect.void, { isRemoteHand: place.isRemoteHand })
+        const session = yield* begin(opened, {
+          folderOf: place.folderOf,
+          prepare: (directory) =>
+            Promise.all([
+              Bun.write(place.real(join(directory, "notes.md")), "# Notes ✓\n"),
+              Bun.write(place.real(join(directory, "src/image.bin")), new Uint8Array([137, 80, 0, 255])),
+              Bun.write(place.real(join(directory, "src/large.txt")), "a".repeat(2 * 1024 * 1024)),
+            ]).then(() => undefined),
+        })
+        const chat = opened.harness.chat
+        expect(yield* chat.listFiles(session.sessionId, undefined)).toEqual([
+          { path: "src/", type: "directory" },
+          { path: "notes.md", type: "file" },
+        ])
+        expect(yield* chat.listFiles(session.sessionId, "src/")).toEqual([
+          { path: "src/image.bin", type: "file" },
+          { path: "src/large.txt", type: "file" },
+        ])
+        expect(yield* chat.readFile(session.sessionId, "notes.md")).toEqual({
+          path: "notes.md",
+          mime: "text/markdown",
+          size: 12,
+          encoding: "utf8",
+          content: "# Notes ✓\n",
+          truncated: false,
+        })
+        expect(yield* chat.readFile(session.sessionId, "src/image.bin")).toMatchObject({
+          encoding: "base64",
+          content: "iVAA/w==",
+          truncated: false,
+        })
+        const large = yield* chat.readFile(session.sessionId, "src/large.txt")
+        expect([large.size, large.content.length, large.truncated]).toEqual([2 * 1024 * 1024, 1024 * 1024, true])
+        expect(
+          (yield* Effect.all([
+            chat.readFile(session.sessionId, "missing.md").pipe(Effect.flip),
+            chat.listFiles(session.sessionId, "missing/").pipe(Effect.flip),
+          ])).map((error) => error._tag),
+        ).toEqual(["Harness.NotFound", "Harness.NotFound"])
+      }),
+  )
+
+  place.it.live(
+    `the Chat API reads the session's repository on ${place.name}: its branch, and a diff that includes a file nobody added yet`,
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* open(Effect.void, { isRemoteHand: place.isRemoteHand })
+        const session = yield* begin(opened, {
+          folderOf: place.folderOf,
+          prepare: async (directory) => {
+            await Bun.write(place.real(join(directory, "kept.txt")), "one\n")
+            await git(place.real(directory), "init", "-q", "-b", "main")
+            await git(place.real(directory), "add", ".")
+            await git(place.real(directory), "commit", "-qm", "first")
+          },
+        })
+        const directory = place.real(place.folderOf(session.sessionId))
+        yield* Effect.promise(() =>
+          Promise.all([
+            Bun.write(join(directory, "kept.txt"), "two\n"),
+            Bun.write(join(directory, "new.txt"), "new\n"),
+          ]),
+        )
+        const chat = opened.harness.chat
+        expect(yield* chat.vcs(session.sessionId)).toEqual({
+          provider: "git",
+          branch: { current: "main", default: "main" },
+        })
+        expect(yield* chat.vcsDiff(session.sessionId, { mode: "working" })).toMatchObject([
+          { file: "kept.txt", status: "modified", additions: 1, deletions: 1 },
+          { file: "new.txt", status: "added", additions: 1, deletions: 0 },
+        ])
+      }),
+  )
+}
 
 it.live(
   "a client cannot run a command in the cell: the shell refuses a location without a sandbox, and nothing runs",
@@ -1008,5 +1046,30 @@ it.live("a chat with no environment does not start an app's local server, and ge
     expect(call.system).not.toContain("tools.where.where")
     expect(yield* opened.opens).toBe(0)
     expect(yield* Effect.promise(() => Bun.file(join(local, "started")).exists())).toBe(false)
+  }),
+)
+
+hand.live("with a remote hand, a long tool result keeps its full output in a file on the hand, not on the brain", () =>
+  Effect.gen(function* () {
+    const opened = yield* open(Effect.void, { isRemoteHand: true })
+    const session = yield* begin(opened, { folderOf: handFolder })
+    yield* opened.harness.configure({ apps: whereServer(crypto.randomUUID()) })
+    yield* Shared.appsSettled(opened.harness)
+    const result = lastToolResult(
+      yield* session.turn(
+        stub.script({
+          tool: {
+            name: "execute",
+            input: { code: "return Array.from({ length: 3000 }, (_, line) => `line ${line}`).join('\\n')" },
+          },
+        }),
+      ),
+    )
+    const file = /full output saved to ([^\]\\]+)\]/.exec(result)?.[1] ?? ""
+    expect(result).toContain("full output saved to ")
+    expect([
+      (yield* text(onHand(file))).includes("line 2999"),
+      yield* Effect.promise(() => Bun.file(file).exists()),
+    ]).toEqual([true, false])
   }),
 )

@@ -35,6 +35,8 @@ export const brain = pgTable(
       readonly environmentTemplateId: EnvironmentTemplate.ID
       readonly config: Schema.Json
     }>(),
+    // oxlint-disable-next-line ren/no-comments -- The space's hand when the machine was created. A brain made for a remote hand runs OpenCode's saved tool output, files and git on the hand (EN13); null on a machine made before this column, which runs them on its own disk.
+    hand_placement: text().$type<Space.Hand["placement"]>(),
     // oxlint-disable-next-line ren/no-comments -- The bundle versions the machine runs; null on a machine whose image holds Ren's code (EN26).
     bundles: jsonb().$type<Readonly<Record<Bundle.Kind, string>>>(),
     // oxlint-disable-next-line ren/no-comments -- Set at create and read by every later step: the sandbox sends its traffic through the egress, so the brain holds placeholders, never real keys or its host token.

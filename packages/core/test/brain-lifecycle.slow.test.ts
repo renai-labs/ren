@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { BrainProvider } from "../src/brain-provider.js"
 import { Database } from "@ren/db/database"
-import { inArray } from "drizzle-orm"
+import { eq, inArray } from "drizzle-orm"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
@@ -17,6 +17,7 @@ import { BrainLifecycle } from "../src/brain-lifecycle.js"
 import { BrainRuns } from "./lib/brain-runs.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
 import { Host } from "./lib/host.js"
+import { Seed } from "./lib/seed.js"
 
 setDefaultTimeout(120_000)
 
@@ -476,6 +477,32 @@ describe("brain runs", () => {
       ),
     )
     expect(replaced).toMatchObject({ generation: 2, egress: false })
+    await current.dispose()
+  })
+
+  test("a brain whose space moved its hand to a remote machine is replaced at its resume, and the new one is for a remote hand (EN13)", async () => {
+    const found = await runs.seeded()
+    const current = await runs.ren()
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    expect(await runs.reaches(found.brainId, "ready")).toMatchObject({ generation: 1, hand_placement: "colocated" })
+    await runs.database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        yield* db.db
+          .update(Database.Schema.space)
+          .set({
+            hand_placement: "remote",
+            environment_template_id: yield* Seed.environmentTemplate(found.organizationId),
+          })
+          .where(eq(Database.Schema.space.id, found.spaceId))
+      }),
+    )
+    await runs.update(found.brainId, { phase: "resuming" })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    expect(await runs.reaches(found.brainId, "ready", { generation: 2 })).toMatchObject({
+      generation: 2,
+      hand_placement: "remote",
+    })
     await current.dispose()
   })
 
