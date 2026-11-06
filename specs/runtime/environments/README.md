@@ -181,10 +181,11 @@ Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, c
 
 1. Built: a remote hand goes through the egress like a brain, with a proxy login of its own generation (`SandboxEgress`, workload `hand`). Its credentials are those of its space: one space per environment (`Credentials.scopeOf`).
 2. A remote hand does not update in place: a newer template config replaces it at its wake, and it keeps its executor version until it is replaced.
-3. Built: a brain made for a remote hand (`brain.hand_placement`, `REN_HAND_PLACEMENT=remote`) runs OpenCode's `ToolOutput`, `FileSystem` and `Vcs` on the hand (`cell/src/harness/opencode/workspace-driver.ts`, EN13, EN14). A change of the space's hand to or from remote replaces the brain at its wake. `Snapshot` is still on the brain's disk, so revert finds no file changes on a remote hand (PR 19).
-4. A chat keeps its hand when its space changes the hand, but the space's brain is made for the new hand. Then that chat's saved tool output, files and diff read the other machine's disk. This is accepted: a change of hand moves the chats.
+3. Built: a brain made for a remote hand (`brain.hand_placement`, `REN_HAND_PLACEMENT=remote`) runs OpenCode's `ToolOutput`, `FileSystem`, `Vcs` and `Snapshot` on the hand (`cell/src/harness/opencode/workspace-driver.ts`, EN13, EN14). A change of the space's hand to or from remote replaces the brain at its wake.
+4. A chat keeps its hand when its space changes the hand, but the space's brain is made for the new hand. Then that chat's saved tool output, files, diff and revert read the other machine's disk. This is accepted: a change of hand moves the chats.
 5. On a remote hand, `Vcs` gives the branches and the diff only; its status, branch list and review base are empty.
 6. Built: Ren waits up to 5 s for a chat's hand (`Environments.startingAfter`), under the 10 s for which its server keeps a quiet connection. A hand that takes longer answers `EnvironmentStartingError`, and the brain asks again every 2 s for up to 3 min (`HostAccess.handStartsWithin`). A chat's first tool call waits while a new hand starts; it does not fail.
+7. Built: on a remote hand, snapshots are a git store per repository in `$XDG_DATA_HOME/ren/snapshot` on the hand (`cell/src/harness/opencode/snapshot.ts`). As with OpenCode's own, a revert finds file changes only in a git repository. Unlike OpenCode's, the store is never packed.
 
 ### Keep-alive and detection
 
