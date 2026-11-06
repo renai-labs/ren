@@ -33,11 +33,27 @@ export interface Labels {
   readonly spaceId: Space.ID
 }
 
+// oxlint-disable-next-line ren/no-comments -- Where a machine's traffic may go: through the egress with a proxy login, and to these hosts only (none: to any host). A provider without canLimitHosts gets no hosts.
+export interface Network {
+  readonly proxy: Option.Option<Proxy>
+  readonly hosts: Option.Option<ReadonlyArray<string>>
+}
+
+export const unrestricted: Network = { proxy: Option.none(), hosts: Option.none() }
+
 interface CreateInput<Config> {
   readonly labels: Labels
   readonly config: Config
+  // oxlint-disable-next-line ren/no-comments -- A template's image; none for the provider's own image.
+  readonly image: Option.Option<string>
   readonly variables: Readonly<Record<string, string>>
-  readonly proxy: Option.Option<Proxy>
+  readonly network: Network
+}
+
+// oxlint-disable-next-line ren/no-comments -- A command that changes a running machine in place, as root or as the machine's user.
+export interface Step {
+  readonly command: string
+  readonly user: "root" | "user"
 }
 
 interface BuildInput<Config> {
@@ -113,11 +129,13 @@ interface Definition<Config, Binding> {
   ) => Effect.Effect<{ readonly binding: Binding; readonly url: string }, Failed | Capacity>
   readonly connect: (
     binding: Binding,
-    proxy: Option.Option<Proxy>,
+    network: Network,
   ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly destroy: (binding: Binding) => Effect.Effect<void, Failed>
   // oxlint-disable-next-line ren/no-comments -- Builds the image of a template's config and gives its name. Two builds of one config give one image.
   readonly build?: (input: BuildInput<Config>) => Effect.Effect<string, Failed>
+  // oxlint-disable-next-line ren/no-comments -- The steps that bring a machine made from one config to another in place, or none when only a new machine can (EN22).
+  readonly stepsBetween?: (from: Config, to: Config) => Option.Option<ReadonlyArray<Step>>
   readonly keepAlive?: (binding: Binding, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly status?: (binding: Binding) => Effect.Effect<Status, Failed>
   readonly lastSample?: (binding: Binding) => Effect.Effect<Option.Option<Sample>, Failed>
@@ -139,10 +157,11 @@ export interface Provider {
   readonly create: (input: CreateInput<Schema.Json>) => Effect.Effect<Created, Failed | Capacity>
   readonly connect: (
     binding: Schema.Json,
-    proxy: Option.Option<Proxy>,
+    network: Network,
   ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
   readonly build: Option.Option<(input: BuildInput<Schema.Json>) => Effect.Effect<string, Failed>>
+  readonly stepsBetween: (from: Schema.Json, to: Schema.Json) => Option.Option<ReadonlyArray<Step>>
   readonly keepAlive: (binding: Schema.Json, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly status: (binding: Schema.Json) => Effect.Effect<Status, Failed>
   readonly lastSample: (binding: Schema.Json) => Effect.Effect<Option.Option<Sample>, Failed>
@@ -214,8 +233,16 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
           Effect.map(encode(created.binding), (encoded) => ({ binding: encoded, url: created.url })),
         ),
       ),
-    connect: (value, proxy) => storedBinding(value).pipe(Effect.flatMap((found) => definition.connect(found, proxy))),
+    connect: (value, network) =>
+      storedBinding(value).pipe(Effect.flatMap((found) => definition.connect(found, network))),
     destroy: (value) => storedBinding(value).pipe(Effect.flatMap(definition.destroy)),
+    stepsBetween: (from, to) => {
+      const decode = Schema.decodeUnknownOption(config)
+      return Option.flatMap(
+        Option.all({ from: decode(from), to: decode(to), steps: Option.fromUndefinedOr(definition.stepsBetween) }),
+        (found) => found.steps(found.from, found.to),
+      )
+    },
     build: Option.map(
       Option.fromUndefinedOr(definition.build),
       (build) => (input: BuildInput<Schema.Json>) =>

@@ -49,6 +49,12 @@ export const UpdateBody = Schema.Struct({
   bundles: Schema.Array(Schema.Struct({ ...Bundle.Info.fields, token: Schema.String })).annotate({
     description: "The current bundles, the dependencies first, each with the token that downloads it.",
   }),
+  steps: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ command: Schema.String, user: Schema.Literals(["root", "user"]) })).annotate({
+      description:
+        "Commands that bring the machine to its template’s new config in place, in order: package installs and build commands (EN22). Sent only to a brain that runs the current bundles.",
+    }),
+  ),
 }).annotate({ identifier: "Brain.UpdateBody" })
 
 export const Synced = Schema.Struct({ drained: Schema.Boolean }).annotate({ identifier: "Brain.Synced" })

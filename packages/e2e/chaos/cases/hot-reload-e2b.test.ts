@@ -71,7 +71,8 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
           OPENCODE_CONFIG: "{}",
           ...TestToken.vars,
         },
-        proxy: Option.none(),
+        image: Option.none(),
+        network: MachineProvider.unrestricted,
       }),
     )
     cleanups.push(() => sandbox((service) => service.destroy(created.binding)))
@@ -116,7 +117,7 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
     expect(pushed).not.toBe(202)
     expect(await sandbox((service) => service.status(created.binding))).toBe("paused")
 
-    await sandbox((service) => service.connect(created.binding, Option.none()))
+    await sandbox((service) => service.connect(created.binding, MachineProvider.unrestricted))
     expect((await call("/ren/wake")).ok).toBe(true)
     expect(ren.pulls.length).toBeGreaterThan(pulledBefore)
     expect(await listed()).toEqual(["anthropic/claude-haiku-5-5", "openai/gpt-5.6-terra"])

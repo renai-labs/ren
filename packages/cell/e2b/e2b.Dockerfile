@@ -1,8 +1,13 @@
 FROM oven/bun:1.4.2
 
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip \
+  && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip sudo \
   && rm -rf /var/lib/apt/lists/*
+
+# A template's packages reach a running machine in place, as root through sudo (EN22).
+RUN (id -u user >/dev/null 2>&1 || useradd --create-home --shell /bin/bash user) \
+  && echo 'user ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/user \
+  && chmod 0440 /etc/sudoers.d/user
 
 RUN version=v1.75.2 arch="$(dpkg --print-architecture)" \
   && case "$arch" in \

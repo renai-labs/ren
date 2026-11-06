@@ -138,7 +138,7 @@ export const layer = Layer.effect(
             .update(table)
             .set(
               Result.isSuccess(result)
-                ? { build_status: "ready", image: result.success, build_error: null }
+                ? { build_status: "ready", image: result.success, image_config: row.config, build_error: null }
                 : { build_status: "failed", build_error: result.failure.message },
             )
             .where(current)
