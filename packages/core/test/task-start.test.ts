@@ -252,7 +252,7 @@ describe("Task factory", () => {
           { agentId: plan },
           { agentId: build, to: [{ agentId: review }] },
           { agentId: review, to: [{ agentId: qa }, { agentId: build, max: 1 }] },
-          { agentId: qa, to: [{ agentId: build, max: 1, else: review }] },
+          { agentId: qa, finish: true, to: [{ agentId: build, max: 1, else: review }] },
         ],
       },
     })
@@ -318,6 +318,30 @@ describe("Task factory", () => {
         event: { data: { _tag: "assigned", fromAgentId: null, toAgentId: f.review } },
       })
     }),
+  )
+
+  it.live(
+    "only an agent the factory lets finish clears the task's agent and ends its run; a review is for a block",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const activity = yield* TaskActivity.Service
+        const f = yield* factory
+        const created = yield* tasks.create(f.o.ada, { spaceId: f.o.factory.id, title: "Ship", agentId: f.build })
+        expect(yield* Effect.flip(tasks.finish(f.builder, created.id, {}))).toMatchObject({
+          _tag: "Primitive.Invalid",
+          message: "build is not a last step: hand off to review.",
+        })
+        expect(yield* Effect.flip(tasks.finish(f.tester, created.id, {}))).toMatchObject({
+          _tag: "Primitive.Conflict",
+        })
+        yield* tasks.assign(f.o.ada, created.id, { agentId: f.qa, start: "none" })
+        const finished = yield* tasks.finish(f.tester, created.id, { note: "PR #12 is green." })
+        expect(finished).toMatchObject({ agentId: null, humanReview: false })
+        expect((yield* activity.list(f.o.ada, { taskId: created.id, ...page })).items.at(-1)).toMatchObject({
+          event: { data: { _tag: "finished", agentId: f.qa, note: "PR #12 is green." } },
+        })
+      }),
   )
 
   it.live("an edge at its max sends the task to its else agent, with a note that says why", () =>

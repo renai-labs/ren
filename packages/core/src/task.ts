@@ -34,8 +34,9 @@ export interface HandOff {
 
 type AssignError = Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid
 
-export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assign"> & {
+export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assign" | "finish"> & {
   readonly assign: (actor: Actor.Info, id: Task.ID, input: Task.AssignInput) => Effect.Effect<Task.Info, AssignError>
+  readonly finish: (actor: Actor.Info, id: Task.ID, input: Task.FinishInput) => Effect.Effect<Task.Info, AssignError>
   readonly handOff: (actor: Actor.Info, id: Task.ID, input: Task.AssignInput) => Effect.Effect<HandOff, AssignError>
   readonly completeMerged: (
     organizationId: Auth.OrganizationID,
@@ -71,6 +72,7 @@ const actions = {
   assign: Primitive.action(Task.definition, "assign"),
   start: Primitive.action(Task.definition, "start"),
   review: Primitive.action(Task.definition, "review"),
+  finish: Primitive.action(Task.definition, "finish"),
 }
 
 const closed: ReadonlySet<Task.Status> = new Set(["done", "dismissed"])
@@ -80,8 +82,9 @@ const reminder = {
   source: "task",
   text:
     "Your run ended without a handoff. When your part is complete, hand off with `task_assign` to the agent in your " +
-    "brief that fits, or finish with `task_review` when the work is done or a person must decide. If you still " +
-    "work, continue. The next run that ends without one of these asks a person to review.",
+    "brief that fits, or finish with `task_finish` if your brief lets you. When you are blocked and a person must " +
+    "decide, use `task_review`. If you still work, continue. The next run that ends without one of these asks a " +
+    "person to review.",
 }
 
 const refKey = (ref: TaskLink.Ref) => `${ref.kind}\u0000${ref.key}`
@@ -819,7 +822,7 @@ export const layer = Layer.effect(
                         sql`not exists (
                           select 1 from ${Database.Schema.task_event} as ${later}
                           where ${later.task_id} = ${row.task.id}
-                            and ${later.kind} in ('assigned', 'review_requested', 'reviewed')
+                            and ${later.kind} in ('assigned', 'review_requested', 'reviewed', 'finished')
                             and (${later.created_at}, ${later.id}) > (${started.created_at}, ${started.id})
                         )`,
                       ),
@@ -1159,6 +1162,45 @@ export const layer = Layer.effect(
         const started = yield* launchAfterCommit(actor, id, "continue", decided.decided.value)
         yield* cards.refresh(id)
         return started
+      }),
+      finish: Effect.fn("Task.finish")(function* (actor: Actor.Info, id: Task.ID, input: Task.FinishInput) {
+        const finished = yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const row = yield* TaskQueries.lockForWrite(
+              transaction,
+              access,
+              actor,
+              eq(Database.Schema.task.id, id),
+              actions.finish,
+            )
+            if (closed.has(row.task.status))
+              return yield* new Primitive.Conflict({ message: "A done or dismissed task cannot finish." })
+            if (actor.agent) {
+              const factory = yield* TaskFactory.read(transaction, row.task.space_id)
+              const named = yield* TaskFactory.agents(transaction, [
+                actor.agent.agentId,
+                ...factory.agents.map((entry) => entry.agentId),
+              ])
+              const decided = TaskFactory.finish(factory, {
+                from: actor.agent.agentId,
+                holder: row.task.agent_id,
+                names: new Map([...named.values()].map((agent) => [agent.id, agent.name])),
+              })
+              if (decided._tag === "conflict") return yield* new Primitive.Conflict({ message: decided.message })
+              if (decided._tag === "refuse") return yield* new Primitive.Invalid({ message: decided.message })
+            }
+            yield* transaction
+              .update(Database.Schema.task)
+              .set({ agent_id: null, human_review: false, human_review_reason: null, updated_at: sql`now()` })
+              .where(eq(Database.Schema.task.id, id))
+            yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
+              { _tag: "finished", agentId: row.task.agent_id, note: input.note ?? null },
+            ])
+            return yield* reread(transaction, actor, id)
+          }),
+        )
+        yield* cards.refresh(id)
+        return finished
       }),
     })
   }),

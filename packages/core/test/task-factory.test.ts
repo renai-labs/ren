@@ -9,7 +9,7 @@ const factory = Schema.decodeUnknownSync(Factory.Info)({
     { agentId: "plan", to: [{ agentId: "build", start: "new" }] },
     { agentId: "build", to: [{ agentId: "review" }] },
     { agentId: "review", to: [{ agentId: "qa" }, { agentId: "build", max: 2, start: "continue" }] },
-    { agentId: "qa", maxRuns: 2, to: [{ agentId: "build", max: 1, else: "review" }] },
+    { agentId: "qa", maxRuns: 2, finish: true, to: [{ agentId: "build", max: 1, else: "review" }] },
     { agentId: "docs" },
   ],
 })
@@ -119,5 +119,22 @@ describe("TaskFactory.next", () => {
       _tag: "review",
       reason: "The task was handed off 6 of 6 times.",
     })
+  })
+})
+
+describe("TaskFactory.finish", () => {
+  test("a governed agent finishes only when the factory lets it, and only a task that it holds", () => {
+    expect(TaskFactory.finish(factory, { from: "qa", holder: "qa", names })).toEqual({ _tag: "finish" })
+    expect(TaskFactory.finish(factory, { from: "qa", holder: null, names })).toEqual({ _tag: "finish" })
+    expect(TaskFactory.finish(factory, { from: "build", holder: "build", names })).toEqual({
+      _tag: "refuse",
+      message: "Build is not a last step: hand off to Review.",
+    })
+    expect(TaskFactory.finish(factory, { from: "qa", holder: "build", names })._tag).toBe("conflict")
+  })
+
+  test("an agent outside the factory finishes any task", () => {
+    expect(TaskFactory.finish(factory, { from: "docs", holder: "build", names })).toEqual({ _tag: "finish" })
+    expect(TaskFactory.finish(factory, { from: "ren", holder: null, names })).toEqual({ _tag: "finish" })
   })
 })

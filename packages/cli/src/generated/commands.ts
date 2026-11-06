@@ -406,6 +406,15 @@ export const TaskReview = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
+export const TaskFinish = {
+  id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
+  note: Flag.String("note").pipe(
+    Flag.optional,
+    Flag.withDescription("What is ready and where: the pull request, the deliverable."),
+  ),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const TaskCommentCreate = {
   taskId: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
   body: Flag.String("body").pipe(Flag.optional, Flag.withDescription("Markdown.")),
@@ -1181,6 +1190,12 @@ export const commands = [
         Command.withDescription("Review a task"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.TaskReview(input)),
+        ),
+      ),
+      Command.make("finish", TaskFinish).pipe(
+        Command.withDescription("Finish a task"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.TaskFinish(input)),
         ),
       ),
       Command.make("comment").pipe(

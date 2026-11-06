@@ -6392,6 +6392,104 @@
         }
       }
     },
+    "/tasks/{id}/finish": {
+      "post": {
+        "tags": ["task"],
+        "operationId": "task.finish",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Task.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the finish action on one task.",
+        "summary": "finish task",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Task.FinishInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/task-comments": {
       "post": {
         "tags": ["task-comment"],
@@ -14438,6 +14536,11 @@
             "maximum": 20,
             "description": "Runs of this agent before a person decides."
           },
+          "finish": {
+            "type": "boolean",
+            "enum": [true],
+            "description": "It can finish the task: the factory’s work is done and the task waits for a person or a merge."
+          },
           "to": {
             "type": "array",
             "items": {
@@ -14694,6 +14797,11 @@
                   "minimum": 1,
                   "maximum": 20,
                   "description": "Runs of this agent before a person decides."
+                },
+                "finish": {
+                  "type": "boolean",
+                  "enum": [true],
+                  "description": "It can finish the task: the factory’s work is done and the task waits for a person or a merge."
                 },
                 "to": {
                   "type": "array",
@@ -15441,6 +15549,11 @@
                       "minimum": 1,
                       "maximum": 20,
                       "description": "Runs of this agent before a person decides."
+                    },
+                    "finish": {
+                      "type": "boolean",
+                      "enum": [true],
+                      "description": "It can finish the task: the factory’s work is done and the task waits for a person or a merge."
                     },
                     "to": {
                       "type": "array",
@@ -20620,7 +20733,7 @@
                 "type": "null"
               }
             ],
-            "description": "The agent that has the task. Creating never starts it."
+            "description": "The agent that has the task. Creating never starts it. Without it, an agent of the space’s factory that creates the task holds it."
           },
           "ownerId": {
             "anyOf": [
@@ -20651,6 +20764,25 @@
       "Task.Decision": {
         "type": "string",
         "enum": ["approved", "changes_requested"]
+      },
+      "Task.FinishInput": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What is ready and where: the pull request, the deliverable. The trail keeps it."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Finish the task: the factory’s work is done and the result is ready for a person or a merge. Only an agent the factory lets finish may call it; others hand off with `task_assign`. Use `task_review` instead when you are blocked and a person must decide."
       },
       "Task.ID": {
         "type": "string",
@@ -21441,6 +21573,9 @@
             "$ref": "#/components/schemas/TaskEvent.Reviewed"
           },
           {
+            "$ref": "#/components/schemas/TaskEvent.Finished"
+          },
+          {
             "$ref": "#/components/schemas/TaskEvent.FieldChanged"
           },
           {
@@ -21494,6 +21629,38 @@
         },
         "required": ["_tag", "field", "from", "to"],
         "additionalProperties": false
+      },
+      "TaskEvent.Finished": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["finished"]
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["_tag", "agentId", "note"],
+        "additionalProperties": false,
+        "description": "The factory’s work is done. The task has no agent and waits for a person or a merge."
       },
       "TaskEvent.ID": {
         "type": "string",

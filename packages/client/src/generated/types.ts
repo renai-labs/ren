@@ -413,6 +413,8 @@ export type TaskEventAssigned = {
   note: string | null
 }
 
+export type TaskEventFinished = { _tag: "finished"; agentId: AgentID | null; note: string | null }
+
 export type CredentialEnv = { kind: "env"; name: CredentialAppEnvName; description?: string; optional?: boolean }
 
 export type CredentialItem = { mcp: PrimitiveSlug } | { env: CredentialAppEnvName }
@@ -772,7 +774,7 @@ export type AppListingInfo = {
   archivedAt: string | null
 }
 
-export type FactoryEntry = { agentId: string; maxRuns?: number; to?: Array<FactoryEdge> }
+export type FactoryEntry = { agentId: string; maxRuns?: number; finish?: true; to?: Array<FactoryEdge> }
 
 export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
 
@@ -930,6 +932,7 @@ export type TaskEventData =
   | TaskEventStatusChanged
   | TaskEventReviewRequested
   | TaskEventReviewed
+  | TaskEventFinished
   | TaskEventFieldChanged
   | TaskEventLabelsChanged
   | TaskEventLinksChanged
@@ -981,7 +984,7 @@ export type GitHostListing = { kind: GitHostKind; installed: boolean; repositori
 
 export type InfraFactoryDeclaration = {
   maxHandoffs?: number
-  agents: Array<{ agent: AgentName; maxRuns?: number; to?: Array<InfraFactoryEdgeDeclaration> }>
+  agents: Array<{ agent: AgentName; maxRuns?: number; finish?: true; to?: Array<InfraFactoryEdgeDeclaration> }>
 }
 
 export type InfraPlan = { changes: Array<InfraChange>; problems: Array<InfraProblem>; digest: string; lock: InfraLock }
@@ -1421,6 +1424,7 @@ export type SpaceUpdateInput = {
       readonly agents: ReadonlyArray<{
         readonly agentId: string
         readonly maxRuns?: number
+        readonly finish?: true
         readonly to?: ReadonlyArray<{
           readonly agentId: string
           readonly max?: number
@@ -1439,6 +1443,7 @@ export type SpaceUpdateInput = {
       readonly agents: ReadonlyArray<{
         readonly agentId: string
         readonly maxRuns?: number
+        readonly finish?: true
         readonly to?: ReadonlyArray<{
           readonly agentId: string
           readonly max?: number
@@ -1457,6 +1462,7 @@ export type SpaceUpdateInput = {
       readonly agents: ReadonlyArray<{
         readonly agentId: string
         readonly maxRuns?: number
+        readonly finish?: true
         readonly to?: ReadonlyArray<{
           readonly agentId: string
           readonly max?: number
@@ -1475,6 +1481,7 @@ export type SpaceUpdateInput = {
       readonly agents: ReadonlyArray<{
         readonly agentId: string
         readonly maxRuns?: number
+        readonly finish?: true
         readonly to?: ReadonlyArray<{
           readonly agentId: string
           readonly max?: number
@@ -6167,6 +6174,13 @@ export type TaskReviewInput = {
 
 export type TaskReviewOutput = TaskInfo
 
+export type TaskFinishInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly note?: { readonly note?: string | undefined }["note"]
+}
+
+export type TaskFinishOutput = TaskInfo
+
 export type TaskCommentCreateInput = {
   readonly taskId: { readonly taskId: string; readonly body: string }["taskId"]
   readonly body: { readonly taskId: string; readonly body: string }["body"]
@@ -7423,6 +7437,7 @@ export type InfraPullInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number
@@ -7759,6 +7774,7 @@ export type InfraPullInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number
@@ -8095,6 +8111,7 @@ export type InfraPullInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number
@@ -8436,6 +8453,7 @@ export type InfraPlanInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number
@@ -8772,6 +8790,7 @@ export type InfraPlanInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number
@@ -9108,6 +9127,7 @@ export type InfraPlanInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number
@@ -9449,6 +9469,7 @@ export type InfraApplyInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number
@@ -9787,6 +9808,7 @@ export type InfraApplyInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number
@@ -10125,6 +10147,7 @@ export type InfraApplyInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number
@@ -10463,6 +10486,7 @@ export type InfraApplyInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number
@@ -10801,6 +10825,7 @@ export type InfraApplyInput = {
             readonly agents: ReadonlyArray<{
               readonly agent: string
               readonly maxRuns?: number
+              readonly finish?: true
               readonly to?: ReadonlyArray<{
                 readonly agent: string
                 readonly max?: number

@@ -4,6 +4,7 @@ import {
   IconArrowDown,
   IconArrowUp,
   IconChevronRight,
+  IconFlagCheck,
   IconGhostFilled,
   IconPlus,
   IconX,
@@ -25,6 +26,7 @@ function FactoryGraph(props: { entries: ReadonlyArray<FactoryAgent>; name: (id: 
       .filter((edge) => order.indexOf(edge.agentId) !== order.indexOf(entry.agentId) + 1)
       .map((edge) => ({ from: entry.agentId, edge })),
   )
+  const finishers = props.entries.filter((entry) => entry.finish).map((entry) => entry.agentId)
   return (
     <figure aria-label="Factory flow" className="flex flex-col gap-4 rounded-xl border bg-card p-5">
       <div className="flex flex-wrap items-center gap-y-3">
@@ -44,12 +46,19 @@ function FactoryGraph(props: { entries: ReadonlyArray<FactoryAgent>; name: (id: 
               {entry.maxRuns ? (
                 <span className="text-xs text-muted-foreground tabular-nums">≤{entry.maxRuns} runs</span>
               ) : null}
+              {entry.finish ? <IconFlagCheck aria-label="Can finish" className="size-4 text-muted-foreground" /> : null}
             </span>
           </span>
         ))}
       </div>
-      {handoffs.length > 0 ? (
+      {handoffs.length > 0 || finishers.length > 0 ? (
         <figcaption className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+          {finishers.map((id) => (
+            <span key={`${id}-finish`} className="flex items-center gap-1 rounded-full border px-2 py-0.5">
+              <IconFlagCheck className="size-3.5" />
+              {props.name(id)} → Finish
+            </span>
+          ))}
           {handoffs.map((handoff) => (
             <span
               key={`${handoff.from}-${handoff.edge.agentId}`}

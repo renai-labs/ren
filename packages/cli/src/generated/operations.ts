@@ -825,6 +825,21 @@ export const TaskReview = (input: Command.Command.Config.Infer<typeof Commands.T
     (client, request) => client["task"]["review"]({ ...request.params, payload: request.payload }),
   )
 
+export const TaskFinish = (input: Command.Command.Config.Infer<typeof Commands.TaskFinish>) =>
+  Operation.run(
+    ClientApi.groups["task"].endpoints["task.finish"],
+    {
+      params: { id: input["id"] },
+      payload: { note: input["note"] },
+      input: input["input"],
+      labels: { id: "<task>", note: "--note" },
+      lookups: {
+        id: (client, value) => client["task"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["task"]["finish"]({ ...request.params, ...request.payload }),
+  )
+
 export const TaskCommentCreate = (input: Command.Command.Config.Infer<typeof Commands.TaskCommentCreate>) =>
   Operation.run(
     ClientApi.groups["task-comment"].endpoints["task-comment.create"],
