@@ -154,7 +154,7 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 2. Co-located is possible only when the space's brain provider has `canColocate`, and its template must be of that provider (EN3). A brain provider change that makes co-located impossible is refused until the space picks remote or none (EN24).
 3. A space cannot pick a template that has never built (`image` is null).
 4. `SessionRunner.create` reads `space.hand` once and puts it in `Session.StartInput`. No other caller builds it.
-5. Space members and org admins change `space.hand`, the brain provider and `brainScope`. Org admins get `space.update` on shared spaces (EN45).
+5. `space.hand` and the brain provider are `space.update` fields, so space members, and org admins on shared spaces, change them (EN45).
 6. Only org admins create, edit and archive templates. Archiving a template that a space uses is refused, with the list of spaces (EN24).
 
 ### When a change applies
