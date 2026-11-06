@@ -81,7 +81,7 @@ it.live("asks Ren once for the session of its host token and gives the access Re
     ren.answer(subject.sessionId, () => ({ type: "access", access }))
     const hostToken = yield* Effect.promise(() => FakeRen.hostToken(subject.brainId))
     yield* subject.configure(hostToken)
-    const opened = yield* subject.access.open(subject.sessionId)
+    const opened = yield* subject.access.open(subject.sessionId, { unreachable: false })
     expect([opened.directory, opened.url.href, opened.generation, DateTime.toEpochMillis(opened.expiresAt)]).toEqual([
       access.directory,
       access.url.href,
@@ -105,10 +105,10 @@ it.live("uses the host token that a later model configuration stored", () =>
     const subject = yield* build()
     ren.answer(subject.sessionId, () => ({ type: "not_found" }))
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
-    yield* subject.access.open(subject.sessionId).pipe(Effect.ignore)
+    yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.ignore)
     const newer = yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, 7200))
     yield* subject.configure(newer)
-    yield* subject.access.open(subject.sessionId).pipe(Effect.ignore)
+    yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.ignore)
     expect(ren.calls.findLast((call) => call.brainId === subject.brainId)?.hostToken).toBe(newer)
   }),
 )
@@ -116,7 +116,7 @@ it.live("uses the host token that a later model configuration stored", () =>
 it.live("without a host token it fails at once as Ren does not answer, and asks nothing", () =>
   Effect.gen(function* () {
     const subject = yield* build()
-    const error = yield* subject.access.open(subject.sessionId).pipe(Effect.flip)
+    const error = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
     expect([error._tag, error.message]).toEqual(["EnvironmentAccess.Unavailable", "the cell has no valid host token"])
     expect(ren.accessCalls(subject.sessionId)).toBe(0)
   }),
@@ -128,7 +128,7 @@ it.live("a host token that Ren refuses is not a revoke: it is Ren does not answe
     ren.refuseHosts(true)
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
     const error = yield* subject.access
-      .open(subject.sessionId)
+      .open(subject.sessionId, { unreachable: false })
       .pipe(Effect.flip, Effect.ensuring(Effect.sync(() => ren.refuseHosts(false))))
     expect(error._tag).toBe("EnvironmentAccess.Unavailable")
     expect(yield* subject.store.readHostToken).toEqual(Option.none())
@@ -140,9 +140,11 @@ it.live("Ren's no access is NotFound, and a sandbox Ren cannot give is unavailab
     const subject = yield* build()
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
     ren.answer(subject.sessionId, () => ({ type: "not_found" }))
-    expect((yield* subject.access.open(subject.sessionId).pipe(Effect.flip))._tag).toBe("EnvironmentAccess.NotFound")
+    expect((yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip))._tag).toBe(
+      "EnvironmentAccess.NotFound",
+    )
     ren.answer(subject.sessionId, () => ({ type: "unavailable", message: "Every sandbox of env_1 is full" }))
-    const full = yield* subject.access.open(subject.sessionId).pipe(Effect.flip)
+    const full = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
     expect([full._tag, full.message]).toEqual(["EnvironmentAccess.Unavailable", "Every sandbox of env_1 is full"])
   }),
 )
@@ -153,7 +155,9 @@ it.live("a refused connection to Ren fails at once and is not NotFound", () =>
     yield* relay.refuse(true)
     const subject = yield* build(relay.url)
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
-    expect((yield* subject.access.open(subject.sessionId).pipe(Effect.flip))._tag).toBe("EnvironmentAccess.Unavailable")
+    expect((yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip))._tag).toBe(
+      "EnvironmentAccess.Unavailable",
+    )
   }),
 )
 
@@ -162,7 +166,9 @@ it.effect("a Ren that accepts the request and never answers fails the access in 
     const subject = yield* build()
     ren.answer(subject.sessionId, () => ({ type: "hold" }))
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
-    const opening = yield* subject.access.open(subject.sessionId).pipe(Effect.flip, Effect.forkScoped)
+    const opening = yield* subject.access
+      .open(subject.sessionId, { unreachable: false })
+      .pipe(Effect.flip, Effect.forkScoped)
     yield* Effect.promise(() => ren.reached(subject.brainId))
     yield* TestClock.adjust(HostToken.renAnswersWithin)
     expect((yield* Fiber.join(opening))._tag).toBe("EnvironmentAccess.Unavailable")
@@ -176,7 +182,7 @@ it.live("a host token in its last five minutes is renewed through host.refresh, 
     ren.answer(subject.sessionId, () => ({ type: "access", access }))
     const expiring = yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, 120))
     yield* subject.configure(expiring)
-    yield* subject.access.open(subject.sessionId)
+    yield* subject.access.open(subject.sessionId, { unreachable: false })
     const calls = ren.calls.filter((call) => call.brainId === subject.brainId)
     expect(calls.map((call) => [call.endpoint, call.hostToken === expiring])).toEqual([
       ["host.refresh", true],
@@ -191,7 +197,7 @@ it.live("removing the models removes the host token, so the access fails at once
     const subject = yield* build()
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
     yield* subject.store.remove
-    const error = yield* subject.access.open(subject.sessionId).pipe(Effect.flip)
+    const error = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
     expect([error._tag, error.message]).toEqual(["EnvironmentAccess.Unavailable", "the cell has no valid host token"])
     expect(ren.calls.filter((call) => call.brainId === subject.brainId)).toEqual([])
   }),
@@ -204,9 +210,13 @@ it.live("50 calls in the renewal window of the host token make one host.refresh 
     ren.answer(subject.sessionId, () => ({ type: "access", access }))
     const expiring = yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, 120))
     yield* subject.configure(expiring)
-    const opened = yield* Effect.forEach(Array.from({ length: 50 }), () => subject.access.open(subject.sessionId), {
-      concurrency: "unbounded",
-    })
+    const opened = yield* Effect.forEach(
+      Array.from({ length: 50 }),
+      () => subject.access.open(subject.sessionId, { unreachable: false }),
+      {
+        concurrency: "unbounded",
+      },
+    )
     const calls = ren.calls.filter((call) => call.brainId === subject.brainId)
     expect(opened).toHaveLength(50)
     expect(calls.filter((call) => call.endpoint === "host.refresh")).toHaveLength(1)
@@ -223,7 +233,7 @@ it.live("a host token configured while the host token is being renewed wins, wit
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, 120)))
     const gate = Promise.withResolvers<void>()
     ren.holdRefresh(() => gate.promise)
-    const opening = yield* subject.access.open(subject.sessionId).pipe(Effect.forkScoped)
+    const opening = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.forkScoped)
     yield* Effect.promise(() => ren.reached(subject.brainId))
     const newer = yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, 7200))
     yield* subject.configure(newer)
@@ -241,14 +251,14 @@ it.live("an expired host token fails the access at once without asking Ren; a ne
     ren.answer(subject.sessionId, () => ({ type: "access", access }))
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, -60)))
     expect(yield* subject.hostToken.isValid).toBe(false)
-    const error = yield* subject.access.open(subject.sessionId).pipe(Effect.flip)
+    const error = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
     expect([error._tag, error.message]).toEqual(["EnvironmentAccess.Unavailable", "the cell has no valid host token"])
     expect(ren.accessCalls(subject.sessionId)).toBe(0)
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
-    expect([yield* subject.hostToken.isValid, (yield* subject.access.open(subject.sessionId)).url.href]).toEqual([
-      true,
-      access.url.href,
-    ])
+    expect([
+      yield* subject.hostToken.isValid,
+      (yield* subject.access.open(subject.sessionId, { unreachable: false })).url.href,
+    ]).toEqual([true, access.url.href])
   }),
 )
 
@@ -291,7 +301,7 @@ it.live("the cell's own storage holds only the models and the host token, never 
     const access = yield* accessFor(subject.sessionId)
     ren.answer(subject.sessionId, () => ({ type: "access", access }))
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, 120)))
-    yield* subject.access.open(subject.sessionId)
+    yield* subject.access.open(subject.sessionId, { unreachable: false })
     expect([...stored.keys()].toSorted()).toEqual(["ren:host-token", "ren:models"])
     expect([...stored.values()].filter((value) => value.includes(Redacted.value(access.token)))).toEqual([])
   }),

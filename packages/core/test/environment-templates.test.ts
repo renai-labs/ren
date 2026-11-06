@@ -1,3 +1,4 @@
+import { FetchHttpClient } from "effect/http"
 import { describe, expect } from "bun:test"
 import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
@@ -56,7 +57,7 @@ const key = await Effect.runPromise(Signature.generate("environments"))
 const it = testEffect(
   Layer.mergeAll(
     EnvironmentTemplates.layer,
-    Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
+    Environments.layer.pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer])),
     Space.layer,
     SpaceProvisioning.layer,
   ).pipe(

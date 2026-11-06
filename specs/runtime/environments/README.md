@@ -177,11 +177,11 @@ Built: `EnvironmentTemplate.Networking`, and `limited` only on a provider with `
 
 ### Remote hands
 
-1. Up to `sessionsPerEnvironment` chats share one hand machine. A chat whose turn ends calls `release`. A `release` while another chat on the machine is busy does not shorten the keep-alive.
-2. Every hand uses one folder per chat: `/home/user/workspace/<sessionId>`.
-3. Ren's server owns hand machines. Ren's OpenCode workspace driver stays thin: it asks Ren for `{ url, token }` (EN12).
-4. When the brain cannot reach its hand, it says so in its next `access`. Ren then checks that machine: Gone or frozen → replace; running → keep and log (EN15).
-5. A brain that boots with `REN_HAND_PLACEMENT=remote` replaces four OpenCode services so they run on the hand: `ToolOutput`, `FileSystem`, `Vcs` and `Snapshot`. A co-located brain keeps OpenCode's own services and today's three replacements (workspace driver, `rg`, `RenShell`; `workspace-driver.ts:81-95`). All of these live in one module of the OpenCode adapter (EN13, EN14).
+Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, columns of `MachineLifecycle.Row` on `environment`), with seats (EN43), the provider's workspace for chat folders (`MachineProvider.workspace`, EN42), the executor's answer as the ready check, and the unreachable check (`environments.access?unreachable=true`, EN15). On E2B a hand runs `start.sh` with `REN_HAND=1`: the executor only, open to Ren and the brains.
+
+1. A remote hand is not behind the egress yet: it gets no placeholders that work.
+2. A remote hand does not update in place: a newer template config replaces it at its wake, and it keeps its executor version until it is replaced.
+3. A brain that boots with `REN_HAND_PLACEMENT=remote` replaces four OpenCode services so they run on the hand: `ToolOutput`, `FileSystem`, `Vcs` and `Snapshot`. A co-located brain keeps OpenCode's own services and today's three replacements (workspace driver, `rg`, `RenShell`; `workspace-driver.ts:81-95`). All of these live in one module of the OpenCode adapter (EN13, EN14).
 
 ### Keep-alive and detection
 
@@ -202,15 +202,14 @@ Built: `EnvironmentTemplate.Networking`, and `limited` only on a provider with `
 
 ## 4. Contract changes
 
-| Where                      | Change                                                                                                                                                                                   |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `db`                       | `environment`: the columns of `MachineLifecycle.Row` (with `template`, `template_config`). `environment`: bundle versions. `environment`: the retry and silence columns that `brain` has |
-| `core/machine-access.ts`   | `release`, `status` and `retire`, each with its first caller. Today: `ensure`, `access`, `check`, `retry`.                                                                               |
-| `core/machine-provider.ts` | `size` in `create` for a provider that sizes a machine there; the flag `canPause`. Built: `image`, `network`, `build`, `stepsBetween`, `canLimitHosts`.                                  |
-| `core/environments.ts`     | Remote hand machines on `MachineLifecycle`; the "hand unreachable" check.                                                                                                                |
-| `environment-api`          | Later: a feature list in `hello`.                                                                                                                                                        |
-| `cell`                     | One OpenCode hand-bridge module chosen by `REN_HAND_PLACEMENT`.                                                                                                                          |
-| `infra/aws`                | A memory alarm for the server.                                                                                                                                                           |
+| Where                      | Change                                                                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db`                       | `environment`: bundle versions.                                                                                                                         |
+| `core/machine-access.ts`   | `release`, `status` and `retire`, each with its first caller. Today: `ensure`, `access`, `check`, `retry`.                                              |
+| `core/machine-provider.ts` | `size` in `create` for a provider that sizes a machine there; the flag `canPause`. Built: `image`, `network`, `build`, `stepsBetween`, `canLimitHosts`. |
+| `environment-api`          | Later: a feature list in `hello`.                                                                                                                       |
+| `cell`                     | One OpenCode hand-bridge module chosen by `REN_HAND_PLACEMENT`.                                                                                         |
+| `infra/aws`                | A memory alarm for the server.                                                                                                                          |
 
 Run `bun run generate` after the protocol changes.
 

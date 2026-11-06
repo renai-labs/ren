@@ -1,12 +1,13 @@
 import type { Auth } from "@ren/schema/auth"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import type { Environment } from "@ren/schema/environment"
+import type { Machine } from "@ren/schema/machine"
 import type { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { Primitive } from "@ren/schema/primitive"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, sql } from "drizzle-orm"
-import { check, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import { boolean, check, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core"
 import type { Schema } from "effect"
 import { organization } from "./auth.sql.js"
 import { space } from "./space.sql.js"
@@ -70,6 +71,25 @@ export const environment = pgTable(
       .$type<Space.ID>()
       .references(() => space.id, { onDelete: "cascade" }),
     binding: jsonb().$type<Schema.Json>(),
+    // oxlint-disable-next-line ren/no-comments -- The columns of MachineLifecycle.Row: a remote hand's machine has the same state machine as a brain's (EN1).
+    template: text(),
+    template_config: jsonb().$type<{
+      readonly environmentTemplateId: EnvironmentTemplate.ID
+      readonly config: Schema.Json
+    }>(),
+    egress: boolean().notNull().default(false),
+    url: text(),
+    generation: integer().notNull().default(1),
+    run_epoch: integer().notNull().default(0),
+    phase: text().$type<Machine.Phase>().notNull().default("creating"),
+    failures: integer().notNull().default(0),
+    failure: text(),
+    keep_alive_until: timestamp(),
+    last_active_at: timestamp(),
+    last_progress_at: timestamp(),
+    retry_at: timestamp(),
+    retries: integer().notNull().default(0),
+    unanswered_since: timestamp(),
     created_at: timestamp().defaultNow().notNull(),
   },
   (table) => [

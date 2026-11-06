@@ -15,7 +15,11 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("EnvironmentA
 }) {}
 
 export interface Interface {
-  readonly open: (sessionId: Session.ID) => Effect.Effect<Environment.Access, NotFound | Unavailable>
+  // oxlint-disable-next-line ren/no-comments -- EN15: `unreachable` when the last connection to the session's environment got no answer.
+  readonly open: (
+    sessionId: Session.ID,
+    options: { readonly unreachable: boolean },
+  ) => Effect.Effect<Environment.Access, NotFound | Unavailable>
   readonly release: (sessionId: Session.ID) => Effect.Effect<void, Unavailable>
 }
 

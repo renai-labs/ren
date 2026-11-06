@@ -26,9 +26,12 @@ export const layer = Layer.effect(
       return { token: token.value, unavailable }
     })
     return EnvironmentAccess.Service.of({
-      open: Effect.fn("HostAccess.open")(function* (sessionId) {
+      open: Effect.fn("HostAccess.open")(function* (sessionId, options) {
         const presented = yield* withHostToken(sessionId)
-        return yield* host.environments["environments.access"]({ params: { id: sessionId } }).pipe(
+        return yield* host.environments["environments.access"]({
+          params: { id: sessionId },
+          query: { ...(options.unreachable && { unreachable: "true" as const }) },
+        }).pipe(
           HostToken.withToken(presented.token),
           Effect.timeout(HostToken.renAnswersWithin),
           Effect.catchTag("EnvironmentNotFoundError", (error) =>

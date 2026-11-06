@@ -101,6 +101,7 @@ export interface Interface {
   readonly accessEnvironment: (
     host: CurrentHost["Service"],
     sessionId: Session.ID,
+    options?: { readonly unreachable?: boolean },
   ) => Effect.Effect<Environment.Access, EnvironmentNotFoundError | EnvironmentUnavailableError | ForbiddenError>
   readonly releaseEnvironment: (
     host: CurrentHost["Service"],
@@ -636,9 +637,10 @@ export const layer = Layer.effect(
       accessEnvironment: Effect.fn("Brains.accessEnvironment")(function* (
         host: CurrentHost["Service"],
         sessionId: Session.ID,
+        options: { readonly unreachable?: boolean } = {},
       ) {
         const subject = yield* inBrain(host, sessionId)
-        return yield* environments.access(subject, yield* handOf(host.brainId, host.generation)).pipe(
+        return yield* environments.access(subject, yield* handOf(host.brainId, host.generation), options).pipe(
           Effect.catchTags({
             "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
             "Environments.Unavailable": (error) =>

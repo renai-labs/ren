@@ -34,7 +34,7 @@ const kind = Effect.gen(function* () {
     capacity: false,
     outdated: "current" as "current" | "update" | "replace",
     updates: true,
-    wanted: { image: Option.none(), hosts: Option.none() } as MachineLifecycle.Wanted,
+    wanted: { config: {}, image: Option.none(), hosts: Option.none() } as MachineLifecycle.Wanted,
     system: "system",
   }
   const images: Array<Option.Option<string>> = []
@@ -92,6 +92,7 @@ const kind = Effect.gen(function* () {
     name: "TestLifecycle",
     noun: "Machine",
     annotation: "machine",
+    kind: "hand",
     providerOf: () => Effect.sync(() => ({ ...provider, template: switches.system })),
     isBehindEgress: () => false,
     bootWithin: Duration.seconds(1),
@@ -323,6 +324,7 @@ describe("MachineLifecycle updates", () => {
   )
 
   const templateImage = (name: string, packages: ReadonlyArray<string>, environmentTemplateId = templateId) => ({
+    config: {},
     image: Option.some({ name, template: { environmentTemplateId, config: { packages } } }),
     hosts: Option.some(["api.example.com"]),
   })
@@ -391,7 +393,7 @@ describe("MachineLifecycle updates", () => {
           })
         expect(yield* wakeWith(templateImage("image-b", ["ffmpeg"]))).toBe(2)
         expect(yield* wakeWith(templateImage("image-c", ["ffmpeg", "git"], EnvironmentTemplate.ID.create()))).toBe(3)
-        expect(yield* wakeWith({ image: Option.none(), hosts: Option.none() })).toBe(4)
+        expect(yield* wakeWith({ config: {}, image: Option.none(), hosts: Option.none() })).toBe(4)
         expect(memory.images).toEqual([
           Option.some("image-a"),
           Option.some("image-b"),

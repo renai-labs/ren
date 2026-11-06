@@ -34,6 +34,7 @@ it.live("a brain whose owner process dies is killed with its whole process group
       const create = (generation: number) =>
         provider.create({
           labels: {
+            kind: "brain",
             id: Brain.ID.create(),
             generation,
             organizationId: Auth.OrganizationID.create(),
