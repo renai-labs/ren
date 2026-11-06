@@ -22,11 +22,14 @@ import {
   Schema,
 } from "effect"
 import { TestClock } from "effect/testing"
+import { CredentialCallers } from "../src/credential-callers.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/environment-provider.js"
+import { TestSandboxEgress } from "./lib/sandbox-egress.js"
 import { Seed } from "./lib/seed.js"
+import { SandboxEgress } from "../src/sandbox-egress.js"
 import { Signer } from "../src/signer.js"
 
 const it = testEffect(Testing.layer)
@@ -55,15 +58,26 @@ const noExecutor = Layer.succeed(
 const environmentsWith = Effect.fnUntraced(function* (
   config: Readonly<Record<string, string>> = {},
   options: Parameters<typeof TestProvider.make>[0] = {},
+  ren: { readonly hasEgress?: boolean } = {},
 ) {
   const probe = yield* TestProvider.make(options)
   const context = yield* Layer.build(
-    Layer.fresh(Environments.layer.pipe(Layer.provide([Signer.layerLocal, noExecutor]))).pipe(
+    Layer.fresh(
+      Environments.layer.pipe(
+        Layer.provide([Signer.layerLocal, noExecutor]),
+        Layer.provide(ren.hasEgress ? Layer.empty : SandboxEgress.layerNone),
+        Layer.provideMerge(TestSandboxEgress.layer),
+      ),
+    ).pipe(
       Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
       Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ ENVIRONMENT_KEYS: signingKeys, ...config }))),
     ),
   )
-  return { environments: Context.get(context, Environments.Service), probe }
+  return {
+    environments: Context.get(context, Environments.Service),
+    callers: Context.get(context, CredentialCallers.Service),
+    probe,
+  }
 })
 
 const subjectIn = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
@@ -148,19 +162,49 @@ describe("Environments", () => {
       }),
   )
 
-  it.live("an access names the folder that the environment's sessions share and the egress of its provider", () =>
-    Effect.gen(function* () {
-      const egressOf = Effect.fnUntraced(function* (egress: boolean) {
-        const subject = yield* environmentsWith({}, { egress })
-        const organizationId = yield* Seed.organization()
-        const session = yield* subjectIn(organizationId)
-        yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
-        const access = yield* subject.environments.access(session, Option.none())
-        return [access.sharedDirectory, access.egress]
-      })
-      expect(yield* egressOf(false)).toEqual(["/workspace/.ren", false])
-      expect(yield* egressOf(true)).toEqual(["/workspace/.ren", true])
-    }),
+  it.live(
+    "a remote hand goes through Ren's egress with its own proxy login when its provider can, and its access says so; without an egress it gets none (C2)",
+    () =>
+      Effect.gen(function* () {
+        const egressOf = Effect.fnUntraced(function* (options: {
+          readonly canEgress: boolean
+          readonly hasEgress: boolean
+        }) {
+          const subject = yield* environmentsWith({}, { egress: options.canEgress }, { hasEgress: options.hasEgress })
+          const organizationId = yield* Seed.organization()
+          const session = yield* subjectIn(organizationId)
+          yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+          const access = yield* subject.environments.access(session, Option.none())
+          const proxy = Option.flatten(Option.fromNullishOr((yield* Ref.get(subject.probe.proxies)).at(0)))
+          const verified = Option.isSome(proxy)
+            ? yield* subject.callers.verify({
+                kind: "ProxyLogin",
+                username: proxy.value.username,
+                password: proxy.value.password,
+              })
+            : undefined
+          return { sharedDirectory: access.sharedDirectory, egress: access.egress, verified }
+        })
+        expect(yield* egressOf({ canEgress: true, hasEgress: true })).toEqual({
+          sharedDirectory: "/workspace/.ren",
+          egress: true,
+          verified: {
+            ok: true,
+            caller: {
+              workload: { kind: "hand", id: expect.any(String), generation: 1 },
+              organizationId: expect.any(String),
+            },
+          },
+        })
+        expect(yield* egressOf({ canEgress: false, hasEgress: true })).toMatchObject({
+          egress: false,
+          verified: undefined,
+        })
+        expect(yield* egressOf({ canEgress: true, hasEgress: false })).toMatchObject({
+          egress: false,
+          verified: undefined,
+        })
+      }),
   )
 
   it.live("a configured token lifetime is the access's lifetime", () =>

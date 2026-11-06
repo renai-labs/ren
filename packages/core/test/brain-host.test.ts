@@ -30,6 +30,7 @@ import { AppProfiles } from "../src/app/profiles.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/environment-provider.js"
 import { Host } from "./lib/host.js"
+import { TestSandboxEgress } from "./lib/sandbox-egress.js"
 import { Seed } from "./lib/seed.js"
 import { Signer } from "../src/signer.js"
 
@@ -470,7 +471,7 @@ describe("BrainHost pull", () => {
               ]),
               (probes) => {
                 const environments = Environments.layer.pipe(
-                  Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
+                  Layer.provide([Signer.layerLocal, FetchHttpClient.layer, TestSandboxEgress.layer]),
                   Layer.provide(EnvironmentProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
                 )
                 return Layer.merge(

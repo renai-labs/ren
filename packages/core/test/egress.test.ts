@@ -314,6 +314,43 @@ describe("Egress.resolve", () => {
     }),
   )
 
+  it.live("a remote hand's placeholder becomes the key of its space, as its brain's does", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const credentials = yield* Credentials.Service
+      const callers = yield* CredentialCallers.Service
+      const database = yield* Database.Service
+      const found = yield* setup()
+      yield* credentials.create(found.ada, {
+        owner: { kind: "space", spaceId: found.space.id },
+        label: "STRIPE_API_KEY",
+        hosts: ["api.stripe.com"],
+        value: { type: "key", value: Redacted.make("sk_live_real") },
+      })
+      const environmentId = Environment.ID.create()
+      yield* database.db.insert(Database.Schema.environment).values({
+        id: environmentId,
+        environment_template_id: yield* Seed.environmentTemplate(found.organizationId),
+        space_id: found.space.id,
+      })
+      const hand = yield* callers.issue(
+        { workload: { kind: "hand", id: environmentId, generation: 1 }, organizationId: found.organizationId },
+        "ProxyLogin",
+      )
+      if (hand.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
+      const reply = yield* resolver.resolve(
+        all,
+        request({ kind: "ProxyLogin", username: hand.username, password: hand.password }, "api.stripe.com", [
+          "ren:STRIPE_API_KEY",
+        ]),
+      )
+      expect(reply).toMatchObject({ allow: true, workload: `hand:${environmentId}:1` })
+      expect(values(reply)).toEqual([
+        { op: "replace", placeholder: "ren:STRIPE_API_KEY", value: "sk_live_real", in: ["header"] },
+      ])
+    }),
+  )
+
   it.live("a principal limited to one org gets principal_scope for a workload of another org", () =>
     Effect.gen(function* () {
       const resolver = yield* Egress.Service

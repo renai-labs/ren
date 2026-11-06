@@ -333,8 +333,11 @@ export const layer = Layer.effect(
           Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
         ),
       proxyFor: (row) =>
-        egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id }),
-      retire: egress.retire,
+        egress.proxyFor({
+          workload: { kind: "brain", id: row.id, generation: row.generation },
+          organizationId: row.organization_id,
+        }),
+      retire: (brainId) => egress.retire({ kind: "brain", id: brainId }),
       wants,
       variables: Effect.fnUntraced(function* (row) {
         const bundles = yield* wanted
