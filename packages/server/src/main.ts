@@ -74,10 +74,20 @@ import { EgressControl } from "@ren/core/egress-control"
 import { EnvironmentNetwork } from "@ren/core/environment-network"
 import { AppResolve } from "@ren/core/app/resolve"
 
+// oxlint-disable-next-line ren/no-comments -- Every stored credential is sealed with ENVELOPE_KEYS; without a key the server would start and then refuse each credential save, so it does not start.
+const envelope = Layer.unwrap(Effect.as(Config.Redacted("ENVELOPE_KEYS"), Envelope.layerLocal))
+
+// oxlint-disable-next-line ren/no-comments -- One proxy login per machine for brains and remote hands. An E2B brain without the egress would fetch the real model key, and in e2b-space the agent's code runs in the same sandbox, so the server does not start without EGRESS_PROXY_ADDRESS.
+const sandboxEgress = Layer.unwrap(
+  Effect.map(Config.String("SANDBOX_PROVIDER").pipe(Config.withDefault("local")), (provider) =>
+    provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig,
+  ),
+).pipe(Layer.provide(CredentialCallers.layer), Layer.provide(envelope))
+
 const environmentNetwork = EnvironmentNetwork.layer.pipe(Layer.provide(AppResolve.layer))
 
-// oxlint-disable-next-line ren/no-comments -- Remote hands need what brains need: Ren's code and the host list of their template.
-const environments = Environments.layer.pipe(Layer.provide([Bundles.layer, environmentNetwork]))
+// oxlint-disable-next-line ren/no-comments -- Remote hands need what brains need: the egress, Ren's code and the host list of their template.
+const environments = Environments.layer.pipe(Layer.provide([sandboxEgress, Bundles.layer, environmentNetwork]))
 
 const host = Layer.unwrap(
   Effect.gen(function* () {
@@ -96,8 +106,7 @@ const host = Layer.unwrap(
     return BrainHost.layerSandbox.pipe(
       Layer.provide(
         BrainLifecycle.layer.pipe(
-          // oxlint-disable-next-line ren/no-comments -- An E2B brain without the egress would fetch the real model key, and in e2b-space the agent's code runs in the same sandbox, so the server does not start without EGRESS_PROXY_ADDRESS.
-          Layer.provide(provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig),
+          Layer.provide(sandboxEgress),
           Layer.provide(Bundles.layer),
           Layer.provide(environmentNetwork),
         ),
@@ -127,9 +136,6 @@ const models = Layer.unwrap(
       : Models.layerInferenceGateway.pipe(Layer.provide(FetchHttpClient.layer)),
   ),
 ).pipe(Layer.provideMerge(RenInference.layerConfig), Layer.provide(Access.layer))
-
-// oxlint-disable-next-line ren/no-comments -- Every stored credential is sealed with ENVELOPE_KEYS; without a key the server would start and then refuse each credential save, so it does not start.
-const envelope = Layer.unwrap(Effect.as(Config.Redacted("ENVELOPE_KEYS"), Envelope.layerLocal))
 
 const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(ProviderConnect.layer),

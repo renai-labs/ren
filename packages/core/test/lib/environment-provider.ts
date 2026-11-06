@@ -13,6 +13,7 @@ interface Probe {
   readonly provisions: Ref.Ref<ReadonlyArray<Environment.ID>>
   readonly destroyed: Ref.Ref<ReadonlyArray<Environment.ID>>
   readonly gone: Ref.Ref<ReadonlySet<Environment.ID>>
+  readonly networks: Ref.Ref<ReadonlyArray<MachineProvider.Network>>
   readonly failing: Ref.Ref<boolean>
   readonly provider: MachineProvider.Provider
 }
@@ -34,6 +35,7 @@ export const make = (
     const destroyed = yield* Ref.make<ReadonlyArray<Environment.ID>>([])
     const gone = yield* Ref.make<ReadonlySet<Environment.ID>>(new Set())
     const failing = yield* Ref.make(false)
+    const networks = yield* Ref.make<ReadonlyArray<MachineProvider.Network>>([])
     const endpoint =
       options.endpoint ??
       ((environmentId: Environment.ID): Effect.Effect<{ readonly url: string }, MachineProvider.Gone> =>
@@ -56,6 +58,7 @@ export const make = (
           if (yield* Ref.get(failing)) return yield* new MachineProvider.Failed({ message: "the test provider fails" })
           const environmentId = Environment.ID.make(input.labels.id)
           yield* Ref.update(provisions, (all) => [...all, environmentId])
+          yield* Ref.update(networks, (all) => [...all, input.network])
           return { binding: { environmentId }, url: `http://${environmentId.toLowerCase()}.test/` }
         }),
       connect: (binding) =>
@@ -69,5 +72,5 @@ export const make = (
         Effect.map(Ref.get(gone), (all) => (all.has(binding.environmentId) ? ("gone" as const) : ("running" as const))),
       ...(build && { build: (input: { readonly config: typeof Config.Type }) => build(input.config) }),
     })
-    return { provisions, destroyed, gone, failing, provider } satisfies Probe
+    return { provisions, destroyed, gone, failing, networks, provider } satisfies Probe
   })
