@@ -46,7 +46,12 @@ export const documents = [
         roles: organizationRoles,
         when: [facts.member],
       },
-      { actions: [actions.read, actions.reach], effect: "allow", roles: administratorRoles, when: [facts.shared] },
+      {
+        actions: [actions.read, actions.reach, actions.update],
+        effect: "allow",
+        roles: administratorRoles,
+        when: [facts.shared],
+      },
       { actions: [actions.reach], effect: "allow", roles: organizationRoles, when: [facts.member] },
       { actions: [actions.archive], effect: "allow", roles: organizationRoles, when: [facts.member, facts.shared] },
       { actions: [actions.archive], effect: "allow", roles: administratorRoles, when: [facts.private] },

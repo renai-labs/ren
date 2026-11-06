@@ -87,7 +87,7 @@ describe("Space", () => {
   )
 
   it.live(
-    "hides spaces from members outside them; an admin sees the list entry and joins before changing anything (AC4)",
+    "hides spaces from members outside them; an admin sees the list entry, updates the space, and joins before changing its members (AC4, EN45)",
     () =>
       Effect.gen(function* () {
         const spaces = yield* Space.Service
@@ -102,15 +102,13 @@ describe("Space", () => {
           membershipId: null,
           description: "Shared",
           canJoin: true,
-          canUpdate: false,
+          canUpdate: true,
           canAddMember: false,
           canArchive: false,
         })
         expect((yield* Effect.flip(spaces.get(grace, team.id)))._tag).toBe("Primitive.NotFound")
         expect((yield* spaces.list(grace, page)).items.map((space) => space.id)).not.toContain(team.id)
-        expect((yield* Effect.flip(spaces.update(admin, team.id, { description: "Mine" })))._tag).toBe(
-          "Primitive.Forbidden",
-        )
+        expect((yield* spaces.update(admin, team.id, { description: "Mine" })).description).toBe("Mine")
         expect((yield* Effect.flip(members.create(admin, { spaceId: team.id, userId: grace.userId })))._tag).toBe(
           "Primitive.Forbidden",
         )
