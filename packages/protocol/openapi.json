@@ -19974,6 +19974,18 @@
           "brainScope": {
             "$ref": "#/components/schemas/Brain.Scope"
           },
+          "brainProvider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The brain provider the space chose. Null: the deployment’s first one. The app hides the choice while the deployment has one."
+          },
           "memberCount": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -20034,6 +20046,7 @@
           "name",
           "description",
           "brainScope",
+          "brainProvider",
           "memberCount",
           "membershipId",
           "factory",
@@ -20128,6 +20141,20 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Brain.Scope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "brainProvider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
               },
               {
                 "type": "null"

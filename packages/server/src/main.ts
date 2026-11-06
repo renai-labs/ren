@@ -1,4 +1,5 @@
 import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
+import { BrainProvider } from "@ren/core/brain-provider"
 import { Access } from "@ren/core/access"
 import { CredentialCallers } from "@ren/core/credential-callers"
 import { CredentialRefresh } from "@ren/core/credential-refresh"
@@ -17,6 +18,7 @@ import { BrainHost } from "@ren/core/brain-host"
 import { BrainPush } from "@ren/core/brain-push"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
 import { Bundles } from "@ren/core/bundles"
+import { ProviderCheck } from "@ren/core/provider-check"
 import { Brains } from "@ren/core/brains"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelSecrets } from "@ren/core/channel-secrets"
@@ -93,15 +95,18 @@ const host = Layer.unwrap(
         ),
       ),
       Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),
-      Layer.provide(
+      Layer.merge(Layer.effectDiscard(ProviderCheck.run.pipe(Effect.orDie))),
+      Layer.provideMerge(
         provider === "e2b"
-          ? E2BSandbox.layer
-          : LocalSandbox.layer({
-              entry,
-              executor,
-              root,
-              ...Option.match(owner, { onNone: () => ({}), onSome: (pid) => ({ owner: pid }) }),
-            }),
+          ? BrainProvider.layer([E2BSandbox.provider])
+          : BrainProvider.layer([
+              LocalSandbox.provider({
+                entry,
+                executor,
+                root,
+                ...Option.match(owner, { onNone: () => ({}), onSome: (pid) => ({ owner: pid }) }),
+              }),
+            ]),
       ),
     )
   }),

@@ -24,6 +24,7 @@ const provider = Effect.gen(function* () {
     canEgress: false,
     canMount: false,
     canSample: false,
+    canColocate: false,
     config: Schema.Struct({ environmentTemplateId: EnvironmentTemplate.ID }),
     binding: Schema.Struct({ environmentTemplateId: EnvironmentTemplate.ID, generation: Schema.Int }),
     create: (input) =>

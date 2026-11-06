@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
+import { BrainProvider } from "../src/brain-provider.js"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
@@ -7,7 +8,6 @@ import { eq } from "drizzle-orm"
 import { Effect, Option, Schedule } from "effect"
 import { Brains } from "../src/brains.js"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
-import { MachineProvider } from "../src/machine-provider.js"
 import { E2BSandbox } from "../src/machine-provider/e2b.js"
 import { BrainRuns } from "./lib/brain-runs.js"
 
@@ -23,18 +23,20 @@ describe("brain runs", () => {
   test("cleanup destroys a provider sandbox whose brain row does not exist", async () => {
     const current = await runs.ren()
     const created = await current.runPromise(
-      MachineProvider.Brain.use((provider) =>
-        provider.create({
-          labels: {
-            id: Brain.ID.create(),
-            generation: 1,
-            organizationId: Auth.OrganizationID.create(),
-            spaceId: Space.ID.create(),
-          },
-          config: {},
-          variables: {},
-          proxy: Option.none(),
-        }),
+      BrainProvider.first.pipe(
+        Effect.flatMap((provider) =>
+          provider.create({
+            labels: {
+              id: Brain.ID.create(),
+              generation: 1,
+              organizationId: Auth.OrganizationID.create(),
+              spaceId: Space.ID.create(),
+            },
+            config: {},
+            variables: {},
+            proxy: Option.none(),
+          }),
+        ),
       ),
     )
     const pid = BrainRuns.pidOf(created.binding)
@@ -77,7 +79,7 @@ describe.skipIf(!process.env.E2B_API_KEY)("an E2B brain", () => {
   test("E2B: a template tag that E2B does not have fails with the tag in the reason, and the third failure gives failed (G4, E81)", async () => {
     const found = await runs.seeded()
     const current = await runs.ren({
-      sandbox: E2BSandbox.layer,
+      sandbox: BrainProvider.layer([E2BSandbox.provider]),
       config: {
         E2B_API_KEY: process.env.E2B_API_KEY ?? "",
         E2B_TEMPLATE: "ren-brain-dev:0000000000000000",

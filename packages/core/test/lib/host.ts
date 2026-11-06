@@ -1,5 +1,6 @@
 export * as Host from "./host.js"
 
+import { BrainProvider } from "../../src/brain-provider.js"
 import { BunCrypto } from "@effect/platform-bun"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { TestEnvironment } from "@ren/executor/testing"
@@ -26,7 +27,6 @@ import { DurableRunner } from "../../src/durable-runner.js"
 import { EnvironmentProvider } from "../../src/environment-provider.js"
 import { Environments } from "../../src/environments.js"
 import type { Models } from "../../src/models.js"
-import { MachineProvider } from "../../src/machine-provider.js"
 import { LocalSandbox } from "../../src/machine-provider/local.js"
 import { Settings } from "../../src/settings.js"
 import { TestDrives } from "./drives.js"
@@ -72,7 +72,7 @@ export const local = (options: {
   readonly maxRunning?: number
   readonly template?: string
 }) =>
-  LocalSandbox.layer({
+  LocalSandbox.provider({
     entry,
     executor,
     root: options.root,
@@ -91,7 +91,7 @@ interface StackOptions<E, R> {
   readonly lostEvery?: Duration.Input
   readonly maxRunning?: number
   readonly template?: string
-  readonly sandbox?: Layer.Layer<MachineProvider.Brain, unknown, HttpClient.HttpClient>
+  readonly sandbox?: Layer.Layer<BrainProvider.Registry, unknown, HttpClient.HttpClient>
   readonly keepBrains?: boolean
 }
 
@@ -113,7 +113,9 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
       ),
     ),
     Layer.provideMerge(
-      (options.keepBrains ? Layer.empty : destroyBrains).pipe(Layer.provideMerge(options.sandbox ?? local(options))),
+      (options.keepBrains ? Layer.empty : destroyBrains).pipe(
+        Layer.provideMerge(options.sandbox ?? BrainProvider.layer([local(options)])),
+      ),
     ),
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
     Layer.provide(Settings.layer),
@@ -250,7 +252,7 @@ const serveSynced = (port: number) =>
 
 export const destroyBrains = Layer.effectDiscard(
   Effect.gen(function* () {
-    const provider = yield* MachineProvider.Brain
+    const provider = yield* BrainProvider.first
     yield* Effect.addFinalizer(() =>
       provider.list.pipe(
         Effect.flatMap((all) => Effect.forEach(all, (each) => provider.destroy(each.binding).pipe(Effect.ignore))),
@@ -344,7 +346,7 @@ const LocalBinding = Schema.Struct({ pid: Schema.Int, home: Schema.String })
 
 // oxlint-disable-next-line ren/no-comments -- Stops a local brain, changes its disk while no brain process runs, and lets the restart loop boot it again.
 export const restart = Effect.fnUntraced(function* (brainId: Brain.ID, change: (home: string) => Promise<unknown>) {
-  const provider = yield* MachineProvider.Brain
+  const provider = yield* BrainProvider.first
   const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === brainId)
   if (!found) return yield* Effect.die(new Error(`Brain ${brainId} has no sandbox`))
   const binding = Schema.decodeUnknownSync(LocalBinding)(found.binding)

@@ -6,7 +6,7 @@ import type { Brain as BrainSchema } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import type { EnvironmentProvider } from "@ren/schema/environment-provider"
 import type { Space } from "@ren/schema/space"
-import { Context, type DateTime, Duration, Effect, Option, Redacted, Schedule, Schema, Stream } from "effect"
+import { type DateTime, Duration, Effect, Option, Redacted, Schedule, Schema, Stream } from "effect"
 import { type HttpClient, HttpClientRequest } from "effect/http"
 
 export class InvalidConfig extends Schema.TaggedError<InvalidConfig>()("MachineProvider.InvalidConfig", {
@@ -95,6 +95,8 @@ interface Definition<Config, Binding> {
   readonly canEgress: boolean
   readonly canMount: boolean
   readonly canSample: boolean
+  // oxlint-disable-next-line ren/no-comments -- Whether its machines can run a brain and that brain's tools on one machine (EN3).
+  readonly canColocate: boolean
   readonly template?: string
   readonly config: Schema.Codec<Config, unknown>
   readonly binding: Schema.Codec<Binding, unknown>
@@ -120,6 +122,7 @@ export interface Provider {
   readonly canEgress: boolean
   readonly canMount: boolean
   readonly canSample: boolean
+  readonly canColocate: boolean
   readonly template: string | null
   readonly check: (config: unknown) => Effect.Effect<Schema.Json, InvalidConfig>
   readonly create: (input: CreateInput<Schema.Json>) => Effect.Effect<Created, Failed | Capacity>
@@ -137,8 +140,23 @@ export interface Provider {
   readonly metered: (since: Option.Option<DateTime.Utc>) => Effect.Effect<ReadonlyArray<Metered>, Failed>
 }
 
-// oxlint-disable-next-line ren/no-comments -- The deployment's brain provider. A registry of brain providers replaces it (spec §5, PR 11).
-export class Brain extends Context.Service<Brain, Provider>()("@ren/core/MachineProvider/Brain") {}
+export interface Registry {
+  readonly providers: ReadonlyArray<Provider>
+  readonly get: (id: string) => Option.Option<Provider>
+}
+
+// oxlint-disable-next-line ren/no-comments -- The providers of one kind that a deployment registers, one per id.
+export const registry = <E, R>(providers: ReadonlyArray<Effect.Effect<Provider, E, R>>) =>
+  Effect.gen(function* () {
+    const all = yield* Effect.all(providers)
+    const ids = all.map((provider) => provider.info.id)
+    if (new Set(ids).size !== ids.length)
+      return yield* Effect.die(new Error(`Two providers share an id: ${ids.join(", ")}`))
+    return {
+      providers: all,
+      get: (id: string) => Option.fromNullishOr(all.find((provider) => provider.info.id === id)),
+    } satisfies Registry
+  })
 
 export const make = <Config, Binding>(definition: Definition<Config, Binding>): Provider => {
   const config = Schema.toCodecJson(definition.config)
@@ -166,6 +184,7 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
     canEgress: definition.canEgress,
     canMount: definition.canMount,
     canSample: definition.canSample,
+    canColocate: definition.canColocate,
     template: definition.template ?? null,
     check: (value) =>
       Schema.decodeUnknownEffect(config)(value).pipe(

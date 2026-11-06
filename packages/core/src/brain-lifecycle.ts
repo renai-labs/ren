@@ -8,6 +8,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Bundle } from "@ren/schema/bundle"
 import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
+import type { Space } from "@ren/schema/space"
 import { and, eq, exists, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { WorkflowEngine } from "effect/workflow"
@@ -18,6 +19,7 @@ import { Deployment } from "./deployment.js"
 import { Environments } from "./environments.js"
 import type { MachineAccess } from "./machine-access.js"
 import { MachineLifecycle } from "./machine-lifecycle.js"
+import { BrainProvider } from "./brain-provider.js"
 import { MachineProvider } from "./machine-provider.js"
 import { SandboxEgress } from "./sandbox-egress.js"
 
@@ -55,7 +57,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const provider = yield* MachineProvider.Brain
+    const registry = yield* BrainProvider.Registry
     const client = yield* BrainClient.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const environments = yield* Environments.Service
@@ -196,13 +198,35 @@ export const layer = Layer.effect(
     const treeOf = (versions: Readonly<Record<Bundle.Kind, string>>) => `${versions.brain}-${versions.dependencies}`
 
     // oxlint-disable-next-line ren/no-comments -- A brain goes behind the egress when this Ren runs one and its provider can route a sandbox through it. The answer is kept on the row (egress); every later step reads the row, never the setting.
-    const isBehindEgress = egress.enabled && provider.canEgress
+    const isBehindEgress = (provider: MachineProvider.Provider) => egress.enabled && provider.canEgress
+
+    // oxlint-disable-next-line ren/no-comments -- The provider the brain's space chose, or the deployment's first one. Ren does not start when a space names one it does not register (EN24).
+    const chosen = Effect.fnUntraced(function* (spaceId: Space.ID) {
+      const row = (yield* database.db
+        .select({ provider: Database.Schema.space.brain_provider })
+        .from(Database.Schema.space)
+        .where(eq(Database.Schema.space.id, spaceId))
+        .pipe(Effect.orDie)).at(0)
+      const found = row?.provider ? registry.get(row.provider) : Option.fromNullishOr(registry.providers.at(0))
+      if (Option.isNone(found))
+        return yield* Effect.die(new Error(`No brain provider ${row?.provider ?? ""} in this Ren`))
+      return found.value
+    })
+
+    const providerOf = (row: Row) =>
+      row.provider
+        ? Option.match(registry.get(row.provider), {
+            onNone: () =>
+              Effect.die(new Error(`Brain ${row.id} runs on ${row.provider}, which this Ren does not register`)),
+            onSome: Effect.succeed,
+          })
+        : chosen(row.space_id)
 
     const machines = MachineLifecycle.make({
       name: "BrainLifecycle",
       noun: "Brain",
       annotation: "brain",
-      provider,
+      providerOf,
       isBehindEgress,
       bootWithin,
       wakeWithin,
@@ -325,6 +349,7 @@ export const layer = Layer.effect(
         return true
       }),
       outdated: Effect.fnUntraced(function* (row) {
+        if (row.provider && row.provider !== (yield* chosen(row.space_id)).info.id) return "replace" as const
         const bundles = yield* wanted
         if (Option.isNone(bundles)) return "current" as const
         if (!row.bundles) return "replace" as const
@@ -367,7 +392,10 @@ export const layer = Layer.effect(
         ),
     })
 
-    yield* provider.lost.pipe(
+    yield* Stream.mergeAll(
+      registry.providers.map((provider) => provider.lost),
+      { concurrency: "unbounded" },
+    ).pipe(
       Stream.runForEach((lost) =>
         Schema.is(Brain.ID)(lost.id)
           ? machines.lose({ id: lost.id, generation: lost.generation }, "its machine is gone")
@@ -405,7 +433,7 @@ export const layer = Layer.effect(
     const cleanup = Effect.gen(function* () {
       const chats = Database.Schema.agent_session
       const resting = yield* database.db
-        .select({ id: brains.id, generation: brains.generation, binding: brains.binding })
+        .select({ brain: brains })
         .from(brains)
         .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, brains.space_id))
         .where(
@@ -427,19 +455,24 @@ export const layer = Layer.effect(
         resting,
         (row) =>
           machines
-            .rest(row)
-            .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of brain ${row.id} failed`, error))),
+            .rest(row.brain)
+            .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of brain ${row.brain.id} failed`, error))),
         { discard: true },
       )
-      const listed = (yield* provider.list.pipe(
-        Effect.catch((error) =>
-          Effect.logWarning("Cleanup could not list sandboxes", error).pipe(
-            Effect.as<ReadonlyArray<MachineProvider.Listed>>([]),
+      const listed = (yield* Effect.forEach(registry.providers, (provider) =>
+        provider.list.pipe(
+          Effect.map((all) => all.map((each) => ({ ...each, provider }))),
+          Effect.catch((error) =>
+            Effect.logWarning(`Cleanup could not list the machines of ${provider.info.id}`, error).pipe(Effect.as([])),
           ),
         ),
-      )).flatMap((each) =>
-        Schema.is(Brain.ID)(each.id) ? [{ binding: each.binding, brainId: each.id, generation: each.generation }] : [],
-      )
+      ))
+        .flat()
+        .flatMap((each) =>
+          Schema.is(Brain.ID)(each.id)
+            ? [{ binding: each.binding, brainId: each.id, generation: each.generation, provider: each.provider }]
+            : [],
+        )
       const known = new Map(
         (yield* database.db
           .select({ id: brains.id, generation: brains.generation })
@@ -455,7 +488,7 @@ export const layer = Layer.effect(
       yield* Effect.forEach(
         listed.filter((each) => known.get(each.brainId) !== each.generation),
         (each) =>
-          provider
+          each.provider
             .destroy(each.binding)
             .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of a sandbox of ${each.brainId} failed`, error))),
         { discard: true },
@@ -525,6 +558,7 @@ export const layer = Layer.effect(
       hand: Effect.fn("BrainLifecycle.hand")(function* (brainId: Brain.ID) {
         const row = yield* read(brainId)
         if (!row.binding) return Option.none()
+        const provider = yield* providerOf(row)
         return Option.some({
           ...(yield* provider.hand(row.binding).pipe(Effect.orDie)),
           egress: row.egress,

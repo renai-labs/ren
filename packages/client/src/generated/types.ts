@@ -1115,6 +1115,7 @@ export type SpaceInfo = {
   name: string
   description: string | null
   brainScope: BrainScope
+  brainProvider: string | null
   memberCount: number
   membershipId: SpaceMembershipID | null
   factory: FactoryInfo
@@ -1432,6 +1433,7 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
+    readonly brainProvider?: string | null | null
   }["factory"]
   readonly name?: {
     readonly factory?: {
@@ -1450,6 +1452,7 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
+    readonly brainProvider?: string | null | null
   }["name"]
   readonly description?: {
     readonly factory?: {
@@ -1468,6 +1471,7 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
+    readonly brainProvider?: string | null | null
   }["description"]
   readonly brainScope?: {
     readonly factory?: {
@@ -1486,7 +1490,27 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
+    readonly brainProvider?: string | null | null
   }["brainScope"]
+  readonly brainProvider?: {
+    readonly factory?: {
+      readonly maxHandoffs?: number
+      readonly agents: ReadonlyArray<{
+        readonly agentId: string
+        readonly maxRuns?: number
+        readonly to?: ReadonlyArray<{
+          readonly agentId: string
+          readonly max?: number
+          readonly else?: string
+          readonly start?: "new" | "continue"
+        }>
+      }>
+    } | null
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly brainScope?: ("session" | "space") | null
+    readonly brainProvider?: string | null | null
+  }["brainProvider"]
 }
 
 export type SpaceUpdateOutput = SpaceInfo

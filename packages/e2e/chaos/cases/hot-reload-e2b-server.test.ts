@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { BrainProvider } from "@ren/core/brain-provider"
 import { BunCrypto } from "@effect/platform-bun"
 import { PgClient } from "@effect/sql-pg"
 import { Access } from "@ren/core/access"
@@ -17,7 +18,6 @@ import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
 import { Models } from "@ren/core/models"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
-import { MachineProvider } from "@ren/core/machine-provider"
 import { E2BSandbox } from "@ren/core/machine-provider/e2b"
 import { SessionRunner } from "@ren/core/session/runner"
 import { Settings } from "@ren/core/settings"
@@ -213,7 +213,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
                 ),
               ),
             ),
-            Layer.provideMerge(E2BSandbox.layer),
+            Layer.provideMerge(BrainProvider.layer([E2BSandbox.provider])),
             Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
             Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
             Layer.provide(Settings.layer),
@@ -253,7 +253,8 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
     cleanups.push(async () => {
       const rows = await direct`SELECT binding FROM brain WHERE id = ${brainId}`
       const binding = rows.at(0)?.binding
-      if (binding) await core.runPromise(MachineProvider.Brain.use((provider) => provider.destroy(binding)))
+      if (binding)
+        await core.runPromise(BrainProvider.first.pipe(Effect.flatMap((provider) => provider.destroy(binding))))
     })
     await Wait.until(`the E2B brain of ${sessionId} to be ready`, 300_000, async () => {
       const found = await core.runPromise(

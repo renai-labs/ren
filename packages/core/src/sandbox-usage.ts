@@ -6,7 +6,8 @@ import { desc, eq } from "drizzle-orm"
 import { Array, Clock, Context, DateTime, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { DurableRunner } from "./durable-runner.js"
-import { MachineProvider } from "./machine-provider.js"
+import { BrainProvider } from "./brain-provider.js"
+import type { MachineProvider } from "./machine-provider.js"
 import { Usage } from "./usage.js"
 
 export interface Interface {
@@ -30,12 +31,12 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const provider = yield* MachineProvider.Brain
+    const registry = yield* BrainProvider.Registry
     const usage = yield* Usage.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const sweeping = yield* Semaphore.make(1)
 
-    const sweep = Effect.gen(function* () {
+    const sweepOf = Effect.fnUntraced(function* (provider: MachineProvider.Provider) {
       const newest = yield* database.db
         .select({ time: events.time })
         .from(events)
@@ -73,7 +74,13 @@ export const layer = Layer.effect(
           ),
         { discard: true },
       )
-    }).pipe(sweeping.withPermitsIfAvailable(1), Effect.asVoid, Effect.withSpan("SandboxUsage.sweep"))
+    })
+
+    const sweep = Effect.forEach(registry.providers, sweepOf, { discard: true }).pipe(
+      sweeping.withPermitsIfAvailable(1),
+      Effect.asVoid,
+      Effect.withSpan("SandboxUsage.sweep"),
+    )
 
     yield* DurableRunner.register(SweepRun, (payload) =>
       DurableRunner.supervise(`sandbox-usage:${payload.slot}`, sweep),
