@@ -5,6 +5,7 @@ import { Access } from "@ren/core/access"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
+import { Bundles } from "@ren/core/bundles"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { Brains } from "@ren/core/brains"
 import { CredentialCallers } from "@ren/core/credential-callers"
@@ -201,6 +202,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provideMerge(BrainHost.layerSandbox),
             Layer.provideMerge(
               BrainLifecycle.layer.pipe(
+                Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal))),
                 Layer.provide(
                   egress
                     ? SandboxEgress.layer.pipe(

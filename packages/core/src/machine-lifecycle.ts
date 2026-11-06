@@ -98,6 +98,10 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   // oxlint-disable-next-line ren/no-comments -- The kind's wake call after a resume. It ends within the time with true, or with whether the machine still answers.
   readonly wake: (target: Target, within: Duration.Duration) => Effect.Effect<boolean, E>
   readonly answers: (target: Target) => Effect.Effect<boolean>
+  // oxlint-disable-next-line ren/no-comments -- Whether the machine's code is current when it wakes: `update` in place, or `replace` when it cannot be updated in place (EN22, EN27).
+  readonly outdated: (row: R) => Effect.Effect<"current" | "update" | "replace">
+  // oxlint-disable-next-line ren/no-comments -- The in-place update of a woken machine: none when the new version answers, or the reason it did not.
+  readonly updateInPlace: (row: R, target: Target) => Effect.Effect<Option.Option<string>, E>
 }
 
 const reasonOf = (sample: MachineProvider.Sample | undefined) => {
@@ -111,6 +115,8 @@ const startKinds: Readonly<Partial<Record<Machine.Phase, string>>> = {
   booting: "new",
   replacing: "replace",
 }
+
+const afterResume = { current: "waking", update: "updating", replace: "replacing" } as const
 
 const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
@@ -260,7 +266,28 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     }
     yield* update(row.id, { url: connected.url, keep_alive_until: null })
     yield* keepAlive({ ...row, keep_alive_until: null }, timing.idle)
-    yield* update(row.id, { phase: "waking" })
+    const code = yield* definition.outdated(row)
+    if (code === "replace")
+      yield* Effect.logInfo(`${noun} ${row.id} runs code that cannot update in place; Ren replaces it`)
+    yield* update(row.id, { phase: afterResume[code] })
+    return false
+  })
+
+  // oxlint-disable-next-line ren/no-comments -- EN27: three failed updates replace the machine; its failures count from zero again on the new one.
+  const updating = Effect.fnUntraced(function* (row: R) {
+    const target = Option.getOrUndefined(definition.target(row))
+    if (!target) return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+    const failure = yield* definition.updateInPlace(row, target)
+    if (Option.isNone(failure))
+      return yield* update(row.id, { phase: "waking", failures: 0, failure: null }).pipe(Effect.as(false))
+    const failures = row.failures + 1
+    yield* Effect.logWarning(`${noun} ${row.id} did not update (${failures}/${timing.failures}): ${failure.value}`)
+    yield* update(
+      row.id,
+      failures >= timing.failures
+        ? { phase: "replacing", failures: 0, failure: failure.value }
+        : { phase: "updating", failures, failure: failure.value },
+    )
     return false
   })
 
@@ -380,6 +407,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     creating: create,
     booting: boot,
     resuming: resume,
+    updating,
     waking: wake,
     replacing: replace,
     ready: settle,

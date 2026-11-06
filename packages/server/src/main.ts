@@ -16,6 +16,7 @@ import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { BrainPush } from "@ren/core/brain-push"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
+import { Bundles } from "@ren/core/bundles"
 import { Brains } from "@ren/core/brains"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelSecrets } from "@ren/core/channel-secrets"
@@ -88,6 +89,7 @@ const host = Layer.unwrap(
         BrainLifecycle.layer.pipe(
           // oxlint-disable-next-line ren/no-comments -- An E2B brain without the egress would fetch the real model key, and in e2b-space the agent's code runs in the same sandbox, so the server does not start without EGRESS_PROXY_ADDRESS.
           Layer.provide(provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig),
+          Layer.provide(Bundles.layer),
         ),
       ),
       Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),
