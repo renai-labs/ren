@@ -266,6 +266,8 @@ export type WebhookDeliveryOutcome =
   | "rejected"
   | "failed"
 
+export type WebhookDeliveryReplayed = { replayed: number }
+
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
 export type CredentialLocation = "header" | "query" | "path"
@@ -7058,6 +7060,12 @@ export type WebhookParserWebhookDeliveryTestInput = {
 }
 
 export type WebhookParserWebhookDeliveryTestOutput = WebhookDeliveryTestResult
+
+export type WebhookParserWebhookDeliveryReplayInput = {
+  readonly webhookId: { readonly webhookId: string }["webhookId"]
+}
+
+export type WebhookParserWebhookDeliveryReplayOutput = WebhookDeliveryReplayed
 
 export type CredentialListInput = {
   readonly owner?: {

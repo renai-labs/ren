@@ -29,10 +29,20 @@ export const WebhookDeliveryHandler = HttpApiBuilder.group(Api, "webhook-deliver
 export const WebhookParserHandler = HttpApiBuilder.group(Api, "webhook-parser", (handlers) =>
   Effect.gen(function* () {
     const webhooks = yield* Webhooks.Service
-    return handlers.handle("webhook-delivery.test", (request) =>
-      Effect.flatMap(Primitive.currentActor, (actor) => webhooks.test(actor, request.payload)).pipe(
-        Effect.catchTag("Primitive.NotFound", Primitive.notFound),
-      ),
-    )
+    return handlers
+      .handle("webhook-delivery.test", (request) =>
+        Effect.flatMap(Primitive.currentActor, (actor) => webhooks.test(actor, request.payload)).pipe(
+          Effect.catchTag("Primitive.NotFound", Primitive.notFound),
+        ),
+      )
+      .handle("webhook-delivery.replay", (request) =>
+        Effect.flatMap(Primitive.currentActor, (actor) => webhooks.replay(actor, request.payload)).pipe(
+          Effect.catchTags({
+            "Primitive.NotFound": Primitive.notFound,
+            "Primitive.Forbidden": Primitive.forbidden,
+            "Primitive.Conflict": Primitive.conflict,
+          }),
+        ),
+      )
   }),
 )

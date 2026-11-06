@@ -212,6 +212,8 @@ import type {
   WebhookDeliveryListOutput,
   WebhookParserWebhookDeliveryTestInput,
   WebhookParserWebhookDeliveryTestOutput,
+  WebhookParserWebhookDeliveryReplayInput,
+  WebhookParserWebhookDeliveryReplayOutput,
   CredentialListInput,
   CredentialListOutput,
   CredentialGetInput,
@@ -1859,6 +1861,18 @@ export function make(options: ClientOptions) {
               body: { webhookId: input["webhookId"], parser: input["parser"], deliveryIds: input["deliveryIds"] },
               successStatus: 200,
               declaredStatuses: [401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        replay: (input: WebhookParserWebhookDeliveryReplayInput, requestOptions?: RequestOptions) =>
+          request<WebhookParserWebhookDeliveryReplayOutput>(
+            {
+              method: "POST",
+              path: `/webhook-deliveries/replay`,
+              body: { webhookId: input["webhookId"] },
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404, 409],
               empty: false,
             },
             requestOptions,

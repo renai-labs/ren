@@ -12,12 +12,15 @@ import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { Envelope } from "./envelope.js"
+import { Intake } from "./intake.js"
 import { IntakeThreads } from "./intake-threads.js"
 import { Primitive } from "./primitive.js"
 import { SpaceQueries } from "./space/queries.js"
 import { WebhookParser } from "./webhook-parser.js"
 import { WebhookSignature } from "./webhook-signature.js"
+import { WebhookIntake } from "./webhook-intake.js"
 import { WebhookPolicy } from "./webhook/policy.js"
+import { WebhookSecrets } from "./webhook/secrets.js"
 
 export type Interface = Primitive.Interface<typeof Webhook.definition> & {
   readonly deliveries: Primitive.Interface<typeof WebhookDelivery.definition>["list"]
@@ -25,6 +28,10 @@ export type Interface = Primitive.Interface<typeof Webhook.definition> & {
     actor: Actor.Info,
     input: WebhookDelivery.TestInput,
   ) => Effect.Effect<WebhookDelivery.TestResult, Primitive.NotFound>
+  readonly replay: (
+    actor: Actor.Info,
+    input: WebhookDelivery.ReplayInput,
+  ) => Effect.Effect<WebhookDelivery.Replayed, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Webhooks") {}
@@ -79,12 +86,6 @@ const base64url = Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)
 // oxlint-disable-next-line ren/no-comments -- 32 random bytes: the URL token (W17) and a secret that Ren makes (W18).
 const random = () => base64url(crypto.getRandomValues(new Uint8Array(32)))
 
-// oxlint-disable-next-line ren/no-comments -- W16: each sealed column has its own context, so a token cannot be read as the signing secret.
-export const contextOf = (
-  row: Pick<Row, "id" | "organization_id">,
-  column: "token" | "signing_secret",
-): EnvelopeSchema.Context => ({ organizationId: row.organization_id, kind: "webhook", id: `${row.id}:${column}` })
-
 // oxlint-disable-next-line ren/no-comments -- W20: a webhook whose signature checks the sender goes live only with a signing secret.
 export const needsSecret = (parser: Webhook.Parser) => parser.signature.kind !== "none"
 
@@ -132,13 +133,14 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const envelope = yield* Envelope.Service
     const threads = yield* IntakeThreads.Service
+    const intake = yield* Intake.Service
     const base = (yield* Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000"))).replace(/\/$/u, "")
 
     const open = (row: Row, column: "token" | "signing_secret", sealed: EnvelopeSchema.Sealed) =>
-      envelope.open(sealed, contextOf(row, column)).pipe(Effect.orDie)
+      envelope.open(sealed, WebhookSecrets.contextOf(row, column)).pipe(Effect.orDie)
 
     const seal = (row: Pick<Row, "id" | "organization_id">, column: "token" | "signing_secret", value: string) =>
-      envelope.seal(Redacted.make(value), contextOf(row, column)).pipe(Effect.orDie)
+      envelope.seal(Redacted.make(value), WebhookSecrets.contextOf(row, column)).pipe(Effect.orDie)
 
     const toInfo = Effect.fnUntraced(function* (row: Row) {
       const token = yield* open(row, "token", row.token)
@@ -316,6 +318,80 @@ export const layer = Layer.effect(
       if (earlier.length > 0) return result("duplicate", { ...keys, reason: "an earlier request had this event ID" })
       const chat = keys.threadKey ? yield* threads.open("webhook", row.id, keys.threadKey) : Option.none()
       return result(Option.isSome(chat) ? "continued" : "started", keys)
+    })
+
+    const updateDelivery = (id: WebhookDelivery.ID, set: Partial<typeof delivery.$inferInsert>) =>
+      database.db.update(delivery).set(set).where(eq(delivery.id, id)).pipe(Effect.orDie)
+
+    // oxlint-disable-next-line ren/no-comments -- One recorded request on replay. The signature is checked at the time the request arrived, so a timestamped one is not too old.
+    const replayed = Effect.fnUntraced(function* (
+      row: Row,
+      parser: Webhook.Parser,
+      secret: Option.Option<string>,
+      found: typeof delivery.$inferSelect,
+    ) {
+      const body = found.body ?? ""
+      const checked = WebhookSignature.verify(
+        parser.signature,
+        secret,
+        { headers: found.headers, body },
+        found.received_at.getTime(),
+      )
+      if (checked._tag === "Unsigned") return false
+      if (checked._tag === "Rejected") {
+        yield* updateDelivery(found.id, { outcome: "rejected", body: null, reason: checked.reason })
+        return false
+      }
+      const parsed = WebhookParser.parsed(parser, WebhookParser.valuesOf({ ...found, body }))
+      if (parsed._tag === "Ignored") {
+        yield* updateDelivery(found.id, { outcome: "ignored", broken: parsed.broken, reason: parsed.reason })
+        return false
+      }
+      const eventId = Option.getOrNull(parsed.eventId)
+      const threadKey = Option.getOrUndefined(parsed.threadKey)
+      const earlier = eventId
+        ? yield* database.db
+            .select({ id: delivery.id })
+            .from(delivery)
+            .where(
+              and(
+                eq(delivery.webhook_id, row.id),
+                eq(delivery.event_id, eventId),
+                ne(delivery.id, found.id),
+                ne(delivery.outcome, "duplicate"),
+              ),
+            )
+            .pipe(Effect.orDie)
+        : []
+      if (earlier.length > 0) {
+        yield* updateDelivery(found.id, {
+          outcome: "duplicate",
+          event_id: eventId,
+          reason: "an earlier request had this event ID",
+        })
+        return false
+      }
+      yield* updateDelivery(found.id, {
+        outcome: "started",
+        broken: false,
+        reason: null,
+        verified: true,
+        event_id: eventId,
+        thread_key: threadKey ?? null,
+      })
+      const title = Option.getOrUndefined(parsed.title)
+      yield* intake.start(
+        "webhook",
+        Schema.encodeSync(WebhookIntake.Event)({
+          _tag: "delivery",
+          webhookId: row.id,
+          deliveryId: found.id,
+          receivedAt: found.received_at.toISOString(),
+          ...(threadKey && { threadKey }),
+          ...(title && { title }),
+        }),
+      )
+      return true
     })
 
     return Service.of({
@@ -504,6 +580,25 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         const totals = yield* database.db.select({ total: count() }).from(delivery).where(where).pipe(Effect.orDie)
         return { ...empty, items: rows.map(toDelivery), total: totals.at(0)?.total ?? 0 }
+      }),
+      // oxlint-disable-next-line ren/no-comments -- W23: the current parser runs on each recorded or throttled request, oldest first, and Intake starts its chat. The key of its run is the delivery, so each starts at most one chat.
+      replay: Effect.fn("Webhooks.replay")(function* (actor: Actor.Info, input: WebhookDelivery.ReplayInput) {
+        const row = yield* database.transaction((transaction) =>
+          find(transaction, actor, input.webhookId, actions.update),
+        )
+        if (row.mode !== "live") return yield* new Primitive.Conflict({ message: "Switch the webhook to live first." })
+        const parser = decodeParser(row.parser)
+        const secret = row.signing_secret
+          ? Option.some(Redacted.value(yield* open(row, "signing_secret", row.signing_secret)))
+          : Option.none<string>()
+        const waiting = yield* database.db
+          .select()
+          .from(delivery)
+          .where(and(eq(delivery.webhook_id, row.id), inArray(delivery.outcome, ["recorded", "throttled"])))
+          .orderBy(delivery.received_at, delivery.id)
+          .pipe(Effect.orDie)
+        const started = yield* Effect.forEach(waiting, (found) => replayed(row, parser, secret, found))
+        return { replayed: started.filter(Boolean).length }
       }),
       test: Effect.fn("Webhooks.test")(function* (actor: Actor.Info, input: WebhookDelivery.TestInput) {
         const row = yield* readable(actor, input.webhookId)

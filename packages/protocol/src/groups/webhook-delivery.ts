@@ -1,6 +1,6 @@
 import { WebhookDelivery } from "@ren/schema/webhook-delivery"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
-import { NotFoundError } from "../errors.js"
+import { ConflictError, ForbiddenError, NotFoundError } from "../errors.js"
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
@@ -22,6 +22,20 @@ export const WebhookParserGroup = HttpApiGroup.make("webhook-parser")
         summary: "Test a webhook parser",
         description:
           "Run a parser, or the webhook’s own, on stored requests and return what each would do: answered, started, continued, ignored, duplicate or rejected, with the reason. Saves nothing.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("webhook-delivery.replay", "/webhook-deliveries/replay", {
+      payload: WebhookDelivery.ReplayInput,
+      success: WebhookDelivery.Replayed,
+      error: [NotFoundError, ForbiddenError, ConflictError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "webhook-delivery.replay",
+        summary: "Replay a webhook’s recorded requests",
+        description:
+          "Run the parser of a live webhook on its recorded and throttled requests, oldest first, and start their chats. Each request starts at most one chat.",
       }),
     ),
   )

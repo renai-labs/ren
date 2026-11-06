@@ -8881,6 +8881,85 @@
         }
       }
     },
+    "/webhook-deliveries/replay": {
+      "post": {
+        "tags": ["webhook-parser"],
+        "operationId": "webhook-delivery.replay",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WebhookDelivery.Replayed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDelivery.Replayed"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the parser of a live webhook on its recorded and throttled requests, oldest first, and start their chats. Each request starts at most one chat.",
+        "summary": "Replay a webhook’s recorded requests",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookDelivery.ReplayInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/credentials": {
       "get": {
         "tags": ["credential"],
@@ -23217,6 +23296,29 @@
           }
         },
         "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "WebhookDelivery.ReplayInput": {
+        "type": "object",
+        "properties": {
+          "webhookId": {
+            "$ref": "#/components/schemas/Webhook.ID"
+          }
+        },
+        "required": ["webhookId"],
+        "additionalProperties": false,
+        "description": "Runs the current parser on the recorded and throttled requests and starts their chats."
+      },
+      "WebhookDelivery.Replayed": {
+        "type": "object",
+        "properties": {
+          "replayed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["replayed"],
         "additionalProperties": false
       },
       "WebhookDelivery.TestInput": {

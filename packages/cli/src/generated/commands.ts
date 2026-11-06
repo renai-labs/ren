@@ -777,6 +777,11 @@ export const WebhookDeliveryTest = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
+export const WebhookDeliveryReplay = {
+  webhookId: Flag.String("webhook").pipe(Flag.optional, Flag.withDescription("Webhook slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const MemoryList = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
   prefix: Flag.String("prefix").pipe(
@@ -1455,6 +1460,12 @@ export const commands = [
         Command.withDescription("Test a parser on a webhook’s requests"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.WebhookDeliveryTest(input)),
+        ),
+      ),
+      Command.make("replay", WebhookDeliveryReplay).pipe(
+        Command.withDescription("Start the chats of a webhook’s recorded requests"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookDeliveryReplay(input)),
         ),
       ),
     ]),

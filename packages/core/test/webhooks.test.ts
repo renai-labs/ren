@@ -1,32 +1,14 @@
 import { describe, expect } from "bun:test"
-import { Testing } from "@ren/db/testing"
 import { Session } from "@ren/schema/session"
 import { Webhook } from "@ren/schema/webhook"
-import { ConfigProvider, Effect, Layer, Schema } from "effect"
-import { Access } from "../src/access.js"
+import { Effect, Schema } from "effect"
 import type { Actor } from "../src/actor.js"
-import { Envelope } from "../src/envelope.js"
-import { IntakeThreads } from "../src/intake-threads.js"
 import { Webhooks } from "../src/webhooks.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
+import { WebhookFixture } from "./lib/webhook-fixture.js"
 
-const it = testEffect(
-  Webhooks.layer.pipe(
-    Layer.provideMerge(Layer.mergeAll(Access.layer, Envelope.layerLocal, IntakeThreads.layer)),
-    Layer.provideMerge(Testing.layer),
-    Layer.provide(
-      ConfigProvider.layer(
-        ConfigProvider.fromUnknown({
-          REN_URL: "https://ren.test/",
-          ENVELOPE_KEYS: JSON.stringify([
-            { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
-          ]),
-        }),
-      ),
-    ),
-  ),
-)
+const it = testEffect(WebhookFixture.layer)
 
 const decodeCreate = Schema.decodeUnknownSync(Webhook.CreateInput)
 

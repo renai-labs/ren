@@ -1378,8 +1378,19 @@ const EndpointWebhookParserWebhookDeliveryTest =
       payload: { webhookId: input["webhookId"], parser: input["parser"], deliveryIds: input["deliveryIds"] },
     }).pipe(Effect.mapError(mapClientError))
 
+type WebhookParserWebhookDeliveryReplayRequest = Parameters<RawClient["webhook-parser"]["webhook-delivery.replay"]>[0]
+type WebhookParserWebhookDeliveryReplayInput = {
+  readonly webhookId: WebhookParserWebhookDeliveryReplayRequest["payload"]["webhookId"]
+}
+const EndpointWebhookParserWebhookDeliveryReplay =
+  (raw: RawClient["webhook-parser"]) => (input: WebhookParserWebhookDeliveryReplayInput) =>
+    raw["webhook-delivery.replay"]({ payload: { webhookId: input["webhookId"] } }).pipe(Effect.mapError(mapClientError))
+
 const adaptGroupWebhookParser = (raw: RawClient["webhook-parser"]) => ({
-  "webhook-delivery": { test: EndpointWebhookParserWebhookDeliveryTest(raw) },
+  "webhook-delivery": {
+    test: EndpointWebhookParserWebhookDeliveryTest(raw),
+    replay: EndpointWebhookParserWebhookDeliveryReplay(raw),
+  },
 })
 
 type CredentialListRequest = Parameters<RawClient["credential"]["credential.list"]>[0]

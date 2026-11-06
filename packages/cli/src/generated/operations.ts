@@ -1686,6 +1686,21 @@ export const WebhookDeliveryTest = (input: Command.Command.Config.Infer<typeof C
     (client, request) => client["webhook-parser"]["webhook-delivery"]["test"]({ ...request.payload }),
   )
 
+export const WebhookDeliveryReplay = (input: Command.Command.Config.Infer<typeof Commands.WebhookDeliveryReplay>) =>
+  Operation.run(
+    ClientApi.groups["webhook-parser"].endpoints["webhook-delivery.replay"],
+    {
+      payload: { webhookId: input["webhookId"] },
+      input: input["input"],
+      labels: { webhookId: "--webhook" },
+      lookups: {
+        webhookId: (client, value) =>
+          client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook-parser"]["webhook-delivery"]["replay"]({ ...request.payload }),
+  )
+
 export const MemoryList = (input: Command.Command.Config.Infer<typeof Commands.MemoryList>) =>
   Operation.run(
     ClientApi.groups["memory"].endpoints["memory.list"],

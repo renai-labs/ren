@@ -4,65 +4,24 @@ import { Session } from "@ren/schema/session"
 import { Webhook } from "@ren/schema/webhook"
 import { WebhookDelivery } from "@ren/schema/webhook-delivery"
 import { asc, eq } from "drizzle-orm"
-import { ConfigProvider, Effect, Layer, Schedule, Schema } from "effect"
-import type { Actor } from "../src/actor.js"
-import { Envelope } from "../src/envelope.js"
-import { Intake } from "../src/intake.js"
-import { IntakeThreads } from "../src/intake-threads.js"
+import { Effect, Schedule, Schema } from "effect"
 import { WebhookIntake } from "../src/webhook-intake.js"
 import { WebhookSignature } from "../src/webhook-signature.js"
 import { Webhooks } from "../src/webhooks.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
-import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
+import { WebhookFixture } from "./lib/webhook-fixture.js"
+import { testEffect } from "./lib/effect.js"
 
 setDefaultTimeout(60_000)
 
-const it = testEffect(
-  Webhooks.layer.pipe(
-    Layer.provide(Layer.mergeAll(Envelope.layerLocal, IntakeThreads.layer)),
-    Layer.provideMerge(
-      ChannelFixture.intakeLayer(
-        Intake.sources(Effect.all([WebhookIntake.source])).pipe(Layer.provide(Envelope.layerLocal)),
-      ),
-    ),
-    Layer.provide(
-      ConfigProvider.layerAdd(
-        ConfigProvider.fromUnknown({
-          REN_URL: "https://ren.test",
-          ENVELOPE_KEYS: JSON.stringify([
-            { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
-          ]),
-        }),
-      ),
-    ),
-  ),
-)
+const it = testEffect(WebhookFixture.layer)
 
-const decodeCreate = Schema.decodeUnknownSync(Webhook.CreateInput)
+const decodeCreate = WebhookFixture.decodeCreate
 
-const owner = Effect.gen(function* () {
-  const seeded = yield* Seed.owner()
-  const actor: Actor.Info = { userId: seeded.createdBy, organizationId: seeded.organizationId, roles: ["owner"] }
-  return { ...seeded, actor }
-})
+const owner = WebhookFixture.owner
 
-const post = (
-  url: string,
-  body: string,
-  headers: Record<string, string> = {},
-  method = "POST",
-): Effect.Effect<Intake.Reply, never, Intake.Service> =>
-  Effect.flatMap(Intake.Service, (intake) => {
-    const parsed = new URL(url)
-    return intake.receive("webhook", {
-      method,
-      path: parsed.pathname,
-      query: Object.fromEntries(parsed.searchParams),
-      headers: new Headers({ "content-type": "application/json", ...headers }),
-      body,
-    })
-  })
+const post = WebhookFixture.post
 
 const deliveriesOf = (webhookId: Webhook.ID) =>
   Effect.flatMap(Database.Service, (database) =>
@@ -253,6 +212,80 @@ describe("WebhookIntake", () => {
         ["started", false, null, "ada@acme.com"],
       ])
       expect((yield* deliveriesOf(created.id)).map((row) => row.outcome)).toEqual(["recorded", "recorded", "recorded"])
+    }),
+  )
+
+  it.live(
+    "5 broken requests in a row switch a live webhook to listening and start one repair chat; after the fix, replay starts the chats of the kept requests (spec section 1)",
+    () =>
+      Effect.gen(function* () {
+        const t = yield* owner
+        const webhooks = yield* Webhooks.Service
+        const created = yield* webhooks.create(
+          t.actor,
+          decodeCreate({
+            spaceId: t.spaceId,
+            name: "PostHog signups",
+            message: "Research this person’s company.",
+            parser: { filter: 'body.evt.name == "user signed up"', threadKey: "body.person.properties.email" },
+          }),
+        )
+        yield* webhooks.update(t.actor, created.id, { mode: "live" })
+        const emails = Array.from({ length: 6 }, (_, index) => `person${index}@acme.com`)
+        const replies = yield* Effect.forEach(emails.slice(0, 5), (email) => post(created.url, signup(email)))
+        expect(replies).toEqual(Array.from({ length: 5 }, () => ({ status: 200 })))
+        const broken = yield* webhooks.get(t.actor, created.id)
+        expect([broken.mode, broken.modeReason]).toEqual(["listening", "parser_broken"])
+        const repair = (yield* ChannelFixture.accepted(1)).at(0)
+        expect(repair).toMatchObject({ kind: "start", interactive: false })
+        expect(repair?.prompt.text).toContain(`The parser of the webhook “PostHog signups” (${created.id}) broke`)
+        expect(yield* post(created.url, signup(emails.at(5) ?? ""))).toEqual({ status: 202 })
+        expect((yield* deliveriesOf(created.id)).map((row) => ({ outcome: row.outcome, broken: row.broken }))).toEqual([
+          ...Array.from({ length: 5 }, () => ({ outcome: "recorded" as const, broken: true })),
+          { outcome: "recorded", broken: false },
+        ])
+        yield* webhooks.update(t.actor, created.id, {
+          parser: Schema.decodeUnknownSync(Webhook.Parser)({
+            filter: 'body.event.event == "user signed up"',
+            threadKey: "body.person.properties.email",
+          }),
+          mode: "live",
+        })
+        expect(yield* webhooks.replay(t.actor, { webhookId: created.id })).toEqual({ replayed: 6 })
+        const accepted = yield* ChannelFixture.accepted(7)
+        expect(accepted.filter((each) => each.webhook).map((each) => each.kind)).toEqual(
+          Array.from({ length: 6 }, () => "start"),
+        )
+        expect(yield* webhooks.replay(t.actor, { webhookId: created.id })).toEqual({ replayed: 0 })
+      }),
+  )
+
+  it.live("a live webhook whose owner left the space switches to listening and keeps the request for a replay", () =>
+    Effect.gen(function* () {
+      const t = yield* owner
+      const webhooks = yield* Webhooks.Service
+      const database = yield* Database.Service
+      const bob = yield* Seed.actor(t.organizationId, "member")
+      yield* Seed.join(t.spaceId, bob.userId)
+      const created = yield* webhooks.create(bob, decodeCreate({ spaceId: t.spaceId, name: "Signups", message: "Go." }))
+      yield* webhooks.update(bob, created.id, { mode: "live" })
+      yield* database.db
+        .update(Database.Schema.space_member)
+        .set({ archived_at: new Date() })
+        .where(eq(Database.Schema.space_member.user_id, bob.userId))
+      expect(yield* post(created.url, signup("ada@acme.com"))).toEqual({ status: 202 })
+      const row = (yield* deliveriesOf(created.id)).at(0)
+      yield* deliveriesOf(created.id).pipe(
+        Effect.repeat({
+          until: (rows) => rows.at(0)?.outcome === "recorded",
+          schedule: Schedule.spaced("20 millis"),
+        }),
+        Effect.timeout("20 seconds"),
+      )
+      expect(yield* webhooks.get(t.actor, created.id)).toMatchObject({ mode: "listening", modeReason: "owner_left" })
+      expect(yield* deliveriesOf(created.id)).toMatchObject([
+        { id: row?.id, outcome: "recorded", reason: "the owner left the space" },
+      ])
     }),
   )
 })

@@ -53,7 +53,7 @@ const exceptions = new Map([
   ],
   [
     "webhook-parser",
-    "Runs a webhook parser on stored requests and returns what each would do, without saving: a computed read over many records, which no primitive operation is.",
+    "Runs a webhook parser on stored requests: test returns what each would do without saving, and replay starts the chats of the recorded ones. Both act on many records, which no primitive operation does.",
   ],
   [
     "chat",

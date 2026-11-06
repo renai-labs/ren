@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import { Drive } from "@ren/schema/drive"
 import { Webhook } from "@ren/schema/webhook"
 import { WebhookDelivery } from "@ren/schema/webhook-delivery"
-import { and, count, eq, gt, isNull } from "drizzle-orm"
+import { and, count, desc, eq, gt, inArray, isNull } from "drizzle-orm"
 import { Clock, Duration, Effect, Option, Redacted, Result, Schema } from "effect"
 import { timingSafeEqual } from "node:crypto"
 import { Access } from "./access.js"
@@ -15,24 +15,40 @@ import type { Intake } from "./intake.js"
 import { SpaceQueries } from "./space/queries.js"
 import { WebhookParser } from "./webhook-parser.js"
 import { WebhookSignature } from "./webhook-signature.js"
-import { Webhooks } from "./webhooks.js"
+import { WebhookSecrets } from "./webhook/secrets.js"
 
-export const Event = Schema.Struct({
+export const Delivery = Schema.Struct({
   _tag: Schema.Literal("delivery"),
   webhookId: Webhook.ID,
   deliveryId: WebhookDelivery.ID,
   receivedAt: Schema.String,
   threadKey: Schema.optionalKey(Schema.String),
   title: Schema.optionalKey(Schema.String),
-}).annotate({ identifier: "WebhookIntake.Event" })
+}).annotate({ identifier: "WebhookIntake.Delivery" })
+export type Delivery = typeof Delivery.Type
+
+// oxlint-disable-next-line ren/no-comments -- W45: the repair chat of one version of a webhook, keyed by the time Ren switched it to listening.
+export const Repair = Schema.Struct({
+  _tag: Schema.Literal("repair"),
+  webhookId: Webhook.ID,
+  updatedAt: Schema.String,
+}).annotate({ identifier: "WebhookIntake.Repair" })
+
+export const Event = Schema.Union([Delivery, Repair]).annotate({ identifier: "WebhookIntake.Event" })
 export type Event = typeof Event.Type
 
 export class Skipped extends Schema.TaggedError<Skipped>()("WebhookIntake.Skipped", {
   reason: Schema.String,
+  modeReason: Schema.optionalKey(Webhook.ModeReason),
 }) {}
 
 export interface Route extends Intake.Route {
-  readonly webhook: { readonly name: string; readonly message: string; readonly parser: Webhook.Parser }
+  readonly webhook: {
+    readonly id: Webhook.ID
+    readonly name: string
+    readonly message: string
+    readonly parser: Webhook.Parser
+  }
 }
 
 // oxlint-disable-next-line ren/no-comments -- W31: at most 60 requests in a minute for each webhook.
@@ -43,6 +59,14 @@ export const inlineBytes = 16 * 1024
 
 // oxlint-disable-next-line ren/no-comments -- W46: a run that fails tries again until an hour after the request arrived.
 export const retryFor = Duration.hours(1)
+
+const parsedOutcomes: ReadonlyArray<WebhookDelivery.Outcome> = [
+  "ignored",
+  "started",
+  "continued",
+  "duplicate",
+  "failed",
+]
 
 const pathOf = /^\/webhooks\/([^/]+)\/([^/]+)$/u
 
@@ -68,7 +92,7 @@ export const source = Effect.gen(function* () {
   const delivery = Database.Schema.webhook_delivery
 
   const opened = (row: typeof webhook.$inferSelect, column: "token" | "signing_secret", sealed: typeof row.token) =>
-    envelope.open(sealed, Webhooks.contextOf(row, column)).pipe(Effect.orDie, Effect.map(Redacted.value))
+    envelope.open(sealed, WebhookSecrets.contextOf(row, column)).pipe(Effect.orDie, Effect.map(Redacted.value))
 
   const record = (fields: Omit<typeof delivery.$inferInsert, "id">) =>
     database.db
@@ -143,11 +167,56 @@ export const source = Effect.gen(function* () {
     return Result.succeed({ secret, kept: { ...base, body, verified: checked._tag === "Verified" } })
   })
 
+  // oxlint-disable-next-line ren/no-comments -- Spec section 7: Ren switches a live webhook to listening; the switch is a new version of it (W45). None when it was not live.
+  const listen = (webhookId: Webhook.ID, reason: Webhook.ModeReason) =>
+    database.db
+      .update(webhook)
+      .set({ mode: "listening", mode_reason: reason, updated_at: new Date() })
+      .where(and(eq(webhook.id, webhookId), eq(webhook.mode, "live")))
+      .returning({ updatedAt: webhook.updated_at })
+      .pipe(
+        Effect.orDie,
+        Effect.map((rows) => Option.fromNullishOr(rows.at(0)?.updatedAt)),
+      )
+
+  // oxlint-disable-next-line ren/no-comments -- W21: 5 parsed deliveries in a row that are broken switch the webhook to listening; they become recorded, so a replay after the repair starts their chats (W23).
+  const brokenRun = Effect.fnUntraced(function* (webhookId: Webhook.ID) {
+    const recent = yield* database.db
+      .select({ id: delivery.id, broken: delivery.broken })
+      .from(delivery)
+      .where(and(eq(delivery.webhook_id, webhookId), inArray(delivery.outcome, parsedOutcomes)))
+      .orderBy(desc(delivery.received_at), desc(delivery.id))
+      .limit(Webhook.brokenToListen)
+      .pipe(Effect.orDie)
+    if (recent.length < Webhook.brokenToListen || !recent.every((each) => each.broken)) return Option.none<Date>()
+    const switched = yield* listen(webhookId, "parser_broken")
+    if (Option.isSome(switched))
+      yield* database.db
+        .update(delivery)
+        .set({ outcome: "recorded" })
+        .where(
+          inArray(
+            delivery.id,
+            recent.map((each) => each.id),
+          ),
+        )
+        .pipe(Effect.orDie)
+    return switched
+  })
+
   // oxlint-disable-next-line ren/no-comments -- Spec section 3: a live delivery that passes the parser starts a run; a duplicate event ID is answered and dropped.
   const parsedRun = Effect.fnUntraced(function* (row: Row, kept: Kept, parsed: WebhookParser.Parsed) {
     if (parsed._tag === "Ignored") {
       yield* record({ ...kept, outcome: "ignored", broken: parsed.broken, reason: parsed.reason })
-      return answer(200)
+      if (!parsed.broken) return answer(200)
+      return Option.match(yield* brokenRun(row.id), {
+        onNone: () => answer(200),
+        onSome: (updatedAt): Intake.Received<Event> => ({
+          _tag: "Start",
+          status: 200,
+          event: { _tag: "repair", webhookId: row.id, updatedAt: updatedAt.toISOString() },
+        }),
+      })
     }
     const eventId = Option.getOrNull(parsed.eventId)
     const threadKey = Option.getOrUndefined(parsed.threadKey)
@@ -250,17 +319,89 @@ export const source = Effect.gen(function* () {
       "</webhook_request>",
     ].join("\n")
 
+  const deliveryPrompt = Effect.fnUntraced(function* (event: Delivery, route: Route, ids: Intake.Ids) {
+    const row = (yield* database.db
+      .select()
+      .from(delivery)
+      .where(eq(delivery.id, event.deliveryId))
+      .pipe(Effect.orDie)).at(0)
+    if (!row) return yield* Effect.die(new Error(`The delivery ${event.deliveryId} has no row`))
+    const body = row.body ?? ""
+    const hidden = WebhookSignature.hidden(route.webhook.parser.signature)
+    const origin = {
+      webhookId: event.webhookId,
+      name: route.webhook.name,
+      deliveryId: event.deliveryId,
+      receivedAt: event.receivedAt,
+    }
+    if (Buffer.byteLength(body) <= inlineBytes)
+      return { prompt: { text: promptText(route.webhook.message, row, hidden, body) }, webhook: origin }
+    const path = `${Drive.uploadsOf(ids.sessionId, ids.messageId)}/payload.json`
+    const placed = yield* drives
+      .put(
+        { organizationId: route.organizationId, spaceId: route.spaceId },
+        path,
+        new TextEncoder().encode(body),
+        "application/json",
+      )
+      .pipe(
+        Effect.as(true),
+        Effect.catchTag("Drives.Unavailable", (error) =>
+          Effect.logWarning("A webhook body could not be put in the space’s drive", error).pipe(Effect.as(false)),
+        ),
+      )
+    return {
+      prompt: placed
+        ? {
+            text: promptText(route.webhook.message, row, hidden, `(${Buffer.byteLength(body)} bytes, in ${path})`),
+            files: [{ path, name: "payload.json" }],
+          }
+        : { text: promptText(route.webhook.message, row, hidden, body) },
+      webhook: origin,
+    }
+  })
+
+  // oxlint-disable-next-line ren/no-comments -- Spec section 8: the repair chat gets the broken deliveries and the parser, and the steps to fix it.
+  const repairPrompt = Effect.fnUntraced(function* (route: Route) {
+    const broken = yield* database.db
+      .select({ id: delivery.id, reason: delivery.reason })
+      .from(delivery)
+      .where(and(eq(delivery.webhook_id, route.webhook.id), eq(delivery.broken, true)))
+      .orderBy(desc(delivery.received_at), desc(delivery.id))
+      .limit(Webhook.brokenToListen)
+      .pipe(Effect.orDie)
+    return {
+      prompt: {
+        text: [
+          `The parser of the webhook “${route.webhook.name}” (${route.webhook.id}) broke on ${Webhook.brokenToListen} requests in a row, so Ren switched it to listening. It records each request and starts no chat.`,
+          "",
+          "Broken requests:",
+          ...broken.map((each) => `- ${each.id}: ${each.reason ?? "broken"}`),
+          "",
+          "Parser:",
+          JSON.stringify(Schema.encodeSync(Webhook.Parser)(route.webhook.parser), null, 2),
+          "",
+          "Fix it: read the requests with webhook-delivery list, find a parser that works on them with webhook-delivery test, save it with webhook update and set mode live, then start the chats of the recorded requests with webhook-delivery replay.",
+        ].join("\n"),
+      },
+    }
+  })
+
   return {
     origin: "webhook",
     event: Event,
     delivery: "queue",
     receive,
-    keyOf: (event: Event) => ({
-      scope: event.webhookId,
-      eventId: event.deliveryId,
-      ...(event.threadKey && { threadKey: event.threadKey }),
-    }),
-    deadlineOf: (event: Event) => new Date(Date.parse(event.receivedAt) + Duration.toMillis(retryFor)),
+    keyOf: (event: Event) =>
+      event._tag === "repair"
+        ? { scope: event.webhookId, eventId: `repair:${event.updatedAt}` }
+        : {
+            scope: event.webhookId,
+            eventId: event.deliveryId,
+            ...(event.threadKey && { threadKey: event.threadKey }),
+          },
+    deadlineOf: (event: Event) =>
+      new Date(Date.parse(event._tag === "repair" ? event.updatedAt : event.receivedAt) + Duration.toMillis(retryFor)),
     resolve: Effect.fn("WebhookIntake.resolve")(function* (event: Event) {
       const row = (yield* database.db
         .select()
@@ -273,7 +414,17 @@ export const source = Effect.gen(function* () {
           SpaceQueries.actsIn(transaction, access, row.organization_id, row.space_id, row.owner_id),
         )
         .pipe(Effect.orDie)
-      if (!owner) return yield* new Skipped({ reason: "the owner left the space" })
+      if (!owner) return yield* new Skipped({ reason: "the owner left the space", modeReason: "owner_left" })
+      const base = {
+        organizationId: row.organization_id,
+        spaceId: row.space_id,
+        senderUserId: row.owner_id,
+        takesThread: false,
+        webhook: { id: row.id, name: row.name, message: row.message, parser: decodeParser(row.parser) },
+      }
+      // oxlint-disable-next-line ren/no-comments -- W35: the repair chat runs on the default agent of the space, which can change webhooks.
+      if (event._tag === "repair")
+        return { ...base, requiresAgent: false, title: `Repair: ${row.name}` } satisfies Route
       const agentId = row.agent_id
       if (agentId) {
         const usable = yield* database.db
@@ -281,64 +432,29 @@ export const source = Effect.gen(function* () {
           .from(Database.Schema.agent)
           .where(and(eq(Database.Schema.agent.id, agentId), AgentQueries.isUsableIn(row.space_id, row.organization_id)))
           .pipe(Effect.orDie)
-        if (usable.length === 0) return yield* new Skipped({ reason: "the agent left the space" })
+        if (usable.length === 0)
+          return yield* new Skipped({ reason: "the agent left the space", modeReason: "agent_removed" })
       }
       return {
-        organizationId: row.organization_id,
-        spaceId: row.space_id,
-        senderUserId: row.owner_id,
+        ...base,
         ...(agentId && { agentId }),
         requiresAgent: true,
         title: event.title ?? titleOf(row.name, event.receivedAt),
-        takesThread: false,
-        webhook: { name: row.name, message: row.message, parser: decodeParser(row.parser) },
       } satisfies Route
     }),
-    promptOf: Effect.fn("WebhookIntake.promptOf")(function* (event: Event, route: Route, ids: Intake.Ids) {
-      const row = (yield* database.db
-        .select()
-        .from(delivery)
-        .where(eq(delivery.id, event.deliveryId))
-        .pipe(Effect.orDie)).at(0)
-      if (!row) return yield* Effect.die(new Error(`The delivery ${event.deliveryId} has no row`))
-      const body = row.body ?? ""
-      const hidden = WebhookSignature.hidden(route.webhook.parser.signature)
-      const origin = {
-        webhookId: event.webhookId,
-        name: route.webhook.name,
-        deliveryId: event.deliveryId,
-        receivedAt: event.receivedAt,
-      }
-      if (Buffer.byteLength(body) <= inlineBytes)
-        return { prompt: { text: promptText(route.webhook.message, row, hidden, body) }, webhook: origin }
-      const path = `${Drive.uploadsOf(ids.sessionId, ids.messageId)}/payload.json`
-      const placed = yield* drives
-        .put(
-          { organizationId: route.organizationId, spaceId: route.spaceId },
-          path,
-          new TextEncoder().encode(body),
-          "application/json",
-        )
-        .pipe(
-          Effect.as(true),
-          Effect.catchTag("Drives.Unavailable", (error) =>
-            Effect.logWarning("A webhook body could not be put in the space’s drive", error).pipe(Effect.as(false)),
-          ),
-        )
-      return {
-        prompt: placed
-          ? {
-              text: promptText(route.webhook.message, row, hidden, `(${Buffer.byteLength(body)} bytes, in ${path})`),
-              files: [{ path, name: "payload.json" }],
-            }
-          : { text: promptText(route.webhook.message, row, hidden, body) },
-        webhook: origin,
-      }
-    }),
+    promptOf: (event: Event, route: Route, ids: Intake.Ids) =>
+      event._tag === "repair" ? repairPrompt(route) : deliveryPrompt(event, route, ids),
     report: Effect.fn("WebhookIntake.report")(function* (event: Event, outcome: Intake.Outcome<Route, Skipped>) {
+      if (event._tag === "repair")
+        return yield* Effect.logInfo(`The repair chat of ${event.webhookId}: ${outcome._tag}`)
       const update = (set: Partial<typeof delivery.$inferInsert>) =>
         database.db.update(delivery).set(set).where(eq(delivery.id, event.deliveryId)).pipe(Effect.orDie)
-      if (outcome._tag === "skipped") return yield* update({ outcome: "failed", reason: outcome.reason.reason })
+      if (outcome._tag === "skipped") {
+        const modeReason = outcome.reason.modeReason
+        // oxlint-disable-next-line ren/no-comments -- Spec section 7: a webhook whose owner or agent left the space switches to listening, and keeps the request for a replay.
+        if (modeReason) yield* listen(event.webhookId, modeReason)
+        return yield* update({ outcome: modeReason ? "recorded" : "failed", reason: outcome.reason.reason })
+      }
       if (outcome._tag === "failed")
         return yield* update({ outcome: "failed", reason: outcome.message, session_id: outcome.sessionId ?? null })
       return yield* update({ outcome: outcome._tag, session_id: outcome.sessionId })

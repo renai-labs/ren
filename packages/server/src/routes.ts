@@ -227,7 +227,11 @@ export const layer = Layer.mergeAll(
           Layer.provide(BrainRegistry.layer),
         ),
         schedules,
-        Webhooks.layer.pipe(Layer.provide(IntakeThreads.layer)),
+        Webhooks.layer.pipe(
+          Layer.provide([intake, IntakeThreads.layer]),
+          Layer.provide(SessionRunner.layer),
+          Layer.provide(BrainRegistry.layer),
+        ),
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,

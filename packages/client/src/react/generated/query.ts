@@ -106,6 +106,7 @@ import type {
   WebhookRevealSigningSecretInput,
   WebhookDeliveryListInput,
   WebhookParserWebhookDeliveryTestInput,
+  WebhookParserWebhookDeliveryReplayInput,
   CredentialListInput,
   CredentialGetInput,
   CredentialCreateInput,
@@ -1146,6 +1147,15 @@ export function make(client: ReturnType<typeof Ren.make>) {
               mutationKey: ["webhook-parser", "webhook-delivery", "test"] as const,
               mutationFn: (input: WebhookParserWebhookDeliveryTestInput) =>
                 client["webhook-parser"]["webhook-delivery"]["test"](input),
+            }),
+        },
+        replay: {
+          mutationKey: () => ["webhook-parser", "webhook-delivery", "replay"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["webhook-parser", "webhook-delivery", "replay"] as const,
+              mutationFn: (input: WebhookParserWebhookDeliveryReplayInput) =>
+                client["webhook-parser"]["webhook-delivery"]["replay"](input),
             }),
         },
       },
