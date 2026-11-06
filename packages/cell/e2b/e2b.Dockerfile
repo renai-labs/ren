@@ -15,10 +15,7 @@ RUN version=v1.75.2 arch="$(dpkg --print-architecture)" \
   && unzip -q -j /tmp/rclone.zip "*/rclone" -d /usr/local/bin \
   && rm /tmp/rclone.zip
 
-COPY ren.tar.gz /tmp/ren.tar.gz
-RUN mkdir -p /opt/ren && tar -xzf /tmp/ren.tar.gz -C /opt/ren && rm /tmp/ren.tar.gz \
-  && cd /opt/ren && bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts
-
+# Ren's code is not in the image: start.sh downloads it from Ren as bundles (EN26).
 RUN echo '[Slice]' >/etc/systemd/system/ren-tools.slice \
   && echo 'MemoryMax=85%' >>/etc/systemd/system/ren-tools.slice
 

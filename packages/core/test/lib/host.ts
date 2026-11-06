@@ -19,6 +19,7 @@ import { BrainClient } from "../../src/brain-client.js"
 import { BrainHost } from "../../src/brain-host.js"
 import { Brains } from "../../src/brains.js"
 import { BrainLifecycle } from "../../src/brain-lifecycle.js"
+import { Bundles } from "../../src/bundles.js"
 import { SandboxEgress } from "../../src/sandbox-egress.js"
 import { Drives } from "../../src/drives.js"
 import { DurableRunner } from "../../src/durable-runner.js"
@@ -99,7 +100,12 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
   Brains.layer.pipe(
     Layer.provide(CredentialEnv.layerNone),
     Layer.provideMerge(BrainHost.layerSandbox),
-    Layer.provideMerge(BrainLifecycle.layer.pipe(Layer.provide(SandboxEgress.layerNone))),
+    Layer.provideMerge(
+      BrainLifecycle.layer.pipe(
+        Layer.provide(SandboxEgress.layerNone),
+        Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal))),
+      ),
+    ),
     Layer.provideMerge(
       ClusterWorkflowEngine.layer.pipe(
         Layer.provideMerge(SingleRunner.layer({ shardingConfig: { entityTerminationTimeout: "100 millis" } })),

@@ -1,5 +1,6 @@
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
+import type { Bundle } from "@ren/schema/bundle"
 import type { Machine } from "@ren/schema/machine"
 import { Space } from "@ren/schema/space"
 import { sql } from "drizzle-orm"
@@ -28,6 +29,8 @@ export const brain = pgTable(
     provider: text(),
     binding: jsonb().$type<Schema.Json>(),
     template: text(),
+    // oxlint-disable-next-line ren/no-comments -- The bundle versions the machine runs; null on a machine whose image holds Ren's code (EN26).
+    bundles: jsonb().$type<Readonly<Record<Bundle.Kind, string>>>(),
     // oxlint-disable-next-line ren/no-comments -- Set at create and read by every later step: the sandbox sends its traffic through the egress, so the brain holds placeholders, never real keys or its host token.
     egress: boolean().notNull().default(false),
     url: text(),

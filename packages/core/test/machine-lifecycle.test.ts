@@ -25,7 +25,14 @@ const capacityFor = Duration.seconds(30)
 // oxlint-disable-next-line ren/no-comments -- A kind of machine that lives in memory: its rows in a map, its provider a counter, its ready check and its probe two switches.
 const kind = Effect.gen(function* () {
   const rows = new Map<string, MachineLifecycle.Row<string>>()
-  const switches = { boots: false, answers: true, capacity: false }
+  const switches = {
+    boots: false,
+    answers: true,
+    capacity: false,
+    outdated: "current" as "current" | "update" | "replace",
+    updates: true,
+  }
+  const updated: Array<string> = []
   const destroyed: Array<number> = []
   const made = { count: 0 }
   const provider = MachineProvider.make({
@@ -86,6 +93,14 @@ const kind = Effect.gen(function* () {
     target: (row) => Option.fromNullishOr(row.url),
     boot: () => Effect.sync(() => (switches.boots ? Option.none() : Option.some("The machine did not answer"))),
     wake: () => Effect.succeed(true),
+    outdated: () => Effect.sync(() => switches.outdated),
+    updateInPlace: (row) =>
+      Effect.sync(() => {
+        if (!switches.updates) return Option.some("the new version did not answer")
+        updated.push(row.id)
+        switches.outdated = "current"
+        return Option.none()
+      }),
     answers: () => Effect.sync(() => switches.answers),
   })
   holder.run = machines.run
@@ -115,7 +130,7 @@ const kind = Effect.gen(function* () {
     })
     return id
   }
-  return { machines, switches, destroyed, read, update, add }
+  return { machines, switches, destroyed, updated, read, update, add }
 })
 
 describe("MachineLifecycle", () => {
@@ -230,5 +245,49 @@ describe("MachineLifecycle keep-awake", () => {
         yield* keep
         expect(yield* awakeUntil).toBe(lastTurn.getTime() + Duration.toMillis(Duration.hours(2)))
       }),
+  )
+})
+
+describe("MachineLifecycle updates", () => {
+  const asleep = Effect.fnUntraced(function* () {
+    const memory = yield* kind
+    memory.switches.boots = true
+    const id = memory.add()
+    yield* memory.machines.access(id)
+    yield* TestClock.adjust(Duration.minutes(11))
+    return { memory, id }
+  })
+
+  it.effect(
+    "an outdated machine updates in place when it wakes, and keeps its generation (EN22, EN27, chaos row 12)",
+    () =>
+      Effect.gen(function* () {
+        const found = yield* asleep()
+        found.memory.switches.outdated = "update"
+        expect((yield* found.memory.machines.access(found.id))._tag).toBe("Starting")
+        expect(found.memory.updated).toEqual([found.id])
+        expect(yield* found.memory.read(found.id)).toMatchObject({ phase: "ready", generation: 1 })
+      }),
+  )
+
+  it.effect("an update that fails 3 times replaces the machine (EN27, chaos row 14)", () =>
+    Effect.gen(function* () {
+      const found = yield* asleep()
+      found.memory.switches.outdated = "update"
+      found.memory.switches.updates = false
+      yield* found.memory.machines.access(found.id)
+      expect(yield* found.memory.read(found.id)).toMatchObject({ phase: "ready", generation: 2 })
+      expect(found.memory.destroyed).toHaveLength(1)
+    }),
+  )
+
+  it.effect("a machine that cannot update in place is replaced at its wake", () =>
+    Effect.gen(function* () {
+      const found = yield* asleep()
+      found.memory.switches.outdated = "replace"
+      yield* found.memory.machines.access(found.id)
+      found.memory.switches.outdated = "current"
+      expect(yield* found.memory.read(found.id)).toMatchObject({ generation: 2 })
+    }),
   )
 })
