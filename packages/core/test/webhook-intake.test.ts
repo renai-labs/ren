@@ -102,7 +102,14 @@ describe("WebhookIntake", () => {
         )
         yield* webhooks.update(t.actor, created.id, { mode: "live" })
         const first = signup("jane@acme.com")
-        expect(yield* post(created.url, first)).toEqual({ status: 202 })
+        expect(
+          yield* post(created.url, first, {
+            "x-forwarded-for": "203.0.113.7",
+            "x-forwarded-proto": "https",
+            "x-amzn-trace-id": "Root=1-6543-abc",
+            "cf-ray": "a565943c887f8026-MAA",
+          }),
+        ).toEqual({ status: 202 })
         expect(yield* post(created.url, first)).toEqual({ status: 200 })
         expect(yield* post(created.url, signup("jane@acme.com", "pageview"))).toEqual({ status: 200 })
         const rows = yield* deliveriesOf(created.id)
@@ -256,6 +263,16 @@ describe("WebhookIntake", () => {
         expect(accepted.filter((each) => each.webhook).map((each) => each.kind)).toEqual(
           Array.from({ length: 6 }, () => "start"),
         )
+        const database = yield* Database.Service
+        const titles = yield* database.db
+          .select({ input: Database.Schema.agent_session.start_input })
+          .from(Database.Schema.agent_session)
+          .where(eq(Database.Schema.agent_session.space_id, t.spaceId))
+        expect(
+          titles
+            .flatMap((row) => (row.input?.title?.startsWith("PostHog signups") ? [row.input.title] : []))
+            .toSorted(),
+        ).toEqual(Array.from({ length: 6 }, (_, index) => `PostHog signups · request ${index + 1}`))
         expect(yield* webhooks.replay(t.actor, { webhookId: created.id })).toEqual({ replayed: 0 })
       }),
   )

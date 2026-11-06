@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import { Drive } from "@ren/schema/drive"
 import { Webhook } from "@ren/schema/webhook"
 import { WebhookDelivery } from "@ren/schema/webhook-delivery"
-import { and, count, desc, eq, gt, inArray, isNull } from "drizzle-orm"
+import { and, count, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm"
 import { Clock, Duration, Effect, Option, Redacted, Result, Schema } from "effect"
 import { timingSafeEqual } from "node:crypto"
 import { Access } from "./access.js"
@@ -67,6 +67,20 @@ const parsedOutcomes: ReadonlyArray<WebhookDelivery.Outcome> = [
   "duplicate",
   "failed",
 ]
+
+// oxlint-disable-next-line ren/no-comments -- What proxies on the way add (the AWS load balancer in production, a tunnel locally). They say nothing about the event, and x-forwarded-for is the sender's IP, so the prompt leaves them out; the delivery keeps them.
+const proxyHeaders = new Set([
+  "forwarded",
+  "via",
+  "cdn-loop",
+  "x-real-ip",
+  "host",
+  "connection",
+  "content-length",
+  "accept-encoding",
+])
+
+const proxyHeaderPrefixes = ["x-forwarded-", "x-amzn-", "cf-"]
 
 const pathOf = /^\/webhooks\/([^/]+)\/([^/]+)$/u
 
@@ -303,7 +317,23 @@ export const source = Effect.gen(function* () {
     )
   })
 
-  const titleOf = (name: string, receivedAt: string) => `${name} · ${receivedAt.slice(0, 16).replace("T", " ")} UTC`
+  // oxlint-disable-next-line ren/no-comments -- A chat with no title expression is "<name> · request N": N counts the webhook's stored deliveries up to this one. Retention drops deliveries after 30 days, so N can repeat after that.
+  const titleOf = Effect.fnUntraced(function* (name: string, event: Delivery) {
+    const counted = yield* database.db
+      .select({ total: count() })
+      .from(delivery)
+      .where(
+        and(
+          eq(delivery.webhook_id, event.webhookId),
+          sql`(${delivery.received_at}, ${delivery.id}) <= (select received_at, id from webhook_delivery where id = ${event.deliveryId})`,
+        ),
+      )
+      .pipe(Effect.orDie)
+    return `${name} · request ${counted.at(0)?.total ?? 1}`
+  })
+
+  const isProxyHeader = (name: string) =>
+    proxyHeaders.has(name) || proxyHeaderPrefixes.some((prefix) => name.startsWith(prefix))
 
   const promptText = (message: string, row: typeof delivery.$inferSelect, hidden: ReadonlySet<string>, body: string) =>
     [
@@ -312,7 +342,7 @@ export const source = Effect.gen(function* () {
       "<webhook_request>",
       "headers:",
       ...Object.keys(row.headers)
-        .filter((name) => !hidden.has(name))
+        .filter((name) => !hidden.has(name) && !isProxyHeader(name))
         .map((name) => `  ${name}: ${row.headers[name]}`),
       "body:",
       body,
@@ -439,7 +469,7 @@ export const source = Effect.gen(function* () {
         ...base,
         ...(agentId && { agentId }),
         requiresAgent: true,
-        title: event.title ?? titleOf(row.name, event.receivedAt),
+        title: event.title ?? (yield* titleOf(row.name, event)),
       } satisfies Route
     }),
     promptOf: (event: Event, route: Route, ids: Intake.Ids) =>
