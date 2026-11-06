@@ -135,17 +135,17 @@ const stepsOf = (config: typeof TemplateConfig.Type) => {
   return [
     ...(packages.apt?.length ? [root(`${apt} ${quoteAll(packages.apt)}`)] : []),
     ...(packages.npm?.length
-      ? [root(`(command -v npm || ${apt} nodejs npm) && npm install -g ${quoteAll(packages.npm)}`)]
+      ? [root(`(command -v npm || (${apt} nodejs npm)) && npm install -g ${quoteAll(packages.npm)}`)]
       : []),
     ...(packages.pip?.length
       ? [
           root(
-            `(command -v pip3 || ${apt} python3-pip) && pip3 install --break-system-packages ${quoteAll(packages.pip)}`,
+            `(command -v pip3 || (${apt} python3-pip)) && pip3 install --break-system-packages ${quoteAll(packages.pip)}`,
           ),
         ]
       : []),
     ...(packages.go?.length
-      ? [root(`(command -v go || ${apt} golang-go) && GOBIN=/usr/local/bin go install ${quoteAll(packages.go)}`)]
+      ? [root(`(command -v go || (${apt} golang-go)) && GOBIN=/usr/local/bin go install ${quoteAll(packages.go)}`)]
       : []),
     ...config.buildCommands.map((command) => ({ type: "RUN", args: [command, "user"], force: false })),
   ]
