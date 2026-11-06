@@ -1,0 +1,1 @@
+ALTER TABLE "agent_session" ADD COLUMN "continue_message_id" text;

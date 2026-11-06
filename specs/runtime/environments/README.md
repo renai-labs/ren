@@ -206,19 +206,13 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 ### Failure and recovery
 
 1. Three failures in a row, of any kind, put a machine in `failed` (EN18).
-2. A forced replace (Gone, frozen, silent for 5 min) marks the busy chats interrupted. After the replace, each of them continues once with the message: "The machine was replaced during your turn. Workspace files are gone. Check the state before you repeat an action." (EN35)
-3. Right after a replace, Ren restores the chats that have waiting messages, so the messages are sent (EN36).
-4. Ren sends a PostHog error report, with the reason, when a build fails (EN38). Failed machines, capacity and forced replaces report today (`machine-lifecycle.ts`).
+2. Ren sends a PostHog error report, with the reason, when a build fails (EN38). Failed machines, capacity and forced replaces report today (`machine-lifecycle.ts`).
 
 ### Ren server
 
 1. One Ren server runs. `DurableRunner` uses Effect's `SingleRunner`, which is single-process. Ren gets a memory alarm and a load test (EN31).
 2. Environment tokens last 15 min. While Ren is down, a tool call uses the token it has. After Ren is back, the next call gets a new token within 30 s (EN32).
 3. Version N and version N-1 work together in both directions: Ren and the brain, and the brain and the executor (EN33).
-
-### Sync
-
-1. A message larger than the sync limit (8 MB) syncs as a short stand-in, "output too large, not saved", and the rest of the chat keeps syncing (EN37).
 
 ## 4. Contract changes
 
@@ -237,7 +231,6 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 | `environment-api`                      | The executor reports its running background processes. Later: a feature list in `hello`.                                                                                                                                                                                                                              |
 | `cell`                                 | One OpenCode hand-bridge module chosen by `REN_HAND_PLACEMENT`; the plugin refuses tools of a space with no hand.                                                                                                                                                                                                     |
 | `cell/e2b`, executor image             | Images without Ren code; `start.sh` pulls bundles and restarts one process at a time.                                                                                                                                                                                                                                 |
-| `brain/opencode-sync.ts`               | A stand-in for a message over 8 MB.                                                                                                                                                                                                                                                                                   |
 | `server`                               | A bundle route; the start check for missing providers.                                                                                                                                                                                                                                                                |
 | `app`                                  | Settings → Environments; space settings for the hand (the brain provider choice stays hidden while one exists).                                                                                                                                                                                                       |
 | `infra/aws`                            | A memory alarm for the server.                                                                                                                                                                                                                                                                                        |

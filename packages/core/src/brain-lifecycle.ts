@@ -7,7 +7,7 @@ import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
-import { and, eq, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
+import { and, eq, exists, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
@@ -100,8 +100,39 @@ export const layer = Layer.effect(
 
     const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
-    const interruptBusy = (transaction: Database.Transaction, brainId: Brain.ID, at: Date) =>
-      transaction
+    // oxlint-disable-next-line ren/no-comments -- EN35, EN36: each top chat of the brain that was busy or had waiting messages gets one message that continues it on the new machine; then its busy chats are interrupted.
+    const interruptBusy = Effect.fnUntraced(function* (transaction: Database.Transaction, brainId: Brain.ID, at: Date) {
+      const chats = Database.Schema.agent_session
+      yield* transaction
+        .update(chats)
+        .set({ continue_message_id: sql`'msg_' || replace(gen_random_uuid()::text, '-', '')` })
+        .where(
+          and(
+            eq(chats.brain_id, brainId),
+            isNull(chats.parent_id),
+            isNull(chats.continue_message_id),
+            or(
+              exists(
+                transaction
+                  .select({ id: Database.Schema.opencode_session.session_id })
+                  .from(Database.Schema.opencode_session)
+                  .where(
+                    and(
+                      eq(Database.Schema.opencode_session.session_id, chats.id),
+                      isNotNull(Database.Schema.opencode_session.time_suspended),
+                    ),
+                  ),
+              ),
+              exists(
+                transaction
+                  .select({ id: Database.Schema.opencode_inbox.id })
+                  .from(Database.Schema.opencode_inbox)
+                  .where(eq(Database.Schema.opencode_inbox.session_id, chats.id)),
+              ),
+            ),
+          ),
+        )
+      yield* transaction
         .update(Database.Schema.opencode_session)
         .set({ time_suspended: null, idle_outcome: "interrupted", time_idle: at.getTime() })
         .where(
@@ -116,6 +147,7 @@ export const layer = Layer.effect(
             isNotNull(Database.Schema.opencode_session.time_suspended),
           ),
         )
+    })
 
     const lose = Effect.fn("BrainLifecycle.lose")(function* (brainId: Brain.ID, generation: number, at: Date) {
       return yield* database
@@ -173,6 +205,21 @@ export const layer = Layer.effect(
           )
           .pipe(Effect.orDie),
       lose,
+      isNeeded: (brainId) =>
+        database.db
+          .select({ id: Database.Schema.agent_session.id })
+          .from(Database.Schema.agent_session)
+          .where(
+            and(
+              eq(Database.Schema.agent_session.brain_id, brainId),
+              isNotNull(Database.Schema.agent_session.continue_message_id),
+            ),
+          )
+          .limit(1)
+          .pipe(
+            Effect.orDie,
+            Effect.map((rows) => rows.length > 0),
+          ),
       ensure: (row) =>
         DurableRunner.ensure(BrainRun, { brainId: row.id, epoch: row.run_epoch }).pipe(
           Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
