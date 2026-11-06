@@ -99,12 +99,9 @@ if [ -z "${REN_BUNDLES:-}" ]; then
   echo "brain.env names no bundles (REN_BUNDLES)" >&2
   exit 1
 fi
-until prepare "$REN_BUNDLES"; do
-  echo "The bundles are not ready; the next try is in 5 s" >&2
-  sleep 5
-done
 # Ren uploads the egress CA before brain.env. Every client trusts the system
 # store plus that CA, from a bundle in the user's home, so no root is needed (C44).
+# This comes before the bundles: behind the egress, their download needs the CA.
 if [ -s "$home/.ren/egress-ca.pem" ]; then
   bundle="$home/.ren/ca-bundle.pem"
   cat /etc/ssl/certs/ca-certificates.crt "$home/.ren/egress-ca.pem" >"$bundle"
@@ -124,6 +121,10 @@ if [ -s "$home/.ren/egress-ca.pem" ]; then
     certutil -d "$nssdb" -A -t "C,," -n ren-egress -i "$home/.ren/egress-ca.pem" || true
   fi
 fi
+until prepare "$REN_BUNDLES"; do
+  echo "The bundles are not ready; the next try is in 5 s" >&2
+  sleep 5
+done
 tools() { "$@"; }
 if sudo -n systemd-run --quiet --scope --slice=ren-tools.slice true >/dev/null 2>&1; then
   export REN_TOOLS_MEMORY_EVENTS=/sys/fs/cgroup/ren.slice/ren-tools.slice/memory.events
