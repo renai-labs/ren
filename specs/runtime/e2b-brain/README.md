@@ -9,7 +9,7 @@ A brain runs as a Bun process in an E2B sandbox; one brain serves a session or e
 | Harness-neutral sync (§3)       | Not started  |
 | Restore leftovers (§4)          | Not done     |
 | Live E2B tests (§5)             | Not written  |
-| E2B environment provider (§6)   | Not built    |
+| E2B environment provider (§6)   | Moved        |
 | Environment retries (§7)        | Not built    |
 | References (§8)                 | Open         |
 | Models and harnesses (§9)       | Not designed |
@@ -70,7 +70,7 @@ Each runs only with `E2B_API_KEY`, and asks the user before it creates a sandbox
 
 ## 6. E2B environment provider
 
-`EnvironmentProvider` has only Docker (`core/src/environment-provider/docker.ts`). An E2B provider lets a template's environment run on E2B. The E2B REST calls move to one module that `SandboxProvider.layerE2B` and the E2B `EnvironmentProvider` share.
+Moved to [the environments spec](../environments/README.md): one managed provider contract for brain and hand machines, with E2B as its first provider.
 
 ## 7. Environment retries
 
