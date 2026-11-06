@@ -115,6 +115,35 @@ export const next = (
   return target(edge.else, start, `${name(edge.else)} got the task instead of ${name(edge.agentId)}: ${reason}`)
 }
 
+export type Finish =
+  | { readonly _tag: "finish" }
+  | { readonly _tag: "refuse"; readonly message: string }
+  | { readonly _tag: "conflict"; readonly message: string }
+
+export const canFinish = (factory: Factory.Info, agentId: string) => {
+  const entry = factory.agents.find((candidate) => candidate.agentId === agentId)
+  return !entry?.to || Boolean(entry.finish)
+}
+
+export const finish = (
+  factory: Factory.Info,
+  input: { readonly from: string; readonly holder: string | null; readonly names: ReadonlyMap<string, string> },
+): Finish => {
+  const name = (agentId: string) => input.names.get(agentId) ?? agentId
+  if (!isGoverned(factory, input.from)) return { _tag: "finish" }
+  if (input.holder && input.from !== input.holder)
+    return { _tag: "conflict", message: "Only the task’s agent can finish it." }
+  if (canFinish(factory, input.from)) return { _tag: "finish" }
+  const to = factory.agents.find((entry) => entry.agentId === input.from)?.to ?? []
+  return {
+    _tag: "refuse",
+    message:
+      to.length === 0
+        ? `${name(input.from)} is not a last step: ask a person with task_review.`
+        : `${name(input.from)} is not a last step: hand off to ${to.map((edge) => name(edge.agentId)).join(", ")}.`,
+  }
+}
+
 export const read = Effect.fnUntraced(function* (transaction: Database.Transaction, spaceId: Space.ID) {
   const row = (yield* transaction
     .select({ factory: Database.Schema.space.factory, usable: AgentQueries.factoryOrder })

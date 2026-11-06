@@ -1021,6 +1021,16 @@ const EndpointTaskReview = (raw: RawClient["task"]) => (input: TaskReviewInput) 
     Effect.mapError(mapClientError),
   )
 
+type TaskFinishRequest = Parameters<RawClient["task"]["task.finish"]>[0]
+type TaskFinishInput = {
+  readonly id: TaskFinishRequest["params"]["id"]
+  readonly note?: TaskFinishRequest["payload"]["note"]
+}
+const EndpointTaskFinish = (raw: RawClient["task"]) => (input: TaskFinishInput) =>
+  raw["task.finish"]({ params: { id: input["id"] }, payload: { note: input["note"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
 const adaptGroupTask = (raw: RawClient["task"]) => ({
   list: EndpointTaskList(raw),
   get: EndpointTaskGet(raw),
@@ -1030,6 +1040,7 @@ const adaptGroupTask = (raw: RawClient["task"]) => ({
   assign: EndpointTaskAssign(raw),
   start: EndpointTaskStart(raw),
   review: EndpointTaskReview(raw),
+  finish: EndpointTaskFinish(raw),
 })
 
 type TaskCommentCreateRequest = Parameters<RawClient["task-comment"]["task-comment.create"]>[0]

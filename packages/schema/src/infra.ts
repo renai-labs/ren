@@ -46,6 +46,7 @@ export const FactoryDeclaration = Schema.Struct({
     Schema.Struct({
       agent: Agent.Name,
       maxRuns: Factory.Entry.fields.maxRuns,
+      finish: Factory.Entry.fields.finish,
       to: Schema.optionalKey(Schema.Array(FactoryEdgeDeclaration)),
     }),
   ).check(

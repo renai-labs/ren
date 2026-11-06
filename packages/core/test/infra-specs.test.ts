@@ -203,7 +203,7 @@ describe("InfraSpecs", () => {
                 maxHandoffs: 8,
                 agents: [
                   { agent: "ren", to: [{ agent: "build" }] },
-                  { agent: "build", maxRuns: 3, to: [{ agent: "review" }] },
+                  { agent: "build", maxRuns: 3, finish: true, to: [{ agent: "review" }] },
                   { agent: "review", to: [{ agent: "build", max: 2, else: "ren", start: "continue" }] },
                 ],
               },

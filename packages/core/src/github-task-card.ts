@@ -6,6 +6,7 @@ import { and, asc, eq, inArray } from "drizzle-orm"
 import { Config, Context, Effect, Layer, Option, Schema } from "effect"
 import { GitHubApp } from "./github-app.js"
 import { TaskCardSync } from "./task-card-sync.js"
+import { TaskQueries } from "./task/queries.js"
 
 export interface Interface {
   readonly refresh: (taskId: Task.ID) => Effect.Effect<void>
@@ -43,6 +44,7 @@ const bodyOf = (
     readonly identifier: string
     readonly title: string
     readonly status: Task.Status
+    readonly ready: boolean
     readonly agent: string | null
     readonly phases: ReadonlyArray<{ readonly agent: string | null; readonly sessionId: string }>
   },
@@ -50,7 +52,7 @@ const bodyOf = (
   [
     marker(card.id),
     `**[${card.identifier}](${app}/tasks/${card.identifier})** ${escaped(card.title)}`,
-    `**Status:** ${statusText[card.status]} · **Agent:** ${card.agent ?? "none"}`,
+    `**Status:** ${card.ready ? "Ready" : statusText[card.status]} · **Agent:** ${card.agent ?? "none"}`,
     ...(card.phases.length > 0
       ? [
           [
@@ -110,6 +112,7 @@ export const layer = Layer.effect(
           number: task.number,
           title: task.title,
           status: task.status,
+          ready: TaskQueries.isReady(task),
           prefix: Database.Schema.task_sequence.prefix,
           agent: agent.name,
         })
@@ -135,6 +138,7 @@ export const layer = Layer.effect(
         identifier: `${row.prefix}-${row.number}`,
         title: row.title,
         status: row.status,
+        ready: row.ready,
         agent: row.agent,
         phases,
       })

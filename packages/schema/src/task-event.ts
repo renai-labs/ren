@@ -54,6 +54,14 @@ export const Reviewed = Schema.TaggedStruct("reviewed", {
   comment: Schema.NullOr(Schema.String),
 }).annotate({ identifier: "TaskEvent.Reviewed" })
 
+export const Finished = Schema.TaggedStruct("finished", {
+  agentId: Schema.NullOr(Agent.ID),
+  note: Schema.NullOr(Schema.String),
+}).annotate({
+  identifier: "TaskEvent.Finished",
+  description: "The factory’s work is done. The task has no agent and waits for a person or a merge.",
+})
+
 export const Field = Schema.Literals(["title", "description", "priority", "dueAt"]).annotate({
   identifier: "TaskEvent.Field",
 })
@@ -89,6 +97,7 @@ export const Data = Schema.Union([
   StatusChanged,
   ReviewRequested,
   Reviewed,
+  Finished,
   FieldChanged,
   LabelsChanged,
   LinksChanged,

@@ -13,6 +13,7 @@ import type { ChannelSecrets } from "./channel-secrets.js"
 import { SlackApp } from "./slack-app.js"
 import { SlackManifest } from "./slack-manifest.js"
 import { TaskCardSync } from "./task-card-sync.js"
+import { TaskQueries } from "./task/queries.js"
 
 type LinksShared = Extract<Channel.Signal, { readonly kind: "links_shared" }>
 
@@ -68,6 +69,7 @@ const eventLabels: Readonly<Record<TaskEvent.Kind, string>> = {
   status: "Status changed",
   review_requested: "Review requested",
   reviewed: "Reviewed",
+  finished: "Finished",
   field: "Edited",
   label: "Labels changed",
   link: "Links changed",
@@ -120,6 +122,7 @@ interface Card {
   readonly status: Task.Status
   readonly priority: Task.Priority | null
   readonly humanReview: boolean
+  readonly ready: boolean
   readonly archived: boolean
   readonly agent: string | null
   readonly ownerId: Auth.UserID | null
@@ -136,6 +139,7 @@ const threadOf = (key: string) => ({ channel: key.slice(0, key.indexOf(":")), ts
 const statusField = (card: Card) => {
   if (card.archived) return { value: "Archived", tag_color: "gray" }
   if (card.humanReview && Task.actionable.includes(card.status)) return { value: "Needs review", tag_color: "yellow" }
+  if (card.ready) return { value: "Ready", tag_color: "green" }
   return { value: statusText[card.status], tag_color: statusColor[card.status] }
 }
 
@@ -250,6 +254,7 @@ export const layer = Layer.effect(
           status: task.status,
           priority: task.priority,
           humanReview: task.human_review,
+          ready: TaskQueries.isReady(task),
           archivedAt: task.archived_at,
           agent: agent.name,
           ownerId: task.owner_id,
@@ -318,6 +323,7 @@ export const layer = Layer.effect(
         status: row.status,
         priority: row.priority,
         humanReview: row.humanReview,
+        ready: row.ready,
         archived: Boolean(row.archivedAt),
         agent: row.agent,
         ownerId: row.ownerId,

@@ -76,6 +76,7 @@ import type {
   TaskAssignInput,
   TaskStartInput,
   TaskReviewInput,
+  TaskFinishInput,
   TaskCommentCreateInput,
   TaskCommentUpdateInput,
   TaskCommentArchiveInput,
@@ -853,6 +854,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["task", "review"] as const,
             mutationFn: (input: TaskReviewInput) => client["task"]["review"](input),
+          }),
+      },
+      finish: {
+        mutationKey: () => ["task", "finish"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task", "finish"] as const,
+            mutationFn: (input: TaskFinishInput) => client["task"]["finish"](input),
           }),
       },
     },

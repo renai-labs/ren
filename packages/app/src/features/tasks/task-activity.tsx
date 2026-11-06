@@ -9,6 +9,7 @@ import {
   IconCheck,
   IconChevronRight,
   IconCirclePlus,
+  IconFlagCheck,
   IconHandStop,
   IconGhostFilled,
   IconLink,
@@ -95,7 +96,14 @@ const labels = (data: Of<"label">) => `changed labels to ${data.to.join(", ") ||
 
 const links = (data: Of<"link">) => (data.added.length > 0 ? "added a link" : "removed a link")
 
-function eventText(data: EventData, names: Names) {
+const plainText = {
+  created: "created the task",
+  archived: "archived the task",
+  review_requested: "requested a human review",
+  finished: "finished the task",
+} as const
+
+const detailedText = (data: Exclude<EventData, { _tag: keyof typeof plainText }>, names: Names) => {
   switch (data._tag) {
     case "status":
       return statusChange(data)
@@ -113,19 +121,19 @@ function eventText(data: EventData, names: Names) {
       return links(data)
     case "parent":
       return parentChange(data)
-    case "created":
-      return "created the task"
-    case "archived":
-      return "archived the task"
-    case "review_requested":
-      return "requested a human review"
   }
 }
+
+const isPlain = (data: EventData): data is Extract<EventData, { _tag: keyof typeof plainText }> =>
+  data._tag in plainText
+
+const eventText = (data: EventData, names: Names) => (isPlain(data) ? plainText[data._tag] : detailedText(data, names))
 
 const eventNote = (event: TaskEventInfo) => {
   if (event.data._tag === "review_requested") return event.data.reason
   if (event.data._tag === "reviewed") return event.data.comment
   if (event.data._tag === "assigned") return event.data.note
+  if (event.data._tag === "finished") return event.data.note
   return null
 }
 
@@ -151,6 +159,7 @@ const eventIcons = {
   assigned: IconArrowRight,
   started: IconMessage,
   review_requested: IconHandStop,
+  finished: IconFlagCheck,
   field: IconPencil,
   label: IconTag,
   link: IconLink,

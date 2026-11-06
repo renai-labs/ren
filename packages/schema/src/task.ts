@@ -261,6 +261,17 @@ export const ReviewInput = Schema.Union([
 })
 export type ReviewInput = typeof ReviewInput.Type
 
+export const FinishInput = Schema.Struct({
+  note: Schema.optional(Note).annotate({
+    description: "What is ready and where: the pull request, the deliverable. The trail keeps it.",
+  }),
+}).annotate({
+  identifier: "Task.FinishInput",
+  description:
+    "Finish the task: the factory’s work is done and the result is ready for a person or a merge. Only an agent the factory lets finish may call it; others hand off with `task_assign`. Use `task_review` instead when you are blocked and a person must decide.",
+})
+export type FinishInput = typeof FinishInput.Type
+
 export const definition = Primitive.define({
   name: "task",
   plural: "tasks",
@@ -275,5 +286,6 @@ export const definition = Primitive.define({
     assign: { input: AssignInput, result: Info },
     start: { input: StartInput, result: Info },
     review: { input: ReviewInput, result: Info },
+    finish: { input: FinishInput, result: Info },
   },
 })

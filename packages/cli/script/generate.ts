@@ -134,7 +134,7 @@ const resources: ReadonlyArray<Resource> = [
     name: "task",
     one: "a task",
     many: "tasks",
-    descriptions: { assign: "Assign a task", start: "Start a task", review: "Review a task" },
+    descriptions: { assign: "Assign a task", start: "Start a task", review: "Review a task", finish: "Finish a task" },
   },
   {
     group: "task-comment",

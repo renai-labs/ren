@@ -152,6 +152,8 @@ import type {
   TaskStartOutput,
   TaskReviewInput,
   TaskReviewOutput,
+  TaskFinishInput,
+  TaskFinishOutput,
   TaskCommentCreateInput,
   TaskCommentCreateOutput,
   TaskCommentUpdateInput,
@@ -1427,6 +1429,18 @@ export function make(options: ClientOptions) {
             body: input["payload"],
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      finish: (input: TaskFinishInput, requestOptions?: RequestOptions) =>
+        request<TaskFinishOutput>(
+          {
+            method: "POST",
+            path: `/tasks/${encodeURIComponent(input.id)}/finish`,
+            body: { note: input["note"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
           },
           requestOptions,
