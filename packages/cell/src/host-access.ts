@@ -3,13 +3,16 @@ export * as HostAccess from "./host-access.js"
 import { EnvironmentAccess } from "@ren/brain/environment/access"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import type { Session } from "@ren/schema/session"
-import { Effect, Layer, Option } from "effect"
+import { Duration, Effect, Layer, Option, Schedule } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Cell } from "./cell.js"
 import { CredentialEnv } from "./credential-env.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
 import { RenAddress } from "./ren-address.js"
+
+// oxlint-disable-next-line ren/no-comments -- Ren answers EnvironmentStartingError while the chat's hand starts; a new remote hand takes about 2 minutes (E2B gives its executor 2 minutes, `handBootWithin`). The brain asks again every 2 seconds.
+export const handStartsWithin = Duration.minutes(3)
 
 export const layer = Layer.effect(
   EnvironmentAccess.Service,
@@ -34,6 +37,14 @@ export const layer = Layer.effect(
         }).pipe(
           HostToken.withToken(presented.token),
           Effect.timeout(HostToken.renAnswersWithin),
+          Effect.retry({
+            while: (error) => error._tag === "EnvironmentStartingError",
+            schedule: Schedule.spaced("2 seconds"),
+          }),
+          Effect.timeoutOrElse({
+            duration: handStartsWithin,
+            orElse: () => Effect.fail(presented.unavailable("The hand did not start within 3 minutes")),
+          }),
           Effect.catchTag("EnvironmentNotFoundError", (error) =>
             Effect.fail(new EnvironmentAccess.NotFound({ sessionId, message: error.message })),
           ),

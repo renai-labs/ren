@@ -26,6 +26,7 @@ export const make = (
     readonly canLimitHosts?: boolean
     readonly build?: (config: typeof Config.Type) => Effect.Effect<string, MachineProvider.Failed>
     readonly endpoint?: (environmentId: Environment.ID) => Effect.Effect<{ readonly url: string }, MachineProvider.Gone>
+    readonly creating?: Effect.Effect<void>
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -51,6 +52,7 @@ export const make = (
       binding: Schema.Struct({ environmentId: Environment.ID }),
       create: (input) =>
         Effect.gen(function* () {
+          if (options.creating) yield* options.creating
           if (yield* Ref.get(failing)) return yield* new MachineProvider.Failed({ message: "the test provider fails" })
           const environmentId = Environment.ID.make(input.labels.id)
           yield* Ref.update(provisions, (all) => [...all, environmentId])
