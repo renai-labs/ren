@@ -75,7 +75,11 @@ const templateProvider = Effect.fnUntraced(function* (
 ) {
   if (hand.placement === "none" || !hand.environmentTemplateId) return Option.none<string>()
   const found = (yield* transaction
-    .select({ provider: Database.Schema.environment_template.provider })
+    .select({
+      provider: Database.Schema.environment_template.provider,
+      image: Database.Schema.environment_template.image,
+      buildStatus: Database.Schema.environment_template.build_status,
+    })
     .from(Database.Schema.environment_template)
     .where(
       and(
@@ -88,6 +92,12 @@ const templateProvider = Effect.fnUntraced(function* (
   if (!found)
     return yield* new Primitive.Invalid({
       message: `This organization has no environment template ${hand.environmentTemplateId}`,
+      field: "hand",
+    })
+  // oxlint-disable-next-line ren/no-comments -- EN44: a space cannot pick a template that has never built. A provider that builds no image is ready at once.
+  if (!found.image && found.buildStatus !== "ready")
+    return yield* new Primitive.Invalid({
+      message: `The environment template ${hand.environmentTemplateId} has no image yet; wait until its build is ready`,
       field: "hand",
     })
   return Option.some(found.provider)

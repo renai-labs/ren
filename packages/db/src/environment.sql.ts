@@ -24,6 +24,12 @@ export const environment_template = pgTable(
     provider: text().$type<EnvironmentProvider.ID>().notNull(),
     config: jsonb().$type<Schema.Json>().notNull(),
     sessions_per_environment: integer().notNull(),
+    networking: jsonb().$type<EnvironmentTemplate.Networking>().notNull().default({ type: "unrestricted" }),
+    build_status: text().$type<EnvironmentTemplate.BuildStatus>().notNull().default("ready"),
+    image: text(),
+    build_error: text(),
+    // oxlint-disable-next-line ren/no-comments -- Each saved config gets the next number; a build counts only while the template still has the config of its number (EN30).
+    config_version: integer().notNull().default(0),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),
@@ -37,6 +43,10 @@ export const environment_template = pgTable(
     check(
       "environment_template_name_length_check",
       sql`char_length(${table.name}) between 1 and ${sql.raw(String(Primitive.maximumNameLength))}`,
+    ),
+    check(
+      "environment_template_build_status_check",
+      sql`${table.build_status} in ('queued', 'building', 'ready', 'failed')`,
     ),
     check(
       "environment_template_sessions_per_environment_check",

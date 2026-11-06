@@ -176,7 +176,14 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([models, Environments.layer, GitHubApp.layer, Integrations.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
-  Layer.provide(EnvironmentProvider.layer([Docker.provider])),
+  Layer.provide(
+    Layer.unwrap(
+      Effect.map(Config.String("SANDBOX_PROVIDER").pipe(Config.withDefault("local")), (provider) =>
+        // oxlint-disable-next-line ren/no-comments -- E2B makes hands as well as brains: its templates are co-located hands today (EN3).
+        EnvironmentProvider.layer(provider === "e2b" ? [Docker.provider, E2BSandbox.provider] : [Docker.provider]),
+      ),
+    ),
+  ),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide(PostHog.layer),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),

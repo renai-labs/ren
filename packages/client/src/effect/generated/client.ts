@@ -146,6 +146,7 @@ type EnvironmentTemplateCreateInput = {
   readonly provider: EnvironmentTemplateCreateRequest["payload"]["provider"]
   readonly config: EnvironmentTemplateCreateRequest["payload"]["config"]
   readonly sessionsPerEnvironment: EnvironmentTemplateCreateRequest["payload"]["sessionsPerEnvironment"]
+  readonly networking: EnvironmentTemplateCreateRequest["payload"]["networking"]
 }
 const EndpointEnvironmentTemplateCreate =
   (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateCreateInput) =>
@@ -156,6 +157,7 @@ const EndpointEnvironmentTemplateCreate =
         provider: input["provider"],
         config: input["config"],
         sessionsPerEnvironment: input["sessionsPerEnvironment"],
+        networking: input["networking"],
       },
     }).pipe(Effect.mapError(mapClientError))
 
@@ -166,6 +168,7 @@ type EnvironmentTemplateUpdateInput = {
   readonly description?: EnvironmentTemplateUpdateRequest["payload"]["description"]
   readonly config?: EnvironmentTemplateUpdateRequest["payload"]["config"]
   readonly sessionsPerEnvironment?: EnvironmentTemplateUpdateRequest["payload"]["sessionsPerEnvironment"]
+  readonly networking?: EnvironmentTemplateUpdateRequest["payload"]["networking"]
 }
 const EndpointEnvironmentTemplateUpdate =
   (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateUpdateInput) =>
@@ -176,6 +179,7 @@ const EndpointEnvironmentTemplateUpdate =
         description: input["description"],
         config: input["config"],
         sessionsPerEnvironment: input["sessionsPerEnvironment"],
+        networking: input["networking"],
       },
     }).pipe(Effect.mapError(mapClientError))
 

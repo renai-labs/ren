@@ -5,6 +5,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain as BrainSchema } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import type { EnvironmentProvider } from "@ren/schema/environment-provider"
+import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import type { Space } from "@ren/schema/space"
 import { type DateTime, Duration, Effect, Option, Redacted, Schedule, Schema, Stream } from "effect"
 import { type HttpClient, HttpClientRequest } from "effect/http"
@@ -37,6 +38,11 @@ interface CreateInput<Config> {
   readonly config: Config
   readonly variables: Readonly<Record<string, string>>
   readonly proxy: Option.Option<Proxy>
+}
+
+interface BuildInput<Config> {
+  readonly environmentTemplateId: EnvironmentTemplate.ID
+  readonly config: Config
 }
 
 export interface Created {
@@ -97,6 +103,8 @@ interface Definition<Config, Binding> {
   readonly canSample: boolean
   // oxlint-disable-next-line ren/no-comments -- Whether its machines can run a brain and that brain's tools on one machine (EN3).
   readonly canColocate: boolean
+  // oxlint-disable-next-line ren/no-comments -- Whether it can keep a machine to a list of hosts (a template's `limited` networking).
+  readonly canLimitHosts: boolean
   readonly template?: string
   readonly config: Schema.Codec<Config, unknown>
   readonly binding: Schema.Codec<Binding, unknown>
@@ -108,6 +116,8 @@ interface Definition<Config, Binding> {
     proxy: Option.Option<Proxy>,
   ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly destroy: (binding: Binding) => Effect.Effect<void, Failed>
+  // oxlint-disable-next-line ren/no-comments -- Builds the image of a template's config and gives its name. Two builds of one config give one image.
+  readonly build?: (input: BuildInput<Config>) => Effect.Effect<string, Failed>
   readonly keepAlive?: (binding: Binding, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly status?: (binding: Binding) => Effect.Effect<Status, Failed>
   readonly lastSample?: (binding: Binding) => Effect.Effect<Option.Option<Sample>, Failed>
@@ -123,6 +133,7 @@ export interface Provider {
   readonly canMount: boolean
   readonly canSample: boolean
   readonly canColocate: boolean
+  readonly canLimitHosts: boolean
   readonly template: string | null
   readonly check: (config: unknown) => Effect.Effect<Schema.Json, InvalidConfig>
   readonly create: (input: CreateInput<Schema.Json>) => Effect.Effect<Created, Failed | Capacity>
@@ -131,6 +142,7 @@ export interface Provider {
     proxy: Option.Option<Proxy>,
   ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
+  readonly build: Option.Option<(input: BuildInput<Schema.Json>) => Effect.Effect<string, Failed>>
   readonly keepAlive: (binding: Schema.Json, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly status: (binding: Schema.Json) => Effect.Effect<Status, Failed>
   readonly lastSample: (binding: Schema.Json) => Effect.Effect<Option.Option<Sample>, Failed>
@@ -185,6 +197,7 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
     canMount: definition.canMount,
     canSample: definition.canSample,
     canColocate: definition.canColocate,
+    canLimitHosts: definition.canLimitHosts,
     template: definition.template ?? null,
     check: (value) =>
       Schema.decodeUnknownEffect(config)(value).pipe(
@@ -203,6 +216,11 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
       ),
     connect: (value, proxy) => storedBinding(value).pipe(Effect.flatMap((found) => definition.connect(found, proxy))),
     destroy: (value) => storedBinding(value).pipe(Effect.flatMap(definition.destroy)),
+    build: Option.map(
+      Option.fromUndefinedOr(definition.build),
+      (build) => (input: BuildInput<Schema.Json>) =>
+        stored(config, "config")(input.config).pipe(Effect.flatMap((decoded) => build({ ...input, config: decoded }))),
+    ),
     keepAlive: (value, duration) =>
       keepAlive ? storedBinding(value).pipe(Effect.flatMap((found) => keepAlive(found, duration))) : Effect.void,
     status: (value) =>
