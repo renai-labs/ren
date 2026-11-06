@@ -4,7 +4,7 @@ export { CreateInput, Declaration } from "@ren/schema/app"
 import { Database } from "@ren/db/database"
 import { App } from "@ren/schema/app"
 import { Pagination } from "@ren/util/pagination"
-import { and, asc, eq, exists, isNull, sql } from "drizzle-orm"
+import { and, asc, eq, isNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
@@ -43,21 +43,7 @@ export const layer = Layer.effect(
                 and(
                   input.spaceId ? eq(Database.Schema.app.owner_space_id, input.spaceId) : undefined,
                   input.connected
-                    ? exists(
-                        transaction
-                          .select({ one: sql`1` })
-                          .from(Database.Schema.app_profile)
-                          .where(
-                            and(
-                              eq(Database.Schema.app_profile.app_id, Database.Schema.app.id),
-                              eq(Database.Schema.app_profile.organization_id, actor.organizationId),
-                              Access.where(
-                                access.plan(actor, AppProfilePolicy.actions.list),
-                                AppQueries.profileWhere(actor),
-                              ),
-                            ),
-                          ),
-                      )
+                    ? AppQueries.hasVisibleProfile(actor, access.plan(actor, AppProfilePolicy.actions.list))
                     : eq(Database.Schema.app.organization_id, actor.organizationId),
                   isNull(Database.Schema.app.archived_at),
                 ),
