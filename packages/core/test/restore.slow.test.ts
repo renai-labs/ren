@@ -584,3 +584,56 @@ it.live("a chat that Ren deleted leaves its brain's harness at the next pull", (
     expect(HarnessDb.hasChat(home, chat.sessionId)).toBe(false)
   }),
 )
+
+it.live(
+  "a chat that was busy when its machine was lost continues once on the new machine, with the replace notice, and no one asks for it (EN35, EN36, I5)",
+  () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const script = stub.script({ hold: true })
+      yield* Effect.addFinalizer(() => Effect.sync(script.release))
+      const chat = yield* opened(`open ${script.marker}`)
+      yield* Effect.promise(() => script.called())
+      yield* database.db
+        .select({ at: Database.Schema.opencode_session.time_suspended })
+        .from(Database.Schema.opencode_session)
+        .where(eq(Database.Schema.opencode_session.session_id, chat.sessionId))
+        .pipe(
+          Effect.map((rows) => rows.at(0)?.at ?? null),
+          Effect.repeat({ until: (at) => at !== null, schedule: Schedule.spaced("100 millis") }),
+          Effect.timeout("30 seconds"),
+        )
+      const provider = yield* MachineProvider.Brain
+      const machine = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === chat.brainId)
+      if (!machine) return yield* Effect.die(new Error("The chat's brain has no machine"))
+      Bun.spawnSync([
+        "kill",
+        "-KILL",
+        `-${Schema.decodeUnknownSync(Schema.Struct({ pid: Schema.Int }))(machine.binding).pid}`,
+      ])
+      script.release()
+      const continued = database.db
+        .select({ data: Database.Schema.opencode_message.data })
+        .from(Database.Schema.opencode_message)
+        .where(eq(Database.Schema.opencode_message.session_id, chat.sessionId))
+        .pipe(
+          Effect.map(
+            (rows) => rows.filter((each) => each.data.includes("The machine was replaced during your turn")).length,
+          ),
+        )
+      yield* continued.pipe(
+        Effect.repeat({ until: (count) => count > 0, schedule: Schedule.spaced("200 millis") }),
+        Effect.timeout("90 seconds"),
+      )
+      yield* database.db
+        .select({ next: Database.Schema.agent_session.continue_message_id })
+        .from(Database.Schema.agent_session)
+        .where(eq(Database.Schema.agent_session.id, chat.sessionId))
+        .pipe(
+          Effect.map((rows) => rows.at(0)?.next ?? null),
+          Effect.repeat({ until: (next) => next === null, schedule: Schedule.spaced("200 millis") }),
+          Effect.timeout("30 seconds"),
+        )
+      expect(yield* continued).toBe(1)
+    }),
+)

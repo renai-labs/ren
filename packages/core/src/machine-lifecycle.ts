@@ -80,6 +80,8 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly replace: (row: R, at: Date) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- Marks the machine of this generation `replacing`, unless it is already creating or replacing, and does the kind's own work in the same transaction. True when it marked it.
   readonly lose: (id: Id, generation: number, at: Date) => Effect.Effect<boolean>
+  // oxlint-disable-next-line ren/no-comments -- Whether work waits for the machine after a forced replace, such as a chat to continue (EN35). Then the replace starts at once.
+  readonly isNeeded: (id: Id) => Effect.Effect<boolean>
   // oxlint-disable-next-line ren/no-comments -- Starts the kind's durable run for the row's run epoch, which calls `run`.
   readonly ensure: (row: R) => Effect.Effect<void>
   readonly proxyFor: (row: R) => Effect.Effect<Option.Option<MachineProvider.Proxy>>
@@ -259,8 +261,10 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   })
 
   const lose = Effect.fnUntraced(function* (row: Pick<R, "id" | "generation">, reason: string) {
-    if (yield* definition.lose(row.id, row.generation, yield* now))
-      yield* report(row, new Replaced({ message: `${noun} ${row.id}: ${reason}` }))
+    if (!(yield* definition.lose(row.id, row.generation, yield* now))) return
+    yield* report(row, new Replaced({ message: `${noun} ${row.id}: ${reason}` }))
+    // oxlint-disable-next-line ren/no-comments -- A forced replace starts at once when work waits, so the chats it interrupted continue without anyone asking (EN35).
+    if (yield* definition.isNeeded(row.id)) yield* ensure(row.id)
   })
 
   const replaceIfFrozen = Effect.fnUntraced(function* (row: R, binding: Schema.Json) {
