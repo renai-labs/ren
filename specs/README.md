@@ -29,6 +29,7 @@ Generated clients follow the protocol `HttpApi`.
 | [runtime/e2b-brain/README.md](runtime/e2b-brain/README.md)           | Harness-neutral sync, restore leftovers, live E2B tests, retries                                                                |
 | [runtime/hot-reload/README.md](runtime/hot-reload/README.md)         | Tests not written, a model key per brain                                                                                        |
 | [runtime/channels/README.md](runtime/channels/README.md)             | Linear, Slack task card and onboarding, GitHub live checks                                                                      |
+| [runtime/webhooks/README.md](runtime/webhooks/README.md)             | All of it: Intake, one path for channels and webhooks; CEL parsers; repair and replay                                           |
 | [runtime/credentials/README.md](runtime/credentials/README.md)       | `oauth-session.complete`, KMS, traffic the egress cannot inject                                                                 |
 | [runtime/private-spaces/README.md](runtime/private-spaces/README.md) | Usage totals, files spec alignment                                                                                              |
 | [runtime/files/README.md](runtime/files/README.md)                   | Chat uploads and outputs on drives, cards, viewer, Files panel, mount fixes                                                     |

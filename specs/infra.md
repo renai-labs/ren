@@ -8,13 +8,13 @@ Apply works today for org settings, shared spaces, agents, `uses`, `factory`, cu
 
 `plan` reports each of these as a problem (`core/src/infra-specs.ts:74`, `:721`, `:727`, `:747`):
 
-| Part                                                 | Today                                                    |
-| ---------------------------------------------------- | -------------------------------------------------------- |
-| `spaces/<slug>/webhooks.yaml` and webhook bindings   | "Infra does not apply webhooks yet."                     |
-| `spaces/<slug>/environment.yaml`                     | "Infra does not apply environments yet."                 |
-| `deploy.yaml` `spaces.<slug>.timezone`               | "Infra does not apply the timezone of a space yet."      |
-| One-time schedules and schedules that send to a chat | Not managed: apply leaves them as they are.              |
-| Linear channel mappings                              | Not managed: only GitHub and Slack mappings are applied. |
+| Part                                                 | Today                                                                                              |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `spaces/<slug>/webhooks.yaml` and webhook bindings   | "Infra does not apply webhooks yet." See [`runtime/webhooks`](runtime/webhooks/README.md), step 7. |
+| `spaces/<slug>/environment.yaml`                     | "Infra does not apply environments yet."                                                           |
+| `deploy.yaml` `spaces.<slug>.timezone`               | "Infra does not apply the timezone of a space yet."                                                |
+| One-time schedules and schedules that send to a chat | Not managed: apply leaves them as they are.                                                        |
+| Linear channel mappings                              | Not managed: only GitHub and Slack mappings are applied.                                           |
 
 Rules that hold for these parts:
 
