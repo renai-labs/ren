@@ -1,4 +1,5 @@
 import { expect } from "bun:test"
+import { BrainProvider } from "../src/brain-provider.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { asc } from "drizzle-orm"
@@ -85,7 +86,7 @@ const it = testEffect(
   SandboxUsage.layer.pipe(
     Layer.provideMerge(Usage.layer),
     Layer.provide(
-      E2BSandbox.layer.pipe(
+      BrainProvider.layer([E2BSandbox.provider]).pipe(
         Layer.provide(e2b),
         Layer.provide(
           ConfigProvider.layer(

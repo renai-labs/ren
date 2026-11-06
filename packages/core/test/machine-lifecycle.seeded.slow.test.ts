@@ -1,6 +1,7 @@
 import { afterAll, afterEach, describe, expect, setDefaultTimeout, test } from "bun:test"
+import { BrainProvider } from "../src/brain-provider.js"
 import { Brain } from "@ren/schema/brain"
-import { Effect, Layer, Random, Schema } from "effect"
+import { Effect, Random, Schema } from "effect"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
 import { MachineProvider } from "../src/machine-provider.js"
 import { BrainRuns } from "./lib/brain-runs.js"
@@ -47,10 +48,9 @@ const faulty = () => {
   const destroyed: Array<Destroyed> = []
   const frozen = new Set<number>()
   const real: { list?: MachineProvider.Provider["list"] } = {}
-  const layer = Layer.effect(
-    MachineProvider.Brain,
+  const layer = BrainProvider.layer([
     Effect.gen(function* () {
-      const provider = yield* MachineProvider.Brain
+      const provider = yield* Host.local({ root: runs.root, lostEvery: "500 millis" })
       real.list = provider.list
       const unknown = Effect.fail(new MachineProvider.Failed({ message: "the seeded fault: no answer" }))
       return {
@@ -80,7 +80,7 @@ const faulty = () => {
           }),
       } satisfies MachineProvider.Provider
     }),
-  ).pipe(Layer.provide(Host.local({ root: runs.root, lostEvery: "500 millis" })))
+  ])
   return { faults, destroyed, frozen, layer, real }
 }
 

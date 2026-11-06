@@ -42,6 +42,7 @@ const kind = Effect.gen(function* () {
     canEgress: false,
     canMount: false,
     canSample: false,
+    canColocate: true,
     config: Schema.Struct({}),
     binding: Schema.Struct({ number: Schema.Int }),
     create: () => {
@@ -64,8 +65,8 @@ const kind = Effect.gen(function* () {
     name: "TestLifecycle",
     noun: "Machine",
     annotation: "machine",
-    provider,
-    isBehindEgress: false,
+    providerOf: () => Effect.succeed(provider),
+    isBehindEgress: () => false,
     bootWithin: Duration.seconds(1),
     wakeWithin: Duration.seconds(1),
     read,
