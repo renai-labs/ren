@@ -19,8 +19,8 @@ export interface Review {
 
 const note =
   "Read the task and its trail with `task_get`, then work your part. When your part is complete, hand off with " +
-  "`task_assign`. When a person must decide, use `task_review` and end your turn. Never set the status to `done` " +
-  "or `dismissed`, and do not create a second task for the same work."
+  "`task_assign` to the agent that fits, or finish with `task_review` when the work is done or a person must decide. " +
+  "Never set the status to `done` or `dismissed`, and do not create a second task for the same work."
 
 interface Described {
   readonly name: string
