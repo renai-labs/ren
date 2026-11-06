@@ -133,8 +133,12 @@ if sudo -n systemd-run --quiet --scope --slice=ren-tools.slice true >/dev/null 2
       --uid="$(id -u)" --gid="$(id -g)" -- "$@"
   }
 fi
+# A remote hand (REN_HAND=1) runs the executor only, and answers Ren and the
+# brains from outside the machine.
+executor_host=127.0.0.1
+if [ -n "${REN_HAND:-}" ]; then executor_host=0.0.0.0; fi
 (
-  export PORT="${EXECUTOR_PORT:-4100}" EXECUTOR_HOST=127.0.0.1 EXECUTOR_WORKSPACE="$home/workspace"
+  export PORT="${EXECUTOR_PORT:-4100}" EXECUTOR_HOST="$executor_host" EXECUTOR_WORKSPACE="$home/workspace"
   while true; do
     tree=$(cat "$home/.ren/executor.version")
     tools bun "$code/executor/$tree/packages/executor/src/main.ts" >>"$home/.ren/executor.log" 2>&1 &
@@ -143,6 +147,10 @@ fi
     sleep 1
   done
 ) &
+if [ -n "${REN_HAND:-}" ]; then
+  wait
+  exit 0
+fi
 export REN_HOME="$home" PORT="${BRAIN_PORT:-4800}"
 cd "$home/workspace"
 kill_when_stuck() {

@@ -470,7 +470,7 @@ describe("BrainHost pull", () => {
               ]),
               (probes) => {
                 const environments = Environments.layer.pipe(
-                  Layer.provide(Signer.layerLocal),
+                  Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
                   Layer.provide(EnvironmentProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
                 )
                 return Layer.merge(
@@ -599,7 +599,7 @@ describe("BrainHost environments", () => {
       Host.cellLayer(
         { CELL_URL: cellUrl },
         fixed,
-        Layer.fresh(Environments.layer.pipe(Layer.provide(Signer.layerLocal))).pipe(
+        Layer.fresh(Environments.layer.pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))).pipe(
           Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
           Layer.provide(
             ConfigProvider.layer(

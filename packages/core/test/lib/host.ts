@@ -56,7 +56,7 @@ const environmentKeys = JSON.stringify([
 ])
 
 export const noTemplates = Environments.layer
-  .pipe(Layer.provide(Signer.layerLocal))
+  .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
   .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([])))
 
 export const freePort = Effect.promise(async () => {

@@ -1,3 +1,4 @@
+import { HttpClient, HttpClientError } from "effect/http"
 import { describe, expect } from "bun:test"
 import { EnvironmentToken } from "@ren/environment-api/environment-token"
 import { Signature } from "@ren/schema/signature"
@@ -7,7 +8,20 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { eq, sql } from "drizzle-orm"
-import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
+import {
+  ConfigProvider,
+  Context,
+  DateTime,
+  Deferred,
+  Effect,
+  Fiber,
+  Layer,
+  Option,
+  Redacted,
+  Ref,
+  Schema,
+} from "effect"
+import { TestClock } from "effect/testing"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { testEffect } from "./lib/effect.js"
@@ -26,13 +40,25 @@ const signingKeys = JSON.stringify(
   })),
 )
 
+// oxlint-disable-next-line ren/no-comments -- The test machines run no executor, so a probe of one gets no answer.
+const noExecutor = Layer.succeed(
+  HttpClient.HttpClient,
+  HttpClient.make((request) =>
+    Effect.fail(
+      new HttpClientError.HttpClientError({
+        reason: new HttpClientError.TransportError({ request, description: "no executor runs in this test" }),
+      }),
+    ),
+  ),
+)
+
 const environmentsWith = Effect.fnUntraced(function* (
   config: Readonly<Record<string, string>> = {},
   options: Parameters<typeof TestProvider.make>[0] = {},
 ) {
   const probe = yield* TestProvider.make(options)
   const context = yield* Layer.build(
-    Layer.fresh(Environments.layer.pipe(Layer.provide(Signer.layerLocal))).pipe(
+    Layer.fresh(Environments.layer.pipe(Layer.provide([Signer.layerLocal, noExecutor]))).pipe(
       Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
       Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ ENVIRONMENT_KEYS: signingKeys, ...config }))),
     ),
@@ -191,42 +217,76 @@ describe("Environments", () => {
       }),
   )
 
-  it.live("an environment that is gone is replaced once; the sessions on it get the next generation", () =>
-    Effect.gen(function* () {
-      const subject = yield* environmentsWith()
-      const organizationId = yield* Seed.organization()
-      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
-      const sessions = yield* Effect.all([subjectIn(organizationId), subjectIn(organizationId)])
-      yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
-        discard: true,
-      })
-      const first = yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()))
-      const lost = (yield* Ref.get(subject.probe.provisions))[0]
-      if (!lost) return yield* Effect.die(new Error("no environment was made"))
-      yield* Ref.set(subject.probe.gone, new Set([lost]))
-      const replaced = yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()))
-      expect(replaced.map((access) => access.generation)).toEqual([2, 2])
-      expect(replaced.at(0)?.url.href).not.toBe(first.at(0)?.url.href)
-      expect(replaced.at(1)?.url.href).toBe(replaced.at(0)?.url.href)
-      expect((yield* environmentsOf(environmentTemplateId)).length).toBe(1)
-    }),
+  it.effect(
+    "an access waits 5 s for a hand that is starting, then answers Starting; once the machine is made the next access gives it",
+    () =>
+      Effect.gen(function* () {
+        const entered = yield* Deferred.make<void>()
+        const made = yield* Deferred.make<void>()
+        const subject = yield* environmentsWith(
+          {},
+          { creating: Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(made))) },
+        )
+        const organizationId = yield* Seed.organization()
+        const session = yield* subjectIn(organizationId)
+        yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+        const first = yield* subject.environments.access(session, Option.none()).pipe(Effect.flip, Effect.forkScoped)
+        yield* Deferred.await(entered)
+        yield* TestClock.adjust(Environments.startingAfter)
+        expect((yield* Fiber.join(first))._tag).toBe("Environments.Starting")
+        yield* Deferred.succeed(made, undefined)
+        expect((yield* subject.environments.access(session, Option.none())).generation).toBe(1)
+      }),
   )
 
-  it.live("a provider that fails gives Unavailable, and the next access tries again", () =>
-    Effect.gen(function* () {
-      const subject = yield* environmentsWith()
-      const organizationId = yield* Seed.organization()
-      const session = yield* subjectIn(organizationId)
-      yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
-      yield* Ref.set(subject.probe.failing, true)
-      const failed = yield* subject.environments.access(session, Option.none()).pipe(Effect.flip)
-      expect([failed._tag, failed.message]).toEqual([
-        "Environments.Unavailable",
-        `The environment of session ${session.sessionId} is unavailable: the test provider fails`,
-      ])
-      yield* Ref.set(subject.probe.failing, false)
-      expect((yield* subject.environments.access(session, Option.none())).generation).toBe(1)
-    }),
+  it.live(
+    "a hand that the brain cannot reach and whose machine is gone is replaced once; the sessions on it get the next generation (EN15)",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* environmentsWith()
+        const organizationId = yield* Seed.organization()
+        const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+        const sessions = yield* Effect.all([subjectIn(organizationId), subjectIn(organizationId)])
+        yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
+          discard: true,
+        })
+        yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()))
+        const lost = (yield* Ref.get(subject.probe.provisions))[0]
+        if (!lost) return yield* Effect.die(new Error("no environment was made"))
+        yield* Ref.set(subject.probe.gone, new Set([lost]))
+        const kept = yield* subject.environments.access(sessions[1], Option.none())
+        const replaced = yield* subject.environments.access(sessions[0], Option.none(), { unreachable: true })
+        const again = yield* subject.environments.access(sessions[1], Option.none())
+        expect([kept.generation, replaced.generation, again.generation]).toEqual([1, 2, 2])
+        expect(yield* Ref.get(subject.probe.provisions)).toEqual([lost, lost])
+        expect((yield* environmentsOf(environmentTemplateId)).length).toBe(1)
+      }),
+  )
+
+  it.live(
+    "a provider that fails 3 times gives Unavailable to a caller that asks again while it is Starting, and the timed retry starts it again (EN19, chaos row 33)",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const subject = yield* environmentsWith()
+        const organizationId = yield* Seed.organization()
+        const session = yield* subjectIn(organizationId)
+        yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+        yield* Ref.set(subject.probe.failing, true)
+        const failed = yield* subject.environments
+          .access(session, Option.none())
+          .pipe(Effect.flip, Effect.repeat({ while: (error) => error._tag === "Environments.Starting" }))
+        expect([failed._tag, failed.message]).toEqual([
+          "Environments.Unavailable",
+          `The environment of session ${session.sessionId} is unavailable: the test provider fails`,
+        ])
+        yield* Ref.set(subject.probe.failing, false)
+        yield* database.db
+          .update(Database.Schema.environment)
+          .set({ retry_at: new Date(Date.now() - 1000) })
+          .where(eq(Database.Schema.environment.phase, "failed"))
+        expect((yield* subject.environments.access(session, Option.none())).generation).toBe(1)
+      }),
   )
 
   it.live(

@@ -28,6 +28,7 @@ describe("brain runs", () => {
         Effect.flatMap((provider) =>
           provider.create({
             labels: {
+              kind: "brain",
               id: Brain.ID.create(),
               generation: 1,
               organizationId: Auth.OrganizationID.create(),

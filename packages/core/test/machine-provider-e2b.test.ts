@@ -165,7 +165,7 @@ describe("E2BSandbox with an egress", () => {
       const provider = yield* BrainProvider.first
       seen.length = 0
       const created = yield* provider.create({
-        labels: { id: Brain.ID.make("brn_01"), generation: 1, ...owner },
+        labels: { kind: "brain", id: Brain.ID.make("brn_01"), generation: 1, ...owner },
         config: {},
         variables: { REN_BRAIN_ID: "brn_01" },
         image: Option.none(),
@@ -193,7 +193,7 @@ describe("E2BSandbox with an egress", () => {
         { sandboxId: "sbx_mine", domain: "e2b.test", port: 4800 },
       ])
       yield* provider.create({
-        labels: { id: Brain.ID.make("brn_03"), generation: 1, ...owner },
+        labels: { kind: "brain", id: Brain.ID.make("brn_03"), generation: 1, ...owner },
         config: {},
         variables: {},
         image: Option.none(),
@@ -204,6 +204,7 @@ describe("E2BSandbox with an egress", () => {
         owner: "ren-test-a",
         brain: "brn_03",
         generation: "1",
+        kind: "brain",
         organization: "org_01",
         space: "spc_01",
       })
@@ -215,7 +216,7 @@ describe("E2BSandbox with an egress", () => {
       const provider = yield* BrainProvider.first
       seen.length = 0
       yield* provider.create({
-        labels: { id: Brain.ID.make("brn_02"), generation: 1, ...owner },
+        labels: { kind: "brain", id: Brain.ID.make("brn_02"), generation: 1, ...owner },
         config: {},
         variables: {},
         image: Option.none(),
@@ -288,7 +289,7 @@ describe("E2BSandbox templates on a machine", () => {
         const provider = yield* BrainProvider.first
         seen.length = 0
         const created = yield* provider.create({
-          labels: { id: Brain.ID.make("brn_04"), generation: 1, ...owner },
+          labels: { kind: "brain", id: Brain.ID.make("brn_04"), generation: 1, ...owner },
           config: {},
           image: Option.some("ren-template-x:abc"),
           variables: {},
@@ -349,5 +350,28 @@ describe("E2BSandbox metering", () => {
       expect(metered.map((span) => span.id)).toEqual(runs.slice(0, 151).map((run) => run.id))
       expect(reads().map((query) => query.get("offset"))).toEqual(["0", "100"])
     }),
+  )
+})
+
+describe("E2BSandbox hands", () => {
+  it.live("E2B's 502 for a sandbox that is not there is not an executor's answer; the executor's own 401 is", () =>
+    Effect.gen(function* () {
+      const edge = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: (request) =>
+          new URL(request.url).pathname.startsWith("/gone/")
+            ? Response.json({ message: "The sandbox was not found", code: 502 }, { status: 502 })
+            : Response.json({ _tag: "UnauthorizedError", message: "Authentication required" }, { status: 401 }),
+      })
+      yield* Effect.addFinalizer(() => Effect.promise(() => edge.stop(true)))
+      const http = yield* HttpClient.HttpClient
+      const answers = (path: string) =>
+        MachineProvider.executorAnswers(http, new URL(path, edge.url)).pipe(
+          Effect.as(true),
+          Effect.orElseSucceed(() => false),
+        )
+      expect([yield* answers("/gone/"), yield* answers("/")]).toEqual([false, true])
+    }).pipe(Effect.scoped, Effect.provide(FetchHttpClient.layer)),
   )
 })

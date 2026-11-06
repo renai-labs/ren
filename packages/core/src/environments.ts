@@ -11,9 +11,27 @@ import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { and, asc, count, eq, exists, inArray, isNull, sql } from "drizzle-orm"
-import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
+import {
+  Clock,
+  Config,
+  Context,
+  DateTime,
+  Duration,
+  Effect,
+  Fiber,
+  FiberMap,
+  Layer,
+  Option,
+  Redacted,
+  Schema,
+  Struct,
+} from "effect"
+import { HttpClient } from "effect/http"
+import { Bundles } from "./bundles.js"
 import { Deployment } from "./deployment.js"
+import { EnvironmentNetwork } from "./environment-network.js"
 import { EnvironmentProvider } from "./environment-provider.js"
+import { MachineLifecycle } from "./machine-lifecycle.js"
 import { MachineProvider } from "./machine-provider.js"
 import { Signer } from "./signer.js"
 
@@ -61,10 +79,12 @@ export interface Interface {
     hand: Option.Option<Hand>,
   ) => Effect.Effect<ReadonlyMap<Session.ID, Capability>>
   readonly unbind: (subject: Subject) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- EN15: `unreachable` when the brain could not reach the session's hand at its last URL; Ren checks that machine first.
   readonly access: (
     subject: Subject,
     hand: Option.Option<Hand>,
-  ) => Effect.Effect<Environment.Access, NotFound | Unavailable>
+    options?: { readonly unreachable?: boolean },
+  ) => Effect.Effect<Environment.Access, NotFound | Unavailable | Starting>
   readonly release: (subject: Subject) => Effect.Effect<void>
   readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
 }
@@ -79,6 +99,11 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Environments
   message: Schema.String,
 }) {}
 
+export class Starting extends Schema.TaggedError<Starting>()("Environments.Starting", { message: Schema.String }) {}
+
+// oxlint-disable-next-line ren/no-comments -- An access waits this long for a hand's machine, under the 10 s for which Ren's server keeps a quiet connection (server main.ts, idleTimeout). A hand that takes longer answers Starting, and the brain asks again.
+export const startingAfter = Duration.seconds(5)
+
 const templates = Database.Schema.environment_template
 const environments = Database.Schema.environment
 const sessions = Database.Schema.session_environment
@@ -87,8 +112,12 @@ const spaces = Database.Schema.space
 const isAvailable = (organizationId: Auth.OrganizationID) =>
   and(eq(templates.organization_id, organizationId), isNull(templates.archived_at))
 
-// oxlint-disable-next-line ren/no-comments -- An environment never gets a new machine under its id: a replace makes a new environment, so its machine is always the first generation.
-const machineGeneration = 1
+// oxlint-disable-next-line ren/no-comments -- Where Ren reaches a remote hand's machine; its generation tells the brain when the files are new.
+interface Target {
+  readonly environmentId: Environment.ID
+  readonly url: string
+  readonly generation: number
+}
 
 const isSessionOf = (subject: Subject) =>
   and(
@@ -108,7 +137,9 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const registry = yield* EnvironmentProvider.Registry
     const sandboxVariables = yield* Deployment.sandboxVariables
-    const directoryOf = (sessionId: Session.ID) => `${config.directory}/${sessionId}`
+    // oxlint-disable-next-line ren/no-comments -- EN42: a chat's folder on a remote hand is fixed when the chat starts, from the provider's workspace.
+    const directoryOf = (provider: MachineProvider.Provider, sessionId: Session.ID) =>
+      `${Option.getOrElse(provider.workspace, () => config.directory)}/${sessionId}`
     const signer = yield* Signer.Service
     const signingKeys = signer.publicKeys("environment").pipe(
       Effect.map((publicKeys) => ({ publicKeys })),
@@ -147,6 +178,7 @@ export const layer = Layer.effect(
         return yield* new NotFound({
           message: `Environment template ${environmentTemplateId} is not available to this session’s space`,
         })
+      return provider.value
     })
 
     const assign = Effect.fn("Environments.assign")(function* (subject: Subject) {
@@ -231,22 +263,186 @@ export const layer = Layer.effect(
       )
     }, Observability.Trace.environmentAssign)
 
-    const replace = (environmentId: Environment.ID) =>
-      database.transaction((transaction) =>
-        Effect.gen(function* () {
-          yield* transaction
-            .update(sessions)
-            .set({ environment_id: null, generation: sql`${sessions.generation} + 1` })
-            .where(eq(sessions.environment_id, environmentId))
-          yield* transaction.delete(environments).where(eq(environments.id, environmentId))
+    const http = yield* HttpClient.HttpClient
+    const code = yield* Effect.serviceOption(Bundles.Service)
+    const network = yield* Effect.serviceOption(EnvironmentNetwork.Service)
+    const renUrl = yield* Config.option(Config.String("REN_URL"))
+
+    type Row = MachineLifecycle.Row<Environment.ID> & { readonly environment_template_id: EnvironmentTemplate.ID }
+
+    const read = (environmentId: Environment.ID) =>
+      database.db
+        .select({ environment: environments, organizationId: templates.organization_id, provider: templates.provider })
+        .from(environments)
+        .innerJoin(templates, eq(templates.id, environments.environment_template_id))
+        .where(eq(environments.id, environmentId))
+        .pipe(
+          Effect.orDie,
+          Effect.flatMap((rows) => {
+            const found = rows.at(0)
+            const spaceId = found?.environment.space_id
+            if (!found || !spaceId) return Effect.die(new Error(`Environment ${environmentId} has no space`))
+            return Effect.succeed({
+              ...found.environment,
+              space_id: spaceId,
+              organization_id: found.organizationId,
+              provider: found.provider,
+            } satisfies Row)
+          }),
+        )
+
+    // oxlint-disable-next-line ren/no-comments -- The provider and the labels of a hand come from its template and space, so only its own columns change.
+    const update = (environmentId: Environment.ID, values: Partial<MachineLifecycle.Row<Environment.ID>>) =>
+      database.db
+        .update(environments)
+        .set(Struct.omit(values, ["id", "organization_id", "space_id", "provider"]))
+        .where(eq(environments.id, environmentId))
+        .pipe(Effect.orDie, Effect.asVoid)
+
+    const providerOf = (row: Row) =>
+      Option.match(row.provider ? registry.get(row.provider) : Option.none(), {
+        onNone: () =>
+          Effect.die(new Error(`Environment ${row.id} runs on ${row.provider}, which this Ren does not register`)),
+        onSome: Effect.succeed,
+      })
+
+    const runs = yield* FiberMap.make<Environment.ID>()
+    const holder: { run?: (id: Environment.ID) => Effect.Effect<void, unknown> } = {}
+
+    // oxlint-disable-next-line ren/no-comments -- A remote hand's machine (EN1): the state machine of a brain's, with the executor's answer as its ready check. Its provider answers only when the executor does (MachineProvider.waitForExecutor). One server runs it (EN31); an access after a restart starts it again from its row.
+    const hands = MachineLifecycle.make<Environment.ID, Row, Target, never>({
+      name: "EnvironmentLifecycle",
+      noun: "Environment",
+      annotation: "environment",
+      kind: "hand",
+      providerOf,
+      isBehindEgress: () => false,
+      bootWithin: MachineLifecycle.timing.boot,
+      wakeWithin: MachineLifecycle.timing.wake,
+      read,
+      update,
+      replace: (row) =>
+        update(row.id, {
+          generation: row.generation + 1,
+          binding: null,
+          url: null,
+          keep_alive_until: null,
+          phase: "creating",
         }),
-      )
+      lose: (environmentId, generation) =>
+        database.db
+          .update(environments)
+          .set({ phase: "replacing" })
+          .where(
+            and(
+              eq(environments.id, environmentId),
+              eq(environments.generation, generation),
+              sql`${environments.phase} not in ('creating', 'replacing')`,
+            ),
+          )
+          .returning({ id: environments.id })
+          .pipe(
+            Effect.orDie,
+            Effect.map((rows) => rows.length > 0),
+          ),
+      isNeeded: () => Effect.succeed(false),
+      ensure: (row) =>
+        FiberMap.run(
+          runs,
+          row.id,
+          (holder.run ? holder.run(row.id) : Effect.void).pipe(
+            Effect.catchCause((cause) => Effect.logWarning(`A step of environment ${row.id} failed`, cause)),
+          ),
+          { onlyIfMissing: true },
+        ).pipe(Effect.asVoid),
+      proxyFor: () => Effect.succeedNone,
+      retire: () => Effect.void,
+      variables: Effect.fnUntraced(function* (row) {
+        const keys = yield* signingKeys
+        const bundles = Option.isSome(code)
+          ? Option.all(yield* Effect.forEach(["dependencies", "executor"] as const, code.value.current))
+          : Option.none()
+        return {
+          ...ExecutorVariables.make(row.id, keys.publicKeys),
+          ...sandboxVariables({ "ren.organization.id": row.organization_id, "ren.space.id": row.space_id }),
+          REN_HAND: "1",
+          ...Option.match(renUrl, { onNone: () => ({}), onSome: (url) => ({ REN_URL: url }) }),
+          ...(Option.isSome(bundles) &&
+            Option.isSome(code) && {
+              REN_BUNDLES: (yield* Effect.forEach(bundles.value, (bundle) =>
+                Effect.map(code.value.token(bundle), (token) =>
+                  [bundle.kind, bundle.version, bundle.sha256, token].join(":"),
+                ),
+              )).join(" "),
+            }),
+        }
+      }),
+      wants: Effect.fnUntraced(function* (row) {
+        const template = (yield* database.db
+          .select({
+            id: templates.id,
+            config: templates.config,
+            image: templates.image,
+            imageConfig: templates.image_config,
+            networking: templates.networking,
+          })
+          .from(templates)
+          .where(eq(templates.id, row.environment_template_id))
+          .pipe(Effect.orDie)).at(0)
+        if (!template)
+          return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.Wanted
+        const hosts = Option.isSome(network)
+          ? yield* network.value.hostsOf({ kind: "hand", id: row.id, generation: row.generation }, template.networking)
+          : Option.none()
+        return {
+          config: template.config,
+          image: Option.map(
+            Option.all({
+              name: Option.fromNullishOr(template.image),
+              config: Option.fromNullishOr(template.imageConfig),
+            }),
+            (built) => ({ name: built.name, template: { environmentTemplateId: template.id, config: built.config } }),
+          ),
+          hosts,
+        } satisfies MachineLifecycle.Wanted
+      }),
+      created: () => Effect.void,
+      target: (row) =>
+        Option.map(Option.fromNullishOr(row.url), (url) => ({
+          environmentId: row.id,
+          url,
+          generation: row.generation,
+        })),
+      boot: () => Effect.succeedNone,
+      wake: () => Effect.succeed(true),
+      answers: (target) =>
+        MachineProvider.executorAnswers(http, new URL(target.url)).pipe(
+          Effect.timeoutOption(MachineLifecycle.timing.probeTimeout),
+          Effect.option,
+          Effect.map((answered) => Option.isSome(answered) && Option.isSome(answered.value)),
+        ),
+      outdated: () => Effect.succeed("current" as const),
+      updateInPlace: () => Effect.succeed(Option.some("A remote hand does not update in place yet; Ren replaces it")),
+    })
+    holder.run = hands.run
+
+    // oxlint-disable-next-line ren/no-comments -- An access waits up to startingAfter for the machine's run that it started, then reads the machine again.
+    const ready = Effect.fnUntraced(function* (environmentId: Environment.ID) {
+      const first = yield* hands.access(environmentId)
+      if (first._tag === "Ready") return first.target
+      const running = yield* FiberMap.get(runs, environmentId)
+      if (Option.isSome(running)) yield* Fiber.await(running.value).pipe(Effect.timeoutOption(startingAfter))
+      const next = yield* hands.access(environmentId)
+      if (next._tag === "Ready") return next.target
+      if (next._tag === "Failed") return yield* new Unavailable({ message: next.reason })
+      return yield* new Starting({ message: `The environment ${environmentId} is ${next.phase}` })
+    })
 
     const grantAccess = Effect.fnUntraced(function* (
       subject: Subject,
       hand: Option.Option<Hand>,
-      options: { readonly isRetry: boolean },
-    ): Effect.fn.Return<Environment.Access, NotFound | Unavailable> {
+      options: { readonly unreachable?: boolean },
+    ): Effect.fn.Return<Environment.Access, NotFound | Unavailable | Starting> {
       if (Option.isSome(hand) && !(yield* isBound(subject))) {
         const exp = yield* expiry
         return {
@@ -276,55 +472,22 @@ export const layer = Layer.effect(
         return yield* new NotFound({
           message: `Session ${subject.sessionId} has no environment template this Ren can run`,
         })
-      const keys = yield* signingKeys
       const assigned = yield* assign(subject)
-      const unavailableBecause = (error: MachineProvider.Failed | MachineProvider.Capacity) =>
-        new Unavailable({ message: `The environment of session ${subject.sessionId} is unavailable: ${error.message}` })
-      const providerBinding =
-        assigned.providerBinding ??
-        (yield* provider.value
-          .create({
-            labels: {
-              id: assigned.environmentId,
-              generation: machineGeneration,
-              organizationId: subject.organizationId,
-              spaceId: assigned.spaceId,
-            },
-            config: assigned.template.config,
-            variables: {
-              ...ExecutorVariables.make(assigned.environmentId, keys.publicKeys),
-              ...sandboxVariables({ "ren.organization.id": subject.organizationId }),
-            },
-            image: Option.none(),
-            network: MachineProvider.unrestricted,
-          })
-          .pipe(
-            Effect.mapError(unavailableBecause),
-            Effect.map((created) => created.binding),
-            Effect.tap((made) =>
-              database.db
-                .update(environments)
-                .set({ binding: made })
-                .where(and(eq(environments.id, assigned.environmentId), isNull(environments.binding)))
-                .pipe(Effect.orDie),
-            ),
-          ))
-      const endpoint = yield* provider.value.connect(providerBinding, MachineProvider.unrestricted).pipe(
-        Effect.map(Option.some),
-        Effect.catchTag("MachineProvider.Gone", (gone) =>
-          options.isRetry
-            ? Effect.fail(new Unavailable({ message: gone.message }))
-            : replace(assigned.environmentId).pipe(Effect.as(Option.none())),
-        ),
-        Effect.catchTag(["MachineProvider.Failed", "MachineProvider.Capacity"], (error) =>
-          Effect.fail(unavailableBecause(error)),
+      // oxlint-disable-next-line ren/no-comments -- EN15: the brain could not reach this hand; a gone or frozen machine is replaced, a running one kept.
+      if (options.unreachable) yield* hands.check(assigned.environmentId)
+      const target = yield* ready(assigned.environmentId).pipe(
+        Effect.catchTag("Environments.Unavailable", (error) =>
+          Effect.fail(
+            new Unavailable({
+              message: `The environment of session ${subject.sessionId} is unavailable: ${error.message}`,
+            }),
+          ),
         ),
       )
-      if (Option.isNone(endpoint)) return yield* grantAccess(subject, hand, { isRetry: true })
       const exp = yield* expiry
       return {
-        directory: directoryOf(subject.sessionId),
-        url: new URL(endpoint.value.url),
+        directory: directoryOf(provider.value, subject.sessionId),
+        url: new URL(target.url),
         token: Redacted.make(
           yield* signToken({
             environment: assigned.environmentId,
@@ -333,10 +496,10 @@ export const layer = Layer.effect(
           }),
         ),
         expiresAt: DateTime.makeUnsafe(exp * 1000),
-        generation: assigned.generation,
+        generation: target.generation,
         egress: provider.value.canEgress,
         // oxlint-disable-next-line ren/no-comments -- R49, R59: the folder beside the session folders, which every session on the environment shares.
-        sharedDirectory: `${config.directory}/.ren`,
+        sharedDirectory: `${Option.getOrElse(provider.value.workspace, () => config.directory)}/.ren`,
       } satisfies Environment.Access
     })
 
@@ -345,7 +508,7 @@ export const layer = Layer.effect(
         placement: Subject & Placement,
         environmentTemplateId: EnvironmentTemplate.ID,
       ) {
-        yield* checkAvailable(placement, environmentTemplateId)
+        const provider = yield* checkAvailable(placement, environmentTemplateId)
         const inserted = yield* database.db
           .insert(sessions)
           .values({
@@ -356,7 +519,7 @@ export const layer = Layer.effect(
           .onConflictDoNothing()
           .returning({ session_id: sessions.session_id })
           .pipe(Effect.orDie)
-        if (inserted.length > 0) return { directory: directoryOf(placement.sessionId), isNew: true }
+        if (inserted.length > 0) return { directory: directoryOf(provider, placement.sessionId), isNew: true }
         const existing = yield* database.db
           .select({ environment_template_id: sessions.environment_template_id, space_id: sessions.space_id })
           .from(sessions)
@@ -364,7 +527,7 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         const found = existing.at(0)
         if (found?.environment_template_id === environmentTemplateId && found.space_id === placement.spaceId)
-          return { directory: directoryOf(placement.sessionId), isNew: false }
+          return { directory: directoryOf(provider, placement.sessionId), isNew: false }
         return yield* new Changed({
           message: `Session ${placement.sessionId} cannot change its environment template or space: not supported yet`,
         })
@@ -379,7 +542,7 @@ export const layer = Layer.effect(
           .where(and(eq(sessions.session_id, subject.sessionId), isAvailable(subject.organizationId)))
           .pipe(Effect.orDie)
         return Option.flatMap(Option.fromNullishOr(rows.at(0)), (row) =>
-          Option.map(registry.get(row.provider), () => directoryOf(subject.sessionId)),
+          Option.map(registry.get(row.provider), (provider) => directoryOf(provider, subject.sessionId)),
         )
       }),
       capabilities: Effect.fn("Environments.capabilities")(function* (
@@ -418,8 +581,12 @@ export const layer = Layer.effect(
       unbind: Effect.fn("Environments.unbind")(function* (subject: Subject) {
         yield* database.db.delete(sessions).where(isSessionOf(subject)).pipe(Effect.orDie)
       }),
-      access: Effect.fn("Environments.access")(function* (subject: Subject, hand: Option.Option<Hand>) {
-        return yield* grantAccess(subject, hand, { isRetry: false })
+      access: Effect.fn("Environments.access")(function* (
+        subject: Subject,
+        hand: Option.Option<Hand>,
+        options: { readonly unreachable?: boolean } = {},
+      ) {
+        return yield* grantAccess(subject, hand, options)
       }),
       release: Effect.fn("Environments.release")(function* (subject: Subject) {
         yield* database.db

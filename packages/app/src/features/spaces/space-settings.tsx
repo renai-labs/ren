@@ -22,31 +22,41 @@ const ownMachine = "colocated"
 
 const noHand = "none"
 
-const valueOf = (hand: SpaceHand) =>
-  hand.placement === "colocated" ? (hand.environmentTemplateId ?? ownMachine) : hand.placement
+const remotePrefix = "remote:"
+
+const valueOf = (hand: SpaceHand) => {
+  if (hand.placement === "remote") return `${remotePrefix}${hand.environmentTemplateId}`
+  return hand.placement === "colocated" ? (hand.environmentTemplateId ?? ownMachine) : hand.placement
+}
 
 const handOf = (value: string): SpaceHand => {
   if (value === noHand) return { placement: "none" }
+  if (value.startsWith(remotePrefix))
+    return { placement: "remote", environmentTemplateId: value.slice(remotePrefix.length) }
   return { placement: "colocated", environmentTemplateId: value === ownMachine ? null : value }
 }
 
-// oxlint-disable-next-line ren/no-comments -- A co-located hand: Ren's standard machine or a template that built, of a provider whose machines run the brain too (EN3). None removes the file and shell tools (EN23).
+// oxlint-disable-next-line ren/no-comments -- A co-located hand: Ren's standard machine or a template that built, of a provider whose machines run the brain too (EN3). A remote hand: machines of any template that built, which chats share (EN43). None removes the file and shell tools (EN23).
 function Hand(props: { space: Space; save: (change: { hand: SpaceHand }) => Promise<unknown> }) {
   const { api } = RouterContext.useRouterContext()
   const templates = useQuery(api["environment-template"].list.queryOptions({ page: 1, pageSize: 50 }))
   const providers = useQuery(api.environmentProvider.list.queryOptions())
   const colocated = new Set((providers.data ?? []).filter((each) => each.canColocate).map((each) => each.id))
+  const built = (templates.data?.items ?? []).filter(
+    (template) => Boolean(template.image) || template.buildStatus === "ready",
+  )
   return (
     <Choice
       label="Tools run on"
       options={[
         { value: ownMachine, label: "Ren’s standard machine" },
-        ...(templates.data?.items ?? [])
-          .filter(
-            (template) =>
-              colocated.has(template.provider) && (Boolean(template.image) || template.buildStatus === "ready"),
-          )
+        ...built
+          .filter((template) => colocated.has(template.provider))
           .map((template) => ({ value: template.id, label: template.name })),
+        ...built.map((template) => ({
+          value: `${remotePrefix}${template.id}`,
+          label: `${template.name}, shared machines`,
+        })),
         { value: noHand, label: "No machine" },
       ]}
       value={valueOf(props.space.hand)}

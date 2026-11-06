@@ -62,7 +62,13 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
     ren.settings(TestSettings.layers({ ren: { model: { endpointId: "anthropic", modelId: "claude-haiku-5-5" } } }))
     const created = await sandbox((service) =>
       service.create({
-        labels: { id: brain, generation: 1, organizationId: Auth.OrganizationID.create(), spaceId: Space.ID.create() },
+        labels: {
+          kind: "brain",
+          id: brain,
+          generation: 1,
+          organizationId: Auth.OrganizationID.create(),
+          spaceId: Space.ID.create(),
+        },
         config: {},
         variables: {
           REN_URL: renTunnel,

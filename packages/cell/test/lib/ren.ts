@@ -3,6 +3,7 @@ export * as FakeRen from "./ren.js"
 import { BrainToken } from "@ren/host-api/brain-token"
 import {
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   GenerationRetiredError,
@@ -40,6 +41,7 @@ export type Answer =
   | { readonly type: "access"; readonly access: Environment.Access }
   | { readonly type: "not_found" }
   | { readonly type: "unavailable"; readonly message: string }
+  | { readonly type: "starting" }
   | { readonly type: "hold" }
 
 export interface Call {
@@ -127,6 +129,10 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
               if (answer.type === "unavailable") {
                 record("environments.access", host.brainId, sessionId, 503)
                 return yield* new EnvironmentUnavailableError({ message: answer.message })
+              }
+              if (answer.type === "starting") {
+                record("environments.access", host.brainId, sessionId, 503)
+                return yield* new EnvironmentStartingError({ message: `The environment of ${sessionId} is creating` })
               }
               record("environments.access", host.brainId, sessionId, 200)
               return answer.access

@@ -257,10 +257,11 @@ export const layer = Layer.effect(
         .where(eq(Database.Schema.space.id, row.space_id))
         .pipe(Effect.orDie)).at(0)
       if (found?.placement !== "colocated" || !found.id || !found.networking)
-        return { image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.Wanted
+        return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.Wanted
       const template = { environmentTemplateId: found.id, config: found.config }
       const hosts = yield* network.hostsOf({ kind: "brain", id: row.id, generation: row.generation }, found.networking)
       return {
+        config: {},
         image: Option.map(
           Option.all({ name: Option.fromNullishOr(found.image), config: Option.fromNullishOr(template.config) }),
           (built) => ({
@@ -276,6 +277,7 @@ export const layer = Layer.effect(
       name: "BrainLifecycle",
       noun: "Brain",
       annotation: "brain",
+      kind: "brain",
       providerOf,
       isBehindEgress,
       bootWithin,

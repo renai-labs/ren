@@ -10,7 +10,9 @@ export const HostEnvironmentsHandler = HttpApiBuilder.group(RenHostApi, "environ
       .handle("environments.access", (request) =>
         Effect.gen(function* () {
           const host = yield* CurrentHost
-          return yield* brain.accessEnvironment(host, request.params.id)
+          return yield* brain.accessEnvironment(host, request.params.id, {
+            unreachable: request.query.unreachable === "true",
+          })
         }),
       )
       .handle("environments.release", (request) =>

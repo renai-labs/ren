@@ -1,3 +1,4 @@
+import { FetchHttpClient } from "effect/http"
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { Shared } from "@ren/cell/testing"
 import type { StubModel } from "@ren/cell/testing"
@@ -114,7 +115,7 @@ const stackOf = async (config: CoreConfig) => {
     },
     models,
     environments: Environments.layer
-      .pipe(Layer.provide(Signer.layerLocal))
+      .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
       .pipe(Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)]))),
   }).pipe(
     Layer.provide(

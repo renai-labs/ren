@@ -271,7 +271,7 @@ export const start = async (options: {
           Layer.provide(ChaosModels.layer),
           Layer.provide(
             Environments.layer
-              .pipe(Layer.provide(Signer.layerLocal))
+              .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
               .pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers))),
           ),
           Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
