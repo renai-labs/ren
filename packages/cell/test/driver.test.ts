@@ -75,7 +75,7 @@ const boot = Effect.fnUntraced(function* (setup: (context: Plugin.Context) => Ef
   const turn = (sessionID: Session.ID, script: StubModel.Script) =>
     client.session
       .prompt({ sessionID, text: `${script.marker} go` })
-      .pipe(Effect.andThen(client.session.wait({ sessionID })), Effect.orDie)
+      .pipe(Effect.andThen(client.experimental.session.wait({ sessionID })), Effect.orDie)
   return { client, directory, session, turn }
 })
 

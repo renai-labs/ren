@@ -254,7 +254,7 @@ export const make = (
         Effect.gen(function* () {
           const sessionID = SessionID.make(sessionId)
           yield* api.session.interrupt({ sessionID }).pipe(Effect.catchTags(located, Effect.die))
-          yield* api.session.wait({ sessionID }).pipe(Effect.catchTags(located, Effect.die))
+          yield* api.experimental.session.wait({ sessionID }).pipe(Effect.catchTags(located, Effect.die))
           const staged = yield* api.session.revert
             .stage({ sessionID, messageID: SessionMessage.ID.make(messageId) })
             .pipe(

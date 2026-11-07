@@ -118,7 +118,7 @@ describe("cell contract", () => {
       },
     })
     expect([startedResponse.status, await startedResponse.text()]).toEqual([200, expect.any(String)])
-    await opened.opencode.session.wait({ sessionID: opened.id })
+    await opened.opencode.experimental.session.wait({ sessionID: opened.id })
     expect(initial.calls).toHaveLength(1)
     const script = stub.script()
     const messageId = Session.MessageID.create()
@@ -128,7 +128,7 @@ describe("cell contract", () => {
       sender: { userId: "user_1" },
     })
     expect(await sent.json()).toEqual({ messageId })
-    await opened.opencode.session.wait({ sessionID: opened.id })
+    await opened.opencode.experimental.session.wait({ sessionID: opened.id })
     expect(script.calls).toHaveLength(1)
     expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
   })
@@ -208,7 +208,7 @@ describe("cell contract", () => {
       const opened = await cell()
       await opened.start()
       await opened.prompt(`remember ${stub.script().marker}`)
-      await opened.opencode.session.wait({ sessionID: opened.id })
+      await opened.opencode.experimental.session.wait({ sessionID: opened.id })
       const messages = await opened.messages()
       expect(await opened.until((state) => Bun.deepEquals(state, idle))).toEqual(idle)
       expect(await (await opened.brain("/ren/sync", {})).json()).toEqual({ drained: true })

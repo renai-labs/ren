@@ -409,7 +409,7 @@ it.live(
       const queued = Shared.stub().script()
       yield* client.session.prompt({ sessionID, text: `${queued.marker} go`, delivery: "queue" }).pipe(Effect.orDie)
       held.release()
-      yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
+      yield* client.experimental.session.wait({ sessionID }).pipe(Effect.orDie)
       expect(queued.calls[0]?.system).toContain("After pull.")
       const revision = (yield* harness.configuration).find((location) => location.directory.endsWith(sessionId))
       expect(revision?.appFingerprint).toEqual(Option.some(catalog.fingerprint))
@@ -442,7 +442,7 @@ it.live(
       const turn = Effect.fnUntraced(function* () {
         const script = Shared.stub().script()
         yield* client.session.prompt({ sessionID, text: `${script.marker} go` }).pipe(Effect.orDie)
-        yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
+        yield* client.experimental.session.wait({ sessionID }).pipe(Effect.orDie)
         return script.calls[0]?.system ?? ""
       })
       const before = yield* turn()
@@ -563,7 +563,7 @@ it.live("a pull while the harness is closed reaches the chat when the harness op
     const sessionID = SessionID.make(sessionId)
     const turn = Shared.stub().script()
     yield* client.session.prompt({ sessionID, text: `${turn.marker} go` }).pipe(Effect.orDie)
-    yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
+    yield* client.experimental.session.wait({ sessionID }).pipe(Effect.orDie)
     expect(turn.calls[0]?.system).toContain("While closed.")
     expect(turn.calls[0]?.system).toContain("- Saved while closed.")
   }),

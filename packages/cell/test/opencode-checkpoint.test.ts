@@ -141,11 +141,11 @@ const open = Effect.fnUntraced(function* () {
   const turn = Effect.fnUntraced(function* (sessionID: Session.ID, script: StubModel.Script, text = "") {
     yield* client.session.prompt({ sessionID, text: `${text} ${script.marker}` }).pipe(Effect.orDie)
     yield* Effect.promise(() => script.called())
-    yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
+    yield* client.experimental.session.wait({ sessionID }).pipe(Effect.orDie)
   })
   const shell = Effect.fnUntraced(function* (sessionID: Session.ID, command: string) {
     yield* client.session.shell({ sessionID, command }).pipe(Effect.orDie)
-    yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
+    yield* client.experimental.session.wait({ sessionID }).pipe(Effect.orDie)
   })
   const messages = (sessionID: Session.ID) =>
     db
@@ -185,7 +185,7 @@ const operations: ReadonlyArray<readonly [string, (opened: Opened) => Effect.Eff
         yield* Effect.promise(() => script.called())
         script.set({})
         yield* Effect.promise(() => script.called(2))
-        yield* o.client.session.wait({ sessionID: session.id }).pipe(Effect.orDie)
+        yield* o.client.experimental.session.wait({ sessionID: session.id }).pipe(Effect.orDie)
       }),
   ],
   ["a shell command", (o) => Effect.flatMap(o.create(), (session) => o.shell(session.id, "echo shell"))],
@@ -237,7 +237,7 @@ const operations: ReadonlyArray<readonly [string, (opened: Opened) => Effect.Eff
         const session = yield* o.create()
         yield* o.turn(session.id, stub.script())
         yield* o.client.session.compact({ sessionID: session.id }).pipe(Effect.orDie)
-        yield* o.client.session.wait({ sessionID: session.id }).pipe(Effect.orDie)
+        yield* o.client.experimental.session.wait({ sessionID: session.id }).pipe(Effect.orDie)
       }),
   ],
   [
@@ -270,7 +270,7 @@ const operations: ReadonlyArray<readonly [string, (opened: Opened) => Effect.Eff
     "a change to instructions",
     (o) =>
       Effect.flatMap(o.create(), (session) =>
-        o.client.session.instructions.entry
+        o.client.experimental.session.instructions.entry
           .put({ sessionID: session.id, key: "ren.test", value: "Answer briefly." })
           .pipe(Effect.orDie),
       ),
@@ -317,9 +317,11 @@ const operations: ReadonlyArray<readonly [string, (opened: Opened) => Effect.Eff
       Effect.gen(function* () {
         const session = yield* o.create()
         yield* o.turn(session.id, stub.script())
-        const exported = yield* o.client.session.export({ sessionID: session.id }).pipe(Effect.orDie)
+        const exported = yield* o.client.experimental.session.export({ sessionID: session.id }).pipe(Effect.orDie)
         yield* o.client.session.remove({ sessionID: session.id }).pipe(Effect.orDie)
-        yield* o.client.session.import({ info: exported.info, messages: exported.messages }).pipe(Effect.orDie)
+        yield* o.client.experimental.session
+          .import({ info: exported.info, messages: exported.messages })
+          .pipe(Effect.orDie)
       }),
   ],
   [
@@ -363,7 +365,7 @@ describe("OpenCode checkpoint", () => {
         const resumed = stub.waitFor((call) => call.text === StubModel.restarted)
         const brain = yield* BrainTest.make({ database: file })
         yield* Effect.promise(() => resumed)
-        yield* brain.opencode.session.wait({ sessionID }).pipe(Effect.orDie)
+        yield* brain.opencode.experimental.session.wait({ sessionID }).pipe(Effect.orDie)
         const writes = log.read()
         expect(writes.some((write) => write.tbl === "session_message" && write.sid === sessionID)).toBe(true)
         expectCovered(writes)

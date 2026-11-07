@@ -100,7 +100,9 @@ export const open = Effect.fnUntraced(function* (
       })
       .pipe(
         Effect.andThen(Effect.promise(() => script.called(calls))),
-        Effect.tap(() => host.client.session.wait({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie)),
+        Effect.tap(() =>
+          host.client.experimental.session.wait({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
+        ),
       )
   return {
     sessionId,
@@ -113,7 +115,7 @@ export const open = Effect.fnUntraced(function* (
         files,
         sender: Option.none(),
       }),
-    wait: host.client.session.wait({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
+    wait: host.client.experimental.session.wait({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
     messages: host.client.message.list({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
     transcript: harness.chat.messages(sessionId, {}).pipe(Effect.orDie),
     tool: (name: string, input: unknown) => turn(stub.script({ tool: { name, input } })),

@@ -65,7 +65,7 @@ const open = Effect.fnUntraced(function* (
   )
   const harness = yield* OpenCodeHarness.make(server, access.endpoints)
   const wait = (sessionId: RenSession.ID) =>
-    server.client.session.wait({ sessionID: Session.ID.make(sessionId) }).pipe(Effect.orDie)
+    server.client.experimental.session.wait({ sessionID: Session.ID.make(sessionId) }).pipe(Effect.orDie)
   const call = Effect.fnUntraced(function* (
     sessionId: RenSession.ID,
     sender: Option.Option<string>,

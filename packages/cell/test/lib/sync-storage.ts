@@ -15,6 +15,6 @@ export const turn = async (
   await opened.start()
   const script = Shared.stub().script(behaviour)
   await opened.prompt(`sync ${script.marker}`)
-  await opened.opencode.session.wait({ sessionID: opened.id })
+  await opened.opencode.experimental.session.wait({ sessionID: opened.id })
   return opened
 }
