@@ -10,7 +10,8 @@ import { Workspace } from "@opencode/core/workspace"
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { TestEnvironment, Processes, testEffect } from "@ren/executor/testing"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Exit, Fiber, Layer, ManagedRuntime, Option, Scope } from "effect"
+import type { SessionEvent } from "@ren/schema/session/event"
+import { Context, Effect, Exit, Fiber, Layer, ManagedRuntime, Option, Queue, Scope, Stream } from "effect"
 import { HttpEffect, HttpRouter } from "effect/http"
 import { createServer, connect, type Socket } from "node:net"
 import { lstat, mkdir, mkdtemp, readdir, realpath, symlink } from "node:fs/promises"
@@ -513,6 +514,31 @@ it.live("J23 a shell timeout says so, and the command and its child stop on the 
     expect(RemoteHost.lastToolResult(answer)).toContain("Command exceeded timeout of 100 ms")
     const pids = yield* Effect.forEach(["main", "child"], (name) => Pid.read(join(dir, name)))
     expect(yield* Effect.forEach(pids, (pid) => RemoteHost.stops(pid, 30))).toEqual([true, true])
+  }),
+)
+
+it.live("a shell removed on the sandbox while it runs reports one exit, killed, before it is deleted", () =>
+  Effect.gen(function* () {
+    const opened = yield* Remote
+    const session = yield* RemoteHost.begin(opened)
+    const events = yield* Queue.unbounded<SessionEvent.Event | typeof SessionEvent.Connected.Type>()
+    yield* opened.harness.chat.events.pipe(
+      Stream.runForEach((event) => Queue.offer(events, event)),
+      Effect.forkScoped,
+    )
+    yield* Queue.take(events).pipe(Effect.repeat({ until: (event) => event.type === "server.connected" }))
+    const created = yield* opened.harness.chat.createShell(session.sessionId, { command: "sleep 30" })
+    yield* opened.harness.chat.removeShell(session.sessionId, created.id)
+    const seen: Array<SessionEvent.Event | typeof SessionEvent.Connected.Type> = []
+    yield* Queue.take(events).pipe(
+      Effect.tap((event) => Effect.sync(() => seen.push(event))),
+      Effect.repeat({ until: (event) => event.type === "shell.deleted" }),
+    )
+    expect(
+      seen.flatMap((event) =>
+        event.type === "shell.exited" ? [{ id: event.data.id, status: event.data.status }] : [],
+      ),
+    ).toEqual([{ id: created.id, status: "killed" }])
   }),
 )
 
