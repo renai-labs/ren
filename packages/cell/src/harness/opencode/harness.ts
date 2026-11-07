@@ -34,8 +34,6 @@ import {
 } from "effect"
 import { FetchHttpClient, HttpClientError } from "effect/http"
 import { mkdir, rm, stat } from "node:fs/promises"
-// oxlint-disable-next-line ren/no-node-modules-import -- @opencode/core exports no package.json and no version, and the harness version must be the installed one.
-import opencode from "../../../node_modules/@opencode/core/package.json"
 import { BrainStorage } from "../../brain-storage.js"
 import { AppStore } from "../../app-store.js"
 import { ChannelStore } from "../../channel-store.js"
@@ -50,6 +48,7 @@ import { Inference } from "../../inference.js"
 import { RenAddress } from "../../ren-address.js"
 import { Harness } from "../harness.js"
 import { OpenCodeAttachments } from "./attachments.js"
+import { OpenCodeVersion } from "./version.js"
 import { OpenCodeChat } from "./chat.js"
 import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
 import type { OpenCodeMcp } from "./mcp.js"
@@ -424,7 +423,7 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
   return { messageId: input.messageId }
 })
 
-export const version = opencode.version
+export const version = OpenCodeVersion.installed
 
 type Opener = (
   endpoints: ReadonlyArray<Models.Endpoint>,

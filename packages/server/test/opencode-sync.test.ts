@@ -113,7 +113,7 @@ const setup = Effect.fnUntraced(function* () {
   const reader = yield* SqliteReader.make(file)
   const driver = brain.driver
   const root = brain.id
-  const sync = (input: { readonly reader?: OpenCodeSync.Reader } = {}) =>
+  const sync = (input: { readonly reader?: OpenCodeSync.Reader; readonly version?: string } = {}) =>
     SyncClient.make(
       proxy.url,
       Effect.sync(() => token.value),
@@ -122,6 +122,7 @@ const setup = Effect.fnUntraced(function* () {
         OpenCodeSync.make({
           remote,
           reader: input.reader ?? reader,
+          version: input.version ?? "2.0.27",
           restoring: Effect.sync(() => new Set(host.restoring)),
           mark: (id, state) =>
             Effect.sync(() => void (state.isRestoring ? host.restoring.add(id) : host.restoring.delete(id))),
@@ -393,6 +394,16 @@ describe("OpenCodeSync", () => {
       expect(
         host.proxy.requests.filter((request) => request.path === `/host/sync/sessions/${host.root}/messages`),
       ).toHaveLength(Math.floor(expected.messages.length / 500) + 1)
+    }),
+  )
+
+  it.live("a commit records the OpenCode version that wrote the rows", () =>
+    Effect.gen(function* () {
+      const host = yield* setup()
+      yield* host.turn(host.root)
+      const sync = yield* host.sync({ version: "2.10.0" })
+      expect(yield* sync.step()).toEqual({ drained: true })
+      expect(yield* SyncTest.harnessVersion(host.root)).toBe("2.10.0")
     }),
   )
 

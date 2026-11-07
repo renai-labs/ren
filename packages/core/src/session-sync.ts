@@ -186,6 +186,7 @@ export const layer = Layer.effect(
           readonly ids: ReadonlyArray<string>
           readonly inbox?: ReadonlyArray<Sync.OpenCodeInboxRow>
           readonly revertMessageId?: string | null
+          readonly harnessVersion?: string
         },
       ) {
         yield* database.transaction((transaction) =>
@@ -205,6 +206,7 @@ export const layer = Layer.effect(
                 sync_seq: input.seq,
                 sync_upload_open: false,
                 ...Option.match(reset, { onNone: () => ({}), onSome: (at) => ({ files_reset_at: at }) }),
+                ...(input.harnessVersion && { harness_version: input.harnessVersion }),
                 // ast-grep-ignore: no-nullish-comparison, -- null clears the revert; undefined is a brain that does not send it
                 ...(input.revertMessageId !== undefined && { revert_message_id: input.revertMessageId }),
               })
