@@ -46,8 +46,17 @@ export const session = (row: unknown) =>
     resume_attempts: 0,
   })
 
+const input = (row: typeof Sync.OpenCodeMessageRow.Type, data: typeof MessageData.Type) => ({
+  ...data,
+  id: row.id,
+  type: row.type,
+})
+
+export const stored = (row: typeof Sync.OpenCodeMessageRow.Type) =>
+  input(row, Schema.decodeUnknownSync(MessageData)(row.data))
+
 export const message = (row: typeof Sync.OpenCodeMessageRow.Type) =>
   Exit.match(Schema.decodeUnknownExit(MessageData)(row.data), {
     onFailure: Exit.failCause,
-    onSuccess: (data) => Schema.decodeUnknownExit(SessionMessage.Info)({ ...data, id: row.id, type: row.type }),
+    onSuccess: (data) => Schema.decodeUnknownExit(SessionMessage.Info)(input(row, data)),
   })
