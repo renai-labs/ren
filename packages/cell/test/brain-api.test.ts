@@ -147,6 +147,27 @@ it.live("start with the same input on an imported session adds no message", () =
   }),
 )
 
+test.each<[string, string, string]>([
+  ["a file OpenCode cannot read", "data:text/plain;base64,a", "Invalid attachment data URL: a.txt"],
+  [
+    "a text file of more than 5,345,276 bytes, which OpenCode 2.0.27 answers with 500",
+    `data:text/plain;base64,${Buffer.alloc(5_345_277, 97).toString("base64")}`,
+    "500",
+  ],
+])("send rejects a message with %s, with OpenCode's answer", (_name, url, answer) =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.Service
+      yield* brain.start()
+      const rejected = yield* brain
+        .send("look", { prompt: { text: "look", files: [{ url, name: "a.txt" }] } })
+        .pipe(Effect.flip)
+      expect(rejected).toBeInstanceOf(BrainRejectedError)
+      expect(rejected.message).toContain(answer)
+    }),
+  ),
+)
+
 test.each<[string, Partial<StartBody>]>([
   ["an unknown model", { model: { endpointId: "stub", modelId: "missing" } }],
   ["an environment in a brain that cannot use environments", { directory: "/workspace/ses_1" }],
