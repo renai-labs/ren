@@ -9,9 +9,9 @@ import { TestAccess } from "@ren/brain/testing"
 import { Sync } from "@ren/schema/sync"
 import { testEffect } from "@ren/executor/testing"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Layer, Option, Schema } from "effect"
+import { Context, Deferred, Effect, Fiber, Layer, Option, Schema, Stream } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Env } from "../src/env.js"
@@ -146,14 +146,18 @@ it.live("import drops an unsettled assistant message and a running shell and num
     const held = stub.script({ hold: true })
     yield* source.send(`${held.marker} second`)
     yield* Effect.promise(() => held.called())
-    const pipes = yield* folder
-    const started = join(pipes, "started")
-    const finish = join(pipes, "finish")
-    Bun.spawnSync(["mkfifo", started, finish])
-    yield* source.opencode.session
-      .shell({ sessionID, command: `printf started > ${started}; cat ${finish}` })
-      .pipe(Effect.forkScoped)
-    yield* Effect.promise(() => readFile(started))
+    const finish = join(yield* folder, "finish")
+    Bun.spawnSync(["mkfifo", finish])
+    const connected = yield* Deferred.make<void>()
+    const running = yield* source.opencode.event.subscribe().pipe(
+      Stream.tap((event) => (event.type === "server.connected" ? Deferred.succeed(connected, undefined) : Effect.void)),
+      Stream.filter((event) => event.type === "session.shell.started"),
+      Stream.runHead,
+      Effect.forkScoped,
+    )
+    yield* Deferred.await(connected)
+    yield* source.opencode.session.shell({ sessionID, command: `cat ${finish}` }).pipe(Effect.forkScoped)
+    yield* Fiber.join(running)
     const data = yield* exported(source.database, source.id)
     yield* Effect.promise(() => writeFile(finish, ""))
     held.release()
