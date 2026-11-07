@@ -107,6 +107,17 @@ const withOwner = (value: unknown): unknown => {
   })
 }
 
+const Recent = Schema.Struct({ metadata: Schema.Struct({ recent: Schema.String }) })
+const decodeRecent = Schema.decodeUnknownOption(Recent)
+
+const withRecent = (value: unknown): unknown => {
+  if (!Predicate.isObject(value) || Predicate.hasProperty(value, "recent")) return value
+  return {
+    ...value,
+    recent: Option.match(decodeRecent(value), { onNone: () => "", onSome: (found) => found.metadata.recent }),
+  }
+}
+
 const nested = (value: unknown, key: string, update: (inner: unknown) => unknown): unknown =>
   Predicate.hasProperty(value, key) ? { ...value, [key]: update(value[key]) } : value
 
@@ -157,9 +168,9 @@ export type EventCompatibility = Checked<
     "permission.replied": "translated"
     "session.agent.selected": "translated"
     "session.compaction.delta": "translated"
-    "session.compaction.ended": "translated"
+    "session.compaction.ended": { reshaped: "recent is empty; OpenCode 2.1 no longer sends it" }
     "session.compaction.failed": "translated"
-    "session.compaction.started": "translated"
+    "session.compaction.started": { reshaped: "recent is empty; OpenCode 2.1 no longer sends it" }
     "session.created": "translated"
     "session.deleted": "translated"
     "session.execution.failed": "translated"
@@ -209,7 +220,7 @@ export type MessageCompatibility = Checked<
   {
     "agent-switched": "translated"
     assistant: "translated"
-    compaction: "translated"
+    compaction: { reshaped: "recent comes from metadata.recent, where OpenCode keeps an older compaction's text" }
     idle: "translated"
     "model-switched": "translated"
     shell: "translated"
@@ -263,12 +274,18 @@ export const event = (raw: unknown): Option.Option<SessionEvent.Event> => {
         (value) => nested(value, "item", (item) => nested(item, "payload", withMetadata)),
         (value) => nested(value, "form", withKind),
         (value) => nested(value, "info", withOwner),
+        (value) =>
+          Predicate.hasProperty(raw, "type") &&
+          (raw.type === "session.compaction.started" || raw.type === "session.compaction.ended")
+            ? withRecent(value)
+            : value,
       ),
     ),
   )
 }
 
-export const message = (info: OpenCodeMessage.Info) => readMessage(withMetadata(info))
+export const message = (info: OpenCodeMessage.Info) =>
+  readMessage(withMetadata(info.type === "compaction" ? withRecent(info) : info))
 
 export const inbox = (info: OpenCodeInbox.Info) => readInbox(nested(info, "payload", withMetadata))
 

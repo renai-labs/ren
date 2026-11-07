@@ -1,7 +1,7 @@
 [install]
 exact = true
 minimumReleaseAge = 259200
-minimumReleaseAgeExcludes = ["@opencode/client", "@opencode/core", "@opencode/plugin", "@opencode/server", "skullet"]
+minimumReleaseAgeExcludes = ["@opencode/ai", "@opencode/client", "@opencode/codemode", "@opencode/core", "@opencode/plugin", "@opencode/plugin-browser", "@opencode/protocol", "@opencode/schema", "@opencode/server", "@opencode/simulation", "@opencode/util", "skullet"]
 
 [test]
 root = "./do-not-run-tests-from-root"

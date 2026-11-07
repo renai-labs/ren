@@ -436,7 +436,7 @@ test("a client compacts the session through the Chat API and reads the summary; 
         status: "completed",
         summary: expect.stringContaining("the summary"),
       })
-      const summarizer = stub.calls.find((call) => call.kind === "compaction" && call.marker === fromGitHub.marker)
+      const summarizer = stub.calls.find((call) => call.kind === "compaction")
       expect(JSON.stringify(summarizer?.body.messages)).toContain(
         JSON.stringify(
           `GitHub acme/api · @octocat\nText in this chat is not posted on GitHub. Act on the issue or pull request yourself with gh: comment, review or push.\n---\n\n${fromGitHub.marker}`,
