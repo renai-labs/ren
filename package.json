@@ -152,6 +152,9 @@
     "@ast-grep/cli",
     "esbuild"
   ],
+  "patchedDependencies": {
+    "@modelcontextprotocol/client@2.3.1": "patches/@modelcontextprotocol%2Fclient@2.3.1.patch"
+  },
   "overrides": {
     "effect": "catalog:",
     "@types/bun": "catalog:"
