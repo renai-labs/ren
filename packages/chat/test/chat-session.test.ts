@@ -714,6 +714,7 @@ test("a queued prompt is withdrawn at once, and one the session took meanwhile s
       const held = stub.script({ hold: true })
       yield* chat.prompt({ text: held.marker })
       yield* Effect.promise(() => held.called())
+      yield* ChatTest.until(chat.state, (state) => ChatState.pending(state, brain.id).length === 0)
       const withdrawn = yield* chat.prompt({ text: stub.script().marker, delivery: "queue" })
       yield* chat.cancelInput(withdrawn)
       const after = yield* SubscriptionRef.get(chat.state)
