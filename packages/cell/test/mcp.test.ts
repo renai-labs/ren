@@ -222,9 +222,9 @@ it.live("the first turn in a brain that opens with an installed app waits for th
   Effect.gen(function* () {
     const peer = yield* McpPeer.make({ holdInitialization: true })
     const test = yield* observed(McpPeer.catalog("first", [{ slug: "docs", url: peer.url }]))
-    yield* Queue.take(peer.requests).pipe(Effect.repeat({ until: (request) => request.method === "initialize" }))
     const script = McpPeer.execute("docs.marker")
     yield* test.prompt(`${script.marker} read the marker`)
+    yield* Queue.take(peer.requests).pipe(Effect.repeat({ until: (request) => request.method === "initialize" }))
     peer.release()
     yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
     expect(McpPeer.result(script)).toBe("first")
@@ -314,6 +314,8 @@ it.live(
         }),
       })
       yield* brain.start()
+      const held = Shared.stub().script({ tools: [{ name: "docs_marker", input: {} }] })
+      yield* brain.send(`${held.marker} read the marker`)
       const context = yield* Queue.take(contexts).pipe(
         Effect.repeat({ until: (context) => context.location.directory === brain.directory }),
       )
@@ -323,8 +325,6 @@ it.live(
           until: (catalog) => catalog.directory === brain.directory && catalog.ids.includes("docs_marker"),
         }),
       )
-      const held = Shared.stub().script({ tools: [{ name: "docs_marker", input: {} }] })
-      yield* brain.send(`${held.marker} read the marker`)
       yield* Queue.take(first.requests).pipe(Effect.repeat({ until: (request) => request.method === "tools/call" }))
       state.url = second.url
       yield* context.mcp.reload().pipe(Effect.orDie)

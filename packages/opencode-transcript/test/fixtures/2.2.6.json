@@ -1,0 +1,307 @@
+{
+  "version": "2.2.6",
+  "chats": [
+    {
+      "session": {
+        "id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+        "parent_id": null,
+        "project_id": "4612f02ff047de9edb6f841b532fae61a6526946",
+        "workspace_id": null,
+        "slug": "witty-comet",
+        "directory": "/var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.5MpkXkO2Ee/file-uVvrKO/tmp/ren-brain-cmWak1",
+        "path": "../../../../../../../../../../var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.5MpkXkO2Ee/file-uVvrKO/tmp/ren-brain-cmWak1",
+        "title": "Stub title",
+        "version": "unknown",
+        "summary_additions": null,
+        "summary_deletions": null,
+        "summary_files": null,
+        "metadata": "{\"ren\":{\"start\":null,\"model\":null,\"defaultModels\":{},\"interactive\":true}}",
+        "cost": 0,
+        "tokens_input": 80,
+        "tokens_output": 40,
+        "tokens_reasoning": 0,
+        "tokens_cache_read": 0,
+        "tokens_cache_write": 0,
+        "permission": "[]",
+        "agent": null,
+        "model": null,
+        "time_created": 1794084491184,
+        "time_updated": 1794084491487,
+        "time_idle": 1794084491497,
+        "time_viewed": null,
+        "idle_outcome": "succeeded",
+        "time_archived": null,
+        "time_suspended": null
+      },
+      "messages": [
+        {
+          "id": "msg_01M6VW9M03PAJ8CSZQ4RB9K3WK",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "user",
+          "seq": 4,
+          "data": "{\"metadata\":{\"userID\":\"user_1\"},\"time\":{\"created\":1794084491283},\"text\":\"stub_63c4816cd793\"}"
+        },
+        {
+          "id": "msg_1b7c4d05f001107Dr0jw1gSBpS",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "assistant",
+          "seq": 7,
+          "data": "{\"time\":{\"created\":1794084491363,\"streamed\":1794084491381,\"completed\":1794084491401},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"reasoning\",\"text\":\"Planning the look\",\"native\":{\"reasoningField\":\"reasoning_content\"},\"time\":{\"created\":1794084491375,\"completed\":1794084491378}},{\"type\":\"tool\",\"id\":\"call_e833c47c\",\"name\":\"subagent\",\"executed\":false,\"state\":{\"status\":\"completed\",\"input\":{\"agent\":\"general\",\"description\":\"Look\",\"prompt\":\"stub_dc936d211328 look\"},\"content\":[{\"type\":\"text\",\"text\":\"<subagent sessionID=\\\"ses_e483b2f87ffeH2nNX7Pd1D6ZlO\\\" state=\\\"completed\\\">\\nstub reply\\n</subagent>\"}],\"metadata\":{\"sessionID\":\"ses_e483b2f87ffeH2nNX7Pd1D6ZlO\",\"status\":\"completed\",\"truncated\":false}},\"time\":{\"created\":1794084491377,\"ran\":1794084491380,\"completed\":1794084491401}}],\"finish\":\"tool-calls\",\"rawFinish\":\"tool_calls\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b7c4d08c001Ndp6iA3ag98635",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "assistant",
+          "seq": 16,
+          "data": "{\"time\":{\"created\":1794084491406,\"streamed\":1794084491411,\"completed\":1794084491412},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"reasoning\",\"text\":\"Planning the look\",\"native\":{\"reasoningField\":\"reasoning_content\"},\"time\":{\"created\":1794084491409,\"completed\":1794084491410}},{\"type\":\"text\",\"text\":\"stub reply\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b7c4d094003pELwD74d5NLsld",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "idle",
+          "seq": 23,
+          "data": "{\"time\":{\"created\":1794084491412},\"outcome\":\"succeeded\"}"
+        },
+        {
+          "id": "msg_01M6VW9M4NS35VTFG22517HYCH",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "user",
+          "seq": 26,
+          "data": "{\"metadata\":{\"userID\":\"user_1\"},\"time\":{\"created\":1794084491417},\"text\":\"stub_9adb8443a113\"}"
+        },
+        {
+          "id": "msg_1b7c4d09a001M1S5gRQbsuv9e9",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "assistant",
+          "seq": 27,
+          "data": "{\"time\":{\"created\":1794084491420,\"streamed\":1794084491425,\"completed\":1794084491427},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"tool\",\"id\":\"call_79cd0f00\",\"name\":\"skill\",\"executed\":false,\"state\":{\"status\":\"error\",\"input\":{\"name\":\"missing\"},\"error\":{\"type\":\"tool.execution\",\"message\":\"Invalid arguments for tool \\\"skill\\\":\\n- id: Missing key\\n\\nArguments provided:\\n{}\\n\\nUpdate the arguments and call the tool again.\"}},\"time\":{\"created\":1794084491423,\"ran\":1794084491424,\"completed\":1794084491426}}],\"finish\":\"tool-calls\",\"rawFinish\":\"tool_calls\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b7c4d0a5001jwUwPfTxAYzXTa",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "assistant",
+          "seq": 34,
+          "data": "{\"time\":{\"created\":1794084491431,\"streamed\":1794084491434,\"completed\":1794084491435},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"text\",\"text\":\"stub reply\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b7c4d0ab003S77FA3knl0I4Rk",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "idle",
+          "seq": 39,
+          "data": "{\"time\":{\"created\":1794084491435},\"outcome\":\"succeeded\"}"
+        },
+        {
+          "id": "msg_01M6VW9M5C241618SXVGRSJF6V",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "user",
+          "seq": 42,
+          "data": "{\"metadata\":{\"userID\":\"user_1\",\"channel\":{\"provider\":\"slack\",\"place\":\"C0RECORD\",\"sender\":\"U0RECORD\"}},\"time\":{\"created\":1794084491445},\"text\":\"stub_f0298b705747\"}"
+        },
+        {
+          "id": "msg_1b7c4d0b7001dHRdcnV8ULNZBQ",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "assistant",
+          "seq": 43,
+          "data": "{\"time\":{\"created\":1794084491449,\"streamed\":1794084491452,\"completed\":1794084491452},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"text\",\"text\":\"stub reply\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b7c4d0bd001iaqQrTDU4r46Lg",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "idle",
+          "seq": 48,
+          "data": "{\"time\":{\"created\":1794084491453},\"outcome\":\"succeeded\"}"
+        },
+        {
+          "id": "msg_1b7c4d0c10023CSKvcEUI2N2G7",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "shell",
+          "seq": 49,
+          "data": "{\"metadata\":{\"background\":true},\"time\":{\"created\":1794084491457,\"completed\":1794084491462},\"shellID\":\"sh_1b7c4d0bf001dVFEg9B7mJqfsx\",\"command\":\"echo recorded\",\"status\":\"exited\",\"exit\":0,\"output\":{\"output\":\"recorded\\n\",\"cursor\":9,\"size\":9,\"truncated\":false}}"
+        },
+        {
+          "id": "msg_1b7c4d0c7001z8KvqrYlMIaV2B",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "synthetic",
+          "seq": 54,
+          "data": "{\"metadata\":{\"source\":\"shell\",\"shellID\":\"sh_1b7c4d0bf001dVFEg9B7mJqfsx\",\"state\":\"completed\",\"truncated\":false,\"exit\":0},\"time\":{\"created\":1794084491466},\"text\":\"The following shell command was executed by the user:\\n<shell id=\\\"sh_1b7c4d0bf001dVFEg9B7mJqfsx\\\" state=\\\"completed\\\" command=\\\"echo recorded\\\">\\nrecorded\\n\\n</shell>\"}"
+        },
+        {
+          "id": "msg_1b7c4d0c8001Z3kcJcClYF4eBm",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "synthetic",
+          "seq": 55,
+          "data": "{\"metadata\":{\"source\":\"ren.files-reset\"},\"time\":{\"created\":1794084491466},\"text\":\"stub_e711a260db5f The chat's workspace files were lost.\"}"
+        },
+        {
+          "id": "msg_1b7c4d0cc0010yRDGcDQOSKGZM",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "assistant",
+          "seq": 56,
+          "data": "{\"time\":{\"created\":1794084491469,\"streamed\":1794084491473,\"completed\":1794084491473},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"text\",\"text\":\"stub reply\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b7c4d0d2002Q7ZpU0jZe21zU5",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "idle",
+          "seq": 61,
+          "data": "{\"time\":{\"created\":1794084491474},\"outcome\":\"succeeded\"}"
+        },
+        {
+          "id": "msg_01M6VW9M6KKRRJ06T1D75MP5D6",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "user",
+          "seq": 64,
+          "data": "{\"metadata\":{\"userID\":\"user_1\"},\"time\":{\"created\":1794084491478},\"text\":\"stub_b115c5573b41\"}"
+        },
+        {
+          "id": "msg_1b7c4d0d7001jUSpsYy6sEcnJd",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "assistant",
+          "seq": 65,
+          "data": "{\"time\":{\"created\":1794084491481,\"completed\":1794084491484},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[],\"finish\":\"error\",\"error\":{\"type\":\"provider.invalid-request\",\"message\":\"stub model status 400\",\"status\":400,\"response\":{\"body\":\"{\\\"error\\\":{\\\"message\\\":\\\"stub model status 400\\\",\\\"type\\\":\\\"stub_error\\\"}}\"}}}"
+        },
+        {
+          "id": "msg_1b7c4d0dd001smTRurMPby3vk9",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "idle",
+          "seq": 67,
+          "data": "{\"time\":{\"created\":1794084491485},\"outcome\":\"failed\",\"error\":{\"type\":\"provider.invalid-request\",\"message\":\"stub model status 400\",\"status\":400,\"response\":{\"body\":\"{\\\"error\\\":{\\\"message\\\":\\\"stub model status 400\\\",\\\"type\\\":\\\"stub_error\\\"}}\"}}}"
+        },
+        {
+          "id": "msg_1b7c4d0de001xoML56k6efuUPu",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "compaction",
+          "seq": 71,
+          "data": "{\"metadata\":{\"keepID\":\"msg_01M6VW9M6KKRRJ06T1D75MP5D6\"},\"time\":{\"created\":1794084491488},\"status\":\"completed\",\"reason\":\"manual\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"summary\":\"## Objective\\n- the summary\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b7c4d0e9001c2W6FDMs2xUvqh",
+          "session_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+          "type": "idle",
+          "seq": 74,
+          "data": "{\"time\":{\"created\":1794084491497},\"outcome\":\"succeeded\"}"
+        }
+      ],
+      "inbox": []
+    },
+    {
+      "session": {
+        "id": "ses_e483b2f87ffeH2nNX7Pd1D6ZlO",
+        "parent_id": "ses_01M6VW9KH7HQVT9XWXE06EDECF",
+        "project_id": "4612f02ff047de9edb6f841b532fae61a6526946",
+        "workspace_id": null,
+        "slug": "tidy-island",
+        "directory": "/var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.5MpkXkO2Ee/file-uVvrKO/tmp/ren-brain-cmWak1",
+        "path": "../../../../../../../../../../var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.5MpkXkO2Ee/file-uVvrKO/tmp/ren-brain-cmWak1",
+        "title": "Look",
+        "version": "unknown",
+        "summary_additions": null,
+        "summary_deletions": null,
+        "summary_files": null,
+        "metadata": "{\"ren\":{\"start\":null,\"model\":null,\"defaultModels\":{},\"interactive\":true}}",
+        "cost": 0,
+        "tokens_input": 10,
+        "tokens_output": 5,
+        "tokens_reasoning": 0,
+        "tokens_cache_read": 0,
+        "tokens_cache_write": 0,
+        "permission": "[]",
+        "agent": "general",
+        "model": null,
+        "time_created": 1794084491385,
+        "time_updated": 1794084491397,
+        "time_idle": 1794084491398,
+        "time_viewed": null,
+        "idle_outcome": "succeeded",
+        "time_archived": null,
+        "time_suspended": null
+      },
+      "messages": [
+        {
+          "id": "msg_1b7c4d079003frzV5AlPiFUG1o",
+          "session_id": "ses_e483b2f87ffeH2nNX7Pd1D6ZlO",
+          "type": "user",
+          "seq": 4,
+          "data": "{\"time\":{\"created\":1794084491389},\"text\":\"You are a subagent spawned by another session.\\nstub_dc936d211328 look\"}"
+        },
+        {
+          "id": "msg_1b7c4d07e0012sPv85MrxMCWI1",
+          "session_id": "ses_e483b2f87ffeH2nNX7Pd1D6ZlO",
+          "type": "assistant",
+          "seq": 5,
+          "data": "{\"time\":{\"created\":1794084491392,\"streamed\":1794084491396,\"completed\":1794084491397},\"agent\":\"general\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"reasoning\",\"text\":\"Reading the files\",\"native\":{\"reasoningField\":\"reasoning_content\"},\"time\":{\"created\":1794084491394,\"completed\":1794084491395}},{\"type\":\"text\",\"text\":\"stub reply\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b7c4d086001fCFYQuG07Y1wGv",
+          "session_id": "ses_e483b2f87ffeH2nNX7Pd1D6ZlO",
+          "type": "idle",
+          "seq": 12,
+          "data": "{\"time\":{\"created\":1794084491398},\"outcome\":\"succeeded\"}"
+        }
+      ],
+      "inbox": []
+    },
+    {
+      "session": {
+        "id": "ses_e483b2f14ffe3wi0Nx9Dj1fBzk",
+        "parent_id": null,
+        "project_id": "4612f02ff047de9edb6f841b532fae61a6526946",
+        "workspace_id": null,
+        "slug": "eager-panda",
+        "directory": "/var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.5MpkXkO2Ee/file-uVvrKO/tmp/ren-brain-cmWak1",
+        "path": "../../../../../../../../../../var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.5MpkXkO2Ee/file-uVvrKO/tmp/ren-brain-cmWak1",
+        "title": null,
+        "version": "unknown",
+        "summary_additions": null,
+        "summary_deletions": null,
+        "summary_files": null,
+        "metadata": null,
+        "cost": 0,
+        "tokens_input": 0,
+        "tokens_output": 0,
+        "tokens_reasoning": 0,
+        "tokens_cache_read": 0,
+        "tokens_cache_write": 0,
+        "permission": null,
+        "agent": null,
+        "model": null,
+        "time_created": 1794084491500,
+        "time_updated": 1794084491511,
+        "time_idle": null,
+        "time_viewed": null,
+        "idle_outcome": null,
+        "time_archived": null,
+        "time_suspended": 1794084491502
+      },
+      "messages": [
+        {
+          "id": "msg_1b7c4d0ed001lNwI8tVimvSRVs",
+          "session_id": "ses_e483b2f14ffe3wi0Nx9Dj1fBzk",
+          "type": "user",
+          "seq": 4,
+          "data": "{\"time\":{\"created\":1794084491503},\"text\":\"stub_a6f979b1e96e\"}"
+        }
+      ],
+      "inbox": [
+        {
+          "id": "msg_1b7c4d0f5001XruzsjuuiBlCWu",
+          "session_id": "ses_e483b2f14ffe3wi0Nx9Dj1fBzk",
+          "type": "user",
+          "payload": "{\"text\":\"Queued while busy\"}",
+          "delivery": "queue",
+          "enqueued_seq": 5,
+          "time_created": 1794084491510
+        },
+        {
+          "id": "msg_1b7c4d0f6002RsPTGxl69Wa566",
+          "session_id": "ses_e483b2f14ffe3wi0Nx9Dj1fBzk",
+          "type": "synthetic",
+          "payload": "{\"text\":\"The chat's workspace files were lost.\",\"metadata\":{\"source\":\"ren.files-reset\"}}",
+          "delivery": "steer",
+          "enqueued_seq": 6,
+          "time_created": 1794084491511
+        }
+      ]
+    }
+  ]
+}
