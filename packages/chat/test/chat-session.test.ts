@@ -118,6 +118,24 @@ const logged = (brain: Brain, log: Array<string>) =>
     ),
   )
 
+test("an unreadable live rename rereads the persisted title without another user action", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make({ unreadableEvent: "session.renamed" })
+      yield* brain.start()
+      const log: Array<string> = []
+      const chat = yield* ChatSession.make({ sessionID: brain.id, access }).pipe(Effect.provide(logged(brain, log)))
+      yield* chat.open(brain.id)
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.state, (state) => Boolean(state.info[brain.id]))
+      const streams = log.filter((path) => path.endsWith("/event")).length
+      yield* brain.driver.rename(brain.id, "Recovered title")
+      const recovered = yield* ChatTest.until(chat.state, (state) => state.info[brain.id]?.title === "Recovered title")
+      expect(recovered.info[brain.id]?.title).toBe("Recovered title")
+      expect(log.filter((path) => path.endsWith("/event"))).toHaveLength(streams)
+    }),
+  ))
+
 test("while access is starting the history comes from Ren, a page that is too large is asked again smaller, and at ready the brain's history shows each message once (E108, E111)", () =>
   ChatTest.live(
     Effect.gen(function* () {

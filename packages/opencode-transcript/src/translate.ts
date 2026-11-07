@@ -2,6 +2,7 @@ export * as Translate from "./translate.js"
 
 import type { Agent } from "@opencode/schema/agent"
 import type { Command } from "@opencode/schema/command"
+import type { EventManifest } from "@opencode/schema/event-manifest"
 import type { FileSystem } from "@opencode/schema/filesystem"
 import type { Form as OpenCodeForm } from "@opencode/schema/form"
 import type { Permission as OpenCodePermission } from "@opencode/schema/permission"
@@ -26,7 +27,7 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { SessionVcs } from "@ren/schema/session/vcs"
 import { Shell } from "@ren/schema/shell"
 import { TaskAssignment } from "@ren/schema/task-assignment"
-import { Option, Predicate, pipe, Schema, Struct } from "effect"
+import { type Brand, Option, Predicate, pipe, Schema, Struct } from "effect"
 
 const UserID = Schema.Struct({ metadata: Schema.Struct({ userID: Schema.String }) })
 const decodeUserID = Schema.decodeUnknownOption(UserID)
@@ -108,6 +109,116 @@ const withOwner = (value: unknown): unknown => {
 
 const nested = (value: unknown, key: string, update: (inner: unknown) => unknown): unknown =>
   Predicate.hasProperty(value, key) ? { ...value, [key]: update(value[key]) } : value
+
+type Encoded<T, A = never> = T extends readonly [infer H extends Schema.Top, ...infer R]
+  ? Encoded<R, A | H["Encoded"]>
+  : A
+
+type Decoded<T, A = never> = T extends readonly [infer H extends Schema.Top, ...infer R] ? Decoded<R, A | H["Type"]> : A
+
+type Wire<T> = unknown extends T
+  ? { readonly json: true }
+  : T extends string & Brand.Brand<string>
+    ? string
+    : [T] extends [Schema.Json]
+      ? [Schema.Json] extends [T]
+        ? { readonly json: true }
+        : T
+      : T extends object
+        ? { readonly [K in keyof T]: Wire<Exclude<T[K], undefined>> }
+        : T
+
+type Fits<From, To, K> = [Wire<Extract<From, { readonly type: K }>>] extends [Wire<Extract<To, { readonly type: K }>>]
+  ? "translated"
+  : { readonly misfit: K }
+
+type Coverage<From extends { readonly type: string }, To extends { readonly type: string }> = {
+  readonly [K in To["type"]]: K extends From["type"]
+    ? Fits<From, To, K> | { readonly reshaped: string }
+    : { readonly gone: K }
+}
+
+type EventCoverage = Coverage<Encoded<typeof EventManifest.ServerDefinitions>, Encoded<typeof SessionEvent.definitions>>
+
+type MessageCoverage = Coverage<
+  Decoded<typeof OpenCodeMessage.Info.members>,
+  Decoded<typeof SessionMessage.Info.members>
+>
+
+type Checked<Expected, Actual extends Expected> = Actual
+
+export type EventCompatibility = Checked<
+  EventCoverage,
+  {
+    "form.cancelled": "translated"
+    "form.created": "translated"
+    "form.replied": "translated"
+    "permission.asked": "translated"
+    "permission.replied": "translated"
+    "session.agent.selected": "translated"
+    "session.compaction.delta": "translated"
+    "session.compaction.ended": "translated"
+    "session.compaction.failed": "translated"
+    "session.compaction.started": "translated"
+    "session.created": "translated"
+    "session.deleted": "translated"
+    "session.execution.failed": "translated"
+    "session.execution.interrupted": "translated"
+    "session.execution.started": "translated"
+    "session.execution.succeeded": "translated"
+    "session.inbox.cancelled": "translated"
+    "session.inbox.delivered": "translated"
+    "session.inbox.delivery.changed": "translated"
+    "session.inbox.enqueued": { reshaped: "Ren shows no move item; the stream leaves it out" }
+    "session.model.selected": "translated"
+    "session.reasoning.delta": "translated"
+    "session.reasoning.ended": "translated"
+    "session.reasoning.started": "translated"
+    "session.renamed": "translated"
+    "session.retry.scheduled": "translated"
+    "session.revert.cleared": "translated"
+    "session.revert.committed": "translated"
+    "session.revert.staged": "translated"
+    "session.shell.ended": "translated"
+    "session.shell.started": "translated"
+    "session.skill.activated": "translated"
+    "session.step.ended": "translated"
+    "session.step.failed": "translated"
+    "session.step.started": "translated"
+    "session.step.streamed": "translated"
+    "session.synthetic": "translated"
+    "session.text.delta": "translated"
+    "session.text.ended": "translated"
+    "session.text.started": "translated"
+    "session.tool.called": "translated"
+    "session.tool.failed": "translated"
+    "session.tool.input.delta": "translated"
+    "session.tool.input.ended": "translated"
+    "session.tool.input.started": "translated"
+    "session.tool.progress": "translated"
+    "session.tool.success": "translated"
+    "session.usage.updated": "translated"
+    "shell.created": { reshaped: "the shell's session comes from its metadata" }
+    "shell.deleted": "translated"
+    "shell.exited": "translated"
+  }
+>
+
+export type MessageCompatibility = Checked<
+  MessageCoverage,
+  {
+    "agent-switched": "translated"
+    assistant: "translated"
+    compaction: "translated"
+    idle: "translated"
+    "model-switched": "translated"
+    shell: "translated"
+    skill: "translated"
+    synthetic: "translated"
+    system: "translated"
+    user: "translated"
+  }
+>
 
 const decodeEvent = Schema.decodeUnknownOption(SessionEvent.Event)
 const readMessage = Schema.decodeUnknownOption(Schema.toType(SessionMessage.Info))

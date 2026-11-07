@@ -186,7 +186,7 @@ const boot = Effect.gen(function* () {
     )
     .pipe(Scope.provide(scope))
   yield* opened.chat.events.pipe(
-    Stream.filter((event) => event.type.startsWith("session.")),
+    Stream.filter((event) => event.type.startsWith("session.") || event.type === "server.connected"),
     Stream.debounce("1 second"),
     Stream.runForEach(() => scheduler.trigger("sync")),
     Effect.catchCause((cause) => Effect.logWarning("The event watch for sync stopped", cause)),

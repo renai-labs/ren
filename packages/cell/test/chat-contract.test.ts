@@ -8,7 +8,9 @@ import { Shell } from "@opencode/schema/shell"
 import { Session } from "@ren/schema/session"
 import { SessionEvent } from "@ren/schema/session/event"
 import { Effect, Option, Queue, Schema, Stream } from "effect"
+import { OpenCodeChat } from "../src/harness/opencode/chat.js"
 import { OpenCodeEvents } from "../src/harness/opencode/events.js"
+import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { Translate } from "@ren/opencode-transcript/translate"
 import { BrainTest } from "./lib/brain.js"
 import { Shared } from "./lib/shared.js"
@@ -202,3 +204,33 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
       .find((info) => info.type === "user")
     expect(sender).toMatchObject({ sender: { userId: "user_1" } })
   }).pipe(Effect.scoped, Effect.runPromise))
+
+test("an unreadable supported event requests a reread and the stream continues", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const body = [
+        { id: "evt_unreadable", created: 1, type: "session.renamed", data: { sessionID: "ses_contract" } },
+        { id: "evt_read", created: 2, type: "session.renamed", data: { sessionID: "ses_contract", title: "Renamed" } },
+      ]
+        .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+        .join("")
+      const fetch = () => Promise.resolve(new Response(body, { headers: { "content-type": "text/event-stream" } }))
+      const unused = () => Effect.die(new Error("The event stream reads nothing else"))
+      const chat = OpenCodeChat.make({
+        fetch,
+        client: yield* OpenCodeServer.client(fetch),
+        shells: unused,
+        agents: unused,
+        skills: unused,
+        commands: unused,
+        findFiles: unused,
+        environment: unused,
+        webSearchProviders: unused,
+        activate: unused,
+        chats: Option.none(),
+      })
+      const events = yield* chat.events.pipe(Stream.runCollect)
+      expect(events.map((event) => event.type)).toEqual(["server.connected", "session.renamed"])
+      expect(events.at(1)?.id).toBe("evt_read")
+    }),
+  ))
