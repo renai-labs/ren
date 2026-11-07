@@ -359,7 +359,6 @@ const attach = (
     }),
   )
 
-// oxlint-disable-next-line ren/no-comments -- OpenCode's answer to a message is final: a retry sends the same message and gets the same answer, so Ren rejects it. Only a request that got no answer is a defect, which Ren retries (RENAI-86).
 const answered = Effect.fnUntraced(function* (error: Effect.Error<ReturnType<OpenCodeClient["session"]["prompt"]>>) {
   const http = error._tag === "ClientError" ? error.cause : error
   if (HttpClientError.isHttpClientError(http)) {

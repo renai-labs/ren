@@ -16,7 +16,6 @@ export interface Attached {
 
 const readable = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "application/json"])
 
-// oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 answers 500 to a file that is not an image above 5,345,276 bytes; it makes an image smaller before that check (RENAI-86). A larger file reaches the agent only as its path.
 const maxDocumentBytes = 5_000_000
 
 const read = (client: EnvironmentClient.Client, path: string, size: number) =>
