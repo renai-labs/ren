@@ -52,7 +52,13 @@ const readOne = <A, B>(item: A, translate: (item: A) => Option.Option<B>) =>
   })
 
 const readAll = <A, B>(items: ReadonlyArray<A>, translate: (item: A) => Option.Option<B>) =>
-  Effect.forEach(items, (item) => readOne(item, translate))
+  Effect.forEach(items, (item) =>
+    Option.match(translate(item), {
+      onNone: () =>
+        Effect.as(Effect.logError("The brain cannot read a value OpenCode returned; the list leaves it out", item), []),
+      onSome: (read) => Effect.succeed([read]),
+    }),
+  ).pipe(Effect.map((reads) => reads.flat()))
 
 export const make = (
   host: Pick<
@@ -100,9 +106,15 @@ export const make = (
     events: OpenCodeEvents.stream(host.fetch).pipe(
       Stream.mapEffect((raw) =>
         Effect.gen(function* () {
-          const translated = Translate.frame(raw, yield* Clock.currentTimeMillis)
-          if (Option.isNone(translated) && Translate.isAllowed(raw))
-            return yield* Effect.fail(new Error("The brain cannot read an OpenCode event Ren supports", { cause: raw }))
+          const created = yield* Clock.currentTimeMillis
+          const translated = Translate.frame(raw, created)
+          if (Option.isNone(translated) && Translate.isAllowed(raw)) {
+            yield* Effect.logError(
+              "The brain cannot read an OpenCode event Ren supports; clients reread their state",
+              raw,
+            )
+            return [{ id: `evt_resync_${created}`, created, type: "server.connected", data: {} }] as const
+          }
           return Option.toArray(translated)
         }),
       ),
