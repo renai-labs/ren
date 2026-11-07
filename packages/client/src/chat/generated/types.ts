@@ -101,6 +101,8 @@ export type ChannelProvider = "slack" | "linear" | "github"
 
 export type ScheduleOriginInfo = { scheduleId: string; name: string; scheduledAt: string }
 
+export type WebhookOriginInfo = { webhookId: string; name: string; requestId: string; receivedAt: string }
+
 export type TaskAssignmentInfo = { taskId: string; identifier: string; title: string; brief: string }
 
 export type SessionMessageText = { type: "text"; text: string }
@@ -879,6 +881,7 @@ export type SessionMessageUser = {
   sender?: SessionMessageSender
   channel?: ChannelOriginInfo
   schedule?: ScheduleOriginInfo
+  webhook?: WebhookOriginInfo
   task?: TaskAssignmentInfo
 }
 

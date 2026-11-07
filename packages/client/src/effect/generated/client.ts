@@ -511,6 +511,7 @@ type AppCreateInput = {
   readonly skills: AppCreateRequest["payload"]["skills"]
   readonly mcps: AppCreateRequest["payload"]["mcps"]
   readonly dependsOn: AppCreateRequest["payload"]["dependsOn"]
+  readonly webhooks: AppCreateRequest["payload"]["webhooks"]
   readonly slug: AppCreateRequest["payload"]["slug"]
   readonly ownerSpaceId: AppCreateRequest["payload"]["ownerSpaceId"]
 }
@@ -525,6 +526,7 @@ const EndpointAppCreate = (raw: RawClient["app"]) => (input: AppCreateInput) =>
       skills: input["skills"],
       mcps: input["mcps"],
       dependsOn: input["dependsOn"],
+      webhooks: input["webhooks"],
       slug: input["slug"],
       ownerSpaceId: input["ownerSpaceId"],
     },
@@ -538,6 +540,7 @@ type AppUpdateInput = {
   readonly skills: AppUpdateRequest["payload"]["skills"]
   readonly mcps: AppUpdateRequest["payload"]["mcps"]
   readonly dependsOn: AppUpdateRequest["payload"]["dependsOn"]
+  readonly webhooks: AppUpdateRequest["payload"]["webhooks"]
   readonly name?: AppUpdateRequest["payload"]["name"]
   readonly description?: AppUpdateRequest["payload"]["description"]
   readonly icon?: AppUpdateRequest["payload"]["icon"]
@@ -552,6 +555,7 @@ const EndpointAppUpdate = (raw: RawClient["app"]) => (input: AppUpdateInput) =>
       skills: input["skills"],
       mcps: input["mcps"],
       dependsOn: input["dependsOn"],
+      webhooks: input["webhooks"],
       name: input["name"],
       description: input["description"],
       icon: input["icon"],
@@ -1264,6 +1268,139 @@ const EndpointScheduleRunList = (raw: RawClient["schedule-run"]) => (input: Sche
 
 const adaptGroupScheduleRun = (raw: RawClient["schedule-run"]) => ({ list: EndpointScheduleRunList(raw) })
 
+type WebhookListRequest = Parameters<RawClient["webhook"]["webhook.list"]>[0]
+type WebhookListInput = {
+  readonly spaceId?: WebhookListRequest["query"]["spaceId"]
+  readonly page: WebhookListRequest["query"]["page"]
+  readonly pageSize: WebhookListRequest["query"]["pageSize"]
+}
+const EndpointWebhookList = (raw: RawClient["webhook"]) => (input: WebhookListInput) =>
+  raw["webhook.list"]({ query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type WebhookGetRequest = Parameters<RawClient["webhook"]["webhook.get"]>[0]
+type WebhookGetInput = { readonly idOrSlug: WebhookGetRequest["params"]["idOrSlug"] }
+const EndpointWebhookGet = (raw: RawClient["webhook"]) => (input: WebhookGetInput) =>
+  raw["webhook.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type WebhookCreateRequest = Parameters<RawClient["webhook"]["webhook.create"]>[0]
+type WebhookCreateInput = {
+  readonly spaceId: WebhookCreateRequest["payload"]["spaceId"]
+  readonly source: WebhookCreateRequest["payload"]["source"]
+  readonly slug?: WebhookCreateRequest["payload"]["slug"]
+  readonly agentId?: WebhookCreateRequest["payload"]["agentId"]
+}
+const EndpointWebhookCreate = (raw: RawClient["webhook"]) => (input: WebhookCreateInput) =>
+  raw["webhook.create"]({
+    payload: { spaceId: input["spaceId"], source: input["source"], slug: input["slug"], agentId: input["agentId"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type WebhookUpdateRequest = Parameters<RawClient["webhook"]["webhook.update"]>[0]
+type WebhookUpdateInput = {
+  readonly id: WebhookUpdateRequest["params"]["id"]
+  readonly name?: WebhookUpdateRequest["payload"]["name"]
+  readonly message?: WebhookUpdateRequest["payload"]["message"]
+  readonly parser?: WebhookUpdateRequest["payload"]["parser"]
+  readonly agentId?: WebhookUpdateRequest["payload"]["agentId"]
+  readonly fallbackUserId?: WebhookUpdateRequest["payload"]["fallbackUserId"]
+  readonly mode?: WebhookUpdateRequest["payload"]["mode"]
+}
+const EndpointWebhookUpdate = (raw: RawClient["webhook"]) => (input: WebhookUpdateInput) =>
+  raw["webhook.update"]({
+    params: { id: input["id"] },
+    payload: {
+      name: input["name"],
+      message: input["message"],
+      parser: input["parser"],
+      agentId: input["agentId"],
+      fallbackUserId: input["fallbackUserId"],
+      mode: input["mode"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type WebhookArchiveRequest = Parameters<RawClient["webhook"]["webhook.archive"]>[0]
+type WebhookArchiveInput = { readonly id: WebhookArchiveRequest["params"]["id"] }
+const EndpointWebhookArchive = (raw: RawClient["webhook"]) => (input: WebhookArchiveInput) =>
+  raw["webhook.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type WebhookRotateUrlRequest = Parameters<RawClient["webhook"]["webhook.rotateUrl"]>[0]
+type WebhookRotateUrlInput = { readonly id: WebhookRotateUrlRequest["params"]["id"] }
+const EndpointWebhookRotateUrl = (raw: RawClient["webhook"]) => (input: WebhookRotateUrlInput) =>
+  raw["webhook.rotateUrl"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+type WebhookSetSigningSecretRequest = Parameters<RawClient["webhook"]["webhook.setSigningSecret"]>[0]
+type WebhookSetSigningSecretInput = {
+  readonly id: WebhookSetSigningSecretRequest["params"]["id"]
+  readonly secret?: WebhookSetSigningSecretRequest["payload"]["secret"]
+}
+const EndpointWebhookSetSigningSecret = (raw: RawClient["webhook"]) => (input: WebhookSetSigningSecretInput) =>
+  raw["webhook.setSigningSecret"]({ params: { id: input["id"] }, payload: { secret: input["secret"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type WebhookRevealSigningSecretRequest = Parameters<RawClient["webhook"]["webhook.revealSigningSecret"]>[0]
+type WebhookRevealSigningSecretInput = { readonly id: WebhookRevealSigningSecretRequest["params"]["id"] }
+const EndpointWebhookRevealSigningSecret = (raw: RawClient["webhook"]) => (input: WebhookRevealSigningSecretInput) =>
+  raw["webhook.revealSigningSecret"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+type WebhookTestRequest = Parameters<RawClient["webhook"]["webhook.test"]>[0]
+type WebhookTestInput = {
+  readonly id: WebhookTestRequest["params"]["id"]
+  readonly parser?: WebhookTestRequest["payload"]["parser"]
+  readonly requestIds?: WebhookTestRequest["payload"]["requestIds"]
+}
+const EndpointWebhookTest = (raw: RawClient["webhook"]) => (input: WebhookTestInput) =>
+  raw["webhook.test"]({
+    params: { id: input["id"] },
+    payload: { parser: input["parser"], requestIds: input["requestIds"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type WebhookReplayRequest = Parameters<RawClient["webhook"]["webhook.replay"]>[0]
+type WebhookReplayInput = { readonly id: WebhookReplayRequest["params"]["id"] }
+const EndpointWebhookReplay = (raw: RawClient["webhook"]) => (input: WebhookReplayInput) =>
+  raw["webhook.replay"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupWebhook = (raw: RawClient["webhook"]) => ({
+  list: EndpointWebhookList(raw),
+  get: EndpointWebhookGet(raw),
+  create: EndpointWebhookCreate(raw),
+  update: EndpointWebhookUpdate(raw),
+  archive: EndpointWebhookArchive(raw),
+  rotateUrl: EndpointWebhookRotateUrl(raw),
+  setSigningSecret: EndpointWebhookSetSigningSecret(raw),
+  revealSigningSecret: EndpointWebhookRevealSigningSecret(raw),
+  test: EndpointWebhookTest(raw),
+  replay: EndpointWebhookReplay(raw),
+})
+
+type WebhookRequestListRequest = Parameters<RawClient["webhook-request"]["webhook-request.list"]>[0]
+type WebhookRequestListInput = {
+  readonly webhookId: WebhookRequestListRequest["query"]["webhookId"]
+  readonly outcome?: WebhookRequestListRequest["query"]["outcome"]
+  readonly page: WebhookRequestListRequest["query"]["page"]
+  readonly pageSize: WebhookRequestListRequest["query"]["pageSize"]
+}
+const EndpointWebhookRequestList = (raw: RawClient["webhook-request"]) => (input: WebhookRequestListInput) =>
+  raw["webhook-request.list"]({
+    query: {
+      webhookId: input["webhookId"],
+      outcome: input["outcome"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type WebhookRequestGetRequest = Parameters<RawClient["webhook-request"]["webhook-request.get"]>[0]
+type WebhookRequestGetInput = { readonly id: WebhookRequestGetRequest["params"]["id"] }
+const EndpointWebhookRequestGet = (raw: RawClient["webhook-request"]) => (input: WebhookRequestGetInput) =>
+  raw["webhook-request.get"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupWebhookRequest = (raw: RawClient["webhook-request"]) => ({
+  list: EndpointWebhookRequestList(raw),
+  get: EndpointWebhookRequestGet(raw),
+})
+
 type CredentialListRequest = Parameters<RawClient["credential"]["credential.list"]>[0]
 type CredentialListInput = {
   readonly owner?: CredentialListRequest["query"]["owner"]
@@ -1740,6 +1877,8 @@ const adaptClient = (raw: RawClient) => ({
   label: adaptGroupLabel(raw["label"]),
   schedule: adaptGroupSchedule(raw["schedule"]),
   "schedule-run": adaptGroupScheduleRun(raw["schedule-run"]),
+  webhook: adaptGroupWebhook(raw["webhook"]),
+  "webhook-request": adaptGroupWebhookRequest(raw["webhook-request"]),
   credential: adaptGroupCredential(raw["credential"]),
   "credential-connect": adaptGroupCredentialConnect(raw["credential-connect"]),
   "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),

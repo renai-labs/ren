@@ -7,6 +7,7 @@ import { Factory } from "@ren/schema/factory"
 import type { Infra } from "@ren/schema/infra"
 import type { OrganizationSettings } from "@ren/schema/organization-settings"
 import type { Schedule } from "@ren/schema/schedule"
+import type { Webhook } from "@ren/schema/webhook"
 import type { Settings } from "@ren/schema/settings"
 import { Predicate, Struct } from "effect"
 import { AppValidation } from "../app/validation.js"
@@ -15,6 +16,7 @@ import { InfraChannels } from "./channels.js"
 import { InfraMemory } from "./memory.js"
 import { InfraProfiles } from "./profiles.js"
 import { InfraSchedules } from "./schedules.js"
+import { InfraWebhooks } from "./webhooks.js"
 
 export interface Source {
   readonly org: OrganizationSettings.UpdateInput
@@ -30,6 +32,7 @@ export interface Source {
         readonly agents: Readonly<Record<string, Agent.Declaration>>
         readonly apps: Readonly<Record<string, App.Declaration>>
         readonly schedules: Readonly<Record<string, Schedule.Declaration>>
+        readonly webhooks: Readonly<Record<string, Webhook.Declaration>>
         readonly channels: Readonly<Record<string, Channel.Declaration>>
         readonly memory: Readonly<Record<string, string>>
         readonly uses: Infra.Uses
@@ -101,6 +104,10 @@ export const resources = (source: Source, live?: Resources): Resources => {
     ...owned((space) => space.schedules).map((schedule): [string, Resource] => [
       InfraSchedules.path(schedule.slug, schedule.name),
       { kind: "schedule", value: InfraSchedules.canonical(schedule.name, schedule.value) },
+    ]),
+    ...owned((space) => space.webhooks).map((webhook): [string, Resource] => [
+      InfraWebhooks.path(webhook.slug, webhook.name),
+      { kind: "webhook", value: InfraWebhooks.canonical(webhook.name, webhook.value) },
     ]),
     ...owned((space) => space.channels).map((channel): [string, Resource] => {
       const path = InfraChannels.path(channel.slug, channel.name)

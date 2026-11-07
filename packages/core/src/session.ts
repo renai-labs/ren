@@ -1,6 +1,7 @@
 export * as Session from "./session.js"
 
 import { Database } from "@ren/db/database"
+import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { PullRequest as PullRequestSchema } from "@ren/schema/pull-request"
@@ -345,20 +346,16 @@ export const layer = Layer.effect(
                     asc(Database.Schema.task_link.created_at),
                     asc(Database.Schema.task_link.id),
                   )
+          const thread = Database.Schema.intake_thread
           const threads = yield* transaction
             .select({
-              provider: Database.Schema.channel_thread.provider,
-              url: Database.Schema.channel_thread.url,
-              place: Database.Schema.channel_thread.place_name,
+              origin: thread.origin,
+              url: sql<string | null>`${thread.channel_state} ->> 'url'`,
+              place: sql<string | null>`${thread.channel_state} ->> 'placeName'`,
             })
-            .from(Database.Schema.channel_thread)
-            .where(
-              and(
-                eq(Database.Schema.channel_thread.session_id, id),
-                eq(Database.Schema.channel_thread.organization_id, actor.organizationId),
-              ),
-            )
-            .orderBy(asc(Database.Schema.channel_thread.created_at), asc(Database.Schema.channel_thread.id))
+            .from(thread)
+            .where(and(eq(thread.current_session_id, id), eq(thread.organization_id, actor.organizationId)))
+            .orderBy(asc(thread.created_at), asc(thread.id))
           return { tasks, links: Array.dedupeWith(links, (a, b) => a.kind === b.kind && a.key === b.key), threads }
         }),
       )
@@ -512,7 +509,9 @@ export const layer = Layer.effect(
             link.kind === "github_issue" || link.kind === "linear_issue" ? [{ kind: link.kind, url: link.url }] : [],
           ),
           threads: found.threads.flatMap((thread) =>
-            thread.url ? [{ provider: thread.provider, url: thread.url, place: thread.place }] : [],
+            thread.url && Schema.is(Channel.Provider)(thread.origin)
+              ? [{ provider: thread.origin, url: thread.url, place: thread.place }]
+              : [],
           ),
         }
       }),

@@ -5,6 +5,7 @@ import { Brains } from "@ren/core/brains"
 import { BrainPush } from "@ren/core/brain-push"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelProvider } from "@ren/core/channel-provider"
+import { Intake } from "@ren/core/intake"
 import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
@@ -28,6 +29,7 @@ import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { Routes } from "@ren/server/routes"
 import { Config, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
+import { PersistedQueue } from "effect/persistence"
 import { ChaosEnvironments } from "./provider/environments.js"
 import { ChaosModels } from "./provider/models.js"
 import { Signer } from "@ren/core/signer"
@@ -80,6 +82,8 @@ HttpRouter.serve(Routes.layer).pipe(
       Layer.provide(ChannelIdentity.layer),
       Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),
     ),
+    Intake.receivers(Effect.succeed([])),
+    Intake.workers(Effect.succeed([])),
     ChannelNotice.layerLog,
     TaskCard.layerNone,
     SlackTaskCard.layerNone,
@@ -89,6 +93,7 @@ HttpRouter.serve(Routes.layer).pipe(
   ]),
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
+  Layer.provideMerge(PersistedQueue.layer.pipe(Layer.provide(PersistedQueue.layerStoreSql()))),
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([
     ChaosModels.layer,

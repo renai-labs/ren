@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@better-auth/oauth-provider": "catalog:",
+    "@bufbuild/cel": "catalog:",
     "@effect/atom-react": "catalog:",
     "@heroicons/react": "2.2.0",
     "@ren/chat": "workspace:*",

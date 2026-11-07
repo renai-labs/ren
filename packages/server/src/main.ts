@@ -59,9 +59,11 @@ import { PostHog } from "@ren/telemetry/posthog"
 import { Telemetry } from "@ren/telemetry/telemetry"
 import { Config, Effect, Layer, Option, References } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
+import { PersistedQueue } from "effect/persistence"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { EgressRoutes } from "./egress.js"
+import { IntakeOrigins } from "./intake-origins.js"
 import { Routes } from "./routes.js"
 import { Signer } from "@ren/core/signer"
 import { SlackApp } from "@ren/core/slack-app"
@@ -146,7 +148,13 @@ const observability = Layer.mergeAll(
   Layer.unwrap(Effect.map(Config.LogLevel("TRACE_LEVEL").pipe(Config.withDefault("Info")), Observability.layer)),
 )
 
+const queue = Layer.merge(
+  PersistedQueue.layer,
+  PersistedQueue.layerCleanup({ timeToLive: "1 day", failedTimeToLive: "30 days" }),
+).pipe(Layer.provide(PersistedQueue.layerStoreSql()))
+
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
+  Layer.provide(IntakeOrigins.layer),
   Layer.provide([
     Layer.mergeAll(
       Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provideMerge(host), Layer.provide(CredentialEnv.layer)),
@@ -166,6 +174,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   ]),
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
+  Layer.provideMerge(queue),
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([models, Environments.layer, GitHubApp.layer, Integrations.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),

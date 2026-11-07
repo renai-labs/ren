@@ -1,7 +1,7 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
-import { Channel } from "@ren/schema/channel"
+import { IntakeThread } from "@ren/schema/intake-thread"
 import type { Session as SessionSchema } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { Space as SpaceSchema } from "@ren/schema/space"
@@ -137,19 +137,18 @@ describe("Session", () => {
         yield* task(3, hidden, id, ["https://github.com/acme/web/pull/99"])
         yield* task(4, owner.spaceId, null, ["https://github.com/acme/web/pull/7"])
         yield* database.db.insert(Database.Schema.task_session).values({ task_id: worked, session_id: id })
-        yield* database.db.insert(Database.Schema.channel_thread).values(
+        yield* database.db.insert(Database.Schema.intake_thread).values(
           [
             { thread: "C07:1760000000.000100", url: "https://acme.slack.com/archives/C07/p1760000000000100" },
-            { thread: "C07:1760000000.000200", url: null },
+            { thread: "C07:1760000000.000200" },
           ].map((row) => ({
-            id: Channel.ThreadID.create(),
+            id: IntakeThread.ID.create(),
             organization_id: owner.organizationId,
-            provider: "slack" as const,
-            install: "T01",
-            thread: row.thread,
-            url: row.url,
-            session_id: id,
-            place_name: "web-team",
+            origin: "slack" as const,
+            origin_id: "T01",
+            thread_key: row.thread,
+            current_session_id: id,
+            channel_state: { ...(row.url && { url: row.url }), placeName: "web-team" },
           })),
         )
         expect(yield* sessions.links(actorOf(owner), id)).toEqual({

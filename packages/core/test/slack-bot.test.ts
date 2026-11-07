@@ -4,11 +4,12 @@ import { Testing } from "@ren/db/testing"
 import { Agent } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
 import { Channel } from "@ren/schema/channel"
+import { IntakeThread } from "@ren/schema/intake-thread"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { ChannelMapping } from "@ren/schema/channel-mapping"
 import { Space } from "@ren/schema/space"
 import type { Session } from "@ren/schema/session"
-import { and, eq } from "drizzle-orm"
+import { and, eq, sql } from "drizzle-orm"
 import { ConfigProvider, Effect, Layer, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import type { Actor } from "../src/actor.js"
@@ -119,17 +120,19 @@ const slackThread = Effect.fnUntraced(function* (
   options: { readonly thread?: string; readonly data?: Channel.ThreadData; readonly createdAt?: Date } = {},
 ) {
   const database = yield* Database.Service
-  yield* database.db.insert(Database.Schema.channel_thread).values({
-    id: Channel.ThreadID.create(),
+  yield* database.db.insert(Database.Schema.intake_thread).values({
+    id: IntakeThread.ID.create(),
     organization_id: owner.organizationId,
-    provider: "slack",
-    install: workspace,
-    thread: options.thread ?? "C07:1712.33",
-    session_id: sessionId,
-    place_name: "eng",
-    last_message: "1712.40",
-    last_message_at: new Date(),
-    ...(options.data && { data: options.data }),
+    origin: "slack",
+    origin_id: workspace,
+    thread_key: options.thread ?? "C07:1712.33",
+    current_session_id: sessionId,
+    channel_state: {
+      placeName: "eng",
+      lastMessage: "1712.40",
+      lastMessageAt: new Date().toISOString(),
+      ...(options.data?.slack && { slack: options.data.slack }),
+    },
     ...(options.createdAt && { created_at: options.createdAt }),
   })
 })
@@ -204,9 +207,9 @@ describe("SlackBot", () => {
         })
         expect(slack.posted.at(-1)?.params.blocks).toContain('"type":"data_visualization"')
         yield* database.db
-          .update(Database.Schema.channel_thread)
-          .set({ last_reply_at: null })
-          .where(eq(Database.Schema.channel_thread.session_id, sessionId))
+          .update(Database.Schema.intake_thread)
+          .set({ channel_state: sql`${Database.Schema.intake_thread.channel_state} - 'lastReplyAt'` })
+          .where(eq(Database.Schema.intake_thread.current_session_id, sessionId))
         expect(
           yield* bot.call(asAgent(owner, sessionId), "send_message", {
             channel_id: "C07",
@@ -216,10 +219,10 @@ describe("SlackBot", () => {
         ).toEqual(answer)
         expect(
           yield* database.db
-            .select({ repliedAt: Database.Schema.channel_thread.last_reply_at })
-            .from(Database.Schema.channel_thread)
-            .where(eq(Database.Schema.channel_thread.session_id, sessionId)),
-        ).toEqual([{ repliedAt: expect.any(Date) }])
+            .select({ repliedAt: sql<string | null>`${Database.Schema.intake_thread.channel_state} ->> 'lastReplyAt'` })
+            .from(Database.Schema.intake_thread)
+            .where(eq(Database.Schema.intake_thread.current_session_id, sessionId)),
+        ).toEqual([{ repliedAt: expect.any(String) }])
         expect(yield* bot.call(asAgent(owner, sessionId), "read_thread", {})).toMatchObject({
           messages: [{ text: "Done." }, { text: "Here are the models." }, { text: "Also this." }],
         })
@@ -308,12 +311,12 @@ describe("SlackBot", () => {
         })
         expect(
           yield* database.db
-            .select({ sessionId: Database.Schema.channel_thread.session_id })
-            .from(Database.Schema.channel_thread)
+            .select({ sessionId: Database.Schema.intake_thread.current_session_id })
+            .from(Database.Schema.intake_thread)
             .where(
               and(
-                eq(Database.Schema.channel_thread.install, install.workspace),
-                eq(Database.Schema.channel_thread.thread, `C09:${ts}`),
+                eq(Database.Schema.intake_thread.origin_id, install.workspace),
+                eq(Database.Schema.intake_thread.thread_key, `C09:${ts}`),
               ),
             ),
         ).toEqual([{ sessionId }])

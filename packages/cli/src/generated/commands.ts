@@ -506,6 +506,98 @@ export const ScheduleRun = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
+export const WebhookList = {
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  page: Flag.Finite("page").pipe(Flag.optional),
+  pageSize: Flag.Finite("page-size").pipe(Flag.optional),
+}
+
+export const WebhookGet = { idOrSlug: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")) }
+
+export const WebhookCreate = {
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  slug: Flag.String("slug").pipe(
+    Flag.optional,
+    Flag.withDescription("Without it, Ren makes one from the name and adds -2, -3, … when it is taken."),
+  ),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const WebhookUpdate = {
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  name: Flag.String("name").pipe(Flag.optional, Flag.withDescription("Not for a preset.")),
+  message: Flag.String("message").pipe(Flag.optional, Flag.withDescription("Not for a preset.")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  fallbackUserId: Flag.String("fallback-user-id").pipe(
+    Flag.optional,
+    Flag.withDescription("Only yourself, or null to remove it."),
+  ),
+  mode: Flag.Literals("mode", ["listening", "live"]).pipe(
+    Flag.optional,
+    Flag.withDescription(
+      "`live` needs the owner and the agent in the space, and a signing secret when the signature needs one.",
+    ),
+  ),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const WebhookArchive = { id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")) }
+
+export const WebhookRotateUrl = {
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const WebhookSetSigningSecret = {
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  secret: Flag.String("secret").pipe(Flag.optional, Flag.withDescription("The secret that the provider gave.")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const WebhookRevealSigningSecret = {
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const WebhookTest = {
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  requestIds: Flag.String("request-ids").pipe(
+    Flag.atLeast(0),
+    Flag.withMetavar("list"),
+    Flag.withDescription("Without it, the last 20 requests. Separate values with commas."),
+  ),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const WebhookReplay = {
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const WebhookRequestList = {
+  webhookId: Flag.String("webhook").pipe(Flag.withDescription("Webhook slug or ID")),
+  outcome: Flag.Literals("outcome", [
+    "queued",
+    "started",
+    "continued",
+    "failed",
+    "recorded",
+    "throttled",
+    "answered",
+    "rejected",
+    "ignored",
+    "duplicate",
+  ]).pipe(Flag.optional, Flag.withDescription("`queued`: passed the parser and waits for its chat.")),
+  page: Flag.Finite("page").pipe(Flag.optional),
+  pageSize: Flag.Finite("page-size").pipe(Flag.optional),
+}
+
+export const WebhookRequestGet = {
+  id: Argument.String("webhook-request").pipe(Argument.withDescription("Webhook-request ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const CredentialList = {
   owner: Flag.Literals("owner", ["org", "space", "person", "profile"]).pipe(Flag.optional),
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
@@ -1325,6 +1417,90 @@ export const commands = [
         Command.withDescription("List a schedule’s runs"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.ScheduleRunList(input)),
+        ),
+      ),
+    ]),
+  ),
+  Command.make("webhook").pipe(
+    Command.withDescription("Manage webhooks"),
+    Command.withAlias("webhooks"),
+    Command.withSubcommands([
+      Command.make("list", WebhookList).pipe(
+        Command.withDescription("List webhooks"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookList(input)),
+        ),
+      ),
+      Command.make("get", WebhookGet).pipe(
+        Command.withDescription("Show a webhook"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookGet(input)),
+        ),
+      ),
+      Command.make("create", WebhookCreate).pipe(
+        Command.withDescription("Create a webhook"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookCreate(input)),
+        ),
+      ),
+      Command.make("update", WebhookUpdate).pipe(
+        Command.withDescription("Update a webhook"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookUpdate(input)),
+        ),
+      ),
+      Command.make("archive", WebhookArchive).pipe(
+        Command.withDescription("Archive a webhook"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookArchive(input)),
+        ),
+      ),
+      Command.make("rotate-url", WebhookRotateUrl).pipe(
+        Command.withDescription("Replace a webhook’s URL"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookRotateUrl(input)),
+        ),
+      ),
+      Command.make("set-signing-secret", WebhookSetSigningSecret).pipe(
+        Command.withDescription("Set a webhook’s signing secret"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookSetSigningSecret(input)),
+        ),
+      ),
+      Command.make("reveal-signing-secret", WebhookRevealSigningSecret).pipe(
+        Command.withDescription("Show a webhook’s signing secret"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookRevealSigningSecret(input)),
+        ),
+      ),
+      Command.make("test", WebhookTest).pipe(
+        Command.withDescription("Test a parser on a webhook’s recorded requests"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookTest(input)),
+        ),
+      ),
+      Command.make("replay", WebhookReplay).pipe(
+        Command.withDescription("Start the chats of a webhook’s recorded requests, 100 at a time"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookReplay(input)),
+        ),
+      ),
+    ]),
+  ),
+  Command.make("webhook-request").pipe(
+    Command.withDescription("Read the requests that reached a webhook"),
+    Command.withAlias("webhook-requests"),
+    Command.withSubcommands([
+      Command.make("list", WebhookRequestList).pipe(
+        Command.withDescription("List webhook requests"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookRequestList(input)),
+        ),
+      ),
+      Command.make("get", WebhookRequestGet).pipe(
+        Command.withDescription("Show one request with its headers and body"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.WebhookRequestGet(input)),
         ),
       ),
     ]),
