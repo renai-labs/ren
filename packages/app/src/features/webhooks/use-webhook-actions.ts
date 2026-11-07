@@ -16,8 +16,7 @@ export function useWebhookActions() {
       update.mutateAsync(
         { id: webhook.id, mode: options.live ? "live" : "listening" },
         {
-          onSuccess: () =>
-            toast.success(options.live ? `${webhook.name} starts chats` : `${webhook.name} is listening`),
+          onSuccess: () => toast.success(options.live ? `${webhook.name} is live` : `${webhook.name} is in debug mode`),
           onError: (error) => toast.error("Couldn’t switch the webhook", { description: errorMessage(error) }),
         },
       ),

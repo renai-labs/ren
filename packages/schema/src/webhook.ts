@@ -19,7 +19,7 @@ export type RequestID = typeof RequestID.Type
 export const Mode = Schema.Literals(["listening", "live"]).annotate({
   identifier: "Webhook.Mode",
   description:
-    "`listening`: Ren records each request and starts no chat. `live`: the parser starts or continues chats.",
+    "`listening` (shown as Debug): Ren records each request and starts no session. `live`: the parser starts or continues sessions.",
 })
 export type Mode = typeof Mode.Type
 
@@ -91,7 +91,11 @@ export const Signature = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("stripe") }).annotate({
     description: "The stripe-signature header. Refuses a request older than 5 minutes.",
   }),
-]).annotate({ identifier: "Webhook.Signature", description: "How Ren checks the sender of a request." })
+]).annotate({
+  identifier: "Webhook.Signature",
+  description:
+    "How Ren checks the sender. Use `hmac` with the provider’s signature header when the provider signs requests. Use `none` only when the provider cannot sign.",
+})
 export type Signature = typeof Signature.Type
 
 export interface Parser extends Schema.Schema.Type<typeof Parser> {}
@@ -100,7 +104,7 @@ export const Parser = Schema.Struct({
   handshake: Schema.optionalKey(
     Expression.annotate({
       description:
-        "Before the signature check: a map { status, contentType?, body } answers the request; null goes on.",
+        "The answer to a provider that checks the URL before it sends events: a map { status, contentType?, body }. Null for other requests. Runs before the signature check.",
     }),
   ),
   signedHandshake: Schema.optionalKey(
@@ -109,15 +113,24 @@ export const Parser = Schema.Struct({
     }),
   ),
   filter: Schema.optionalKey(
-    Expression.annotate({ description: "A bool. Without it, every request starts or continues a chat." }),
+    Expression.annotate({
+      description:
+        "A bool. A request starts or continues a session only when it is true. For example: `body.action` is create. Without it, every request does.",
+    }),
   ),
   eventId: Schema.optionalKey(
-    Expression.annotate({ description: "A string: the provider’s ID of the event. Ren drops a duplicate." }),
+    Expression.annotate({
+      description:
+        "A string that is unique per delivery, usually a delivery-ID header, such as the linear-delivery header of Linear. Ren ignores a request whose value it has already seen. Never use a timestamp.",
+    }),
   ),
   threadKey: Schema.optionalKey(
-    Expression.annotate({ description: "A string. Requests with the same key go into the same chat." }),
+    Expression.annotate({
+      description:
+        "A string. Requests with the same value continue one session, such as an issue ID or an email address.",
+    }),
   ),
-  title: Schema.optionalKey(Expression.annotate({ description: "A string: the title of a new chat." })),
+  title: Schema.optionalKey(Expression.annotate({ description: "A string: the title of a new session." })),
 }).annotate({ identifier: "Webhook.Parser", description: "The CEL expressions that tell what a request does." })
 
 export const SecretSource = Schema.Literals(["ren", "provider"]).annotate({
@@ -190,7 +203,7 @@ export const Info = Schema.Struct({
   fallbackUserId: Schema.NullOr(Auth.UserID).annotate({
     description: "Chats run as this person when the owner left the space.",
   }),
-  agentId: Schema.NullOr(Agent.ID).annotate({ description: "Null: chats run on ren." }),
+  agentId: Schema.NullOr(Agent.ID).annotate({ description: "Null: a new chat gets the space’s default settings." }),
   mode: Mode,
   modeReason: Schema.NullOr(ModeReason),
   message: Schema.NullOr(Schema.String).annotate({ description: "Null when the app no longer has the preset." }),
@@ -217,7 +230,9 @@ export const CreateInput = Schema.Struct({
   slug: Schema.optional(Primitive.Slug).annotate({
     description: "Without it, Ren makes one from the name and adds -2, -3, … when it is taken.",
   }),
-  agentId: Schema.optional(Agent.ID).annotate({ description: "An agent of the space. Without it, ren." }),
+  agentId: Schema.optional(Agent.ID).annotate({
+    description: "An agent of the space. Without it, the space’s default settings.",
+  }),
 }).annotate({
   identifier: "Webhook.CreateInput",
   description: "A new webhook is listening: it records requests and starts no chat until it is live.",
@@ -291,7 +306,7 @@ export const Replayed = Schema.Struct({
 }).annotate({ identifier: "Webhook.Replayed" })
 
 const agentField = Schema.optionalKey(
-  Agent.Name.annotate({ description: "Without it, the webhook runs on the ren agent." }),
+  Agent.Name.annotate({ description: "Without it, a new chat gets the space’s default settings." }),
 )
 
 export interface CustomDeclaration extends Schema.Schema.Type<typeof CustomDeclaration> {}

@@ -269,21 +269,48 @@ export const layer = Layer.effect(
       return found.webhook
     })
 
-    const agentUsable = Effect.fnUntraced(function* (
+    const agentOf = Effect.fnUntraced(function* (
       transaction: Pick<Database.Transaction, "select">,
       placement: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
       agentId: NonNullable<Row["agent_id"]>,
     ) {
-      const found = yield* transaction
-        .select({ id: Database.Schema.agent.id })
+      return (yield* transaction
+        .select({ name: Database.Schema.agent.name, organizationId: Database.Schema.agent.organization_id })
         .from(Database.Schema.agent)
         .where(
           and(
             eq(Database.Schema.agent.id, agentId),
             AgentQueries.isUsableIn(placement.spaceId, placement.organizationId),
           ),
-        )
-      return found.length > 0
+        )).at(0)
+    })
+
+    const checkedAgent = Effect.fnUntraced(function* (
+      transaction: Pick<Database.Transaction, "select">,
+      placement: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
+      agentId: NonNullable<Row["agent_id"]>,
+    ) {
+      const found = yield* agentOf(transaction, placement, agentId)
+      if (!found) return yield* new Primitive.NotFound({ message: "Agent not found in this space." })
+      if (!found.organizationId)
+        return yield* new Primitive.Invalid({
+          message: `${found.name} is the space default. Leave the agent empty to use it.`,
+        })
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- An agent that creates a webhook without naming one passes on itself, unless it is a global agent: the space default runs then.
+    const agentForCreate = Effect.fnUntraced(function* (
+      transaction: Pick<Database.Transaction, "select">,
+      placement: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
+      named: Row["agent_id"] | undefined,
+      inherited: Row["agent_id"] | undefined,
+    ) {
+      if (named) {
+        yield* checkedAgent(transaction, placement, named)
+        return named
+      }
+      if (!inherited) return
+      return (yield* agentOf(transaction, placement, inherited))?.organizationId ? inherited : undefined
     })
 
     const reachedPreset = Effect.fnUntraced(function* (
@@ -331,7 +358,7 @@ export const layer = Layer.effect(
         return Option.some("The owner is not in the space.")
       if (
         row.agent_id &&
-        !(yield* agentUsable(transaction, { organizationId: row.organization_id, spaceId: row.space_id }, row.agent_id))
+        !(yield* agentOf(transaction, { organizationId: row.organization_id, spaceId: row.space_id }, row.agent_id))
       )
         return Option.some("Pick an agent of the space first.")
       return Option.none<string>()
@@ -554,7 +581,7 @@ export const layer = Layer.effect(
       create: Effect.fn("Webhooks.create")(function* (actor: Actor.Info, input: Webhook.CreateInput) {
         const source = input.source
         if (source._tag === "custom") yield* checked(source.parser)
-        const agentId = input.agentId ?? (actor.agent?.spaceId === input.spaceId ? actor.agent.agentId : undefined)
+        const inherited = actor.agent?.spaceId === input.spaceId ? actor.agent.agentId : undefined
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const space = (yield* transaction
@@ -578,8 +605,7 @@ export const layer = Layer.effect(
             )
               return yield* new Primitive.Forbidden({ message: "You cannot add webhooks to this space." })
             const placement = { organizationId: actor.organizationId, spaceId: input.spaceId }
-            if (agentId && !(yield* agentUsable(transaction, placement, agentId)))
-              return yield* new Primitive.NotFound({ message: "Agent not found." })
+            const agentId = yield* agentForCreate(transaction, placement, input.agentId, inherited)
             const preset = source._tag === "preset" ? yield* reachedPreset(transaction, placement, source) : undefined
             const taken = yield* transaction
               .select({ slug: webhook.slug })
@@ -633,15 +659,12 @@ export const layer = Layer.effect(
             const fixed = fixedOf(source, input)
             if (Option.isSome(fixed))
               return yield* invalid(`The ${fixed.value} of a preset comes from its app.`, fixed.value)
-            if (
-              input.agentId &&
-              !(yield* agentUsable(
+            if (input.agentId)
+              yield* checkedAgent(
                 transaction,
                 { organizationId: row.organization_id, spaceId: row.space_id },
                 input.agentId,
-              ))
-            )
-              return yield* new Primitive.NotFound({ message: "Agent not found." })
+              )
             const ownerId = ownerAfter(row, input, actor)
             if (input.mode === "live") {
               // ast-grep-ignore: no-nullish-comparison, -- null clears the agent; undefined leaves it

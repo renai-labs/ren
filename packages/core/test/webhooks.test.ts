@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
+import { Agent } from "@ren/schema/agent"
 import { Session } from "@ren/schema/session"
 import { Webhook } from "@ren/schema/webhook"
 import { eq } from "drizzle-orm"
@@ -40,6 +41,36 @@ describe("Webhooks", () => {
       expect(created.url).toMatch(new RegExp(`^https://ren\\.test/webhooks/${created.id}/[A-Za-z0-9_-]{32,}$`, "u"))
       expect(yield* webhooks.get(t.bob, created.id)).toEqual(created)
     }),
+  )
+
+  it.live(
+    "a global agent is never stored: naming it is refused, and a chat on it creates a webhook on the space default",
+    () =>
+      Effect.gen(function* () {
+        const webhooks = yield* Webhooks.Service
+        const database = yield* Database.Service
+        const t = yield* WebhookFixture.team
+        const ren = Agent.ID.create()
+        yield* database.db.insert(Database.Schema.agent).values({ id: ren, name: "ren", is_subagent: false })
+        const named = yield* Effect.flip(webhooks.create(t.ada, { ...WebhookFixture.signups(t.spaceId), agentId: ren }))
+        expect(named).toMatchObject({
+          _tag: "Primitive.Invalid",
+          message: "ren is the space default. Leave the agent empty to use it.",
+        })
+        const unknown = yield* Effect.flip(
+          webhooks.create(t.ada, { ...WebhookFixture.signups(t.spaceId), agentId: Agent.ID.create() }),
+        )
+        expect(unknown).toMatchObject({ _tag: "Primitive.NotFound", message: "Agent not found in this space." })
+        const inChat: Actor.Info = {
+          ...t.ada,
+          agent: { agentId: ren, sessionId: Session.ID.create(), spaceId: t.spaceId, fence: null },
+        }
+        const created = yield* webhooks.create(inChat, WebhookFixture.signups(t.spaceId))
+        expect(created.agentId).toBeNull()
+        expect(yield* Effect.flip(webhooks.update(t.ada, created.id, { agentId: ren }))).toMatchObject({
+          _tag: "Primitive.Invalid",
+        })
+      }),
   )
 
   it.live("a parser expression that does not compile is refused, with its field", () =>

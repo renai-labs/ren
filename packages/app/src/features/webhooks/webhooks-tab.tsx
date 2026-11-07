@@ -45,7 +45,7 @@ function WebhookRow(props: { webhook: WebhookInfo; spaceId: string; owner: strin
   const live = webhook.mode === "live"
   const name = nameOf(webhook)
   return (
-    <TableRow>
+    <TableRow className="relative cursor-pointer">
       <TableCell className="max-w-80">
         <span className="flex min-w-0 items-start gap-2.5">
           {webhook.modeReason ? (
@@ -57,7 +57,7 @@ function WebhookRow(props: { webhook: WebhookInfo; spaceId: string; owner: strin
             <Link
               to="/spaces/$spaceId/webhooks/$webhookId"
               params={{ spaceId: props.spaceId, webhookId: webhook.id }}
-              className="truncate hover:underline"
+              className="truncate outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
             >
               {name}
             </Link>
@@ -76,12 +76,13 @@ function WebhookRow(props: { webhook: WebhookInfo; spaceId: string; owner: strin
           checked={live}
           disabled={!live && !Webhooks.canGoLive(webhook)}
           onCheckedChange={(checked) => void actions.setLive(webhook, { live: checked })}
-          aria-label={`Start chats from ${name}`}
+          aria-label={`Make ${name} live`}
           title={Webhooks.canGoLive(webhook) ? undefined : "Set the signing secret first"}
+          className="relative"
         />
       </TableCell>
       <TableCell>
-        <span className="flex justify-end">
+        <span className="relative flex justify-end">
           <RowMenu
             label={`${name} actions`}
             className="flex text-muted-foreground"
@@ -103,7 +104,7 @@ function WebhookRow(props: { webhook: WebhookInfo; spaceId: string; owner: strin
                 onSelect: () => actions.archive(webhook),
                 confirm: {
                   title: `Archive ${name}?`,
-                  description: "Its URL stops working. Chats it started stay.",
+                  description: "Its URL stops working. Sessions it started stay.",
                   action: "Archive",
                 },
               },
@@ -136,20 +137,23 @@ function PresetRow(props: { app: AppInfo; preset: string; turnedOn: WebhookInfo 
       },
     )
   return (
-    <TableRow>
-      <TableCell className="max-w-64 truncate">{label}</TableCell>
+    <TableRow className={props.turnedOn ? "relative cursor-pointer" : undefined}>
+      <TableCell className="max-w-64 truncate">
+        {props.turnedOn ? (
+          <Link
+            to="/spaces/$spaceId/webhooks/$webhookId"
+            params={{ spaceId: props.spaceId, webhookId: props.turnedOn.id }}
+            className="outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+          >
+            {label}
+          </Link>
+        ) : (
+          label
+        )}
+      </TableCell>
       <TableCell className="text-muted-foreground">{found.description}</TableCell>
       <TableCell>
-        <span className="flex items-center justify-end gap-2">
-          {props.turnedOn ? (
-            <Link
-              to="/spaces/$spaceId/webhooks/$webhookId"
-              params={{ spaceId: props.spaceId, webhookId: props.turnedOn.id }}
-              className="text-sm hover:underline"
-            >
-              Open
-            </Link>
-          ) : null}
+        <span className="relative flex items-center justify-end gap-2">
           <Switch
             checked={Boolean(props.turnedOn)}
             disabled={create.isPending}
@@ -266,20 +270,25 @@ export function WebhooksTab(props: { spaceId: string }) {
   )
 }
 
-export function AgentSelect(props: { spaceId: string; value: string; onChange: (agentId: string) => void }) {
+export function AgentSelect(props: {
+  spaceId: string
+  value: string
+  onChange: (agentId: string) => void
+  className?: string
+}) {
   const { api } = RouterContext.useRouterContext()
   const agents = useQuery(
     api.agent.list.queryOptions({ page: 1, pageSize: pickerPageSize, isSubagent: false, spaceId: props.spaceId }),
   )
   const options = [
-    { value: Webhooks.ren, label: "ren" },
+    { value: Webhooks.defaultAgent, label: "Space default" },
     ...(agents.data?.items ?? [])
       .filter((agent) => agent.organizationId !== null)
       .map((agent) => ({ value: agent.id, label: agent.name })),
   ]
   return (
     <Select items={options} value={props.value} onValueChange={(value) => props.onChange(String(value))}>
-      <SelectTrigger aria-label="Agent" className="w-full">
+      <SelectTrigger aria-label="Agent" className={props.className ?? "w-full"}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -301,7 +310,7 @@ function CreateSheet(props: { open: boolean; spaceId: string; onClose: () => voi
   const create = useMutation(api.webhook.create.mutationOptions())
   const [name, setName] = useState("")
   const [message, setMessage] = useState("")
-  const [agent, setAgent] = useState(Webhooks.ren)
+  const [agent, setAgent] = useState(Webhooks.defaultAgent)
   const [error, setError] = useState("")
   const save = () => {
     if (name.trim() === "") return setError("Name the webhook.")
@@ -337,7 +346,9 @@ function CreateSheet(props: { open: boolean; spaceId: string; onClose: () => voi
       <SheetContent>
         <SheetHeader>
           <SheetTitle>Create webhook</SheetTitle>
-          <SheetDescription>A URL that starts chats in this space when another app sends a request.</SheetDescription>
+          <SheetDescription>
+            A URL that starts sessions in this space when another app sends a request.
+          </SheetDescription>
         </SheetHeader>
         <form
           className="contents"
