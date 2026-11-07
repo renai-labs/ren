@@ -4,6 +4,7 @@ import { Schema } from "effect"
 import { Shared } from "./lib/shared.js"
 import { SyncStorage } from "./lib/sync-storage.js"
 import { TestCell } from "./lib/test-cell.js"
+import { OpenCodeSnapshot } from "./lib/opencode-snapshot.js"
 
 setDefaultTimeout(120_000)
 
@@ -64,6 +65,37 @@ const alarmRead = async (
 
 const ids = async (opened: Opened) => (await opened.messages()).map((message) => message.id)
 
+const snapshots = new URL("./fixtures/databases/", import.meta.url).pathname
+for (const file of new Bun.Glob("*.json").scanSync(snapshots)) {
+  const snapshot = Schema.decodeUnknownSync(OpenCodeSnapshot.Snapshot)(await Bun.file(`${snapshots}${file}`).json())
+  test(`a Durable Object opens the database recorded on OpenCode ${snapshot.version} and keeps its messages through a write`, async () => {
+    const opened = await TestCell.make(cell)
+    const seeded = await opened.request("/test/seed-database", { method: "POST", body: JSON.stringify(snapshot) })
+    expect(seeded.status).toBe(204)
+    const expected = snapshot.tables.find((table) => table.name === "session_message")?.rows ?? []
+    const before = Schema.decodeUnknownSync(Schema.Struct({ messages: Schema.Array(Sync.OpenCodeMessageRow) }))(
+      await (await opened.request("/test/rows")).json(),
+    ).messages
+    expect(before).toHaveLength(expected.length)
+    await opened.opencode.session.update({ sessionID: snapshot.root, title: "Migrated database" })
+    const after = Schema.decodeUnknownSync(Schema.Struct({ messages: Schema.Array(Sync.OpenCodeMessageRow) }))(
+      await (await opened.request("/test/rows")).json(),
+    ).messages
+    expect(after).toEqual(before)
+    expect((await opened.opencode.session.get({ sessionID: snapshot.root })).title).toBe("Migrated database")
+    expect(
+      (await opened.opencode.message.list({ sessionID: snapshot.root, order: "asc", limit: 200 })).data.map(
+        (message) => message.id,
+      ),
+    ).toEqual(
+      before
+        .filter((message) => message.session_id === snapshot.root)
+        .toSorted((left, right) => left.seq - right.seq || left.id.localeCompare(right.id))
+        .map((message) => message.id),
+    )
+  })
+}
+
 describe("the sync read of the OpenCode tables in a Durable Object", () => {
   test("S2-05: before OpenCode opens the first time, the read finds no OpenCode tables and does not fail", async () => {
     const opened = await TestCell.make(cell)
@@ -108,12 +140,14 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
       Schema.decodeUnknownSync(Schema.Struct({ isKept: Schema.Boolean }))(
         await (
           await opened.request(
-            `/test/older-harness?session=${opened.id}&linked&ren:harness-version=${older}${flushed ? `&ren:flushed-version=${older}` : ""}`,
+            `/test/older-harness?session=${opened.id}&ren:harness-version=${older}${flushed ? `&ren:flushed-version=${older}` : ""}`,
           )
         ).json(),
       ).isKept
     expect(await boot(false)).toBe(true)
-    expect(await boot(true)).toBe(false)
+    const kept = await boot(true)
+    if (kept) throw new Error(await cell.logs())
+    expect(kept).toBe(false)
   })
 
   test("S2-04: PRAGMA table_info of session_v2 and session_message lists the columns that sync reads", async () => {
