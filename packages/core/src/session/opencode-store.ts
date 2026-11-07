@@ -24,6 +24,23 @@ export const summary = {
   updatedAt: Database.Schema.opencode_session.time_updated,
 }
 
+const data = sql`${Database.Schema.opencode_message.data}::jsonb`
+
+const filesResetSource = "ren.files-reset"
+
+export const message = {
+  text: sql<string | null>`(case ${Database.Schema.opencode_message.type}
+    when 'user' then ${data} ->> 'text'
+    when 'assistant' then jsonb_path_query_array(${data}, '$.content[*] ? (@.type == "text").text')::text
+  end)`,
+  isFromChannel: sql<boolean>`(${data} -> 'metadata' -> 'channel') is not null`,
+  errorType: sql<string | null>`${data} -> 'error' ->> 'type'`,
+  isFilesReset: sql<boolean>`coalesce(${data} -> 'metadata' ->> 'source' = ${filesResetSource}, false)`,
+  createdAt: sql<string | null>`(${data} -> 'time' ->> 'created')::bigint`,
+}
+
+export const inboxIsFilesReset = sql<boolean>`coalesce(${Database.Schema.opencode_inbox.payload}::jsonb -> 'metadata' ->> 'source' = ${filesResetSource}, false)`
+
 export const search = (text: string | undefined) => {
   if (!text) return
   const pattern = `%${text.replaceAll(/[\\%_]/gu, "\\$&")}%`
@@ -33,12 +50,7 @@ export const search = (text: string | undefined) => {
       select 1 from ${Database.Schema.opencode_message}
       where ${Database.Schema.opencode_message.session_id} = ${Database.Schema.agent_session.id}
         and ${Database.Schema.opencode_message.removed_at} is null
-        and (case ${Database.Schema.opencode_message.type}
-          when 'user' then ${Database.Schema.opencode_message.data}::jsonb ->> 'text'
-          when 'assistant' then jsonb_path_query_array(
-            ${Database.Schema.opencode_message.data}::jsonb, '$.content[*] ? (@.type == "text").text'
-          )::text
-        end) ilike ${pattern}
+        and ${message.text} ilike ${pattern}
     )`,
   )
 }
@@ -91,7 +103,7 @@ export const keepMessages = Effect.fnUntraced(function* (
 export const filesResetAt = Effect.fnUntraced(function* (transaction: Database.Transaction, sessionId: Session.ID) {
   const delivered = yield* transaction
     .select({
-      at: sql<string | null>`max((${Database.Schema.opencode_message.data}::jsonb -> 'time' ->> 'created')::bigint)`,
+      at: sql<string | null>`max(${message.createdAt})`,
     })
     .from(Database.Schema.opencode_message)
     .where(
@@ -99,7 +111,7 @@ export const filesResetAt = Effect.fnUntraced(function* (transaction: Database.T
         eq(Database.Schema.opencode_message.session_id, sessionId),
         eq(Database.Schema.opencode_message.type, "synthetic"),
         isNull(Database.Schema.opencode_message.removed_at),
-        sql`${Database.Schema.opencode_message.data}::jsonb -> 'metadata' ->> 'source' = 'ren.files-reset'`,
+        message.isFilesReset,
       ),
     )
   const waiting = yield* transaction
@@ -109,7 +121,7 @@ export const filesResetAt = Effect.fnUntraced(function* (transaction: Database.T
       and(
         eq(Database.Schema.opencode_inbox.session_id, sessionId),
         eq(Database.Schema.opencode_inbox.type, "synthetic"),
-        sql`${Database.Schema.opencode_inbox.payload}::jsonb -> 'metadata' ->> 'source' = 'ren.files-reset'`,
+        inboxIsFilesReset,
       ),
     )
   const times = [delivered.at(0)?.at, waiting.at(0)?.at].flatMap((at) => (at ? [Number(at)] : []))

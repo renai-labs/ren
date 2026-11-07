@@ -11,6 +11,7 @@ import { ChannelNotice } from "./channel-notice.js"
 import { ChannelProvider } from "./channel-provider.js"
 import { ChannelThreads } from "./channel-threads.js"
 import { DurableRunner } from "./durable-runner.js"
+import { OpenCodeStore } from "./session/opencode-store.js"
 import { SessionRunner } from "./session/runner.js"
 
 export interface Interface {
@@ -56,8 +57,8 @@ export const layer = Layer.effect(
       database.db
         .select({
           id: message.id,
-          fromChannel: sql<boolean>`(${message.data}::jsonb -> 'metadata' -> 'channel') is not null`,
-          errorType: sql<string | null>`${message.data}::jsonb -> 'error' ->> 'type'`,
+          fromChannel: OpenCodeStore.message.isFromChannel,
+          errorType: OpenCodeStore.message.errorType,
         })
         .from(message)
         .where(and(eq(message.session_id, sessionId), eq(message.type, type), isNull(message.removed_at)))
