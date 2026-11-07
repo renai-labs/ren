@@ -380,7 +380,7 @@ const handlers = Layer.mergeAll(
           ),
         )
         .handle("session.command", (request) =>
-          run((harness) => harness.chat.command(request.params.sessionID, request.payload).pipe(notFound)),
+          run((harness) => harness.chat.command(request.params.sessionID, request.payload).pipe(notFound, rejected)),
         )
         .handle("session.model.switch", (request) =>
           run((harness) =>

@@ -416,13 +416,13 @@ export const SessionGroup = HttpApiGroup.make("session")
       params,
       payload: CommandInput,
       success: HttpApiSchema.NoContent,
-      error: NotFoundError,
+      error: [NotFoundError, InvalidRequestError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "session.command",
         summary: "Run a command",
         description:
-          "Run a command from `command.list` with its arguments. The command sends its prompt to the session like `session.prompt`, under an ID the session picks. A command the session does not know is not found.",
+          "Run a command from `command.list` with its arguments. The command sends its prompt to the session like `session.prompt`, under an ID the session picks. A command the session does not know is not found; a command that fails is an invalid request.",
       }),
     ),
   )

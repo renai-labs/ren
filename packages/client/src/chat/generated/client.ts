@@ -491,7 +491,7 @@ export function make(options: ClientOptions) {
               skills: input["skills"],
             },
             successStatus: 204,
-            declaredStatuses: [403, 404, 503],
+            declaredStatuses: [400, 403, 404, 503],
             empty: true,
           },
           requestOptions,
