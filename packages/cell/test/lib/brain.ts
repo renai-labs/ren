@@ -33,6 +33,7 @@ import { ModelStore } from "../../src/model-store.js"
 import { Restore } from "../../src/restore.js"
 import { Sync } from "../../src/sync.js"
 import { ModelsTest } from "./models.js"
+import { OpenCodeDriver } from "./opencode-driver.js"
 import { Shared } from "./shared.js"
 import { TestToken } from "./token.js"
 
@@ -249,6 +250,7 @@ export const make = Effect.fnUntraced(function* (
       Effect.promise(() => web.fetch(new Request(`http://cell${path}`, init))),
     store: Context.get(services, ModelStore.Service),
     opencode,
+    driver: OpenCodeDriver.make(opencode, directory),
     harness: host.fetch,
     chat,
     chatAs,

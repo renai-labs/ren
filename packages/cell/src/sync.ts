@@ -1,6 +1,6 @@
 export * as Sync from "./sync.js"
 
-import { OpenCodeSync } from "@ren/brain/opencode-sync"
+import { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
 import { Session } from "@ren/schema/session"
 import { Clock, Context, Duration, Effect, Layer, Option, Random, Ref, Schema, type Scope } from "effect"
 import { FetchHttpClient } from "effect/http"

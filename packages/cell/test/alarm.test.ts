@@ -17,7 +17,7 @@ import {
   Stream,
 } from "effect"
 import { TestClock } from "effect/testing"
-import { OpenCodeSync } from "@ren/brain/opencode-sync"
+import { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
 import { Cell } from "../src/cell.js"
 import { Harness } from "../src/harness/harness.js"
 import { OpenCodeChat } from "../src/harness/opencode/chat.js"

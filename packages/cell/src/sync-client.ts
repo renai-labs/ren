@@ -1,6 +1,6 @@
 export * as SyncClient from "./sync-client.js"
 
-import { OpenCodeSync } from "@ren/brain/opencode-sync"
+import { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
 import { SyncApi } from "@ren/host-api/sync-api"
 import { Effect } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"

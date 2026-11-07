@@ -17,19 +17,28 @@ const platformImports = {
   regex: `^(node:|bun(:|$)|(${builtinModules.filter((name) => !name.startsWith("node:")).join("|")})(/|$))`,
   message: "This module is browser-safe. Node and Bun APIs belong in the host or platform layer.",
 }
+const only = (packages: ReadonlyArray<string>) => ["@ren/**", ...packages.map((name) => `!@ren/${name}/**`)]
 const chatImports = [
   vendored,
   platformImports,
-  {
-    regex: "^@ren/(?!schema(/|$)|protocol(/|$)|client(/|$))",
-    message: "Chat depends on schema, protocol and client only.",
-  },
+  { group: only(["schema", "protocol", "client"]), message: "Chat depends on schema, protocol and client only." },
 ]
-const packageBoundaries = [
+const cellImports = {
+  regex: "^@ren/(core|db|server)(/|$)",
+  group: ["@ren/protocol/**", "!@ren/protocol/chat", "!@ren/protocol/errors"],
+  message:
+    "The cell bundle runs in workerd. It depends only on schema, the Host API, the Environment API, brain and the Chat API.",
+}
+const packageBoundaries: ReadonlyArray<{
+  readonly files: ReadonlyArray<string>
+  readonly regex?: string
+  readonly group?: ReadonlyArray<string>
+  readonly message: string
+}> = [
   { files: ["packages/schema/**"], regex: "^@ren/", message: "Schema imports nothing from Ren." },
   {
     files: ["packages/schema/src/**"],
-    regex: `^@ren/|${platformImports.regex}`,
+    regex: platformImports.regex,
     message: "Schema imports nothing from Ren and uses no Node or Bun APIs.",
   },
   {
@@ -39,18 +48,18 @@ const packageBoundaries = [
   },
   {
     files: ["packages/host-api/**"],
-    regex: "^@ren/(?!schema(/|$))",
+    group: only(["schema"]),
     message: "The Host API depends only on schema. It holds BrainApi and RenHostApi.",
   },
   {
     files: ["packages/environment-api/**"],
-    regex: "^@ren/(?!schema(/|$))",
+    group: only(["schema"]),
     message:
       "The Environment API depends only on schema. Ren signs its tokens, a brain calls it and an executor serves it.",
   },
   {
     files: ["packages/brain/**"],
-    regex: "^@ren/(?!schema(/|$)|environment-api(/|$)|executor(/|$))",
+    group: only(["schema", "environment-api", "executor"]),
     message:
       "Brain code runs on every host. It depends only on schema and the Environment API; tests may start an executor.",
   },
@@ -61,14 +70,14 @@ const packageBoundaries = [
   },
   {
     files: ["packages/executor/**"],
-    regex: "^@ren/(?!schema(/|$)|environment-api(/|$)|telemetry(/|$))",
+    group: only(["schema", "environment-api", "telemetry"]),
     message:
       "The executor runs on an environment's machine. It depends only on schema, telemetry and the Environment API.",
   },
   {
     files: ["packages/opencode-transcript/**"],
-    regex: "^@ren/(?!schema(/|$))",
-    message: "The OpenCode transcript translation depends only on schema and OpenCode's schema.",
+    group: only(["schema"]),
+    message: "Ren's OpenCode storage and transcript code depends only on schema and OpenCode.",
   },
   {
     files: ["packages/db/**"],
@@ -82,25 +91,19 @@ const packageBoundaries = [
   },
   {
     files: ["packages/core/src/**"],
-    regex: "^(@ren/(protocol|server|opencode-transcript)(/|$)|@opencode/)",
+    regex: "^@ren/opencode-transcript(/|$)",
     message:
-      "Core never knows about HTTP or a harness's packages. Take an Actor instead of protocol services; take a harness's code through a registry such as TranscriptCodec.",
+      "Core never knows about a harness's packages. Take a harness's code through a registry such as TranscriptCodec.",
   },
-  {
-    files: ["packages/cell/**"],
-    regex: "^@ren/((core|db|server)(/|$)|protocol(?!/(chat|errors)$))",
-    message:
-      "The cell bundle runs in workerd. It depends only on schema, the Host API, the Environment API, brain and the Chat API.",
-  },
+  { files: ["packages/cell/**"], ...cellImports },
   {
     files: ["packages/cell/src/*.ts"],
-    regex: "^(@ren/((core|db|server|executor)(/|$)|protocol(?!/(chat|errors)$))|@opencode/)",
-    message:
-      "The cell host never imports a harness's packages; it reaches OpenCode through src/harness. The cell depends only on schema, the Host API, the Environment API, brain and the Chat API.",
+    regex: "^@ren/executor(/|$)",
+    message: "The cell host runs no executor. It reaches environments through the Environment API.",
   },
   {
     files: ["packages/cell/src/harness/**"],
-    regex: "^(@ren/(core|db|server|protocol|executor)(/|$)|cloudflare:)",
+    regex: "^(@ren/(protocol|executor)(/|$)|cloudflare:)",
     message:
       "A harness never uses Durable Object APIs; the host passes it storage and requests. The cell depends only on schema, the Host API, the Environment API and brain.",
   },
@@ -111,7 +114,8 @@ const packageBoundaries = [
   },
   {
     files: ["packages/chat/src/**"],
-    regex: `^@ren/(?!schema(/|$)|protocol(/|$)|client(/|$))|${platformImports.regex}`,
+    regex: platformImports.regex,
+    group: only(["schema", "protocol", "client"]),
     message:
       "The chat runtime runs on web, desktop and mobile. It depends on schema, protocol, client and effect, and on React only in src/react.ts.",
   },
@@ -127,6 +131,17 @@ const packageBoundaries = [
     message: "Util is browser-safe and knows nothing about Ren. It depends on effect only.",
   },
 ]
+
+const contains = (outer: string, inner: string) => outer.endsWith("/**") && inner.startsWith(outer.slice(0, -2))
+const inheritedPatterns = (boundary: (typeof packageBoundaries)[number]) =>
+  packageBoundaries.flatMap((each) =>
+    each === boundary || boundary.files.every((file) => each.files.some((outer) => contains(outer, file)))
+      ? [
+          ...(each.regex === undefined ? [] : [{ regex: each.regex, message: each.message }]),
+          ...(each.group === undefined ? [] : [{ group: [...each.group], message: each.message }]),
+        ]
+      : [],
+  )
 
 const reactApis = [
   "useMemo",
@@ -173,8 +188,12 @@ const browserPatterns = [
   },
   { regex: "^(moment|dayjs|date-fns|luxon)(/|$)", message: "Use the formatters in @ren/ui." },
   {
-    regex:
-      "^(@radix-ui|@headlessui|@mui|@chakra-ui|@mantine|@ark-ui|react-aria|react-aria-components)(/|$)|^@shadcn/(?!react/(message-scroller|questionnaire)$)",
+    regex: "^(@radix-ui|@headlessui|@mui|@chakra-ui|@mantine|@ark-ui|react-aria|react-aria-components)(/|$)",
+    message:
+      "Base UI is the only primitive library. @shadcn/react serves only the chat's message scroller and questionnaire.",
+  },
+  {
+    group: ["@shadcn/**", "!@shadcn/react/message-scroller", "!@shadcn/react/questionnaire"],
     message:
       "Base UI is the only primitive library. @shadcn/react serves only the chat's message scroller and questionnaire.",
   },
@@ -497,6 +516,7 @@ export default defineConfig({
     "unicorn/filename-case": ["error", { case: "kebabCase" }],
     "ren/no-comments": "error",
     "ren/no-node-modules-import": "error",
+    "ren/opencode-boundary": "error",
     "eslint/no-console": "error",
     "eslint/require-yield": "off",
 
@@ -649,12 +669,9 @@ export default defineConfig({
     },
 
     ...packageBoundaries.map((boundary) => ({
-      files: boundary.files,
+      files: [...boundary.files],
       rules: {
-        "no-restricted-imports": [
-          "error",
-          { patterns: [{ regex: boundary.regex, message: boundary.message }, vendored] },
-        ],
+        "no-restricted-imports": ["error", { patterns: [...inheritedPatterns(boundary), vendored] }],
       },
     })),
     {

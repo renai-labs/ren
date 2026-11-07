@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { SQL } from "bun"
-import { OpenCode } from "@opencode/client"
 import { hostTokenHeader } from "@ren/host-api/brain-api"
 import { Sync } from "@ren/schema/sync"
-import { Celld, Shared, TestToken } from "@ren/cell/testing"
+import { Celld, OpenCodeDriver, Shared, TestToken } from "@ren/cell/testing"
 import { Brains } from "@ren/core/brains"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
@@ -82,7 +81,7 @@ const setup = Effect.fnUntraced(function* () {
   const id = Session.ID.create()
   const brainId = Brain.ofSession(id)
   const client = TestToken.basic(yield* sign({ scope: "server", brain: brainId, gen: 1, exp: seconds(3600) }))
-  const opencode = OpenCode.make({ baseUrl: celld().url, headers: { authorization: client } })
+  const driver = yield* OpenCodeDriver.remote(celld().url, { authorization: client }, "/workspace")
   const commits = yield* Queue.unbounded<void>()
   proxy.observe((request, status) => {
     if (request.path.startsWith(uploads(id)) && request.path.endsWith("/commit") && status < 300)
@@ -96,7 +95,7 @@ const setup = Effect.fnUntraced(function* () {
       messages: SyncTest.sortRows(rows.messages, SyncTest.messageKey),
     }
   })
-  const idle = Effect.promise(() => opencode.session.wait({ sessionID: id }))
+  const idle = driver.wait(id)
   const message = (text: string) => ({
     messageId: Session.MessageID.create(),
     prompt: { text },
@@ -130,7 +129,7 @@ const setup = Effect.fnUntraced(function* () {
       ),
     )
   }
-  return { proxy, owner, brain, brainId, id, client, opencode, local, idle, message, create, held, converged }
+  return { proxy, owner, brain, brainId, id, client, driver, local, idle, message, create, held, converged }
 })
 
 const restart = Effect.promise(async () => {
@@ -245,7 +244,7 @@ describe("cell sync", () => {
           after: async (response) =>
             Effect.runPromise(Deferred.succeed(late, { status: response.status, body: await response.json() })),
         })
-        yield* Effect.promise(() => cell.opencode.session.update({ sessionID: cell.id, title: "Renamed" }))
+        yield* cell.driver.rename(cell.id, "Renamed")
         yield* Deferred.await(entered)
         yield* restart
         const synced = yield* cell.converged((rows) => rows.sessions.every((session) => session.title === "Renamed"))
@@ -266,9 +265,7 @@ describe("cell sync", () => {
           fetch(`${celld().url}/ren/state`, { headers: { authorization: cell.client, [hostTokenHeader]: expired } }),
         )
         expect(greeted.status).toBe(200)
-        yield* Effect.promise(() =>
-          cell.opencode.session.create({ id: cell.id, location: { directory: "/workspace" } }),
-        )
+        yield* cell.driver.create({ id: cell.id })
         expect(yield* SyncTest.remote(cell.id)).toEqual({ sessions: [], messages: [] })
         expect(yield* cell.brain.flush(cell.id)).toEqual({ drained: true })
         expect(yield* SyncTest.remote(cell.id)).toEqual(yield* cell.local)

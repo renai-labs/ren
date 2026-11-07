@@ -1,5 +1,5 @@
 import { expect } from "bun:test"
-import { OpenCodeSync } from "@ren/brain/opencode-sync"
+import { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
 import { testEffect } from "@ren/executor/testing"
 import { Duration, Effect, Fiber, Layer, Option, Random } from "effect"
 import { TestClock } from "effect/testing"

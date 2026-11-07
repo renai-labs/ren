@@ -42,7 +42,6 @@
     "tldts": "catalog:"
   },
   "devDependencies": {
-    "@opencode/client": "catalog:",
     "@ren/brain": "workspace:*",
     "@ren/cell": "workspace:*",
     "@ren/environment-api": "workspace:*",

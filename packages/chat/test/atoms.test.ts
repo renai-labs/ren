@@ -1,5 +1,4 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
-import { SessionID } from "@opencode/schema/session-id"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -185,7 +184,7 @@ test("the shell output atom reads a shell's output through the root session", ()
       made.atoms.status(brain.id),
       (value) => AsyncResult.isSuccess(value) && value.value === "connected",
     )
-    yield* brain.opencode.session.shell({ sessionID: SessionID.make(brain.id), command: "printf 'hello world'" })
+    yield* brain.driver.shell(brain.id, "printf 'hello world'")
     const state = yield* made.until(
       made.atoms.state(brain.id),
       (value) =>
