@@ -108,6 +108,8 @@ const layer = (environmentOf: (workspaceId: Workspace.ID) => ShellEnvironment) =
         yield* Deferred.fail(command.done, new NotFoundError({ id }))
         // oxlint-disable-next-line ren/no-comments -- A frozen environment must not hold up an interrupt, so the file is deleted in the background.
         if (Option.isSome(environment)) runFork(environment.value.overrides.remove(command.file).pipe(Effect.ignore))
+        if (command.info.status === "running")
+          yield* bus.publish(publishable(Shell.Event.Exited), { id, status: "killed" })
         yield* bus.publish(publishable(Shell.Event.Deleted), { id })
       })
       const wait = Effect.fn("Shell.wait")(function* (id: Shell.ID) {
@@ -240,53 +242,57 @@ const layer = (environmentOf: (workspaceId: Workspace.ID) => ShellEnvironment) =
                   Effect.andThen(outputDone.open),
                 ),
               )
-              const finish = (
-                status: Shell.Info["status"],
-                exit?: number,
-                beforeWait: Effect.Effect<void> = Effect.void,
-                signal?: string,
-              ) =>
-                Effect.gen(function* () {
-                  if (command.info.status !== "running") return
-                  command.info = Struct.assign(command.info, {
-                    status,
-                    // ast-grep-ignore: no-nullish-comparison, -- exit code 0 is a value
-                    ...(exit !== undefined && { exit }),
-                    ...(signal && { signal }),
-                    time: Struct.assign(command.info.time, { completed: Date.now() }),
-                  })
-                  yield* beforeWait
-                  yield* outputDone.await
-                  yield* Deferred.succeed(command.done, command.info)
-                  yield* bus.publish(publishable(Shell.Event.Exited), {
-                    id,
-                    ...(Predicate.isNotUndefined(exit) && { exit }),
-                    status,
-                  })
-                  exitOrder.push(id)
-                  while (exitOrder.length > exitedLimit) {
-                    const oldest = exitOrder.at(0)
-                    if (!oldest) break
-                    yield* removeCommand(oldest)
-                  }
-                  const timeoutFiber = command.timeoutFiber
-                  command.timeout = undefined
-                  command.timeoutFiber = undefined
-                  if (timeoutFiber) yield* Fiber.interrupt(timeoutFiber)
+              const ended = Deferred.makeUnsafe<{
+                readonly status: "exited" | "timeout"
+                readonly exit?: number
+                readonly signal?: string
+                readonly completed: number
+              }>()
+              const end = (outcome: {
+                readonly status: "exited" | "timeout"
+                readonly exit?: number
+                readonly signal?: string
+              }) => Effect.suspend(() => Deferred.succeed(ended, { ...outcome, completed: Date.now() }))
+              const finish = Effect.gen(function* () {
+                const outcome = yield* Deferred.await(ended)
+                yield* outputDone.await
+                if (commands.get(id) !== command) return
+                command.info = Struct.assign(command.info, {
+                  status: outcome.status,
+                  ...(Predicate.isNotUndefined(outcome.exit) && { exit: outcome.exit }),
+                  ...(outcome.signal && { signal: outcome.signal }),
+                  time: Struct.assign(command.info.time, { completed: outcome.completed }),
                 })
+                yield* Deferred.succeed(command.done, command.info)
+                yield* bus.publish(publishable(Shell.Event.Exited), {
+                  id,
+                  ...(Predicate.isNotUndefined(outcome.exit) && { exit: outcome.exit }),
+                  status: outcome.status,
+                })
+                exitOrder.push(id)
+                while (exitOrder.length > exitedLimit) {
+                  const oldest = exitOrder.at(0)
+                  if (!oldest) break
+                  yield* removeCommand(oldest)
+                }
+                const timeoutFiber = command.timeoutFiber
+                command.timeout = undefined
+                command.timeoutFiber = undefined
+                if (timeoutFiber) yield* Fiber.interrupt(timeoutFiber)
+              })
               command.timeout = (duration) =>
                 Effect.gen(function* () {
+                  if (Deferred.isDoneUnsafe(ended)) return
                   if (command.timeoutFiber) yield* Fiber.interrupt(command.timeoutFiber)
                   command.timeoutFiber = undefined
-                  if (duration === 0 || command.info.status !== "running") return
+                  if (duration === 0) return
                   command.timeoutFiber = runFork(
                     Effect.sleep(Duration.millis(duration)).pipe(
-                      Effect.flatMap(() =>
-                        finish(
-                          "timeout",
-                          undefined,
-                          handle.kill({ forceKillAfter: Duration.seconds(3) }).pipe(Effect.ignore),
-                        ),
+                      Effect.andThen(
+                        Effect.gen(function* () {
+                          if (!(yield* end({ status: "timeout" }))) return
+                          runFork(handle.kill({ forceKillAfter: Duration.seconds(3) }).pipe(Effect.ignore))
+                        }).pipe(Effect.uninterruptible),
                       ),
                     ),
                   )
@@ -294,15 +300,14 @@ const layer = (environmentOf: (workspaceId: Workspace.ID) => ShellEnvironment) =
               yield* command.timeout(invocation.timeout)
               runFork(
                 handle.exitCode.pipe(
-                  Effect.flatMap((code) => finish("exited", code)),
+                  Effect.flatMap((code) => end({ status: "exited", exit: code })),
                   Effect.catch((error) =>
-                    finish(
-                      "exited",
-                      undefined,
-                      Effect.void,
-                      error.cause instanceof CrossSpawnSpawner.KilledBySignal ? error.cause.signal : undefined,
-                    ),
+                    end({
+                      status: "exited",
+                      ...(error.cause instanceof CrossSpawnSpawner.KilledBySignal && { signal: error.cause.signal }),
+                    }),
                   ),
+                  Effect.andThen(finish),
                 ),
               )
               yield* bus.publish(publishable(Shell.Event.Created), { info })
