@@ -14,7 +14,8 @@
     "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun ../../script/test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo -b",
-    "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts"
+    "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts",
+    "test:opencode": "REN_SLOW=1 bun ../../script/test.ts"
   },
   "dependencies": {
     "@ren/client": "workspace:*",
