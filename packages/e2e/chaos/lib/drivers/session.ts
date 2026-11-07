@@ -77,7 +77,11 @@ export const make = async (target: TestCell.Target, provider?: ModelProvider.Ins
     configureModels,
     messages: read,
     settled: async (ms = 30_000) => {
-      await Wait.deadline(`session ${cell.id} to settle`, ms, cell.opencode.session.wait({ sessionID: cell.id }))
+      await Wait.deadline(
+        `session ${cell.id} to settle`,
+        ms,
+        cell.opencode.experimental.session.wait({ sessionID: cell.id }),
+      )
       return read()
     },
     closed: (ms = 30_000) => cell.until((state) => Bun.deepEquals(state, cell.idle), ms),

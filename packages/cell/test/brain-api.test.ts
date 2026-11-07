@@ -50,7 +50,7 @@ test.each<[Session.Delivery, Array<string>]>([
         yield* brain.send(`second ${second.marker}`, { delivery })
         first.release()
         const sessionID = SessionID.make(brain.id)
-        yield* brain.opencode.session.wait({ sessionID })
+        yield* brain.opencode.experimental.session.wait({ sessionID })
         expect(second.calls[0]?.body.messages.map((item) => item.role).filter((role) => role !== "system")).toEqual(
           roles,
         )
@@ -102,13 +102,13 @@ it.live("start accepts its initial message after configuration and deduplicates 
     expect(call.tools).not.toContain("question")
     script.release()
     const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     const messages = (yield* brain.opencode.message.list({ sessionID })).data
     expect(messages.filter((message) => message.type === "user")).toMatchObject([
       { id: input.initialMessage.messageId, metadata: { userID: "user_initial" } },
     ])
     yield* brain.start(input)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     expect((yield* brain.opencode.message.list({ sessionID })).data).toEqual(messages)
     expect(script.calls).toHaveLength(1)
   }),
@@ -136,10 +136,10 @@ it.live("start with the same input on an imported session adds no message", () =
     yield* source.start(input)
     yield* source.send(`${Shared.stub().script().marker} first`)
     const sessionID = SessionID.make(source.id)
-    yield* source.opencode.session.wait({ sessionID })
-    const data = yield* source.opencode.session.export({ sessionID })
+    yield* source.opencode.experimental.session.wait({ sessionID })
+    const data = yield* source.opencode.experimental.session.export({ sessionID })
     const target = yield* BrainTest.make({ id: source.id })
-    yield* target.opencode.session.import({ ...data, location: data.info.location })
+    yield* target.opencode.experimental.session.import({ ...data, location: data.info.location })
     const messages = target.opencode.message.list({ sessionID }).pipe(Effect.map((page) => page.data))
     const before = yield* messages
     yield* target.start(input)
@@ -197,13 +197,13 @@ it.live("each send and each chat prompt checks Ren for changes before its turn",
     const started = yield* brain.pulls
     yield* brain.send(`sent ${Shared.stub().script().marker}`)
     expect(yield* brain.pulls).toBe(started + 1)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     yield* brain.chat.session["session.prompt"]({
       params: { sessionID: brain.id },
       payload: { id: SessionMessage.ID.create(), text: Shared.stub().script().marker, delivery: "steer" },
     })
     expect(yield* brain.pulls).toBe(started + 2)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
   }),
 )
 
@@ -248,7 +248,7 @@ it.live("a synthetic send starts a turn, shows as a notice in the transcript and
     yield* brain.send(`Reply in the thread. ${script.marker}`, input)
     expect((yield* Effect.promise(() => script.called())).text).toBe(`Reply in the thread. ${script.marker}`)
     const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     const page = yield* brain.chat.session["session.messages"]({ params: { sessionID: brain.id }, query: {} })
     expect(page.items.filter((message) => message.type === "synthetic" || message.type === "user")).toMatchObject([
       {
@@ -279,10 +279,10 @@ it.live(
       yield* Effect.promise(() => script.called())
       script.release()
       const sessionID = SessionID.make(brain.id)
-      yield* brain.opencode.session.wait({ sessionID })
+      yield* brain.opencode.experimental.session.wait({ sessionID })
       const before = (yield* brain.opencode.message.list({ sessionID })).data
       yield* brain.send(`once ${script.marker}`, input)
-      yield* brain.opencode.session.wait({ sessionID })
+      yield* brain.opencode.experimental.session.wait({ sessionID })
       expect((yield* brain.opencode.message.list({ sessionID })).data).toEqual(before)
       expect(before.find((message) => String(message.id) === messageId)).toMatchObject({
         type: "user",
@@ -299,7 +299,7 @@ it.live("non-interactive permissions and the Ren plugin reach the model", () =>
     yield* brain.start({ interactive: false })
     const script = Shared.stub().script()
     yield* brain.send(`tools ${script.marker}`)
-    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+    yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
     expect(
       script.calls[0]?.tools.filter((tool) =>
         ["read", "write", "edit", "patch", "glob", "grep", "shell", "question"].includes(tool),
@@ -308,7 +308,7 @@ it.live("non-interactive permissions and the Ren plugin reach the model", () =>
     yield* brain.start({ interactive: true })
     const interactive = Shared.stub().script()
     yield* brain.send(`interactive ${interactive.marker}`)
-    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+    yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
     expect(interactive.calls[0]?.tools).toContain("question")
   }),
 )
@@ -323,7 +323,7 @@ it.live("a busy start applies changes without interrupting the running turn", ()
     yield* brain.start({ title: "While busy" })
     script.release()
     const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     expect(yield* brain.opencode.session.get({ sessionID })).toMatchObject({
       title: "While busy",
       outcome: "succeeded",
@@ -342,7 +342,7 @@ it.live("a configuration replaces the brain's credentials", () =>
     yield* brain.configureModels({ stub: Shared.apiKey("new", expires + 1000) })
     const script = Shared.stub().script()
     yield* brain.send(`key ${script.marker}`)
-    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+    yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
     expect(script.calls[0]?.authorization).toBe("Bearer new")
     yield* brain.configureModels({ stub: Shared.apiKey("replacement") })
     expect((yield* brain.credentials.all()).map((credential) => credential.value)).toEqual([
@@ -385,7 +385,7 @@ it.live("an expiring key configured during a turn reaches its next model call", 
     yield* brain.configureModels({ stub: Shared.apiKey("second", expires + 1000) })
     yield* brain.send(`second ${second.marker}`)
     first.release()
-    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+    yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
     expect([first.calls[0]?.authorization, second.calls[0]?.authorization]).toEqual(["Bearer first", "Bearer second"])
   }),
 )
@@ -406,7 +406,7 @@ it.live("an expired key refuses start and send without a model call until a fres
     yield* brain.configureModels({ stub: Shared.apiKey("fresh", Date.now() + 3_600_000) })
     const fresh = Shared.stub().script()
     yield* brain.send(`fresh ${fresh.marker}`)
-    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+    yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
     expect(fresh.calls[0]?.authorization).toBe("Bearer fresh")
   }),
 )
@@ -452,11 +452,11 @@ it.live(
       yield* brain.start({ model: { endpointId: "stub", modelId: "stub-added", variant: "high" } })
       const script = Shared.stub().script()
       yield* brain.send(`added ${script.marker}`)
-      yield* brain.opencode.session.wait({ sessionID })
+      yield* brain.opencode.experimental.session.wait({ sessionID })
       yield* brain.start({ model: { endpointId: "later", modelId: "stub-model" } })
       const later = Shared.stub().script()
       yield* brain.send(`later ${later.marker}`)
-      yield* brain.opencode.session.wait({ sessionID })
+      yield* brain.opencode.experimental.session.wait({ sessionID })
       expect([...script.calls, ...later.calls].map((call) => [call.body.model, call.authorization])).toEqual([
         ["stub-added", "Bearer catalog-key"],
         ["stub-model", "Bearer later"],
@@ -492,7 +492,7 @@ it.live("an anthropic endpoint becomes a provider with its efforts as variants, 
     yield* brain.start({ model: { endpointId: "gateway-anthropic", modelId: "stub-claude" } })
     const script = Shared.stub().script()
     yield* brain.send(`anthropic ${script.marker}`)
-    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+    yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
     expect(script.calls.map((call) => [call.path, call.authorization, call.apiKey])).toEqual([
       ["/v1/messages", "Bearer anthropic-key", null],
     ])
@@ -542,11 +542,11 @@ it.live("a model with its own protocol is called with it, not with its endpoint'
     yield* brain.start({ model: { endpointId: "gateway", modelId: "stub-claude" } })
     const own = Shared.stub().script()
     yield* brain.send(`own ${own.marker}`)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     yield* brain.start({ model: { endpointId: "gateway", modelId: "stub-model" } })
     const inherited = Shared.stub().script()
     yield* brain.send(`inherited ${inherited.marker}`)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     expect([...own.calls, ...inherited.calls].map((call) => call.path)).toEqual([
       "/v1/messages",
       "/v1/chat/completions",
@@ -602,7 +602,7 @@ test.each<[string, Models.Access, Models.Access, Session.Model]>([
       yield* brain.install(after)
       const script = Shared.stub().script()
       yield* Effect.exit(brain.send(`removed ${script.marker}`))
-      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
       expect(script.calls).toEqual([])
     }),
   ),
@@ -627,7 +627,7 @@ test.todo("REN-1486 an endpoint's base URL and key changed during a turn reach t
       )
       yield* brain.send(`second ${second.marker}`, { delivery: "queue" })
       first.release()
-      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
       expect([...first.calls, ...second.calls].map((call) => [call.path, call.authorization])).toEqual([
         ["/v1/chat/completions", "Bearer first-key"],
         ["/moved/v1/chat/completions", "Bearer moved-key"],
@@ -658,7 +658,7 @@ it.live(
           access: Shared.access({ stub: Shared.apiKey("renewed", Date.now() + 3_600_000) }, Shared.stub().url),
         }),
       )
-      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
       expect(brain.issuer.requests).toEqual([`Bearer ${later}`])
     }),
 )

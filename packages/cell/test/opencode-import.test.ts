@@ -70,7 +70,7 @@ const open = Effect.fnUntraced(function* (id?: Session.ID) {
 
 const turn = Effect.fnUntraced(function* (brain: Effect.Success<ReturnType<typeof open>>, text: string) {
   yield* brain.send(text)
-  yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+  yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
 })
 
 const delegated = Effect.gen(function* () {
@@ -90,7 +90,7 @@ const delegated = Effect.gen(function* () {
 })
 
 const importOf = (client: OpenCodeClient, data: Effect.Success<ReturnType<typeof exported>>) =>
-  client.session.import({ info: data.info, messages: data.messages, location: data.info.location })
+  client.experimental.session.import({ info: data.info, messages: data.messages, location: data.info.location })
 
 for (const payload of ["not json", JSON.stringify({ text: 42 })])
   it.live(`restore rejects a synthetic queue payload ${payload} before import, and a corrected retry succeeds`, () =>
@@ -149,7 +149,7 @@ it.live("an import beside another session in the same directory shares its proje
     const target = yield* open(source.id)
     const other = yield* target.opencode.session.create({ location: { directory: data.info.location.directory } })
     yield* target.opencode.session.prompt({ sessionID: other.id, text: `${stub.script().marker} other` })
-    yield* target.opencode.session.wait({ sessionID: other.id })
+    yield* target.opencode.experimental.session.wait({ sessionID: other.id })
     const snapshot = Effect.all([
       all(target.database, "select * from project order by id"),
       all(target.database, "select * from session_v2 where id = ?", other.id),
@@ -354,7 +354,7 @@ it.live("the next turn after the import of a compacted session sends the summary
     const first = stub.script({ reply: "first answer", summary })
     yield* turn(source, `${first.marker} first`)
     yield* source.opencode.session.compact({ sessionID })
-    yield* source.opencode.session.wait({ sessionID })
+    yield* source.opencode.experimental.session.wait({ sessionID })
     const data = yield* exported(source.database, source.id)
     expect(data.messages.filter((message) => message.type === "compaction")).toMatchObject([
       { status: "completed", summary },
@@ -381,10 +381,10 @@ it.live("an imported session has no staged revert and no fork lineage", () =>
       (yield* source.opencode.message.list({ sessionID: fork.id })).data.find((message) => message.type === "user"),
     )
     yield* source.opencode.session.revert.stage({ sessionID: fork.id, messageID: last.id })
-    const data = yield* source.opencode.session.export({ sessionID: fork.id })
+    const data = yield* source.opencode.experimental.session.export({ sessionID: fork.id })
     expect(data.info).toMatchObject({ fork: { sessionID: source.id }, revert: { messageID: last.id } })
     const target = yield* open()
-    const imported = yield* target.opencode.session.import({ ...data, location: data.info.location })
+    const imported = yield* target.opencode.experimental.session.import({ ...data, location: data.info.location })
     expect([imported.fork, imported.revert]).toEqual([undefined, undefined])
     expect(
       yield* all(

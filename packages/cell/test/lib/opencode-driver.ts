@@ -17,7 +17,8 @@ export interface Rule {
 
 export const make = (client: OpenCodeClient, directory: string) => {
   const location = { directory: AbsolutePath.make(directory) }
-  const wait = (id: Session.ID) => client.session.wait({ sessionID: SessionID.make(id) }).pipe(Effect.orDie)
+  const wait = (id: Session.ID) =>
+    client.experimental.session.wait({ sessionID: SessionID.make(id) }).pipe(Effect.orDie)
   return {
     create: (input: { readonly id?: Session.ID; readonly parentId?: Session.ID } = {}) =>
       client.session
@@ -59,7 +60,7 @@ export const make = (client: OpenCodeClient, directory: string) => {
         OpenCodeRows.message,
       )
       database.close()
-      yield* client.session.import({ info, messages, location: info.location }).pipe(Effect.orDie)
+      yield* client.experimental.session.import({ info, messages, location: info.location }).pipe(Effect.orDie)
     }),
   }
 }

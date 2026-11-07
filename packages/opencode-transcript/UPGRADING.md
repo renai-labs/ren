@@ -18,6 +18,6 @@ The storage audit compares the real SQLite columns with the synced columns and e
 
 `cell/test/fixtures/databases` contains full SQLite schema, migration records and rows from a quiescent scripted chat. The Durable Object test loads each snapshot before opening the installed OpenCode, then checks that messages remain readable and unchanged through a write. At a version bump this exercises in-place migrations; the transcript fixtures separately exercise importing into a fresh database.
 
-`bun run check` and `check:all` reject duplicate versions of shared Effect and OpenCode packages. There is one exact legacy exception: OpenCode 2.0.27 brings `@effect/platform-node-shared@4.0.1` alongside Ren's 4.1.0. It is disabled automatically for other OpenCode versions and should be removed at the bump.
+`bun run check` and `check:all` reject duplicate versions of shared Effect and OpenCode packages.
 
 A failing critical-path test is a failed gate. Diagnose or track the individual failure; do not exclude its entire suite to make an upgrade pass.

@@ -658,7 +658,9 @@ it.live("V3 a revert with files to a turn that changed a file on the sandbox lis
     const second = stub.script({ tool: { name: "write", input: { path: file, content: "two\n" } } })
     const sent = yield* session.send(second)
     yield* Effect.promise(() => second.called(2))
-    yield* opened.host.client.session.wait({ sessionID: SessionID.make(session.sessionId) }).pipe(Effect.orDie)
+    yield* opened.host.client.experimental.session
+      .wait({ sessionID: SessionID.make(session.sessionId) })
+      .pipe(Effect.orDie)
     const staged = yield* opened.host.sessions.revert.stage({
       sessionID: SessionID.make(session.sessionId),
       messageID: SessionMessage.ID.make(sent.messageId),
@@ -951,7 +953,9 @@ it.live(
       const opened = yield* open()
       const session = yield* begin(opened)
       yield* session.turn(stub.script(), 1)
-      yield* opened.host.client.session.wait({ sessionID: SessionID.make(session.sessionId) }).pipe(Effect.orDie)
+      yield* opened.host.client.experimental.session
+        .wait({ sessionID: SessionID.make(session.sessionId) })
+        .pipe(Effect.orDie)
       expect(yield* opened.opens).toBe(0)
       const value = crypto.randomUUID()
       yield* Effect.promise(() => Bun.write(join(folder(session.sessionId), "marker.txt"), value))

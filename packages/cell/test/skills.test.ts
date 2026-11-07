@@ -140,7 +140,9 @@ const open = Effect.fnUntraced(function* (github?: TestGitHub.Instance) {
         })
         .pipe(
           Effect.andThen(Effect.promise(() => script.called(calls))),
-          Effect.tap(() => host.client.session.wait({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie)),
+          Effect.tap(() =>
+            host.client.experimental.session.wait({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
+          ),
         )
     return {
       sessionId,
@@ -159,7 +161,9 @@ const open = Effect.fnUntraced(function* (github?: TestGitHub.Instance) {
           })
           .pipe(
             Effect.andThen(Effect.promise(() => script.called(1))),
-            Effect.tap(() => host.client.session.wait({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie)),
+            Effect.tap(() =>
+              host.client.experimental.session.wait({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
+            ),
           )
       },
     }

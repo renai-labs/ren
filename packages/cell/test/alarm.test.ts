@@ -375,7 +375,7 @@ opencode.effect("a question unanswered for the park time is interrupted, and the
     yield* Fiber.join(waiting)
     yield* brain.alarm
     const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     yield* brain.alarm
     expect(yield* brain.state).toMatchObject(closed)
     expect(
@@ -403,7 +403,7 @@ opencode.effect("a prompt queued behind a running turn runs after it, and the ha
     expect((yield* brain.state).isOpen).toBe(true)
     yield* Effect.promise(() => second.called())
     const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     yield* brain.alarm
     expect(yield* brain.state).toMatchObject(closed)
     expect(
@@ -425,7 +425,7 @@ opencode.effect(
       yield* brain.start()
       const sessionID = SessionID.make(brain.id)
       yield* brain.send(`once ${Shared.stub().script().marker}`)
-      yield* brain.opencode.session.wait({ sessionID })
+      yield* brain.opencode.experimental.session.wait({ sessionID })
       yield* Effect.forEach(
         Array.from({ length: 60 }),
         () => brain.opencode.session.switchAgent({ sessionID, agent: Agent.ID.make("build") }),

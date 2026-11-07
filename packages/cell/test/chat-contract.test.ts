@@ -71,7 +71,7 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
     }
     const turn = Effect.fnUntraced(function* (script: { readonly marker: string }, text = "") {
       yield* brain.send(`${text} ${script.marker}`)
-      yield* brain.opencode.session.wait({ sessionID })
+      yield* brain.opencode.experimental.session.wait({ sessionID })
     })
 
     expect(read("agent", (yield* brain.opencode.agent.list()).data, Translate.agent)).not.toHaveLength(0)
@@ -106,7 +106,7 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
       decision: "reject",
     })
     yield* until("permission.replied")
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     yield* brain.opencode.session.update({ sessionID, permissions: [] })
 
     yield* brain.send(stub.script({ tool: question }).marker)
@@ -117,17 +117,17 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
       formID: Form.ID.make(form.id),
       answer: { [form.fields[0].key]: form.fields[0].options[0]?.value ?? "A" },
     })
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     yield* brain.send(stub.script({ tool: question }).marker)
     const dismissed = Schema.decodeUnknownSync(FormCreated)(yield* until("form.created")).data.form
     yield* brain.opencode.session.form.cancel({ sessionID, formID: Form.ID.make(dismissed.id) })
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
 
     const retry = stub.script({ status: 503 })
     yield* brain.send(retry.marker)
     yield* Effect.promise(() => retry.called())
     retry.set({})
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
 
     yield* brain.start({ interactive: true, model: { endpointId: "stub", modelId: "stub-other" } })
 
@@ -143,17 +143,17 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
     yield* brain.opencode.session.inbox.update({ sessionID, inboxID: changed, delivery: "steer" })
     yield* brain.opencode.session.synthetic({ sessionID, text: "a note", description: "note" })
     held.release()
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
 
     const stopped = stub.script({ hold: true })
     yield* brain.send(stopped.marker)
     yield* Effect.promise(() => stopped.called())
     yield* brain.opencode.session.interrupt({ sessionID })
     stopped.release()
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
 
     yield* brain.opencode.session.shell({ sessionID, command: "echo shell" })
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     const shell = Schema.decodeUnknownSync(ShellCreated)(yield* until("shell.created")).data.info
     yield* until("shell.exited")
     const location = { directory: (yield* brain.opencode.session.get({ sessionID })).location.directory }
@@ -166,7 +166,7 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
     yield* turn(stub.script(summarized))
     yield* brain.opencode.session.compact({ sessionID })
     yield* until("session.compaction.ended")
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
 
     const messages = (yield* brain.opencode.message.list({ sessionID, order: "asc", limit: 200 })).data
     const user = messages.findLast((info) => info.type === "user")

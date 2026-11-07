@@ -121,7 +121,7 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
         entry.checkpoint.value.l.length >= 2,
     )
     script.release()
-    await opened.opencode.session.wait({ sessionID: opened.id })
+    await opened.opencode.experimental.session.wait({ sessionID: opened.id })
     const messages = await ids(opened)
     const open = await read(opened)
     expect((await opened.request(`/test/alarm?session=${opened.id}`)).status).toBe(204)

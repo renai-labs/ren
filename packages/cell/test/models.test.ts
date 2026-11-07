@@ -120,7 +120,7 @@ const chatWith = Effect.fnUntraced(function* (options: { readonly egress?: boole
       delivery: "steer",
       sender: { userId: `usr_${memberId}`, memberId },
     })
-  const idle = server.client.session.wait({ sessionID: Session.ID.make(sessionId) }).pipe(Effect.orDie)
+  const idle = server.client.experimental.session.wait({ sessionID: Session.ID.make(sessionId) }).pipe(Effect.orDie)
   return { sessionId, send, idle }
 })
 

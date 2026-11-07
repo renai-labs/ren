@@ -49,17 +49,17 @@ The goal: a bump changes the catalog, runs one command, and any break shows as a
 
 Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
-- [ ] `opencode-transcript/src/opencode-rows.ts`: decode `agent` as `Agent.ID`; pass `time_busy: null` (new column, d500927b9d).
-- [ ] `cell/src/harness/opencode/plugin.ts`: import `Message` from `@opencode/ai/effect`; new has no `@opencode/ai/schema/messages`.
-- [ ] Test stubs (`cell/test/lib/stub-model.ts`, `e2e/chaos/lib/provider/model.ts`): find a title request by "You name conversations"; new rewrote the title prompt (d2812d147e).
-- [ ] 2.2.6 is on effect 4.1.0: no nested `bun.lock` entry. Add the 7 missing `@opencode/*` names to `minimumReleaseAgeExcludes`.
-- [ ] Apply OpenCode's patch for `@modelcontextprotocol/client@2.3.1` (one malformed MCP tool otherwise drops the server's whole list).
+- [x] `opencode-transcript/src/opencode-rows.ts`: decode `agent` as `Agent.ID`; pass `time_busy: null` (new column, d500927b9d).
+- [x] `cell/src/harness/opencode/plugin.ts`: import `Message` from `@opencode/ai/effect`; new has no `@opencode/ai/schema/messages`. Done: model messages no longer carry `metadata` (e5c9b0151b); the context hooks read it from `session.context` by message id.
+- [x] Test stubs (`cell/test/lib/stub-model.ts`, `e2e/chaos/lib/provider/model.ts`): find a title request by "You name conversations"; new rewrote the title prompt (d2812d147e).
+- [x] 2.2.6 is on effect 4.1.0: no nested `bun.lock` entry. Add the 7 missing `@opencode/*` names to `minimumReleaseAgeExcludes`. Done: all 11 names are excluded; the 2.0.27 exception in `script/opencode-lock.ts` is gone.
+- [x] Apply OpenCode's patch for `@modelcontextprotocol/client@2.3.1` (one malformed MCP tool otherwise drops the server's whole list). Done: in `patchedDependencies`; `cell/test/mcp.test.ts` "a server that lists one malformed tool…" fails without it.
 
 ## 2. PR 2: must fix
 
 ### U1. Compaction no longer has `recent`
 
-- [ ] Fix
+- [x] Fix Done: `Translate` fills `recent` from `metadata.recent` or `""`; the A4 table caught it.
 - Evidence: acdcdb8dd9 and fd6589239e removed `recent` from `session.compaction.started` and `.ended` and from the `compaction` message (running and completed). New reads an old compaction through `SessionLegacy.message`, which moves `recent` to `metadata.recent`. `delta`, `failed` and the inbox item did not change.
 - Ren: `schema/src/session/event.ts:171,181` and `schema/src/session/message.ts:294,305` require `recent`; `opencode-transcript/src/translate.ts`; `cell/src/harness/opencode/chat.ts` (fails with "The brain cannot read an OpenCode event Ren supports"); `opencode-transcript/src/transcript.ts:15`; `core/src/session.ts:267`.
 - Impact: any compaction ends the event stream for every client of the brain. Any chat that has a compaction, from old or new, fails to load in the cell and on the server.
@@ -69,7 +69,7 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
 ### U2. Restored chats lose model context
 
-- [ ] Fix
+- [x] Fix Done: `OpenCodeRows.message` runs `SessionLegacy.message`; the "no field lost" test on the 2.0.27 recordings fails without it.
 - Evidence: acdcdb8dd9 renamed `providerState`, `state` and `resultState` to `native`, moved `recent` to `metadata.recent` and `providerContext` to `native.messages`. New upgrades an old row with `SessionLegacy.message` in its own reads (`core/src/session/history.ts`) and in its HTTP import route. The in-process `SessionTransfer.import` does not.
 - Ren: `opencode-transcript/src/opencode-rows.ts` `message` decodes the row with the new `SessionMessage.Info` and no upgrade; `cell/src/harness/opencode/harness.ts:668` passes it to `transfer.import`.
 - Impact: a restored chat keeps its transcript but loses reasoning signatures (Anthropic, OpenAI, Gemini), cache continuity, and for a compaction the recent text and the native window: the model sees only the summary. Every process brain restores all its chats on its first boot after the deploy.
@@ -79,7 +79,7 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
 ### U3. Restore tests in core
 
-- [ ] Fix
+- [x] Fix Done: on 2.2.6 only "a chat whose root never committed…" fails, as on `main`.
 - `cell/test/environment-lifecycle-cell.test.ts` under Wrangler (`bun run test:cloudflare`): 18 tests fail on `main` at 1a6a06fc2 too (2026-11-07). "a command that prints 64 MiB keeps workerd's memory bounded" fails only under load. Not in `test:opencode`.
 - `cell/test/tool-parity.slow.test.ts`: "J30 a command with no timeout and no output for 35 seconds…" (`Shell.NotFoundError` after about 5 seconds). Fails on `main` at 1a6a06fc2 too (2026-11-07). It is the only failure in `bun run test:opencode` for `cell`.
 - `core/test/restore.slow.test.ts`: "a chat whose root never committed in Ren but whose subagent chat did…" (the subagent's message is missing) and "on a new sandbox the first request is a prompt to a chat that needs a restore…" (a tool reads `workspace/ses_other/f.txt`, not the chat's own folder). Both pass on `main`.
@@ -87,7 +87,7 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
 ### U4. Clearing the harness database fails on new's schema
 
-- [ ] Fix
+- [x] Fix Done: in PR 1 (c0db85ace).
 - Evidence: `cell/src/harness-storage.ts:19-27` drops every table in `rowid desc` order. On a database created by new, `blob_ref` (parents `session_v2` and `blob`, both `on delete cascade`) comes before `blob`, which comes before `session_v2` (`core/src/database/schema.gen.ts`). The clear drops `session_v2`, then `blob`; SQLite then builds the cascade into `blob_ref` and fails with `no such table: main.session_v2`. Each retry fails the same way, and `prepare` throws before it writes the version key: the brain cannot open OpenCode again.
 - Scope: not every DO cell at the deploy. Only `cell/src/bun.ts:268` calls `HarnessStorage.flushed`, so a DO cell never clears; it migrates in place. A process brain deletes its file. It fails in the test, and in any DO cell once DO cells write the flushed marker.
 - Fix: in `storage.transactionSync`, drop in rounds: list the tables left (not `_*`, not `sqlite_*`), read each one's parents with `PRAGMA foreign_key_list`, drop the tables that no table left references. Confirm that celld and Wrangler allow `PRAGMA foreign_key_list`.
@@ -102,7 +102,7 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
 ### U13. A test pins old's 500 for a large text file
 
-- [ ] Fix
+- [x] Fix Done: the 2.0.27 case is dropped.
 - Evidence: `cell/test/brain-api.test.ts` "send rejects a message with a text file of more than 5,345,276 bytes, which OpenCode 2.0.27 answers with 500…" (81f726be9). New accepts that file: `send` returns the message ID, so the test fails.
 - Ren: the behaviour that 81f726be9 adds (`answered` in `cell/src/harness/opencode/harness.ts`: OpenCode's answer becomes `BrainRejectedError`, a request with no answer stays a defect) does not change. The case "a file OpenCode cannot read" still proves it on new.
 - Fix: drop the 2.0.27 case, or replace it with an input that new answers with a 5xx, so an answered 5xx stays covered. Confirm that the large file then runs a turn, and check whether sending large documents by path (`brain/src/reference/drive-files.ts`, same commit) is still needed.
@@ -111,7 +111,7 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
 ### U6. Start does not boot the chat's location
 
-- [ ] Fix
+- [x] Fix Done: not changed. Booting at start made `chat` tests race; a production brain already boots at start through `remember`. Two MCP tests now prompt first.
 - Evidence: 450e7b9241 removed `sessionLocationMiddleware` from the global session routes (`instructions.entry.*`, `session.update`, agent and model switches). Old booted the location, and so the plugins and MCP, when the chat started.
 - Ren: `cell/src/harness/opencode/harness.ts` `start` calls `server.activate` only inside `remember`, when ChatSettings exist.
 - Impact: the first prompt waits for plugins and MCP to start. Prompt-started turns still see every tool (`Plugin.awaitActivation` in `SessionPrompt.prepare`; confirmed by `cell/test/ren-mcp.test.ts` "each chat calls Ren MCP…" and "a space with Slack…").
@@ -119,7 +119,7 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
 ### U7. A wake that is not a prompt can run without MCP tools
 
-- [ ] Fix
+- [x] Fix Done: not reproduced: `cell/test/mcp.test.ts` "the first step of a message from Ren…" passes on 2.2.6 with no change; kept as a guard.
 - Old had the same gap; it is not a regression.
 - Evidence: `Session.synthetic`, `resumeSuspendedSessions` and background-job notices wake the drain without `SessionPrompt.prepare`. On a cold location, `boundary.run` in Ren's runner wrapper copies its holds before Ren's plugin registers the MCP hold (`cell/src/harness/opencode/execution.ts:20`).
 - Impact: after a restart or a location eviction, a synthetic message (for example the channel reminder in `core/src/channel-turns.ts:123-130`) can run its first step without app, Ren or channel tools.
@@ -128,8 +128,8 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
 ### U8. The `/goal` command
 
-- [ ] Decide: hide it or support it
-- [ ] Map `CommandExecutionError` to `Harness.Rejected`
+- [x] Decide: hide it or support it Done: hidden: left out of `commands()` and not found in the command route.
+- [x] Map `CommandExecutionError` to `Harness.Rejected` (`session.command` declares `InvalidRequestError`).
 - Evidence: 8de0323975 added `GoalPlugin` to the built-in plugins with no config gate (`core/src/plugin/goal.ts`, `plugin/internal.ts`). It continues a session for up to 50 rounds through `experimental.idle` and synthetic messages, and pauses goals when the server restarts.
 - Ren: `cell/src/harness/opencode/chat.ts:259` lists every command to clients; `chat.ts:244-256` catches only `CommandNotFoundError`.
 - Impact: `/goal` shows in Ren's command picker. It can run many billed rounds, and the continuations are hidden. `/goal` with no text, or `/goal pause` with no goal, fails with `CommandExecutionError`, which becomes a 500.
@@ -145,28 +145,28 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
 ### U10. Interrupt of a session that OpenCode does not hold
 
-- [ ] Fix
+- [x] Fix Done: no change: 2.2.6 answers 404 only for a session missing from the database, which Ren already treats as not found.
 - Evidence: 450e7b9241: `session.interrupt` answers 404 for an unknown session.
 - Ren: `cell/src/harness/opencode/harness.ts:545,834` call it with `Effect.orDie`.
 - Fix: treat `NotFound` as done.
 
 ### U11. Ren's copy of the shell service
 
-- [ ] Fix
+- [x] Fix Done: ported; `cell/test/tool-parity.test.ts` "a shell removed on the sandbox…" fails without it.
 - Evidence: new `core/src/shell.ts:178` publishes `shell.exited` with `killed` when a running command is removed, and `:366-436` races the exit against the timeout so that the timeout kill always runs.
 - Ren: `cell/src/harness/opencode/shell.ts:101-112,243-307` keeps old's logic.
 - Fix: port both changes. Add a case to `cell/test/tool-parity.test.ts`.
 
 ### U12. `fetch` in Code Mode asks for the `webfetch` permission
 
-- [ ] Decide
+- [x] Decide Done: no change. Ren allows `webfetch` unless a space rule asks or denies, and "ask" is "deny" when no one can answer; `fetch` now follows the same rules as the tool.
 - Evidence: new `codemode/fetch.ts` calls `permission.assert({ action: "webfetch" })`; old's `codemode/web.ts` did not.
 - Impact: with `webfetch: ask`, a `fetch` in `execute` asks the person; a chat that is not interactive can be refused.
 - Fix: none if this is wanted. Otherwise allow it in Ren's `permission.hook("evaluate")` (`plugin.ts:492`).
 
 ## 4. Hygiene
 
-- [ ] Move `client.session.wait` and `client.session.instructions.entry.*` to `client.experimental.session.*` (9a9386edbc deprecates the old names; removed in 2.3). Ren: `cell/src/harness/opencode/chat.ts:214`, `harness.ts:328-336,833`, `cell/src/cell.ts:180`, tests.
+- [x] Move `client.session.wait` and `client.session.instructions.entry.*` to `client.experimental.session.*` (9a9386edbc deprecates the old names; removed in 2.3). Ren: `cell/src/harness/opencode/chat.ts:214`, `harness.ts:328-336,833`, `cell/src/cell.ts:180`, tests.
 - [ ] Remove `experimental_image_generate` in Ren's tool transform; Ren has its own `image_generation` (`model-tools.ts`). New registers it when the catalog has an image model.
 - [ ] Add `browser` to the reserved skill ids (`plugin.ts:55-60`).
 - [ ] Ren's `title` hook (`plugin.ts:318-334`) frames the conversation, and new now frames it too. Remove the hook and its assertion (`cell/test/settings.test.ts:1137-1138`) if the title still comes out right with Claude.
@@ -194,11 +194,15 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 - [ ] `bun run check` from the repo root.
 - [ ] `REN_SLOW=1 bun turbo test --continue`, compared with `main` (see §8).
 - [ ] `bun run test:cloudflare` in `packages/cell` (Wrangler, not celld).
-- [ ] A DO test that opens a database that old created and migrates it to new (m50 to m58, including `DROP COLUMN allowance` and the copy from `kv` to `job`). Every DO test starts empty today.
+- [x] A DO test that opens a database that old created and migrates it to new (m50 to m58, including `DROP COLUMN allowance` and the copy from `kv` to `job`). Every DO test starts empty today. Done: `cell/test/fixtures/databases/<version>.json` and `sync-storage.test.ts`.
 - [ ] Mixed versions: the server decodes rows from old and new cells; a new cell restores a chat that old synced.
 - [ ] By hand with `bun run dev` and `bun run dev:app`: a new chat; a message from Slack; an app MCP tool; a manual and an automatic compaction; a restore after the brain loses its database; subagents; a schedule.
 
 ## 8. Failures that are not from this upgrade
+
+On a Mac without a container memory limit, the executor reads used memory as `totalmem() - freemem()`, which counts cache (98% here). The watchdog then kills any shell after one 5-second sample above 92%, so J30, J24 and J52 fail with `Shell.NotFoundError`. They pass with the critical line raised. Fix the reading in `executor/src/sandbox/memory.ts`, outside this upgrade.
+
+A command with no description is dropped from `command.list`: OpenCode sends `description: undefined`, which `SessionCatalog.Command` does not accept.
 
 These fail on `main` too (run on a `main` worktree, 2026-10-31). Fix them elsewhere; do not count them here.
 

@@ -326,17 +326,21 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
     install: true,
   })
   const changes = InstructionEntries.changes(
-    yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
+    yield* client.experimental.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
     environmentInstructions(server, environmentDirectory),
   )
   yield* Effect.forEach(
     changes.put,
-    (entry) => client.session.instructions.entry.put({ sessionID, key: entry.key, value: entry.value }),
+    (entry) => client.experimental.session.instructions.entry.put({ sessionID, key: entry.key, value: entry.value }),
     { discard: true },
   ).pipe(Effect.orDie)
-  yield* Effect.forEach(changes.remove, (key) => client.session.instructions.entry.remove({ sessionID, key }), {
-    discard: true,
-  }).pipe(Effect.orDie)
+  yield* Effect.forEach(
+    changes.remove,
+    (key) => client.experimental.session.instructions.entry.remove({ sessionID, key }),
+    {
+      discard: true,
+    },
+  ).pipe(Effect.orDie)
   if (input.initialMessage) {
     const initial = { ...input.initialMessage, sessionId: input.sessionId }
     yield* attach(server, initial).pipe(
@@ -891,7 +895,8 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               .prompt({ sessionID: item.sessionID, id: item.id, delivery: item.delivery, text: item.payload.text })
               .pipe(Effect.orDie)
           }),
-          wait: (ms: number) => client.session.wait({ sessionID: session.id }).pipe(Effect.timeout(ms), Effect.ignore),
+          wait: (ms: number) =>
+            client.experimental.session.wait({ sessionID: session.id }).pipe(Effect.timeout(ms), Effect.ignore),
           interrupt: client.session.interrupt({ sessionID: session.id }).pipe(Effect.orDie, Effect.asVoid),
         }
       })

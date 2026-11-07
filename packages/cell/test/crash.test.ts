@@ -97,7 +97,7 @@ describe("crash recovery", () => {
   test("killed with nothing running: the cell restarts with no alarm and makes no model call", async () => {
     const opened = await started()
     await opened.prompt(`once ${stub.script({ reply: "done" }).marker}`)
-    await opened.opencode.session.wait({ sessionID: opened.id })
+    await opened.opencode.experimental.session.wait({ sessionID: opened.id })
     await opened.ended()
     const calls = stub.calls.length
     await restart()
