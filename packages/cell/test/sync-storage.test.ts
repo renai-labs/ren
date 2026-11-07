@@ -101,14 +101,14 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
     expect(closed.checkpoint).toEqual(open.checkpoint)
   })
 
-  test("E100: a cell that opens OpenCode after another harness version clears its tables only when that version flushed sync", async () => {
+  test("E100: a cell that opens OpenCode after another harness version clears its tables only when that version flushed sync, also a table created before the tables it references", async () => {
     const opened = await SyncStorage.turn(cell)
     const older = "0.0.1-older"
     const boot = async (flushed: boolean) =>
       Schema.decodeUnknownSync(Schema.Struct({ isKept: Schema.Boolean }))(
         await (
           await opened.request(
-            `/test/older-harness?session=${opened.id}&ren:harness-version=${older}${flushed ? `&ren:flushed-version=${older}` : ""}`,
+            `/test/older-harness?session=${opened.id}&linked&ren:harness-version=${older}${flushed ? `&ren:flushed-version=${older}` : ""}`,
           )
         ).json(),
       ).isKept

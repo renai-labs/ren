@@ -102,6 +102,13 @@ class SyncStorageCell extends SessionCell {
     const sessionId = this.watched
     if (url.pathname === "/test/older-harness") {
       await this.runtime.runPromise(Effect.flatMap(Harness.Service, (harness) => harness.close))
+      if (url.searchParams.has("linked"))
+        for (const statement of [
+          "create table if not exists linked_ref (session_id text references linked_session(id) on delete cascade, hash text references linked_blob(hash) on delete cascade)",
+          "create table if not exists linked_blob (hash text primary key)",
+          "create table if not exists linked_session (id text primary key)",
+        ])
+          this.ctx.storage.sql.exec(statement)
       await Promise.all(
         [...url.searchParams]
           .filter((entry) => entry[0].startsWith("ren:"))
