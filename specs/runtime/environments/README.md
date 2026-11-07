@@ -154,7 +154,7 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 2. Co-located is possible only when the space's brain provider has `canColocate`, and its template must be of that provider (EN3). A brain provider change that makes co-located impossible is refused until the space picks remote or none (EN24).
 3. A space cannot pick a template that has never built (`image` is null).
 4. `SessionRunner.create` reads `space.hand` once and puts it in `Session.StartInput`. No other caller builds it.
-5. Space members and org admins change `space.hand`, the brain provider and `brainScope`. Org admins get `space.update` on shared spaces (EN45).
+5. Only space members change `space.hand`, the brain provider and `brainScope`. An org admin joins a shared space first (EN45).
 6. Only org admins create, edit and archive templates. Archiving a template that a space uses is refused, with the list of spaces (EN24).
 
 ### When a change applies
@@ -255,24 +255,23 @@ Each pull request is based on the one before it. Each one passes its own rows of
 | #   | Branch                      | Change                                                                                                  |
 | --- | --------------------------- | ------------------------------------------------------------------------------------------------------- |
 | 1   | `hand-design-spec`          | This spec.                                                                                              |
-| 2   | `shared-space-admins`       | Org admins update shared spaces.                                                                        |
-| 3   | `machine-provider-contract` | `MachineAccess` and the managed provider contract. No change in behaviour.                              |
-| 4   | `machine-lifecycle`         | `MachineLifecycle`, taken out of `BrainLifecycle`. No change in behaviour.                              |
-| 5   | `chaos-invariants`          | The seeded runs that check I1–I13, and the restore measurement.                                         |
-| 6   | `lifecycle-recovery`        | Timed retry, the 5-min replace, PostHog reports.                                                        |
-| 7   | `turn-recovery`             | Interrupted turns continue once, waiting messages after a replace, the 8 MB stand-in.                   |
-| 8   | `background-keep-awake`     | Background processes keep a machine awake up to 2 h.                                                    |
-| 9   | `bundle-serving`            | Bundles built, served by hash, and the current version in Postgres.                                     |
-| 10  | `bundle-update`             | Images without Ren code; `updating`; the OpenCode version rule.                                         |
-| 11  | `brain-provider-registry`   | Brain providers with `canColocate`; the space's choice, hidden.                                         |
-| 12  | `space-hand-choice`         | `space.hand`, `SessionRunner`, tools refused with no hand, the refusals of §3.                          |
-| 13  | `template-image-build`      | Networking, build status, one build at a time, E2B builds from the system image.                        |
-| 14  | `colocated-template-brain`  | The brain machine from the template image; Ren's hosts in `limited`; packages in place.                 |
-| 15  | `environments-settings-ui`  | Settings → Environments and the space's hand settings.                                                  |
-| 16  | `remote-e2b-hand`           | Remote hand machines on `MachineLifecycle`, seats, the unreachable check, the remote option in the app. |
-| 17  | `remote-hand-services`      | `REN_HAND_PLACEMENT`; `ToolOutput`, `FileSystem` and `Vcs` on the hand.                                 |
-| 18  | `remote-hand-snapshot`      | `Snapshot` on the hand: revert works on a remote hand.                                                  |
-| 19  | `soak-and-alarms`           | The 1-hour soak, the memory alarm, the load test.                                                       |
+| 2   | `machine-provider-contract` | `MachineAccess` and the managed provider contract. No change in behaviour.                              |
+| 3   | `machine-lifecycle`         | `MachineLifecycle`, taken out of `BrainLifecycle`. No change in behaviour.                              |
+| 4   | `chaos-invariants`          | The seeded runs that check I1–I13, and the restore measurement.                                         |
+| 5   | `lifecycle-recovery`        | Timed retry, the 5-min replace, PostHog reports.                                                        |
+| 6   | `turn-recovery`             | Interrupted turns continue once, waiting messages after a replace, the 8 MB stand-in.                   |
+| 7   | `background-keep-awake`     | Background processes keep a machine awake up to 2 h.                                                    |
+| 8   | `bundle-serving`            | Bundles built, served by hash, and the current version in Postgres.                                     |
+| 9   | `bundle-update`             | Images without Ren code; `updating`; the OpenCode version rule.                                         |
+| 10  | `brain-provider-registry`   | Brain providers with `canColocate`; the space's choice, hidden.                                         |
+| 11  | `space-hand-choice`         | `space.hand`, `SessionRunner`, tools refused with no hand, the refusals of §3.                          |
+| 12  | `template-image-build`      | Networking, build status, one build at a time, E2B builds from the system image.                        |
+| 13  | `colocated-template-brain`  | The brain machine from the template image; Ren's hosts in `limited`; packages in place.                 |
+| 14  | `environments-settings-ui`  | Settings → Environments and the space's hand settings.                                                  |
+| 15  | `remote-e2b-hand`           | Remote hand machines on `MachineLifecycle`, seats, the unreachable check, the remote option in the app. |
+| 16  | `remote-hand-services`      | `REN_HAND_PLACEMENT`; `ToolOutput`, `FileSystem` and `Vcs` on the hand.                                 |
+| 17  | `remote-hand-snapshot`      | `Snapshot` on the hand: revert works on a remote hand.                                                  |
+| 18  | `soak-and-alarms`           | The 1-hour soak, the memory alarm, the load test.                                                       |
 
 ## 6. How to build it
 
