@@ -77,6 +77,9 @@ const SyncGroup = HttpApiGroup.make("sync")
         inbox: Schema.optionalKey(Schema.Array(Sync.OpenCodeInboxRow)).annotate({
           description: "The session’s queued messages. Ren replaces the ones it has.",
         }),
+        harnessVersion: Schema.optionalKey(Schema.String).annotate({
+          description: "The version of the harness that wrote the rows. Ren keeps the last one sent.",
+        }),
       }),
       error: StaleUploadError,
     }).annotateMerge(

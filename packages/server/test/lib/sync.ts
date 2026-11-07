@@ -94,6 +94,15 @@ export const remote = Effect.fnUntraced(function* (root: Session.ID) {
   }
 })
 
+export const harnessVersion = Effect.fnUntraced(function* (id: Session.ID) {
+  const database = yield* Database.Service
+  const rows = yield* database.db
+    .select({ version: Database.Schema.agent_session.harness_version })
+    .from(Database.Schema.agent_session)
+    .where(eq(Database.Schema.agent_session.id, id))
+  return rows.at(0)?.version ?? null
+})
+
 export const status = (id: string) =>
   Effect.flatMap(SessionRunner.Service, (sessions) => sessions.get(Session.ID.make(id))).pipe(
     Effect.map((info) => info.status),
