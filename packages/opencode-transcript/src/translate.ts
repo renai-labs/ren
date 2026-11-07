@@ -16,6 +16,7 @@ import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { ScheduleOrigin } from "@ren/schema/schedule-origin"
+import { WebhookOrigin } from "@ren/schema/webhook-origin"
 import { SessionEvent } from "@ren/schema/session/event"
 import type { SessionCapabilities } from "@ren/schema/session/capabilities"
 import { SessionCatalog } from "@ren/schema/session/catalog"
@@ -35,6 +36,9 @@ const decodeChannel = Schema.decodeUnknownOption(FromChannel)
 
 const FromSchedule = Schema.Struct({ metadata: Schema.Struct({ schedule: ScheduleOrigin.Info }) })
 const decodeSchedule = Schema.decodeUnknownOption(FromSchedule)
+
+const FromWebhook = Schema.Struct({ metadata: Schema.Struct({ webhook: WebhookOrigin.Info }) })
+const decodeWebhook = Schema.decodeUnknownOption(FromWebhook)
 
 const FromTask = Schema.Struct({ metadata: Schema.Struct({ task: TaskAssignment.Info }) })
 const decodeTask = Schema.decodeUnknownOption(FromTask)
@@ -61,6 +65,7 @@ const withMetadata = (value: unknown): unknown => {
   const sender = decodeUserID(value)
   const channel = decodeChannel(value)
   const schedule = decodeSchedule(value)
+  const webhook = decodeWebhook(value)
   const uploads = decodeUploads(value)
   const task = taskOf(value)
   return {
@@ -68,6 +73,7 @@ const withMetadata = (value: unknown): unknown => {
     ...(Option.isSome(sender) && { sender: { userId: sender.value.metadata.userID } }),
     ...(Option.isSome(channel) && { channel: channel.value.metadata.channel }),
     ...(Option.isSome(schedule) && { schedule: schedule.value.metadata.schedule }),
+    ...(Option.isSome(webhook) && { webhook: webhook.value.metadata.webhook }),
     ...(Option.isSome(task) && { task: task.value }),
     ...(Option.isSome(uploads) && {
       uploads: uploads.value.metadata.files,

@@ -208,6 +208,19 @@ describe("InfraFolder.write", () => {
           schedules: {
             nightly: { agent: "build", cron: "0 3 * * *", timeZone: "UTC", message: "Run the nightly.", enabled: true },
           },
+          webhooks: {
+            "pull-requests": {
+              message: "Review this pull request.",
+              signature: {
+                kind: "hmac" as const,
+                header: "x-hub-signature-256",
+                encoding: "hex" as const,
+                prefix: "sha256=",
+              },
+              filter: 'headers["x-github-event"] == "pull_request"',
+              threadKey: "body.pull_request.html_url",
+            },
+          },
           channels: { ren: { kind: "github" as const, purpose: "GitHub acme/ren", agent: "build", fallback: false } },
           memory: { "memory.md": "- Ship on Fridays.\n", "people/ana.md": "  Ana leads design.  \n\n" },
           uses: { agents: [] },
@@ -218,6 +231,7 @@ describe("InfraFolder.write", () => {
           agents: {},
           apps: {},
           schedules: {},
+          webhooks: {},
           channels: {},
           uses: { agents: ["build"] },
         },
@@ -235,6 +249,7 @@ describe("InfraFolder.write", () => {
       "spaces/engineering/memory/memory.md",
       "spaces/engineering/memory/people/ana.md",
       "spaces/engineering/schedules/nightly",
+      "spaces/engineering/webhooks/pull-requests",
       "spaces/home",
       "spaces/home/uses/agents/build",
     ],
@@ -324,6 +339,7 @@ describe("InfraFolder.write", () => {
       "spaces/engineering/memory/people/ana.md",
       "spaces/engineering/schedules.yaml",
       "spaces/engineering/space.yaml",
+      "spaces/engineering/webhooks.yaml",
       "spaces/home/space.yaml",
     ])
   })

@@ -55,9 +55,9 @@ export const Trace = {
   ),
   connectorConnect: operation("connector.connect", "Starting to connect a connector: an OAuth app or an MCP provider."),
   connectorCallback: operation("connector.callback", "Finishing a connector's sign-in when the provider calls back."),
-  channelEvent: operation(
-    "channel.event",
-    "A GitHub or Slack event, from Ren receiving it to the task or turn it starts.",
+  intakeRun: operation(
+    "intake.run",
+    "One attempt to start or continue a chat from an event of a channel or a webhook, after the queue gives it to a worker.",
   ),
 } as const
 

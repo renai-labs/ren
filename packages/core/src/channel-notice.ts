@@ -70,7 +70,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const registry = yield* ChannelProvider.Registry
     const app = (yield* Config.String("APP_URL").pipe(Effect.orDie)).replace(/\/$/u, "")
-    const thread = Database.Schema.channel_thread
+    const thread = Database.Schema.intake_thread
     const link = Database.Schema.task_link
     const cards = yield* SlackTaskCard.Service
     const send = (provider: Channel.Provider, target: ChannelProvider.Target, text: string, about: string) =>
@@ -93,8 +93,8 @@ export const layer = Layer.effect(
           thread,
           and(
             eq(thread.organization_id, link.organization_id),
-            eq(thread.provider, "slack"),
-            eq(sql`upper(${thread.thread})`, link.key),
+            eq(thread.origin, "slack"),
+            eq(sql`upper(${thread.thread_key})`, link.key),
           ),
         )
         .where(
@@ -102,7 +102,7 @@ export const layer = Layer.effect(
             eq(link.task_id, about.taskId),
             eq(link.organization_id, about.organizationId),
             eq(link.kind, "slack_thread"),
-            about.sessionId ? ne(thread.session_id, about.sessionId) : undefined,
+            about.sessionId ? ne(thread.current_session_id, about.sessionId) : undefined,
           ),
         )
         .pipe(Effect.orDie)

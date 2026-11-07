@@ -3,7 +3,6 @@ export * as Channel from "./channel.js"
 import { Schema } from "effect"
 import { Agent } from "./agent.js"
 import { ChannelOrigin } from "./channel-origin.js"
-import { Identifier } from "./identifier.js"
 import { Task } from "./task.js"
 import { TaskLink } from "./task-link.js"
 
@@ -11,9 +10,6 @@ export const Provider = ChannelOrigin.Provider
 export type Provider = ChannelOrigin.Provider
 
 export const titles: Readonly<Record<Provider, string>> = { slack: "Slack", linear: "Linear", github: "GitHub" }
-
-export const ThreadID = Identifier.make("cth", "Channel.ThreadID")
-export type ThreadID = typeof ThreadID.Type
 
 export const TriggerID = Schema.NonEmptyString.annotate({
   identifier: "Channel.TriggerID",
@@ -59,6 +55,20 @@ export const ThreadData = Schema.Struct({
   identifier: "Channel.ThreadData",
   description:
     "Provider data that a message brings for the tools that act on its thread, under the key of its provider. The thread keeps the data of its latest message.",
+})
+
+export interface ThreadState extends Schema.Schema.Type<typeof ThreadState> {}
+export const ThreadState = Schema.Struct({
+  url: Schema.optionalKey(Schema.String),
+  placeName: Schema.optionalKey(Schema.String),
+  lastMessage: Schema.optionalKey(Schema.String.annotate({ description: "The provider’s id of the latest message." })),
+  lastMessageAt: Schema.optionalKey(Schema.DateTimeUtcFromString),
+  lastReplyAt: Schema.optionalKey(Schema.DateTimeUtcFromString),
+  ...ThreadData.fields,
+}).annotate({
+  identifier: "Channel.ThreadState",
+  description:
+    "What a channel keeps on a thread for its current chat: where to reply, and when it last asked and answered. A thread that moves to another chat starts empty.",
 })
 
 const Sender = Schema.Struct({

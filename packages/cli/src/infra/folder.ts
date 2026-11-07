@@ -485,7 +485,7 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
         )
         if (writes.has(folder)) await instructions(folder, space?.settings.instructions)
       }
-      const records = (["schedules", "channels"] as const).map(async (kind) => {
+      const records = (["schedules", "webhooks", "channels"] as const).map(async (kind) => {
         const names = named(kind)
         if (names.length === 0) return
         const file = join(root, folder, `${kind}.yaml`)

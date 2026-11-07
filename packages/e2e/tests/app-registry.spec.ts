@@ -34,6 +34,7 @@ test("a member finds a listed app with the generated client, gives it a profile 
       requiredCredentials: [],
       skills: {},
       mcps: {},
+      webhooks: {},
       dependsOn: [],
       expectedRevision: docs.revision,
     }),

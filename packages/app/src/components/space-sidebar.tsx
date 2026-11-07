@@ -16,6 +16,7 @@ import {
   IconSelector,
   IconSettings,
   IconUsers,
+  IconWebhook,
 } from "@tabler/icons-react"
 import { GitMark } from "../icons/brands.js"
 import {
@@ -55,6 +56,7 @@ const spaceSections = [
   { value: "channels", label: "Channels", icon: IconMessagesFilled, to: "/spaces/$spaceId/channels" },
   { value: "credentials", label: "Keys", icon: IconKey, to: "/spaces/$spaceId/credentials" },
   { value: "schedules", label: "Scheduled", icon: IconClock, to: "/spaces/$spaceId/schedules" },
+  { value: "webhooks", label: "Webhooks", icon: IconWebhook, to: "/spaces/$spaceId/webhooks" },
   { value: "factory", label: "Factory", icon: IconBuildingFactory2, to: "/spaces/$spaceId/factory" },
 ] as const
 

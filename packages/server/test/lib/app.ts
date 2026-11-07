@@ -13,6 +13,7 @@ import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
+import { Intake } from "@ren/core/intake"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
@@ -34,6 +35,7 @@ import type { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
 import { Clock, ConfigProvider, Effect, Layer, Logger, Schema } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
+import { PersistedQueue } from "effect/persistence"
 import { Routes } from "../../src/routes.js"
 import { Signer } from "@ren/core/signer"
 import { SlackApp } from "@ren/core/slack-app"
@@ -75,6 +77,10 @@ export const hostToken = Effect.fnUntraced(function* (
   })
 })
 
+const envelopeKeys = JSON.stringify([
+  { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
+])
+
 export const config = {
   BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
   BETTER_AUTH_URL: "http://localhost:4000",
@@ -93,6 +99,7 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
       SIGNUP_MX_CHECK: "false",
       CELL_URL: "http://127.0.0.1:9",
       BRAIN_KEYS: brainKeys,
+      ENVELOPE_KEYS: envelopeKeys,
       ...TestDrives.config,
       ...overrides,
     }),
@@ -109,6 +116,9 @@ export const services = Layer.mergeAll(
     Layer.provide(ChannelIdentity.layer),
     Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),
   ),
+  Intake.receivers(Effect.succeed([])),
+  Intake.workers(Effect.succeed([])),
+  PersistedQueue.layer.pipe(Layer.provide(PersistedQueue.layerStoreSql())),
   ChannelNotice.layerLog,
   TaskCard.layerNone,
   SlackTaskCard.layerNone,
@@ -142,7 +152,11 @@ export const services = Layer.mergeAll(
 )
 
 export const makeApp = (
-  routes: typeof Routes.layer = Routes.layer,
+  routes: Layer.Layer<
+    Layer.Success<typeof Routes.layer>,
+    Layer.Error<typeof Routes.layer>,
+    Layer.Services<typeof Routes.layer> | Layer.Success<typeof services>
+  > = Routes.layer,
   options?: {
     readonly baseURL?: string
     readonly config?: Readonly<Record<string, string>>

@@ -36,6 +36,7 @@ export const canonical = (declaration: AppSchema.Declaration) => {
     environment: encoded.environment ?? null,
     skills: encoded.skills,
     mcps: encoded.mcps,
+    webhooks: encoded.webhooks,
     dependsOn: [...new Set(encoded.dependsOn)].toSorted(),
   }
 }
@@ -99,6 +100,7 @@ export const load = Effect.fnUntraced(function* (
             ...(row.environment && { environment: row.environment }),
             skills: row.skills,
             mcps: row.mcps,
+            webhooks: row.webhooks,
             dependsOn: dependencies.get(row.id) ?? [],
           },
         },
@@ -164,6 +166,7 @@ export const make = Effect.gen(function* () {
                 ...(declaration.environment && { environment: declaration.environment }),
                 skills: declaration.skills,
                 mcps: declaration.mcps,
+                webhooks: declaration.webhooks,
                 dependsOn: declaration.dependsOn,
                 slug: entry.slug,
                 ownerSpaceId: yield* context.spaceId(entry.space),
@@ -204,6 +207,7 @@ export const make = Effect.gen(function* () {
                 ...(declaration.environment && { environment: declaration.environment }),
                 skills: declaration.skills,
                 mcps: declaration.mcps,
+                webhooks: declaration.webhooks,
                 dependsOn: declaration.dependsOn,
                 expectedRevision: current.revision,
               })

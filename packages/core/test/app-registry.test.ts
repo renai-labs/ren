@@ -101,6 +101,7 @@ it.live("an admin reads a listed app but never edits, archives or moves it", () 
       requiredCredentials: app.requiredCredentials,
       mcps: app.mcps,
       skills: app.skills,
+      webhooks: app.webhooks,
       dependsOn: app.dependsOn,
       expectedRevision: app.revision,
     }

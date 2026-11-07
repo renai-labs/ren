@@ -20,6 +20,7 @@ import { InfraPlan } from "./infra-specs/plan.js"
 import { InfraPolicy } from "./infra-specs/policy.js"
 import { InfraProfiles } from "./infra-specs/profiles.js"
 import { InfraSchedules } from "./infra-specs/schedules.js"
+import { InfraWebhooks } from "./infra-specs/webhooks.js"
 import { InfraVersions } from "./infra-specs/versions.js"
 import { OrganizationSettings } from "./organization-settings.js"
 import { Primitive } from "./primitive.js"
@@ -70,6 +71,7 @@ interface Live {
   readonly globals: ReadonlyArray<{ readonly id: AgentSchema.ID; readonly name: string }>
   readonly apps: InfraApps.Live
   readonly schedules: InfraSchedules.Live
+  readonly webhooks: InfraWebhooks.Live
   readonly channels: InfraChannels.Live
   readonly profiles: InfraProfiles.Live
   readonly memory: InfraMemory.Live
@@ -94,8 +96,6 @@ const described = (
   values,
   ...(status && { status }),
 })
-
-const unsupported = ["webhooks"] as const
 
 const sameSettings = Schema.toEquivalence(Settings.Info)
 
@@ -198,6 +198,7 @@ export const layer = Layer.effect(
     const kinds = {
       apps: yield* InfraApps.make,
       schedules: yield* InfraSchedules.make,
+      webhooks: yield* InfraWebhooks.make,
       channels: yield* InfraChannels.make,
       profiles: yield* InfraProfiles.make,
       memory: yield* InfraMemory.make,
@@ -277,6 +278,7 @@ export const layer = Layer.effect(
             const declaredApps = Object.values(input?.spec.spaces ?? {}).flatMap((space) => Object.keys(space.apps))
             const apps = yield* InfraApps.load(transaction, actor.organizationId, declaredApps)
             const schedules = yield* InfraSchedules.load(transaction, actor.organizationId)
+            const webhooks = yield* InfraWebhooks.load(transaction, actor.organizationId)
             const channels = yield* InfraChannels.load(transaction, actor.organizationId)
             const profiles = yield* InfraProfiles.load(transaction, actor.organizationId)
             const memory = yield* InfraMemory.load(transaction, actor.organizationId)
@@ -317,6 +319,7 @@ export const layer = Layer.effect(
               globals,
               apps,
               schedules,
+              webhooks,
               channels,
               profiles,
               memory,
@@ -386,6 +389,7 @@ export const layer = Layer.effect(
                 ),
                 apps: kinds.apps.pull(live.apps, space.id),
                 schedules: kinds.schedules.pull(live.schedules, space.id, pulledNames),
+                webhooks: kinds.webhooks.pull(live.webhooks, space.id, pulledNames),
                 channels: kinds.channels.pull(live.channels, space.id, pulledNames, aliases),
                 memory: kinds.memory.pull(live.memory, space.id),
                 uses: {
@@ -771,6 +775,7 @@ export const layer = Layer.effect(
       const planned = {
         apps: kinds.apps.diff(context, live.apps),
         schedules: kinds.schedules.diff(context, live.schedules),
+        webhooks: kinds.webhooks.diff(context, live.webhooks),
         channels: kinds.channels.diff(context, live.channels),
         profiles: kinds.profiles.diff(context, live.profiles),
         memory: kinds.memory.diff(context, live.memory, spec.memory),
@@ -778,6 +783,7 @@ export const layer = Layer.effect(
       problems.push(
         ...planned.apps.problems,
         ...planned.schedules.problems,
+        ...planned.webhooks.problems,
         ...planned.channels.problems,
         ...planned.profiles.problems,
       )
@@ -790,11 +796,13 @@ export const layer = Layer.effect(
         ...factorySteps.toSorted(byPath),
         ...planned.apps.steps,
         ...planned.schedules.steps,
+        ...planned.webhooks.steps,
         ...planned.channels.steps,
         ...planned.profiles.steps,
         ...planned.memory.steps,
         ...planned.profiles.removals,
         ...planned.channels.removals,
+        ...planned.webhooks.removals,
         ...planned.schedules.removals,
         ...planned.apps.removals,
         ...membershipArchives.toSorted(byPath),
@@ -830,12 +838,6 @@ export const layer = Layer.effect(
             message: "Infra does not apply the timezone of a space yet.",
           })),
         ...bound
-          .filter(([, bindings]) => Object.keys(bindings.webhooks).length > 0)
-          .map(([slug]) => ({
-            path: `deploy.yaml/spaces/${slug}/webhooks`,
-            message: "Infra does not apply webhooks yet.",
-          })),
-        ...bound
           .filter(([slug]) => !(slug in input.spec.spaces))
           .map(([slug]) => ({
             path: `deploy.yaml/spaces/${slug}`,
@@ -843,11 +845,6 @@ export const layer = Layer.effect(
           })),
       )
       problems.push(
-        ...declared.flatMap(([slug, declaration]) =>
-          unsupported
-            .filter((kind) => Object.keys(declaration[kind]).length > 0)
-            .map((kind) => ({ path: `spaces/${slug}/${kind}`, message: `Infra does not apply ${kind} yet.` })),
-        ),
         ...declared
           .filter(([, declaration]) => declaration.environment)
           .map(([slug]) => ({

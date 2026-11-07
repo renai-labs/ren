@@ -26,6 +26,7 @@ import { MemoryGroup } from "./groups/memory.js"
 import { OrganizationSettingsGroup } from "./groups/organization-settings.js"
 import { RenInferenceGroup } from "./groups/ren-inference.js"
 import { ScheduleGroup, ScheduleRunGroup } from "./groups/schedule.js"
+import { WebhookGroup, WebhookRequestGroup } from "./groups/webhook.js"
 import { SessionGroup } from "./groups/session.js"
 import { SpaceGroup } from "./groups/space.js"
 import { SpaceEnvironmentTemplateGroup } from "./groups/space-environment-template.js"
@@ -63,6 +64,8 @@ export const Api = HttpApi.make("server")
   .add(LabelGroup)
   .add(ScheduleGroup)
   .add(ScheduleRunGroup)
+  .add(WebhookGroup)
+  .add(WebhookRequestGroup)
   .add(CredentialGroup)
   .add(CredentialConnectGroup)
   .add(OAuthSessionGroup)

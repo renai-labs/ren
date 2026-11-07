@@ -32,6 +32,7 @@ import {
   IconInfoCircle,
   IconPencil,
   IconChecklist,
+  IconWebhook,
 } from "@tabler/icons-react"
 import { AsyncResult } from "effect/reactivity"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
@@ -389,6 +390,59 @@ function ScheduleOrigin(props: { schedule: NonNullable<SessionMessage.User["sche
   )
 }
 
+function WebhookOrigin(props: { webhook: NonNullable<SessionMessage.User["webhook"]>; spaceId: string | undefined }) {
+  return (
+    <Marker className="justify-end text-xs">
+      <MarkerIcon>
+        <IconWebhook />
+      </MarkerIcon>
+      <MarkerContent>
+        Webhook · {props.webhook.name} · {formatRun(props.webhook.receivedAt, localTimeZone())}
+        {props.spaceId ? (
+          <>
+            {" · "}
+            <Link
+              to="/spaces/$spaceId/webhooks/$webhookId"
+              params={{ spaceId: props.spaceId, webhookId: props.webhook.webhookId }}
+              search={{ tab: "requests", request: props.webhook.requestId }}
+            >
+              View request
+            </Link>
+          </>
+        ) : null}
+      </MarkerContent>
+    </Marker>
+  )
+}
+
+const requestStart = "\n\n<webhook_request>"
+
+function WebhookRequest(props: { request: string }) {
+  const [open, setOpen] = useState(false)
+  const bytes = new TextEncoder().encode(props.request).length
+  return (
+    <div className="flex w-full max-w-md flex-col self-end overflow-hidden rounded-xl border bg-card text-sm">
+      <Button
+        variant="ghost"
+        className="justify-start gap-2 rounded-none px-3.5"
+        aria-expanded={open}
+        onClick={() => setOpen((previous) => !previous)}
+      >
+        {open ? <IconChevronDown data-icon="inline-start" /> : <IconChevronRight data-icon="inline-start" />}
+        Request
+        <span className="text-muted-foreground">{bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024)} KB`}</span>
+      </Button>
+      {open ? (
+        <CodeBlock size="sm" className="rounded-none border-0">
+          <CodeBlockContent wrap className="max-h-80">
+            {props.request}
+          </CodeBlockContent>
+        </CodeBlock>
+      ) : null}
+    </div>
+  )
+}
+
 function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) {
   const [open, setOpen] = useState(false)
   const rest = props.task.brief
@@ -432,11 +486,19 @@ function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) 
 
 function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined }) {
   if (props.message.task) return <TaskHandoff task={props.message.task} />
+  const at = props.message.webhook ? props.message.text.indexOf(requestStart) : -1
+  if (at >= 0)
+    return (
+      <>
+        <UserText message={props.message} text={props.message.text.slice(0, at)} spaceId={props.spaceId} />
+        <WebhookRequest request={props.message.text.slice(at + 2)} />
+      </>
+    )
   return <UserText message={props.message} spaceId={props.spaceId} />
 }
 
-function UserText(props: { message: SessionMessage.User; spaceId: string | undefined }) {
-  const parts = splitPasted(props.message.text)
+function UserText(props: { message: SessionMessage.User; text?: string; spaceId: string | undefined }) {
+  const parts = splitPasted(props.text ?? props.message.text)
   const apps = useCatalog().apps
   const files = props.message.files ?? []
   const uploads = props.message.uploads ?? []
@@ -503,6 +565,7 @@ function UserMessage(props: {
       <MessageContent className={props.editing ? "w-full" : undefined}>
         <MessageHeader className="px-0">{props.person.name}</MessageHeader>
         {props.message.schedule ? <ScheduleOrigin schedule={props.message.schedule} /> : null}
+        {props.message.webhook ? <WebhookOrigin webhook={props.message.webhook} spaceId={props.spaceId} /> : null}
         {props.message.channel ? <ChannelOrigin origin={props.message.channel} /> : null}
         {props.editing ? (
           <EditPrompt text={props.message.text} onCancel={props.onCancel} onSave={props.onSave} />

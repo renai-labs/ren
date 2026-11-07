@@ -70,6 +70,7 @@ describe("profile items (§9 rule 4, §12)", () => {
           app = yield* apps.update(found.ana, app.id, {
             requiredCredentials: [],
             skills: {},
+            webhooks: {},
             dependsOn: [],
             mcps,
             expectedRevision: app.revision,

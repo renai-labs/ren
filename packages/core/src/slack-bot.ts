@@ -4,13 +4,15 @@ import { Database } from "@ren/db/database"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import type { Auth } from "@ren/schema/auth"
 import { Channel } from "@ren/schema/channel"
+import { IntakeThread } from "@ren/schema/intake-thread"
 import { Drive } from "@ren/schema/drive"
 import type { Space } from "@ren/schema/space"
-import { and, desc, eq, isNotNull, like } from "drizzle-orm"
+import { and, eq, like } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, type Redacted, Schedule, Schema } from "effect"
 import type { Actor } from "./actor.js"
 import { ChannelInstallQueries } from "./channel-install/queries.js"
 import { ChannelProvider } from "./channel-provider.js"
+import { ChannelThreads } from "./channel-threads.js"
 import { Drives } from "./drives.js"
 import { Slack } from "./channel-provider/slack.js"
 import { SlackMessage } from "./channel-provider/slack-message.js"
@@ -380,7 +382,7 @@ export const layer = Layer.effect(
     const slack = yield* SlackApp.Service
     const registry = yield* ChannelProvider.Registry
     const drives = yield* Drives.Service
-    const thread = Database.Schema.channel_thread
+    const thread = Database.Schema.intake_thread
     const spaces = Database.Schema.space
     const accounts = Database.Schema.account
 
@@ -446,27 +448,17 @@ export const layer = Layer.effect(
       database.db
         .insert(thread)
         .values({
-          id: Channel.ThreadID.create(),
+          id: IntakeThread.ID.create(),
           organization_id: connection.actor.organizationId,
-          provider: "slack",
-          install: connection.workspace,
-          thread: `${channel}:${root}`,
-          session_id: connection.actor.agent.sessionId,
+          origin: "slack",
+          origin_id: connection.workspace,
+          thread_key: `${channel}:${root}`,
+          current_session_id: connection.actor.agent.sessionId,
         })
         .onConflictDoNothing()
         .pipe(Effect.orDie)
 
-    const latestThread = (connection: Connection) =>
-      database.db
-        .select()
-        .from(thread)
-        .where(and(eq(thread.session_id, connection.actor.agent.sessionId), isNotNull(thread.last_message_at)))
-        .orderBy(desc(thread.last_message_at))
-        .limit(1)
-        .pipe(
-          Effect.orDie,
-          Effect.map((rows) => Option.fromNullishOr(rows.at(0))),
-        )
+    const latestThread = (connection: Connection) => ChannelThreads.latest(database, connection.actor.agent.sessionId)
 
     const placeOf = (found: string) => ({
       channel: found.slice(0, found.indexOf(":")),
@@ -594,39 +586,32 @@ export const layer = Layer.effect(
 
     const reply = Effect.fnUntraced(function* (
       connection: Connection,
-      latest: typeof thread.$inferSelect,
+      latest: ChannelThreads.Thread,
       input: { readonly message: string; readonly charts?: ReadonlyArray<unknown> },
       attached: ReadonlyArray<Attachment>,
     ) {
-      const place = placeOf(latest.thread)
+      const place = placeOf(latest.threadKey)
       yield* reachable(connection, place.channel)
       const provider = registry.get("slack")
       if (Option.isNone(provider)) return yield* notSetUp
-      const name = latest.place_name ?? latest.thread
-      const charts = yield* provider.value
-        .send(
-          { install: latest.install, place: name, thread: latest.thread, message: latest.last_message ?? "" },
-          input.message,
-          input.charts,
-        )
-        .pipe(
-          Effect.retry({
-            while: (error) => error._tag === "ChannelProvider.Unavailable",
-            times: 3,
-            schedule: Schedule.exponential("1 second"),
-          }),
-          Effect.catchTags({
-            "ChannelProvider.PlaceGone": () =>
-              Effect.fail(new Refused({ message: "The Slack thread is gone, so the reply was not sent." })),
-            "ChannelProvider.Unavailable": () =>
-              Effect.fail(
-                new Refused({ message: "Slack did not answer, so the reply was not sent. Try again later." }),
-              ),
-            "ChannelProvider.Rejected": (error) =>
-              Effect.fail(new Refused({ message: `Slack refused the reply: ${error.message}` })),
-          }),
-        )
-      const since = DateTime.fromDateUnsafe(latest.last_reply_at ?? latest.created_at)
+      const target = ChannelThreads.targetOf(latest)
+      const name = target.place
+      const charts = yield* provider.value.send(target, input.message, input.charts).pipe(
+        Effect.retry({
+          while: (error) => error._tag === "ChannelProvider.Unavailable",
+          times: 3,
+          schedule: Schedule.exponential("1 second"),
+        }),
+        Effect.catchTags({
+          "ChannelProvider.PlaceGone": () =>
+            Effect.fail(new Refused({ message: "The Slack thread is gone, so the reply was not sent." })),
+          "ChannelProvider.Unavailable": () =>
+            Effect.fail(new Refused({ message: "Slack did not answer, so the reply was not sent. Try again later." })),
+          "ChannelProvider.Rejected": (error) =>
+            Effect.fail(new Refused({ message: `Slack refused the reply: ${error.message}` })),
+        }),
+      )
+      const since = latest.state.lastReplyAt ?? DateTime.fromDateUnsafe(latest.createdAt)
       const given = new Set(attached.flatMap((file) => (file.path ? [file.path] : [])))
       const shown = (yield* drives
         .files(ownerOf(connection), Drive.outputsOf(connection.actor.agent.sessionId))
@@ -647,11 +632,7 @@ export const layer = Layer.effect(
         ),
       )
       const failed = yield* uploadAll(connection, place.channel, place.ts, [...attached, ...outputs.flat()])
-      yield* database.db
-        .update(thread)
-        .set({ last_reply_at: new Date() })
-        .where(eq(thread.id, latest.id))
-        .pipe(Effect.orDie)
+      yield* ChannelThreads.replied(database, latest.id)
       return {
         provider: "slack",
         place: name,
@@ -712,13 +693,13 @@ export const layer = Layer.effect(
       },
     ) {
       const attached = yield* attachments(connection, input.files ?? [])
-      const current = Option.filter(yield* latestThread(connection), (found) => found.provider === "slack")
+      const current = Option.filter(yield* latestThread(connection), (found) => found.origin === "slack")
       if (!input.channel_id) {
         if (Option.isNone(current)) return yield* new Refused({ message: noThread })
         return yield* reply(connection, current.value, input, attached)
       }
       const channel = yield* conversation(connection, input.channel_id)
-      if (Option.isSome(current) && `${channel}:${input.thread_ts ?? ""}` === current.value.thread)
+      if (Option.isSome(current) && `${channel}:${input.thread_ts ?? ""}` === current.value.threadKey)
         return yield* reply(connection, current.value, input, attached)
       return yield* post(connection, channel, input, attached)
     })
@@ -1032,8 +1013,8 @@ export const layer = Layer.effect(
           const target = input.channel_id
             ? { channel: input.channel_id, ts: input.message_ts }
             : Option.match(
-                Option.filter(yield* latestThread(connection), (found) => found.provider === "slack"),
-                { onNone: () => undefined, onSome: (found) => placeOf(found.thread) },
+                Option.filter(yield* latestThread(connection), (found) => found.origin === "slack"),
+                { onNone: () => undefined, onSome: (found) => placeOf(found.threadKey) },
               )
           if (!target) return yield* new Refused({ message: noThread })
           if (!target.ts) return yield* new Refused({ message: "read_thread needs the message_ts of the thread." })
@@ -1088,20 +1069,12 @@ export const layer = Layer.effect(
             "Searches public Slack messages and files as the person who started this chat. Read slack://guides/search first.\n\nIt works only in a chat that a Slack mention or DM started, shortly after that message, and about 10 times a minute.",
         },
         Effect.fnUntraced(function* (connection, input) {
-          const found = (yield* database.db
-            .select({ data: thread.data })
-            .from(thread)
-            .where(
-              and(
-                eq(thread.session_id, connection.actor.agent.sessionId),
-                eq(thread.provider, "slack"),
-                eq(thread.install, connection.workspace),
-                isNotNull(thread.last_message_at),
-              ),
-            )
-            .orderBy(desc(thread.last_message_at))
-            .limit(1)
-            .pipe(Effect.orDie)).at(0)?.data.slack?.actionToken
+          const found = Option.getOrUndefined(
+            yield* ChannelThreads.latest(database, connection.actor.agent.sessionId, {
+              origin: "slack",
+              install: connection.workspace,
+            }),
+          )?.state.slack?.actionToken
           if (!found)
             return yield* new Refused({
               message:
@@ -1438,8 +1411,8 @@ export const layer = Layer.effect(
             input.channel_id ??
             Option.getOrUndefined(
               Option.map(
-                Option.filter(yield* latestThread(connection), (found) => found.provider === "slack"),
-                (found) => placeOf(found.thread).channel,
+                Option.filter(yield* latestThread(connection), (found) => found.origin === "slack"),
+                (found) => placeOf(found.threadKey).channel,
               ),
             )
           if (!target)
