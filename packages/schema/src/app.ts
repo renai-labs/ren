@@ -9,6 +9,7 @@ import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
 import { Skill } from "./skill.js"
 import { Space } from "./space.js"
+import { Webhook } from "./webhook.js"
 
 export const ID = AppIdentity.ID
 export type ID = typeof ID.Type
@@ -54,6 +55,11 @@ export const Definition = Schema.Struct({
     )
     .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   dependsOn: Schema.Array(Primitive.Slug).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
+  webhooks: Schema.Record(Primitive.Slug, Webhook.Preset)
+    .annotate({
+      description: "Webhooks that a space can turn on. Each one reads its name, message and parser from here.",
+    })
+    .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
 }).annotate({ identifier: "App.Definition", description: "The app’s content. One per app; an edit replaces it." })
 
 export interface Metadata extends Schema.Schema.Type<typeof Metadata> {}

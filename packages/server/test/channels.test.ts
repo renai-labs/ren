@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test"
 import { ChannelProvider } from "@ren/core/channel-provider"
 import { Effect, Layer, Option } from "effect"
+import { IntakeOrigins } from "../src/intake-origins.js"
 import { Routes } from "../src/routes.js"
 import { call, makeApp, sessionCookie, signUp } from "./lib/app.js"
 
@@ -30,7 +31,9 @@ const echo = Effect.succeedSome<ChannelProvider.Provider>({
   announce: () => Effect.void,
 })
 
-const app = makeApp(Routes.layer.pipe(Layer.provide(ChannelProvider.layer(Effect.all([echo])))))
+const app = makeApp(
+  Routes.layer.pipe(Layer.provide(IntakeOrigins.layer), Layer.provide(ChannelProvider.layer(Effect.all([echo])))),
+)
 afterAll(() => app.dispose())
 
 const post = (path: string, body: string, signature: string) =>

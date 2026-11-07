@@ -238,6 +238,7 @@ export const layer = Layer.effect(
             name: publication.name,
             description: publication.description,
             icon: publication.icon ?? null,
+            webhooks: publication.webhooks,
           }
           const definition = {
             required_credentials: publication.requiredCredentials,
@@ -250,7 +251,8 @@ export const layer = Layer.effect(
                 const isMetadataChanged =
                   current.name !== metadata.name ||
                   current.description !== metadata.description ||
-                  current.icon !== metadata.icon
+                  current.icon !== metadata.icon ||
+                  AppValidation.canonical(current.webhooks) !== AppValidation.canonical(metadata.webhooks)
                 const isExecutionChanged =
                   AppValidation.execution(yield* AppQueries.info(transaction, current)) !==
                   AppValidation.execution(publication)

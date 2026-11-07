@@ -74,6 +74,7 @@ describe("InfraSpecs apps", () => {
           requiredCredentials: [],
           skills: { [`${slug}-write`]: { ...skill("Write well."), requiredCredentials: [], files: {} } },
           mcps: {},
+          webhooks: {},
           dependsOn: [],
         },
       })

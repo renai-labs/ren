@@ -6,9 +6,10 @@ import type { Auth } from "@ren/schema/auth"
 import { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
+import { IntakeThread } from "@ren/schema/intake-thread"
+import { WebhookOrigin } from "@ren/schema/webhook-origin"
 import { Session } from "@ren/schema/session"
 import { TaskLink } from "@ren/schema/task-link"
-import { BunCrypto } from "@effect/platform-bun"
 import {
   Clock,
   ConfigProvider,
@@ -22,8 +23,9 @@ import {
   Schema,
   Struct,
 } from "effect"
-import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
-import { WorkflowEngine } from "effect/workflow"
+import { PersistedQueue } from "effect/persistence"
+import { SqlClient } from "effect/sql"
+import type { WorkflowEngine } from "effect/workflow"
 import { BrainRegistry } from "../../src/brain-registry.js"
 import { Access } from "../../src/access.js"
 import { ChannelIdentity } from "../../src/channel-identity.js"
@@ -38,9 +40,12 @@ import { GitHubApp } from "../../src/github-app.js"
 import { Envelope } from "../../src/envelope.js"
 import { PersonCredentials } from "../../src/person-credentials.js"
 import { ChannelRoute } from "../../src/channel-route.js"
-import { Channels } from "../../src/channels.js"
+import { ChannelEventRun } from "../../src/channel-event-run.js"
+import { ChannelIntake } from "../../src/channel-intake.js"
 import { DurableRunner } from "../../src/durable-runner.js"
 import { Drives } from "../../src/drives.js"
+import { Intake } from "../../src/intake.js"
+import { IntakeThreads } from "../../src/intake-threads.js"
 import { Models } from "../../src/models.js"
 import { PullRequest } from "../../src/pull-request.js"
 import { SessionRunner } from "../../src/session/runner.js"
@@ -185,7 +190,10 @@ const providers = Effect.map(provider, (slack) => [
   Option.some<ChannelProvider.Provider>({ ...Struct.omit(slack, ["replyTool"]), id: "github" }),
 ])
 
-export const request = (body: string, signature = sign(body)): ChannelProvider.Request => ({
+export const request = (body: string, signature = sign(body)): Intake.Request => ({
+  method: "POST",
+  params: { provider: "slack" },
+  query: {},
   headers: new Headers({ "x-signature": signature }),
   body,
 })
@@ -238,6 +246,7 @@ const Start = Schema.Struct({
       prompt: Session.Prompt,
       sender: Session.Sender,
       channel: Schema.optionalKey(ChannelOrigin.Info),
+      webhook: Schema.optionalKey(WebhookOrigin.Info),
       synthetic: Schema.optionalKey(Session.Synthetic),
     }),
   ),
@@ -248,6 +257,7 @@ const Send = Schema.Struct({
   prompt: Session.Prompt,
   delivery: Session.Delivery,
   channel: Schema.optionalKey(ChannelOrigin.Info),
+  webhook: Schema.optionalKey(WebhookOrigin.Info),
   synthetic: Schema.optionalKey(Session.Synthetic),
 })
 
@@ -259,6 +269,7 @@ export interface Delivered {
   readonly delivery?: Session.Delivery
   readonly interactive?: boolean
   readonly channel?: ChannelOrigin.Info
+  readonly webhook?: WebhookOrigin.Info
   readonly synthetic?: Session.Synthetic
 }
 
@@ -294,7 +305,8 @@ const cell = Layer.effect(
               if (failures.starts)
                 return Response.json({ _tag: "BrainRejectedError", message: "No agent" }, { status: 422 })
               started.add(body.sessionId)
-              if (body.initialMessage)
+              const repeated = accepted.some((each) => each.messageId === body.initialMessage?.messageId)
+              if (body.initialMessage && !repeated)
                 accepted.push({
                   kind: "start",
                   sessionId: body.sessionId,
@@ -313,7 +325,8 @@ const cell = Layer.effect(
             }
             if (!started.has(sessionId))
               return Response.json({ _tag: "SessionNotStartedError", message: "not started" }, { status: 409 })
-            accepted.push({ kind: "send", sessionId, ...body })
+            if (!accepted.some((each) => each.messageId === body.messageId))
+              accepted.push({ kind: "send", sessionId, ...body })
             return Response.json({ messageId: body.messageId })
           },
         }),
@@ -406,39 +419,61 @@ const onCell = <A, E, R, RE, RR>(
     Layer.provideMerge(cell),
   )
 
-export const cellLayer = onCell(Layer.mergeAll(Channels.layer, ChannelTurns.layer), DurableRunner.layerMemory).pipe(
-  Layer.provideMerge(Testing.layer),
+const channelOrigins = Layer.mergeAll(
+  Intake.receivers(
+    Effect.gen(function* () {
+      const registry = yield* ChannelProvider.Registry
+      return yield* Effect.forEach(registry.providers, ChannelIntake.receiver)
+    }),
+  ),
+  Intake.workers(
+    Effect.gen(function* () {
+      const registry = yield* ChannelProvider.Registry
+      return yield* Effect.forEach(registry.providers, ChannelIntake.worker)
+    }),
+  ),
 )
 
-export const unstoredLayer = onCell(
-  Channels.layer.pipe(
-    Layer.provide(
-      Layer.effect(
-        WorkflowEngine.WorkflowEngine,
-        Effect.gen(function* () {
-          const engine = yield* WorkflowEngine.WorkflowEngine
-          return WorkflowEngine.WorkflowEngine.of({
-            ...engine,
-            execute: () => Effect.die(new Error("The run store is down")),
-          })
-        }),
-      ),
-    ),
+const unstored = Layer.effect(
+  PersistedQueue.PersistedQueueStore,
+  Effect.map(PersistedQueue.makeStoreSql(), (store) =>
+    PersistedQueue.PersistedQueueStore.of({
+      ...store,
+      offer: () => Effect.fail(new PersistedQueue.PersistedQueueError({ message: "The queue store is down" })),
+    }),
   ),
+)
+
+const intakeOf = <E, R, SE, SR>(
+  origins: Layer.Layer<Intake.Receivers | Intake.Workers, E, R>,
+  store: Layer.Layer<PersistedQueue.PersistedQueueStore, SE, SR>,
+) =>
+  Layer.mergeAll(ChannelEventRun.layer, Intake.layerWorker).pipe(
+    Layer.provideMerge(Intake.layer),
+    Layer.provideMerge(IntakeThreads.layer),
+    Layer.provideMerge(origins),
+    Layer.provide(PersistedQueue.layer),
+    Layer.provide(store),
+  )
+
+export const intakeLayer = <E, R>(origins: Layer.Layer<Intake.Receivers | Intake.Workers, E, R>) =>
+  onCell(intakeOf(origins, PersistedQueue.layerStoreSql()), DurableRunner.layerMemory).pipe(
+    Layer.provideMerge(Testing.layer),
+  )
+
+export const cellLayer = onCell(
+  Layer.mergeAll(intakeOf(channelOrigins, PersistedQueue.layerStoreSql()), ChannelTurns.layer),
   DurableRunner.layerMemory,
 ).pipe(Layer.provideMerge(Testing.layer))
 
-export const durableLayer = (options: { readonly held: boolean }) =>
-  onCell(
-    Channels.layer,
-    ClusterWorkflowEngine.layer.pipe(
-      Layer.provideMerge(SingleRunner.layer({ shardingConfig: { entityTerminationTimeout: "100 millis" } })),
-      Layer.provide(BunCrypto.layer),
-    ),
-    options,
-  )
+export const unstoredLayer = onCell(intakeOf(channelOrigins, unstored), DurableRunner.layerMemory).pipe(
+  Layer.provideMerge(Testing.layer),
+)
 
-export const sandboxLayer = Channels.layer.pipe(
+export const durableLayer = (options: { readonly held: boolean }) =>
+  onCell(intakeOf(channelOrigins, PersistedQueue.layerStoreSql()), DurableRunner.layerMemory, options)
+
+export const sandboxLayer = intakeOf(channelOrigins, PersistedQueue.layerStoreSql()).pipe(
   Layer.provideMerge(core(false)),
   Layer.provideMerge(Host.layer({}, models)),
   Layer.provideMerge(Testing.layer),
@@ -458,23 +493,27 @@ export const quickly = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.flatMap(Clock.Clock, (live) => effect.pipe(Effect.provideService(Clock.Clock, quick(live))))
 
 export const receive = (body: string, signature?: string) =>
-  Channels.Service.pipe(Effect.flatMap((channels) => quickly(channels.receive("slack", request(body, signature)))))
+  Intake.Service.pipe(Effect.flatMap((intake) => quickly(intake.receive("slack", request(body, signature)))))
 
-export const settled = (found: Channel.Event) =>
+export const done = (id: string) =>
   Effect.gen(function* () {
-    const executionId = yield* Channels.EventRun.executionId({
-      event: found,
-      messageId: Session.MessageID.create(),
-      sessionId: Session.ID.create(),
-    })
-    yield* Channels.EventRun.poll(executionId).pipe(
-      Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("20 millis") }),
+    const sql = yield* SqlClient.SqlClient
+    return yield* sql<{ readonly state: string }>`select state from effect_queue where id = ${id}`.pipe(
+      Effect.orDie,
+      Effect.map((rows) => rows.at(0)?.state),
+      Effect.repeat({
+        until: (state) => state === "completed" || state === "failed",
+        schedule: Schedule.spaced("20 millis"),
+      }),
       Effect.timeoutOrElse({
         duration: "20 seconds",
-        orElse: () => Effect.die(new Error(`The run of ${found.eventId} did not finish`)),
+        orElse: () => Effect.die(new Error(`The intake job ${id} did not finish`)),
       }),
     )
   })
+
+export const settled = (found: Channel.Event) =>
+  done(Intake.queueIdOf({ origin: found.provider, originId: found.install, eventId: found.eventId }))
 
 export const accepted = (count: number) =>
   Effect.gen(function* () {
@@ -495,17 +534,17 @@ export const thread = Effect.fnUntraced(function* (
   sessionId: Session.ID,
 ) {
   const database = yield* Database.Service
-  yield* database.db.insert(Database.Schema.channel_thread).values({
-    id: Channel.ThreadID.create(),
+  yield* database.db.insert(Database.Schema.intake_thread).values({
+    id: IntakeThread.ID.create(),
     organization_id: organizationId,
-    provider: found.provider,
-    install: found.install,
-    thread: found.thread.id,
-    session_id: sessionId,
+    origin: found.provider,
+    origin_id: found.install,
+    thread_key: found.thread.id,
+    current_session_id: sessionId,
   })
 })
 
 export const threads = Effect.gen(function* () {
   const database = yield* Database.Service
-  return yield* database.db.select().from(Database.Schema.channel_thread)
+  return yield* database.db.select().from(Database.Schema.intake_thread)
 })

@@ -45,7 +45,17 @@ export const layer = Layer.effect(
         .pipe(Effect.orDie)
       yield* Effect.forEach(
         stale,
-        (chat) => database.db.delete(chats).where(eq(chats.id, chat.id)).pipe(Effect.orDie),
+        (chat) =>
+          database
+            .transaction((transaction) =>
+              Effect.gen(function* () {
+                yield* transaction
+                  .delete(Database.Schema.intake_thread)
+                  .where(eq(Database.Schema.intake_thread.current_session_id, chat.id))
+                yield* transaction.delete(chats).where(eq(chats.id, chat.id))
+              }),
+            )
+            .pipe(Effect.orDie),
         { discard: true },
       )
       yield* database.db
@@ -60,6 +70,10 @@ export const layer = Layer.effect(
       yield* database.db
         .delete(Database.Schema.schedule_run)
         .where(lt(Database.Schema.schedule_run.scheduled_at, cutoff))
+        .pipe(Effect.orDie)
+      yield* database.db
+        .delete(Database.Schema.webhook_request)
+        .where(lt(Database.Schema.webhook_request.received_at, cutoff))
         .pipe(Effect.orDie)
       yield* drives.sweep(cutoff)
       if (stale.length > 0) yield* Effect.logInfo(`Retention deleted ${stale.length} chats`)

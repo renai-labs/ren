@@ -194,6 +194,30 @@ import type {
   ScheduleRunOutput,
   ScheduleRunListInput,
   ScheduleRunListOutput,
+  WebhookListInput,
+  WebhookListOutput,
+  WebhookGetInput,
+  WebhookGetOutput,
+  WebhookCreateInput,
+  WebhookCreateOutput,
+  WebhookUpdateInput,
+  WebhookUpdateOutput,
+  WebhookArchiveInput,
+  WebhookArchiveOutput,
+  WebhookRotateUrlInput,
+  WebhookRotateUrlOutput,
+  WebhookSetSigningSecretInput,
+  WebhookSetSigningSecretOutput,
+  WebhookRevealSigningSecretInput,
+  WebhookRevealSigningSecretOutput,
+  WebhookTestInput,
+  WebhookTestOutput,
+  WebhookReplayInput,
+  WebhookReplayOutput,
+  WebhookRequestListInput,
+  WebhookRequestListOutput,
+  WebhookRequestGetInput,
+  WebhookRequestGetOutput,
   CredentialListInput,
   CredentialListOutput,
   CredentialGetInput,
@@ -891,6 +915,7 @@ export function make(options: ClientOptions) {
               skills: input["skills"],
               mcps: input["mcps"],
               dependsOn: input["dependsOn"],
+              webhooks: input["webhooks"],
               slug: input["slug"],
               ownerSpaceId: input["ownerSpaceId"],
             },
@@ -911,6 +936,7 @@ export function make(options: ClientOptions) {
               skills: input["skills"],
               mcps: input["mcps"],
               dependsOn: input["dependsOn"],
+              webhooks: input["webhooks"],
               name: input["name"],
               description: input["description"],
               icon: input["icon"],
@@ -1710,6 +1736,169 @@ export function make(options: ClientOptions) {
             query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
             successStatus: 200,
             declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    webhook: {
+      list: (input: WebhookListInput, requestOptions?: RequestOptions) =>
+        request<WebhookListOutput>(
+          {
+            method: "GET",
+            path: `/webhooks`,
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: WebhookGetInput, requestOptions?: RequestOptions) =>
+        request<WebhookGetOutput>(
+          {
+            method: "GET",
+            path: `/webhooks/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: WebhookCreateInput, requestOptions?: RequestOptions) =>
+        request<WebhookCreateOutput>(
+          {
+            method: "POST",
+            path: `/webhooks`,
+            body: {
+              spaceId: input["spaceId"],
+              source: input["source"],
+              slug: input["slug"],
+              agentId: input["agentId"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: WebhookUpdateInput, requestOptions?: RequestOptions) =>
+        request<WebhookUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/webhooks/${encodeURIComponent(input.id)}`,
+            body: {
+              name: input["name"],
+              message: input["message"],
+              parser: input["parser"],
+              agentId: input["agentId"],
+              fallbackUserId: input["fallbackUserId"],
+              mode: input["mode"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: WebhookArchiveInput, requestOptions?: RequestOptions) =>
+        request<WebhookArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/webhooks/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      rotateUrl: (input: WebhookRotateUrlInput, requestOptions?: RequestOptions) =>
+        request<WebhookRotateUrlOutput>(
+          {
+            method: "POST",
+            path: `/webhooks/${encodeURIComponent(input.id)}/rotateUrl`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      setSigningSecret: (input: WebhookSetSigningSecretInput, requestOptions?: RequestOptions) =>
+        request<WebhookSetSigningSecretOutput>(
+          {
+            method: "POST",
+            path: `/webhooks/${encodeURIComponent(input.id)}/setSigningSecret`,
+            body: { secret: input["secret"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      revealSigningSecret: (input: WebhookRevealSigningSecretInput, requestOptions?: RequestOptions) =>
+        request<WebhookRevealSigningSecretOutput>(
+          {
+            method: "POST",
+            path: `/webhooks/${encodeURIComponent(input.id)}/revealSigningSecret`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      test: (input: WebhookTestInput, requestOptions?: RequestOptions) =>
+        request<WebhookTestOutput>(
+          {
+            method: "POST",
+            path: `/webhooks/${encodeURIComponent(input.id)}/test`,
+            body: { parser: input["parser"], requestIds: input["requestIds"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      replay: (input: WebhookReplayInput, requestOptions?: RequestOptions) =>
+        request<WebhookReplayOutput>(
+          {
+            method: "POST",
+            path: `/webhooks/${encodeURIComponent(input.id)}/replay`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "webhook-request": {
+      list: (input: WebhookRequestListInput, requestOptions?: RequestOptions) =>
+        request<WebhookRequestListOutput>(
+          {
+            method: "GET",
+            path: `/webhook-requests`,
+            query: {
+              webhookId: input["webhookId"],
+              outcome: input["outcome"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: WebhookRequestGetInput, requestOptions?: RequestOptions) =>
+        request<WebhookRequestGetOutput>(
+          {
+            method: "POST",
+            path: `/webhook-requests/${encodeURIComponent(input.id)}/get`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
             empty: false,
           },
           requestOptions,

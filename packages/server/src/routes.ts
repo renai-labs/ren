@@ -15,7 +15,9 @@ import { ChannelMappings } from "@ren/core/channel-mappings"
 import { SlackBot } from "@ren/core/slack-bot"
 import { SlackTaskActions } from "@ren/core/slack-task-actions"
 import { ChannelTurns } from "@ren/core/channel-turns"
-import { Channels } from "@ren/core/channels"
+import { ChannelEventRun } from "@ren/core/channel-event-run"
+import { Intake } from "@ren/core/intake"
+import { IntakeThreads } from "@ren/core/intake-threads"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { InfraSpecs } from "@ren/core/infra-specs"
@@ -26,6 +28,7 @@ import { Memory } from "@ren/core/memory"
 import { OrganizationSettings } from "@ren/core/organization-settings"
 import { ScheduleTrigger } from "@ren/core/schedule-trigger"
 import { Schedules } from "@ren/core/schedules"
+import { Webhooks } from "@ren/core/webhooks"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
@@ -61,6 +64,7 @@ import { SignInHandler } from "./handlers/api/sign-in.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { ChannelRoutes } from "./channel-routes.js"
+import { WebhookRoutes } from "./webhook-routes.js"
 import { OAuthApps } from "@ren/core/oauth-apps"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
 import { HealthHandler } from "./handlers/api/health.js"
@@ -75,6 +79,7 @@ import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handle
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
+import { WebhookHandler, WebhookRequestHandler } from "./handlers/api/webhook.js"
 import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
@@ -135,6 +140,16 @@ const schedules = Schedules.layer.pipe(
   Layer.provide(BrainRegistry.layer),
 )
 
+const intake = Layer.mergeAll(
+  ChannelEventRun.layer,
+  Intake.layerWorker.pipe(
+    Layer.provide([IntakeThreads.layer, SessionRunner.layer]),
+    Layer.provide(BrainRegistry.layer),
+  ),
+).pipe(Layer.provideMerge(Intake.layer))
+
+const webhooks = Webhooks.layer.pipe(Layer.provide(intake))
+
 // oxlint-disable-next-line ren/no-comments -- Api only (MCP may stream SSE); gzip only (Bun's brotli blocks the event loop).
 const Compression = HttpRouter.middleware(
   Effect.gen(function* () {
@@ -177,6 +192,8 @@ export const layer = Layer.mergeAll(
         LabelHandler,
         ScheduleHandler,
         ScheduleRunHandler,
+        WebhookHandler,
+        WebhookRequestHandler,
         CredentialHandler,
         CredentialConnectHandler,
         OAuthSessionHandler,
@@ -210,6 +227,7 @@ export const layer = Layer.mergeAll(
             ChannelMappings.layer,
             Memory.layer,
             schedules,
+            webhooks,
           ]),
         ),
         Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
@@ -217,6 +235,7 @@ export const layer = Layer.mergeAll(
           Layer.provide(BrainRegistry.layer),
         ),
         schedules,
+        webhooks,
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,
@@ -242,12 +261,13 @@ export const layer = Layer.mergeAll(
     SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
     ChannelRoutes.layer.pipe(
-      Layer.provide(Channels.layer),
+      Layer.provide(intake),
       Layer.provide(SlackTaskActions.layer),
       Layer.provide([Task.layer.pipe(Layer.provideMerge(SessionRunner.layer)), ChannelInstalls.layer]),
       Layer.provide(BrainRegistry.layer),
     ),
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
+  WebhookRoutes.layer.pipe(Layer.provide(intake)),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),
     Layer.provide([

@@ -757,6 +757,7 @@ describe("Egress.unauthorized", () => {
           requiredCredentials: [],
           mcps: { gmail: ProfilesFixture.remote("Gmail") },
           skills: {},
+          webhooks: {},
           dependsOn: [],
           expectedRevision: app.revision,
         })

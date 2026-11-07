@@ -38,6 +38,7 @@ export const app = pgTable(
     environment: jsonb().$type<App.Environment>(),
     mcps: jsonb().$type<App.Definition["mcps"]>().notNull(),
     skills: jsonb().$type<App.Definition["skills"]>().notNull(),
+    webhooks: jsonb().$type<App.Definition["webhooks"]>().notNull().default({}),
     revision: integer().notNull().default(1),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),

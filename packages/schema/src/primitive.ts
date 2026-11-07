@@ -64,7 +64,6 @@ interface Checked<D extends Definition> {
   }
   readonly create?: { readonly result: Result<D["info"]> }
   readonly update?: { readonly result: Result<D["info"]> }
-  readonly actions?: { readonly [Name in keyof D["actions"]]: { readonly result: Result<D["info"]> } }
 }
 
 type Operation<D extends { readonly name: string }> =

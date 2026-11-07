@@ -2,7 +2,7 @@
 
 A `.ren/` folder declares a whole organization. `ren infra validate`, `plan`, `apply` and `pull` are built (`packages/cli`, `core/src/infra-specs.ts`). `Infra.Spec` in `@ren/schema` (`schema/src/infra.ts`) is the one definition of the folder and is the authority for its shape.
 
-Apply works today for org settings, shared spaces, agents, `uses`, `factory`, custom apps, recurring schedules that start a new chat, GitHub and Slack channel mappings, and the spaces listed on app profiles. The rest of this file is not built.
+Apply works today for org settings, shared spaces, agents, `uses`, `factory`, custom apps, recurring schedules that start a new chat, webhooks (created as listening; the mode, URL token and signing secret stay live state), GitHub and Slack channel mappings, and the spaces listed on app profiles. The rest of this file is not built.
 
 ## 1. Parts that apply refuses
 
@@ -10,7 +10,6 @@ Apply works today for org settings, shared spaces, agents, `uses`, `factory`, cu
 
 | Part                                                 | Today                                                    |
 | ---------------------------------------------------- | -------------------------------------------------------- |
-| `spaces/<slug>/webhooks.yaml` and webhook bindings   | "Infra does not apply webhooks yet."                     |
 | `spaces/<slug>/environment.yaml`                     | "Infra does not apply environments yet."                 |
 | `deploy.yaml` `spaces.<slug>.timezone`               | "Infra does not apply the timezone of a space yet."      |
 | One-time schedules and schedules that send to a chat | Not managed: apply leaves them as they are.              |

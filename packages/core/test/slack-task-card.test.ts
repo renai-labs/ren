@@ -2,6 +2,7 @@ import { afterAll, describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { Channel } from "@ren/schema/channel"
+import { IntakeThread } from "@ren/schema/intake-thread"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { ChannelMapping } from "@ren/schema/channel-mapping"
 import type { Session } from "@ren/schema/session"
@@ -141,13 +142,13 @@ const threaded = Effect.fnUntraced(function* (
   sessionId?: Session.ID,
 ) {
   const database = yield* Database.Service
-  yield* database.db.insert(Database.Schema.channel_thread).values({
-    id: Channel.ThreadID.create(),
+  yield* database.db.insert(Database.Schema.intake_thread).values({
+    id: IntakeThread.ID.create(),
     organization_id: o.organizationId,
-    provider: "slack",
-    install: workspace,
-    thread: key,
-    session_id:
+    origin: "slack",
+    origin_id: workspace,
+    thread_key: key,
+    current_session_id:
       sessionId ??
       (yield* Seed.session({ organizationId: o.organizationId, spaceId: o.factory.id, createdBy: o.ada.userId })),
   })

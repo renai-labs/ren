@@ -9,7 +9,7 @@ import type { PullRequest as PullRequestSchema } from "@ren/schema/pull-request"
 import { Task } from "@ren/schema/task"
 import type { TaskEvent } from "@ren/schema/task-event"
 import { TaskLink } from "@ren/schema/task-link"
-import { and, asc, count, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm"
+import { and, asc, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { alias } from "drizzle-orm/pg-core"
 import { Array, Context, DateTime, Effect, Layer, Option, Predicate, Schema } from "effect"
@@ -977,15 +977,15 @@ export const layer = Layer.effect(
               : []
             const threads = actor.agent
               ? yield* transaction
-                  .select({ url: Database.Schema.channel_thread.url })
-                  .from(Database.Schema.channel_thread)
+                  .select({ url: sql<string>`${Database.Schema.intake_thread.channel_state} ->> 'url'` })
+                  .from(Database.Schema.intake_thread)
                   .where(
                     and(
-                      eq(Database.Schema.channel_thread.session_id, actor.agent.sessionId),
-                      isNotNull(Database.Schema.channel_thread.url),
+                      eq(Database.Schema.intake_thread.current_session_id, actor.agent.sessionId),
+                      sql`${Database.Schema.intake_thread.channel_state} ? 'url'`,
                     ),
                   )
-                  .orderBy(asc(Database.Schema.channel_thread.created_at))
+                  .orderBy(asc(Database.Schema.intake_thread.created_at))
                   .limit(Task.maximumLinks - (input.links?.length ?? 0))
               : []
             const links = yield* editLinks(

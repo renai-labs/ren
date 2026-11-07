@@ -75,6 +75,12 @@ export type CredentialProvider = string
 
 export type McpTimeouts = { startup?: number; catalog?: number; execution?: number }
 
+export type WebhookHeaderName = string
+
+export type WebhookExpression = string
+
+export type WebhookSecretSource = "ren" | "provider"
+
 export type AppProfileID = string
 
 export type AppProfileSlug = string
@@ -137,6 +143,8 @@ export type SessionMessageSender = { userId: string }
 export type ChannelProvider = "slack" | "linear" | "github"
 
 export type ScheduleOriginInfo = { scheduleId: string; name: string; scheduledAt: string }
+
+export type WebhookOriginInfo = { webhookId: string; name: string; requestId: string; receivedAt: string }
 
 export type TaskAssignmentInfo = { taskId: string; identifier: string; title: string; brief: string }
 
@@ -241,6 +249,30 @@ export type ScheduleRunReason =
   | "agent_removed"
   | "chat_archived"
 
+export type WebhookID = string
+
+export type WebhookMode = "listening" | "live"
+
+export type WebhookModeReason = "owner_left" | "agent_removed" | "parser_broken" | "preset_removed"
+
+export type WebhookRequestID = string
+
+export type WebhookRequestOutcome =
+  | "queued"
+  | "started"
+  | "continued"
+  | "failed"
+  | "recorded"
+  | "throttled"
+  | "answered"
+  | "rejected"
+  | "ignored"
+  | "duplicate"
+
+export type WebhookTestOutcome = "answered" | "passed" | "ignored" | "duplicate" | "rejected"
+
+export type WebhookReplayed = { replayed: number; remaining: number }
+
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
 export type CredentialLocation = "header" | "query" | "path"
@@ -292,6 +324,7 @@ export type InfraKind =
   | "membership"
   | "app"
   | "schedule"
+  | "webhook"
   | "channel"
   | "profile"
   | "memory"
@@ -426,6 +459,22 @@ export type CredentialWhen = { name: CredentialFieldName; op: "eq" | "neq"; valu
 export type AppEnvironment = { packages?: AppPackages; buildCommands?: Array<string> }
 
 export type CredentialName = CredentialEnvName | CredentialFieldName
+
+export type WebhookSignature =
+  | { kind: "none" }
+  | { kind: "header"; header: WebhookHeaderName }
+  | { kind: "hmac"; header: WebhookHeaderName; encoding: "hex" | "base64"; prefix?: string }
+  | { kind: "standard" }
+  | { kind: "stripe" }
+
+export type WebhookPresetOf = {
+  appId: AppID
+  appName: string
+  preset: PrimitiveSlug
+  secret: WebhookSecretSource | null
+  setup: string | null
+  updatedAt: string
+}
 
 export type AppProfileLink = { appId: AppID; profileId: AppProfileID | null }
 
@@ -639,6 +688,56 @@ export type ScheduleRunInfo = {
   sessionId: SessionID
 }
 
+export type WebhookLastRequest = {
+  id: WebhookRequestID
+  receivedAt: string
+  outcome: WebhookRequestOutcome
+  broken: boolean
+}
+
+export type WebhookRequestInfo = {
+  id: WebhookRequestID
+  webhookId: WebhookID
+  receivedAt: string
+  outcome: WebhookRequestOutcome
+  broken: boolean
+  reason: string | null
+  verified: boolean
+  eventId: string | null
+  threadKey: string | null
+  sessionId: SessionID | null
+  method: string
+  bodyBytes: number | null
+}
+
+export type WebhookRequestDetail = {
+  id: WebhookRequestID
+  webhookId: WebhookID
+  receivedAt: string
+  outcome: WebhookRequestOutcome
+  broken: boolean
+  reason: string | null
+  verified: boolean
+  eventId: string | null
+  threadKey: string | null
+  sessionId: SessionID | null
+  method: string
+  bodyBytes: number | null
+  query: { [x: string]: string }
+  headers: { [x: string]: string }
+  body: string | null
+}
+
+export type WebhookTested = {
+  requestId: WebhookRequestID
+  outcome: WebhookTestOutcome
+  broken: boolean
+  reason: string | null
+  eventId: string | null
+  threadKey: string | null
+  title: string | null
+}
+
 export type CredentialInject =
   | { op: "replace"; in: [CredentialLocation, ...Array<CredentialLocation>] }
   | { op: "setHeader"; name: string; format: "Bearer {value}" | "Basic {basic}" | "{value}" }
@@ -720,6 +819,8 @@ export type InfraPulledSchedule = {
   until?: string
   enabled?: boolean
 }
+
+export type WebhookPresetDeclaration = { app: PrimitiveSlug; preset: PrimitiveSlug; agent?: AgentName }
 
 export type ChannelDeclaration =
   | {
@@ -831,6 +932,44 @@ export type CredentialSelect = {
   when?: CredentialWhen
 }
 
+export type WebhookPreset = {
+  name: string
+  description: string
+  message: string
+  signature?: WebhookSignature
+  handshake?: WebhookExpression
+  signedHandshake?: WebhookExpression
+  filter?: WebhookExpression
+  eventId?: WebhookExpression
+  threadKey?: WebhookExpression
+  title?: WebhookExpression
+  secret: WebhookSecretSource
+  setup: string
+}
+
+export type WebhookParser = {
+  signature?: WebhookSignature
+  handshake?: WebhookExpression
+  signedHandshake?: WebhookExpression
+  filter?: WebhookExpression
+  eventId?: WebhookExpression
+  threadKey?: WebhookExpression
+  title?: WebhookExpression
+}
+
+export type WebhookCustomDeclaration = {
+  name?: string
+  agent?: AgentName
+  message: string
+  signature?: WebhookSignature
+  handshake?: WebhookExpression
+  signedHandshake?: WebhookExpression
+  filter?: WebhookExpression
+  eventId?: WebhookExpression
+  threadKey?: WebhookExpression
+  title?: WebhookExpression
+}
+
 export type CredentialOwner =
   | { kind: "org" }
   | { kind: "space"; spaceId: SpaceID }
@@ -865,6 +1004,7 @@ export type SessionMessageUser = {
   sender?: SessionMessageSender
   channel?: ChannelOriginInfo
   schedule?: ScheduleOriginInfo
+  webhook?: WebhookOriginInfo
   task?: TaskAssignmentInfo
 }
 
@@ -958,6 +1098,10 @@ export type ScheduleInfo = {
 }
 
 export type ScheduleRunPage = { items: Array<ScheduleRunInfo>; page: number; pageSize: number; total: number }
+
+export type WebhookRequestPage = { items: Array<WebhookRequestInfo>; page: number; pageSize: number; total: number }
+
+export type WebhookTestResult = { items: Array<WebhookTested> }
 
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
 
@@ -1053,6 +1197,29 @@ export type CredentialRequirement =
   | CredentialOAuthApp
   | CredentialText
   | CredentialSelect
+
+export type WebhookInfo = {
+  id: WebhookID
+  spaceId: SpaceID
+  slug: PrimitiveSlug
+  name: string
+  url: string
+  preset: WebhookPresetOf | null
+  ownerId: AuthUserID
+  fallbackUserId: AuthUserID | null
+  agentId: AgentID | null
+  mode: WebhookMode
+  modeReason: WebhookModeReason | null
+  message: string | null
+  parser: WebhookParser | null
+  hasSigningSecret: boolean
+  lastRequest: WebhookLastRequest | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
+export type WebhookDeclaration = WebhookPresetDeclaration | WebhookCustomDeclaration
 
 export type CredentialInfo = {
   id: CredentialID
@@ -1195,6 +1362,10 @@ export type McpInfo = {
   requiredCredentials?: Array<CredentialRequirement>
 }
 
+export type WebhookPage = { items: Array<WebhookInfo>; page: number; pageSize: number; total: number }
+
+export type WebhookSecret = { record: WebhookInfo; secret: string }
+
 export type CredentialPage = { items: Array<CredentialInfo>; page: number; pageSize: number; total: number }
 
 export type SessionMessageTool = {
@@ -1229,6 +1400,7 @@ export type AppInfo = {
   skills: { [x: PrimitiveSlug]: SkillInfo }
   mcps: { [x: PrimitiveSlug]: McpInfo }
   dependsOn?: Array<PrimitiveSlug>
+  webhooks?: { [x: PrimitiveSlug]: WebhookPreset }
   revision: number
   createdAt: string
   updatedAt: string
@@ -1257,6 +1429,7 @@ export type InfraPulledApp = {
   skills: { [x: PrimitiveSlug]: SkillInfo }
   mcps: { [x: PrimitiveSlug]: McpInfo }
   dependsOn?: Array<PrimitiveSlug>
+  webhooks?: { [x: PrimitiveSlug]: WebhookPreset }
   icon?: string
   environment?: AppEnvironment
 }
@@ -1277,6 +1450,7 @@ export type InfraPulledSpace = {
   agents: { [x: AgentName]: AgentDeclaration }
   apps: { [x: PrimitiveSlug]: InfraPulledApp }
   schedules: { [x: PrimitiveSlug]: InfraPulledSchedule }
+  webhooks: { [x: PrimitiveSlug]: WebhookDeclaration }
   channels: { [x: PrimitiveSlug]: ChannelDeclaration }
   memory?: MemoryFiles
   uses: InfraUses
@@ -2330,6 +2504,32 @@ export type AppCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly slug: string
     readonly ownerSpaceId: string
   }["name"]
@@ -2484,6 +2684,32 @@ export type AppCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly slug: string
     readonly ownerSpaceId: string
   }["description"]
@@ -2638,6 +2864,32 @@ export type AppCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly slug: string
     readonly ownerSpaceId: string
   }["icon"]
@@ -2792,6 +3044,32 @@ export type AppCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly slug: string
     readonly ownerSpaceId: string
   }["requiredCredentials"]
@@ -2946,6 +3224,32 @@ export type AppCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly slug: string
     readonly ownerSpaceId: string
   }["environment"]
@@ -3100,6 +3404,32 @@ export type AppCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly slug: string
     readonly ownerSpaceId: string
   }["skills"]
@@ -3254,6 +3584,32 @@ export type AppCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly slug: string
     readonly ownerSpaceId: string
   }["mcps"]
@@ -3408,9 +3764,215 @@ export type AppCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly slug: string
     readonly ownerSpaceId: string
   }["dependsOn"]
+  readonly webhooks: {
+    readonly name: string
+    readonly description: string
+    readonly icon?: string | null
+    readonly requiredCredentials?: ReadonlyArray<
+      | { readonly kind: "env"; readonly name: string; readonly description?: string; readonly optional?: boolean }
+      | { readonly kind: "secret"; readonly name: string; readonly description?: string; readonly optional?: boolean }
+      | {
+          readonly kind: "oauth_app"
+          readonly name: string
+          readonly description?: string
+          readonly optional?: boolean
+        }
+      | {
+          readonly kind: "text"
+          readonly name: string
+          readonly description?: string
+          readonly optional?: boolean
+          readonly message: string
+          readonly placeholder?: string
+          readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+        }
+      | {
+          readonly kind: "select"
+          readonly name: string
+          readonly description?: string
+          readonly optional?: boolean
+          readonly message: string
+          readonly options: readonly [
+            { readonly label: string; readonly value: string; readonly hint?: string },
+            ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+          ]
+          readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+        }
+    >
+    readonly environment?: {
+      readonly packages?: {
+        readonly apt?: ReadonlyArray<string>
+        readonly npm?: ReadonlyArray<string>
+        readonly pip?: ReadonlyArray<string>
+        readonly go?: ReadonlyArray<string>
+      }
+      readonly buildCommands?: ReadonlyArray<string>
+    } | null
+    readonly skills?: {
+      readonly [x: string]:
+        | {
+            readonly type: "content"
+            readonly description: string
+            readonly requiredCredentials?: ReadonlyArray<
+              | {
+                  readonly kind: "env"
+                  readonly name: string
+                  readonly description?: string
+                  readonly optional?: boolean
+                }
+              | {
+                  readonly kind: "oauth_app"
+                  readonly name: string
+                  readonly description?: string
+                  readonly optional?: boolean
+                }
+            >
+            readonly instructions: string
+            readonly files?: { readonly [x: string]: string }
+          }
+        | {
+            readonly type: "upstream"
+            readonly requiredCredentials?: ReadonlyArray<
+              | {
+                  readonly kind: "env"
+                  readonly name: string
+                  readonly description?: string
+                  readonly optional?: boolean
+                }
+              | {
+                  readonly kind: "oauth_app"
+                  readonly name: string
+                  readonly description?: string
+                  readonly optional?: boolean
+                }
+            >
+            readonly upstream: { readonly url: string; readonly ref?: string; readonly path: string }
+          }
+    }
+    readonly mcps?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly transport:
+          | { readonly type: "remote"; readonly url: string }
+          | {
+              readonly type: "local"
+              readonly command: readonly [string, ...Array<string>]
+              readonly cwd?: string
+              readonly env?: { readonly [x: string]: string }
+            }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
+        readonly auth:
+          | { readonly type: "none" }
+          | {
+              readonly type: "oauth"
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
+              readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
+              readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
+            }
+          | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
+        readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
+        readonly requiredCredentials?: ReadonlyArray<
+          | { readonly kind: "env"; readonly name: string; readonly description?: string; readonly optional?: boolean }
+          | {
+              readonly kind: "secret"
+              readonly name: string
+              readonly description?: string
+              readonly optional?: boolean
+            }
+          | {
+              readonly kind: "oauth_app"
+              readonly name: string
+              readonly description?: string
+              readonly optional?: boolean
+            }
+          | {
+              readonly kind: "text"
+              readonly name: string
+              readonly description?: string
+              readonly optional?: boolean
+              readonly message: string
+              readonly placeholder?: string
+              readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+            }
+          | {
+              readonly kind: "select"
+              readonly name: string
+              readonly description?: string
+              readonly optional?: boolean
+              readonly message: string
+              readonly options: readonly [
+                { readonly label: string; readonly value: string; readonly hint?: string },
+                ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+              ]
+              readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+            }
+        >
+      }
+    }
+    readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
+    readonly slug: string
+    readonly ownerSpaceId: string
+  }["webhooks"]
   readonly slug: {
     readonly name: string
     readonly description: string
@@ -3562,6 +4124,32 @@ export type AppCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly slug: string
     readonly ownerSpaceId: string
   }["slug"]
@@ -3716,6 +4304,32 @@ export type AppCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly slug: string
     readonly ownerSpaceId: string
   }["ownerSpaceId"]
@@ -3873,6 +4487,32 @@ export type AppUpdateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly name?: string | null
     readonly description?: string | null
     readonly icon?: string | null | null
@@ -4026,6 +4666,32 @@ export type AppUpdateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly name?: string | null
     readonly description?: string | null
     readonly icon?: string | null | null
@@ -4179,6 +4845,32 @@ export type AppUpdateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly name?: string | null
     readonly description?: string | null
     readonly icon?: string | null | null
@@ -4332,6 +5024,32 @@ export type AppUpdateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly name?: string | null
     readonly description?: string | null
     readonly icon?: string | null | null
@@ -4485,11 +5203,216 @@ export type AppUpdateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly name?: string | null
     readonly description?: string | null
     readonly icon?: string | null | null
     readonly expectedRevision: number
   }["dependsOn"]
+  readonly webhooks: {
+    readonly requiredCredentials?: ReadonlyArray<
+      | { readonly kind: "env"; readonly name: string; readonly description?: string; readonly optional?: boolean }
+      | { readonly kind: "secret"; readonly name: string; readonly description?: string; readonly optional?: boolean }
+      | {
+          readonly kind: "oauth_app"
+          readonly name: string
+          readonly description?: string
+          readonly optional?: boolean
+        }
+      | {
+          readonly kind: "text"
+          readonly name: string
+          readonly description?: string
+          readonly optional?: boolean
+          readonly message: string
+          readonly placeholder?: string
+          readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+        }
+      | {
+          readonly kind: "select"
+          readonly name: string
+          readonly description?: string
+          readonly optional?: boolean
+          readonly message: string
+          readonly options: readonly [
+            { readonly label: string; readonly value: string; readonly hint?: string },
+            ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+          ]
+          readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+        }
+    >
+    readonly environment?: {
+      readonly packages?: {
+        readonly apt?: ReadonlyArray<string>
+        readonly npm?: ReadonlyArray<string>
+        readonly pip?: ReadonlyArray<string>
+        readonly go?: ReadonlyArray<string>
+      }
+      readonly buildCommands?: ReadonlyArray<string>
+    } | null
+    readonly skills?: {
+      readonly [x: string]:
+        | {
+            readonly type: "content"
+            readonly description: string
+            readonly requiredCredentials?: ReadonlyArray<
+              | {
+                  readonly kind: "env"
+                  readonly name: string
+                  readonly description?: string
+                  readonly optional?: boolean
+                }
+              | {
+                  readonly kind: "oauth_app"
+                  readonly name: string
+                  readonly description?: string
+                  readonly optional?: boolean
+                }
+            >
+            readonly instructions: string
+            readonly files?: { readonly [x: string]: string }
+          }
+        | {
+            readonly type: "upstream"
+            readonly requiredCredentials?: ReadonlyArray<
+              | {
+                  readonly kind: "env"
+                  readonly name: string
+                  readonly description?: string
+                  readonly optional?: boolean
+                }
+              | {
+                  readonly kind: "oauth_app"
+                  readonly name: string
+                  readonly description?: string
+                  readonly optional?: boolean
+                }
+            >
+            readonly upstream: { readonly url: string; readonly ref?: string; readonly path: string }
+          }
+    }
+    readonly mcps?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly transport:
+          | { readonly type: "remote"; readonly url: string }
+          | {
+              readonly type: "local"
+              readonly command: readonly [string, ...Array<string>]
+              readonly cwd?: string
+              readonly env?: { readonly [x: string]: string }
+            }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
+          | { readonly type: "managed"; readonly server: string; readonly replaces?: string }
+        readonly auth:
+          | { readonly type: "none" }
+          | {
+              readonly type: "oauth"
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
+              readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
+              readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
+            }
+          | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
+        readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
+        readonly requiredCredentials?: ReadonlyArray<
+          | { readonly kind: "env"; readonly name: string; readonly description?: string; readonly optional?: boolean }
+          | {
+              readonly kind: "secret"
+              readonly name: string
+              readonly description?: string
+              readonly optional?: boolean
+            }
+          | {
+              readonly kind: "oauth_app"
+              readonly name: string
+              readonly description?: string
+              readonly optional?: boolean
+            }
+          | {
+              readonly kind: "text"
+              readonly name: string
+              readonly description?: string
+              readonly optional?: boolean
+              readonly message: string
+              readonly placeholder?: string
+              readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+            }
+          | {
+              readonly kind: "select"
+              readonly name: string
+              readonly description?: string
+              readonly optional?: boolean
+              readonly message: string
+              readonly options: readonly [
+                { readonly label: string; readonly value: string; readonly hint?: string },
+                ...Array<{ readonly label: string; readonly value: string; readonly hint?: string }>,
+              ]
+              readonly when?: { readonly name: string; readonly op: "eq" | "neq"; readonly value: string }
+            }
+        >
+      }
+    }
+    readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
+    readonly name?: string | null
+    readonly description?: string | null
+    readonly icon?: string | null | null
+    readonly expectedRevision: number
+  }["webhooks"]
   readonly name?: {
     readonly requiredCredentials?: ReadonlyArray<
       | { readonly kind: "env"; readonly name: string; readonly description?: string; readonly optional?: boolean }
@@ -4638,6 +5561,32 @@ export type AppUpdateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly name?: string | null
     readonly description?: string | null
     readonly icon?: string | null | null
@@ -4791,6 +5740,32 @@ export type AppUpdateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly name?: string | null
     readonly description?: string | null
     readonly icon?: string | null | null
@@ -4944,6 +5919,32 @@ export type AppUpdateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly name?: string | null
     readonly description?: string | null
     readonly icon?: string | null | null
@@ -5097,6 +6098,32 @@ export type AppUpdateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
+    readonly webhooks?: {
+      readonly [x: string]: {
+        readonly name: string
+        readonly description: string
+        readonly message: string
+        readonly signature?:
+          | { readonly kind: "none" }
+          | { readonly kind: "header"; readonly header: string }
+          | {
+              readonly kind: "hmac"
+              readonly header: string
+              readonly encoding: "hex" | "base64"
+              readonly prefix?: string
+            }
+          | { readonly kind: "standard" }
+          | { readonly kind: "stripe" }
+        readonly handshake?: string
+        readonly signedHandshake?: string
+        readonly filter?: string
+        readonly eventId?: string
+        readonly threadKey?: string
+        readonly title?: string
+        readonly secret: "ren" | "provider"
+        readonly setup: string
+      }
+    }
     readonly name?: string | null
     readonly description?: string | null
     readonly icon?: string | null | null
@@ -6495,6 +7522,475 @@ export type ScheduleRunListInput = {
 
 export type ScheduleRunListOutput = ScheduleRunPage
 
+export type WebhookListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type WebhookListOutput = WebhookPage
+
+export type WebhookGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type WebhookGetOutput = WebhookInfo
+
+export type WebhookCreateInput = {
+  readonly spaceId: {
+    readonly spaceId: string
+    readonly source:
+      | {
+          readonly _tag: "custom"
+          readonly name: string
+          readonly message: string
+          readonly parser?: {
+            readonly signature?:
+              | { readonly kind: "none" }
+              | { readonly kind: "header"; readonly header: string }
+              | {
+                  readonly kind: "hmac"
+                  readonly header: string
+                  readonly encoding: "hex" | "base64"
+                  readonly prefix?: string
+                }
+              | { readonly kind: "standard" }
+              | { readonly kind: "stripe" }
+            readonly handshake?: string
+            readonly signedHandshake?: string
+            readonly filter?: string
+            readonly eventId?: string
+            readonly threadKey?: string
+            readonly title?: string
+          }
+        }
+      | { readonly _tag: "preset"; readonly appId: string; readonly preset: string }
+    readonly slug?: string | null
+    readonly agentId?: string | null
+  }["spaceId"]
+  readonly source: {
+    readonly spaceId: string
+    readonly source:
+      | {
+          readonly _tag: "custom"
+          readonly name: string
+          readonly message: string
+          readonly parser?: {
+            readonly signature?:
+              | { readonly kind: "none" }
+              | { readonly kind: "header"; readonly header: string }
+              | {
+                  readonly kind: "hmac"
+                  readonly header: string
+                  readonly encoding: "hex" | "base64"
+                  readonly prefix?: string
+                }
+              | { readonly kind: "standard" }
+              | { readonly kind: "stripe" }
+            readonly handshake?: string
+            readonly signedHandshake?: string
+            readonly filter?: string
+            readonly eventId?: string
+            readonly threadKey?: string
+            readonly title?: string
+          }
+        }
+      | { readonly _tag: "preset"; readonly appId: string; readonly preset: string }
+    readonly slug?: string | null
+    readonly agentId?: string | null
+  }["source"]
+  readonly slug?: {
+    readonly spaceId: string
+    readonly source:
+      | {
+          readonly _tag: "custom"
+          readonly name: string
+          readonly message: string
+          readonly parser?: {
+            readonly signature?:
+              | { readonly kind: "none" }
+              | { readonly kind: "header"; readonly header: string }
+              | {
+                  readonly kind: "hmac"
+                  readonly header: string
+                  readonly encoding: "hex" | "base64"
+                  readonly prefix?: string
+                }
+              | { readonly kind: "standard" }
+              | { readonly kind: "stripe" }
+            readonly handshake?: string
+            readonly signedHandshake?: string
+            readonly filter?: string
+            readonly eventId?: string
+            readonly threadKey?: string
+            readonly title?: string
+          }
+        }
+      | { readonly _tag: "preset"; readonly appId: string; readonly preset: string }
+    readonly slug?: string | null
+    readonly agentId?: string | null
+  }["slug"]
+  readonly agentId?: {
+    readonly spaceId: string
+    readonly source:
+      | {
+          readonly _tag: "custom"
+          readonly name: string
+          readonly message: string
+          readonly parser?: {
+            readonly signature?:
+              | { readonly kind: "none" }
+              | { readonly kind: "header"; readonly header: string }
+              | {
+                  readonly kind: "hmac"
+                  readonly header: string
+                  readonly encoding: "hex" | "base64"
+                  readonly prefix?: string
+                }
+              | { readonly kind: "standard" }
+              | { readonly kind: "stripe" }
+            readonly handshake?: string
+            readonly signedHandshake?: string
+            readonly filter?: string
+            readonly eventId?: string
+            readonly threadKey?: string
+            readonly title?: string
+          }
+        }
+      | { readonly _tag: "preset"; readonly appId: string; readonly preset: string }
+    readonly slug?: string | null
+    readonly agentId?: string | null
+  }["agentId"]
+}
+
+export type WebhookCreateOutput = WebhookInfo
+
+export type WebhookUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly fallbackUserId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["name"]
+  readonly message?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly fallbackUserId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["message"]
+  readonly parser?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly fallbackUserId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["parser"]
+  readonly agentId?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly fallbackUserId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["agentId"]
+  readonly fallbackUserId?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly fallbackUserId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["fallbackUserId"]
+  readonly mode?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly agentId?: string | null | null
+    readonly fallbackUserId?: string | null | null
+    readonly mode?: ("listening" | "live") | null
+  }["mode"]
+}
+
+export type WebhookUpdateOutput = WebhookInfo
+
+export type WebhookArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type WebhookArchiveOutput = WebhookInfo
+
+export type WebhookRotateUrlInput = { readonly id: { readonly id: string }["id"] }
+
+export type WebhookRotateUrlOutput = WebhookInfo
+
+export type WebhookSetSigningSecretInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly secret?: { readonly secret?: string | undefined }["secret"]
+}
+
+export type WebhookSetSigningSecretOutput = WebhookSecret
+
+export type WebhookRevealSigningSecretInput = { readonly id: { readonly id: string }["id"] }
+
+export type WebhookRevealSigningSecretOutput = WebhookSecret
+
+export type WebhookTestInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly parser?: {
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly requestIds?: ReadonlyArray<string> | null
+  }["parser"]
+  readonly requestIds?: {
+    readonly parser?: {
+      readonly signature?:
+        | { readonly kind: "none" }
+        | { readonly kind: "header"; readonly header: string }
+        | {
+            readonly kind: "hmac"
+            readonly header: string
+            readonly encoding: "hex" | "base64"
+            readonly prefix?: string
+          }
+        | { readonly kind: "standard" }
+        | { readonly kind: "stripe" }
+      readonly handshake?: string
+      readonly signedHandshake?: string
+      readonly filter?: string
+      readonly eventId?: string
+      readonly threadKey?: string
+      readonly title?: string
+    } | null
+    readonly requestIds?: ReadonlyArray<string> | null
+  }["requestIds"]
+}
+
+export type WebhookTestOutput = WebhookTestResult
+
+export type WebhookReplayInput = { readonly id: { readonly id: string }["id"] }
+
+export type WebhookReplayOutput = WebhookReplayed
+
+export type WebhookRequestListInput = {
+  readonly webhookId: {
+    readonly webhookId: string
+    readonly outcome?:
+      | (
+          | "queued"
+          | "started"
+          | "continued"
+          | "failed"
+          | "recorded"
+          | "throttled"
+          | "answered"
+          | "rejected"
+          | "ignored"
+          | "duplicate"
+        )
+      | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["webhookId"]
+  readonly outcome?: {
+    readonly webhookId: string
+    readonly outcome?:
+      | (
+          | "queued"
+          | "started"
+          | "continued"
+          | "failed"
+          | "recorded"
+          | "throttled"
+          | "answered"
+          | "rejected"
+          | "ignored"
+          | "duplicate"
+        )
+      | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["outcome"]
+  readonly page: {
+    readonly webhookId: string
+    readonly outcome?:
+      | (
+          | "queued"
+          | "started"
+          | "continued"
+          | "failed"
+          | "recorded"
+          | "throttled"
+          | "answered"
+          | "rejected"
+          | "ignored"
+          | "duplicate"
+        )
+      | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly webhookId: string
+    readonly outcome?:
+      | (
+          | "queued"
+          | "started"
+          | "continued"
+          | "failed"
+          | "recorded"
+          | "throttled"
+          | "answered"
+          | "rejected"
+          | "ignored"
+          | "duplicate"
+        )
+      | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type WebhookRequestListOutput = WebhookRequestPage
+
+export type WebhookRequestGetInput = { readonly id: { readonly id: string }["id"] }
+
+export type WebhookRequestGetOutput = WebhookRequestDetail
+
 export type CredentialListInput = {
   readonly owner?: {
     readonly owner?: ("org" | "space" | "person" | "profile") | undefined
@@ -7391,6 +8887,32 @@ export type InfraPullInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -7406,7 +8928,30 @@ export type InfraPullInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -7461,7 +9006,6 @@ export type InfraPullInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     } | null
@@ -7728,6 +9272,32 @@ export type InfraPullInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -7743,7 +9313,30 @@ export type InfraPullInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -7798,7 +9391,6 @@ export type InfraPullInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     } | null
@@ -8065,6 +9657,32 @@ export type InfraPullInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -8080,7 +9698,30 @@ export type InfraPullInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -8135,7 +9776,6 @@ export type InfraPullInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     } | null
@@ -8407,6 +10047,32 @@ export type InfraPlanInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -8422,7 +10088,30 @@ export type InfraPlanInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -8477,7 +10166,6 @@ export type InfraPlanInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -8744,6 +10432,32 @@ export type InfraPlanInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -8759,7 +10473,30 @@ export type InfraPlanInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -8814,7 +10551,6 @@ export type InfraPlanInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -9081,6 +10817,32 @@ export type InfraPlanInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -9096,7 +10858,30 @@ export type InfraPlanInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -9151,7 +10936,6 @@ export type InfraPlanInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -9423,6 +11207,32 @@ export type InfraApplyInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -9438,7 +11248,30 @@ export type InfraApplyInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -9493,7 +11326,6 @@ export type InfraApplyInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -9762,6 +11594,32 @@ export type InfraApplyInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -9777,7 +11635,30 @@ export type InfraApplyInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -9832,7 +11713,6 @@ export type InfraApplyInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -10101,6 +11981,32 @@ export type InfraApplyInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -10116,7 +12022,30 @@ export type InfraApplyInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -10171,7 +12100,6 @@ export type InfraApplyInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -10440,6 +12368,32 @@ export type InfraApplyInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -10455,7 +12409,30 @@ export type InfraApplyInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -10510,7 +12487,6 @@ export type InfraApplyInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
@@ -10779,6 +12755,32 @@ export type InfraApplyInput = {
                 }
               }
               readonly dependsOn?: ReadonlyArray<string>
+              readonly webhooks?: {
+                readonly [x: string]: {
+                  readonly name: string
+                  readonly description: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                  readonly secret: "ren" | "provider"
+                  readonly setup: string
+                }
+              }
               readonly renamedFrom?: ReadonlyArray<string>
             }
           }
@@ -10794,7 +12796,30 @@ export type InfraApplyInput = {
             }
           }
           readonly webhooks?: {
-            readonly [x: string]: { readonly agent?: string; readonly purpose: string; readonly enabled?: boolean }
+            readonly [x: string]:
+              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly name?: string
+                  readonly agent?: string
+                  readonly message: string
+                  readonly signature?:
+                    | { readonly kind: "none" }
+                    | { readonly kind: "header"; readonly header: string }
+                    | {
+                        readonly kind: "hmac"
+                        readonly header: string
+                        readonly encoding: "hex" | "base64"
+                        readonly prefix?: string
+                      }
+                    | { readonly kind: "standard" }
+                    | { readonly kind: "stripe" }
+                  readonly handshake?: string
+                  readonly signedHandshake?: string
+                  readonly filter?: string
+                  readonly eventId?: string
+                  readonly threadKey?: string
+                  readonly title?: string
+                }
           }
           readonly channels?: {
             readonly [x: string]:
@@ -10849,7 +12874,6 @@ export type InfraApplyInput = {
               | { readonly kind: "github"; readonly repository: string }
           }
           readonly profiles?: { readonly [x: string]: ReadonlyArray<string> }
-          readonly webhooks?: { readonly [x: string]: { readonly secret: string } }
         }
       }
     }
