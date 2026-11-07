@@ -65,7 +65,6 @@ export interface Interface {
 
 // oxlint-disable-next-line ren/no-comments -- The chats that a lost sandbox stopped mid-turn. A repeated loss (within timing.relapse of the last one) fails them instead, so the next step is a person's, not another sandbox that dies the same way.
 export interface Interrupted {
-  readonly brainId: Brain.ID
   readonly sessionIds: ReadonlyArray<Session.ID>
   readonly repeated: boolean
 }
@@ -427,7 +426,7 @@ export const layer = Layer.effect(
                 : `The sandbox of brain ${lost.brainId} is gone; its busy chats are interrupted`,
             )
             const sessions = yield* interruptBusy(transaction, lost.brainId, at, repeated ? "failed" : "interrupted")
-            return Option.some({ brainId: lost.brainId, sessionIds: sessions.map((session) => session.id), repeated })
+            return Option.some({ sessionIds: sessions.map((session) => session.id), repeated })
           }),
         )
         .pipe(Effect.orDie)
@@ -527,17 +526,14 @@ export const layer = Layer.effect(
     })
 
     // oxlint-disable-next-line ren/no-comments -- An awake brain pulls every 30 s, also when no person or call uses it. A ready brain whose keep-alive runs and that has not pulled within pullWithin is checked, so a frozen sandbox is found without an access. Right after Ren starts, no pull has reached it yet, so it waits one pullWithin first.
-    const started = yield* now
     yield* Effect.gen(function* () {
       const at = yield* now
-      if (at.getTime() - started.getTime() < Duration.toMillis(pullWithin)) return
       const silent = yield* database.db
         .select({ id: brains.id })
         .from(brains)
         .where(
           and(
             eq(brains.phase, "ready"),
-            isNotNull(brains.binding),
             gt(brains.keep_alive_until, at),
             or(
               isNull(brains.last_pulled_at),
@@ -549,6 +545,7 @@ export const layer = Layer.effect(
       yield* Effect.forEach(silent, (row) => check(row.id), { concurrency: 8, discard: true })
     }).pipe(
       Effect.repeat(Schedule.spaced(Duration.divideUnsafe(pullWithin, 3))),
+      Effect.delay(pullWithin),
       Effect.withErrorReporting,
       Effect.forkScoped,
     )
