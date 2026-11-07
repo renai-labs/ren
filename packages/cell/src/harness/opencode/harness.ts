@@ -31,7 +31,7 @@ import {
   Stream,
   Struct,
 } from "effect"
-import { FetchHttpClient } from "effect/http"
+import { FetchHttpClient, HttpClientError } from "effect/http"
 import { mkdir, rm, stat } from "node:fs/promises"
 // oxlint-disable-next-line ren/no-node-modules-import -- @opencode/core exports no package.json and no version, and the harness version must be the installed one.
 import opencode from "../../../node_modules/@opencode/core/package.json"
@@ -359,6 +359,21 @@ const attach = (
     }),
   )
 
+// oxlint-disable-next-line ren/no-comments -- OpenCode's answer to a message is final: a retry sends the same message and gets the same answer, so Ren rejects it. Only a request that got no answer is a defect, which Ren retries (RENAI-86).
+const answered = Effect.fnUntraced(function* (error: Effect.Error<ReturnType<OpenCodeClient["session"]["prompt"]>>) {
+  const http = error._tag === "ClientError" ? error.cause : error
+  if (HttpClientError.isHttpClientError(http)) {
+    const response = http.response
+    if (!response) return yield* Effect.die(error)
+    const body = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
+    return yield* new BrainRejectedError({
+      message: `OpenCode answered the message with ${response.status}${body ? `: ${body}` : ""}`,
+    })
+  }
+  if (Schema.isSchemaError(error) || error._tag === "ClientError") return yield* Effect.die(error)
+  return yield* new BrainRejectedError({ message: error.message })
+})
+
 const send = Effect.fn("OpenCodeHarness.send")(function* (
   client: OpenCodeClient,
   input: Omit<SendInput, "delivery"> & { readonly delivery?: SendInput["delivery"] },
@@ -385,7 +400,7 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
         metadata: { source: input.synthetic.source },
         delivery: input.delivery,
       })
-      .pipe(Effect.orDie)
+      .pipe(Effect.catch(answered))
     return { messageId: input.messageId }
   }
   yield* client.session
@@ -404,7 +419,7 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
         ...(input.task && { task: input.task }),
       },
     })
-    .pipe(Effect.orDie)
+    .pipe(Effect.catch(answered))
   return { messageId: input.messageId }
 })
 

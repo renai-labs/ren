@@ -16,6 +16,9 @@ export interface Attached {
 
 const readable = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "application/json"])
 
+// oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 answers 500 to a file that is not an image above 5,345,276 bytes; it makes an image smaller before that check (RENAI-86). A larger file reaches the agent only as its path.
+const maxDocumentBytes = 5_000_000
+
 const read = (client: EnvironmentClient.Client, path: string, size: number) =>
   Effect.forEach(
     Array.from(
@@ -61,7 +64,8 @@ export const attach = Effect.fn("DriveFiles.attach")(function* (
         const mime = Drive.typeOf(file.path)
         const size = info.sizeBytes
         const bytes =
-          size <= Session.maxFileBytes && (mime.startsWith("text/") || readable.has(mime))
+          size <= (mime.startsWith("image/") ? Session.maxFileBytes : maxDocumentBytes) &&
+          (mime.startsWith("text/") || readable.has(mime))
             ? Option.some(yield* read(client, path, size).pipe(Effect.mapError(failed)))
             : Option.none<Uint8Array>()
         return { file: { path: file.path, name: file.name, mime, size }, bytes }
