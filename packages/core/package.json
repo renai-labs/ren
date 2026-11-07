@@ -18,7 +18,8 @@
     "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/brain-host.test.ts test/environment-lifecycle.test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo -b",
-    "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts"
+    "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts",
+    "test:opencode": "REN_SLOW=1 bun ../../script/test.ts test/opencode- test/restore.slow.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",

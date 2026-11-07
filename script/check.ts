@@ -2,6 +2,8 @@ import path from "path"
 import { Schema } from "effect"
 import { Changed } from "./changed.js"
 
+await Bun.$`bun ${new URL("./opencode-lock.ts", import.meta.url).pathname}`
+
 const base = await Changed.base()
 const PackageJson = Schema.Struct({ scripts: Schema.optional(Schema.Record(Schema.String, Schema.String)) })
 const tasks = async (filter: string, script: string) =>

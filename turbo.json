@@ -73,6 +73,12 @@
       "outputs": [],
       "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"]
     },
+    "test:opencode": {
+      "dependsOn": ["^build"],
+      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
+      "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"],
+      "cache": false
+    },
     "test": {
       "dependsOn": ["^build"],
       "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"],

@@ -39,7 +39,7 @@ Needed before a second harness (Pi, Claude Code, Codex). Today Ren stores OpenCo
 Decisions:
 
 - **E30.** Each harness owns its transcript format. Sync is a harness capability: the adapter produces rows and restores them. Ren stores rows tagged with the harness. Ren core reads only neutral columns on `agent_session` (title, status, updated time), which sync fills. Why: swapping in Pi needs a Pi codec, not changes in core, db and the app.
-- **E31.** Sync copies rows (session and messages), not the harness's event log, and runs on harness events. Piece J checks whether only the rows changed since the last commit can be sent; if yes, the 5-min throttle while busy goes away (`brain/src/opencode-sync.ts:87`). Why: OpenCode v2 has no history or replay API, and its migrations clear the event table.
+- **E31.** Sync copies rows (session and messages), not the harness's event log, and runs on harness events. Piece J checks whether only the rows changed since the last commit can be sent; if yes, the 5-min throttle while busy goes away (`opencode-transcript/src/opencode-sync.ts`, `busyInterval`). Why: OpenCode v2 has no history or replay API, and its migrations clear the event table.
 
 Scope: brain core defines the `Transcript` contract (`changed`, `rows`, `summary`, `restore`); each harness adapter meets it by any means (the harness API, its storage, or a plugin inside the harness).
 
