@@ -1,6 +1,6 @@
 export * as RenPlugin from "./plugin.js"
 
-import { Message } from "@opencode/ai/schema/messages"
+import { Message } from "@opencode/ai/effect"
 import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { Agent, Model, Provider } from "@opencode/client/effect"
@@ -191,15 +191,37 @@ const headerOf = (metadata: unknown) =>
     () => Option.map(decodeWebhook(metadata), (found) => webhookHeader(found.webhook)),
   )
 
-const withOrigin = (message: Message) =>
-  Option.match(message.role === "user" ? headerOf(message.metadata) : Option.none(), {
-    onNone: () => message,
-    onSome: (header) =>
-      Message.make({
-        ...Struct.omit(message, ["content"]),
-        content: [Message.text(header), ...message.content],
-      }),
-  })
+const metadataOf = (session: Plugin.Context["session"], sessionID: SessionID) =>
+  session.context({ sessionID }).pipe(
+    Effect.map(
+      (messages) =>
+        new Map<string, unknown>(
+          messages.flatMap((message) =>
+            message.type === "synthetic" || !("metadata" in message) ? [] : [[message.id, message.metadata] as const],
+          ),
+        ),
+    ),
+    Effect.catchCause((cause) =>
+      Effect.logWarning(
+        "The brain cannot read the chat's messages; the model sees them without Ren's notes",
+        cause,
+      ).pipe(Effect.as(new Map<string, unknown>())),
+    ),
+  )
+
+const withOrigin =
+  (metadata: ReadonlyMap<string, unknown>) =>
+  (message: Message): Message =>
+    message.role !== "user"
+      ? message
+      : Option.match(headerOf(metadata.get(message.id ?? "")), {
+          onNone: () => message,
+          onSome: (header) =>
+            Message.make({
+              ...Struct.omit(message, ["content"]),
+              content: [Message.text(header), ...message.content],
+            }),
+        })
 
 const withoutModel = (value: unknown) =>
   Predicate.isObject(value) ? Record.filter(value, (_, key) => key !== "model") : value
@@ -360,14 +382,17 @@ export const make = (
           }),
         )
         yield* context.session.hook("context", (event) =>
-          Effect.sync(() => {
+          Effect.gen(function* () {
+            const metadata = yield* metadataOf(context.session, event.sessionID)
             const speakers = event.messages.map((message) =>
-              message.role === "user" ? Option.getOrUndefined(OpenCodeChat.speakerOf(message.metadata)) : undefined,
+              message.role === "user"
+                ? Option.getOrUndefined(OpenCodeChat.speakerOf(metadata.get(message.id ?? "")))
+                : undefined,
             )
             event.messages = event.messages.map((message, index) => {
               const speaker = speakers[index]
               const previous = speakers.slice(0, index).findLast(Predicate.isNotUndefined)
-              if (!speaker || !previous || previous.userID === speaker.userID) return message
+              if (message.role !== "user" || !speaker || !previous || previous.userID === speaker.userID) return message
               const user = speaker.userName ? `user=${JSON.stringify(speaker.userName)} ` : ""
               return Message.make({
                 ...Struct.omit(message, ["content"]),
@@ -377,12 +402,12 @@ export const make = (
                 ],
               })
             })
-            event.messages = event.messages.map(withOrigin)
+            event.messages = event.messages.map(withOrigin(metadata))
           }),
         )
         yield* context.session.hook("compaction", (event) =>
-          Effect.sync(() => {
-            event.messages = event.messages.map(withOrigin)
+          Effect.gen(function* () {
+            event.messages = event.messages.map(withOrigin(yield* metadataOf(context.session, event.sessionID)))
           }),
         )
         if (isSession) {
@@ -533,10 +558,11 @@ export const make = (
             })
           })
           yield* context.session.hook("context", (event) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
+              const metadata = yield* metadataOf(context.session, event.sessionID)
               event.messages = event.messages.map((message) => {
-                const attached =
-                  message.role === "user" ? Option.getOrUndefined(attachedOf(message.metadata)) : undefined
+                if (message.role !== "user") return message
+                const attached = Option.getOrUndefined(attachedOf(metadata.get(message.id ?? "")))
                 if (!attached?.files.length) return message
                 return Message.make({
                   ...Struct.omit(message, ["content"]),

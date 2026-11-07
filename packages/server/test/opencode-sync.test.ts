@@ -445,6 +445,7 @@ describe("OpenCodeSync", () => {
               summary_diffs: "Whole patches are not part of the saved transcript",
               revert: "Synced separately as revertMessageId",
               time_compacting: "In-flight compaction is restarted",
+              time_busy: "When the running turn started belongs to the running host",
               resume_attempts: "Retry accounting belongs to the running host",
             },
           },

@@ -166,7 +166,7 @@ const toCall = (body: typeof ChatRequest.Type, authorization: string, known: (ma
     .filter((message) => message.role === "system")
     .map((message) => flatten(message.content))
     .join("\n")
-  const kind = system.includes("title generator") ? ("title" as const) : ("turn" as const)
+  const kind = system.includes("You name conversations") ? ("title" as const) : ("turn" as const)
   return {
     marker:
       kind === "turn"

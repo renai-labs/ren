@@ -75,7 +75,7 @@ describe("S4-04: large message rows in a Durable Object", () => {
     }).toEqual({ outcome: "succeeded", types: ["user", "assistant", "idle"], written: true })
   })
 
-  test("model text of 3 MB: celld cannot write the row, so the turn is lost and the session stays busy; Wrangler writes it", async () => {
+  test("model text of 3 MB: celld cannot write the row, so the turn fails; Wrangler writes it", async () => {
     const sizes = await large({ reply: "b".repeat(3_000_000) })
     expect({
       session: sizes.session,
@@ -89,8 +89,8 @@ describe("S4-04: large message rows in a Durable Object", () => {
             written: true,
           }
         : {
-            session: { time_suspended: expect.any(Number), idle_outcome: null },
-            types: ["user", "assistant"],
+            session: { time_suspended: null, idle_outcome: "failed" },
+            types: ["user", "assistant", "idle"],
             written: false,
           },
     )

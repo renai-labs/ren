@@ -544,7 +544,7 @@ test("coalesces duplicate gestures until the admission request settles", () =>
         chat.state,
         (state) => settled(brain.id)(state) && ChatState.messages(state, brain.id).length >= 6,
       )
-      const reply = stub.script({ reply: "after the summary" })
+      const reply = stub.script({ ...summarized, reply: "after the summary" })
       const results = yield* Effect.all([chat.compact(), chat.compact(), chat.prompt({ text: reply.marker })], {
         concurrency: "unbounded",
       })
