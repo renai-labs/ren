@@ -708,6 +708,14 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           Effect.gen(function* () {
             const info = OpenCodeRows.session(data.session)
             const messages = yield* Effect.forEach(data.messages, OpenCodeRows.message)
+            const inbox = yield* Effect.forEach(data.chat.inbox, (row) =>
+              Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(row.payload).pipe(
+                Effect.flatMap((payload) =>
+                  Schema.decodeUnknownEffect(SessionInbox.Item)({ type: row.type, payload, delivery: row.delivery }),
+                ),
+                Effect.map((item) => ({ id: SessionMessage.ID.make(row.id), item })),
+              ),
+            )
             // oxlint-disable-next-line ren/no-comments -- Only the brain's own hand is on this disk: its folder is made before the import, and a folder that was gone means its files were lost (E105, E113).
             const isOwnHand =
               server.hasEnvironmentConnections && info.location.directory === server.directoryOf(data.chat.id)
@@ -737,22 +745,33 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
             }
             // oxlint-disable-next-line ren/no-comments -- Queued messages go back in the chat's inbox with their ids and order, and start no turn (E110).
             yield* Effect.forEach(
-              data.chat.inbox.filter((row) => row.type === "user"),
-              (row) =>
-                Schema.decodeUnknownEffect(Schema.fromJsonString(SessionInbox.UserPayload))(row.payload).pipe(
-                  Effect.flatMap((payload) =>
-                    client.session.prompt({
-                      text: payload.text,
-                      ...(payload.metadata && { metadata: payload.metadata }),
-                      ...(payload.agents && { agents: payload.agents }),
-                      ...(payload.skills && { skills: payload.skills }),
-                      sessionID: info.id,
-                      id: SessionMessage.ID.make(row.id),
-                      delivery: row.delivery === "steer" ? "steer" : "queue",
-                      resume: false,
-                    }),
-                  ),
-                ),
+              inbox,
+              Effect.fnUntraced(function* (queued) {
+                const item = queued.item
+                if (item.type === "synthetic") {
+                  yield* server.sessions.synthetic({
+                    sessionID: info.id,
+                    id: queued.id,
+                    text: item.payload.text,
+                    ...(typeof item.payload.description === "string" && { description: item.payload.description }),
+                    ...(item.payload.metadata && { metadata: item.payload.metadata }),
+                    delivery: item.delivery,
+                    resume: false,
+                  })
+                }
+                if (item.type === "user") {
+                  yield* client.session.prompt({
+                    sessionID: info.id,
+                    id: queued.id,
+                    text: item.payload.text,
+                    ...(item.payload.metadata && { metadata: item.payload.metadata }),
+                    ...(item.payload.agents && { agents: item.payload.agents }),
+                    ...(item.payload.skills && { skills: item.payload.skills }),
+                    delivery: item.delivery,
+                    resume: false,
+                  })
+                }
+              }),
               { discard: true },
             )
             if (isLost)

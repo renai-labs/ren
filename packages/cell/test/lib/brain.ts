@@ -251,6 +251,7 @@ export const make = Effect.fnUntraced(function* (
     store: Context.get(services, ModelStore.Service),
     opencode,
     driver: OpenCodeDriver.make(opencode, directory),
+    transcript: harness.transcript,
     harness: host.fetch,
     chat,
     chatAs,

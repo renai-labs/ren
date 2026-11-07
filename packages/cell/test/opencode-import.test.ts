@@ -4,12 +4,13 @@ import { AbsolutePath, OpenCode, type OpenCodeClient } from "@opencode/client/ef
 import { Location } from "@opencode/schema/location"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
+import { OpenCodeFixtures } from "@ren/opencode-transcript/testing"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { TestAccess } from "@ren/brain/testing"
 import { Sync } from "@ren/schema/sync"
 import { testEffect } from "@ren/executor/testing"
 import { Session } from "@ren/schema/session"
-import { Context, Deferred, Effect, Fiber, Layer, Option, Schema, Stream } from "effect"
+import { Context, Deferred, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -90,6 +91,54 @@ const delegated = Effect.gen(function* () {
 
 const importOf = (client: OpenCodeClient, data: Effect.Success<ReturnType<typeof exported>>) =>
   client.session.import({ info: data.info, messages: data.messages, location: data.info.location })
+
+for (const payload of ["not json", JSON.stringify({ text: 42 })])
+  it.live(`restore rejects a synthetic queue payload ${payload} before import, and a corrected retry succeeds`, () =>
+    Effect.gen(function* () {
+      const recorded = yield* Effect.fromNullishOr(
+        OpenCodeFixtures.recordings
+          .flatMap((recording) => recording.chats)
+          .find((chat) => chat.inbox.some((row) => row.type === "synthetic")),
+      )
+      const target = yield* open(recorded.session.id)
+      const session = { ...recorded.session, directory: target.directory }
+      const data = {
+        session,
+        messages: recorded.messages,
+        chat: {
+          id: session.id,
+          harness: "opencode" as const,
+          harnessVersion: null,
+          parentId: session.parent_id,
+          revertMessageId: null,
+          session,
+          inbox: recorded.inbox,
+        },
+      }
+      const rejected = yield* target.transcript
+        .restore({
+          ...data,
+          chat: {
+            ...data.chat,
+            inbox: data.chat.inbox.map((row) => (row.type === "synthetic" ? { ...row, payload } : row)),
+          },
+        })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(rejected)).toBe(true)
+      if (Exit.isSuccess(rejected)) return yield* Effect.die(new Error("Restore accepted a bad synthetic payload"))
+      expect(
+        rejected.cause.reasons.some((reason) => reason._tag === "Die" && Schema.isSchemaError(reason.defect)),
+      ).toBe(true)
+      expect(yield* target.transcript.has(session.id)).toBe(false)
+      expect(yield* stored(target.database, session.id)).toEqual([])
+      expect(yield* all(target.database, "select id from session_inbox where session_id = ?", session.id)).toEqual([])
+      yield* target.transcript.restore(data)
+      expect(yield* target.transcript.has(session.id)).toBe(true)
+      expect<ReadonlyArray<string>>(
+        (yield* target.opencode.session.inbox.list({ sessionID: SessionID.make(session.id) })).map((row) => row.id),
+      ).toEqual(recorded.inbox.map((row) => row.id))
+    }),
+  )
 
 it.live("an import beside another session in the same directory shares its project and leaves it unchanged", () =>
   Effect.gen(function* () {
