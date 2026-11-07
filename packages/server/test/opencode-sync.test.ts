@@ -1,7 +1,9 @@
 import { describe, expect } from "bun:test"
 import { Database } from "bun:sqlite"
 import { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
+import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
 import { SqliteReader } from "@ren/opencode-transcript/sqlite-reader"
+import { OpenCodeFixtures } from "@ren/opencode-transcript/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { Sync } from "@ren/schema/sync"
 import { Shared, type StubModel, SyncClient } from "@ren/cell/testing"
@@ -10,7 +12,7 @@ import { Seed } from "@ren/core/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import type { Session as RenSession } from "@ren/schema/session"
-import { Clock, Deferred, Duration, Effect, Fiber, Layer, Logger, Metric, References, Schema } from "effect"
+import { Clock, Deferred, Duration, Effect, Fiber, Layer, Logger, Metric, References, Schema, Stream } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { TestClock } from "effect/testing"
 import { mkdtemp, rm } from "node:fs/promises"
@@ -98,10 +100,10 @@ const logs = () => {
 
 const renId = Schema.decodeUnknownSync(Sync.Checkpoint.fields.id)
 
-const setup = Effect.fnUntraced(function* () {
+const setup = Effect.fnUntraced(function* (input: { readonly id?: RenSession.ID; readonly isStarted?: boolean } = {}) {
   const file = join(yield* folder, "opencode.db")
-  const brain = yield* SyncTest.isolated(BrainTest.make({ database: file }))
-  yield* brain.start({ interactive: false, title: "Sync" })
+  const brain = yield* SyncTest.isolated(BrainTest.make({ database: file, ...(input.id && { id: input.id }) }))
+  if (input.isStarted ?? true) yield* brain.start({ interactive: false, title: "Sync" })
   const owner = yield* Seed.owner()
   yield* Seed.session(owner, { sessionId: brain.id })
   const server = yield* HttpServer.HttpServer
@@ -397,6 +399,84 @@ describe("OpenCodeSync", () => {
     }),
   )
 
+  it.live(
+    "after a turn, a subagent and a shell command, each OpenCode table with rows is one that sync reads or one that Ren keeps out on purpose",
+    () =>
+      Effect.gen(function* () {
+        const host = yield* setup()
+        const child = stub.script()
+        yield* host.turn(
+          host.root,
+          stub.script({
+            reasoning: "Planning",
+            tool: {
+              name: "subagent",
+              input: { agent: "general", description: "Look", prompt: `${child.marker} look` },
+            },
+          }),
+        )
+        yield* host.driver.shell(host.root, "echo shell")
+        yield* host.driver.wait(host.root)
+        const known = new Set([
+          "session_v2",
+          "session_message",
+          "session_inbox",
+          "event_sequence",
+          "migration",
+          "project",
+          "worktree",
+          "instruction_blob",
+          "instruction_state",
+        ])
+        const filled = host.db
+          .query<{ name: string }, []>("select name from sqlite_master where type = 'table'")
+          .all()
+          .map((table) => table.name)
+          .filter((name) => host.db.query(`select 1 from "${name}" limit 1`).get() !== null)
+        expect(filled.filter((name) => !known.has(name))).toEqual([])
+        const storage = [
+          {
+            name: "session_v2",
+            synced: Object.keys(Sync.OpenCodeSessionRow.fields),
+            omitted: {
+              fork_session_id: "Import flattens forks",
+              fork_boundary: "Import flattens forks",
+              share_url: "OpenCode sharing is not exposed by Ren",
+              summary_diffs: "Whole patches are not part of the saved transcript",
+              revert: "Synced separately as revertMessageId",
+              time_compacting: "In-flight compaction is restarted",
+              resume_attempts: "Retry accounting belongs to the running host",
+            },
+          },
+          {
+            name: "session_message",
+            synced: Object.keys(Sync.OpenCodeMessageRow.fields),
+            omitted: {
+              time_created: "Message times live in data",
+              time_updated: "Message times live in data",
+            },
+          },
+          { name: "session_inbox", synced: Object.keys(Sync.OpenCodeInboxRow.fields), omitted: {} },
+          {
+            name: "event_sequence",
+            synced: ["aggregate_id", "seq"],
+            omitted: { owner_id: "The new host owns the restored aggregate" },
+          },
+        ]
+        for (const table of storage) {
+          const actual = host.db
+            .query<{ name: string }, []>(`pragma table_info(${table.name})`)
+            .all()
+            .map((column) => column.name)
+            .toSorted()
+          expect({ table: table.name, columns: actual }).toEqual({
+            table: table.name,
+            columns: [...table.synced, ...Object.keys(table.omitted)].toSorted(),
+          })
+        }
+      }),
+  )
+
   it.live("a commit records the OpenCode version that wrote the rows", () =>
     Effect.gen(function* () {
       const host = yield* setup()
@@ -405,6 +485,160 @@ describe("OpenCodeSync", () => {
       expect(yield* sync.step()).toEqual({ drained: true })
       expect(yield* SyncTest.harnessVersion(host.root)).toBe("2.10.0")
     }),
+  )
+
+  describe.each(OpenCodeFixtures.recordings.map((recording) => [recording.version, recording] as const))(
+    "chats recorded on OpenCode %s",
+    (_, recording) => {
+      const rootOf = (chat: OpenCodeFixtures.Chat): RenSession.ID => {
+        const parent = recording.chats.find((each) => each.session.id === chat.session.parent_id)
+        return parent ? rootOf(parent) : chat.session.id
+      }
+      const Compaction = Schema.fromJsonString(
+        Schema.Struct({ summary: Schema.String, recent: Schema.optionalKey(Schema.String) }),
+      )
+      for (const root of recording.chats.filter((chat) => chat.session.parent_id === null))
+        it.live(
+          `chat ${root.session.id} comes back through sync and restore, runs a turn with its whole context, and syncs back with no row changed`,
+          () =>
+            Effect.gen(function* () {
+              const group = recording.chats.filter((chat) => rootOf(chat) === root.session.id)
+              const host = yield* setup({ id: root.session.id, isStarted: false })
+              const delivered: Array<string> = []
+              const connected = yield* Deferred.make<void>()
+              const observed = yield* Deferred.make<void>()
+              const barrier = `Delivery checked ${crypto.randomUUID()}`
+              const events = yield* host.brain.chat.event["event.subscribe"]()
+              yield* events.pipe(
+                Stream.runForEach((event) =>
+                  Effect.gen(function* () {
+                    if (event.type === "server.connected") yield* Deferred.succeed(connected, undefined)
+                    if (
+                      event.type === "session.inbox.delivered" &&
+                      event.data.sessionID === root.session.id &&
+                      root.inbox.some((row) => row.id === event.data.inboxID)
+                    )
+                      delivered.push(event.data.inboxID)
+                    if (event.type === "session.renamed" && event.data.title === barrier)
+                      yield* Deferred.succeed(observed, undefined)
+                  }),
+                ),
+                Effect.forkScoped,
+              )
+              yield* Deferred.await(connected)
+              const remote = yield* SyncClient.make(
+                host.proxy.url,
+                Effect.sync(() => host.token.value),
+              ).pipe(Effect.provide(FetchHttpClient.layer))
+              yield* Effect.forEach(
+                group,
+                Effect.fnUntraced(function* (chat) {
+                  const params = {
+                    id: chat.session.id,
+                    upload: yield* remote.startUpload(chat.session.id, chat.session.parent_id),
+                  }
+                  yield* remote.uploadMessages(params, chat.messages)
+                  yield* remote.commit(params, {
+                    session: { ...chat.session, directory: host.brain.directory },
+                    seq: 1,
+                    ids: chat.messages.map((message) => message.id),
+                    inbox: chat.inbox,
+                    revertMessageId: null,
+                    harnessVersion: recording.version,
+                  })
+                }),
+                { discard: true },
+              )
+              const sync = yield* host.sync()
+              yield* sync.restore({
+                sessionId: root.session.id,
+                exists: host.brain.transcript.has,
+                start: () => Effect.void,
+                import: host.brain.transcript.restore,
+              })
+              for (const chat of group) {
+                const inbox = Schema.decodeUnknownSync(Schema.Array(Sync.OpenCodeInboxRow))(
+                  host.db
+                    .query("select * from session_inbox where session_id = ? order by enqueued_seq")
+                    .all(chat.session.id),
+                )
+                expect(
+                  inbox.map((row) => ({ id: row.id, type: row.type, payload: row.payload, delivery: row.delivery })),
+                ).toEqual(
+                  chat.inbox.map((row) => ({
+                    id: row.id,
+                    type: row.type,
+                    payload: row.payload,
+                    delivery: row.delivery,
+                  })),
+                )
+                const restored = Schema.decodeUnknownSync(Sync.OpenCodeSessionRow)(
+                  host.db.query("select * from session_v2 where id = ?").get(chat.session.id),
+                )
+                expect({ agent: restored.agent, model: restored.model, permission: restored.permission }).toEqual({
+                  agent: chat.session.agent,
+                  model: chat.session.model,
+                  permission: chat.session.permission,
+                })
+                expect(restored.time_suspended).toBeNull()
+              }
+              expect(yield* sync.step()).toEqual({ drained: true })
+              expect(
+                (yield* remote.restore(root.session.id))
+                  .flatMap((chat) => chat.inbox)
+                  .map((row) => ({
+                    id: row.id,
+                    type: row.type,
+                    payload: row.payload,
+                    delivery: row.delivery,
+                  })),
+              ).toEqual(
+                group
+                  .flatMap((chat) => chat.inbox)
+                  .map((row) => ({
+                    id: row.id,
+                    type: row.type,
+                    payload: row.payload,
+                    delivery: row.delivery,
+                  })),
+              )
+              const script = stub.script()
+              yield* host.turn(root.session.id, script)
+              const context = JSON.stringify(script.calls.at(0)?.body.messages)
+              const compactions = root.messages.flatMap((message) =>
+                message.type === "compaction" ? [Schema.decodeUnknownSync(Compaction)(message.data)] : [],
+              )
+              for (const compaction of compactions) {
+                expect(context).toContain(JSON.stringify(compaction.summary).slice(1, -1))
+                if (compaction.recent) expect(context).toContain(JSON.stringify(compaction.recent).slice(1, -1))
+              }
+              expect(yield* sync.step()).toEqual({ drained: true })
+              const synced = new Map((yield* SyncTest.remote(root.session.id)).messages.map((row) => [row.id, row]))
+              for (const queued of root.inbox) {
+                const delivered = synced.get(queued.id)
+                expect(delivered?.type).toBe(queued.type)
+                expect(delivered && OpenCodeRows.stored(delivered)).toMatchObject(
+                  Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)))(
+                    queued.payload,
+                  ),
+                )
+              }
+              for (const message of group.flatMap((chat) => chat.messages)) {
+                const row = synced.get(message.id)
+                const actual: unknown = row && OpenCodeRows.stored(row)
+                expect(actual).toEqual(OpenCodeRows.stored(message))
+              }
+              yield* host.turn(root.session.id)
+              yield* host.driver.rename(root.session.id, barrier)
+              yield* Deferred.await(observed)
+              expect(delivered.toSorted()).toEqual(root.inbox.map((row) => row.id).toSorted())
+              expect(
+                yield* host.brain.chat.session["session.inbox.list"]({ params: { sessionID: root.session.id } }),
+              ).toEqual([])
+            }),
+          60_000,
+        )
+    },
   )
 
   it.live("a session that OpenCode deletes during a pass does not commit, and the next step does not send it", () =>
