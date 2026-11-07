@@ -5,6 +5,7 @@ import { Webhooks } from "../../lib/webhooks.js"
 export interface Draft {
   readonly message: string
   readonly agent: string
+  readonly runAsMe: boolean
   readonly signature: WebhookSignature
   readonly conditions: ReadonlyArray<Webhooks.Condition> | undefined
   readonly filter: string
@@ -32,6 +33,7 @@ export const draftOf = (webhook: WebhookInfo): Draft => {
   return {
     message: webhook.message ?? "",
     agent: Webhooks.agentValueOf(webhook.agentId),
+    runAsMe: false,
     signature: parser.signature ?? { kind: "none" },
     conditions: Webhooks.conditionsOf(parser.filter),
     filter: parser.filter ?? "",

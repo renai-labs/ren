@@ -54,10 +54,10 @@ export const isOutcome = (value: string | undefined): value is WebhookRequestOut
   value !== undefined && value in outcomes
 
 export const modeReasons: Readonly<Record<WebhookModeReason, string>> = {
-  owner_left: "Listening: the owner and the fallback user left the space. Turn it on to run it as you.",
-  agent_removed: "Listening: its agent left the space. Pick another agent.",
-  parser_broken: "Listening: the parser broke on 5 requests in a row.",
-  preset_removed: "Listening: the app no longer has this preset.",
+  owner_left: "Debug: the owner and the fallback user left the space. Make it live to run it as you.",
+  agent_removed: "Debug: its agent left the space. Pick another agent.",
+  parser_broken: "Debug: the parser broke on 5 requests in a row.",
+  preset_removed: "Debug: the app no longer has this preset.",
 }
 
 export const signatureKinds: ReadonlyArray<{ readonly value: WebhookSignature["kind"]; readonly label: string }> = [
@@ -83,11 +83,11 @@ export const requestOptions = (client: Runtime.Context["client"], id: string) =>
 
 export const listInput = (spaceId: string) => ({ spaceId, page: 1, pageSize: 50 })
 
-export const ren = "ren"
+export const defaultAgent = "default"
 
-export const agentIdOf = (value: string) => (value === ren ? undefined : value)
+export const agentIdOf = (value: string) => (value === defaultAgent ? undefined : value)
 
-export const agentValueOf = (agentId: string | null) => agentId ?? ren
+export const agentValueOf = (agentId: string | null) => agentId ?? defaultAgent
 
 export type Operator = "is" | "is not" | "is one of" | "exists"
 

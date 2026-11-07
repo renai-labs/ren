@@ -78,7 +78,7 @@ export function WebhookRequests(props: { webhook: WebhookInfo }) {
                 <TableHead>Time</TableHead>
                 <TableHead>Outcome</TableHead>
                 <TableHead>Reason</TableHead>
-                <TableHead>Chat</TableHead>
+                <TableHead>Session</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -156,7 +156,7 @@ function RequestsToolbar(props: { webhook: WebhookInfo; outcome: WebhookRequestO
         title={live ? undefined : "Turn the webhook on to replay"}
         onClick={() =>
           void replayAll(0).then(
-            (replayed) => toast.success(`${replayed} requests went to their chats`),
+            (replayed) => toast.success(`${replayed} requests went to their sessions`),
             (error: unknown) => toast.error("Couldn’t replay the requests", { description: errorMessage(error) }),
           )
         }
@@ -172,9 +172,14 @@ function RequestRow(props: { request: WebhookRequestInfo; selected: boolean; onS
   const outcome = Webhooks.outcomes[delivery.outcome]
   const OutcomeIcon = delivery.broken ? IconAlertTriangle : outcome.icon
   return (
-    <TableRow data-state={props.selected ? "selected" : undefined}>
+    <TableRow data-state={props.selected ? "selected" : undefined} className="relative cursor-pointer">
       <TableCell className="tabular-nums">
-        <Button variant="link" className="h-auto p-0 font-normal" onClick={props.onSelect}>
+        <Button
+          variant="ghost"
+          aria-expanded={props.selected}
+          onClick={props.onSelect}
+          className="block h-auto min-w-0 justify-start rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
+        >
           {formatDateTime(delivery.receivedAt)}
         </Button>
       </TableCell>
@@ -189,8 +194,12 @@ function RequestRow(props: { request: WebhookRequestInfo; selected: boolean; onS
       </TableCell>
       <TableCell>
         {delivery.sessionId ? (
-          <Link to="/sessions/$sessionId" params={{ sessionId: delivery.sessionId }} className="hover:underline">
-            Open chat
+          <Link
+            to="/sessions/$sessionId"
+            params={{ sessionId: delivery.sessionId }}
+            className="relative hover:underline"
+          >
+            Open session
           </Link>
         ) : (
           <span className="text-muted-foreground">—</span>
@@ -279,18 +288,18 @@ function JsonLeaf(props: { text: string; path: string }) {
           <DropdownMenuItem
             onClick={() => {
               form.actions.set({ threadKey: props.path })
-              added("Same-chat key set")
+              added("Session continuation key set")
             }}
           >
-            Use as same-chat key
+            Use as session continuation key
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
               form.actions.set({ title: props.path })
-              added("Title set")
+              added("Session title set")
             }}
           >
-            Use as title
+            Use as session title
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>

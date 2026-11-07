@@ -2,7 +2,7 @@ import { useState } from "react"
 import type { WebhookInfo, WebhookSignature, WebhookTested } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { getRouteApi, Link } from "@tanstack/react-router"
-import { IconArrowLeft, IconCheck, IconCode, IconCopy, IconPlus, IconX } from "@tabler/icons-react"
+import { IconArrowLeft, IconCode, IconCopy, IconPlus, IconX } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
@@ -15,15 +15,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@ren/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
+import { Field, FieldError, FieldLabel } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Spinner } from "@ren/ui/spinner"
 import { Switch } from "@ren/ui/switch"
 import { Tabs, TabsContent } from "@ren/ui/tabs"
 import { Textarea } from "@ren/ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { formatDate } from "@ren/ui/time"
-import { PageTabsList, PageTabsTrigger, Section } from "../../components/page.js"
+import { Page, PageTabsList, PageTabsTrigger, Row, Rows, Section } from "../../components/page.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useMe } from "../../lib/use-me.js"
@@ -59,7 +60,11 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
   const actions = useWebhookActions()
   const update = useMutation(api.webhook.update.mutationOptions())
   const total = useQuery({
-    ...api["webhook-request"].list.queryOptions({ webhookId: props.webhook.id, page: 1, pageSize: 1 }),
+    ...api["webhook-request"].list.queryOptions({
+      webhookId: props.webhook.id,
+      page: 1,
+      pageSize: 1,
+    }),
     select: (page) => page.total,
     refetchInterval: Webhooks.refreshEvery,
   })
@@ -73,10 +78,14 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
     update.mutate(
       {
         id: webhook.id,
-        ...(agentId !== webhook.agentId && { agentId }),
+        ...((agentId !== webhook.agentId || draft.runAsMe) && { agentId }),
         ...(!webhook.preset && {
-          ...(draft.message.trim() !== webhook.message && { message: draft.message.trim() }),
-          ...(JSON.stringify(parser) !== JSON.stringify(webhook.parser) && { parser }),
+          ...(draft.message.trim() !== webhook.message && {
+            message: draft.message.trim(),
+          }),
+          ...(JSON.stringify(parser) !== JSON.stringify(webhook.parser) && {
+            parser,
+          }),
         }),
       },
       {
@@ -84,32 +93,40 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
           form.actions.reset(saved)
           toast.success("Webhook saved")
         },
-        onError: (error) => toast.error("Couldn’t save the webhook", { description: errorMessage(error) }),
+        onError: (error) =>
+          toast.error("Couldn’t save the webhook", {
+            description: errorMessage(error),
+          }),
       },
     )
   }
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            to="/spaces/$spaceId/webhooks"
-            params={{ spaceId: props.spaceId }}
-            className={buttonVariants({ variant: "ghost", size: "sm" })}
-          >
-            <IconArrowLeft data-icon="inline-start" />
-            Webhooks
-          </Link>
-          <h2 className="truncate text-base font-medium">{name}</h2>
-        </div>
-        <div className="flex items-center gap-3">
+    <Page
+      title={name}
+      description={webhook.modeReason ? Webhooks.modeReasons[webhook.modeReason] : undefined}
+      back={
+        <Link
+          to="/spaces/$spaceId/webhooks"
+          params={{ spaceId: props.spaceId }}
+          className={buttonVariants({
+            variant: "ghost",
+            size: "sm",
+            className: "px-0 text-muted-foreground has-[>svg]:px-0",
+          })}
+        >
+          <IconArrowLeft />
+          Back to webhooks
+        </Link>
+      }
+      aside={
+        <>
           <span className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span aria-hidden>Listening</span>
+            <span aria-hidden>Debug</span>
             <Switch
               checked={live}
               disabled={!live && !Webhooks.canGoLive(webhook)}
               onCheckedChange={(checked) => void actions.setLive(webhook, { live: checked })}
-              aria-label={`Start chats from ${name}`}
+              aria-label={`Make ${name} live`}
             />
             <span aria-hidden>Live</span>
           </span>
@@ -117,15 +134,18 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
             {update.isPending ? <Spinner data-icon="inline-start" /> : null}
             Save
           </Button>
-        </div>
-      </header>
-      {webhook.modeReason ? (
-        <p className="text-sm text-muted-foreground">{Webhooks.modeReasons[webhook.modeReason]}</p>
-      ) : null}
+        </>
+      }
+    >
       <Tabs
         value={search.tab ?? "setup"}
         onValueChange={(tab) =>
-          void navigate({ search: (previous) => ({ ...previous, tab: tab === "requests" ? "requests" : "setup" }) })
+          void navigate({
+            search: (previous) => ({
+              ...previous,
+              tab: tab === "requests" ? "requests" : "setup",
+            }),
+          })
         }
       >
         <PageTabsList>
@@ -134,14 +154,14 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
             Requests
           </PageTabsTrigger>
         </PageTabsList>
-        <TabsContent value="setup" className="pt-4">
+        <TabsContent value="setup" className="pt-6">
           <WebhookSetup webhook={webhook} spaceId={props.spaceId} />
         </TabsContent>
-        <TabsContent value="requests" className="pt-4">
+        <TabsContent value="requests" className="pt-6">
           <WebhookRequests webhook={webhook} />
         </TabsContent>
       </Tabs>
-    </div>
+    </Page>
   )
 }
 
@@ -151,7 +171,7 @@ function WebhookSetup(props: { webhook: WebhookInfo; spaceId: string }) {
   const webhook = props.webhook
   const preset = webhook.preset
   return (
-    <div className="flex max-w-3xl flex-col gap-10">
+    <div className="flex flex-col gap-10">
       <UrlSection webhook={webhook} />
       {preset ? (
         <Section
@@ -161,40 +181,32 @@ function WebhookSetup(props: { webhook: WebhookInfo; spaceId: string }) {
           <p className="text-sm whitespace-pre-wrap">{preset.setup ?? "The app no longer has this preset."}</p>
         </Section>
       ) : null}
-      <Section title="Signature" description="How Ren checks that a request comes from the other app.">
-        {preset ? (
-          <p className="text-sm">
-            {Webhooks.signatureKinds.find((kind) => kind.value === (webhook.parser?.signature?.kind ?? "none"))?.label}
-          </p>
-        ) : (
-          <SignatureFields signature={draft.signature} onChange={(signature) => form.actions.set({ signature })} />
-        )}
-        <SigningSecret webhook={webhook} />
+      <SignatureSection webhook={webhook} />
+      <Section title="Message" description="What each new session asks the agent.">
+        <Textarea
+          aria-label="Message"
+          value={draft.message}
+          readOnly={Boolean(preset)}
+          onChange={(event) => form.actions.set({ message: event.target.value })}
+          className="max-h-60 min-h-24"
+        />
       </Section>
-      <Section title="Chats" description="What each request asks, and who runs it.">
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="webhook-message">Message</FieldLabel>
-            <Textarea
-              id="webhook-message"
-              value={draft.message}
-              readOnly={Boolean(preset)}
-              onChange={(event) => form.actions.set({ message: event.target.value })}
-              className="max-h-60 min-h-20"
-            />
-          </Field>
-          <Field>
-            <FieldLabel>Agent</FieldLabel>
-            <AgentSelect
-              spaceId={props.spaceId}
-              value={draft.agent}
-              onChange={(agent) => form.actions.set({ agent })}
-            />
-          </Field>
-          <RunsAs webhook={webhook} />
-        </FieldGroup>
+      <Section title="Sessions" description="Who runs the sessions this webhook starts.">
+        <Rows>
+          {[
+            <Row key="agent" title="Agent">
+              <AgentSelect
+                spaceId={props.spaceId}
+                value={draft.agent}
+                onChange={(agent) => form.actions.set({ agent })}
+                className="w-56"
+              />
+            </Row>,
+            <RunsAs key="runs-as" webhook={webhook} />,
+          ]}
+        </Rows>
       </Section>
-      <Section title="Parser" description="Which requests start a chat, and which go into the same chat.">
+      <Section title="Parser" description="Which requests start a session, and which continue one.">
         {preset ? (
           <CodeBlock size="sm">
             <CodeBlockContent wrap>{JSON.stringify(webhook.parser, null, 2)}</CodeBlockContent>
@@ -209,42 +221,52 @@ function WebhookSetup(props: { webhook: WebhookInfo; spaceId: string }) {
 }
 
 function RunsAs(props: { webhook: WebhookInfo }) {
-  const { api } = RouterContext.useRouterContext()
+  const form = useWebhookForm()
   const members = useMembers()
   const me = useMe().user
-  const update = useMutation(api.webhook.update.mutationOptions())
   const webhook = props.webhook
   const owner = members.member(webhook.ownerId)?.name ?? "Someone"
-  const fallback = webhook.fallbackUserId ? (members.member(webhook.fallbackUserId)?.name ?? "Someone") : undefined
-  const setFallback = (fallbackUserId: string | null) =>
-    update.mutate(
-      { id: webhook.id, fallbackUserId },
-      { onError: (error) => toast.error("Couldn’t change the fallback user", { description: errorMessage(error) }) },
-    )
-  const changes = props.webhook.preset ? "the agent" : "a new message, parser or agent"
+  const isMine = webhook.ownerId === me.id
+  const options = [{ value: "owner", label: owner }, ...(isMine ? [] : [{ value: "me", label: "Use me instead" }])]
+  const picker = (
+    <Select
+      items={options}
+      value={form.state.draft.runAsMe ? "me" : "owner"}
+      onValueChange={(value) => form.actions.set({ runAsMe: value === "me" })}
+      disabled={isMine}
+    >
+      <SelectTrigger aria-label="Runs as" className="w-56">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  )
   return (
-    <div className="flex flex-col gap-2 text-sm">
-      <p>
-        <span className="font-medium">Runs as</span> {owner}. Saving {changes} makes you the owner.
-      </p>
-      <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-        <span>
-          {fallback
-            ? `If ${owner} leaves: ${fallback}.`
-            : `If ${owner} leaves, the webhook stops and keeps its requests.`}
-        </span>
-        {webhook.fallbackUserId !== me.id ? (
-          <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => setFallback(me.id)}>
-            Use me instead
-          </Button>
-        ) : null}
-        {fallback ? (
-          <Button variant="ghost" size="sm" disabled={update.isPending} onClick={() => setFallback(null)}>
-            Remove
-          </Button>
-        ) : null}
-      </div>
-    </div>
+    <Row
+      title="Runs as"
+      description={
+        form.state.draft.runAsMe
+          ? "Save to run it as you."
+          : `If ${owner} leaves the space, the webhook stops and keeps its requests.`
+      }
+    >
+      {isMine ? (
+        <Tooltip>
+          <TooltipTrigger render={<div />}>{picker}</TooltipTrigger>
+          <TooltipContent side="left">You can only set yourself.</TooltipContent>
+        </Tooltip>
+      ) : (
+        picker
+      )}
+    </Row>
   )
 }
 
@@ -253,14 +275,14 @@ function UrlSection(props: { webhook: WebhookInfo }) {
   return (
     <Section title="URL" description="Paste it in the other app. It holds a token, so treat it like a password.">
       <div className="flex flex-wrap items-center gap-2">
-        <code className="min-w-0 flex-1 truncate rounded-md border bg-muted/40 px-3 py-1.5 text-sm">
+        <code className="min-w-0 flex-1 truncate rounded-md border bg-card px-3 py-1.5 font-mono text-sm">
           {masked(props.webhook.url)}
         </code>
         <Button variant="outline" onClick={() => void actions.copyUrl(props.webhook)}>
           <IconCopy data-icon="inline-start" />
           Copy URL
         </Button>
-        <Button variant="ghost" onClick={() => void actions.rotateUrl(props.webhook)}>
+        <Button variant="outline" onClick={() => void actions.rotateUrl(props.webhook)}>
           Rotate URL
         </Button>
       </div>
@@ -277,86 +299,111 @@ const signatureOf = (kind: string, previous: WebhookSignature): WebhookSignature
   return { kind: "none" }
 }
 
-function SignatureFields(props: { signature: WebhookSignature; onChange: (signature: WebhookSignature) => void }) {
-  const signature = props.signature
+function SignatureSection(props: { webhook: WebhookInfo }) {
+  const form = useWebhookForm()
+  const webhook = props.webhook
+  const signature = form.state.draft.signature
+  const set = (next: WebhookSignature) => form.actions.set({ signature: next })
+  const label = Webhooks.signatureKinds.find((kind) => kind.value === signature.kind)?.label
   return (
-    <FieldGroup>
-      <Field>
-        <FieldLabel>Check</FieldLabel>
-        <Select
-          items={Webhooks.signatureKinds}
-          value={signature.kind}
-          onValueChange={(kind) => props.onChange(signatureOf(String(kind), signature))}
-        >
-          <SelectTrigger aria-label="Check" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {Webhooks.signatureKinds.map((kind) => (
-                <SelectItem key={kind.value} value={kind.value}>
-                  {kind.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </Field>
-      {signature.kind === "header" || signature.kind === "hmac" ? (
-        <Field>
-          <FieldLabel htmlFor="webhook-header">Header</FieldLabel>
-          <Input
-            id="webhook-header"
-            value={signature.header}
-            onChange={(event) => props.onChange({ ...signature, header: event.target.value.toLowerCase() })}
-            placeholder="x-hub-signature-256"
-          />
-        </Field>
-      ) : null}
-      {signature.kind === "hmac" ? (
-        <div className="grid grid-cols-2 gap-3">
-          <Field>
-            <FieldLabel>Encoding</FieldLabel>
-            <Select
-              items={[
-                { value: "hex", label: "Hex" },
-                { value: "base64", label: "Base64" },
-              ]}
-              value={signature.encoding}
-              onValueChange={(encoding) =>
-                props.onChange({ ...signature, encoding: encoding === "base64" ? "base64" : "hex" })
-              }
-            >
-              <SelectTrigger aria-label="Encoding" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="hex">Hex</SelectItem>
-                  <SelectItem value="base64">Base64</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="webhook-prefix">Prefix</FieldLabel>
-            <Input
-              id="webhook-prefix"
-              value={signature.prefix ?? ""}
-              onChange={(event) => {
-                const prefix = event.target.value
-                props.onChange(
-                  prefix
-                    ? { ...signature, prefix }
-                    : { kind: "hmac", header: signature.header, encoding: signature.encoding },
-                )
-              }}
-              placeholder="sha256="
-            />
-          </Field>
-        </div>
-      ) : null}
-    </FieldGroup>
+    <Section title="Signature" description="How Ren checks that a request comes from the other app.">
+      <Rows>
+        {[
+          <Row key="check" title="Check">
+            {webhook.preset ? (
+              <span className="text-sm text-muted-foreground">{label}</span>
+            ) : (
+              <Select
+                items={Webhooks.signatureKinds}
+                value={signature.kind}
+                onValueChange={(kind) => set(signatureOf(String(kind), signature))}
+              >
+                <SelectTrigger aria-label="Check" className="w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {Webhooks.signatureKinds.map((kind) => (
+                      <SelectItem key={kind.value} value={kind.value}>
+                        {kind.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            )}
+          </Row>,
+          ...(!webhook.preset && (signature.kind === "header" || signature.kind === "hmac")
+            ? [
+                <Row key="header" title="Header" description="The request header that carries the secret or signature.">
+                  <Input
+                    aria-label="Header"
+                    value={signature.header}
+                    onChange={(event) =>
+                      set({
+                        ...signature,
+                        header: event.target.value.toLowerCase(),
+                      })
+                    }
+                    placeholder="x-hub-signature-256"
+                    className="w-56 font-mono"
+                  />
+                </Row>,
+              ]
+            : []),
+          ...(!webhook.preset && signature.kind === "hmac"
+            ? [
+                <Row key="encoding" title="Encoding">
+                  <Select
+                    items={[
+                      { value: "hex", label: "Hex" },
+                      { value: "base64", label: "Base64" },
+                    ]}
+                    value={signature.encoding}
+                    onValueChange={(encoding) =>
+                      set({
+                        ...signature,
+                        encoding: encoding === "base64" ? "base64" : "hex",
+                      })
+                    }
+                  >
+                    <SelectTrigger aria-label="Encoding" className="w-56">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="hex">Hex</SelectItem>
+                        <SelectItem value="base64">Base64</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Row>,
+                <Row key="prefix" title="Prefix" description="Text before the signature in the header.">
+                  <Input
+                    aria-label="Prefix"
+                    value={signature.prefix ?? ""}
+                    onChange={(event) => {
+                      const prefix = event.target.value
+                      set(
+                        prefix
+                          ? { ...signature, prefix }
+                          : {
+                              kind: "hmac",
+                              header: signature.header,
+                              encoding: signature.encoding,
+                            },
+                      )
+                    }}
+                    placeholder="sha256="
+                    className="w-56 font-mono"
+                  />
+                </Row>,
+              ]
+            : []),
+          <SigningSecret key="secret" webhook={webhook} />,
+        ]}
+      </Rows>
+    </Section>
   )
 }
 
@@ -377,49 +424,42 @@ function SigningSecret(props: { webhook: WebhookInfo }) {
           setShown(secret ? undefined : result.secret)
           toast.success(secret ? "Signing secret saved" : "Signing secret made. Copy it into the other app.")
         },
-        onError: (error) => toast.error("Couldn’t set the signing secret", { description: errorMessage(error) }),
+        onError: (error) =>
+          toast.error("Couldn’t set the signing secret", {
+            description: errorMessage(error),
+          }),
       },
     )
+  const status = props.webhook.hasSigningSecret ? "Set" : "Not set"
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium">Signing secret</span>
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        {props.webhook.hasSigningSecret ? (
-          <span className="flex items-center gap-1.5">
-            <IconCheck className="size-4" />
-            Set
-          </span>
-        ) : (
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <IconX className="size-4" />
-            Not set
-          </span>
-        )}
-        {props.webhook.hasSigningSecret ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={reveal.isPending}
-            onClick={() =>
-              reveal.mutate(
-                { id: props.webhook.id },
-                {
-                  onSuccess: (result) => setShown(result.secret),
-                  onError: (error) => toast.error("Couldn’t show the secret", { description: errorMessage(error) }),
-                },
-              )
-            }
-          >
-            Reveal
-          </Button>
-        ) : null}
-        <Button variant="outline" size="sm" onClick={() => setReplacing(true)}>
-          {props.webhook.hasSigningSecret ? "Replace" : "Set secret"}
+    <Row
+      title="Signing secret"
+      description={shown ? <code className="font-mono break-all text-foreground select-all">{shown}</code> : status}
+    >
+      {props.webhook.hasSigningSecret ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={reveal.isPending}
+          onClick={() =>
+            reveal.mutate(
+              { id: props.webhook.id },
+              {
+                onSuccess: (result) => setShown(result.secret),
+                onError: (error) =>
+                  toast.error("Couldn’t show the secret", {
+                    description: errorMessage(error),
+                  }),
+              },
+            )
+          }
+        >
+          Reveal
         </Button>
-      </div>
-      {shown ? (
-        <code className="rounded-md border bg-muted/40 px-3 py-1.5 text-sm break-all select-all">{shown}</code>
       ) : null}
+      <Button variant="outline" size="sm" onClick={() => setReplacing(true)}>
+        {props.webhook.hasSigningSecret ? "Replace" : "Set secret"}
+      </Button>
       <Dialog open={replacing} onOpenChange={setReplacing}>
         <DialogContent>
           <DialogHeader>
@@ -449,7 +489,7 @@ function SigningSecret(props: { webhook: WebhookInfo }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Row>
   )
 }
 
@@ -462,18 +502,23 @@ function ParserFields(props: { draft: Draft }) {
       conditions: conditions?.map((condition, at) => (at === index ? { ...condition, ...patch } : condition)),
     })
   return (
-    <FieldGroup>
-      <Field>
-        <div className="flex items-center justify-between">
-          <FieldLabel>Start a chat when</FieldLabel>
+    <>
+      <div className="flex flex-col gap-3 rounded-xl border bg-card px-4 py-3">
+        <div className="flex min-h-8 items-center justify-between gap-4">
+          <span className="text-sm font-medium">Start a session when</span>
           <Button
             variant="ghost"
             size="sm"
             onClick={() =>
               form.actions.set(
                 conditions
-                  ? { conditions: undefined, filter: Webhooks.celOf(conditions) }
-                  : { conditions: Webhooks.conditionsOf(draft.filter) ?? conditions },
+                  ? {
+                      conditions: undefined,
+                      filter: Webhooks.celOf(conditions),
+                    }
+                  : {
+                      conditions: Webhooks.conditionsOf(draft.filter) ?? conditions,
+                    },
               )
             }
             disabled={!conditions && Webhooks.conditionsOf(draft.filter) === undefined}
@@ -484,22 +529,37 @@ function ParserFields(props: { draft: Draft }) {
         </div>
         {conditions ? (
           <div className="flex flex-col gap-2">
+            {conditions.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Every request starts or continues a session.</p>
+            ) : null}
             {conditions.map((condition, index) => (
               <ConditionRow
                 key={condition.id}
                 condition={condition}
                 index={index}
                 onChange={(patch) => setCondition(index, patch)}
-                onRemove={() => form.actions.set({ conditions: conditions.filter((each) => each.id !== condition.id) })}
+                onRemove={() =>
+                  form.actions.set({
+                    conditions: conditions.filter((each) => each.id !== condition.id),
+                  })
+                }
               />
             ))}
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               className="self-start"
               onClick={() =>
                 form.actions.set({
-                  conditions: [...conditions, { id: crypto.randomUUID(), path: "", operator: "is", value: "" }],
+                  conditions: [
+                    ...conditions,
+                    {
+                      id: crypto.randomUUID(),
+                      path: "",
+                      operator: "is",
+                      value: "",
+                    },
+                  ],
                 })
               }
             >
@@ -509,43 +569,50 @@ function ParserFields(props: { draft: Draft }) {
           </div>
         ) : (
           <Textarea
-            aria-label="Filter as CEL"
+            aria-label="Start a session when, as CEL"
             value={draft.filter}
             onChange={(event) => form.actions.set({ filter: event.target.value })}
             className="min-h-16 font-mono text-sm"
             placeholder="has(body.event)"
           />
         )}
-      </Field>
-      <PathField
-        id="webhook-thread-key"
-        label="Same chat when"
-        value={draft.threadKey}
-        placeholder="body.person.properties.email"
-        onChange={(threadKey) => form.actions.set({ threadKey })}
-      />
-      <PathField
-        id="webhook-event-id"
-        label="Duplicate ID"
-        value={draft.eventId}
-        placeholder="body.event.uuid"
-        onChange={(eventId) => form.actions.set({ eventId })}
-      />
-      <PathField
-        id="webhook-title"
-        label="Title"
-        value={draft.title}
-        placeholder="body.person.properties.email"
-        onChange={(title) => form.actions.set({ title })}
-      />
-      <PathField
-        id="webhook-handshake"
-        label="Handshake"
-        value={draft.handshake}
-        placeholder="has(query.validationToken) ? … : null"
-        onChange={(handshake) => form.actions.set({ handshake })}
-      />
-    </FieldGroup>
+      </div>
+      <Rows>
+        {[
+          <PathRow
+            key="thread-key"
+            title="Session continuation key"
+            description="Requests with the same value go into one session."
+            value={draft.threadKey}
+            placeholder="body.person.properties.email"
+            onChange={(threadKey) => form.actions.set({ threadKey })}
+          />,
+          <PathRow
+            key="event-id"
+            title="Event identifier"
+            description="Ren skips a request whose identifier it has already seen."
+            value={draft.eventId}
+            placeholder="body.event.uuid"
+            onChange={(eventId) => form.actions.set({ eventId })}
+          />,
+          <PathRow
+            key="title"
+            title="Session title"
+            value={draft.title}
+            placeholder="body.person.properties.email"
+            onChange={(title) => form.actions.set({ title })}
+          />,
+          <PathRow
+            key="handshake"
+            title="Verification reply"
+            description="The answer for apps that check the URL before they send events."
+            value={draft.handshake}
+            placeholder="has(query.validationToken) ? … : null"
+            onChange={(handshake) => form.actions.set({ handshake })}
+          />,
+        ]}
+      </Rows>
+    </>
   )
 }
 
@@ -566,7 +633,10 @@ function ConditionRow(props: {
         placeholder="body.event.event"
       />
       <Select
-        items={Webhooks.operators.map((operator) => ({ value: operator, label: operator }))}
+        items={Webhooks.operators.map((operator) => ({
+          value: operator,
+          label: operator,
+        }))}
         value={condition.operator}
         onValueChange={(operator) => {
           const found = Webhooks.operators.find((each) => each === operator)
@@ -600,24 +670,23 @@ function ConditionRow(props: {
   )
 }
 
-function PathField(props: {
-  id: string
-  label: string
+function PathRow(props: {
+  title: string
+  description?: string
   value: string
   placeholder: string
   onChange: (value: string) => void
 }) {
   return (
-    <Field>
-      <FieldLabel htmlFor={props.id}>{props.label}</FieldLabel>
+    <Row title={props.title} description={props.description}>
       <Input
-        id={props.id}
+        aria-label={props.title}
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
         placeholder={props.placeholder}
-        className="font-mono text-sm"
+        className="w-72 font-mono"
       />
-    </Field>
+    </Row>
   )
 }
 
@@ -625,7 +694,7 @@ const summaryOf = (items: ReadonlyArray<WebhookTested>) => {
   const broken = items.filter((item) => item.broken).length
   const passed = items.filter((item) => item.outcome === "passed").length
   const ignored = items.filter((item) => item.outcome === "ignored" && !item.broken).length
-  return `${ignored} ignored · ${passed} would start a chat · ${broken} broken`
+  return `${ignored} ignored · ${passed} would start a session · ${broken} broken`
 }
 
 function TestParser(props: { webhook: WebhookInfo }) {
@@ -638,7 +707,10 @@ function TestParser(props: { webhook: WebhookInfo }) {
         variant="outline"
         disabled={test.isPending}
         onClick={() =>
-          test.mutate({ id: props.webhook.id, ...(!props.webhook.preset && { parser: form.meta.parser }) })
+          test.mutate({
+            id: props.webhook.id,
+            ...(!props.webhook.preset && { parser: form.meta.parser }),
+          })
         }
       >
         {test.isPending ? <Spinner data-icon="inline-start" /> : null}

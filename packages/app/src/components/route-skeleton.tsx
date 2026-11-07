@@ -35,7 +35,7 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   schedules: { title: "Scheduled", description: (space) => `Work that starts in ${space} on a schedule.` },
   webhooks: {
     title: "Webhooks",
-    description: (space) => `URLs that start chats in ${space} when another app sends a request.`,
+    description: (space) => `URLs that start sessions in ${space} when another app sends a request.`,
   },
   factory: { title: "Factory", description: (space) => `Agents that work on tasks in ${space}.` },
 }
