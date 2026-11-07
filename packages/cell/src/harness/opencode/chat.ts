@@ -41,6 +41,7 @@ const absent = () => Effect.succeed(false)
 const shellMissing = (shellId: string) =>
   Effect.fail(new Harness.NotFound({ message: `Shell ${shellId} is not running or kept` }))
 const located = { SessionNotFoundError: missing, LocationNotFoundError: missing }
+const hiddenCommands = new Set(["goal"])
 
 const readOne = <A, B>(item: A, translate: (item: A) => Option.Option<B>) =>
   Option.match(translate(item), {
@@ -284,21 +285,36 @@ export const make = (
         .update({ sessionID: SessionID.make(sessionId), inboxID: SessionMessage.ID.make(inboxId), delivery })
         .pipe(Effect.catchTags({ SessionNotFoundError: missing, ConflictError: conflict }, Effect.die)),
     command: (sessionId, command) =>
-      api.session
-        .command({
-          sessionID: SessionID.make(sessionId),
-          name: command.name,
-          text: command.text,
-          delivery: command.delivery,
-          ...(command.agents && { agents: command.agents }),
-          ...(command.skills && {
-            skills: command.skills.map((skill) => ({ ...skill, id: Skill.ID.make(skill.id) })),
-          }),
-        })
-        .pipe(Effect.catchTags({ ...located, CommandNotFoundError: missing }, Effect.die)),
+      hiddenCommands.has(command.name)
+        ? Effect.fail(new Harness.NotFound({ message: `Command not found: ${command.name}` }))
+        : api.session
+            .command({
+              sessionID: SessionID.make(sessionId),
+              name: command.name,
+              text: command.text,
+              delivery: command.delivery,
+              ...(command.agents && { agents: command.agents }),
+              ...(command.skills && {
+                skills: command.skills.map((skill) => ({ ...skill, id: Skill.ID.make(skill.id) })),
+              }),
+            })
+            .pipe(
+              Effect.catchTags(
+                { ...located, CommandNotFoundError: missing, CommandExecutionError: rejected },
+                Effect.die,
+              ),
+            ),
     agents: (sessionId) => host.agents(sessionId).pipe(Effect.flatMap((all) => readAll(all, Translate.agent))),
     skills: (sessionId) => host.skills(sessionId).pipe(Effect.flatMap((all) => readAll(all, Translate.skill))),
-    commands: (sessionId) => host.commands(sessionId).pipe(Effect.flatMap((all) => readAll(all, Translate.command))),
+    commands: (sessionId) =>
+      host.commands(sessionId).pipe(
+        Effect.flatMap((all) =>
+          readAll(
+            all.filter((command) => !hiddenCommands.has(command.name)),
+            Translate.command,
+          ),
+        ),
+      ),
     files: (sessionId, search) =>
       host.findFiles(sessionId, search).pipe(Effect.flatMap((all) => readAll(all, Translate.file))),
     listFiles: (sessionId, path) =>

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { Plugin } from "@opencode/plugin/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { testEffect } from "@ren/executor/testing"
 import { ChatApi } from "@ren/protocol/chat"
@@ -630,6 +631,41 @@ test("a client lists the agents, skills and commands where the session works, fi
         Effect.flip,
       )
       expect(outside._tag).toBe("NotFoundError")
+    }),
+  ))
+
+test("the command list leaves out /goal, which runs hidden rounds, and running it is not found; a command that fails is an invalid request", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make({
+        plugin: Plugin.define({
+          id: "broken-command-test",
+          effect: (context) =>
+            context.command
+              .transform((editor) =>
+                editor.add({
+                  name: "broken",
+                  description: "Fails",
+                  execute: () => Effect.fail(new Error("The command broke")),
+                }),
+              )
+              .pipe(Effect.asVoid),
+        }),
+      })
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const names = (yield* brain.chat.command["command.list"]({ params })).map((command) => command.name)
+      expect(names).toContain("broken")
+      expect(names).not.toContain("goal")
+      const run = (name: string) =>
+        brain.chat.session["session.command"]({ params, payload: { name, text: "ship it", delivery: "steer" } }).pipe(
+          Effect.flip,
+        )
+      expect((yield* run("goal"))._tag).toBe("NotFoundError")
+      expect(yield* run("broken")).toMatchObject({
+        _tag: "InvalidRequestError",
+        message: expect.stringContaining("The command broke"),
+      })
     }),
   ))
 

@@ -103,7 +103,7 @@ export interface Chat {
     inboxId: SessionMessage.ID,
     delivery: SessionInbox.Delivery,
   ) => Effect.Effect<void, NotFound | Conflict>
-  readonly command: (sessionId: Session.ID, command: Command) => Effect.Effect<void, NotFound>
+  readonly command: (sessionId: Session.ID, command: Command) => Effect.Effect<void, NotFound | Rejected>
   readonly agents: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Agent>, NotFound>
   readonly skills: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Skill>, NotFound>
   readonly commands: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Command>, NotFound>
