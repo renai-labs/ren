@@ -21,9 +21,6 @@
       "path": "../client/tsconfig.src.json"
     },
     {
-      "path": "../opencode-transcript/tsconfig.src.json"
-    },
-    {
       "path": "../schema/tsconfig.src.json"
     }
   ]

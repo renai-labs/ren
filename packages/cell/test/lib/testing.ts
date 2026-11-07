@@ -1,5 +1,6 @@
 export { Celld } from "./celld.js"
 export { FakeRen } from "./ren.js"
+export { OpenCodeDriver } from "./opencode-driver.js"
 export { Shared } from "./shared.js"
 export { StubModel } from "./stub-model.js"
 export { SyncClient } from "../../src/sync-client.js"

@@ -5,6 +5,7 @@ import type { ModelTypes } from "@ren/schema/model-types"
 import { AbsolutePath, Agent, Session, SessionMessage } from "@opencode/client/effect"
 import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
+import { Global } from "@opencode/util/global"
 import { SessionInbox } from "@opencode/schema/session-inbox"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { BrainSettings } from "@ren/brain/settings"
@@ -523,7 +524,13 @@ export const layerProcess = (database: string, confinement: RenPlugin.Confinemen
       egress: host.egress,
       sources: host.sources,
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
-      confinement,
+      confinement: {
+        workspace: confinement.workspace,
+        allow: [
+          ...confinement.allow,
+          ...[Global.Path.data, Global.Path.cache, Global.Path.config, Global.Path.tmp].map((path) => `${path}/`),
+        ],
+      },
       makeDirectory: (directory) => Effect.promise(() => mkdir(directory, { recursive: true })),
     }),
   )

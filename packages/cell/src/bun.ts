@@ -1,6 +1,5 @@
 import { Database } from "bun:sqlite"
-import { Global } from "@opencode/util/global"
-import type { OpenCodeSync } from "@ren/brain/opencode-sync"
+import type { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
 import { Observability } from "@ren/schema/observability"
 import { Session } from "@ren/schema/session"
 import { PostHog } from "@ren/telemetry/posthog"
@@ -118,12 +117,7 @@ const runtime = ManagedRuntime.make(
     Layer.provideMerge(
       OpenCodeHarness.layerProcess(harnessDatabase, {
         workspace,
-        allow: [
-          "/tmp/",
-          ...[Global.Path.data, Global.Path.cache, Global.Path.config, Global.Path.tmp, ...caches].map(
-            (path) => `${path}/`,
-          ),
-        ],
+        allow: ["/tmp/", ...caches.map((path) => `${path}/`)],
       }).pipe(Layer.provide([HostAccess.connections, harnessStorage])),
     ),
     Layer.provideMerge(Sync.layerWith(reader, vars.REN_URL)),

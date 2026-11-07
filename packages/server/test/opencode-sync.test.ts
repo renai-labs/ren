@@ -1,8 +1,7 @@
 import { describe, expect } from "bun:test"
 import { Database } from "bun:sqlite"
-import { AbsolutePath, Session, SessionMessage } from "@opencode/client/effect"
-import { OpenCodeSync } from "@ren/brain/opencode-sync"
-import { SqliteReader } from "@ren/brain/sqlite-reader"
+import { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
+import { SqliteReader } from "@ren/opencode-transcript/sqlite-reader"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { Sync } from "@ren/schema/sync"
 import { Shared, type StubModel, SyncClient } from "@ren/cell/testing"
@@ -112,9 +111,8 @@ const setup = Effect.fnUntraced(function* () {
   const db = new Database(file)
   yield* Effect.addFinalizer(() => Effect.sync(() => db.close()))
   const reader = yield* SqliteReader.make(file)
-  const client = brain.opencode
-  const root = Session.ID.make(brain.id)
-  const location = { directory: AbsolutePath.make(brain.directory) }
+  const driver = brain.driver
+  const root = brain.id
   const sync = (input: { readonly reader?: OpenCodeSync.Reader } = {}) =>
     SyncClient.make(
       proxy.url,
@@ -131,24 +129,18 @@ const setup = Effect.fnUntraced(function* () {
       ),
       Effect.provide(FetchHttpClient.layer),
     )
-  const create = (parentID?: Session.ID) =>
-    client.session.create({ location, ...(parentID && { parentID }) }).pipe(
-      Effect.orDie,
-      Effect.map((session) => session.id),
-    )
-  const turn = Effect.fnUntraced(function* (sessionID: Session.ID, script: StubModel.Script = stub.script()) {
-    yield* client.session.prompt({ sessionID, text: `Go ${script.marker}` }).pipe(Effect.orDie)
+  const create = (parentId?: RenSession.ID) => driver.create({ ...(parentId && { parentId }) })
+  const turn = Effect.fnUntraced(function* (id: RenSession.ID, script: StubModel.Script = stub.script()) {
+    yield* driver.prompt(id, `Go ${script.marker}`)
     yield* Effect.promise(() => script.called())
-    yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
+    yield* driver.wait(id)
   })
-  const rename = (sessionID: Session.ID, title: string) =>
-    client.session.update({ sessionID, title }).pipe(Effect.orDie)
   const expectEqual = Effect.gen(function* () {
     const expected = local(db, brain.id)
     expect(yield* SyncTest.remote(brain.id)).toEqual(expected)
     return expected
   })
-  return { brain, owner, root, proxy, token, host, db, reader, client, sync, create, turn, rename, expectEqual }
+  return { brain, owner, root, proxy, token, host, db, reader, driver, sync, create, turn, expectEqual }
 })
 
 describe("OpenCodeSync", () => {
@@ -172,13 +164,13 @@ describe("OpenCodeSync", () => {
         )
         yield* Effect.promise(() => child.called())
         const retry = stub.script({ status: 503 })
-        yield* host.client.session.prompt({ sessionID: host.root, text: retry.marker }).pipe(Effect.orDie)
+        yield* host.driver.prompt(host.root, retry.marker)
         yield* Effect.promise(() => retry.called())
         retry.set({})
         yield* Effect.promise(() => retry.called(2))
-        yield* host.client.session.wait({ sessionID: host.root }).pipe(Effect.orDie)
-        yield* host.client.session.shell({ sessionID: host.root, command: "echo shell" }).pipe(Effect.orDie)
-        yield* host.client.session.wait({ sessionID: host.root }).pipe(Effect.orDie)
+        yield* host.driver.wait(host.root)
+        yield* host.driver.shell(host.root, "echo shell")
+        yield* host.driver.wait(host.root)
         expect(yield* sync.step()).toEqual({ drained: true })
         const synced = yield* host.expectEqual
         expect(synced.sessions).toHaveLength(2)
@@ -199,10 +191,7 @@ describe("OpenCodeSync", () => {
       const before = yield* host.expectEqual
       const second = before.messages.filter((message) => message.type === "user")[1]
       if (!second) return yield* Effect.die(new Error("The second user message is missing"))
-      yield* host.client.session.revert
-        .stage({ sessionID: host.root, messageID: SessionMessage.ID.make(second.id) })
-        .pipe(Effect.orDie)
-      yield* host.client.session.revert.commit({ sessionID: host.root }).pipe(Effect.orDie)
+      yield* host.driver.revert(host.root, second.id)
       yield* sync.step()
       const after = yield* host.expectEqual
       expect(after.messages.map((message) => message.id)).not.toContain(second.id)
@@ -254,7 +243,7 @@ describe("OpenCodeSync", () => {
           [isStart(host.root), nth(2, isBatch(host.root)), isCommit(host.root)],
           (match, index) =>
             Effect.gen(function* () {
-              yield* host.rename(host.root, `Case ${index}`)
+              yield* host.driver.rename(host.root, `Case ${index}`)
               host.proxy.once({ match, fault: "fail" })
               expect(yield* sync.step()).toEqual({ drained: false, failed: true })
               expect(yield* sync.step()).toEqual({ drained: true })
@@ -343,7 +332,7 @@ describe("OpenCodeSync", () => {
       yield* host.turn(host.root)
       host.proxy.once({
         match: isCommit(host.root),
-        before: () => Effect.runPromise(host.rename(host.root, "Renamed during the pass")),
+        before: () => Effect.runPromise(host.driver.rename(host.root, "Renamed during the pass")),
       })
       yield* sync.step()
       yield* sync.step()
@@ -356,7 +345,7 @@ describe("OpenCodeSync", () => {
     Effect.gen(function* () {
       const host = yield* setup()
       const sync = yield* host.sync()
-      yield* host.rename(host.root, "a\u0000b")
+      yield* host.driver.rename(host.root, "a\u0000b")
       expect(yield* sync.step()).toEqual({ drained: true })
       expect((yield* SyncTest.remote(host.brain.id)).sessions.map((session) => session.title)).toEqual(["a\uFFFDb"])
     }),
@@ -414,7 +403,7 @@ describe("OpenCodeSync", () => {
       const child = yield* host.create(host.root)
       host.proxy.once({
         match: isStart(child),
-        before: () => Effect.runPromise(host.client.session.remove({ sessionID: child }).pipe(Effect.orDie)),
+        before: () => Effect.runPromise(host.driver.remove(child)),
       })
       yield* sync.step()
       expect(host.proxy.requests.filter(isCommit(child))).toEqual([])
@@ -554,22 +543,22 @@ describe("OpenCodeSync", () => {
         })
         const first = yield* host.sync()
         const script = stub.script({ hold: true })
-        yield* host.client.session.prompt({ sessionID: host.root, text: script.marker }).pipe(Effect.orDie)
+        yield* host.driver.prompt(host.root, script.marker)
         yield* Effect.promise(() => script.called())
         expect(yield* passed(first)).toEqual({ drained: true, passed: true })
         expect(yield* SyncTest.status(host.root)).toBe("busy")
         const interval = Duration.toMillis(OpenCodeSync.busyInterval)
-        yield* host.rename(host.root, "One")
+        yield* host.driver.rename(host.root, "One")
         expect(yield* passed(first)).toEqual({ drained: false, throttledUntil: interval, passed: false })
         expect(paths(host.proxy.requests)).toEqual([checkpoints])
         yield* TestClock.adjust(OpenCodeSync.busyInterval).pipe(Effect.provideContext(clock))
         expect(yield* passed(first)).toEqual({ drained: true, passed: true })
-        yield* host.rename(host.root, "Two")
+        yield* host.driver.rename(host.root, "Two")
         expect(yield* passed(first)).toEqual({ drained: false, throttledUntil: 2 * interval, passed: false })
         const restarted = yield* host.sync()
         expect(yield* passed(restarted)).toEqual({ drained: true, passed: true })
         script.release()
-        yield* host.client.session.wait({ sessionID: host.root }).pipe(Effect.orDie)
+        yield* host.driver.wait(host.root)
         expect(yield* passed(restarted)).toEqual({ drained: true, passed: true })
         expect(yield* SyncTest.status(host.root)).toBe("idle")
         yield* host.expectEqual
@@ -587,8 +576,8 @@ describe("OpenCodeSync", () => {
         const child = yield* host.create(unknown)
         const captured = logs()
         expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: true })
-        yield* host.rename(unknown, "Changed")
-        yield* host.rename(child, "Changed")
+        yield* host.driver.rename(unknown, "Changed")
+        yield* host.driver.rename(child, "Changed")
         expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: true })
         expect(captured.messages.filter((message) => message.includes(unknown))).toHaveLength(1)
         expect(paths(host.proxy.requests).filter((path) => path.includes(unknown))).toEqual([uploads(unknown)])
@@ -726,7 +715,7 @@ describe("OpenCodeSync", () => {
           .pipe(Effect.exit)
         expect(restoring._tag).toBe("Failure")
         expect([...host.host.restoring]).toEqual([renId(host.root)])
-        yield* Effect.forEach([host.root, child, other], (id) => host.rename(id, "Changed"))
+        yield* Effect.forEach([host.root, child, other], (id) => host.driver.rename(id, "Changed"))
         host.proxy.clear()
         expect(yield* sync.step()).toEqual({ drained: true })
         expect(host.proxy.requests.filter(isStart(other))).toHaveLength(1)
