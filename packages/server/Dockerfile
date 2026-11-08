@@ -6,6 +6,7 @@ WORKDIR /repo
 COPY package.json bun.lock bunfig.toml tsconfig.base.json tsconfig.json ./
 # Every workspace manifest: `--frozen-lockfile` checks the whole graph against bun.lock.
 COPY --parents packages/*/package.json repos/iron-proxy/package.json ./
+COPY patches ./patches
 RUN bun install --frozen-lockfile --filter '@ren/server' --filter '@ren/db'
 
 FROM oven/bun:1.4.2-slim AS runtime
