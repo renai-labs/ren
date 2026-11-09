@@ -34,7 +34,6 @@ import { EnvironmentNetwork } from "./environment-network.js"
 import { Environments } from "./environments.js"
 import type { MachineAccess } from "./machine-access.js"
 import { MachineLifecycle } from "./machine-lifecycle.js"
-import { Models } from "./models.js"
 import { BrainProvider } from "./brain-provider.js"
 import { MachineProvider } from "./machine-provider.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
@@ -107,12 +106,6 @@ export const layer = Layer.effect(
     const scope = yield* Effect.scope
     const interruptedListeners = yield* Ref.make<ReadonlyArray<(interrupted: Interrupted) => Effect.Effect<void>>>([])
     const network = yield* EnvironmentNetwork.Service
-    const models = yield* Models.Service
-    // oxlint-disable-next-line ren/no-comments -- EN40: a co-located machine runs the brain too, so a limited host list also has Ren's server and the inference address that brains are given, which can differ from Ren's own.
-    const renHosts = [
-      client.renUrl,
-      ...Option.toArray(Option.map(yield* models.inference, (found) => found.baseUrl)),
-    ].flatMap((url) => Option.toArray(Option.fromNullishOr(URL.parse(url)?.hostname)))
 
     const read = (brainId: Brain.ID) =>
       database.db
@@ -296,7 +289,7 @@ export const layer = Layer.effect(
             template: { environmentTemplateId: template.environmentTemplateId, config: built.config },
           }),
         ),
-        hosts: Option.map(hosts, (list) => [...new Set([...list, ...renHosts])]),
+        hosts,
       } satisfies MachineLifecycle.DesiredSetup
     })
 

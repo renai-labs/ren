@@ -273,7 +273,6 @@ export const layer = Layer.effect(
     const code = yield* Bundles.Service
     const network = yield* EnvironmentNetwork.Service
     const renUrl = yield* Config.option(Config.String("REN_URL"))
-    const renHost = Option.toArray(Option.flatMap(renUrl, (url) => Option.fromNullishOr(URL.parse(url)?.hostname)))
 
     type Row = MachineLifecycle.Row<Environment.ID> & { readonly environment_template_id: EnvironmentTemplate.ID }
 
@@ -411,8 +410,7 @@ export const layer = Layer.effect(
             }),
             (built) => ({ name: built.name, template: { environmentTemplateId: template.id, config: built.config } }),
           ),
-          // oxlint-disable-next-line ren/no-comments -- A limited hand also reaches Ren's server: start.sh fetches Ren's code there (EN26).
-          hosts: Option.map(hosts, (list) => [...new Set([...list, ...renHost])]),
+          hosts,
         } satisfies MachineLifecycle.DesiredSetup
       }),
       target: (row) =>
