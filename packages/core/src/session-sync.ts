@@ -110,10 +110,10 @@ export const layer = Layer.effect(
             .select({
               id: Database.Schema.agent_session.id,
               syncSeq: Database.Schema.agent_session.sync_seq,
-              timeSuspended: OpenCodeStore.summary.timeSuspended,
+              timeSuspended: OpenCodeStore.state.timeSuspended,
             })
             .from(Database.Schema.agent_session)
-            .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
+            .leftJoin(OpenCodeStore.chat, OpenCodeStore.join)
             .where(inScope(host))
             .orderBy(asc(Database.Schema.agent_session.created_at), asc(Database.Schema.agent_session.id)),
         )

@@ -4,7 +4,7 @@ import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
 import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
-import { and, asc, desc, eq, getColumns, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm"
+import { and, asc, desc, eq, getColumns, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm"
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core"
 import { Effect, Option, Record, Struct } from "effect"
 
@@ -16,13 +16,18 @@ export interface Cursor {
 const excluded = <T extends PgTable>(table: T) =>
   Record.map(getColumns(table), (column) => sql`excluded.${sql.identifier(column.name)}`)
 
-export const join = eq(Database.Schema.opencode_session.session_id, Database.Schema.agent_session.id)
+// oxlint-disable-next-line ren/no-comments -- The harness's state of each chat that has synced. Only this module names OpenCode's tables: a reader joins `chat` to `agent_session` with `join` and reads `state`, or calls a function below.
+export const chat = Database.Schema.opencode_session
 
-export const summary = {
-  title: Database.Schema.opencode_session.title,
-  timeSuspended: Database.Schema.opencode_session.time_suspended,
-  outcome: Database.Schema.opencode_session.idle_outcome,
-  updatedAt: Database.Schema.opencode_session.time_updated,
+export const join = eq(chat.session_id, Database.Schema.agent_session.id)
+
+export const state = {
+  synced: chat.session_id,
+  title: chat.title,
+  timeSuspended: chat.time_suspended,
+  outcome: chat.idle_outcome,
+  timeIdle: chat.time_idle,
+  updatedAt: chat.time_updated,
 }
 
 const data = sql`${Database.Schema.opencode_message.data}::jsonb`
@@ -142,7 +147,7 @@ export const keepInbox = Effect.fnUntraced(function* (
 
 // oxlint-disable-next-line ren/no-comments -- A chat is busy while its harness session is suspended mid-turn.
 export const isBusy = (sessionId: AnyPgColumn) =>
-  sql<boolean>`exists (select 1 from ${Database.Schema.opencode_session} where ${Database.Schema.opencode_session.session_id} = ${sessionId} and ${Database.Schema.opencode_session.time_suspended} is not null)`
+  sql<boolean>`exists (select 1 from ${chat} where ${chat.session_id} = ${sessionId} and ${chat.time_suspended} is not null)`
 
 // oxlint-disable-next-line ren/no-comments -- A chat has messages waiting in its harness's inbox.
 export const hasWaiting = (sessionId: AnyPgColumn) =>
@@ -171,6 +176,41 @@ export const endBusyTurns = (
       ),
     )
     .returning({ id: Database.Schema.opencode_session.session_id })
+
+// oxlint-disable-next-line ren/no-comments -- A chat's newest message of a type that is not removed: its id, whether a channel sent it, and its error.
+export const latestMessage = (db: Database.Interface["db"], sessionId: Session.ID, type: "user" | "assistant") =>
+  db
+    .select({
+      id: Database.Schema.opencode_message.id,
+      fromChannel: message.isFromChannel,
+      errorType: message.errorType,
+    })
+    .from(Database.Schema.opencode_message)
+    .where(
+      and(
+        eq(Database.Schema.opencode_message.session_id, sessionId),
+        eq(Database.Schema.opencode_message.type, type),
+        isNull(Database.Schema.opencode_message.removed_at),
+      ),
+    )
+    .orderBy(desc(Database.Schema.opencode_message.seq), desc(Database.Schema.opencode_message.id))
+    .limit(1)
+    .pipe(
+      Effect.orDie,
+      Effect.map((rows) => Option.fromNullishOr(rows.at(0))),
+    )
+
+// oxlint-disable-next-line ren/no-comments -- Deletes the messages removed before the cutoff (retention).
+export const purgeRemoved = (db: Database.Interface["db"], cutoff: Date) =>
+  db
+    .delete(Database.Schema.opencode_message)
+    .where(
+      and(
+        isNotNull(Database.Schema.opencode_message.removed_at),
+        lt(Database.Schema.opencode_message.removed_at, cutoff),
+      ),
+    )
+    .pipe(Effect.orDie)
 
 export const inbox = (transaction: Database.Transaction, ids: ReadonlyArray<Session.ID>) =>
   transaction

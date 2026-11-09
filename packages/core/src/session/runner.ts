@@ -188,9 +188,9 @@ export const layer = Layer.effect(
       get: Effect.fn("SessionRunner.get")(function* (sessionId: Session.ID) {
         const row = (yield* database.transaction((transaction) =>
           transaction
-            .select({ session: Database.Schema.agent_session, opencode: OpenCodeStore.summary })
+            .select({ session: Database.Schema.agent_session, opencode: OpenCodeStore.state })
             .from(Database.Schema.agent_session)
-            .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
+            .leftJoin(OpenCodeStore.chat, OpenCodeStore.join)
             .where(eq(Database.Schema.agent_session.id, sessionId)),
         )).at(0)
         if (!row) return yield* notFound

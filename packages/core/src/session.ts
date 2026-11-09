@@ -84,7 +84,7 @@ const notFound = new Primitive.NotFound({ message: "Session not found." })
 
 const spaceNotFound = new Primitive.NotFound({ message: "Space not found." })
 
-const updatedAt = sql<Date>`coalesce(to_timestamp(${Database.Schema.opencode_session.time_updated} / 1000.0), ${Database.Schema.agent_session.created_at})`
+const updatedAt = sql<Date>`coalesce(to_timestamp(${OpenCodeStore.state.updatedAt} / 1000.0), ${Database.Schema.agent_session.created_at})`
 
 const anyOf = <TColumn extends Column>(
   column: TColumn,
@@ -95,12 +95,12 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
   transaction
     .select({
       session: Database.Schema.agent_session,
-      opencode: OpenCodeStore.summary,
+      opencode: OpenCodeStore.state,
       membershipId: SpaceQueries.membership.id,
     })
     .from(Database.Schema.agent_session)
     .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_session.space_id))
-    .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
+    .leftJoin(OpenCodeStore.chat, OpenCodeStore.join)
     .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
 
 type Row = Effect.Success<ReturnType<typeof select>>[number]
@@ -376,8 +376,7 @@ export const layer = Layer.effect(
               ),
               anyOf(Database.Schema.agent_session.agent_id, input.agentId),
               anyOf(Database.Schema.agent_session.origin, input.origin),
-              input.status &&
-                (input.status === "busy" ? isNotNull : isNull)(Database.Schema.opencode_session.time_suspended),
+              input.status && (input.status === "busy" ? isNotNull : isNull)(OpenCodeStore.state.timeSuspended),
               OpenCodeStore.search(input.search),
               (input.archived ? isNotNull : isNull)(Database.Schema.agent_session.archived_at),
               input.from && gte(time, DateTime.toDateUtc(input.from)),
