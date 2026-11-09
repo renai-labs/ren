@@ -37,7 +37,7 @@ Words:
    - **none**: no file or shell tools.
 3. An org admin creates a template. Ren builds its image when the admin saves it.
 4. A change to a template or to a space reaches a machine when the machine wakes from sleep.
-5. A Ren deploy updates Ren's code on each machine at its next wake, in place. The files stay.
+5. A Ren deploy updates Ren's code on each machine at its next wake, in place. The files stay. Exception: the first deploy of this work replaces each existing brain once at its next wake, and its files are lost. Its image has no bundle support, so its code cannot update in place (`brain-lifecycle.ts`, `outdated`).
 6. Every machine recovers without a person: from a crash, a hang, an E2B outage, a Ren outage and a Ren restart.
 
 Done when:
