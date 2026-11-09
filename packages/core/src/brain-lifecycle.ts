@@ -633,6 +633,7 @@ export const layer = Layer.effect(
         .where(OpenCodeStore.isBusy(chats.id))
         .pipe(Effect.orDie)
       yield* Effect.forEach(busy, (each) => machines.check(each.brainId), { discard: true })
+      yield* environments.cleanup
     }).pipe(Effect.withSpan("BrainLifecycle.cleanup"))
 
     yield* DurableRunner.register(CleanupRun, (payload) => DurableRunner.supervise(`cleanup:${payload.day}`, cleanup))

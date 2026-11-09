@@ -299,6 +299,30 @@ describe("Environments", () => {
     }),
   )
 
+  it.live("cleanup destroys a hand sandbox that no row knows at its generation, and keeps the others", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const template = yield* Seed.environmentTemplate(organizationId, { sessionsPerEnvironment: 1 })
+      const sessions = [yield* subjectIn(organizationId), yield* subjectIn(organizationId)]
+      yield* Effect.forEach(sessions, (session) =>
+        subject.environments
+          .bind(session, template)
+          .pipe(Effect.andThen(subject.environments.access(session, Option.none()))),
+      )
+      const made = yield* Ref.get(subject.probe.provisions)
+      const lost = made.at(1)
+      if (!lost) return yield* Effect.die(new Error("Two hands were not made"))
+      yield* database.db
+        .update(Database.Schema.environment)
+        .set({ generation: 2, binding: null })
+        .where(eq(Database.Schema.environment.id, lost))
+      yield* subject.environments.cleanup
+      expect(yield* Ref.get(subject.probe.destroyed)).toEqual([lost])
+    }),
+  )
+
   it.live("a configured token lifetime is the access's lifetime", () =>
     Effect.gen(function* () {
       const subject = yield* environmentsWith({ ENVIRONMENT_TOKEN_LIFETIME: "20 seconds" })

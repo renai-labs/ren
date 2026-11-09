@@ -91,6 +91,8 @@ export interface Interface {
   readonly keepAwake: (sessionIds: ReadonlyArray<Session.ID>, lastProgressAt: Date) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- Sends the awake remote hands of a space their new host list (networking rule 4).
   readonly refreshNetworks: (spaceId: Space.ID) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- Destroys the hand sandboxes that no row knows at their generation: a row that is gone or replaced, or a create that half worked.
+  readonly cleanup: Effect.Effect<void>
   readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
 }
 
@@ -664,6 +666,38 @@ export const layer = Layer.effect(
           { discard: true },
         )
       }),
+      cleanup: Effect.gen(function* () {
+        const listed = (yield* Effect.forEach(registry.providers, (provider) =>
+          provider.list.pipe(
+            Effect.map((all) => all.flatMap((each) => (each.kind === "hand" ? [{ ...each, provider }] : []))),
+            Effect.catch((error) =>
+              Effect.logWarning(`Cleanup could not list the machines of ${provider.info.id}`, error).pipe(
+                Effect.as([]),
+              ),
+            ),
+          ),
+        )).flat()
+        const known = new Map(
+          (yield* database.db
+            .select({ id: environments.id, generation: environments.generation })
+            .from(environments)
+            .where(
+              inArray(
+                environments.id,
+                listed.map((each) => each.id),
+              ),
+            )
+            .pipe(Effect.orDie)).map((each) => [each.id, each.generation]),
+        )
+        yield* Effect.forEach(
+          listed.filter((each) => known.get(each.id) !== each.generation),
+          (each) =>
+            each.provider
+              .destroy(each.binding)
+              .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of a sandbox of ${each.id} failed`, error))),
+          { discard: true },
+        )
+      }).pipe(Effect.withSpan("Environments.cleanup")),
       refreshNetworks: Effect.fn("Environments.refreshNetworks")(function* (spaceId: Space.ID) {
         const awake = yield* database.db
           .select({ id: environments.id })

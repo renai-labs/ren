@@ -42,6 +42,9 @@ export const make = (
     const failing = yield* Ref.make(false)
     const networks = yield* Ref.make<ReadonlyArray<MachineProvider.Network>>([])
     const keptAlive = yield* Ref.make<ReadonlyArray<Environment.ID>>([])
+    const made = yield* Ref.make<
+      ReadonlyArray<MachineProvider.Lost & { readonly binding: { readonly environmentId: Environment.ID } }>
+    >([])
     const endpoint =
       options.endpoint ??
       ((environmentId: Environment.ID): Effect.Effect<{ readonly url: string }, MachineProvider.Gone> =>
@@ -65,6 +68,15 @@ export const make = (
           if (yield* Ref.get(failing)) return yield* new MachineProvider.Failed({ message: "the test provider fails" })
           const environmentId = Environment.ID.make(input.labels.id)
           yield* Ref.update(provisions, (all) => [...all, environmentId])
+          yield* Ref.update(made, (all) => [
+            ...all,
+            {
+              kind: "hand" as const,
+              id: environmentId,
+              generation: input.labels.generation,
+              binding: { environmentId },
+            },
+          ])
           yield* Ref.update(networks, (all) => [...all, input.network])
           return { binding: { environmentId }, url: `http://${environmentId.toLowerCase()}.test/` }
         }),
@@ -75,6 +87,11 @@ export const make = (
           return yield* endpoint(binding.environmentId)
         }),
       destroy: (binding) => Ref.update(destroyed, (all) => [...all, binding.environmentId]),
+      // oxlint-disable-next-line ren/no-comments -- Every machine it made and has not destroyed, with its labels.
+      list: Effect.gen(function* () {
+        const ended = yield* Ref.get(destroyed)
+        return (yield* Ref.get(made)).filter((each) => !ended.includes(each.binding.environmentId))
+      }),
       keepAlive: (binding) => Ref.update(keptAlive, (all) => [...all, binding.environmentId]),
       status: (binding) =>
         Effect.map(Ref.get(gone), (all) => (all.has(binding.environmentId) ? ("gone" as const) : ("running" as const))),
