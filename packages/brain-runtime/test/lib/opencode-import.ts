@@ -1,7 +1,6 @@
 export * as OpenCodeImport from "./opencode-import.js"
 
 import { Database } from "bun:sqlite"
-import type { OpenCodeClient } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
 import type { Session } from "@ren/schema/session"
@@ -34,7 +33,7 @@ export const exported = Effect.fnUntraced(function* (database: string, sessionID
   }
 })
 
-export const folder = Effect.acquireRelease(
+const folder = Effect.acquireRelease(
   Effect.promise(() => mkdtemp(join(tmpdir(), "ren-import-"))),
   (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
 )
@@ -48,6 +47,3 @@ export const turn = Effect.fnUntraced(function* (brain: Effect.Success<ReturnTyp
   yield* brain.send(text)
   yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
 })
-
-export const importOf = (client: OpenCodeClient, data: Effect.Success<ReturnType<typeof exported>>) =>
-  client.session.import({ info: data.info, messages: data.messages, location: data.info.location })
