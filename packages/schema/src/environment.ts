@@ -1,13 +1,16 @@
 export * as Environment from "./environment.js"
 
 import { Effect, Schema } from "effect"
-import type { Brain } from "./brain.js"
+import { Brain } from "./brain.js"
 import { Identifier } from "./identifier.js"
 
 export const ID = Identifier.make("env", "Environment.ID")
 export type ID = typeof ID.Type
 
 export const ofBrain = (brainId: Brain.ID) => ID.make(`env_${Identifier.suffix(brainId)}`)
+
+// oxlint-disable-next-line ren/no-comments -- The brain whose own machine is this co-located hand: the opposite of ofBrain.
+export const brainOf = (environmentId: ID) => Brain.ID.make(`brn_${Identifier.suffix(environmentId)}`)
 
 export const Directory = Schema.String.check(Schema.isStartingWith("/")).annotate({
   identifier: "Environment.Directory",

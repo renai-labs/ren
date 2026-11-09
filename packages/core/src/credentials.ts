@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import type { PullEnv } from "@ren/host-api/ren-host-api"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Auth } from "@ren/schema/auth"
-import { Brain } from "@ren/schema/brain"
+import { Environment } from "@ren/schema/environment"
 import { Credential } from "@ren/schema/credential"
 import type { Space } from "@ren/schema/space"
 import type { Workload } from "@ren/schema/workload"
@@ -247,7 +247,7 @@ export const scopeOf = Effect.fnUntraced(function* (
           .innerJoin(spaces, eq(spaces.id, Database.Schema.environment.space_id))
           .where(eq(Database.Schema.environment.id, workload.id))).at(0)
       : undefined
-  const brainId = workload.kind === "brain" ? workload.id : Brain.ID.make(`brn_${workload.id.slice(4)}`)
+  const brainId = workload.kind === "brain" ? workload.id : Environment.brainOf(workload.id)
   const found =
     remote ??
     (yield* client
