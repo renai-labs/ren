@@ -688,7 +688,7 @@ describe("OpenCodeSync", () => {
         const remote = synced.messages.filter((message) => String(message.session_id) === String(child))
         expect(remote.map((message) => message.id).toSorted()).toEqual(local.map((message) => message.id).toSorted())
         expect(remote.find((message) => message.id === large.id)).toMatchObject({ type: "synthetic" })
-        expect(remote.find((message) => message.id === large.id)?.data).toContain(OpenCodeSync.tooLarge)
+        expect(remote.find((message) => message.id === large.id)?.data).toContain(OpenCodeRows.tooLarge)
         host.proxy.clear()
         expect(yield* sync.step()).toEqual({ drained: true })
         expect(host.proxy.requests.filter(isStart(child))).toEqual([])

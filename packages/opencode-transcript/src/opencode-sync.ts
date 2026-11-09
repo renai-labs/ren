@@ -1,5 +1,6 @@
 export * as OpenCodeSync from "./opencode-sync.js"
 
+import { OpenCodeRows } from "./opencode-rows.js"
 import { Session } from "@ren/schema/session"
 import { Sync } from "@ren/schema/sync"
 import { Observability } from "@ren/schema/observability"
@@ -92,27 +93,6 @@ export const busyInterval = Duration.minutes(5)
 export const oversizedRows = Metric.counter("opencode_sync_oversized_rows", {
   description: "Message rows larger than the SyncApi body limit, which a sync pass sent as a stand-in.",
   incremental: true,
-})
-
-export const tooLarge = "Output too large, not saved."
-
-const Created = Schema.fromJsonString(Schema.Struct({ time: Schema.Struct({ created: Schema.Number }) }))
-
-// oxlint-disable-next-line ren/no-comments -- EN37: a message larger than the sync limit syncs as a short synthetic message with its id and time, so the rest of its chat syncs and a restore still has the message's place.
-const standIn = (row: Sync.OpenCodeMessageRow): Sync.OpenCodeMessageRow => ({
-  id: row.id,
-  session_id: row.session_id,
-  seq: row.seq,
-  type: "synthetic",
-  data: JSON.stringify({
-    time: {
-      created: Option.match(Schema.decodeUnknownOption(Created)(row.data), {
-        onNone: () => 0,
-        onSome: (found) => found.time.created,
-      }),
-    },
-    text: tooLarge,
-  }),
 })
 
 const batchRows = 500
@@ -228,7 +208,7 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
           `A message is more than the ${Sync.maxBodyBytes} bytes as JSON that Ren accepts. It syncs as a stand-in.`,
         ).pipe(Effect.annotateLogs({ "ren.message.id": message.id, bytes: full }))
       }
-      const synced = isTooLarge ? standIn(row.value) : row.value
+      const synced = isTooLarge ? OpenCodeRows.standIn(row.value) : row.value
       const size = isTooLarge ? encoder.encode(JSON.stringify(synced)).length : full
       if (rows.length >= batchRows || (rows.length > 0 && bytes + 1 + size > batchBytes)) {
         yield* send(rows)
