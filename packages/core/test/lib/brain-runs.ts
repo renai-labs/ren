@@ -38,7 +38,7 @@ export const pidOf = (binding: unknown) => Schema.decodeUnknownSync(Schema.Struc
 export const brainOf = (binding: unknown) =>
   Number(
     new TextDecoder()
-      .decode(Bun.spawnSync(["pgrep", "-g", String(pidOf(binding)), "-f", "^bun .*cell/src/bun\\.ts"]).stdout)
+      .decode(Bun.spawnSync(["pgrep", "-g", String(pidOf(binding)), "-f", "^bun .*brain-runtime/src/bun\\.ts"]).stdout)
       .trim()
       .split("\n")[0],
   )

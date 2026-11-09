@@ -266,7 +266,7 @@ const answers = async (url: string): Promise<void> => {
 const crashBrain = async () => {
   const brain = await brainRow()
   const binding = await Bun.file(join(brain.home, ".ren", "sandbox.json")).json()
-  await Bun.spawn(["pkill", "-KILL", "-g", String(binding.pid), "-f", "^bun .*cell/src/bun\\.ts"]).exited
+  await Bun.spawn(["pkill", "-KILL", "-g", String(binding.pid), "-f", "^bun .*brain-runtime/src/bun\\.ts"]).exited
   // ast-grep-ignore: no-test-sleep -- the loop waits 1 second before it starts the brain again
   await Bun.sleep(500)
   await answers(brain.url)

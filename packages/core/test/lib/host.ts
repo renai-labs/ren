@@ -355,7 +355,7 @@ export const restart = Effect.fnUntraced(function* (brainId: Brain.ID, change: (
   const binding = Schema.decodeUnknownSync(LocalBinding)(found.binding)
   const brains = () =>
     new TextDecoder()
-      .decode(Bun.spawnSync(["pgrep", "-g", String(binding.pid), "-f", "^bun .*cell/src/bun\\.ts"]).stdout)
+      .decode(Bun.spawnSync(["pgrep", "-g", String(binding.pid), "-f", "^bun .*brain-runtime/src/bun\\.ts"]).stdout)
       .split("\n")
       .filter(Boolean)
   process.kill(binding.pid, "SIGSTOP")
