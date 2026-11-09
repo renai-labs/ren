@@ -37,7 +37,7 @@ Words:
    - **none**: no file or shell tools.
 3. An org admin creates a template. Ren builds its image when the admin saves it.
 4. A change to a template or to a space reaches a machine when the machine wakes from sleep.
-5. A Ren deploy updates Ren's code on each machine at its next wake, in place. The files stay. Exception: the first deploy of this work replaces each existing brain once at its next wake, and its files are lost. Its image has no bundle support, so its code cannot update in place (`brain-lifecycle.ts`, `outdated`).
+5. A Ren deploy updates Ren's code on each machine at its next wake, in place. The files stay. Exception: the first deploy of this work replaces each existing brain once at its next wake, and its files are lost. Its image has no bundle support, so its code cannot update in place (`brain-lifecycle.ts`, `changeAtWake`).
 6. Every machine recovers without a person: from a crash, a hang, an E2B outage, a Ren outage and a Ren restart.
 
 Done when:
@@ -153,7 +153,7 @@ Built: `Space.Hand` (`schema/space.ts`), its checks in `Space.update` (EN3, EN24
 
 ### When a change applies
 
-Built for brain machines (EN21, EN22, EN27): `MachineLifecycle` compares the machine's image (`template`, `template_config`) with what its owner `wants` only in `resuming`. It updates in place a newer bundle, or a template config that only adds packages or build commands (the provider's `stepsBetween`; the brain runs the steps with `brain.update`, root steps through sudo). It replaces the machine for any other image change, a different provider, or an in-place update that failed 3 times.
+Built for brain machines (EN21, EN22, EN27): `MachineLifecycle` compares the machine's image (`image`, `image_template`) with its `desiredSetup` only in `resuming`. It updates in place a newer bundle, or a template config that only adds packages or build commands (the provider's `stepsBetween`; the brain runs the steps with `brain.update`, root steps through sudo). It replaces the machine for any other image change, a different provider, or an in-place update that failed 3 times.
 
 1. Remote hand machines follow the same rules (PR 16).
 2. Hand → none: at the next pull, the existing chats lose their file and shell tools (built: `PullChat.hasHand`, the Ren plugin). None → hand: only new chats get tools, because the brain fixes a chat's workspace link when it creates the chat (EN23).
