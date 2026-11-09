@@ -6,6 +6,7 @@ import { describe, expect } from "bun:test"
 import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import { eq } from "drizzle-orm"
 import type { Auth } from "@ren/schema/auth"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import type { Actor } from "../src/actor.js"
@@ -39,6 +40,7 @@ const built = await Effect.runPromise(
   TestProvider.make({
     id: "built",
     canLimitHosts: true,
+    systemImage: "ren-brain:sys2-d1",
     build: {
       start: (config) =>
         Queue.offer(started, config.label).pipe(Effect.as({ _tag: "Building", id: config.label } as const)),
@@ -418,6 +420,42 @@ describe("EnvironmentTemplates", () => {
       )
       expect(yield* Queue.clear(started)).not.toContain(label)
     }),
+  )
+
+  it.live(
+    "at start, a template built on another system image builds again on the provider's, and keeps its old image until then (templates rule 1)",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const setup = yield* team()
+        const label = `system-${crypto.randomUUID()}`
+        const id = EnvironmentTemplate.ID.create()
+        yield* database.db.insert(Database.Schema.environment_template).values({
+          id,
+          organization_id: setup.organizationId,
+          name: "Old system",
+          provider: EnvironmentProvider.ID.make("built"),
+          config: { label },
+          sessions_per_environment: 8,
+          build_status: "ready",
+          image: "image-old",
+          image_config: { label },
+          image_system: "ren-brain:sys1",
+        })
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            yield* Layer.build(Layer.fresh(EnvironmentTemplates.layer))
+            expect(yield* Queue.take(started)).toBe(label)
+            yield* Deferred.succeed(gate(label), undefined)
+            expect(yield* settled(id, setup.admin)).toMatchObject({ buildStatus: "ready", image: `image-${label}` })
+          }),
+        )
+        const row = (yield* database.db
+          .select({ system: Database.Schema.environment_template.image_system })
+          .from(Database.Schema.environment_template)
+          .where(eq(Database.Schema.environment_template.id, id))).at(0)
+        expect(row?.system).toBe("ren-brain:sys2")
+      }),
   )
 
   it.live("at start, Ren builds again a template left queued without a build (templates rule 3)", () =>

@@ -35,6 +35,7 @@ export const brain = pgTable(
     image_template: jsonb().$type<{
       readonly environmentTemplateId: EnvironmentTemplate.ID
       readonly config: Schema.Json
+      readonly system: string | null
     }>(),
     // oxlint-disable-next-line ren/no-comments -- The space's hand when the machine was created. A brain made for a remote hand runs OpenCode's saved tool output, files and git on the hand (EN13); null on a machine made before this column, which runs them on its own disk.
     hand_placement: text().$type<Space.Hand["placement"]>(),

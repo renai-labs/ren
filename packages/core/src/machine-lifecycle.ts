@@ -75,6 +75,8 @@ export interface Row<Id extends string> {
 export interface TemplateConfig {
   readonly environmentTemplateId: EnvironmentTemplate.ID
   readonly config: Schema.Json
+  // oxlint-disable-next-line ren/no-comments -- The system image the template's image was built on, without its dependencies (MachineProvider.systemOf). Only a new machine changes it.
+  readonly system: string | null
 }
 
 // oxlint-disable-next-line ren/no-comments -- What the owner wants for its machine now: the provider config of a new machine, a template's image (none: the provider's own), and the hosts it may reach (none: any).
@@ -148,17 +150,18 @@ const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 const desiredImage = (desired: DesiredSetup, provider: MachineProvider.Provider) =>
   Option.match(desired.image, { onNone: () => provider.systemImage, onSome: (image) => image.name })
 
-// oxlint-disable-next-line ren/no-comments -- A system image's tag can end with the version of Ren's dependencies built into it (`<name>:<system>-<dependencies>`, cell/e2b/stage.ts). They only save start.sh a download, so a machine on other dependencies is not changeAtWake by its image; the bundles update them in place (EN26).
-const withoutDependencies = (image: string) => image.replace(/(:[^:-]*)-[^:]*$/, "$1")
-
-// oxlint-disable-next-line ren/no-comments -- EN22: the steps that bring a machine to the image its owner wants, in place: none needed, the steps between two configs of its template, or none possible (a replace; templates rule 3).
+// oxlint-disable-next-line ren/no-comments -- EN22: the steps that bring a machine to the image its owner wants, in place: none needed, the steps between two configs of its template on one system image, or none possible (a replace; templates rules 1, 3).
 const stepsInPlace = <Id extends string>(row: Row<Id>, desired: DesiredSetup, provider: MachineProvider.Provider) => {
   const image = desiredImage(desired, provider)
-  if (!image || !row.image || withoutDependencies(row.image) === withoutDependencies(image))
+  if (!image || !row.image || MachineProvider.systemOf(row.image) === MachineProvider.systemOf(image))
     return Option.some<ReadonlyArray<MachineProvider.Step>>([])
   const from = row.image_template
   return Option.flatMap(
-    Option.filter(desired.image, (found) => from?.environmentTemplateId === found.template.environmentTemplateId),
+    Option.filter(
+      desired.image,
+      (found) =>
+        from?.environmentTemplateId === found.template.environmentTemplateId && from.system === found.template.system,
+    ),
     (found) => (from ? provider.stepsBetween(from.config, found.template.config) : Option.none()),
   )
 }

@@ -268,6 +268,7 @@ export const layer = Layer.effect(
           id: templates.id,
           image: templates.image,
           config: templates.image_config,
+          system: templates.image_system,
           networking: templates.networking,
         })
         .from(Database.Schema.space)
@@ -287,7 +288,11 @@ export const layer = Layer.effect(
           Option.all({ name: Option.fromNullishOr(found.image), config: Option.fromNullishOr(template.config) }),
           (built) => ({
             name: built.name,
-            template: { environmentTemplateId: template.environmentTemplateId, config: built.config },
+            template: {
+              environmentTemplateId: template.environmentTemplateId,
+              config: built.config,
+              system: found.system,
+            },
           }),
         ),
         hosts,

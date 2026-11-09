@@ -359,9 +359,14 @@ describe("MachineLifecycle updates", () => {
     }),
   )
 
-  const templateImage = (name: string, packages: ReadonlyArray<string>, environmentTemplateId = templateId) => ({
+  const templateImage = (
+    name: string,
+    packages: ReadonlyArray<string>,
+    environmentTemplateId = templateId,
+    system = "ren-brain:a1b2",
+  ) => ({
     config: {},
-    image: Option.some({ name, template: { environmentTemplateId, config: { packages } } }),
+    image: Option.some({ name, template: { environmentTemplateId, config: { packages }, system } }),
     hosts: Option.some(["api.example.com"]),
   })
 
@@ -384,7 +389,11 @@ describe("MachineLifecycle updates", () => {
           phase: "ready",
           generation: 1,
           image: "image-b",
-          image_template: { environmentTemplateId: templateId, config: { packages: ["ffmpeg", "requests"] } },
+          image_template: {
+            environmentTemplateId: templateId,
+            config: { packages: ["ffmpeg", "requests"] },
+            system: "ren-brain:a1b2",
+          },
         })
       }),
   )
@@ -408,6 +417,23 @@ describe("MachineLifecycle updates", () => {
         expect(yield* wakeOn("ren-brain:a1b2-d2")).toBe(1)
         expect(yield* wakeOn("ren-brain:c3d4-d2")).toBe(2)
         expect((yield* memory.read(id)).image).toBe("ren-brain:c3d4-d2")
+      }),
+  )
+
+  it.effect(
+    "a template built again on a new system image replaces an asleep machine at its wake, with no steps in place (templates rule 1)",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kind
+        memory.switches.boots = true
+        memory.switches.wanted = templateImage("image-a", ["ffmpeg"])
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        memory.switches.wanted = templateImage("image-a2", ["ffmpeg"], templateId, "ren-brain:c3d4")
+        yield* TestClock.adjust(Duration.minutes(11))
+        yield* memory.machines.access(id)
+        expect(yield* memory.read(id)).toMatchObject({ generation: 2, image: "image-a2" })
+        expect(memory.steps).toEqual([])
       }),
   )
 

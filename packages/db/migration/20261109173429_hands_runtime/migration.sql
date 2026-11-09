@@ -34,6 +34,7 @@ ALTER TABLE "environment_template" ADD COLUMN "networking" jsonb DEFAULT '{"type
 ALTER TABLE "environment_template" ADD COLUMN "build_status" text DEFAULT 'ready' NOT NULL;--> statement-breakpoint
 ALTER TABLE "environment_template" ADD COLUMN "image" text;--> statement-breakpoint
 ALTER TABLE "environment_template" ADD COLUMN "image_config" jsonb;--> statement-breakpoint
+ALTER TABLE "environment_template" ADD COLUMN "image_system" text;--> statement-breakpoint
 ALTER TABLE "environment_template" ADD COLUMN "build_error" text;--> statement-breakpoint
 ALTER TABLE "environment_template" ADD COLUMN "config_version" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "environment_template" ADD COLUMN "build_id" text;--> statement-breakpoint

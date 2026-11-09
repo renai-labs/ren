@@ -161,13 +161,13 @@ Built for brain machines (EN21, EN22, EN27): `MachineLifecycle` compares the mac
 
 ### Templates
 
-Ren's code reaches machines as bundles, not in images (EN26-EN29; `brain-runtime/machine/bundle.ts`, `brain-runtime/machine/start.sh`, `core/src/bundles.ts`). A template image holds the system and the template's packages only. The deploy builds Ren's system image with the current dependencies bundle in it, and the image's tag ends with their version (`<name>:<system>-<dependencies>`, `brain-runtime/e2b/stage.ts`, `E2B_TEMPLATE_SEED`): a new machine downloads only the sources. Ren ignores that part of a tag when it compares a machine's image (`machine-lifecycle.ts`, `systemOf`), so new dependencies never replace a machine; its bundles update them in place.
+Ren's code reaches machines as bundles, not in images (EN26-EN29; `brain-runtime/machine/bundle.ts`, `brain-runtime/machine/start.sh`, `core/src/bundles.ts`). A template image holds the system and the template's packages only. The deploy builds Ren's system image with the current dependencies bundle in it, and the image's tag ends with their version (`<name>:<system>-<dependencies>`, `brain-runtime/e2b/stage.ts`, `E2B_TEMPLATE_SEED`): a new machine downloads only the sources. Ren ignores that part of a tag when it compares a machine's image (`MachineProvider.systemOf`), so new dependencies never replace a machine; its bundles update them in place.
 
 Built: the template fields, the E2B config and its build (`core/src/machine-provider/e2b.ts`), one build at a time per template and its status (`core/src/environment-templates.ts`, EN30, EN44).
 
 A co-located machine uses the template's last `ready` image while a build runs or after it fails (`image`, `image_config`).
 
-1. A new system image (`E2B_TEMPLATE`) does not rebuild the template images: an admin saves the template again.
+1. A new system image (`E2B_TEMPLATE`, its system part: `MachineProvider.systemOf`) rebuilds every template built on another one, at Ren's start, as a save does. A machine moves to the new image by a replace at its wake: in-place steps never change a machine's system (`TemplateConfig.system`). A new dependencies part alone rebuilds nothing; the bundles bring it.
 2. An update of the executor bundle restarts the executor, and the processes that it started stop. An update of the brain bundle alone keeps them (chaos rows 12 and 13).
 3. A failed in-place update runs all of its steps again at the next try. A build command must give the same result when it runs two times; if not, its second run fails, and after 3 failures Ren replaces the machine.
 

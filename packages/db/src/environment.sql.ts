@@ -30,6 +30,8 @@ export const environment_template = pgTable(
     image: text(),
     // oxlint-disable-next-line ren/no-comments -- The config that built `image`; a machine updates in place from the config of its image (EN22).
     image_config: jsonb().$type<Schema.Json>(),
+    // oxlint-disable-next-line ren/no-comments -- The provider's system image that `image` was built on, without its dependencies (templates rule 1).
+    image_system: text(),
     build_error: text(),
     // oxlint-disable-next-line ren/no-comments -- Each saved config gets the next number; a build counts only while the template still has the config of its number (EN30).
     config_version: integer().notNull().default(0),
@@ -79,6 +81,7 @@ export const environment = pgTable(
     image_template: jsonb().$type<{
       readonly environmentTemplateId: EnvironmentTemplate.ID
       readonly config: Schema.Json
+      readonly system: string | null
     }>(),
     egress: boolean().notNull().default(false),
     url: text(),

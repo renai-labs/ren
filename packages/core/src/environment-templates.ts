@@ -2,7 +2,7 @@ export * as EnvironmentTemplates from "./environment-templates.js"
 
 import { Database } from "@ren/db/database"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
-import { and, asc, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
+import { and, asc, count, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm"
 import {
   Cause,
   Config,
@@ -131,10 +131,12 @@ export const layer = Layer.effect(
         return
       }
       if (state._tag === "Ready") {
+        const system = Option.flatMap(registry.get(row.provider), (found) => Option.fromNullishOr(found.systemImage))
         yield* finish(row, version, {
           build_status: "ready",
           image: state.image,
           image_config: row.config,
+          image_system: Option.getOrNull(Option.map(system, MachineProvider.systemOf)),
           build_error: null,
         })
         return
@@ -161,6 +163,26 @@ export const layer = Layer.effect(
       yield* record(row, row.config_version, started)
     })
 
+    // oxlint-disable-next-line ren/no-comments -- Templates rule 1: at start, a template whose image was built on another system image than its provider's now builds again, as after a save; its machines move to it by a replace at their wake.
+    yield* Effect.forEach(
+      registry.providers.filter((provider) => Option.isSome(provider.build)),
+      (provider) => {
+        const system = provider.systemImage && MachineProvider.systemOf(provider.systemImage)
+        return database.db
+          .update(table)
+          .set({ build_status: "queued", config_version: sql`${table.config_version} + 1` })
+          .where(
+            and(
+              eq(table.provider, provider.info.id),
+              isNull(table.archived_at),
+              isNotNull(table.image),
+              system ? or(isNull(table.image_system), ne(table.image_system, system)) : isNotNull(table.image_system),
+            ),
+          )
+          .pipe(Effect.orDie)
+      },
+      { discard: true },
+    )
     const checkEvery = yield* Config.Duration("ENVIRONMENT_TEMPLATE_BUILD_CHECK").pipe(
       Config.withDefault(Duration.seconds(10)),
     )

@@ -392,6 +392,7 @@ export const layer = Layer.effect(
             config: templates.config,
             image: templates.image,
             imageConfig: templates.image_config,
+            imageSystem: templates.image_system,
             networking: templates.networking,
           })
           .from(templates)
@@ -410,7 +411,10 @@ export const layer = Layer.effect(
               name: Option.fromNullishOr(template.image),
               config: Option.fromNullishOr(template.imageConfig),
             }),
-            (built) => ({ name: built.name, template: { environmentTemplateId: template.id, config: built.config } }),
+            (built) => ({
+              name: built.name,
+              template: { environmentTemplateId: template.id, config: built.config, system: template.imageSystem },
+            }),
           ),
           hosts,
         } satisfies MachineLifecycle.DesiredSetup
