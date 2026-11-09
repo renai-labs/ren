@@ -14,6 +14,7 @@ interface Probe {
   readonly destroyed: Ref.Ref<ReadonlyArray<Environment.ID>>
   readonly gone: Ref.Ref<ReadonlySet<Environment.ID>>
   readonly networks: Ref.Ref<ReadonlyArray<MachineProvider.Network>>
+  readonly keptAlive: Ref.Ref<ReadonlyArray<Environment.ID>>
   readonly failing: Ref.Ref<boolean>
   readonly provider: MachineProvider.Provider
 }
@@ -36,6 +37,7 @@ export const make = (
     const gone = yield* Ref.make<ReadonlySet<Environment.ID>>(new Set())
     const failing = yield* Ref.make(false)
     const networks = yield* Ref.make<ReadonlyArray<MachineProvider.Network>>([])
+    const keptAlive = yield* Ref.make<ReadonlyArray<Environment.ID>>([])
     const endpoint =
       options.endpoint ??
       ((environmentId: Environment.ID): Effect.Effect<{ readonly url: string }, MachineProvider.Gone> =>
@@ -68,9 +70,10 @@ export const make = (
           return yield* endpoint(binding.environmentId)
         }),
       destroy: (binding) => Ref.update(destroyed, (all) => [...all, binding.environmentId]),
+      keepAlive: (binding) => Ref.update(keptAlive, (all) => [...all, binding.environmentId]),
       status: (binding) =>
         Effect.map(Ref.get(gone), (all) => (all.has(binding.environmentId) ? ("gone" as const) : ("running" as const))),
       ...(build && { build: (input: { readonly config: typeof Config.Type }) => build(input.config) }),
     })
-    return { provisions, destroyed, gone, failing, networks, provider } satisfies Probe
+    return { provisions, destroyed, gone, failing, networks, keptAlive, provider } satisfies Probe
   })

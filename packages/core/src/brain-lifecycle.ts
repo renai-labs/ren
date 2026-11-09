@@ -703,10 +703,12 @@ export const layer = Layer.effect(
           last_pulled_at: at,
           ...(progressed && { last_progress_at: at }),
         })
+        const background = sessions.filter((session) => session.background === true).map((session) => session.id)
         yield* machines.keepAwake(
           { ...row, last_progress_at: lastProgress },
-          { isBusy: busy.length > 0, hasBackground: sessions.some((session) => session.background === true) },
+          { isBusy: busy.length > 0, hasBackground: background.length > 0 },
         )
+        if (lastProgress) yield* environments.keepAwake(background, lastProgress)
       }),
       cleanup,
       onInterrupted: Effect.fn("BrainLifecycle.onInterrupted")(function* (

@@ -10,7 +10,7 @@ import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { and, asc, count, eq, exists, inArray, isNull, sql } from "drizzle-orm"
+import { and, asc, count, eq, exists, gt, inArray, isNull, sql } from "drizzle-orm"
 import {
   Clock,
   Config,
@@ -87,6 +87,7 @@ export interface Interface {
     options?: { readonly unreachable?: boolean },
   ) => Effect.Effect<Environment.Access, NotFound | Unavailable | Starting>
   readonly release: (subject: Subject) => Effect.Effect<void>
+  readonly keepAwake: (sessionIds: ReadonlyArray<Session.ID>, lastProgressAt: Date) => Effect.Effect<void>
   readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
 }
 
@@ -602,6 +603,34 @@ export const layer = Layer.effect(
           .set({ idle_at: sql`now()` })
           .where(and(isSessionOf(subject), isNull(sessions.idle_at)))
           .pipe(Effect.orDie)
+      }),
+      // oxlint-disable-next-line ren/no-comments -- EN25: a chat's background process runs on its remote hand, so the hand stays awake for it as the brain does, up to 2 h after the chat's last progress. A hand that is asleep stays asleep.
+      keepAwake: Effect.fn("Environments.keepAwake")(function* (
+        sessionIds: ReadonlyArray<Session.ID>,
+        lastProgressAt: Date,
+      ) {
+        if (sessionIds.length === 0) return
+        const at = new Date(yield* Clock.currentTimeMillis)
+        const awake = yield* database.db
+          .selectDistinct({ environment: environments })
+          .from(sessions)
+          .innerJoin(environments, eq(environments.id, sessions.environment_id))
+          .where(
+            and(
+              inArray(sessions.session_id, [...sessionIds]),
+              eq(environments.phase, "ready"),
+              gt(environments.keep_alive_until, at),
+            ),
+          )
+          .pipe(Effect.orDie)
+        yield* Effect.forEach(
+          awake,
+          Effect.fnUntraced(function* (found) {
+            const row = yield* read(found.environment.id)
+            yield* hands.keepAwake({ ...row, last_progress_at: lastProgressAt }, { isBusy: false, hasBackground: true })
+          }),
+          { discard: true },
+        )
       }),
       executorVariables: Effect.fn("Environments.executorVariables")(function* (environmentId: Environment.ID) {
         const keys = yield* signingKeys

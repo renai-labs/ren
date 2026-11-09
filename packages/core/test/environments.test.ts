@@ -247,6 +247,29 @@ describe("Environments", () => {
     }),
   )
 
+  it.live("a chat's background process keeps its remote hand awake, as it keeps the brain (EN25)", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const session = yield* subjectIn(organizationId)
+      yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+      yield* subject.environments.access(session, Option.none())
+      const environmentId = (yield* database.db
+        .select({ id: Database.Schema.session_environment.environment_id })
+        .from(Database.Schema.session_environment)
+        .where(eq(Database.Schema.session_environment.session_id, session.sessionId))).at(0)?.id
+      if (!environmentId) return yield* Effect.die(new Error("The session has no environment"))
+      yield* database.db
+        .update(Database.Schema.environment)
+        .set({ keep_alive_until: new Date(Date.now() + 60_000) })
+        .where(eq(Database.Schema.environment.id, environmentId))
+      yield* Ref.set(subject.probe.keptAlive, [])
+      yield* subject.environments.keepAwake([session.sessionId], new Date())
+      expect(yield* Ref.get(subject.probe.keptAlive)).toEqual([environmentId])
+    }),
+  )
+
   it.live("a configured token lifetime is the access's lifetime", () =>
     Effect.gen(function* () {
       const subject = yield* environmentsWith({ ENVIRONMENT_TOKEN_LIFETIME: "20 seconds" })
