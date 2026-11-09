@@ -2,7 +2,7 @@ export * as BrainLifecycle from "./brain-lifecycle.js"
 
 import { Observability } from "@ren/schema/observability"
 import { Database } from "@ren/db/database"
-import type { State as BrainState, UpdateBody } from "@ren/host-api/brain-api"
+import type { State as BrainState } from "@ren/host-api/brain-api"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import type { Bundle } from "@ren/schema/bundle"
@@ -457,37 +457,31 @@ export const layer = Layer.effect(
         if (!row.bundles) return "replace" as const
         return isCurrent(row, bundles.value) ? ("current" as const) : ("update" as const)
       }),
-      // oxlint-disable-next-line ren/no-comments -- The brain unpacks the bundles and restarts what changed; the update counts when the brain answers with the new version within the boot time (EN27). Then, on its current code, it runs its template's new steps (EN22).
+      // oxlint-disable-next-line ren/no-comments -- One call: the brain runs its template's new steps (EN22), unpacks the bundles and restarts what changed. New code counts when the brain answers with its version within the boot time (EN27).
       updateInPlace: Effect.fnUntraced(function* (row, target, steps) {
-        const bundles = yield* currentBundles
+        const bundles = Option.getOrElse(yield* currentBundles, () => [])
         const api = yield* client.brain(target)
-        const send = (payload: typeof UpdateBody.Type, within: Duration.Duration) =>
-          api.brain["brain.update"]({ payload }).pipe(
-            Effect.timeoutOption(within),
-            Effect.map((answered) =>
-              Option.isSome(answered) ? Option.none() : Option.some("the brain did not answer"),
-            ),
-            Effect.catch((error) => Effect.succeed(Option.some(error.message))),
-          )
-        const current = Option.isSome(bundles) ? yield* withTokens(bundles.value) : []
-        if (Option.isSome(bundles) && !isCurrent(row, bundles.value)) {
-          const sent = yield* send({ bundles: current }, bootWithin)
-          if (Option.isSome(sent)) return sent
-          const tree = treeOf(versionsOf(bundles.value))
-          const answered = yield* api.brain["brain.state"]().pipe(
-            Effect.flatMap((state) =>
-              state.version === tree ? Effect.succeed(state) : Effect.fail(new Error(`still ${state.version}`)),
-            ),
-            Effect.retry({ schedule: Schedule.spaced(MachineLifecycle.timing.poll) }),
-            Effect.timeoutOption(bootWithin),
-            Effect.option,
-          )
-          if (Option.isNone(answered) || Option.isNone(answered.value))
-            return Option.some(`the brain did not answer with version ${tree} within ${Duration.format(bootWithin)}`)
-          yield* update(row.id, { bundles: versionsOf(bundles.value) })
-        }
-        if (steps.length === 0) return Option.none()
-        return yield* send({ bundles: current, steps }, stepsWithin)
+        const sent = yield* api.brain["brain.update"]({
+          payload: { bundles: yield* withTokens(bundles), steps },
+        }).pipe(
+          Effect.timeoutOption(steps.length > 0 ? stepsWithin : bootWithin),
+          Effect.map((answered) => (Option.isSome(answered) ? Option.none() : Option.some("the brain did not answer"))),
+          Effect.catch((error) => Effect.succeedSome(error.message)),
+        )
+        if (Option.isSome(sent) || bundles.length === 0 || isCurrent(row, bundles)) return sent
+        const tree = treeOf(versionsOf(bundles))
+        const restarted = yield* api.brain["brain.state"]().pipe(
+          Effect.retry({ schedule: Schedule.spaced(MachineLifecycle.timing.poll) }),
+          Effect.repeat({
+            until: (state) => state.version === tree,
+            schedule: Schedule.spaced(MachineLifecycle.timing.poll),
+          }),
+          Effect.timeoutOption(bootWithin),
+        )
+        if (Option.isNone(restarted))
+          return Option.some(`the brain did not answer with version ${tree} within ${Duration.format(bootWithin)}`)
+        yield* update(row.id, { bundles: versionsOf(bundles) })
+        return Option.none()
       }),
       answers: (target) =>
         client.brain(target).pipe(

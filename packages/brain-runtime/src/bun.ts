@@ -118,40 +118,40 @@ const codeUpdate = (options: { readonly home: string; readonly script: string; r
         bundles: ReadonlyArray<CodeUpdate.Download>,
         steps: ReadonlyArray<CodeUpdate.Step>,
       ) {
+        const run = (command: ReadonlyArray<string>, failed: string) =>
+          Effect.promise(async () => {
+            const child = Bun.spawn([...command], {
+              env: { ...process.env, HOME: options.home },
+              stdout: "ignore",
+              stderr: "pipe",
+            })
+            return { code: await child.exited, error: await new Response(child.stderr).text() }
+          }).pipe(
+            Effect.flatMap((ran) =>
+              ran.code === 0
+                ? Effect.void
+                : Effect.fail(new BrainRejectedError({ message: `${failed}: ${ran.error.slice(-500)}` })),
+            ),
+          )
         // oxlint-disable-next-line ren/no-comments -- Each step runs in order and stops the update at its first failure; a root step runs with sudo, which the system image gives the machine's user.
         yield* Effect.forEach(
           steps,
-          Effect.fnUntraced(function* (step) {
-            const ran = yield* Effect.promise(async () => {
-              const child = Bun.spawn(
-                step.user === "root" ? ["sudo", "-n", "sh", "-c", step.command] : ["sh", "-c", step.command],
-                { env: { ...process.env, HOME: options.home }, stdout: "ignore", stderr: "pipe" },
-              )
-              return { code: await child.exited, error: await new Response(child.stderr).text() }
-            })
-            if (ran.code !== 0)
-              return yield* new BrainRejectedError({
-                message: `The step ${step.command} failed: ${ran.error.slice(-500)}`,
-              })
-          }),
+          (step) =>
+            run(
+              step.user === "root" ? ["sudo", "-n", "sh", "-c", step.command] : ["sh", "-c", step.command],
+              `The step ${step.command} failed`,
+            ),
           { discard: true },
         )
-        const prepared = yield* Effect.promise(async () => {
-          const child = Bun.spawn(
-            [
-              "sh",
-              options.script,
-              "prepare",
-              bundles.map((bundle) => [bundle.kind, bundle.version, bundle.sha256, bundle.token].join(":")).join(" "),
-            ],
-            { env: { ...process.env, HOME: options.home }, stdout: "ignore", stderr: "pipe" },
-          )
-          return { code: await child.exited, error: await new Response(child.stderr).text() }
-        })
-        if (prepared.code !== 0)
-          return yield* new BrainRejectedError({
-            message: `The bundles did not unpack: ${prepared.error.slice(-500)}`,
-          })
+        yield* run(
+          [
+            "sh",
+            options.script,
+            "prepare",
+            bundles.map((bundle) => [bundle.kind, bundle.version, bundle.sha256, bundle.token].join(":")).join(" "),
+          ],
+          "The bundles did not unpack",
+        )
         const current: string = yield* Effect.promise(() =>
           Bun.file(join(options.home, ".ren", "brain.version")).text(),
         )

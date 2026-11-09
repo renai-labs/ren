@@ -52,7 +52,7 @@ export const UpdateBody = Schema.Struct({
   steps: Schema.optionalKey(
     Schema.Array(Schema.Struct({ command: Schema.String, user: Schema.Literals(["root", "user"]) })).annotate({
       description:
-        "Commands that bring the machine to its template’s new config in place, in order: package installs and build commands (EN22). Sent only to a brain that runs the current bundles.",
+        "Commands that bring the machine to its template’s new config in place, in order: package installs and build commands (EN22). They run before the bundles unpack.",
     }),
   ),
 }).annotate({ identifier: "Brain.UpdateBody" })
