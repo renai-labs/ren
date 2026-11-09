@@ -182,13 +182,13 @@ export const StartRun = DurableRunner.make("StartRun", {
     `start:${payload.input.sessionId}:${payload.input.initialMessage?.messageId ?? ""}:${payload.epoch}`,
 })
 
-const lostSandbox = {
-  description: "The sandbox stopped and Ren replaced it",
+// oxlint-disable-next-line ren/no-comments -- One note for every replace that stopped a chat, forced or planned (a template change at a wake): what the model lost, not why.
+const replacedSandbox = {
+  description: "Ren replaced the sandbox",
   source: "brain",
   text:
-    "Your sandbox stopped answering, most often because it ran out of memory, and Ren replaced it with a new one. " +
-    "The command that was running did not finish, and its output is lost. Files that were only on the old sandbox " +
-    "can be gone. Check what is there before you continue, and do not run the same heavy command again in one go.",
+    "Ren replaced your sandbox with a new one. The command that was running did not finish, and its output is lost. " +
+    "Files that were only on the old sandbox can be gone. Check what is there before you continue.",
 }
 
 const failedAsUnavailable = (cause: BrainHost.BrainFailed) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))
@@ -393,10 +393,10 @@ export const layer = Layer.effect(
       yield* send({
         sessionId,
         messageId,
-        prompt: { text: lostSandbox.text },
+        prompt: { text: replacedSandbox.text },
         delivery: "queue",
         sender: { userId: row.createdBy },
-        synthetic: { description: lostSandbox.description, source: lostSandbox.source },
+        synthetic: { description: replacedSandbox.description, source: replacedSandbox.source },
       }).pipe(
         Effect.catchTag(["SessionNotStartedError", "BrainRejectedError"], (error) =>
           Effect.logWarning(`The chat ${sessionId} cannot continue after the replace`, error),
