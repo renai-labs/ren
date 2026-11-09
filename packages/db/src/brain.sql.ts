@@ -29,9 +29,10 @@ export const brain = pgTable(
       .default(sql`'{}'::text[]`),
     provider: text(),
     binding: jsonb().$type<Schema.Json>(),
-    template: text(),
+    // oxlint-disable-next-line ren/no-comments -- The image the machine runs: the provider's system image or a template's.
+    image: text(),
     // oxlint-disable-next-line ren/no-comments -- The template and config that built the image of a co-located hand's machine; null for the provider's own image.
-    template_config: jsonb().$type<{
+    image_template: jsonb().$type<{
       readonly environmentTemplateId: EnvironmentTemplate.ID
       readonly config: Schema.Json
     }>(),

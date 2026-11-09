@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "1183bce8-1d63-410e-9170-43b3efe5092d",
+  "id": "04513cd9-7072-4df9-9b61-81b538f92422",
   "prevIds": [
     "25fa7af1-4a88-4205-9ff4-91cf142a5db4"
   ],
@@ -3254,7 +3254,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "template",
+      "name": "image",
       "entityType": "columns",
       "schema": "public",
       "table": "brain"
@@ -3267,7 +3267,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "template_config",
+      "name": "image_template",
       "entityType": "columns",
       "schema": "public",
       "table": "brain"
@@ -5217,7 +5217,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "template",
+      "name": "image",
       "entityType": "columns",
       "schema": "public",
       "table": "environment"
@@ -5230,7 +5230,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "template_config",
+      "name": "image_template",
       "entityType": "columns",
       "schema": "public",
       "table": "environment"
@@ -14915,5 +14915,7 @@
       "table": "webhook_request"
     }
   ],
-  "renames": []
+  "renames": [
+    "public.brain.template->public.brain.image"
+  ]
 }

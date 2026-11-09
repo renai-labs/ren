@@ -54,7 +54,7 @@ export const provider = (options: {
   readonly root: string
   readonly lostEvery?: Duration.Input
   readonly maxRunning?: number
-  readonly template?: string
+  readonly systemImage?: string
   readonly owner?: number
 }) =>
   Effect.gen(function* () {
@@ -86,7 +86,7 @@ export const provider = (options: {
       canSample: true,
       canColocate: true,
       canLimitHosts: false,
-      ...(options.template && { template: options.template }),
+      ...(options.systemImage && { systemImage: options.systemImage }),
       config: Schema.Struct({}),
       binding: Binding,
       create: Effect.fn("LocalSandbox.create")(function* (input) {

@@ -251,8 +251,9 @@ export const layer = Layer.effect(
     })
 
     // oxlint-disable-next-line ren/no-comments -- The current bundles, the dependencies first, when this Ren serves bundles; none for a host whose image or folder holds Ren's code.
-    const wanted = Effect.map(Effect.forEach(["dependencies", "brain", "executor"] as const, code.current), (found) =>
-      Option.all(found),
+    const currentBundles = Effect.map(
+      Effect.forEach(["dependencies", "brain", "executor"] as const, code.current),
+      (found) => Option.all(found),
     )
     const versionsOf = (bundles: ReadonlyArray<Bundle.Info>) => {
       const version = (kind: Bundle.Kind) => bundles.find((bundle) => bundle.kind === kind)?.version ?? ""
@@ -277,7 +278,7 @@ export const layer = Layer.effect(
     const isBehindEgress = (provider: MachineProvider.Provider) => egress.enabled && provider.canEgress
 
     // oxlint-disable-next-line ren/no-comments -- The provider the brain's space chose, or the deployment's first one. Ren does not start when a space names one it does not register (EN24).
-    const chosen = Effect.fnUntraced(function* (spaceId: Space.ID) {
+    const providerOfSpace = Effect.fnUntraced(function* (spaceId: Space.ID) {
       const row = (yield* database.db
         .select({ provider: Database.Schema.space.brain_provider })
         .from(Database.Schema.space)
@@ -296,7 +297,7 @@ export const layer = Layer.effect(
               Effect.die(new Error(`Brain ${row.id} runs on ${row.provider}, which this Ren does not register`)),
             onSome: Effect.succeed,
           })
-        : chosen(row.space_id)
+        : providerOfSpace(row.space_id)
 
     // oxlint-disable-next-line ren/no-comments -- A brain is made for its space's hand at create. A brain for a remote hand runs OpenCode's tool output, files and git on the hand; a change to or from remote replaces the brain at its wake, so the choice at boot holds for the process's life (EN13).
     const handPlacement = Effect.fnUntraced(function* (spaceId: Space.ID) {
@@ -309,7 +310,7 @@ export const layer = Layer.effect(
     })
 
     // oxlint-disable-next-line ren/no-comments -- A co-located hand with a template: the machine runs the template's last image that built, and keeps to its host list (EN3, networking rules 1, 2).
-    const wants = Effect.fnUntraced(function* (row: Row) {
+    const desiredSetup = Effect.fnUntraced(function* (row: Row) {
       const templates = Database.Schema.environment_template
       const found = (yield* database.db
         .select({
@@ -327,7 +328,7 @@ export const layer = Layer.effect(
         .where(eq(Database.Schema.space.id, row.space_id))
         .pipe(Effect.orDie)).at(0)
       if (found?.placement !== "colocated" || !found.id || !found.networking)
-        return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.Wanted
+        return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.DesiredSetup
       const template = { environmentTemplateId: found.id, config: found.config }
       const hosts = yield* network.hostsOf({ kind: "brain", id: row.id, generation: row.generation }, found.networking)
       return {
@@ -340,7 +341,7 @@ export const layer = Layer.effect(
           }),
         ),
         hosts: Option.map(hosts, (list) => [...new Set([...list, ...renHosts])]),
-      } satisfies MachineLifecycle.Wanted
+      } satisfies MachineLifecycle.DesiredSetup
     })
 
     const machines = MachineLifecycle.make({
@@ -398,9 +399,9 @@ export const layer = Layer.effect(
           organizationId: row.organization_id,
         }),
       retire: (brainId) => egress.retire({ kind: "brain", id: brainId }),
-      wants,
+      desiredSetup,
       variables: Effect.fnUntraced(function* (row) {
-        const bundles = yield* wanted
+        const bundles = yield* currentBundles
         return {
           REN_URL: client.renUrl,
           REN_BRAIN_ID: row.id,
@@ -422,7 +423,7 @@ export const layer = Layer.effect(
         }
       }),
       created: Effect.fnUntraced(function* (brainId) {
-        const bundles = yield* wanted
+        const bundles = yield* currentBundles
         yield* update(brainId, {
           hand_placement: yield* handPlacement((yield* read(brainId)).space_id),
           key_ids: client.publicKeys.map((key) => key.id),
@@ -478,18 +479,18 @@ export const layer = Layer.effect(
         )
         return yield* update(target.brainId, { last_pulled_at: yield* now }).pipe(Effect.as(true))
       }),
-      outdated: Effect.fnUntraced(function* (row) {
-        if (row.provider && row.provider !== (yield* chosen(row.space_id)).info.id) return "replace" as const
+      changeAtWake: Effect.fnUntraced(function* (row) {
+        if (row.provider && row.provider !== (yield* providerOfSpace(row.space_id)).info.id) return "replace" as const
         if ((row.hand_placement === "remote") !== ((yield* handPlacement(row.space_id)) === "remote"))
           return "replace" as const
-        const bundles = yield* wanted
+        const bundles = yield* currentBundles
         if (Option.isNone(bundles)) return "current" as const
         if (!row.bundles) return "replace" as const
         return isCurrent(row, bundles.value) ? ("current" as const) : ("update" as const)
       }),
       // oxlint-disable-next-line ren/no-comments -- The brain unpacks the bundles and restarts what changed; the update counts when the brain answers with the new version within the boot time (EN27). Then, on its current code, it runs its template's new steps (EN22).
       updateInPlace: Effect.fnUntraced(function* (row, target, steps) {
-        const bundles = yield* wanted
+        const bundles = yield* currentBundles
         const api = yield* client.brain(target)
         const send = (payload: typeof UpdateBody.Type, within: Duration.Duration) =>
           api.brain["brain.update"]({ payload }).pipe(

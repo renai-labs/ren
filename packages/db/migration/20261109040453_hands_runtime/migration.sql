@@ -6,14 +6,15 @@ CREATE TABLE "bundle" (
 );
 --> statement-breakpoint
 DROP TABLE "space_environment_template";--> statement-breakpoint
-ALTER TABLE "brain" ADD COLUMN "template_config" jsonb;--> statement-breakpoint
+ALTER TABLE "brain" RENAME COLUMN "template" TO "image";--> statement-breakpoint
+ALTER TABLE "brain" ADD COLUMN "image_template" jsonb;--> statement-breakpoint
 ALTER TABLE "brain" ADD COLUMN "hand_placement" text;--> statement-breakpoint
 ALTER TABLE "brain" ADD COLUMN "bundles" jsonb;--> statement-breakpoint
 ALTER TABLE "brain" ADD COLUMN "retry_at" timestamp;--> statement-breakpoint
 ALTER TABLE "brain" ADD COLUMN "retries" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "brain" ADD COLUMN "unanswered_since" timestamp;--> statement-breakpoint
-ALTER TABLE "environment" ADD COLUMN "template" text;--> statement-breakpoint
-ALTER TABLE "environment" ADD COLUMN "template_config" jsonb;--> statement-breakpoint
+ALTER TABLE "environment" ADD COLUMN "image" text;--> statement-breakpoint
+ALTER TABLE "environment" ADD COLUMN "image_template" jsonb;--> statement-breakpoint
 ALTER TABLE "environment" ADD COLUMN "egress" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "environment" ADD COLUMN "url" text;--> statement-breakpoint
 ALTER TABLE "environment" ADD COLUMN "generation" integer DEFAULT 1 NOT NULL;--> statement-breakpoint

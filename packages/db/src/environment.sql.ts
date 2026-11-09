@@ -72,8 +72,8 @@ export const environment = pgTable(
       .references(() => space.id, { onDelete: "cascade" }),
     binding: jsonb().$type<Schema.Json>(),
     // oxlint-disable-next-line ren/no-comments -- The columns of MachineLifecycle.Row: a remote hand's machine has the same state machine as a brain's (EN1).
-    template: text(),
-    template_config: jsonb().$type<{
+    image: text(),
+    image_template: jsonb().$type<{
       readonly environmentTemplateId: EnvironmentTemplate.ID
       readonly config: Schema.Json
     }>(),

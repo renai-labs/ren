@@ -208,15 +208,15 @@ describe("brain runs", () => {
   test("a paused brain on an older build is replaced with the provider's build at its next access; a running one keeps its build", async () => {
     const paused = await runs.newBrain()
     const running = await runs.newBrain()
-    const runtime = await runs.ren({ template: "t2" })
+    const runtime = await runs.ren({ systemImage: "t2" })
     await runtime.runPromise(
       BrainLifecycle.Service.use((lifecycle) =>
         Effect.all([lifecycle.ensure(paused), lifecycle.ensure(running)], { discard: true }),
       ),
     )
     await Promise.all([runs.reaches(paused, "ready"), runs.reaches(running, "ready")])
-    await runs.update(paused, { template: "t1", keep_alive_until: new Date(Date.now() - 1000) })
-    await runs.update(running, { template: "t1" })
+    await runs.update(paused, { image: "t1", keep_alive_until: new Date(Date.now() - 1000) })
+    await runs.update(running, { image: "t1" })
     await runtime.runPromise(
       BrainLifecycle.Service.use((lifecycle) =>
         Effect.all([lifecycle.access(paused), lifecycle.access(running)], { discard: true }),
@@ -234,7 +234,7 @@ describe("brain runs", () => {
         }),
       ),
     )
-    expect([replaced.template, (await runs.row(running)).generation, (await runs.row(running)).template]).toEqual([
+    expect([replaced.image, (await runs.row(running)).generation, (await runs.row(running)).image]).toEqual([
       "t2",
       1,
       "t1",

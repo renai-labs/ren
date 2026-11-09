@@ -327,7 +327,7 @@ export const provider = Effect.gen(function* () {
     canSample: true,
     canColocate: true,
     canLimitHosts: true,
-    template: config.template,
+    systemImage: config.template,
     workspace,
     config: TemplateConfig,
     binding: Binding,

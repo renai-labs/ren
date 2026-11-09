@@ -73,7 +73,7 @@ export const local = (options: {
   readonly root: string
   readonly lostEvery?: Duration.Input
   readonly maxRunning?: number
-  readonly template?: string
+  readonly systemImage?: string
 }) =>
   LocalSandbox.provider({
     entry,
@@ -82,7 +82,7 @@ export const local = (options: {
     owner: process.pid,
     ...(options.lostEvery && { lostEvery: options.lostEvery }),
     ...(options.maxRunning && { maxRunning: options.maxRunning }),
-    ...(options.template && { template: options.template }),
+    ...(options.systemImage && { systemImage: options.systemImage }),
   })
 
 interface StackOptions<E, R> {
@@ -93,7 +93,7 @@ interface StackOptions<E, R> {
   readonly environments: Layer.Layer<Environments.Service, E, R>
   readonly lostEvery?: Duration.Input
   readonly maxRunning?: number
-  readonly template?: string
+  readonly systemImage?: string
   readonly sandbox?: Layer.Layer<BrainProvider.Registry, unknown, HttpClient.HttpClient>
   readonly keepBrains?: boolean
 }

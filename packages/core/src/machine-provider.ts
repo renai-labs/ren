@@ -116,7 +116,7 @@ interface Definition<Config, Binding> {
   readonly canColocate: boolean
   // oxlint-disable-next-line ren/no-comments -- Whether it can keep a machine to a list of hosts (a template's `limited` networking).
   readonly canLimitHosts: boolean
-  readonly template?: string
+  readonly systemImage?: string
   // oxlint-disable-next-line ren/no-comments -- The folder where a remote hand of this provider keeps one folder per chat (EN42).
   readonly workspace?: string
   readonly config: Schema.Codec<Config, unknown>
@@ -149,7 +149,7 @@ export interface Provider {
   readonly canSample: boolean
   readonly canColocate: boolean
   readonly canLimitHosts: boolean
-  readonly template: string | null
+  readonly systemImage: string | null
   readonly workspace: Option.Option<string>
   readonly check: (config: unknown) => Effect.Effect<Schema.Json, InvalidConfig>
   readonly create: (input: CreateInput<Schema.Json>) => Effect.Effect<Created, Failed | Capacity>
@@ -217,7 +217,7 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
     canSample: definition.canSample,
     canColocate: definition.canColocate,
     canLimitHosts: definition.canLimitHosts,
-    template: definition.template ?? null,
+    systemImage: definition.systemImage ?? null,
     workspace: Option.fromUndefinedOr(definition.workspace),
     check: (value) =>
       Schema.decodeUnknownEffect(config)(value).pipe(

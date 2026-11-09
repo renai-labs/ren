@@ -382,7 +382,7 @@ export const layer = Layer.effect(
           }),
         }
       }),
-      wants: Effect.fnUntraced(function* (row) {
+      desiredSetup: Effect.fnUntraced(function* (row) {
         const template = (yield* database.db
           .select({
             id: templates.id,
@@ -395,7 +395,7 @@ export const layer = Layer.effect(
           .where(eq(templates.id, row.environment_template_id))
           .pipe(Effect.orDie)).at(0)
         if (!template)
-          return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.Wanted
+          return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.DesiredSetup
         const hosts = yield* network.hostsOf(
           { kind: "hand", id: row.id, generation: row.generation },
           template.networking,
@@ -411,7 +411,7 @@ export const layer = Layer.effect(
           ),
           // oxlint-disable-next-line ren/no-comments -- A limited hand also reaches Ren's server: start.sh fetches Ren's code there (EN26).
           hosts: Option.map(hosts, (list) => [...new Set([...list, ...renHost])]),
-        } satisfies MachineLifecycle.Wanted
+        } satisfies MachineLifecycle.DesiredSetup
       }),
       created: () => Effect.void,
       target: (row) =>
@@ -429,7 +429,7 @@ export const layer = Layer.effect(
           Effect.option,
           Effect.map((answered) => Option.isSome(answered) && Option.isSome(answered.value)),
         ),
-      outdated: () => Effect.succeed("current" as const),
+      changeAtWake: () => Effect.succeed("current" as const),
       updateInPlace: () => Effect.succeed(Option.some("A remote hand does not update in place yet; Ren replaces it")),
     })
     holder.run = hands.run

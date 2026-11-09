@@ -34,9 +34,9 @@ const kind = Effect.gen(function* () {
     connects: true,
     alive: true,
     capacity: false,
-    outdated: "current" as "current" | "update" | "replace",
+    changeAtWake: "current" as "current" | "update" | "replace",
     updates: true,
-    wanted: { config: {}, image: Option.none(), hosts: Option.none() } as MachineLifecycle.Wanted,
+    wanted: { config: {}, image: Option.none(), hosts: Option.none() } as MachineLifecycle.DesiredSetup,
     system: "system",
   }
   const images: Array<Option.Option<string>> = []
@@ -54,7 +54,7 @@ const kind = Effect.gen(function* () {
     canSample: false,
     canColocate: true,
     canLimitHosts: true,
-    template: "system",
+    systemImage: "system",
     config: Schema.Struct({
       packages: Schema.Array(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
     }),
@@ -99,7 +99,7 @@ const kind = Effect.gen(function* () {
     noun: "Machine",
     annotation: "machine",
     kind: "hand",
-    providerOf: () => Effect.sync(() => ({ ...provider, template: switches.system })),
+    providerOf: () => Effect.sync(() => ({ ...provider, systemImage: switches.system })),
     isBehindEgress: () => false,
     bootWithin: Duration.seconds(1),
     wakeWithin: Duration.seconds(1),
@@ -124,18 +124,18 @@ const kind = Effect.gen(function* () {
     proxyFor: () => Effect.succeedNone,
     retire: () => Effect.void,
     variables: () => Effect.succeed({}),
-    wants: () => Effect.sync(() => switches.wanted),
+    desiredSetup: () => Effect.sync(() => switches.wanted),
     created: () => Effect.void,
     target: (row) => Option.fromNullishOr(row.url),
     boot: () => Effect.sync(() => (switches.boots ? Option.none() : Option.some("The machine did not answer"))),
     wake: () => Effect.succeed(true),
-    outdated: () => Effect.sync(() => switches.outdated),
+    changeAtWake: () => Effect.sync(() => switches.changeAtWake),
     updateInPlace: (row, _target, applied) =>
       Effect.sync(() => {
         if (!switches.updates) return Option.some("the new version did not answer")
         updated.push(row.id)
         steps.push(applied.map((step) => step.command))
-        switches.outdated = "current"
+        switches.changeAtWake = "current"
         return Option.none()
       }),
     answers: () => Effect.sync(() => switches.answers),
@@ -149,8 +149,8 @@ const kind = Effect.gen(function* () {
       space_id: Space.ID.create(),
       provider: null,
       binding: null,
-      template: null,
-      template_config: null,
+      image: null,
+      image_template: null,
       egress: false,
       url: null,
       generation: 1,
@@ -330,7 +330,7 @@ describe("MachineLifecycle updates", () => {
     () =>
       Effect.gen(function* () {
         const found = yield* asleep()
-        found.memory.switches.outdated = "update"
+        found.memory.switches.changeAtWake = "update"
         expect((yield* found.memory.machines.access(found.id))._tag).toBe("Starting")
         expect(found.memory.updated).toEqual([found.id])
         expect(yield* found.memory.read(found.id)).toMatchObject({ phase: "ready", generation: 1 })
@@ -340,7 +340,7 @@ describe("MachineLifecycle updates", () => {
   it.effect("an update that fails 3 times replaces the machine (EN27, chaos row 14)", () =>
     Effect.gen(function* () {
       const found = yield* asleep()
-      found.memory.switches.outdated = "update"
+      found.memory.switches.changeAtWake = "update"
       found.memory.switches.updates = false
       yield* found.memory.machines.access(found.id)
       expect(yield* found.memory.read(found.id)).toMatchObject({ phase: "ready", generation: 2 })
@@ -351,9 +351,9 @@ describe("MachineLifecycle updates", () => {
   it.effect("a machine that cannot update in place is replaced at its wake", () =>
     Effect.gen(function* () {
       const found = yield* asleep()
-      found.memory.switches.outdated = "replace"
+      found.memory.switches.changeAtWake = "replace"
       yield* found.memory.machines.access(found.id)
-      found.memory.switches.outdated = "current"
+      found.memory.switches.changeAtWake = "current"
       expect(yield* found.memory.read(found.id)).toMatchObject({ generation: 2 })
     }),
   )
@@ -382,8 +382,8 @@ describe("MachineLifecycle updates", () => {
         expect(yield* memory.read(id)).toMatchObject({
           phase: "ready",
           generation: 1,
-          template: "image-b",
-          template_config: { environmentTemplateId: templateId, config: { packages: ["ffmpeg", "requests"] } },
+          image: "image-b",
+          image_template: { environmentTemplateId: templateId, config: { packages: ["ffmpeg", "requests"] } },
         })
       }),
   )
@@ -406,7 +406,7 @@ describe("MachineLifecycle updates", () => {
           })
         expect(yield* wakeOn("ren-brain:a1b2-d2")).toBe(1)
         expect(yield* wakeOn("ren-brain:c3d4-d2")).toBe(2)
-        expect((yield* memory.read(id)).template).toBe("ren-brain:c3d4-d2")
+        expect((yield* memory.read(id)).image).toBe("ren-brain:c3d4-d2")
       }),
   )
 
@@ -419,7 +419,7 @@ describe("MachineLifecycle updates", () => {
         memory.switches.wanted = templateImage("image-a", ["ffmpeg", "requests"])
         const id = memory.add()
         yield* memory.machines.access(id)
-        const wakeWith = (wanted: MachineLifecycle.Wanted) =>
+        const wakeWith = (wanted: MachineLifecycle.DesiredSetup) =>
           Effect.gen(function* () {
             memory.switches.wanted = wanted
             yield* TestClock.adjust(Duration.minutes(11))

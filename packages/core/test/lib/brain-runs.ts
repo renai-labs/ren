@@ -54,7 +54,7 @@ export const make = async () => {
       readonly lostEvery?: Duration.Input
       readonly maxRunning?: number
       readonly root?: string
-      readonly template?: string
+      readonly systemImage?: string
       readonly port?: number
       readonly around?: Parameters<typeof Host.serve>[1]
       readonly config?: Record<string, string>
