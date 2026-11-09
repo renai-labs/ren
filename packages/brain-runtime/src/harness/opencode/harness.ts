@@ -60,8 +60,6 @@ import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { SessionSettings } from "./session-settings.js"
 import type { HarnessConfig } from "../config.js"
 
-const environmentActions = ["read", "edit", "glob", "grep", "shell"]
-
 const environmentInstructionKey = "ren.environment"
 
 const notSupported = (sessionId: string) =>
@@ -79,14 +77,7 @@ const environmentInstructions = (server: OpenCodeServer.Instance, environmentDir
   }
 }
 
-const deniedActions = (
-  server: OpenCodeServer.Instance,
-  input: StartBody,
-  environmentDirectory: Option.Option<string>,
-) => [
-  ...(input.interactive ? [] : ["question"]),
-  ...(server.hasEnvironmentConnections && Option.isNone(environmentDirectory) ? environmentActions : []),
-]
+const deniedActions = (input: StartBody) => (input.interactive ? [] : ["question"])
 
 const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
   client.session.get({ sessionID }).pipe(
@@ -345,7 +336,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   const environmentDirectory = yield* environmentDirectoryOf(server, input, session)
   // oxlint-disable-next-line ren/no-comments -- The folder on the brain's own hand exists from the start, so a restore that finds it missing knows its files were lost (E105).
   if (Option.getOrElse(environmentDirectory, () => directory) === directory) yield* server.makeDirectory(directory)
-  const permissions = deniedActions(server, input, environmentDirectory).map((action) => ({
+  const permissions = deniedActions(input).map((action) => ({
     action,
     resource: "*",
     effect: "deny" as const,

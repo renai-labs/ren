@@ -156,7 +156,7 @@ Built: `Space.Hand` (`schema/space.ts`), its checks in `Space.update` (EN3, EN24
 Built for brain machines (EN21, EN22, EN27): `MachineLifecycle` compares the machine's image (`image`, `image_template`) with its `desiredSetup` only in `resuming`. It updates in place a newer bundle, or a template config that only adds packages or build commands (the provider's `stepsBetween`; the brain runs the steps with `brain.update`, root steps through sudo). It replaces the machine for any other image change, a different provider, or an in-place update that failed 3 times.
 
 1. Remote hand machines follow the same rules (PR 16).
-2. Hand → none: at the next pull, the existing chats lose their file and shell tools (built: `PullChat.hasHand`, the Ren plugin). None → hand: only new chats get tools, because the brain fixes a chat's workspace link when it creates the chat (EN23).
+2. Hand → none: at the next pull, every chat's file and shell tools leave its tool list, and come back when the space has a hand again (`PullChat.hasHand`, the Ren plugin). A chat created while its space had none never gets them: the brain fixes a chat's workspace link when it creates the chat (EN23). One rule removes the tools in both cases.
 3. A change to `brainScope` applies to new chats only.
 
 ### Templates

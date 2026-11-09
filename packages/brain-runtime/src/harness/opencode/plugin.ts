@@ -320,10 +320,6 @@ export const make = (
         const tool = context.tool
         const integration = context.integration
         const provider = context.provider
-        if (Option.isNone(connections))
-          yield* tool.transform((editor) => {
-            for (const id of OpenCodeEnvironmentTools.names) editor.remove(id)
-          })
         if (Option.isSome(connections))
           yield* tool.hook("execute.after", (event) =>
             Effect.sync(() => {
@@ -427,6 +423,13 @@ export const make = (
           )
         }
         const initial = yield* Ref.get(desired)
+        const installed = yield* Ref.make(Option.fromUndefinedOr(initial.chats.get(sessionId)))
+        // oxlint-disable-next-line ren/no-comments -- EN23, one rule: a chat's file and shell tools leave its tool list unless it has a hand now: environments, a workspace, and a space with a hand. A chat created without a workspace never gets one; a space that loses its hand takes them at the next pull and gives them back with the hand.
+        yield* tool.transform((editor) => {
+          const hasHand = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.hasHand !== false
+          if (Option.isSome(connections) && workspaceID && hasHand) return
+          for (const id of OpenCodeEnvironmentTools.names) editor.remove(id)
+        })
         const appConflicts = yield* Ref.make(conflictsOf(initial.apps))
         const applied = yield* Ref.make(
           (yield* Ref.get(appConflicts)).length ? { ...initial, apps: Option.none<AppCatalog.Info>() } : initial,
@@ -476,8 +479,6 @@ export const make = (
         })
         if (Option.isSome(settings)) {
           const shared = settings.value
-          const saved = initial.chats.get(sessionId)
-          const installed = yield* Ref.make(Option.fromUndefinedOr(saved))
           const agentOf = (name: string | undefined) =>
             Option.flatMap(Ref.getUnsafe(installed), (chat) =>
               Option.fromUndefinedOr(
@@ -504,11 +505,6 @@ export const make = (
                 ]
               })
             editor.default(resolved.primary.name)
-          })
-          // oxlint-disable-next-line ren/no-comments -- EN23: a chat whose space has no hand now loses its file and shell tools at the next pull. A chat started with none never had them (deniedActions in harness.ts).
-          yield* tool.transform((editor) => {
-            if (Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.hasHand !== false) return
-            for (const id of OpenCodeEnvironmentTools.names) editor.remove(id)
           })
           const references = yield* OpenCodeReferences.make({
             context,
