@@ -115,7 +115,7 @@ const codeUpdate = (options: { readonly home: string; readonly script: string; r
     CodeUpdate.Service,
     CodeUpdate.Service.of({
       update: Effect.fn("CodeUpdate.update")(function* (
-        bundles: ReadonlyArray<CodeUpdate.Bundled>,
+        bundles: ReadonlyArray<CodeUpdate.Download>,
         steps: ReadonlyArray<CodeUpdate.Step>,
       ) {
         // oxlint-disable-next-line ren/no-comments -- Each step runs in order and stops the update at its first failure; a root step runs with sudo, which the system image gives the machine's user.
@@ -150,7 +150,7 @@ const codeUpdate = (options: { readonly home: string; readonly script: string; r
         })
         if (prepared.code !== 0)
           return yield* new BrainRejectedError({
-            message: `The bundles did not unpack: ${prepared.error.slice(0, 500)}`,
+            message: `The bundles did not unpack: ${prepared.error.slice(-500)}`,
           })
         const current: string = yield* Effect.promise(() =>
           Bun.file(join(options.home, ".ren", "brain.version")).text(),

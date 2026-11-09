@@ -4,7 +4,8 @@ import { BrainRejectedError } from "@ren/host-api/errors"
 import type { Bundle } from "@ren/schema/bundle"
 import { Context, Effect, Layer } from "effect"
 
-export interface Bundled extends Bundle.Info {
+// oxlint-disable-next-line ren/no-comments -- A bundle, and the token with which the machine downloads it from Ren.
+export interface Download extends Bundle.Info {
   readonly token: string
 }
 
@@ -17,7 +18,7 @@ export interface Step {
 // oxlint-disable-next-line ren/no-comments -- How a machine takes newer bundles of Ren's code and its template's new steps at a wake (EN22, EN27). Only a machine that runs start.sh can; any other host is replaced instead.
 export interface Interface {
   readonly update: (
-    bundles: ReadonlyArray<Bundled>,
+    bundles: ReadonlyArray<Download>,
     steps: ReadonlyArray<Step>,
   ) => Effect.Effect<void, BrainRejectedError>
 }
