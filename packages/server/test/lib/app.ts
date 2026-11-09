@@ -1,4 +1,9 @@
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
+import { MachineProvider } from "@ren/core/machine-provider"
+import { BrainProvider } from "@ren/core/brain-provider"
+import { SandboxEgress } from "@ren/core/sandbox-egress"
+import { EnvironmentNetwork } from "@ren/core/environment-network"
+import { Bundles } from "@ren/core/bundles"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
@@ -132,7 +137,14 @@ export const services = Layer.mergeAll(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(AppProfiles.layer),
   Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
-  Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
+  Layer.provideMerge([
+    Models.layerNone,
+    Environments.layer.pipe(
+      Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
+      Layer.provide(Signer.layerLocal),
+    ),
+    Layer.effect(BrainProvider.Registry, MachineProvider.registry<never, never>([])),
+  ]),
   Layer.provideMerge(RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal))),
   Layer.provideMerge(SlackApp.layer),
   Layer.provideMerge(

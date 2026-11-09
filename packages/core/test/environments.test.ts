@@ -1,4 +1,5 @@
 import { HttpClient, HttpClientError } from "effect/http"
+import { Bundles } from "../src/bundles.js"
 import { describe, expect } from "bun:test"
 import { EnvironmentToken } from "@ren/environment-api/environment-token"
 import { Signature } from "@ren/schema/signature"
@@ -68,7 +69,9 @@ const environmentsWith = Effect.fnUntraced(function* (
   const context = yield* Layer.build(
     Layer.fresh(
       Environments.layer.pipe(
-        Layer.provide([Signer.layerLocal, noExecutor, ren.network ?? Layer.empty]),
+        Layer.provide([noExecutor, ren.network ?? EnvironmentNetwork.layerNone]),
+        Layer.provide(Bundles.layer),
+        Layer.provide(Signer.layerLocal),
         Layer.provide(ren.hasEgress ? Layer.empty : SandboxEgress.layerNone),
         Layer.provideMerge(TestSandboxEgress.layer),
       ),

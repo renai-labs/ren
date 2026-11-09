@@ -1,5 +1,6 @@
 export * as Configured from "./configured.js"
 
+import { BrainProviders } from "./brain-providers.js"
 import { Shared } from "@ren/cell/testing"
 import type { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
@@ -45,7 +46,7 @@ export const runnerLayer = Layer.mergeAll(SessionRunner.layer, SessionSync.layer
 export const sessionLayerWith = (
   github: Layer.Layer<GitHubApp.Service, never, Database.Service> = GitHubApp.layerNone,
 ) =>
-  Layer.mergeAll(Session.layer, Space.layer, SpaceProvisioning.layer).pipe(
+  Layer.mergeAll(Session.layer, Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceProvisioning.layer).pipe(
     Layer.provideMerge(SessionRunner.layer),
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(github))),
     Layer.provideMerge(BrainRegistry.layer),

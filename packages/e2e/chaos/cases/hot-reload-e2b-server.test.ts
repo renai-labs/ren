@@ -222,6 +222,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provide(Models.layerInferenceGateway),
             Layer.provide(
               Environments.layer
+                .pipe(Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]))
                 .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
                 .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([]))),
             ),

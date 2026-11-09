@@ -1,4 +1,5 @@
 import { afterAll, describe, expect } from "bun:test"
+import { BrainProviders } from "./lib/brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
@@ -140,7 +141,7 @@ const it = testEffect(
   Layer.mergeAll(
     Egress.layer,
     CredentialEnv.layer,
-    Space.layer,
+    Space.layer.pipe(Layer.provide(BrainProviders.none)),
     SpaceMember.layer,
     SpaceProvisioning.layer,
     App.layer,

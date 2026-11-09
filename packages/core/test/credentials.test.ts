@@ -1,4 +1,5 @@
 import { afterAll, describe, expect } from "bun:test"
+import { BrainProviders } from "./lib/brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
@@ -49,7 +50,7 @@ afterAll(() => tokens.stop(true))
 const it = testEffect(
   Layer.mergeAll(
     CredentialRefresh.layer,
-    Space.layer,
+    Space.layer.pipe(Layer.provide(BrainProviders.none)),
     SpaceMember.layer,
     SpaceProvisioning.layer,
     App.layer,

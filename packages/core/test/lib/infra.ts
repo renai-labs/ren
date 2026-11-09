@@ -1,5 +1,6 @@
 export * as InfraFixture from "./infra.js"
 
+import { BrainProviders } from "./brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
@@ -67,7 +68,9 @@ export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>
         ),
       ),
     ),
-    Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer, Credentials.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceMember.layer, Credentials.layer),
+    ),
     Layer.provideMerge(
       Layer.mergeAll(
         Access.layer,

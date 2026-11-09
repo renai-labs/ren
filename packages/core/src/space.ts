@@ -105,6 +105,7 @@ const templateProvider = Effect.fnUntraced(function* (
 
 // oxlint-disable-next-line ren/no-comments -- EN3, EN24: a space holds only a hand that its brain provider can run. The template read waits for an archive of it.
 const checkHand = Effect.fnUntraced(function* (
+  registry: BrainProvider.Registry["Service"],
   transaction: Database.Transaction,
   actor: Actor.Info,
   space: typeof Database.Schema.space.$inferSelect,
@@ -117,9 +118,7 @@ const checkHand = Effect.fnUntraced(function* (
   if (hand.placement !== "colocated") return
   // ast-grep-ignore: no-nullish-comparison, -- a null brain provider is a change: back to the first one.
   const chosen = input.brainProvider === undefined ? space.brain_provider : input.brainProvider
-  const provider = Option.flatMap(yield* Effect.serviceOption(BrainProvider.Registry), (registry) =>
-    chosen ? registry.get(chosen) : Option.fromNullishOr(registry.providers.at(0)),
-  )
+  const provider = chosen ? registry.get(chosen) : Option.fromNullishOr(registry.providers.at(0))
   if (Option.isNone(provider)) return
   const field = input.hand ? "hand" : "brainProvider"
   if (!provider.value.canColocate)
@@ -137,6 +136,7 @@ const checkHand = Effect.fnUntraced(function* (
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
+    const registry = yield* BrainProvider.Registry
     const database = yield* Database.Service
     const access = yield* Access.Service
     const control = yield* EgressControl.Service
@@ -281,14 +281,13 @@ export const layer = Layer.effect(
             }
             // oxlint-disable-next-line ren/no-comments -- A space names only a brain provider this deployment registers, or Ren would not start (EN24).
             if (input.brainProvider) {
-              const registry = yield* Effect.serviceOption(BrainProvider.Registry)
-              if (Option.isSome(registry) && Option.isNone(registry.value.get(input.brainProvider)))
+              if (Option.isNone(registry.get(input.brainProvider)))
                 return yield* new Primitive.Invalid({
-                  message: `This Ren has no brain provider ${input.brainProvider}; it has ${registry.value.providers.map((provider) => provider.info.id).join(", ")}`,
+                  message: `This Ren has no brain provider ${input.brainProvider}; it has ${registry.providers.map((provider) => provider.info.id).join(", ")}`,
                   field: "brainProvider",
                 })
             }
-            yield* checkHand(transaction, actor, visible.row.space, input)
+            yield* checkHand(registry, transaction, actor, visible.row.space, input)
             if (input.factory) {
               const problem = FactoryCheck.problems(input.factory).at(0)
               if (problem) return yield* new Primitive.Invalid({ message: problem, field: "factory" })

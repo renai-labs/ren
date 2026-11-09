@@ -56,6 +56,8 @@ const environmentKeys = JSON.stringify([
 ])
 
 export const noTemplates = Environments.layer
+  .pipe(Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone]))
+  .pipe(Layer.provide(Bundles.layer))
   .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
   .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([])))
 

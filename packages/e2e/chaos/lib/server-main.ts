@@ -1,4 +1,9 @@
 import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
+import { MachineProvider } from "@ren/core/machine-provider"
+import { BrainProvider } from "@ren/core/brain-provider"
+import { SandboxEgress } from "@ren/core/sandbox-egress"
+import { EnvironmentNetwork } from "@ren/core/environment-network"
+import { Bundles } from "@ren/core/bundles"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
@@ -98,7 +103,11 @@ HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
     ChaosModels.layer,
     RenInference.layerConfig.pipe(Layer.provide([Signer.layerLocal, Access.layer])),
-    Environments.layer.pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer])),
+    Environments.layer.pipe(
+      Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
+      Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
+    ),
+    Layer.effect(BrainProvider.Registry, MachineProvider.registry<never, never>([])),
     Integrations.layer.pipe(Layer.provide(Signer.layerLocal)),
   ]),
   Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal, GitHubApp.layerNone, SlackApp.layerNone)),

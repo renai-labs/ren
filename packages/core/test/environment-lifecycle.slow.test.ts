@@ -1,4 +1,7 @@
 import { FetchHttpClient } from "effect/http"
+import { SandboxEgress } from "../src/sandbox-egress.js"
+import { EnvironmentNetwork } from "../src/environment-network.js"
+import { Bundles } from "../src/bundles.js"
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { Shared } from "@ren/cell/testing"
 import type { StubModel } from "@ren/cell/testing"
@@ -115,6 +118,7 @@ const stackOf = async (config: CoreConfig) => {
     },
     models,
     environments: Environments.layer
+      .pipe(Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]))
       .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
       .pipe(Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)]))),
   }).pipe(

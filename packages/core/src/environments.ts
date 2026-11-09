@@ -138,8 +138,8 @@ export const layer = Layer.effect(
     })
     const database = yield* Database.Service
     const registry = yield* EnvironmentProvider.Registry
-    // oxlint-disable-next-line ren/no-comments -- A remote hand goes through the egress as a brain does, with its own proxy login, so its processes get placeholders that work (C2). A Ren without the service runs no egress.
-    const sandboxEgress = Option.getOrElse(yield* Effect.serviceOption(SandboxEgress.Service), () => SandboxEgress.none)
+    // oxlint-disable-next-line ren/no-comments -- A remote hand goes through the egress as a brain does, with its own proxy login, so its processes get placeholders that work (C2).
+    const sandboxEgress = yield* SandboxEgress.Service
     const isBehindEgress = (provider: MachineProvider.Provider) => sandboxEgress.enabled && provider.canEgress
     const sandboxVariables = yield* Deployment.sandboxVariables
     // oxlint-disable-next-line ren/no-comments -- EN42: a chat's folder on a remote hand is fixed when the chat starts, from the provider's workspace.
@@ -269,8 +269,8 @@ export const layer = Layer.effect(
     }, Observability.Trace.environmentAssign)
 
     const http = yield* HttpClient.HttpClient
-    const code = yield* Effect.serviceOption(Bundles.Service)
-    const network = yield* Effect.serviceOption(EnvironmentNetwork.Service)
+    const code = yield* Bundles.Service
+    const network = yield* EnvironmentNetwork.Service
     const renUrl = yield* Config.option(Config.String("REN_URL"))
     const renHost = Option.toArray(Option.flatMap(renUrl, (url) => Option.fromNullishOr(URL.parse(url)?.hostname)))
 
@@ -369,22 +369,17 @@ export const layer = Layer.effect(
       retire: (environmentId) => sandboxEgress.retire({ kind: "hand", id: environmentId }),
       variables: Effect.fnUntraced(function* (row) {
         const keys = yield* signingKeys
-        const bundles = Option.isSome(code)
-          ? Option.all(yield* Effect.forEach(["dependencies", "executor"] as const, code.value.current))
-          : Option.none()
+        const bundles = Option.all(yield* Effect.forEach(["dependencies", "executor"] as const, code.current))
         return {
           ...ExecutorVariables.make(row.id, keys.publicKeys),
           ...sandboxVariables({ "ren.organization.id": row.organization_id, "ren.space.id": row.space_id }),
           REN_HAND: "1",
           ...Option.match(renUrl, { onNone: () => ({}), onSome: (url) => ({ REN_URL: url }) }),
-          ...(Option.isSome(bundles) &&
-            Option.isSome(code) && {
-              REN_BUNDLES: (yield* Effect.forEach(bundles.value, (bundle) =>
-                Effect.map(code.value.token(bundle), (token) =>
-                  [bundle.kind, bundle.version, bundle.sha256, token].join(":"),
-                ),
-              )).join(" "),
-            }),
+          ...(Option.isSome(bundles) && {
+            REN_BUNDLES: (yield* Effect.forEach(bundles.value, (bundle) =>
+              Effect.map(code.token(bundle), (token) => [bundle.kind, bundle.version, bundle.sha256, token].join(":")),
+            )).join(" "),
+          }),
         }
       }),
       wants: Effect.fnUntraced(function* (row) {
@@ -401,9 +396,10 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)).at(0)
         if (!template)
           return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.Wanted
-        const hosts = Option.isSome(network)
-          ? yield* network.value.hostsOf({ kind: "hand", id: row.id, generation: row.generation }, template.networking)
-          : Option.none()
+        const hosts = yield* network.hostsOf(
+          { kind: "hand", id: row.id, generation: row.generation },
+          template.networking,
+        )
         return {
           config: template.config,
           image: Option.map(

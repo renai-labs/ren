@@ -1,4 +1,7 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
+import { SandboxEgress } from "../src/sandbox-egress.js"
+import { EnvironmentNetwork } from "../src/environment-network.js"
+import { Bundles } from "../src/bundles.js"
 import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
@@ -471,6 +474,7 @@ describe("BrainHost pull", () => {
               ]),
               (probes) => {
                 const environments = Environments.layer.pipe(
+                  Layer.provide([EnvironmentNetwork.layerNone, Bundles.layer]),
                   Layer.provide([Signer.layerLocal, FetchHttpClient.layer, TestSandboxEgress.layer]),
                   Layer.provide(EnvironmentProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
                 )
@@ -600,7 +604,12 @@ describe("BrainHost environments", () => {
       Host.cellLayer(
         { CELL_URL: cellUrl },
         fixed,
-        Layer.fresh(Environments.layer.pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))).pipe(
+        Layer.fresh(
+          Environments.layer.pipe(
+            Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
+            Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
+          ),
+        ).pipe(
           Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
           Layer.provide(
             ConfigProvider.layer(

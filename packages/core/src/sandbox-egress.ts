@@ -19,9 +19,10 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SandboxEgress") {}
 
-export const none = Service.of({ proxyFor: () => Effect.succeedNone, retire: () => Effect.void, enabled: false })
-
-export const layerNone = Layer.succeed(Service, none)
+export const layerNone = Layer.succeed(
+  Service,
+  Service.of({ proxyFor: () => Effect.succeedNone, retire: () => Effect.void, enabled: false }),
+)
 
 // oxlint-disable-next-line ren/no-comments -- A machine, a brain's or a remote hand's, sends all its traffic through the egress with a proxy login of its generation (C2). A resume reuses the login; a replace retires it at once, so a sandbox whose destroy failed gets nothing while the next one waits (C40, §8 Replace).
 export const layer = Layer.effect(

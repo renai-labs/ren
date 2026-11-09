@@ -1,5 +1,6 @@
 import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
 import { BrainProvider } from "@ren/core/brain-provider"
+import { MachineProvider } from "@ren/core/machine-provider"
 import { Access } from "@ren/core/access"
 import { CredentialCallers } from "@ren/core/credential-callers"
 import { CredentialRefresh } from "@ren/core/credential-refresh"
@@ -91,12 +92,14 @@ const environmentNetwork = EnvironmentNetwork.layer.pipe(Layer.provide(AppResolv
 // oxlint-disable-next-line ren/no-comments -- Remote hands need what brains need: the egress, Ren's code and the host list of their template.
 const environments = Environments.layer.pipe(Layer.provide([sandboxEgress, Bundles.layer, environmentNetwork]))
 
-const host = Layer.unwrap(
+// oxlint-disable-next-line ren/no-comments -- The deployment's brain providers (EN2). A Ren whose brains run in cells registers none, so a space's provider checks pass.
+const brainProviders = Layer.unwrap(
   Effect.gen(function* () {
     const provider = yield* Config.Literals(["local", "e2b", "cell"], "SANDBOX_PROVIDER").pipe(
       Config.withDefault("local"),
     )
-    if (provider === "cell") return BrainHost.layerCell
+    if (provider === "cell") return Layer.effect(BrainProvider.Registry, MachineProvider.registry<never, never>([]))
+    if (provider === "e2b") return BrainProvider.layer([E2BSandbox.provider])
     const root = yield* Config.String("LOCAL_BRAIN_ROOT").pipe(Config.withDefault(join(tmpdir(), "ren-brains")))
     const entry = yield* Config.String("LOCAL_BRAIN_ENTRY").pipe(
       Config.withDefault(join(import.meta.dir, "../../cell/src/bun.ts")),
@@ -105,30 +108,35 @@ const host = Layer.unwrap(
       Config.withDefault(join(import.meta.dir, "../../executor/src/main.ts")),
     )
     const owner = yield* Config.option(Config.Int("LOCAL_BRAIN_OWNER"))
-    return BrainHost.layerSandbox.pipe(
-      Layer.provide(
-        BrainLifecycle.layer.pipe(
-          Layer.provide(sandboxEgress),
-          Layer.provide(Bundles.layer),
-          Layer.provide(environmentNetwork),
-        ),
-      ),
-      Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),
-      Layer.merge(Layer.effectDiscard(ProviderCheck.run.pipe(Effect.orDie))),
-      Layer.provideMerge(
-        provider === "e2b"
-          ? BrainProvider.layer([E2BSandbox.provider])
-          : BrainProvider.layer([
-              LocalSandbox.provider({
-                entry,
-                executor,
-                root,
-                ...Option.match(owner, { onNone: () => ({}), onSome: (pid) => ({ owner: pid }) }),
-              }),
-            ]),
-      ),
-    )
+    return BrainProvider.layer([
+      LocalSandbox.provider({
+        entry,
+        executor,
+        root,
+        ...Option.match(owner, { onNone: () => ({}), onSome: (pid) => ({ owner: pid }) }),
+      }),
+    ])
   }),
+)
+
+const host = Layer.unwrap(
+  Effect.map(
+    Config.Literals(["local", "e2b", "cell"], "SANDBOX_PROVIDER").pipe(Config.withDefault("local")),
+    (provider) =>
+      provider === "cell"
+        ? BrainHost.layerCell
+        : BrainHost.layerSandbox.pipe(
+            Layer.provide(
+              BrainLifecycle.layer.pipe(
+                Layer.provide(sandboxEgress),
+                Layer.provide(Bundles.layer),
+                Layer.provide(environmentNetwork),
+              ),
+            ),
+            Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),
+            Layer.merge(Layer.effectDiscard(ProviderCheck.run.pipe(Effect.orDie))),
+          ),
+  ),
 )
 
 const models = Layer.unwrap(
@@ -203,6 +211,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([models, GitHubApp.layer, Integrations.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
+  Layer.provideMerge(brainProviders),
   Layer.provide(
     Layer.unwrap(
       Effect.map(Config.String("SANDBOX_PROVIDER").pipe(Config.withDefault("local")), (provider) =>
