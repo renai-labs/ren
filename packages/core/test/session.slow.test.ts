@@ -3,8 +3,10 @@ import { BrainToken } from "@ren/host-api/brain-token"
 import { TestToken } from "@ren/brain-runtime/testing"
 import { Database } from "@ren/db/database"
 import { eq } from "drizzle-orm"
+import { Brain } from "@ren/schema/brain"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Option, Schedule } from "effect"
+import { Effect, Option, Schedule, Schema } from "effect"
+import { Brains } from "../src/brains.js"
 import { Session } from "../src/session.js"
 import { Space } from "../src/space.js"
 import { Configured } from "./lib/configured.js"
@@ -144,6 +146,54 @@ describe("Session", () => {
           ),
         ).toBe("ready")
         expect((yield* sessions.prepare(grace, team.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+      }),
+  )
+
+  it.live(
+    "a chat whose brain failed before it started starts with its first message after a Retry that sends no message, as the app's does",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const spaces = yield* Space.Service
+        const database = yield* Database.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* Configured.member(organizationId)
+        const team = yield* spaces.create(ada, { name: "Team" })
+        const brainId = Brain.ID.create()
+        yield* database.db.insert(Database.Schema.brain).values({
+          id: brainId,
+          organization_id: organizationId,
+          space_id: team.id,
+          scope: "space",
+          phase: "failed",
+          failures: 3,
+          failure: "the template is broken",
+          run_epoch: 1,
+        })
+        const script = Configured.stub.script()
+        const id = Session.ID.create()
+        yield* sessions.create(ada, {
+          id,
+          spaceId: team.id,
+          message: { id: SessionMessage.ID.create(), text: `plan ${script.marker}` },
+        })
+        const stored = (yield* database.db
+          .select({ start: Database.Schema.agent_session.start_input })
+          .from(Database.Schema.agent_session)
+          .where(eq(Database.Schema.agent_session.id, id))).at(0)?.start
+        const execution = yield* Brains.StartRun.executionId(
+          yield* Schema.decodeUnknownEffect(Brains.StartRun.payloadSchema)({
+            input: stored,
+            placement: { organizationId, spaceId: team.id, brainId },
+            epoch: 1,
+          }),
+        )
+        yield* Brains.StartRun.poll(execution).pipe(
+          Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("100 millis") }),
+          Effect.timeout("20 seconds"),
+        )
+        yield* sessions.retry(ada, id, undefined)
+        expect((yield* Effect.promise(() => script.called())).text).toContain(script.marker)
       }),
   )
 })

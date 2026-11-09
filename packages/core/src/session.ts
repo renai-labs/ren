@@ -538,20 +538,23 @@ export const layer = Layer.effect(
       ) {
         const row = yield* read(actor, id, actions.retry)
         yield* brain.retry(id)
-        if (!message || row.opencode) return
+        // oxlint-disable-next-line ren/no-comments -- A chat that never reached its brain starts again; without a message, with the first message it was created with.
+        if (row.opencode) return
         const start = yield* Schema.decodeUnknownEffect(Session.StartInput)(
           row.session.start_input ?? { sessionId: id, harness: row.session.harness },
         ).pipe(Effect.orDie)
         yield* brain
           .start(
-            {
-              ...start,
-              initialMessage: {
-                messageId: Session.MessageID.make(message.id),
-                prompt: { text: message.text, ...(message.files && { files: message.files }) },
-                sender: { userId: actor.userId, memberId: yield* memberOf(actor) },
-              },
-            },
+            message
+              ? {
+                  ...start,
+                  initialMessage: {
+                    messageId: Session.MessageID.make(message.id),
+                    prompt: { text: message.text, ...(message.files && { files: message.files }) },
+                    sender: { userId: actor.userId, memberId: yield* memberOf(actor) },
+                  },
+                }
+              : start,
             { organizationId: actor.organizationId, spaceId: row.session.space_id, brainId: row.session.brain_id },
           )
           .pipe(Effect.catchTag("BrainRejectedError", Effect.die))
