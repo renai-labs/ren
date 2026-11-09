@@ -27,7 +27,7 @@ import { Signer } from "../src/signer.js"
 
 const probe = await Effect.runPromise(TestProvider.make())
 
-// oxlint-disable-next-line ren/no-comments -- A build of the "built" provider waits until the test opens the gate of its label; a label that starts with "broken" fails.
+// oxlint-disable-next-line ren/no-comments -- A build of the "built" provider runs until the test opens the gate of its label; a label that starts with "broken" fails.
 const started = await Effect.runPromise(Queue.unbounded<string>())
 const gates = new Map<string, Deferred.Deferred<void>>()
 const gate = (label: string) => {
@@ -39,14 +39,16 @@ const built = await Effect.runPromise(
   TestProvider.make({
     id: "built",
     canLimitHosts: true,
-    build: (config) =>
-      Effect.gen(function* () {
-        yield* Queue.offer(started, config.label)
-        yield* Deferred.await(gate(config.label))
-        if (config.label.startsWith("broken"))
-          return yield* new MachineProvider.Failed({ message: `${config.label} does not build` })
-        return `image-${config.label}`
-      }),
+    build: {
+      start: (config) =>
+        Queue.offer(started, config.label).pipe(Effect.as({ _tag: "Building", id: config.label } as const)),
+      status: (label) =>
+        Effect.map(Deferred.isDone(gate(label)), (isDone): MachineProvider.BuildState => {
+          if (!isDone) return { _tag: "Building", id: label }
+          if (label.startsWith("broken")) return { _tag: "Failed", reason: `${label} does not build` }
+          return { _tag: "Ready", image: `image-${label}` }
+        }),
+    },
   }),
 )
 
@@ -77,6 +79,7 @@ const it = testEffect(
     Layer.provide(
       ConfigProvider.layer(
         ConfigProvider.fromUnknown({
+          ENVIRONMENT_TEMPLATE_BUILD_CHECK: "20 millis",
           ENVIRONMENT_KEYS: JSON.stringify([
             { id: key.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.privateKey.key) },
           ]),
@@ -385,6 +388,35 @@ describe("EnvironmentTemplates", () => {
       const made = yield* templates.create(setup.admin, { ...builtInput(label), networking: limited })
       expect(made.networking).toEqual(limited)
       expect(yield* Queue.take(started)).toBe(label)
+    }),
+  )
+
+  it.live("a Ren restart during a build asks about that build, and starts no second one (EN30)", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const setup = yield* team()
+      const label = `running-${crypto.randomUUID()}`
+      const id = EnvironmentTemplate.ID.create()
+      yield* database.db.insert(Database.Schema.environment_template).values({
+        id,
+        organization_id: setup.organizationId,
+        name: "Running",
+        provider: EnvironmentProvider.ID.make("built"),
+        config: { label },
+        sessions_per_environment: 8,
+        build_status: "building",
+        config_version: 3,
+        build_id: label,
+        build_version: 3,
+      })
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* Layer.build(Layer.fresh(EnvironmentTemplates.layer))
+          yield* Deferred.succeed(gate(label), undefined)
+          expect(yield* settled(id, setup.admin)).toMatchObject({ buildStatus: "ready", image: `image-${label}` })
+        }),
+      )
+      expect(yield* Queue.clear(started)).not.toContain(label)
     }),
   )
 

@@ -5,6 +5,7 @@ import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { and, asc, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
 import {
   Cause,
+  Config,
   Context,
   DateTime,
   Duration,
@@ -13,13 +14,11 @@ import {
   Layer,
   Option,
   Predicate,
-  Result,
+  Schedule,
   Schema,
-  Semaphore,
 } from "effect"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
-import { DurableRunner } from "./durable-runner.js"
 import { EnvironmentProvider } from "./environment-provider.js"
 import { MachineProvider } from "./machine-provider.js"
 import { Primitive } from "./primitive.js"
@@ -31,14 +30,6 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/En
 const notFound = new Primitive.NotFound({ message: "Environment template not found." })
 
 const table = Database.Schema.environment_template
-
-// oxlint-disable-next-line ren/no-comments -- One run per saved config (EN30): a key that finished never runs again, so each save gets the next config_version.
-const BuildRun = DurableRunner.make("EnvironmentTemplateBuild", {
-  payload: { environmentTemplateId: EnvironmentTemplate.ID, configVersion: Schema.Int },
-  idempotencyKey: (payload) => `environment-template-build:${payload.environmentTemplateId}:${payload.configVersion}`,
-})
-
-const buildWithin = Duration.minutes(45)
 
 const sameConfig = Schema.toEquivalence(Schema.Json)
 
@@ -106,58 +97,75 @@ export const layer = Layer.effect(
 
     const buildOf = (provider: EnvironmentProvider.ID) => Option.flatMap(registry.get(provider), (found) => found.build)
 
-    // oxlint-disable-next-line ren/no-comments -- EN30: one build at a time per template, so a save during a build waits. A build counts only while the template still has the config of its version. One Ren server runs the builds (EN31).
-    const locks = new Map<EnvironmentTemplate.ID, Semaphore.Semaphore>()
-    const build = Effect.fn("EnvironmentTemplates.build")(function* (payload: typeof BuildRun.payloadSchema.Type) {
-      const lock = locks.get(payload.environmentTemplateId) ?? Semaphore.makeUnsafe(1)
-      locks.set(payload.environmentTemplateId, lock)
-      yield* lock.withPermit(
-        Effect.gen(function* () {
-          const current = and(
-            eq(table.id, payload.environmentTemplateId),
-            eq(table.config_version, payload.configVersion),
-            isNull(table.archived_at),
-          )
-          const row = (yield* database.db.select().from(table).where(current).pipe(Effect.orDie)).at(0)
-          const builder = Option.flatMap(Option.fromNullishOr(row), (found) => buildOf(found.provider))
-          if (!row || Option.isNone(builder)) return
-          yield* database.db.update(table).set({ build_status: "building" }).where(current).pipe(Effect.orDie)
-          const result = yield* builder.value({ environmentTemplateId: row.id, config: row.config }).pipe(
-            Effect.timeoutOrElse({
-              duration: buildWithin,
-              orElse: () =>
-                Effect.fail(
-                  new MachineProvider.Failed({
-                    message: `The build did not end within ${Duration.format(buildWithin)}`,
-                  }),
-                ),
-            }),
-            Effect.result,
-          )
-          yield* database.db
-            .update(table)
-            .set(
-              Result.isSuccess(result)
-                ? { build_status: "ready", image: result.success, image_config: row.config, build_error: null }
-                : { build_status: "failed", build_error: result.failure.message },
-            )
-            .where(current)
-            .pipe(Effect.orDie)
-          // oxlint-disable-next-line ren/no-comments -- EN38: a failed build reaches PostHog with its reason.
-          if (Result.isFailure(result))
-            yield* ErrorReporter.report(Cause.fail(result.failure)).pipe(
-              Effect.annotateLogs({
-                "ren.environment_template.id": row.id,
-                "ren.organization.id": row.organization_id,
-              }),
-            )
-        }),
+    // oxlint-disable-next-line ren/no-comments -- A build's end counts only while the template still has the config it built (EN30); otherwise Ren forgets the build, and the newest config builds next.
+    const finish = Effect.fnUntraced(function* (
+      row: typeof table.$inferSelect,
+      version: number,
+      values: Partial<typeof table.$inferInsert>,
+    ) {
+      const counted = yield* database.db
+        .update(table)
+        .set({ ...values, build_id: null, build_version: null })
+        .where(and(eq(table.id, row.id), eq(table.config_version, version)))
+        .returning({ id: table.id })
+        .pipe(Effect.orDie)
+      if (counted.length === 0)
+        yield* database.db
+          .update(table)
+          .set({ build_id: null, build_version: null })
+          .where(eq(table.id, row.id))
+          .pipe(Effect.orDie)
+    })
+
+    const record = Effect.fnUntraced(function* (
+      row: typeof table.$inferSelect,
+      version: number,
+      state: MachineProvider.BuildState,
+    ) {
+      if (state._tag === "Building") {
+        yield* database.db
+          .update(table)
+          .set({ build_status: "building", build_id: state.id, build_version: version })
+          .where(and(eq(table.id, row.id), eq(table.config_version, version), isNull(table.build_id)))
+          .pipe(Effect.orDie)
+        return
+      }
+      if (state._tag === "Ready") {
+        yield* finish(row, version, {
+          build_status: "ready",
+          image: state.image,
+          image_config: row.config,
+          build_error: null,
+        })
+        return
+      }
+      yield* finish(row, version, { build_status: "failed", build_error: state.reason })
+      // oxlint-disable-next-line ren/no-comments -- EN38: a failed build reaches PostHog with its reason.
+      yield* ErrorReporter.report(Cause.fail(new MachineProvider.Failed({ message: state.reason }))).pipe(
+        Effect.annotateLogs({ "ren.environment_template.id": row.id, "ren.organization.id": row.organization_id }),
       )
     })
-    const queueBuild = yield* DurableRunner.supervised(BuildRun, build)
-    // oxlint-disable-next-line ren/no-comments -- Templates rule 3: at start, a template left queued or building gets its build again; a run that still exists does nothing new.
+
+    // oxlint-disable-next-line ren/no-comments -- EN30: the provider owns each build; Ren keeps its id and asks. One build at a time per template: a template with a build in progress asks about it; one queued without one starts its newest config. A Ren restart finds the build it started. One Ren server runs this (EN31).
+    const checkBuild = Effect.fnUntraced(function* (row: typeof table.$inferSelect) {
+      const builder = buildOf(row.provider)
+      if (Option.isNone(builder)) return
+      // ast-grep-ignore: no-nullish-comparison, -- version 0 is the first config's.
+      if (row.build_id && row.build_version !== null) {
+        yield* record(row, row.build_version, yield* builder.value.status(row.build_id))
+        return
+      }
+      const started = yield* builder.value
+        .start({ environmentTemplateId: row.id, config: row.config })
+        .pipe(Effect.catch((error) => Effect.succeed({ _tag: "Failed", reason: error.message } as const)))
+      yield* record(row, row.config_version, started)
+    })
+
+    const checkEvery = yield* Config.Duration("ENVIRONMENT_TEMPLATE_BUILD_CHECK").pipe(
+      Config.withDefault(Duration.seconds(10)),
+    )
     yield* database.db
-      .select({ id: table.id, configVersion: table.config_version })
+      .select()
       .from(table)
       .where(and(isNull(table.archived_at), inArray(table.build_status, ["queued", "building"])))
       .pipe(
@@ -165,12 +173,16 @@ export const layer = Layer.effect(
         Effect.flatMap((rows) =>
           Effect.forEach(
             rows,
-            (row) => queueBuild({ environmentTemplateId: row.id, configVersion: row.configVersion }),
-            {
-              discard: true,
-            },
+            (row) =>
+              checkBuild(row).pipe(
+                Effect.catch((error) => Effect.logWarning(`The build of template ${row.id} is unknown`, error)),
+              ),
+            { discard: true },
           ),
         ),
+        Effect.repeat(Schedule.spaced(checkEvery)),
+        Effect.withErrorReporting,
+        Effect.forkScoped,
       )
 
     const findForUpdate = Effect.fnUntraced(function* (
@@ -283,7 +295,6 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         const row = rows.at(0)
         if (!row) return yield* notFound
-        if (isBuilt) yield* queueBuild({ environmentTemplateId: row.id, configVersion: row.config_version })
         return toInfo(row)
       }),
       update: Effect.fn("EnvironmentTemplates.update")(function* (
@@ -324,8 +335,6 @@ export const layer = Layer.effect(
             return { row, isRebuilt }
           }),
         )
-        if (saved.isRebuilt)
-          yield* queueBuild({ environmentTemplateId: saved.row.id, configVersion: saved.row.config_version })
         return toInfo(saved.row)
       }),
       archive: Effect.fn("EnvironmentTemplates.archive")(function* (actor: Actor.Info, id: EnvironmentTemplate.ID) {

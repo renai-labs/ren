@@ -254,7 +254,7 @@ describe("E2BSandbox template builds", () => {
   const buildOf = Effect.map(BrainProvider.first, (provider) => Option.getOrThrow(provider.build))
 
   it.live(
-    "a build starts from the system image with one RUN per package manager and per build command; the same config again gives its image at once (templates rule 4)",
+    "a build starts from the system image with one RUN per package manager and per build command and returns at once; its status gives the image; the same config again is ready at once (templates rule 4, EN30)",
     () =>
       Effect.gen(function* () {
         const build = yield* buildOf
@@ -267,8 +267,9 @@ describe("E2BSandbox template builds", () => {
         }
         seen.length = 0
         builds.status = "ready"
-        const image = yield* build({ environmentTemplateId, config })
-        expect(image).toMatch(/^ren-template-01abcdefghjkmnpqrstvwxyz00:[0-9a-f]{16}$/)
+        const started = yield* build.start({ environmentTemplateId, config })
+        if (started._tag !== "Building") return yield* Effect.die(new Error(`started as ${started._tag}`))
+        expect(seen.some((request) => request.path.endsWith("/status"))).toBe(false)
         const requested = seen.find((request) => request.path === "/v3/templates")
         expect(JSON.parse(requested?.body ?? "{}")).toMatchObject({ cpuCount: 4, memoryMB: 4096 })
         const steps = JSON.parse(
@@ -283,22 +284,28 @@ describe("E2BSandbox template builds", () => {
           ],
           ["echo ready > ~/ready", "user"],
         ])
+        const ready = yield* build.status(started.id)
+        expect(ready).toMatchObject({
+          _tag: "Ready",
+          image: expect.stringMatching(/^ren-template-01abcdefghjkmnpqrstvwxyz00:[0-9a-f]{16}$/),
+        })
         seen.length = 0
-        expect(yield* build({ environmentTemplateId, config })).toBe(image)
+        expect(yield* build.start({ environmentTemplateId, config })).toEqual(ready)
         expect(seen.some((request) => request.path === "/v3/templates")).toBe(false)
       }),
   )
 
-  it.live("a failed build fails with E2B's reason and the last lines of its log (templates rule 3)", () =>
+  it.live("a failed build's status gives E2B's reason and the last lines of its log (templates rule 3)", () =>
     Effect.gen(function* () {
       const build = yield* buildOf
       builds.status = "error"
-      const failed = yield* build({
+      const started = yield* build.start({
         environmentTemplateId: EnvironmentTemplate.ID.make("tpl_01ABCDEFGHJKMNPQRSTVWXYZ01"),
         config: { packages: { apt: ["nope"] } },
-      }).pipe(Effect.flip)
+      })
+      const failed = started._tag === "Building" ? yield* build.status(started.id) : started
       builds.status = "ready"
-      expect(failed.message).toBe("step 2 failed\nE: Unable to locate package nope")
+      expect(failed).toEqual({ _tag: "Failed", reason: "step 2 failed\nE: Unable to locate package nope" })
     }),
   )
 })

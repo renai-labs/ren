@@ -6,7 +6,7 @@ import { Auth } from "@ren/schema/auth"
 import { Identifier } from "@ren/schema/identifier"
 import { Space } from "@ren/schema/space"
 import { Workload } from "@ren/schema/workload"
-import { Config, DateTime, Duration, Effect, Option, Redacted, Schedule, Schema } from "effect"
+import { Config, DateTime, Duration, Effect, Option, Redacted, Schema } from "effect"
 import { HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import { EnvironmentProvider } from "../environment-provider.js"
 import { MachineProvider } from "../machine-provider.js"
@@ -125,6 +125,9 @@ const Tags = Schema.Array(Schema.Struct({ tag: Schema.String }))
 
 const Requested = Schema.Struct({ templateID: Schema.String, buildID: Schema.String })
 
+// oxlint-disable-next-line ren/no-comments -- A build's id for Ren: E2B's ids and the image it makes.
+const Started = Schema.Struct({ ...Requested.fields, image: Schema.String })
+
 const BuildStatus = Schema.Struct({
   status: Schema.String,
   reason: Schema.optional(
@@ -136,8 +139,6 @@ const BuildStatus = Schema.Struct({
     ),
   ),
 })
-
-const buildCheckedEvery = Duration.seconds(5)
 
 const logLinesShown = 8
 
@@ -192,6 +193,11 @@ const stepsBetween = (from: typeof TemplateConfig.Type, to: typeof TemplateConfi
 
 const failed = (operation: string) => (error: { readonly message: string }) =>
   new MachineProvider.Failed({ message: `E2B ${operation}: ${error.message}` })
+
+const decode =
+  <A>(operation: string, schema: Schema.Codec<A, unknown>) =>
+  (text: string) =>
+    Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(text).pipe(Effect.mapError(failed(operation)))
 
 const quote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`
 
@@ -396,73 +402,76 @@ export const provider = Effect.gen(function* () {
       return { url: urlOf(binding) }
     }),
     // oxlint-disable-next-line ren/no-comments -- The image is a tag of the template's own E2B template, named by a hash of the system image and the config, so a config built before gives its image at once.
-    build: Effect.fn("E2BSandbox.build")(function* (input) {
-      const name = `ren-template-${Identifier.suffix(input.environmentTemplateId).toLowerCase()}`
-      const tag = new Bun.CryptoHasher("sha256")
-        .update(`${config.template}\0${JSON.stringify(input.config)}`)
-        .digest("hex")
-        .slice(0, 16)
-      const decode =
-        <A>(operation: string, schema: Schema.Codec<A, unknown>) =>
-        (text: string) =>
-          Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(text).pipe(Effect.mapError(failed(operation)))
-      const tags = yield* send("tags", HttpClientRequest.get(`/templates/${name}/tags`))
-      if (
-        tags.status === 200 &&
-        (yield* tags.text.pipe(Effect.mapError(failed("tags")), Effect.flatMap(decode("tags", Tags)))).some(
-          (existing) => existing.tag === tag,
+    build: {
+      start: Effect.fn("E2BSandbox.build.start")(function* (input) {
+        const name = `ren-template-${Identifier.suffix(input.environmentTemplateId).toLowerCase()}`
+        const tag = new Bun.CryptoHasher("sha256")
+          .update(`${config.template}\0${JSON.stringify(input.config)}`)
+          .digest("hex")
+          .slice(0, 16)
+        const image = `${name}:${tag}`
+        const tags = yield* send("tags", HttpClientRequest.get(`/templates/${name}/tags`))
+        if (
+          tags.status === 200 &&
+          (yield* tags.text.pipe(Effect.mapError(failed("tags")), Effect.flatMap(decode("tags", Tags)))).some(
+            (existing) => existing.tag === tag,
+          )
         )
-      )
-        return `${name}:${tag}`
-      const requested = yield* send(
-        "build",
-        HttpClientRequest.post("/v3/templates").pipe(
-          HttpClientRequest.bodyJsonUnsafe({
-            name,
-            tags: [tag],
-            cpuCount: input.config.cpuCount,
-            memoryMB: input.config.memoryMiB,
-          }),
-        ),
-      ).pipe(
-        Effect.flatMap((response) => strict("build", response)),
-        Effect.flatMap(decode("build", Requested)),
-      )
-      const build = `/templates/${requested.templateID}/builds/${requested.buildID}`
-      yield* send(
-        "build",
-        HttpClientRequest.post(`/v2${build}`).pipe(
-          HttpClientRequest.bodyJsonUnsafe({
-            fromTemplate: config.template,
-            steps: stepsOf(input.config).map((step) => ({
-              type: "RUN",
-              args: [step.command, step.user],
+          return { _tag: "Ready", image } as const
+        const requested = yield* send(
+          "build",
+          HttpClientRequest.post("/v3/templates").pipe(
+            HttpClientRequest.bodyJsonUnsafe({
+              name,
+              tags: [tag],
+              cpuCount: input.config.cpuCount,
+              memoryMB: input.config.memoryMiB,
+            }),
+          ),
+        ).pipe(
+          Effect.flatMap((response) => strict("build", response)),
+          Effect.flatMap(decode("build", Requested)),
+        )
+        yield* send(
+          "build",
+          HttpClientRequest.post(`/v2/templates/${requested.templateID}/builds/${requested.buildID}`).pipe(
+            HttpClientRequest.bodyJsonUnsafe({
+              fromTemplate: config.template,
+              steps: stepsOf(input.config).map((step) => ({
+                type: "RUN",
+                args: [step.command, step.user],
+                force: false,
+              })),
+              startCmd: startCommand,
+              readyCmd: `pgrep -f ${startCommand}`,
               force: false,
-            })),
-            startCmd: startCommand,
-            readyCmd: `pgrep -f ${startCommand}`,
-            force: false,
-          }),
-        ),
-      ).pipe(Effect.flatMap((response) => strict("build", response)))
-      const finished = yield* send("build status", HttpClientRequest.get(`${build}/status`)).pipe(
-        Effect.flatMap((response) => strict("build status", response)),
-        Effect.flatMap(decode("build status", BuildStatus)),
-        Effect.repeat({
-          schedule: Schedule.spaced(buildCheckedEvery),
-          until: (status) => status.status === "ready" || status.status === "error",
-        }),
-      )
+            }),
+          ),
+        ).pipe(Effect.flatMap((response) => strict("build", response)))
+        return { _tag: "Building", id: JSON.stringify({ ...requested, image }) } as const
+      }),
       // oxlint-disable-next-line ren/no-comments -- The last lines of the build log say which package or command failed; the admin sees them as the template's build error.
-      if (finished.status === "error")
-        return yield* new MachineProvider.Failed({
-          message: [
-            finished.reason?.message ?? "The build failed",
-            ...(finished.reason?.logEntries ?? []).slice(-logLinesShown).map((entry) => entry.message),
-          ].join("\n"),
-        })
-      return `${name}:${tag}`
-    }),
+      status: Effect.fn("E2BSandbox.build.status")(function* (id) {
+        const build = yield* decode("build", Started)(id)
+        const response = yield* send(
+          "build status",
+          HttpClientRequest.get(`/templates/${build.templateID}/builds/${build.buildID}/status`),
+        )
+        if (response.status === 404)
+          return { _tag: "Failed", reason: "E2B no longer knows this build; save the template again" } as const
+        const found = yield* strict("build status", response).pipe(Effect.flatMap(decode("build status", BuildStatus)))
+        if (found.status === "ready") return { _tag: "Ready", image: build.image } as const
+        if (found.status === "error")
+          return {
+            _tag: "Failed",
+            reason: [
+              found.reason?.message ?? "The build failed",
+              ...(found.reason?.logEntries ?? []).slice(-logLinesShown).map((entry) => entry.message),
+            ].join("\n"),
+          } as const
+        return { _tag: "Building", id } as const
+      }),
+    },
     keepAlive: Effect.fn("E2BSandbox.keepAlive")(function* (binding, duration) {
       const response = yield* send(
         "timeout",

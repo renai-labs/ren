@@ -62,6 +62,19 @@ interface BuildInput<Config> {
   readonly config: Config
 }
 
+// oxlint-disable-next-line ren/no-comments -- EN30: the provider owns each image build. Ren keeps the id of a build in progress and asks for its state; it never waits on one.
+export type BuildState =
+  | { readonly _tag: "Building"; readonly id: string }
+  | { readonly _tag: "Ready"; readonly image: string }
+  | { readonly _tag: "Failed"; readonly reason: string }
+
+interface Build<Config> {
+  // oxlint-disable-next-line ren/no-comments -- Starts the image of a template's config. A config built before is Ready at once.
+  readonly start: (input: BuildInput<Config>) => Effect.Effect<BuildState, Failed>
+  // oxlint-disable-next-line ren/no-comments -- The state of a build that start gave. Failed, the error, means the provider did not answer; Ren asks again.
+  readonly status: (id: string) => Effect.Effect<BuildState, Failed>
+}
+
 export interface Created {
   readonly binding: Schema.Json
   readonly url: string
@@ -131,8 +144,7 @@ interface Definition<Config, Binding> {
   readonly destroy: (binding: Binding) => Effect.Effect<void, Failed>
   // oxlint-disable-next-line ren/no-comments -- Sends a running machine its new host list (networking rule 4).
   readonly updateNetwork?: (binding: Binding, network: Network) => Effect.Effect<void, Gone | Failed>
-  // oxlint-disable-next-line ren/no-comments -- Builds the image of a template's config and gives its name. Two builds of one config give one image.
-  readonly build?: (input: BuildInput<Config>) => Effect.Effect<string, Failed>
+  readonly build?: Build<Config>
   // oxlint-disable-next-line ren/no-comments -- The steps that bring a machine made from one config to another in place, or none when only a new machine can (EN22).
   readonly stepsBetween?: (from: Config, to: Config) => Option.Option<ReadonlyArray<Step>>
   readonly keepAlive?: (binding: Binding, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
@@ -161,7 +173,7 @@ export interface Provider {
   ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
   readonly updateNetwork: (binding: Schema.Json, network: Network) => Effect.Effect<void, Gone | Failed>
-  readonly build: Option.Option<(input: BuildInput<Schema.Json>) => Effect.Effect<string, Failed>>
+  readonly build: Option.Option<Build<Schema.Json>>
   readonly stepsBetween: (from: Schema.Json, to: Schema.Json) => Option.Option<ReadonlyArray<Step>>
   readonly keepAlive: (binding: Schema.Json, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly status: (binding: Schema.Json) => Effect.Effect<Status, Failed>
@@ -250,11 +262,14 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
         (found) => found.steps(found.from, found.to),
       )
     },
-    build: Option.map(
-      Option.fromUndefinedOr(definition.build),
-      (build) => (input: BuildInput<Schema.Json>) =>
-        stored(config, "config")(input.config).pipe(Effect.flatMap((decoded) => build({ ...input, config: decoded }))),
-    ),
+    build: Option.map(Option.fromUndefinedOr(definition.build), (build) => ({
+      start: (input: BuildInput<Schema.Json>) =>
+        stored(
+          config,
+          "config",
+        )(input.config).pipe(Effect.flatMap((decoded) => build.start({ ...input, config: decoded }))),
+      status: build.status,
+    })),
     keepAlive: (value, duration) =>
       keepAlive ? storedBinding(value).pipe(Effect.flatMap((found) => keepAlive(found, duration))) : Effect.void,
     status: (value) =>

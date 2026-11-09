@@ -33,6 +33,9 @@ export const environment_template = pgTable(
     build_error: text(),
     // oxlint-disable-next-line ren/no-comments -- Each saved config gets the next number; a build counts only while the template still has the config of its number (EN30).
     config_version: integer().notNull().default(0),
+    // oxlint-disable-next-line ren/no-comments -- The provider's id of the build in progress, and the config_version it builds (EN30). Null when none runs.
+    build_id: text(),
+    build_version: integer(),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),

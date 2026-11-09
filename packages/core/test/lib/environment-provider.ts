@@ -26,7 +26,10 @@ export const make = (
     readonly canMount?: boolean
     readonly canColocate?: boolean
     readonly canLimitHosts?: boolean
-    readonly build?: (config: typeof Config.Type) => Effect.Effect<string, MachineProvider.Failed>
+    readonly build?: {
+      readonly start: (config: typeof Config.Type) => Effect.Effect<MachineProvider.BuildState, MachineProvider.Failed>
+      readonly status: (id: string) => Effect.Effect<MachineProvider.BuildState, MachineProvider.Failed>
+    }
     readonly endpoint?: (environmentId: Environment.ID) => Effect.Effect<{ readonly url: string }, MachineProvider.Gone>
     readonly creating?: Effect.Effect<void>
   } = {},
@@ -73,7 +76,12 @@ export const make = (
       keepAlive: (binding) => Ref.update(keptAlive, (all) => [...all, binding.environmentId]),
       status: (binding) =>
         Effect.map(Ref.get(gone), (all) => (all.has(binding.environmentId) ? ("gone" as const) : ("running" as const))),
-      ...(build && { build: (input: { readonly config: typeof Config.Type }) => build(input.config) }),
+      ...(build && {
+        build: {
+          start: (input: { readonly config: typeof Config.Type }) => build.start(input.config),
+          status: build.status,
+        },
+      }),
     })
     return { provisions, destroyed, gone, failing, networks, keptAlive, provider } satisfies Probe
   })

@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "b5224875-1d13-4894-9e33-d2c9f74c0985",
+  "id": "7d039550-20cb-435d-8057-f46c84dd4e5d",
   "prevIds": [
     "25fa7af1-4a88-4205-9ff4-91cf142a5db4"
   ],
@@ -5608,6 +5608,32 @@
       "generated": null,
       "identity": null,
       "name": "config_version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "environment_template"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "build_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "environment_template"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "build_version",
       "entityType": "columns",
       "schema": "public",
       "table": "environment_template"
