@@ -38,7 +38,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const signer = yield* Signer.Service
     const directory = yield* Config.option(Config.String("REN_BUNDLES"))
-    // oxlint-disable-next-line ren/no-comments -- At start, the bundles this server was built with become current, unless another server already set a later build (EN29).
+    // oxlint-disable-next-line ren/no-comments -- At start, the bundles this server was built with become current when they are a later build (EN29), or when this server has no file for the current one: after a rollback, machines must still get code that a running server serves.
     const built = yield* Option.match(directory, {
       onNone: () => Effect.succeed(Option.none<Bundle.Manifest>()),
       onSome: (path) =>
@@ -67,7 +67,10 @@ export const layer = Layer.effect(
                 sha256: sql`excluded.sha256`,
                 built_at: sql`excluded.built_at`,
               },
-              setWhere: sql`${bundles.built_at} < excluded.built_at`,
+              setWhere: sql`${bundles.built_at} < excluded.built_at or ${bundles.version} not in (${sql.join(
+                built.value.bundles.map((each) => sql`${each.version}`),
+                sql`, `,
+              )})`,
             })
             .pipe(Effect.orDie),
         { discard: true },

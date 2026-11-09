@@ -45,7 +45,7 @@ const server = Effect.fnUntraced(function* (manifest: Bundle.Manifest) {
 
 describe("Bundles", () => {
   it.live(
-    "a server moves the current bundles only to a later build, so an older server never moves them back (EN29, chaos row 17)",
+    "a later build moves the current bundles forward; a server rolled back to an earlier build moves them to the one it has (EN29, chaos row 17)",
     () =>
       Effect.gen(function* () {
         const older = {
@@ -56,13 +56,17 @@ describe("Bundles", () => {
           builtAt: DateTime.makeUnsafe("2026-11-06T11:00:00Z"),
           bundles: [info("brain", "bbbbbbbbbbbbbbbb")],
         }
-        const current = Effect.map(
-          Effect.flatMap(server(older), (found) => found.bundles.current("brain")),
-          Option.map((found) => found.version),
-        )
-        expect(yield* current).toEqual(Option.some("aaaaaaaaaaaaaaaa"))
-        yield* server(newer)
-        expect(yield* current).toEqual(Option.some("bbbbbbbbbbbbbbbb"))
+        const current = (manifest: Bundle.Manifest) =>
+          Effect.map(
+            Effect.flatMap(server(manifest), (found) => found.bundles.current("brain")),
+            Option.map((found) => found.version),
+          )
+        expect([yield* current(older), yield* current(newer), yield* current(newer), yield* current(older)]).toEqual([
+          Option.some("aaaaaaaaaaaaaaaa"),
+          Option.some("bbbbbbbbbbbbbbbb"),
+          Option.some("bbbbbbbbbbbbbbbb"),
+          Option.some("aaaaaaaaaaaaaaaa"),
+        ])
       }),
   )
 
