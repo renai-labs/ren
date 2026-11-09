@@ -16,12 +16,26 @@ const archives = new Map<string, Uint8Array>()
 
 const requests: Array<string> = []
 
+// oxlint-disable-next-line ren/no-comments -- A download of a held path waits until the test releases it; `arrived` has one promise per request, which resolves when that request arrives.
+const held = new Map<
+  string,
+  {
+    readonly arrived: readonly [PromiseWithResolvers<void>, PromiseWithResolvers<void>]
+    readonly released: Promise<void>
+  }
+>()
+
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
-  fetch: (request) => {
+  fetch: async (request) => {
     const path = new URL(request.url).pathname
     requests.push(path)
+    const hold = held.get(path)
+    if (hold) {
+      hold.arrived[requests.filter((each) => each === path).length - 1]?.resolve()
+      await hold.released
+    }
     const body = archives.get(path)
     if (!body || request.headers.get("authorization") !== `Bearer ${token}`) return new Response(null, { status: 404 })
     return new Response(body)
@@ -120,6 +134,36 @@ describe("start.sh prepare", () => {
     const seen = await readFile(join(home, ".ren/executor.env"), "utf8")
     expect(seen).toContain(`REN_URL=${server.url.origin}`)
     expect(seen).not.toContain("REN_BUNDLES")
+  })
+
+  test("a second prepare waits until the first one ends, and downloads nothing", async () => {
+    const home = await mkdtemp(join(work, "home-"))
+    expect(await prepare(home, [dependencies, brain, executor])).toBe(0)
+    const slow = await bundle("brain", "b5", { "packages/brain-runtime/src/bun.ts": "export const slow = 5" })
+    const released = Promise.withResolvers<void>()
+    const arrived = [Promise.withResolvers<void>(), Promise.withResolvers<void>()] as const
+    held.set("/host/bundles/brain/b5", { arrived, released: released.promise })
+    const first = prepare(home, [dependencies, slow, executor])
+    await arrived[0].promise
+    const second = Bun.spawn(["sh", start, "prepare", [dependencies, slow, executor].join(" ")], {
+      env: { HOME: home, REN_URL: server.url.origin, PATH: process.env.PATH },
+      stdout: "ignore",
+      stderr: "pipe",
+    })
+    const reader = second.stderr.getReader()
+    const decoder = new TextDecoder()
+    // oxlint-disable-next-line ren/no-comments -- Ends when the second prepare says that it waits, or when it ends.
+    const waits = async (text: string): Promise<void> => {
+      if (text.includes("waits")) return
+      const chunk = await reader.read()
+      if (!chunk.done) return waits(text + decoder.decode(chunk.value))
+    }
+    await Promise.race([waits(""), arrived[1].promise])
+    released.resolve()
+    expect(await first).toBe(0)
+    expect(await second.exited).toBe(0)
+    expect(requests.filter((path) => path === "/host/bundles/brain/b5")).toEqual(["/host/bundles/brain/b5"])
+    expect(await readFile(join(home, ".ren/brain.version"), "utf8")).toBe("b5-d1\n")
   })
 
   test("an archive that does not match its sha256 fails the prepare and changes nothing", async () => {

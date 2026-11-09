@@ -58,7 +58,30 @@ remove_unused() {
   done
 }
 
+# One prepare at a time: Ren can send the next update while a slow download of
+# the last one still runs. mkdir is atomic; a lock whose process is gone is free.
 prepare() {
+  lock="$code/.lock"
+  mkdir -p "$code" || return 1
+  said=""
+  until mkdir "$lock" 2>/dev/null; do
+    holder=$(cat "$lock/pid" 2>/dev/null || true)
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
+      rm -rf "$lock"
+    else
+      [ -n "$said" ] || echo "Another prepare runs; this one waits" >&2
+      said=1
+      sleep 1
+    fi
+  done
+  echo "$$" >"$lock/pid"
+  prepare_locked "$1"
+  status=$?
+  rm -rf "$lock"
+  return "$status"
+}
+
+prepare_locked() {
   kept=$(versions)
   dependencies=""
   for bundle in $1; do
