@@ -178,6 +178,32 @@ describe("start.sh prepare", () => {
     expect(await readFile(join(home, ".ren/brain.version"), "utf8")).toBe("b6-d1\n")
   })
 
+  test("a brain made for remote hands starts no executor of its own", async () => {
+    const home = await mkdtemp(join(work, "home-"))
+    const bin = join(home, "bin")
+    await mkdir(join(home, ".ren"), { recursive: true })
+    await Bun.write(
+      join(home, ".ren/brain.env"),
+      `REN_URL=${server.url.origin}\nREN_HAND_PLACEMENT=remote\nREN_BUNDLES='${[dependencies, brain, executor].join(" ")}'\n`,
+    )
+    // oxlint-disable-next-line ren/no-comments -- A fake bun records what it starts and removes both versions, so each loop of start.sh ends.
+    await Bun.write(
+      join(bin, "bun"),
+      `#!/bin/sh\necho "$1" >>"$HOME/.ren/started"\nrm -f "$HOME/.ren/brain.version" "$HOME/.ren/executor.version"\n`,
+    )
+    await Bun.$`chmod +x ${join(bin, "bun")}`
+    await Bun.spawn(["sh", start], {
+      env: { HOME: home, PATH: `${bin}:${process.env.PATH}` },
+      stdout: "ignore",
+      stderr: "ignore",
+    }).exited
+    const started = await readFile(join(home, ".ren/started"), "utf8")
+    expect([started.includes("brain-runtime/src/bun.ts"), started.includes("executor/src/main.ts")]).toEqual([
+      true,
+      false,
+    ])
+  })
+
   test("an archive that does not match its sha256 fails the prepare and changes nothing", async () => {
     const home = await mkdtemp(join(work, "home-"))
     expect(await prepare(home, [dependencies, brain, executor])).toBe(0)

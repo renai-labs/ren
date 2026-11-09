@@ -186,8 +186,9 @@ Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, c
 3. Built: a brain made for a remote hand (`brain.hand_placement`, `REN_HAND_PLACEMENT=remote`) runs OpenCode's `ToolOutput`, `FileSystem`, `Vcs` and `Snapshot` on the hand (`brain-runtime/src/harness/opencode/workspace-driver.ts`, EN13, EN14). A change of the space's hand to or from remote replaces the brain at its wake.
 4. A chat's tools run on its space's current hand (2026-11-09). A message that starts a turn of an idle chat moves the chat to it first (`Environments.follow`, from `Brains.send`); a chat never moves mid-turn. A background process on the old hand stops when its seat goes, and a revert to a message from before the move restores no files.
 5. On a remote hand, `Vcs` gives the branches and the diff only; its status, branch list and review base are empty.
-6. Built: Ren waits up to 5 s for a chat's hand (`Environments.startingAfter`), under the 10 s for which its server keeps a quiet connection. A hand that takes longer answers `EnvironmentStartingError`, and the brain asks again every 2 s for up to 3 min (`HostAccess.handStartsWithin`). A chat's first tool call waits while a new hand starts; it does not fail.
-7. Built: on a remote hand, snapshots are a git store per repository in `$XDG_DATA_HOME/ren/snapshot` on the hand (`brain-runtime/src/harness/opencode/snapshot.ts`). As with OpenCode's own, a revert finds file changes only in a git repository. Unlike OpenCode's, the store is never packed.
+6. Built: a brain made for a remote hand starts no executor of its own (`start.sh`), and Ren offers no hand on its machine (`BrainLifecycle.hand`).
+7. Built: Ren waits up to 5 s for a chat's hand (`Environments.startingAfter`), under the 10 s for which its server keeps a quiet connection. A hand that takes longer answers `EnvironmentStartingError`, and the brain asks again every 2 s for up to 3 min (`HostAccess.handStartsWithin`). A chat's first tool call waits while a new hand starts; it does not fail.
+8. Built: on a remote hand, snapshots are a git store per repository in `$XDG_DATA_HOME/ren/snapshot` on the hand (`brain-runtime/src/harness/opencode/snapshot.ts`). As with OpenCode's own, a revert finds file changes only in a git repository. Unlike OpenCode's, the store is never packed.
 
 ### Keep-alive and detection
 
@@ -291,3 +292,5 @@ Follow [`references/naming.md`](references/naming.md). The repository's `AGENTS.
 8. A feature list in `executor.hello`, and a tool list built from it.
 9. UDP DNS to `8.8.8.8` leaves outside the firewall and the egress (E2B docs). Close it with `dnsServers` and a resolver that Ren runs.
 10. A memory alarm for the server. Infra has no notification target yet (no SNS topic), so an alarm would tell no one.
+11. Scale: brains light and many, hands heavy and on demand. Today one E2B sandbox runs each brain. For thousands of brains (one per chat, `brainScope: session`): a dense brain provider (many brain processes per host, item 6), more than one Ren server (item 3), and pulls that stay cheap (each pull already reads host lists only in a space that has a `limited` template or a machine with a list).
+12. More than one hand per chat: bind a chat to named hands (`session_environment` keyed by chat and hand), and give each extra hand its own tools that call the Environment API. The chat's first hand keeps OpenCode's workspace. The executor, the egress and `MachineLifecycle` stay as they are.

@@ -700,7 +700,8 @@ export const layer = Layer.effect(
       }),
       hand: Effect.fn("BrainLifecycle.hand")(function* (brainId: Brain.ID) {
         const row = yield* read(brainId)
-        if (!row.binding) return Option.none()
+        // oxlint-disable-next-line ren/no-comments -- A brain made for remote hands runs no executor, so its own machine is no hand.
+        if (!row.binding || row.hand_placement === "remote") return Option.none()
         const provider = yield* providerOf(row)
         return Option.some({
           ...(yield* provider.hand(row.binding).pipe(Effect.orDie)),

@@ -184,16 +184,20 @@ fi
 # brains from outside the machine.
 executor_host=127.0.0.1
 if [ -n "${REN_HAND:-}" ]; then executor_host=0.0.0.0; fi
-(
-  export PORT="${EXECUTOR_PORT:-4100}" EXECUTOR_HOST="$executor_host" EXECUTOR_WORKSPACE="$home/workspace"
-  while true; do
-    tree=$(cat "$home/.ren/executor.version")
-    tools bun "$code/executor/$tree/packages/executor/src/main.ts" >>"$home/.ren/executor.log" 2>&1 &
-    echo "$!" >"$home/.ren/executor.pid"
-    wait "$!" || echo "$?" >"$home/.ren/executor.exit"
-    sleep 1
-  done
-) &
+# A brain made for remote hands (REN_HAND_PLACEMENT=remote) runs the tools of
+# its chats on other machines, so it starts no executor of its own.
+if [ "${REN_HAND_PLACEMENT:-}" != remote ] || [ -n "${REN_HAND:-}" ]; then
+  (
+    export PORT="${EXECUTOR_PORT:-4100}" EXECUTOR_HOST="$executor_host" EXECUTOR_WORKSPACE="$home/workspace"
+    while true; do
+      tree=$(cat "$home/.ren/executor.version")
+      tools bun "$code/executor/$tree/packages/executor/src/main.ts" >>"$home/.ren/executor.log" 2>&1 &
+      echo "$!" >"$home/.ren/executor.pid"
+      wait "$!" || echo "$?" >"$home/.ren/executor.exit"
+      sleep 1
+    done
+  ) &
+fi
 if [ -n "${REN_HAND:-}" ]; then
   wait
   exit 0
