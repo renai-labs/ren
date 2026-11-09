@@ -29,7 +29,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm"
+import { and, eq, inArray, isNotNull, isNull, not } from "drizzle-orm"
 import { Cause, Clock, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schedule, Schema, Struct } from "effect"
 import { HttpClientError } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
@@ -47,6 +47,7 @@ import { Memory } from "./memory.js"
 import { Models } from "./models.js"
 import { Settings } from "./settings.js"
 import { SessionPolicy } from "./session/policy.js"
+import { OpenCodeStore } from "./session/opencode-store.js"
 import { SpaceQueries } from "./space/queries.js"
 
 export {
@@ -347,6 +348,24 @@ export const layer = Layer.effect(
     const send = Effect.fn("Brains.send")(function* (input: Session.SendInput) {
       yield* validatePrompt(input.prompt)
       const session = yield* brainOf(input.sessionId)
+      // oxlint-disable-next-line ren/no-comments -- A chat's tools run on its space's current hand: a message that starts a turn moves the chat first, never one sent during a turn. The brain dropped its connection when the last turn ended.
+      const isIdle =
+        (yield* database.db
+          .select({ id: Database.Schema.agent_session.id })
+          .from(Database.Schema.agent_session)
+          .where(
+            and(
+              eq(Database.Schema.agent_session.id, input.sessionId),
+              not(OpenCodeStore.isBusy(Database.Schema.agent_session.id)),
+            ),
+          )
+          .pipe(Effect.orDie)).length > 0
+      if (isIdle)
+        yield* environments.follow({
+          sessionId: input.sessionId,
+          organizationId: session.organizationId,
+          spaceId: session.spaceId,
+        })
       const target = yield* brainHost.target(session.brainId).pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
       const api = yield* client.brain(target)
       return yield* call(

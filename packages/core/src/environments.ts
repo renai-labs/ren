@@ -81,6 +81,8 @@ export interface Interface {
     hand: Option.Option<Hand>,
   ) => Effect.Effect<ReadonlyMap<Session.ID, Capability>>
   readonly unbind: (subject: Subject) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- A chat's tools run on its space's current hand (2026-11-09): binds the chat to the space's remote template, or unbinds it for the brain's own machine or none.
+  readonly follow: (placement: Subject & Placement) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- EN15: `unreachable` when the brain could not reach the session's hand at its last URL; Ren checks that machine first.
   readonly access: (
     subject: Subject,
@@ -546,35 +548,37 @@ export const layer = Layer.effect(
       } satisfies Environment.Access
     })
 
-    return Service.of({
-      bind: Effect.fn("Environments.bind")(function* (
-        placement: Subject & Placement,
-        environmentTemplateId: EnvironmentTemplate.ID,
-      ) {
-        const provider = yield* checkAvailable(placement, environmentTemplateId)
-        const inserted = yield* database.db
-          .insert(sessions)
-          .values({
-            session_id: placement.sessionId,
-            space_id: placement.spaceId,
-            environment_template_id: environmentTemplateId,
-          })
-          .onConflictDoNothing()
-          .returning({ session_id: sessions.session_id })
-          .pipe(Effect.orDie)
-        if (inserted.length > 0) return { directory: directoryOf(provider, placement.sessionId), isNew: true }
-        const existing = yield* database.db
-          .select({ environment_template_id: sessions.environment_template_id, space_id: sessions.space_id })
-          .from(sessions)
-          .where(eq(sessions.session_id, placement.sessionId))
-          .pipe(Effect.orDie)
-        const found = existing.at(0)
-        if (found?.environment_template_id === environmentTemplateId && found.space_id === placement.spaceId)
-          return { directory: directoryOf(provider, placement.sessionId), isNew: false }
-        return yield* new Changed({
-          message: `Session ${placement.sessionId} cannot change its environment template or space: not supported yet`,
+    const bind = Effect.fn("Environments.bind")(function* (
+      placement: Subject & Placement,
+      environmentTemplateId: EnvironmentTemplate.ID,
+    ) {
+      const provider = yield* checkAvailable(placement, environmentTemplateId)
+      const inserted = yield* database.db
+        .insert(sessions)
+        .values({
+          session_id: placement.sessionId,
+          space_id: placement.spaceId,
+          environment_template_id: environmentTemplateId,
         })
-      }),
+        .onConflictDoNothing()
+        .returning({ session_id: sessions.session_id })
+        .pipe(Effect.orDie)
+      if (inserted.length > 0) return { directory: directoryOf(provider, placement.sessionId), isNew: true }
+      const existing = yield* database.db
+        .select({ environment_template_id: sessions.environment_template_id, space_id: sessions.space_id })
+        .from(sessions)
+        .where(eq(sessions.session_id, placement.sessionId))
+        .pipe(Effect.orDie)
+      const found = existing.at(0)
+      if (found?.environment_template_id === environmentTemplateId && found.space_id === placement.spaceId)
+        return { directory: directoryOf(provider, placement.sessionId), isNew: false }
+      return yield* new Changed({
+        message: `Session ${placement.sessionId} cannot change its environment template or space: not supported yet`,
+      })
+    })
+
+    return Service.of({
+      bind,
       findDirectory: Effect.fn("Environments.findDirectory")(function* (subject: Subject, hand: Option.Option<Hand>) {
         if (Option.isSome(hand) && !(yield* isBound(subject)))
           return Option.some(handDirectory(hand.value, subject.sessionId))
@@ -620,6 +624,29 @@ export const layer = Layer.effect(
             return Option.isSome(capability) ? [[sessionId, capability.value] as const] : []
           }),
         )
+      }),
+      follow: Effect.fn("Environments.follow")(function* (placement: Subject & Placement) {
+        const space = (yield* database.db
+          .select({
+            placement: Database.Schema.space.hand_placement,
+            templateId: Database.Schema.space.environment_template_id,
+          })
+          .from(Database.Schema.space)
+          .where(eq(Database.Schema.space.id, placement.spaceId))
+          .pipe(Effect.orDie)).at(0)
+        const wanted = space?.placement === "remote" ? space.templateId : null
+        const bound =
+          (yield* database.db
+            .select({ templateId: sessions.environment_template_id })
+            .from(sessions)
+            .where(isSessionOf(placement))
+            .pipe(Effect.orDie)).at(0)?.templateId ?? null
+        if (bound === wanted) return
+        if (bound) yield* database.db.delete(sessions).where(isSessionOf(placement)).pipe(Effect.orDie)
+        if (wanted)
+          yield* bind(placement, wanted).pipe(
+            Effect.catch((error) => Effect.logWarning(`Session ${placement.sessionId} keeps no hand`, error)),
+          )
       }),
       unbind: Effect.fn("Environments.unbind")(function* (subject: Subject) {
         yield* database.db.delete(sessions).where(isSessionOf(subject)).pipe(Effect.orDie)
