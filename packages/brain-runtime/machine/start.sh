@@ -12,10 +12,12 @@ sha256() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
 
+# A 404 is retried too: during a deploy, a server that does not have the bundle
+# yet can answer, and the next request can reach one that has it.
 download() {
   mkdir -p "$code/downloads"
   archive="$code/downloads/$1-$2.tar.gz"
-  curl -fsS --retry 3 --connect-timeout 10 --max-time 600 -H "Authorization: Bearer $4" "$REN_URL/host/bundles/$1/$2" -o "$archive.part" || return 1
+  curl -fsS --retry 3 --retry-all-errors --connect-timeout 10 --max-time 600 -H "Authorization: Bearer $4" "$REN_URL/host/bundles/$1/$2" -o "$archive.part" || return 1
   if [ "$(sha256 "$archive.part")" != "$3" ]; then
     rm -f "$archive.part"
     echo "The bundle $1 $2 does not match its sha256" >&2

@@ -25,12 +25,16 @@ const held = new Map<
   }
 >()
 
+// oxlint-disable-next-line ren/no-comments -- Paths that answer 404 once, as a Ren server without the bundle does during a deploy.
+const missingOnce = new Set<string>()
+
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
   fetch: async (request) => {
     const path = new URL(request.url).pathname
     requests.push(path)
+    if (missingOnce.delete(path)) return new Response(null, { status: 404 })
     const hold = held.get(path)
     if (hold) {
       hold.arrived[requests.filter((each) => each === path).length - 1]?.resolve()
@@ -164,6 +168,14 @@ describe("start.sh prepare", () => {
     expect(await second.exited).toBe(0)
     expect(requests.filter((path) => path === "/host/bundles/brain/b5")).toEqual(["/host/bundles/brain/b5"])
     expect(await readFile(join(home, ".ren/brain.version"), "utf8")).toBe("b5-d1\n")
+  })
+
+  test("a download that reaches a server without the bundle asks again", async () => {
+    const home = await mkdtemp(join(work, "home-"))
+    const next = await bundle("brain", "b6", { "packages/brain-runtime/src/bun.ts": "export const next = 6" })
+    missingOnce.add("/host/bundles/brain/b6")
+    expect(await prepare(home, [dependencies, next, executor])).toBe(0)
+    expect(await readFile(join(home, ".ren/brain.version"), "utf8")).toBe("b6-d1\n")
   })
 
   test("an archive that does not match its sha256 fails the prepare and changes nothing", async () => {
