@@ -33,7 +33,6 @@ export const timing = {
   stuck: Duration.minutes(30),
   // oxlint-disable-next-line ren/no-comments -- EN25: a background process keeps a machine awake until this long after its last turn's progress.
   background: Duration.hours(2),
-  accessMargin: Duration.minutes(2),
   poll: Duration.seconds(1),
   probeTimeout: Duration.seconds(3),
   sampleMaxAge: Duration.seconds(60),
@@ -536,16 +535,6 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       retry_at: null,
     })
 
-  const touch = Effect.fnUntraced(function* (row: R) {
-    yield* update(row.id, { last_active_at: yield* now })
-    yield* keepAlive(row, timing.idle).pipe(
-      Effect.catchTag("MachineProvider.Gone", () =>
-        update(row.id, { phase: "replacing" }).pipe(Effect.andThen(ensure(row.id))),
-      ),
-      Effect.catch((error) => Effect.logWarning("keepAlive failed", error)),
-    )
-  })
-
   const access = Effect.fn(`${name}.access`)(function* (id: Id): Effect.fn.Return<MachineAccess.Access<Target>> {
     const row = yield* read(id)
     const at = yield* now
@@ -556,10 +545,12 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       row.keep_alive_until &&
       row.keep_alive_until.getTime() > at.getTime()
     ) {
-      yield* touch(
-        row.keep_alive_until.getTime() - at.getTime() <= Duration.toMillis(timing.accessMargin)
-          ? { ...row, keep_alive_until: null }
-          : row,
+      yield* update(row.id, { last_active_at: at })
+      yield* keepAlive(row, timing.idle).pipe(
+        Effect.catchTag("MachineProvider.Gone", () =>
+          update(row.id, { phase: "replacing" }).pipe(Effect.andThen(ensure(row.id))),
+        ),
+        Effect.catch((error) => Effect.logWarning("keepAlive failed", error)),
       )
       return { _tag: "Ready", target: target.value } as const
     }
