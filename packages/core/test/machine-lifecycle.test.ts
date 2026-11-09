@@ -32,6 +32,7 @@ const kind = Effect.gen(function* () {
     boots: false,
     answers: true,
     connects: true,
+    alive: true,
     capacity: false,
     outdated: "current" as "current" | "update" | "replace",
     updates: true,
@@ -85,6 +86,8 @@ const kind = Effect.gen(function* () {
           })
         : Effect.fail(new MachineProvider.Failed({ message: "the provider answered 500" })),
     destroy: (binding) => Effect.sync(() => destroyed.push(binding.number)),
+    keepAlive: () =>
+      switches.alive ? Effect.void : Effect.fail(new MachineProvider.Gone({ message: "the sandbox is gone" })),
     status: () => Effect.succeed("running" as const),
   })
   const read = (id: string) => Effect.sync(() => rows.get(id)).pipe(Effect.flatMap(Effect.fromNullishOr), Effect.orDie)
@@ -207,6 +210,23 @@ describe("MachineLifecycle", () => {
       expect(yield* memory.read(id)).toMatchObject({ phase: "failed", failures: 3 })
       expect(reports.filter((report) => report.includes("MachineLifecycle.Failed"))).toHaveLength(1)
     }),
+  )
+
+  it.effect(
+    "an access that finds the machine gone while extending its keep-alive answers Starting, not its old url",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kind
+        memory.switches.alive = false
+        const now = yield* Clock.currentTimeMillis
+        const id = memory.add({
+          phase: "ready",
+          binding: { number: 1 },
+          url: "http://machine-1.test",
+          keep_alive_until: new Date(now + Duration.toMillis(Duration.minutes(1))),
+        })
+        expect(yield* memory.machines.access(id)).toEqual({ _tag: "Starting", phase: "replacing" })
+      }),
   )
 
   it.effect("the Retry button starts a failed machine at once, and the timed retries count from 10 min again", () =>

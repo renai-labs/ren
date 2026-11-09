@@ -546,12 +546,14 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       row.keep_alive_until.getTime() > at.getTime()
     ) {
       yield* update(row.id, { last_active_at: at })
-      yield* keepAlive(row, timing.idle).pipe(
+      const isAlive = yield* keepAlive(row, timing.idle).pipe(
+        Effect.as(true),
         Effect.catchTag("MachineProvider.Gone", () =>
-          update(row.id, { phase: "replacing" }).pipe(Effect.andThen(ensure(row.id))),
+          update(row.id, { phase: "replacing" }).pipe(Effect.andThen(ensure(row.id)), Effect.as(false)),
         ),
-        Effect.catch((error) => Effect.logWarning("keepAlive failed", error)),
+        Effect.catch((error) => Effect.logWarning("keepAlive failed", error).pipe(Effect.as(true))),
       )
+      if (!isAlive) return { _tag: "Starting", phase: "replacing" } as const
       return { _tag: "Ready", target: target.value } as const
     }
     if (row.phase === "failed" && !(row.retry_at && row.retry_at.getTime() <= at.getTime()))
