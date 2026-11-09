@@ -55,6 +55,7 @@ export const brain = pgTable(
     retries: integer().notNull().default(0),
     // oxlint-disable-next-line ren/no-comments -- EN17: the first check that found the brain silent while its machine runs.
     unanswered_since: timestamp(),
+    network_hosts: jsonb().$type<ReadonlyArray<string>>(),
     last_progress_at: timestamp(),
     last_pulled_at: timestamp(),
     lost_at: timestamp(),

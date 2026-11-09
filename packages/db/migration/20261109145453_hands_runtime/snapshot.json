@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "0af6abf6-6e9b-48ae-b3fe-00e016fefffb",
+  "id": "b5224875-1d13-4894-9e33-d2c9f74c0985",
   "prevIds": [
     "25fa7af1-4a88-4205-9ff4-91cf142a5db4"
   ],
@@ -3455,6 +3455,19 @@
       "table": "brain"
     },
     {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "network_hosts",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "brain"
+    },
+    {
       "type": "timestamp",
       "typeSchema": null,
       "notNull": false,
@@ -5400,6 +5413,19 @@
       "generated": null,
       "identity": null,
       "name": "unanswered_since",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "environment"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "network_hosts",
       "entityType": "columns",
       "schema": "public",
       "table": "environment"

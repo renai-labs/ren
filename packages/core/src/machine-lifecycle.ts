@@ -68,6 +68,8 @@ export interface Row<Id extends string> {
   readonly retry_at: Date | null
   readonly retries: number
   readonly unanswered_since: Date | null
+  // oxlint-disable-next-line ren/no-comments -- The host list the provider last got for the machine; null for any host.
+  readonly network_hosts: ReadonlyArray<string> | null
 }
 
 export interface TemplateConfig {
@@ -271,6 +273,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       image: desiredImage(desired, provider),
       image_template: Option.match(desired.image, { onNone: () => null, onSome: (image) => image.template }),
       egress: Option.isSome(proxy),
+      network_hosts: Option.getOrNull(desired.hosts),
       url: created.value.url,
       phase: "booting",
       keep_alive_until: new Date((yield* now).getTime() + Duration.toMillis(Duration.minutes(10))),
@@ -327,7 +330,11 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       yield* report(row, new Replaced({ message: `${noun} ${row.id} is gone at its wake` }))
       return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
     }
-    yield* update(row.id, { url: connected.url, keep_alive_until: null })
+    yield* update(row.id, {
+      url: connected.url,
+      keep_alive_until: null,
+      network_hosts: Option.getOrNull(desired.hosts),
+    })
     yield* keepAlive({ ...row, keep_alive_until: null }, timing.idle)
     const code = yield* definition.changeAtWake(row)
     if (code === "replace")
@@ -572,8 +579,25 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     return { _tag: "Starting", phase: shown[row.phase] ?? row.phase } as const
   })
 
+  // oxlint-disable-next-line ren/no-comments -- Networking rule 4: an awake machine gets its owner's new host list at once, and the provider hears nothing while the list is the same. A paused one gets it at its wake.
+  const refreshNetwork = Effect.fn(`${name}.refreshNetwork`)(function* (id: Id) {
+    const row = yield* read(id)
+    const at = yield* now
+    if (!row.binding || row.phase !== "ready" || !(row.keep_alive_until && row.keep_alive_until > at)) return
+    const desired = yield* definition.desiredSetup(row)
+    const hosts = Option.getOrNull(desired.hosts)
+    if (JSON.stringify(hosts) === JSON.stringify(row.network_hosts)) return
+    const provider = yield* definition.providerOf(row)
+    yield* provider.updateNetwork(row.binding, { proxy: yield* proxyOf(row, provider), hosts: desired.hosts }).pipe(
+      Effect.andThen(update(row.id, { network_hosts: hosts })),
+      Effect.catch((error) => Effect.logWarning(`${noun} ${row.id} did not get its new host list`, error)),
+      annotate(row),
+    )
+  })
+
   const lifecycle = {
     run,
+    refreshNetwork,
     keepAwake,
     forceReplace,
     rest,

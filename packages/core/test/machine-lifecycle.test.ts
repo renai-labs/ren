@@ -86,6 +86,7 @@ const kind = Effect.gen(function* () {
           })
         : Effect.fail(new MachineProvider.Failed({ message: "the provider answered 500" })),
     destroy: (binding) => Effect.sync(() => destroyed.push(binding.number)),
+    updateNetwork: (_binding, network) => Effect.sync(() => void networks.push(network.hosts)),
     keepAlive: () =>
       switches.alive ? Effect.void : Effect.fail(new MachineProvider.Gone({ message: "the sandbox is gone" })),
     status: () => Effect.succeed("running" as const),
@@ -163,6 +164,7 @@ const kind = Effect.gen(function* () {
       retry_at: null,
       retries: 0,
       unanswered_since: null,
+      network_hosts: null,
       ...values,
     })
     return id
@@ -435,6 +437,31 @@ describe("MachineLifecycle updates", () => {
           Option.none(),
         ])
         expect(memory.steps).toEqual([])
+      }),
+  )
+
+  it.effect(
+    "an awake machine gets a changed host list at once, and the provider hears nothing when it did not change (networking rule 4)",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kind
+        memory.switches.boots = true
+        memory.switches.wanted = { config: {}, image: Option.none(), hosts: Option.some(["api.example.com"]) }
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        yield* memory.machines.refreshNetwork(id)
+        memory.switches.wanted = {
+          config: {},
+          image: Option.none(),
+          hosts: Option.some(["api.example.com", "github.com"]),
+        }
+        yield* memory.machines.refreshNetwork(id)
+        yield* memory.machines.refreshNetwork(id)
+        expect(memory.networks).toEqual([
+          Option.some(["api.example.com"]),
+          Option.some(["api.example.com", "github.com"]),
+        ])
+        expect((yield* memory.read(id)).network_hosts).toEqual(["api.example.com", "github.com"])
       }),
   )
 })

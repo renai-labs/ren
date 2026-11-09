@@ -24,7 +24,7 @@ export const packageManagerHosts = [
 ]
 
 export interface Interface {
-  // oxlint-disable-next-line ren/no-comments -- None for unrestricted networking; for limited, every host the machine of the workload may reach, Ren's own included (networking rule 1).
+  // oxlint-disable-next-line ren/no-comments -- None for unrestricted networking; for limited, every host the machine of the workload may reach, Ren's own included, sorted so that two lists compare (networking rule 1).
   readonly hostsOf: (
     workload: Workload.Info,
     networking: EnvironmentTemplate.Networking,
@@ -55,7 +55,7 @@ export const layerNone = Layer.effect(
       hostsOf: (_workload, networking) =>
         Effect.succeed(
           networking.type === "limited"
-            ? Option.some([...new Set([...ofTemplate(networking), ...server])])
+            ? Option.some([...new Set([...ofTemplate(networking), ...server])].toSorted())
             : Option.none(),
         ),
     })
@@ -108,14 +108,16 @@ export const layer = Layer.effect(
       ) {
         if (networking.type === "unrestricted") return Option.none()
         const scope = yield* credentials.scopeOf(workload)
-        return Option.some([
-          ...new Set([
-            ...ofTemplate(networking),
-            ...server,
-            ...(workload.kind === "brain" ? inference : []),
-            ...(Option.isSome(scope) ? yield* ofSpace(scope.value, networking) : []),
-          ]),
-        ])
+        return Option.some(
+          [
+            ...new Set([
+              ...ofTemplate(networking),
+              ...server,
+              ...(workload.kind === "brain" ? inference : []),
+              ...(Option.isSome(scope) ? yield* ofSpace(scope.value, networking) : []),
+            ]),
+          ].toSorted(),
+        )
       }),
     })
   }),

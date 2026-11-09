@@ -88,6 +88,8 @@ export interface Interface {
   ) => Effect.Effect<Environment.Access, NotFound | Unavailable | Starting>
   readonly release: (subject: Subject) => Effect.Effect<void>
   readonly keepAwake: (sessionIds: ReadonlyArray<Session.ID>, lastProgressAt: Date) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- Sends the awake remote hands of a space their new host list (networking rule 4).
+  readonly refreshNetworks: (spaceId: Space.ID) => Effect.Effect<void>
   readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
 }
 
@@ -629,6 +631,14 @@ export const layer = Layer.effect(
           }),
           { discard: true },
         )
+      }),
+      refreshNetworks: Effect.fn("Environments.refreshNetworks")(function* (spaceId: Space.ID) {
+        const awake = yield* database.db
+          .select({ id: environments.id })
+          .from(environments)
+          .where(and(eq(environments.space_id, spaceId), eq(environments.phase, "ready")))
+          .pipe(Effect.orDie)
+        yield* Effect.forEach(awake, (row) => hands.refreshNetwork(row.id), { discard: true })
       }),
       executorVariables: Effect.fn("Environments.executorVariables")(function* (environmentId: Environment.ID) {
         const keys = yield* signingKeys

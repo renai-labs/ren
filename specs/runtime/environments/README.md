@@ -173,7 +173,7 @@ A co-located machine uses the template's last `ready` image while a build runs o
 
 ### Networking
 
-Built: `EnvironmentTemplate.Networking`, and `limited` only on a provider with `canLimitHosts`. `EnvironmentNetwork.hostsOf` makes the host list: `allowedHosts`, the package manager hosts, the hosts of the space's MCP servers, and the named hosts of the credentials the machine's workload can use. A co-located machine's list also has Ren's server and inference (EN40). The provider gets it in `network` at `create` and at every `connect`; E2B sends it as `allowOut` with `denyOut: ["0.0.0.0/0"]` after the resume, and `*.example.com` also allows `example.com`.
+Built: `EnvironmentTemplate.Networking`, and `limited` only on a provider with `canLimitHosts`. `EnvironmentNetwork.hostsOf` makes the host list: `allowedHosts`, the package manager hosts, the hosts of the space's MCP servers, and the named hosts of the credentials the machine's workload can use. A co-located machine's list also has Ren's server and inference (EN40). The provider gets it in `network` at `create` and at every `connect`, and an awake machine gets a changed list at once (`MachineLifecycle.refreshNetwork`, at each pull of its space's brain; a push makes the brain pull right after a change to a connection, a profile or the template's networking); E2B sends it as `allowOut` with `denyOut: ["0.0.0.0/0"]` after the resume, and `*.example.com` also allows `example.com`.
 
 1. The egress keeps only its credential checks.
 

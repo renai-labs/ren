@@ -46,6 +46,7 @@ export interface Interface extends MachineAccess.Interface<Brain.ID, BrainClient
   readonly awake: (brainId: Brain.ID) => Effect.Effect<Option.Option<BrainClient.Target>>
   readonly observe: (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) => Effect.Effect<void>
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Hand>>
+  readonly refreshNetwork: (brainId: Brain.ID) => Effect.Effect<void>
   readonly cleanup: Effect.Effect<void>
   readonly onInterrupted: (listener: (interrupted: Interrupted) => Effect.Effect<void>) => Effect.Effect<void>
 }
@@ -665,6 +666,7 @@ export const layer = Layer.effect(
       retry: machines.retry,
       awake: machines.awake,
       ready: machines.ready,
+      refreshNetwork: machines.refreshNetwork,
       observe: Effect.fn("BrainLifecycle.observe")(function* (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) {
         const row = yield* read(brainId)
         const at = yield* now

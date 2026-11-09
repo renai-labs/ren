@@ -90,6 +90,7 @@ export const environment = pgTable(
     retry_at: timestamp(),
     retries: integer().notNull().default(0),
     unanswered_since: timestamp(),
+    network_hosts: jsonb().$type<ReadonlyArray<string>>(),
     created_at: timestamp().defaultNow().notNull(),
   },
   (table) => [

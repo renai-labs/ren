@@ -332,6 +332,7 @@ export const provider = Effect.gen(function* () {
     config: TemplateConfig,
     binding: Binding,
     stepsBetween,
+    updateNetwork,
     create: Effect.fn("E2BSandbox.create")(function* (input) {
       // oxlint-disable-next-line ren/no-comments -- EN34: the kind label keeps hands apart from brains; Ren reaches a brain at its port and a remote hand at its executor's.
       const metadata = { brain: input.labels.id, generation: String(input.labels.generation), kind: input.labels.kind }

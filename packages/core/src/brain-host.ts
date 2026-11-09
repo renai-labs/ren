@@ -20,6 +20,8 @@ export interface Interface {
   readonly ensure: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: PullRequest["sessions"]) => Effect.Effect<void>
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<BrainLifecycle.Hand>>
+  // oxlint-disable-next-line ren/no-comments -- Sends an awake brain's machine its new host list (networking rule 4). A cell has none.
+  readonly refreshNetwork: (brainId: Brain.ID) => Effect.Effect<void>
   readonly unavailable: (brainId: Brain.ID) => Effect.Effect<void>
   readonly retry: (brainId: Brain.ID) => Effect.Effect<void>
   readonly notify: (brainId: Brain.ID) => Effect.Effect<void>
@@ -85,6 +87,7 @@ export const layerCell = Layer.effect(
       ensure: () => Effect.void,
       observe: () => Effect.void,
       hand: () => Effect.succeedNone,
+      refreshNetwork: () => Effect.void,
       unavailable: () => Effect.void,
       retry: () => Effect.void,
       notify: (brainId) => pushTo(client, brainId, Effect.map(target(brainId), Option.some)),
@@ -105,6 +108,7 @@ export const layerSandbox = Layer.effect(
       ensure: lifecycle.ensure,
       observe: lifecycle.observe,
       hand: lifecycle.hand,
+      refreshNetwork: lifecycle.refreshNetwork,
       unavailable: lifecycle.check,
       retry: lifecycle.retry,
       notify: (brainId) => pushTo(client, brainId, lifecycle.awake(brainId)),

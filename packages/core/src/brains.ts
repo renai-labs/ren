@@ -572,6 +572,9 @@ export const layer = Layer.effect(
         yield* brainHost.observe(host.brainId, request.sessions)
         // oxlint-disable-next-line ren/no-comments -- A pull is the first sign that a new machine is up: the chats that a forced replace marked continue now (EN35, EN36).
         yield* continueMarked(host.brainId)
+        // oxlint-disable-next-line ren/no-comments -- Networking rule 4: a push makes the brain pull at once after a change, so a new connection or allowed host reaches its machines within seconds.
+        yield* brainHost.refreshNetwork(host.brainId)
+        yield* environments.refreshNetworks(host.spaceId)
         const roots = request.roots ?? []
         const kept =
           roots.length === 0

@@ -129,6 +129,8 @@ interface Definition<Config, Binding> {
     network: Network,
   ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly destroy: (binding: Binding) => Effect.Effect<void, Failed>
+  // oxlint-disable-next-line ren/no-comments -- Sends a running machine its new host list (networking rule 4).
+  readonly updateNetwork?: (binding: Binding, network: Network) => Effect.Effect<void, Gone | Failed>
   // oxlint-disable-next-line ren/no-comments -- Builds the image of a template's config and gives its name. Two builds of one config give one image.
   readonly build?: (input: BuildInput<Config>) => Effect.Effect<string, Failed>
   // oxlint-disable-next-line ren/no-comments -- The steps that bring a machine made from one config to another in place, or none when only a new machine can (EN22).
@@ -158,6 +160,7 @@ export interface Provider {
     network: Network,
   ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
+  readonly updateNetwork: (binding: Schema.Json, network: Network) => Effect.Effect<void, Gone | Failed>
   readonly build: Option.Option<(input: BuildInput<Schema.Json>) => Effect.Effect<string, Failed>>
   readonly stepsBetween: (from: Schema.Json, to: Schema.Json) => Option.Option<ReadonlyArray<Step>>
   readonly keepAlive: (binding: Schema.Json, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
@@ -203,6 +206,7 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
   const lastSample = definition.lastSample
   const hand = definition.hand
   const list = definition.list
+  const updateNetwork = definition.updateNetwork
   return {
     info: {
       id: definition.id,
@@ -237,6 +241,8 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
     connect: (value, network) =>
       storedBinding(value).pipe(Effect.flatMap((found) => definition.connect(found, network))),
     destroy: (value) => storedBinding(value).pipe(Effect.flatMap(definition.destroy)),
+    updateNetwork: (value, network) =>
+      updateNetwork ? storedBinding(value).pipe(Effect.flatMap((found) => updateNetwork(found, network))) : Effect.void,
     stepsBetween: (from, to) => {
       const decode = Schema.decodeUnknownOption(config)
       return Option.flatMap(

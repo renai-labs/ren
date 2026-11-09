@@ -119,6 +119,33 @@ describe("ren_notify_brains (HR10, HR23)", () => {
       }),
   )
 
+  it.live(
+    "a change to a template's networking notifies its organization; another change sends nothing (networking rule 4)",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const listener = yield* listening
+        const owner = yield* Seed.owner()
+        const templateId = yield* Seed.environmentTemplate(owner.organizationId)
+        yield* listener.collect
+        const templates = Database.Schema.environment_template
+        yield* database.db.update(templates).set({ name: "Renamed" }).where(eq(templates.id, templateId))
+        expect(yield* listener.collect).toEqual([])
+        yield* database.db
+          .update(templates)
+          .set({
+            networking: {
+              type: "limited",
+              allowPackageManagers: false,
+              allowMcpServers: false,
+              allowedHosts: ["a.test"],
+            },
+          })
+          .where(eq(templates.id, templateId))
+        expect(yield* listener.collect).toEqual([`org:${owner.organizationId}`])
+      }),
+  )
+
   it.live("one transaction that writes 1000 rows of one space sends one notification", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
@@ -155,6 +182,7 @@ describe("BrainPush (HR10, HR12)", () => {
           ensure: () => Effect.die(new Error("a push never resumes a brain")),
           observe: () => Effect.void,
           hand: () => Effect.succeedNone,
+          refreshNetwork: () => Effect.void,
           unavailable: () => Effect.void,
           retry: () => Effect.void,
           onInterrupted: () => Effect.void,
