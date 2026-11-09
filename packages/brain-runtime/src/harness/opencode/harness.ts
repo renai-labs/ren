@@ -95,6 +95,45 @@ const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
     Effect.orDie,
   )
 
+// oxlint-disable-next-line ren/no-comments -- The chat's instruction about its file and shell tools matches what it has: at start, and at each pull that adds or takes away its hand (EN23).
+const applyEnvironmentInstructions = Effect.fnUntraced(function* (
+  client: OpenCodeClient,
+  server: OpenCodeServer.Instance,
+  sessionID: Session.ID,
+  environmentDirectory: Option.Option<string>,
+) {
+  const changes = InstructionEntries.changes(
+    yield* client.experimental.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
+    environmentInstructions(server, environmentDirectory),
+  )
+  yield* Effect.forEach(
+    changes.put,
+    (entry) => client.experimental.session.instructions.entry.put({ sessionID, key: entry.key, value: entry.value }),
+    { discard: true },
+  ).pipe(Effect.orDie)
+  yield* Effect.forEach(
+    changes.remove,
+    (key) => client.experimental.session.instructions.entry.remove({ sessionID, key }),
+    { discard: true },
+  ).pipe(Effect.orDie)
+})
+
+// oxlint-disable-next-line ren/no-comments -- At a pull: a chat with a workspace is told it has file and shell tools only while its space has a hand.
+const applyHandInstructions = Effect.fnUntraced(function* (
+  client: OpenCodeClient,
+  server: OpenCodeServer.Instance,
+  sessionID: Session.ID,
+  options: { readonly hasHand: boolean },
+) {
+  const location = (yield* server.sessions.get(sessionID).pipe(Effect.orDie)).location
+  yield* applyEnvironmentInstructions(
+    client,
+    server,
+    sessionID,
+    location.workspaceID && options.hasHand ? Option.some(location.directory) : Option.none(),
+  )
+})
+
 const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(function* (
   client: OpenCodeClient,
   model: Model | undefined,
@@ -325,22 +364,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   yield* remember(server, settings, input.sessionId, resolved && { resolved, interactive: input.interactive }, {
     install: true,
   })
-  const changes = InstructionEntries.changes(
-    yield* client.experimental.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
-    environmentInstructions(server, environmentDirectory),
-  )
-  yield* Effect.forEach(
-    changes.put,
-    (entry) => client.experimental.session.instructions.entry.put({ sessionID, key: entry.key, value: entry.value }),
-    { discard: true },
-  ).pipe(Effect.orDie)
-  yield* Effect.forEach(
-    changes.remove,
-    (key) => client.experimental.session.instructions.entry.remove({ sessionID, key }),
-    {
-      discard: true,
-    },
-  ).pipe(Effect.orDie)
+  yield* applyEnvironmentInstructions(client, server, sessionID, environmentDirectory)
   if (input.initialMessage) {
     const initial = { ...input.initialMessage, sessionId: input.sessionId }
     yield* attach(server, initial).pipe(
@@ -609,6 +633,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               return
             }
             if (!picked) yield* dropPick(client, session, resolved.success.primary.model)
+            yield* applyHandInstructions(client, server, session.value.id, { hasHand: chat.hasHand !== false })
             const next = { resolved: resolved.success, interactive: saved?.interactive ?? true }
             yield* Ref.update(known.latest, (all) => new Map([...all, [chat.id, next]]))
             if (Option.isSome(settings)) yield* settings.value.keep(chat.id, next)

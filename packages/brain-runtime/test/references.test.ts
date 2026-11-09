@@ -44,16 +44,32 @@ const docsOf = (github: TestGitHub.Instance): Reference.Info => ({
   description: "Product docs",
 })
 
-it.live("a chat whose space has no hand now loses its file and shell tools at the next pull (EN23, chaos row 26)", () =>
-  Effect.gen(function* () {
-    const chat = yield* open(yield* fresh(), [])
-    const before = yield* chat.turn(stub.script(), 1)
-    yield* chat.pull([], { hasHand: false })
-    const after = yield* chat.turn(stub.script(), 1)
-    expect(
-      [before.tools, after.tools].map((tools) => ["read", "shell"].filter((tool) => tools.includes(tool))),
-    ).toEqual([["read", "shell"], []])
-  }),
+it.live(
+  "a chat whose space has no hand now loses its file and shell tools at the next pull, and is told so; they come back with the hand (EN23, chaos row 26)",
+  () =>
+    Effect.gen(function* () {
+      const chat = yield* open(yield* fresh(), [])
+      const before = yield* chat.turn(stub.script(), 1)
+      yield* chat.pull([], { hasHand: false })
+      const without = yield* chat.turn(stub.script(), 1)
+      yield* chat.pull([], { hasHand: true })
+      const back = yield* chat.turn(stub.script(), 1)
+      expect(
+        [before, without, back].map((call) => {
+          const request = JSON.stringify(call.body)
+          return {
+            tools: ["read", "shell"].filter((tool) => call.tools.includes(tool)),
+            isToldLastItHasTools:
+              request.lastIndexOf("Your file and shell tools run on a separate machine") >
+              request.lastIndexOf("no file or shell tools"),
+          }
+        }),
+      ).toEqual([
+        { tools: ["read", "shell"], isToldLastItHasTools: true },
+        { tools: [], isToldLastItHasTools: false },
+        { tools: ["read", "shell"], isToldLastItHasTools: true },
+      ])
+    }),
 )
 
 it.live("a chat reads a file of a public reference with the read tool, at a path with the commit", () =>
