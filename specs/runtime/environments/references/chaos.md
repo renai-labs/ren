@@ -47,19 +47,19 @@ How each fault is made:
 
 ### Brain machine
 
-| #   | Case                                                                | Expected                                                                                                                                                                         | Kind         |
-| --- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| 1   | The brain does not answer within 120 s, 3 times                     | `failed`; the first access after 10 min reaches `ready` (unit: `core/test/machine-lifecycle.test.ts`)                                                                            | unit + live  |
-| 2   | E2B API errors for 10 s during a boot                               | `failed` (known limit, EN18); the timed retry recovers                                                                                                                           | live         |
-| 3   | The machine is killed mid-turn                                      | Next use: Gone, replace. The turn continues once, the notice shows, waiting messages are sent. Local: `core/test/restore.slow.test.ts`.                                          | live         |
-| 4   | The brain process is stopped for 70 s                               | `start.sh` restarts it. No replace.                                                                                                                                              | live         |
-| 5   | The brain and `start.sh` are stopped for 6 min                      | Replaced (EN17)                                                                                                                                                                  | live         |
-| 6   | Ren → brain cut for 6 min while the brain still pulls               | Replaced (known risk, EN17)                                                                                                                                                      | live         |
-| 7   | A tool uses too much memory                                         | The tools' cap stops it. The brain answers. No replace.                                                                                                                          | live         |
-| 8   | The disk is full                                                    | The brain answers or is replaced. It never stays stuck.                                                                                                                          | live         |
-| 9   | A restore of 52 chats, 1,783 messages, 24 MB (fake data, see below) | Report the import time and the longest stall of the brain's thread. It must be under 60 s. The import into OpenCode is measured locally (`cell/test/restore-size.slow.test.ts`). | local + live |
-| 10  | One 9 MB message                                                    | It syncs as a stand-in; the rest of the chat syncs (EN37; `server/test/opencode-sync.test.ts`)                                                                                   | local        |
-| 11  | The keep-alive ends while idle, then a wake                         | Files kept                                                                                                                                                                       | live         |
+| #   | Case                                                                | Expected                                                                                                                                                                                  | Kind         |
+| --- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | The brain does not answer within 120 s, 3 times                     | `failed`; the first access after 10 min reaches `ready` (unit: `core/test/machine-lifecycle.test.ts`)                                                                                     | unit + live  |
+| 2   | E2B API errors for 10 s during a boot                               | `failed` (known limit, EN18); the timed retry recovers                                                                                                                                    | live         |
+| 3   | The machine is killed mid-turn                                      | Next use: Gone, replace. The turn continues once, the notice shows, waiting messages are sent. Local: `core/test/restore.slow.test.ts`.                                                   | live         |
+| 4   | The brain process is stopped for 70 s                               | `start.sh` restarts it. No replace.                                                                                                                                                       | live         |
+| 5   | The brain and `start.sh` are stopped for 6 min                      | Replaced (EN17)                                                                                                                                                                           | live         |
+| 6   | Ren → brain cut for 6 min while the brain still pulls               | Replaced (known risk, EN17)                                                                                                                                                               | live         |
+| 7   | A tool uses too much memory                                         | The tools' cap stops it. The brain answers. No replace.                                                                                                                                   | live         |
+| 8   | The disk is full                                                    | The brain answers or is replaced. It never stays stuck.                                                                                                                                   | live         |
+| 9   | A restore of 52 chats, 1,783 messages, 24 MB (fake data, see below) | Report the import time and the longest stall of the brain's thread. It must be under 60 s. The import into OpenCode is measured locally (`brain-runtime/test/restore-size.slow.test.ts`). | local + live |
+| 10  | One 9 MB message                                                    | It syncs as a stand-in; the rest of the chat syncs (EN37; `server/test/opencode-sync.test.ts`)                                                                                            | local        |
+| 11  | The keep-alive ends while idle, then a wake                         | Files kept                                                                                                                                                                                | live         |
 
 ### Bundles
 
@@ -141,7 +141,7 @@ Rows 43 and 44 are the seeded runs and the soak (table above).
 
 ## Restore fixture
 
-A restore brings back one chat with all of its subagent chats (`cell/src/restore.ts:23`). Row 9 and row 51 use generated data of this shape:
+A restore brings back one chat with all of its subagent chats (`brain-runtime/src/restore.ts:23`). Row 9 and row 51 use generated data of this shape:
 
 | Measure         | Value                           |
 | --------------- | ------------------------------- |

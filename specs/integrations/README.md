@@ -111,7 +111,7 @@ The managed path copies the model path: placeholder, egress, receiver, upstream 
 | 10:02 | The pull gives a new catalog fingerprint: the credentials changed.     | The plugin removes `kernel-managed` and adds `kernel__main`. The next step sees the official tools. |
 | 10:30 | Asha removes the credential                                            | The same path in reverse.                                                                           |
 
-The push exists for `credential`, `app_profile`, `app_profile_space` and `app_profile_link` (`db/migration/20261025101446_brain_push/migration.sql`). The timed pull, every 30 s (`cell/src/env.ts:20`), catches a lost notification.
+The push exists for `credential`, `app_profile`, `app_profile_space` and `app_profile_link` (`db/migration/20261025101446_brain_push/migration.sql`). The timed pull, every 30 s (`brain-runtime/src/env.ts:20`), catches a lost notification.
 
 ## 2. Words
 
@@ -198,7 +198,7 @@ The push exists for `credential`, `app_profile`, `app_profile_space` and `app_pr
 
 **Cell**
 
-1. `cell/src/harness/opencode/mcp.ts`: a managed entry is a remote config with `entry.url` (`:77` already takes `entry.url` for a transport that is not `remote`) and the headers `Authorization: Bearer ren:INTEGRATIONS`, `ren-root-session: <chat ID>`, `ren-member: ren:PERSON.<sender>`. These headers are for each chat and change with the sender, so managed entries join the path of Ren's MCP (`renServers`, `:184-215`; reload on a new sender, `:322`).
+1. `brain-runtime/src/harness/opencode/mcp.ts`: a managed entry is a remote config with `entry.url` (`:77` already takes `entry.url` for a transport that is not `remote`) and the headers `Authorization: Bearer ren:INTEGRATIONS`, `ren-root-session: <chat ID>`, `ren-member: ren:PERSON.<sender>`. These headers are for each chat and change with the sender, so managed entries join the path of Ren's MCP (`renServers`, `:184-215`; reload on a new sender, `:322`).
 2. The namespace description of a managed entry says "paid with Ren credits" (`:106`).
 
 **Server**
@@ -237,7 +237,7 @@ The push exists for `credential`, `app_profile`, `app_profile_space` and `app_pr
 | A credential insert, then a delete, changes the fingerprint and swaps the server                                                                           | ren `core`           |
 | `App.create` with a managed MCP is refused; a managed MCP with auth that is not `none` fails decoding                                                      | ren `core`, `schema` |
 | `INTEGRATIONS` exists only with `REN_INTEGRATIONS_URL`, and its token has the five claims                                                                  | ren `core`           |
-| A managed entry gets the token placeholder and the claim headers; a new sender reloads them                                                                | ren `cell`           |
+| A managed entry gets the token placeholder and the claim headers; a new sender reloads them                                                                | ren `brain-runtime`  |
 | An `api.call` event is stored; `INTEGRATIONS_INGEST_KEY` with another `source` gets 403                                                                    | ren `server`         |
 | A token of another purpose gets 401                                                                                                                        | integrations         |
 | The gate contract cases of billing §4.4, on a real Postgres with the real view. A refusal is a tool error, not an HTTP status. Each refusal calls no tool. | integrations         |

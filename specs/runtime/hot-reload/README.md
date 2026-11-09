@@ -6,22 +6,22 @@ Hot reload sends a change in Ren (a setting, an env var, an app, a model, a chat
 
 Write each test first; it must fail before its change. Use real components, latches and `TestClock`.
 
-| #   | Case                                                            | Expected                                                                                                                                        | Package        |
-| --- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| 7   | Two server instances listen                                     | Each brain gets two pushes and does two pulls or fewer                                                                                          | `core`, `cell` |
-| 15  | Wake while Ren is down                                          | The wake answers; the next `start` or `send` pull repairs the state; the brain does not stay "waking"                                           | `cell`         |
-| 16  | Boot while the first pull fails                                 | The brain pulls every 1 s until it works, then continues                                                                                        | `cell`         |
-| 28  | The catalog changes between the retry's skip, reload and unskip | The applied MCP servers are the newest catalog                                                                                                  | `cell`         |
-| 30  | The egress refreshes a token mid-turn                           | Calls continue; no reload                                                                                                                       | `core`, `cell` |
-| 33  | LiteLLM removes the model mid-turn                              | The next request fails with a classified error; the next turn uses the settings' model and shows a message. Also confirm the message in the app | `cell`         |
-| 36  | The base URL changes in the pull mid-turn (brain side)          | The next request uses the new URL                                                                                                               | `cell`         |
-| 38  | An agent changes mid-turn; a subagent of a removed agent runs   | The next step uses the new instructions; the subagent fails and the parent continues                                                            | `cell`         |
-| 39  | A permission becomes stricter during a step                     | The next tool call in the same step is refused                                                                                                  | `cell`         |
-| 40  | A permission or question waits while settings change            | Nothing is disposed; the question can still get an answer                                                                                       | `cell`         |
-| 44  | A busy chat is deleted; `TestClock` moves 7 days                | The turn is interrupted, the chat is dropped, the folder goes after 7 days                                                                      | `cell`         |
-| 45  | A chat is deleted while its brain is asleep                     | The wake drops the chat; no sync error repeats                                                                                                  | `cell`         |
-| —   | Key rotation, brain side (`cell/test/crash.test.ts`)            | After a rotation and a restart, a token signed with the new key is accepted before the first pull                                               | `cell`         |
-| —   | Host token renewal point                                        | The brain renews at 1 h left (`cell/src/host-token.ts:11`). The test at `cell/test/host-access.test.ts:172` uses 120 s and says "five minutes"  | `cell`         |
+| #   | Case                                                            | Expected                                                                                                                                                         | Package                 |
+| --- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| 7   | Two server instances listen                                     | Each brain gets two pushes and does two pulls or fewer                                                                                                           | `core`, `brain-runtime` |
+| 15  | Wake while Ren is down                                          | The wake answers; the next `start` or `send` pull repairs the state; the brain does not stay "waking"                                                            | `brain-runtime`         |
+| 16  | Boot while the first pull fails                                 | The brain pulls every 1 s until it works, then continues                                                                                                         | `brain-runtime`         |
+| 28  | The catalog changes between the retry's skip, reload and unskip | The applied MCP servers are the newest catalog                                                                                                                   | `brain-runtime`         |
+| 30  | The egress refreshes a token mid-turn                           | Calls continue; no reload                                                                                                                                        | `core`, `brain-runtime` |
+| 33  | LiteLLM removes the model mid-turn                              | The next request fails with a classified error; the next turn uses the settings' model and shows a message. Also confirm the message in the app                  | `brain-runtime`         |
+| 36  | The base URL changes in the pull mid-turn (brain side)          | The next request uses the new URL                                                                                                                                | `brain-runtime`         |
+| 38  | An agent changes mid-turn; a subagent of a removed agent runs   | The next step uses the new instructions; the subagent fails and the parent continues                                                                             | `brain-runtime`         |
+| 39  | A permission becomes stricter during a step                     | The next tool call in the same step is refused                                                                                                                   | `brain-runtime`         |
+| 40  | A permission or question waits while settings change            | Nothing is disposed; the question can still get an answer                                                                                                        | `brain-runtime`         |
+| 44  | A busy chat is deleted; `TestClock` moves 7 days                | The turn is interrupted, the chat is dropped, the folder goes after 7 days                                                                                       | `brain-runtime`         |
+| 45  | A chat is deleted while its brain is asleep                     | The wake drops the chat; no sync error repeats                                                                                                                   | `brain-runtime`         |
+| —   | Key rotation, brain side (`brain-runtime/test/crash.test.ts`)   | After a rotation and a restart, a token signed with the new key is accepted before the first pull                                                                | `brain-runtime`         |
+| —   | Host token renewal point                                        | The brain renews at 1 h left (`brain-runtime/src/host-token.ts:11`). The test at `brain-runtime/test/host-access.test.ts:172` uses 120 s and says "five minutes" | `brain-runtime`         |
 
 Chaos cases on the real stack:
 
@@ -41,7 +41,7 @@ User journeys, deferred:
 
 ## 2. Other
 
-1. **A model key per brain.** Ren mints one `MODELS` key per brain. Then the grant holds one LiteLLM key, and `ModelRefresh.anyEndpoint` (`cell/src/model-refresh.ts:13`) and the first-key fallback go.
+1. **A model key per brain.** Ren mints one `MODELS` key per brain. Then the grant holds one LiteLLM key, and `ModelRefresh.anyEndpoint` (`brain-runtime/src/model-refresh.ts:13`) and the first-key fallback go.
 2. **The 3 `openai` models without `mode`** are not run on LiteLLM: the local LiteLLM has no OpenRouter key. Run one turn on each once it has one.
 3. **Stale lists in the app.** The app loads a chat's model, agent and skill lists once per open (`chat/src/atoms.ts:185`), so a change shows only after a reload.
 4. **Flaky tests.** The `BrainPush` reconnect test and the real-stack chaos file fail under load or after an earlier test hangs.

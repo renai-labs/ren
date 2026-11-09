@@ -161,13 +161,14 @@ Built for brain machines (EN21, EN22, EN27): `MachineLifecycle` compares the mac
 
 ### Templates
 
-Ren's code reaches machines as bundles, not in images (EN26-EN29; `cell/machine/bundle.ts`, `cell/machine/start.sh`, `core/src/bundles.ts`). A template image holds the system and the template's packages only. The deploy builds Ren's system image with the current dependencies bundle in it, and the image's tag ends with their version (`<name>:<system>-<dependencies>`, `cell/e2b/stage.ts`, `E2B_TEMPLATE_SEED`): a new machine downloads only the sources. Ren ignores that part of a tag when it compares a machine's image (`machine-lifecycle.ts`, `systemOf`), so new dependencies never replace a machine; its bundles update them in place.
+Ren's code reaches machines as bundles, not in images (EN26-EN29; `brain-runtime/machine/bundle.ts`, `brain-runtime/machine/start.sh`, `core/src/bundles.ts`). A template image holds the system and the template's packages only. The deploy builds Ren's system image with the current dependencies bundle in it, and the image's tag ends with their version (`<name>:<system>-<dependencies>`, `brain-runtime/e2b/stage.ts`, `E2B_TEMPLATE_SEED`): a new machine downloads only the sources. Ren ignores that part of a tag when it compares a machine's image (`machine-lifecycle.ts`, `systemOf`), so new dependencies never replace a machine; its bundles update them in place.
 
 Built: the template fields, the E2B config and its build (`core/src/machine-provider/e2b.ts`), one build at a time per template and its status (`core/src/environment-templates.ts`, EN30, EN44).
 
 A co-located machine uses the template's last `ready` image while a build runs or after it fails (`image`, `image_config`).
 
 1. A new system image (`E2B_TEMPLATE`) does not rebuild the template images: an admin saves the template again.
+2. An update of the executor bundle restarts the executor, and the processes that it started stop. An update of the brain bundle alone keeps them (chaos rows 12 and 13).
 
 ### Networking
 
@@ -181,16 +182,16 @@ Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, c
 
 1. Built: a remote hand goes through the egress like a brain, with a proxy login of its own generation (`SandboxEgress`, workload `hand`). Its credentials are those of its space: one space per environment (`Credentials.scopeOf`).
 2. A remote hand does not update in place: a newer template config replaces it at its wake, and it keeps its executor version until it is replaced.
-3. Built: a brain made for a remote hand (`brain.hand_placement`, `REN_HAND_PLACEMENT=remote`) runs OpenCode's `ToolOutput`, `FileSystem`, `Vcs` and `Snapshot` on the hand (`cell/src/harness/opencode/workspace-driver.ts`, EN13, EN14). A change of the space's hand to or from remote replaces the brain at its wake.
+3. Built: a brain made for a remote hand (`brain.hand_placement`, `REN_HAND_PLACEMENT=remote`) runs OpenCode's `ToolOutput`, `FileSystem`, `Vcs` and `Snapshot` on the hand (`brain-runtime/src/harness/opencode/workspace-driver.ts`, EN13, EN14). A change of the space's hand to or from remote replaces the brain at its wake.
 4. A chat keeps its hand when its space changes the hand, but the space's brain is made for the new hand. Then that chat's saved tool output, files, diff and revert read the other machine's disk. This is accepted: a change of hand moves the chats.
 5. On a remote hand, `Vcs` gives the branches and the diff only; its status, branch list and review base are empty.
 6. Built: Ren waits up to 5 s for a chat's hand (`Environments.startingAfter`), under the 10 s for which its server keeps a quiet connection. A hand that takes longer answers `EnvironmentStartingError`, and the brain asks again every 2 s for up to 3 min (`HostAccess.handStartsWithin`). A chat's first tool call waits while a new hand starts; it does not fail.
-7. Built: on a remote hand, snapshots are a git store per repository in `$XDG_DATA_HOME/ren/snapshot` on the hand (`cell/src/harness/opencode/snapshot.ts`). As with OpenCode's own, a revert finds file changes only in a git repository. Unlike OpenCode's, the store is never packed.
+7. Built: on a remote hand, snapshots are a git store per repository in `$XDG_DATA_HOME/ren/snapshot` on the hand (`brain-runtime/src/harness/opencode/snapshot.ts`). As with OpenCode's own, a revert finds file changes only in a git repository. Unlike OpenCode's, the store is never packed.
 
 ### Keep-alive and detection
 
 1. Each `access` keeps a machine awake for 10 min. Each pull with progress during a turn keeps it awake for 30 min. A turn with no progress for 30 min gets no more time (today, `brain-lifecycle.ts:81-93`).
-2. Ren checks a machine when a call to it fails, and in the hourly cleanup. Every 30 s, Ren also checks each awake brain that has not pulled for 90 s (`BRAIN_PULL_TIMEOUT`), so a silent brain is found with no access (EN16). A remote hand does not pull, so only the first two find it.
+2. Ren checks a machine when a call to it fails, and in the hourly cleanup. Every 30 s, Ren also checks each awake brain that has not pulled for 90 s (`BRAIN_PULL_TIMEOUT`), so a silent brain is found with no access (EN16). A remote hand does not pull, so only the first two find it. The 5 min of EN17 count only while these checks find the brain silent: a brain that still pulls is checked only when a call to it fails.
 3. An unknown answer never destroys a machine: a provider error, an unreadable status or an unreadable version means keep (I11). Nothing is destroyed because a list does not show it (I12).
 
 ### Failure and recovery
