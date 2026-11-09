@@ -66,7 +66,6 @@ import { ChannelRoutes } from "./channel-routes.js"
 import { WebhookRoutes } from "./webhook-routes.js"
 import { BundleRoutes } from "./bundle-routes.js"
 import { Bundles } from "@ren/core/bundles"
-import { Signer } from "@ren/core/signer"
 import { OAuthApps } from "@ren/core/oauth-apps"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
 import { HealthHandler } from "./handlers/api/health.js"
@@ -259,7 +258,7 @@ export const layer = Layer.mergeAll(
     RenMcp.layer,
     SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
-    BundleRoutes.layer.pipe(Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal)))),
+    BundleRoutes.layer.pipe(Layer.provide(Bundles.layer)),
     ChannelRoutes.layer.pipe(
       Layer.provide(intake),
       Layer.provide(SlackTaskActions.layer),

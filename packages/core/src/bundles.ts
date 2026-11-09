@@ -99,8 +99,14 @@ export const layer = Layer.effect(
         const keys = yield* signer.publicKeys("brain").pipe(Effect.orDie)
         const claims = yield* Signature.verify(keys, Claims, token)
         const isFor = Option.exists(claims, (found) => found.kind === bundle.kind && found.version === bundle.version)
-        if (!isFor || Option.isNone(directory) || !has(bundle))
+        // oxlint-disable-next-line ren/no-comments -- The machine gets a bare 404 either way; the log tells a key that this server lacks apart from a missing file.
+        const refuse = Effect.fnUntraced(function* (reason: string) {
+          yield* Effect.logWarning(`The bundle ${bundle.kind} ${bundle.version} was refused: ${reason}`)
           return yield* new NotFound({ message: `This server has no bundle ${bundle.kind} ${bundle.version} for you` })
+        })
+        if (!isFor) return yield* refuse("the token is not valid for it")
+        if (Option.isNone(directory)) return yield* refuse("REN_BUNDLES is not set")
+        if (!has(bundle)) return yield* refuse("this server was not built with it")
         return join(directory.value, Bundle.fileOf(bundle))
       }),
     })

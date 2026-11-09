@@ -136,16 +136,13 @@ export const services = Layer.mergeAll(
 ).pipe(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(AppProfiles.layer),
-  Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
+  Layer.provideMerge([BrainClient.layer, Settings.layer]),
   Layer.provideMerge([
     Models.layerNone,
-    Environments.layer.pipe(
-      Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
-      Layer.provide(Signer.layerLocal),
-    ),
+    Environments.layer.pipe(Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer])),
     Layer.effect(BrainProvider.Registry, MachineProvider.registry<never, never>([])),
   ]),
-  Layer.provideMerge(RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal))),
+  Layer.provideMerge(RenInference.layerConfig),
   Layer.provideMerge(SlackApp.layer),
   Layer.provideMerge(
     Layer.mergeAll(
@@ -160,6 +157,7 @@ export const services = Layer.mergeAll(
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
+  Layer.provideMerge(Signer.layerLocal),
   Layer.provide(BunServices.layer),
 )
 
