@@ -400,9 +400,10 @@ export const layer = Layer.effect(
         }),
       retire: (brainId) => egress.retire({ kind: "brain", id: brainId }),
       desiredSetup,
-      variables: Effect.fnUntraced(function* (row) {
+      startup: Effect.fnUntraced(function* (row) {
         const bundles = yield* currentBundles
-        return {
+        const placement = yield* handPlacement(row.space_id)
+        const variables = {
           REN_URL: client.renUrl,
           REN_BRAIN_ID: row.id,
           REN_BRAIN_GENERATION: String(row.generation),
@@ -414,21 +415,21 @@ export const layer = Layer.effect(
             "ren.brain.generation": String(row.generation),
           }),
           ...(yield* environments.executorVariables(Environment.ofBrain(row.id))),
-          ...((yield* handPlacement(row.space_id)) === "remote" && { REN_HAND_PLACEMENT: "remote" }),
+          ...(placement === "remote" && { REN_HAND_PLACEMENT: "remote" }),
           ...(Option.isSome(bundles) && {
             REN_BUNDLES: (yield* withTokens(bundles.value))
               .map((bundle) => [bundle.kind, bundle.version, bundle.sha256, bundle.token].join(":"))
               .join(" "),
           }),
         }
-      }),
-      created: Effect.fnUntraced(function* (brainId) {
-        const bundles = yield* currentBundles
-        yield* update(brainId, {
-          hand_placement: yield* handPlacement((yield* read(brainId)).space_id),
-          key_ids: client.publicKeys.map((key) => key.id),
-          bundles: Option.match(bundles, { onNone: () => null, onSome: versionsOf }),
-        })
+        return {
+          variables,
+          created: update(row.id, {
+            hand_placement: placement,
+            key_ids: client.publicKeys.map((key) => key.id),
+            bundles: Option.match(bundles, { onNone: () => null, onSome: versionsOf }),
+          }),
+        }
       }),
       target: targetOf,
       boot: Effect.fnUntraced(function* (target, within) {

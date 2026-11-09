@@ -105,10 +105,12 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly ensure: (row: R) => Effect.Effect<void>
   readonly proxyFor: (row: R) => Effect.Effect<Option.Option<MachineProvider.Proxy>>
   readonly retire: (id: Id) => Effect.Effect<void>
-  readonly variables: (row: R) => Effect.Effect<Readonly<Record<string, string>>>
+  // oxlint-disable-next-line ren/no-comments -- What a new machine starts with, and the write of the kind's own columns that records it. Both come from one read, so the row says what the machine got.
+  readonly startup: (row: R) => Effect.Effect<{
+    readonly variables: Readonly<Record<string, string>>
+    readonly created: Effect.Effect<void>
+  }>
   readonly desiredSetup: (row: R) => Effect.Effect<DesiredSetup>
-  // oxlint-disable-next-line ren/no-comments -- The kind's own columns of a new machine, written before the machine's, so a crash between the two leaves a row that creates again.
-  readonly created: (id: Id) => Effect.Effect<void>
   readonly target: (row: R) => Option.Option<Target>
   // oxlint-disable-next-line ren/no-comments -- The kind's ready check: none when the machine is ready within the time, or the reason it is not.
   readonly boot: (target: Target, within: Duration.Duration) => Effect.Effect<Option.Option<string>, E>
@@ -238,6 +240,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const provider = yield* definition.providerOf(row)
     const proxy = yield* proxyOf(row, provider)
     const desired = yield* definition.desiredSetup(row)
+    const startup = yield* definition.startup(row)
     const created = yield* provider
       .create({
         labels: {
@@ -250,7 +253,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
         config: desired.config,
         image: Option.map(desired.image, (image) => image.name),
         // oxlint-disable-next-line ren/no-comments -- Behind an egress, the machine calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49).
-        variables: { ...(yield* definition.variables(row)), ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },
+        variables: { ...startup.variables, ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },
         network: { proxy, hosts: desired.hosts },
       })
       .pipe(
@@ -260,7 +263,8 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
         ),
       )
     if (Option.isNone(created)) return false
-    yield* definition.created(row.id)
+    // oxlint-disable-next-line ren/no-comments -- The kind's own columns go before the machine's, so a crash between the two leaves a row that creates again.
+    yield* startup.created
     yield* update(row.id, {
       provider: provider.info.id,
       binding: created.value.binding,

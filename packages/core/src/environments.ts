@@ -367,10 +367,10 @@ export const layer = Layer.effect(
           organizationId: row.organization_id,
         }),
       retire: (environmentId) => sandboxEgress.retire({ kind: "hand", id: environmentId }),
-      variables: Effect.fnUntraced(function* (row) {
+      startup: Effect.fnUntraced(function* (row) {
         const keys = yield* signingKeys
         const bundles = Option.all(yield* Effect.forEach(["dependencies", "executor"] as const, code.current))
-        return {
+        const variables = {
           ...ExecutorVariables.make(row.id, keys.publicKeys),
           ...sandboxVariables({ "ren.organization.id": row.organization_id, "ren.space.id": row.space_id }),
           REN_HAND: "1",
@@ -381,6 +381,7 @@ export const layer = Layer.effect(
             )).join(" "),
           }),
         }
+        return { variables, created: Effect.void }
       }),
       desiredSetup: Effect.fnUntraced(function* (row) {
         const template = (yield* database.db
@@ -413,7 +414,6 @@ export const layer = Layer.effect(
           hosts: Option.map(hosts, (list) => [...new Set([...list, ...renHost])]),
         } satisfies MachineLifecycle.DesiredSetup
       }),
-      created: () => Effect.void,
       target: (row) =>
         Option.map(Option.fromNullishOr(row.url), (url) => ({
           environmentId: row.id,
