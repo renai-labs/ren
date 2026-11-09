@@ -50,10 +50,7 @@ const built = await Effect.runPromise(
   }),
 )
 
-const brains = [
-  Effect.map(TestProvider.make({ canColocate: true }), (each) => each.provider),
-  Effect.map(TestProvider.make({ id: "remote-only" }), (each) => each.provider),
-] as const
+const brains = [Effect.map(TestProvider.make({ canColocate: true }), (each) => each.provider)] as const
 
 const key = await Effect.runPromise(Signature.generate("environments"))
 
@@ -195,40 +192,21 @@ describe("EnvironmentTemplates", () => {
       }),
   )
 
-  it.live(
-    "co-located needs a brain provider that can co-locate and a template of that provider; a brain provider change that breaks it is refused (EN3, EN24, chaos row 28)",
-    () =>
-      Effect.gen(function* () {
-        const templates = yield* EnvironmentTemplates.Service
-        const spaces = yield* Space.Service
-        const setup = yield* team()
-        const made = yield* templates.create(setup.admin, input)
-        const colocated = { placement: "colocated", environmentTemplateId: made.id } as const
-        expect((yield* spaces.update(setup.ada, setup.space.id, { hand: colocated })).hand).toEqual(colocated)
-        expect(
-          yield* spaces.update(setup.ada, setup.space.id, { brainProvider: "remote-only" }).pipe(Effect.flip),
-        ).toMatchObject({ _tag: "Primitive.Invalid", field: "brainProvider" })
-        const moved = yield* spaces.update(setup.ada, setup.space.id, {
-          brainProvider: "remote-only",
-          hand: { placement: "remote", environmentTemplateId: made.id },
-        })
-        expect(moved.brainProvider).toBe("remote-only")
-        expect(
-          yield* spaces
-            .update(setup.ada, setup.space.id, { hand: { placement: "colocated", environmentTemplateId: null } })
-            .pipe(Effect.flip),
-        ).toMatchObject({ _tag: "Primitive.Invalid", field: "hand" })
-        yield* spaces.update(setup.ada, setup.space.id, {
-          brainProvider: null,
-          hand: { placement: "colocated", environmentTemplateId: null },
-        })
-        const other = yield* Seed.environmentTemplate(setup.organizationId, { provider: "other" })
-        expect(
-          yield* spaces
-            .update(setup.ada, setup.space.id, { hand: { placement: "colocated", environmentTemplateId: other } })
-            .pipe(Effect.flip),
-        ).toMatchObject({ _tag: "Primitive.Invalid", field: "hand" })
-      }),
+  it.live("co-located needs a template of the brain provider (EN3, chaos row 28)", () =>
+    Effect.gen(function* () {
+      const templates = yield* EnvironmentTemplates.Service
+      const spaces = yield* Space.Service
+      const setup = yield* team()
+      const made = yield* templates.create(setup.admin, input)
+      const colocated = { placement: "colocated", environmentTemplateId: made.id } as const
+      expect((yield* spaces.update(setup.ada, setup.space.id, { hand: colocated })).hand).toEqual(colocated)
+      const other = yield* Seed.environmentTemplate(setup.organizationId, { provider: "other" })
+      expect(
+        yield* spaces
+          .update(setup.ada, setup.space.id, { hand: { placement: "colocated", environmentTemplateId: other } })
+          .pipe(Effect.flip),
+      ).toMatchObject({ _tag: "Primitive.Invalid", field: "hand" })
+    }),
   )
 
   it.live("archiving a template that a space uses is refused, with the spaces (EN24, chaos row 22)", () =>

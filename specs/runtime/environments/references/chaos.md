@@ -85,14 +85,14 @@ How each fault is made:
 
 ### Space settings
 
-| #   | Case                                                     | Expected                                                    | Kind |
-| --- | -------------------------------------------------------- | ----------------------------------------------------------- | ---- |
-| 24  | Co-located → remote                                      | At the next wake, tools go to the remote hand; notice shows | live |
-| 25  | Remote template T1 → T2                                  | Hands replaced at their wake                                | live |
-| 26  | Hand → none                                              | Existing chats' file and shell tools refused within ~30 s   | live |
-| 27  | None → hand                                              | Only new chats get tools                                    | unit |
-| 28  | A brain provider change that makes co-located impossible | Refused                                                     | unit |
-| 29  | A change while the machine is still `creating`           | Applied at its next wake                                    | unit |
+| #   | Case                                                  | Expected                                                    | Kind |
+| --- | ----------------------------------------------------- | ----------------------------------------------------------- | ---- |
+| 24  | Co-located → remote                                   | At the next wake, tools go to the remote hand; notice shows | live |
+| 25  | Remote template T1 → T2                               | Hands replaced at their wake                                | live |
+| 26  | Hand → none                                           | Existing chats' file and shell tools refused within ~30 s   | live |
+| 27  | None → hand                                           | Only new chats get tools                                    | unit |
+| 28  | A co-located hand with a template of another provider | Refused                                                     | unit |
+| 29  | A change while the machine is still `creating`        | Applied at its next wake                                    | unit |
 
 ### Remote hands
 

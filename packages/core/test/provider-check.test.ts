@@ -1,6 +1,7 @@
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import { Brain } from "@ren/schema/brain"
 import { eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { BrainProvider } from "../src/brain-provider.js"
@@ -20,18 +21,26 @@ const it = testEffect(
 
 describe("ProviderCheck", () => {
   it.live(
-    "Ren does not start when a space names a brain provider it does not register, and says which it has (EN24, chaos row 40)",
+    "Ren does not start when a brain runs on a provider it does not register, and says which it has (EN24, chaos row 40)",
     () =>
       Effect.gen(function* () {
         const database = yield* Database.Service
-        const spaceId = yield* Seed.space(yield* Seed.organization())
+        const organizationId = yield* Seed.organization()
+        const brainId = Brain.ID.create()
+        yield* database.db.insert(Database.Schema.brain).values({
+          id: brainId,
+          organization_id: organizationId,
+          space_id: yield* Seed.space(organizationId),
+          scope: "space",
+          provider: "brains",
+        })
         yield* ProviderCheck.run
         yield* database.db
-          .update(Database.Schema.space)
-          .set({ brain_provider: "gone" })
-          .where(eq(Database.Schema.space.id, spaceId))
+          .update(Database.Schema.brain)
+          .set({ provider: "gone" })
+          .where(eq(Database.Schema.brain.id, brainId))
         expect((yield* Effect.flip(ProviderCheck.run)).message).toBe(
-          "Spaces name the brain providers gone, which this Ren does not register; it has brains",
+          "Brains run on the providers gone, which this Ren does not register; it has brains",
         )
       }),
   )

@@ -63,7 +63,6 @@ type SpaceUpdateInput = {
   readonly name?: SpaceUpdateRequest["payload"]["name"]
   readonly description?: SpaceUpdateRequest["payload"]["description"]
   readonly brainScope?: SpaceUpdateRequest["payload"]["brainScope"]
-  readonly brainProvider?: SpaceUpdateRequest["payload"]["brainProvider"]
   readonly hand?: SpaceUpdateRequest["payload"]["hand"]
 }
 const EndpointSpaceUpdate = (raw: RawClient["space"]) => (input: SpaceUpdateInput) =>
@@ -74,7 +73,6 @@ const EndpointSpaceUpdate = (raw: RawClient["space"]) => (input: SpaceUpdateInpu
       name: input["name"],
       description: input["description"],
       brainScope: input["brainScope"],
-      brainProvider: input["brainProvider"],
       hand: input["hand"],
     },
   }).pipe(Effect.mapError(mapClientError))

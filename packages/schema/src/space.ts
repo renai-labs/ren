@@ -29,7 +29,7 @@ export const Hand = Schema.Union([
   Schema.Struct({
     placement: Schema.Literal("colocated"),
     environmentTemplateId: Schema.NullOr(EnvironmentTemplate.ID).annotate({
-      description: "A template of the space’s brain provider. Null: Ren’s system image.",
+      description: "A template of the deployment’s brain provider. Null: Ren’s system image.",
     }),
   }),
   Schema.Struct({ placement: Schema.Literal("remote"), environmentTemplateId: EnvironmentTemplate.ID }),
@@ -57,10 +57,6 @@ export const Info = Schema.Struct({
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
   brainScope: Brain.Scope,
-  brainProvider: Schema.NullOr(Schema.NonEmptyString).annotate({
-    description:
-      "The brain provider the space chose. Null: the deployment’s first one. The app hides the choice while the deployment has one.",
-  }),
   hand: Hand,
   memberCount: Schema.Int,
   membershipId: Schema.NullOr(MembershipID),
@@ -98,7 +94,6 @@ export const UpdateInput = Schema.Struct({
   name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NullOr(Schema.String)),
   brainScope: Schema.optional(Brain.Scope),
-  brainProvider: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
   hand: Schema.optional(Hand),
 }).annotate({ identifier: "Space.UpdateInput" })
 

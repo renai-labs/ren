@@ -433,7 +433,6 @@ export function make(options: ClientOptions) {
               name: input["name"],
               description: input["description"],
               brainScope: input["brainScope"],
-              brainProvider: input["brainProvider"],
               hand: input["hand"],
             },
             successStatus: 200,

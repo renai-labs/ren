@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "04513cd9-7072-4df9-9b61-81b538f92422",
+  "id": "0af6abf6-6e9b-48ae-b3fe-00e016fefffb",
   "prevIds": [
     "25fa7af1-4a88-4205-9ff4-91cf142a5db4"
   ],
@@ -7278,19 +7278,6 @@
       "generated": null,
       "identity": null,
       "name": "brain_scope",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "space"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "brain_provider",
       "entityType": "columns",
       "schema": "public",
       "table": "space"

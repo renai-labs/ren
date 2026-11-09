@@ -32,8 +32,6 @@ export const space = pgTable(
     name: text().notNull(),
     description: text(),
     brain_scope: text().$type<Brain.Scope>().notNull().default("space"),
-    // oxlint-disable-next-line ren/no-comments -- The brain provider the space chose; null for the deployment's first one (EN2).
-    brain_provider: text(),
     hand_placement: text().$type<Space.Hand["placement"]>().notNull().default("colocated"),
     // oxlint-disable-next-line ren/no-comments -- No foreign key: environment.sql.ts already references space. Templates are archived, never deleted, and archiving one that a space uses is refused (EN24).
     environment_template_id: text().$type<EnvironmentTemplate.ID>(),

@@ -1287,7 +1287,6 @@ export type SpaceInfo = {
   name: string
   description: string | null
   brainScope: BrainScope
-  brainProvider: string | null
   hand: SpaceHand
   memberCount: number
   membershipId: SpaceMembershipID | null
@@ -1614,7 +1613,6 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
-    readonly brainProvider?: string | null | null
     readonly hand?:
       | (
           | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
@@ -1641,7 +1639,6 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
-    readonly brainProvider?: string | null | null
     readonly hand?:
       | (
           | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
@@ -1668,7 +1665,6 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
-    readonly brainProvider?: string | null | null
     readonly hand?:
       | (
           | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
@@ -1695,7 +1691,6 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
-    readonly brainProvider?: string | null | null
     readonly hand?:
       | (
           | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
@@ -1704,38 +1699,13 @@ export type SpaceUpdateInput = {
         )
       | null
   }["brainScope"]
-  readonly brainProvider?: {
-    readonly factory?: {
-      readonly maxHandoffs?: number
-      readonly agents: ReadonlyArray<{
-        readonly agentId: string
-        readonly maxRuns?: number
-        readonly to?: ReadonlyArray<{
-          readonly agentId: string
-          readonly max?: number
-          readonly else?: string
-          readonly start?: "new" | "continue"
-        }>
-      }>
-    } | null
-    readonly name?: string | null
-    readonly description?: string | null | null
-    readonly brainScope?: ("session" | "space") | null
-    readonly brainProvider?: string | null | null
-    readonly hand?:
-      | (
-          | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }
-          | { readonly placement: "remote"; readonly environmentTemplateId: string }
-          | { readonly placement: "none" }
-        )
-      | null
-  }["brainProvider"]
   readonly hand?: {
     readonly factory?: {
       readonly maxHandoffs?: number
       readonly agents: ReadonlyArray<{
         readonly agentId: string
         readonly maxRuns?: number
+        readonly finish?: true
         readonly to?: ReadonlyArray<{
           readonly agentId: string
           readonly max?: number
@@ -1747,7 +1717,6 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
-    readonly brainProvider?: string | null | null
     readonly hand?:
       | (
           | { readonly placement: "colocated"; readonly environmentTemplateId: string | null }

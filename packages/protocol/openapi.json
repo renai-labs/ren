@@ -21081,7 +21081,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "A template of the space’s brain provider. Null: Ren’s system image."
+                "description": "A template of the deployment’s brain provider. Null: Ren’s system image."
               }
             },
             "required": ["placement", "environmentTemplateId"],
@@ -21176,18 +21176,6 @@
           "brainScope": {
             "$ref": "#/components/schemas/Brain.Scope"
           },
-          "brainProvider": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The brain provider the space chose. Null: the deployment’s first one. The app hides the choice while the deployment has one."
-          },
           "hand": {
             "$ref": "#/components/schemas/Space.Hand"
           },
@@ -21251,7 +21239,6 @@
           "name",
           "description",
           "brainScope",
-          "brainProvider",
           "hand",
           "memberCount",
           "membershipId",
@@ -21347,20 +21334,6 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Brain.Scope"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "brainProvider": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "null"
               },
               {
                 "type": "null"

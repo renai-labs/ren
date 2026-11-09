@@ -245,19 +245,7 @@ export const layer = Layer.effect(
     // oxlint-disable-next-line ren/no-comments -- A brain goes behind the egress when this Ren runs one and its provider can route a sandbox through it. The answer is kept on the row (egress); every later step reads the row, never the setting.
     const isBehindEgress = (provider: MachineProvider.Provider) => egress.enabled && provider.canEgress
 
-    // oxlint-disable-next-line ren/no-comments -- The provider the brain's space chose, or the deployment's first one. Ren does not start when a space names one it does not register (EN24).
-    const providerOfSpace = Effect.fnUntraced(function* (spaceId: Space.ID) {
-      const row = (yield* database.db
-        .select({ provider: Database.Schema.space.brain_provider })
-        .from(Database.Schema.space)
-        .where(eq(Database.Schema.space.id, spaceId))
-        .pipe(Effect.orDie)).at(0)
-      const found = row?.provider ? registry.get(row.provider) : Option.fromNullishOr(registry.providers.at(0))
-      if (Option.isNone(found))
-        return yield* Effect.die(new Error(`No brain provider ${row?.provider ?? ""} in this Ren`))
-      return found.value
-    })
-
+    // oxlint-disable-next-line ren/no-comments -- A new brain gets the deployment's brain provider (EN2); an existing one keeps its own. Ren does not start when a brain runs on one it does not register (EN24).
     const providerOf = (row: Row) =>
       row.provider
         ? Option.match(registry.get(row.provider), {
@@ -265,7 +253,7 @@ export const layer = Layer.effect(
               Effect.die(new Error(`Brain ${row.id} runs on ${row.provider}, which this Ren does not register`)),
             onSome: Effect.succeed,
           })
-        : providerOfSpace(row.space_id)
+        : BrainProvider.first.pipe(Effect.provideService(BrainProvider.Registry, registry))
 
     // oxlint-disable-next-line ren/no-comments -- A brain is made for its space's hand at create. A brain for a remote hand runs OpenCode's tool output, files and git on the hand; a change to or from remote replaces the brain at its wake, so the choice at boot holds for the process's life (EN13).
     const handPlacement = Effect.fnUntraced(function* (spaceId: Space.ID) {
@@ -449,7 +437,6 @@ export const layer = Layer.effect(
         return yield* update(target.brainId, { last_pulled_at: yield* now }).pipe(Effect.as(true))
       }),
       changeAtWake: Effect.fnUntraced(function* (row) {
-        if (row.provider && row.provider !== (yield* providerOfSpace(row.space_id)).info.id) return "replace" as const
         if ((row.hand_placement === "remote") !== ((yield* handPlacement(row.space_id)) === "remote"))
           return "replace" as const
         const bundles = yield* currentBundles

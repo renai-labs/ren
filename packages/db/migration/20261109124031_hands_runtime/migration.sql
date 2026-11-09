@@ -35,7 +35,6 @@ ALTER TABLE "environment_template" ADD COLUMN "image_config" jsonb;--> statement
 ALTER TABLE "environment_template" ADD COLUMN "build_error" text;--> statement-breakpoint
 ALTER TABLE "environment_template" ADD COLUMN "config_version" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "agent_session" ADD COLUMN "continue_message_id" text;--> statement-breakpoint
-ALTER TABLE "space" ADD COLUMN "brain_provider" text;--> statement-breakpoint
 ALTER TABLE "space" ADD COLUMN "hand_placement" text DEFAULT 'colocated' NOT NULL;--> statement-breakpoint
 ALTER TABLE "space" ADD COLUMN "environment_template_id" text;--> statement-breakpoint
 CREATE INDEX "space_environment_template_id_idx" ON "space" ("environment_template_id");--> statement-breakpoint

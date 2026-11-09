@@ -30,7 +30,7 @@ Words:
 
 ## 1. What it does
 
-1. A space chooses a brain provider and a hand. Today the only brain provider is `e2b`, and the app hides the choice.
+1. The deployment has one brain provider (`e2b` today). A space chooses a hand.
 2. The hand is one of:
    - **co-located**: the brain's own machine. With a template, the brain machine runs from the template's image. Without one, it runs from Ren's system image.
    - **remote**: machines of a template, which up to 8 chats share.
@@ -55,8 +55,8 @@ Done when:
 ```
  ┌──────────────────────────────┐   canColocate = true    ┌──────────────────────────────────┐   optional    ┌──────────────────────────────┐
  │                              │ ──────────────────────> │                                  │ ────────────> │                              │
- │  1. brain provider           │                         │  2a. co-located hand             │               │  template of the same        │
- │     e2b (today)              │                         │      the brain's own machine     │               │  provider: packages, CPU,    │
+ │  1. the deployment's brain   │                         │  2a. co-located hand             │               │  template of the same        │
+ │     provider: e2b (today)    │                         │      the brain's own machine     │               │  provider: packages, CPU,    │
  │     ecs, durable object,     │                         │                                  │               │  memory, networking          │
  │     laptop (later)           │                         │      no template: system image   │               │                              │
  └──────────────────────────────┘                         └──────────────────────────────────┘               └──────────────────────────────┘
@@ -144,7 +144,7 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 1. `MachineAccess` is the only contract that `Brains` and `Environments` call for a machine. Each family meets it (EN1).
 2. A managed provider is a `MachineProvider` (built). Later pull requests add `image`, `size` and `network` to `create`, an optional `build`, and the flags `canPause` and `canLimitHosts`, each with its first caller. A step that a provider does not have does nothing: a Durable Object's `create` names it by id, and it never pauses (EN6). Core never branches on a provider's name.
 3. Each managed machine carries labels: Ren's owner name, the kind (`brain` or `hand`), its id, its generation, its organization and its space. Every step finds its earlier work by kind, id and generation before it acts, so a step that runs twice makes one machine (EN34).
-4. The deployment registers its brain providers and hand providers, and Ren does not start when a space or a template names one it does not register (built: `BrainProvider.Registry`, `ProviderCheck`). A space picks its hand provider through `space.hand` (§ Space settings).
+4. The deployment registers one brain provider and its hand providers. Ren does not start when a brain runs on a provider, or a template names one, that it does not register (built: `BrainProvider.Registry`, `ProviderCheck`). A space picks its hand through `space.hand` (§ Space settings).
 5. An attached machine connects out to Ren, and Ren relays the Brain API and the Environment API over that connection. Nothing in this work builds it (EN7).
 
 ### Space settings
@@ -232,7 +232,7 @@ Each pull request is based on the one before it. Each one passes its own rows of
 | 7   | `background-keep-awake`     | Background processes keep a machine awake up to 2 h.                                                               |
 | 8   | `bundle-serving`            | Bundles built, served by hash, and the current version in Postgres.                                                |
 | 9   | `bundle-update`             | Images without Ren code; `updating`; the OpenCode version rule.                                                    |
-| 10  | `brain-provider-registry`   | Brain providers with `canColocate`; the space's choice, hidden.                                                    |
+| 10  | `brain-provider-registry`   | Brain providers with `canColocate`.                                                                                |
 | 11  | `space-hand-choice`         | `space.hand`, `SessionRunner`, tools refused with no hand, the refusals of §3.                                     |
 | 12  | `template-image-build`      | Networking, build status, one build at a time, E2B builds from the system image; no never-built hand.              |
 | 13  | `colocated-template-brain`  | The brain machine from the template image; Ren's hosts in `limited`; packages in place.                            |
