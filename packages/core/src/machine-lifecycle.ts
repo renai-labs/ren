@@ -388,9 +388,15 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     if (yield* definition.isNeeded(row.id)) yield* ensure(row.id)
   })
 
-  const replaceIfFrozen = Effect.fnUntraced(function* (row: R, binding: Schema.Json) {
-    const provider = yield* definition.providerOf(row)
+  // oxlint-disable-next-line ren/no-comments -- A machine that runs but does not answer is logged at the first check that finds it silent only; the checks until isSilent replaces it log nothing.
+  const replaceIfFrozen = Effect.fnUntraced(function* (
+    row: R,
+    binding: Schema.Json,
+    provider: MachineProvider.Provider,
+  ) {
+    const isFirst = !row.unanswered_since
     if (!provider.canSample) {
+      if (!isFirst) return
       const message = `${noun} ${row.id} does not answer, and its provider reports no samples of its machine; Ren keeps it`
       return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(annotate(row))
     }
@@ -414,6 +420,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
         ),
       )
     if (sample && Duration.isLessThan(DateTime.distance(sample.at, yield* DateTime.now), timing.sampleMaxAge)) {
+      if (!isFirst) return
       const message = `${noun} ${row.id} does not answer, but its machine runs; Ren keeps it`
       return yield* logged(Effect.logError(message, Cause.fail(new Unreachable({ message }))))
     }
@@ -439,11 +446,11 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const row = yield* read(id)
     if (!row.binding) return
     const target = Option.filter(definition.target(row), () => row.phase === "ready")
-    const provider = yield* definition.providerOf(row)
     if (Option.isSome(target) && (yield* definition.answers(target.value))) {
       if (row.unanswered_since) yield* update(row.id, { unanswered_since: null })
       return
     }
+    const provider = yield* definition.providerOf(row)
     const status = yield* provider.status(row.binding).pipe(
       Effect.tapError((error) => Effect.logWarning("The sandbox status is unknown", error)),
       Effect.option,
@@ -454,7 +461,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     // oxlint-disable-next-line ren/no-comments -- A paused machine wakes; it is never replaced here (E123).
     if (status.value === "paused") return yield* update(row.id, { phase: "resuming" })
     if (yield* isSilent(row)) return yield* lose(row, `its brain gave no answer for ${Duration.format(timing.silent)}`)
-    yield* replaceIfFrozen(row, row.binding)
+    yield* replaceIfFrozen(row, row.binding, provider)
   })
 
   // oxlint-disable-next-line ren/no-comments -- Ends a machine that nothing uses: destroys it and leaves the row at the next generation, `creating`.
