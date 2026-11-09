@@ -100,7 +100,7 @@ export const OpenCodeMessageRow = Schema.Struct({
 })
 export interface OpenCodeMessageRow extends Schema.Schema.Type<typeof OpenCodeMessageRow> {}
 
-export const maxBodyBytes = 8 * 1024 * 1024
+export const maxBodyBytes = 32 * 1024 * 1024
 
 export interface Cursor extends Schema.Schema.Type<typeof Cursor> {}
 export const Cursor = Schema.Struct({ seq: Schema.Int, id: Schema.String }).annotate({

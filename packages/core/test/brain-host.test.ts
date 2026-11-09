@@ -133,26 +133,23 @@ describe("BrainHost calls to a brain", () => {
       const file = (bytes: number) => [{ url: `data:text/plain,${"a".repeat(bytes)}`, name: "a.png" }]
       const failures = yield* Effect.all([
         sendTo(subject.sessionId, "look", Session.MessageID.create(), file(3000)).pipe(Effect.flip),
-        sendTo(subject.sessionId, "look", Session.MessageID.create(), file(3001)).pipe(Effect.flip),
+        sendTo(
+          subject.sessionId,
+          "look",
+          Session.MessageID.create(),
+          file(Session.inlineLimitOf("text/plain") + 1),
+        ).pipe(Effect.flip),
         sendTo(subject.sessionId, "look", Session.MessageID.create(), [
-          { url: `data:text/plain,${"a".repeat(6_000_000)}` },
-          { url: `data:text/plain,${"b".repeat(6_000_000)}` },
+          { url: `data:image/png;base64,${"a".repeat(16_000_000)}` },
+          { url: `data:image/png;base64,${"b".repeat(16_000_000)}` },
         ]).pipe(Effect.flip),
-      ]).pipe(Effect.provide(cell(refusing.url.origin, { BRAIN_MAX_FILE_SIZE: "8MB" })))
+      ]).pipe(Effect.provide(cell(refusing.url.origin)))
       expect(failures).toMatchObject([
         { _tag: "BrainRejectedError", message: "The host rejected the request because its body is too large" },
-        { _tag: "BrainRejectedError", message: "The host rejected the request because its body is too large" },
-        { _tag: "BrainRejectedError", message: "A message’s files total more than 10 MB" },
+        { _tag: "BrainRejectedError", message: `a.png is over the inline limit (${Session.inlineLimits})` },
+        { _tag: "BrainRejectedError", message: "A message’s inline files total more than 20 MiB" },
       ])
-      const small = yield* sendTo(subject.sessionId, "look", Session.MessageID.create(), file(3001)).pipe(
-        Effect.flip,
-        Effect.provide(cell(refusing.url.origin, { BRAIN_MAX_FILE_SIZE: "3kB" })),
-      )
-      expect(small).toMatchObject({ _tag: "BrainRejectedError", message: "a.png is larger than 3 kB" })
-      expect(requests).toEqual([
-        `/ren/sessions/${subject.sessionId}/messages`,
-        `/ren/sessions/${subject.sessionId}/messages`,
-      ])
+      expect(requests).toEqual([`/ren/sessions/${subject.sessionId}/messages`])
     }),
   )
 

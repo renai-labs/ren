@@ -272,7 +272,8 @@ export const layer = Layer.mergeAll(
     Layer.provide(SyncHandler),
     Layer.provide([
       Brains.hostAuthentication,
-      bodyLimit(Sync.maxBodyBytes),
+      // oxlint-disable-next-line ren/no-comments -- At most two of the largest uploads at once, so many brains that sync large messages together do not run the server out of memory (chaos row 58).
+      bodyLimit(Sync.maxBodyBytes, { inFlightBytes: 2 * Sync.maxBodyBytes }),
       SessionSync.layer,
       ChannelTurns.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
       Task.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),

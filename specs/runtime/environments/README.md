@@ -200,7 +200,7 @@ Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, c
 
 ### Ren server
 
-1. One Ren server runs. `DurableRunner` uses Effect's `SingleRunner`, which is single-process (EN31). Built: the load test of chaos row 58 (`e2e/script/sync-load.ts`). Measured on the local stack (macOS), 20 brains each syncing 8,387,746 bytes at once: Ren's memory peaked at 1030 MB and 1063 MB in two runs (from 270 MB and 224 MB, all 20 sent within 2 s), above the server's default 1024 MB (`infra/aws/variables.tf`), and was back under 150 MB 30 s later; about 40 MB per upload. Accepted for now (user, 2026-11-07); see §7.
+1. One Ren server runs. `DurableRunner` uses Effect's `SingleRunner`, which is single-process (EN31). Built: the load test of chaos row 58 (`e2e/script/sync-load.ts`). Measured on the local stack (macOS), 20 brains each syncing 8,387,746 bytes at once: Ren's memory peaked at 1030 MB and 1063 MB in two runs (from 270 MB and 224 MB, all 20 sent within 2 s), above the server's default 1024 MB (`infra/aws/variables.tf`), and was back under 150 MB 30 s later; about 40 MB per upload. Since then (2026-11-09): one message syncs up to 32 MiB (`Sync.maxBodyBytes`), a message's inline files are at most 20 MiB in all, and by kind an image 20 MiB, a PDF 5 MB, a text file 256 KB (`Session.inlineLimitOf`, one check for every inline path); a chat's output file reaches the drive only up to 100 MiB (`Drive.maxFileBytes`), and the server handles at most 64 MiB of upload bodies at once; a request over that gets 503 and the brain retries (`server/src/middleware/body-limit.ts`).
 2. Environment tokens last 15 min. While Ren is down, a tool call uses the token it has. After Ren is back, the next call gets a new token within 30 s (EN32).
 3. Version N and version N-1 work together in both directions: Ren and the brain, and the brain and the executor (EN33).
 
@@ -219,27 +219,27 @@ Run `bun run generate` after the protocol changes.
 
 Each pull request is based on the one before it. Each one passes its own rows of [`references/chaos.md`](references/chaos.md) live before it merges. The full suite runs once more before the last merge.
 
-| #   | Branch                      | Change                                                                                                  |
-| --- | --------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 1   | `hand-design-spec`          | This spec.                                                                                              |
-| 2   | `machine-provider-contract` | The managed provider contract. No change in behaviour.                                                  |
-| 3   | `machine-lifecycle`         | `MachineLifecycle`, taken out of `BrainLifecycle`, and `MachineAccess`. No change in behaviour.         |
-| 4   | `chaos-invariants`          | The seeded runs that check I1–I13, and the restore measurement.                                         |
-| 5   | `lifecycle-recovery`        | Timed retry, the 5-min replace, PostHog reports.                                                        |
-| 6   | `turn-recovery`             | Interrupted turns continue once, waiting messages after a replace, the 8 MB stand-in.                   |
-| 7   | `background-keep-awake`     | Background processes keep a machine awake up to 2 h.                                                    |
-| 8   | `bundle-serving`            | Bundles built, served by hash, and the current version in Postgres.                                     |
-| 9   | `bundle-update`             | Images without Ren code; `updating`; the OpenCode version rule.                                         |
-| 10  | `brain-provider-registry`   | Brain providers with `canColocate`; the space's choice, hidden.                                         |
-| 11  | `space-hand-choice`         | `space.hand`, `SessionRunner`, tools refused with no hand, the refusals of §3.                          |
-| 12  | `template-image-build`      | Networking, build status, one build at a time, E2B builds from the system image; no never-built hand.   |
-| 13  | `colocated-template-brain`  | The brain machine from the template image; Ren's hosts in `limited`; packages in place.                 |
-| 14  | `environments-settings-ui`  | Settings → Environments and the space's hand settings.                                                  |
-| 15  | `remote-e2b-hand`           | Remote hand machines on `MachineLifecycle`, seats, the unreachable check, the remote option in the app. |
-| 16  | `remote-hand-services`      | `REN_HAND_PLACEMENT`; `ToolOutput`, `FileSystem` and `Vcs` on the hand.                                 |
-| 17  | `remote-hand-egress`        | A remote hand behind the egress, with its space's credentials.                                          |
-| 18  | `remote-hand-snapshot`      | `Snapshot` on the hand: revert works on a remote hand.                                                  |
-| 19  | `soak-and-alarms`           | The load test (chaos row 58). The soak and rows 38, 39 run with the full suite before the last merge.   |
+| #   | Branch                      | Change                                                                                                             |
+| --- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 1   | `hand-design-spec`          | This spec.                                                                                                         |
+| 2   | `machine-provider-contract` | The managed provider contract. No change in behaviour.                                                             |
+| 3   | `machine-lifecycle`         | `MachineLifecycle`, taken out of `BrainLifecycle`, and `MachineAccess`. No change in behaviour.                    |
+| 4   | `chaos-invariants`          | The seeded runs that check I1–I13, and the restore measurement.                                                    |
+| 5   | `lifecycle-recovery`        | Timed retry, the 5-min replace, PostHog reports.                                                                   |
+| 6   | `turn-recovery`             | Interrupted turns continue once, waiting messages after a replace, the stand-in for a message over the sync limit. |
+| 7   | `background-keep-awake`     | Background processes keep a machine awake up to 2 h.                                                               |
+| 8   | `bundle-serving`            | Bundles built, served by hash, and the current version in Postgres.                                                |
+| 9   | `bundle-update`             | Images without Ren code; `updating`; the OpenCode version rule.                                                    |
+| 10  | `brain-provider-registry`   | Brain providers with `canColocate`; the space's choice, hidden.                                                    |
+| 11  | `space-hand-choice`         | `space.hand`, `SessionRunner`, tools refused with no hand, the refusals of §3.                                     |
+| 12  | `template-image-build`      | Networking, build status, one build at a time, E2B builds from the system image; no never-built hand.              |
+| 13  | `colocated-template-brain`  | The brain machine from the template image; Ren's hosts in `limited`; packages in place.                            |
+| 14  | `environments-settings-ui`  | Settings → Environments and the space's hand settings.                                                             |
+| 15  | `remote-e2b-hand`           | Remote hand machines on `MachineLifecycle`, seats, the unreachable check, the remote option in the app.            |
+| 16  | `remote-hand-services`      | `REN_HAND_PLACEMENT`; `ToolOutput`, `FileSystem` and `Vcs` on the hand.                                            |
+| 17  | `remote-hand-egress`        | A remote hand behind the egress, with its space's credentials.                                                     |
+| 18  | `remote-hand-snapshot`      | `Snapshot` on the hand: revert works on a remote hand.                                                             |
+| 19  | `soak-and-alarms`           | The load test (chaos row 58). The soak and rows 38, 39 run with the full suite before the last merge.              |
 
 ## 6. How to build it
 
@@ -289,4 +289,3 @@ Follow [`references/naming.md`](references/naming.md). The repository's `AGENTS.
 8. A feature list in `executor.hello`, and a tool list built from it.
 9. UDP DNS to `8.8.8.8` leaves outside the firewall and the egress (E2B docs). Close it with `dnsServers` and a resolver that Ren runs.
 10. A memory alarm for the server. Infra has no notification target yet (no SNS topic), so an alarm would tell no one.
-11. Ren's memory under many large syncs at once (row 58 failed against 1024 MB): handle at most a few `uploadMessages` at once and answer 503 to the rest (brains retry), or a larger server.

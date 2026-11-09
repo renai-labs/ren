@@ -30,22 +30,7 @@ import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm"
-import {
-  ByteSize,
-  Cause,
-  Clock,
-  Config,
-  Context,
-  DateTime,
-  Effect,
-  Layer,
-  Option,
-  Redacted,
-  Ref,
-  Schedule,
-  Schema,
-  Struct,
-} from "effect"
+import { Cause, Clock, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schedule, Schema, Struct } from "effect"
 import { HttpClientError } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
 import { Access } from "./access.js"
@@ -196,9 +181,6 @@ const failedAsUnavailable = (cause: BrainHost.BrainFailed) => Effect.fail(new Br
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const config = yield* Config.all({
-      maxFileSize: Config.ByteSize("BRAIN_MAX_FILE_SIZE").pipe(Config.withDefault(ByteSize.megabytes(10))),
-    })
     const database = yield* Database.Service
     const access = yield* Access.Service
     const appResolve = yield* AppResolve.Service
@@ -256,17 +238,15 @@ export const layer = Layer.effect(
 
     const validatePrompt = Effect.fn("Brains.validatePrompt")(function* (prompt: Session.Prompt) {
       const inline = [...(prompt.files ?? []).filter(Session.isInline), ...(prompt.fallback ?? [])]
-      const large = inline.find((file) =>
-        ByteSize.isGreaterThan(ByteSize.bytes(Session.fileBytes(file.url)), config.maxFileSize),
-      )
+      const large = inline.find((file) => Session.fileBytes(file.url) > Session.inlineLimitOf(Session.mimeOf(file.url)))
       if (large)
         return yield* new BrainRejectedError({
-          message: `${large.name ?? "A file"} is larger than ${ByteSize.format(config.maxFileSize, { system: "decimal" })}`,
+          message: `${large.name ?? "A file"} is over the inline limit (${Session.inlineLimits})`,
         })
       if (
-        [prompt.files ?? [], prompt.fallback ?? []].some((files) => Session.inlineBytes(files) > Session.maxFileBytes)
+        [prompt.files ?? [], prompt.fallback ?? []].some((files) => Session.inlineBytes(files) > Session.maxInlineBytes)
       )
-        return yield* new BrainRejectedError({ message: "A message’s files total more than 10 MB" })
+        return yield* new BrainRejectedError({ message: "A message’s inline files total more than 20 MiB" })
     })
 
     const handOf = Effect.fnUntraced(function* (brainId: Brain.ID, generation: number) {

@@ -66,7 +66,7 @@ const driveOf = Effect.fnUntraced(function* (files: Readonly<Record<string, stri
 })
 
 it.live(
-  "an image of at most 10 MB, and a text file or a PDF of at most 5 MB, come with their bytes; a larger file or a zip comes only with its path",
+  "an image of at most 20 MiB, a PDF of at most 5 MB and a text file of at most 256 KB come with their bytes; a larger file or a zip comes only with its path",
   () =>
     Effect.gen(function* () {
       const folder = "chats/ses_1/uploads/msg_1"
@@ -101,6 +101,19 @@ it.live(
         Option.some("<p>hi</p>"),
       )
     }),
+)
+
+it.live("the files of one message come with their bytes up to 20 MiB in all; the rest come only with their path", () =>
+  Effect.gen(function* () {
+    const folder = "chats/ses_1/uploads/msg_2"
+    const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...new Uint8Array(12_000_000)])
+    const drive = yield* driveOf({ [`${folder}/one.png`]: image, [`${folder}/two.png`]: image })
+    const attached = yield* drive.attach(["one.png", "two.png"].map((name) => ({ path: `${folder}/${name}`, name })))
+    expect(attached.map((each) => [each.file.name, Option.isSome(each.bytes)])).toEqual([
+      ["one.png", true],
+      ["two.png", false],
+    ])
+  }),
 )
 
 it.live("a file that is not in the drive refuses the message, with its name", () =>

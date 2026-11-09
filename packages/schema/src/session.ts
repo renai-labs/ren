@@ -41,8 +41,21 @@ export const Model = Schema.Struct({
 export const Delivery = Schema.Literals(["steer", "queue"]).annotate({ identifier: "Session.Delivery" })
 export type Delivery = typeof Delivery.Type
 
-export const maxFileBytes = 10_000_000
-export const maxBodyBytes = 16_000_000
+// oxlint-disable-next-line ren/no-comments -- What a message may send to the model as its own bytes (inline), by kind, and in all. OpenCode refuses one attachment over 20 MiB and shrinks an image itself; a PDF costs tokens by the page and a text file by the byte. A larger file goes by its drive path, and the model reads it with its tools.
+export const maxInlineBytes = 20 * 1024 * 1024
+
+export const inlineLimitOf = (mime: string) => {
+  if (mime === "application/pdf") return 5_000_000
+  if (mime.startsWith("text/")) return 256_000
+  return maxInlineBytes
+}
+
+export const inlineLimits = "an image or other file 20 MiB, a PDF 5 MB, a text file 256 KB"
+
+// oxlint-disable-next-line ren/no-comments -- The body of a message with its inline files as base64.
+export const maxBodyBytes = 32 * 1024 * 1024
+
+export const mimeOf = (url: string) => url.slice(5, url.search(/[;,]/u)).toLowerCase()
 
 export const fileBytes = (url: string) => {
   const comma = url.indexOf(",")
@@ -59,7 +72,9 @@ export const InlineFile = Schema.Struct({
   url: Schema.String.check(
     Schema.isPattern(/^data:[a-z]+\/[a-z0-9.+-]+(;[^,]*)?,/iu),
     Schema.isMaxLength(maxBodyBytes),
-    Schema.makeFilter((url) => fileBytes(url) <= maxFileBytes || "a file is at most 10 MB"),
+    Schema.makeFilter(
+      (url) => fileBytes(url) <= inlineLimitOf(mimeOf(url)) || `an inline file is at most: ${inlineLimits}`,
+    ),
   ),
   name: Schema.optionalKey(Schema.String),
 }).annotate({ identifier: "Session.InlineFile", description: "A file in the message itself, as a `data:` URL." })
@@ -81,15 +96,17 @@ export const DriveFiles = Schema.Array(DriveFile).check(Schema.isMaxLength(maxDr
 export const File = Schema.Union([InlineFile, DriveFile]).annotate({ identifier: "Session.File" })
 export type File = typeof File.Type
 
-export const isInline = Schema.is(InlineFile)
+// oxlint-disable-next-line ren/no-comments -- Which kind a file is, by its shape only: a file over its limit is still inline, so the limit check sees it.
+export const isInline = (file: File): file is InlineFile => "url" in file
 
-export const isDriveFile = Schema.is(DriveFile)
+export const isDriveFile = (file: File): file is DriveFile => "path" in file
 
 export const inlineBytes = (files: ReadonlyArray<File>) =>
   files.filter(isInline).reduce((bytes, file) => bytes + fileBytes(file.url), 0)
 
 const withinTotal = Schema.makeFilter(
-  (files: ReadonlyArray<File>) => inlineBytes(files) <= maxFileBytes || "a message’s files total at most 10 MB",
+  (files: ReadonlyArray<File>) =>
+    inlineBytes(files) <= maxInlineBytes || "a message’s inline files total at most 20 MiB",
 )
 
 export interface Prompt extends Schema.Schema.Type<typeof Prompt> {}

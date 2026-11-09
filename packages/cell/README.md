@@ -59,9 +59,8 @@ The cell renews its host token with `host.refresh` in its last five minutes. A m
 
 ## Limits
 
-- The shared Brain contract caps decoded files at 10 MB per file and 10 MB in total per message. Invalid payloads receive 400 before acquiring the harness.
-- Core's `BRAIN_MAX_FILE_SIZE` can impose a lower per-file limit and rejects before making a host request.
-- The worker caps every request body at 16 MB and returns 413 before forwarding it to a Durable Object. It counts streamed bytes as well as checking Content-Length.
+- The shared Brain contract caps a message's inline files (`Session.inlineLimitOf`): an image or other file 20 MiB, a PDF 5 MB, a text file 256 KB, and 20 MiB in all. Invalid payloads receive 400 before acquiring the harness. Core checks the same limits before it calls a host.
+- The worker caps every request body at 32 MiB (`Session.maxBodyBytes`) and returns 413 before forwarding it to a Durable Object. It counts streamed bytes as well as checking Content-Length.
 
 ## Tests
 
