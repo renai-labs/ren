@@ -90,20 +90,22 @@ const e2b = Bun.serve({
     })
     if (url.pathname === "/v2/sandboxes")
       return Response.json(
-        url.searchParams.get("metadata")?.includes("brain=")
-          ? []
-          : [
-              {
-                sandboxID: "sbx_mine",
-                state: "running",
-                metadata: { owner: "ren-test-a", brain: "brn_01", generation: "1" },
-              },
-              {
-                sandboxID: "sbx_theirs",
-                state: "running",
-                metadata: { owner: "ren-v2-dev", brain: "brn_02", generation: "1" },
-              },
-            ],
+        url.searchParams.get("metadata")?.includes("brain=brn_paused")
+          ? [{ sandboxID: "sbx_1", state: "paused", metadata: { owner: "ren-test-a", brain: "brn_paused" } }]
+          : url.searchParams.get("metadata")?.includes("brain=")
+            ? []
+            : [
+                {
+                  sandboxID: "sbx_mine",
+                  state: "running",
+                  metadata: { owner: "ren-test-a", brain: "brn_01", generation: "1" },
+                },
+                {
+                  sandboxID: "sbx_theirs",
+                  state: "running",
+                  metadata: { owner: "ren-v2-dev", brain: "brn_02", generation: "1" },
+                },
+              ],
       )
     if (url.pathname === "/sandboxes" && request.method === "POST")
       return Response.json({ sandboxID: "sbx_1", domain: "e2b.test", envdAccessToken: "envd" })
@@ -216,6 +218,25 @@ describe("E2BSandbox with an egress", () => {
         organization: "org_01",
         space: "spc_01",
       })
+    }),
+  )
+
+  it.live("a create that finds its sandbox paused resumes it before the network update, and makes no other", () =>
+    Effect.gen(function* () {
+      const provider = yield* BrainProvider.first
+      seen.length = 0
+      yield* provider.create({
+        labels: { kind: "brain", id: Brain.ID.make("brn_paused"), generation: 1, ...owner },
+        config: {},
+        variables: {},
+        image: Option.none(),
+        network: { proxy: Option.some(proxy), hosts: Option.none() },
+      })
+      expect(
+        seen
+          .filter((request) => request.path.startsWith("/sandboxes"))
+          .map((request) => `${request.method} ${request.path}`),
+      ).toEqual(["POST /sandboxes/sbx_1/connect", "PUT /sandboxes/sbx_1/network"])
     }),
   )
 
