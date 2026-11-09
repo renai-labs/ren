@@ -510,14 +510,10 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
           startKinds[first.phase] ?? (first.binding ? "resume" : "new"),
         )
     }).pipe(
+      // oxlint-disable-next-line ren/no-comments -- EN18: every provider failure counts, so an outage ends in failed and its report, not in endless retries.
       Effect.catchIf(Schema.is(MachineProvider.Failed), (error) =>
         read(id).pipe(
-          Effect.flatMap((row) =>
-            // oxlint-disable-next-line ren/no-comments -- EN18: a provider failure counts in every step that calls the provider, so an outage ends in failed and its report, not in endless retries.
-            row.phase === "creating" || row.phase === "booting" || row.phase === "resuming" || row.phase === "waking"
-              ? fail(row, error.message, row.phase)
-              : Effect.void,
-          ),
+          Effect.flatMap((row) => fail(row, error.message, row.phase)),
           Effect.andThen(Effect.fail(error)),
         ),
       ),
