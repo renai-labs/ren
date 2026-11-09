@@ -1,4 +1,4 @@
-// oxlint-disable-next-line ren/no-comments -- Chaos row 58 (EN31): the brains of the spaces whose name starts with <prefix> each sync one message of about 8 MB, all at once, to a running Ren; the script prints Ren's memory before, at the peak and after. Run it with the server's env files, after a chat has started a brain in each space: bun --env-file=<server.env> --env-file=<secrets> script/sync-load.ts <prefix>
+// oxlint-disable-next-line ren/no-comments -- Chaos row 58 (EN31): the brains of the spaces whose name starts with <prefix> each sync one message of the largest size Ren takes (Sync.maxBodyBytes), all at once, to a running Ren; the script prints the answers (503 above the bytes in flight that Ren allows) and Ren's memory before, at the peak and after. Run it with the server's env files, after a chat has started a brain in each space: bun --env-file=<server.env> --env-file=<secrets> script/sync-load.ts <prefix>
 import { BrainClient } from "@ren/core/brain-client"
 import { Signer } from "@ren/core/signer"
 import { Auth } from "@ren/schema/auth"
