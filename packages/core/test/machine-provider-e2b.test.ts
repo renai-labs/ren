@@ -93,8 +93,16 @@ const e2b = Bun.serve({
         url.searchParams.get("metadata")?.includes("brain=")
           ? []
           : [
-              { sandboxID: "sbx_mine", state: "running", metadata: { owner: "ren-test-a", brain: "brn_01" } },
-              { sandboxID: "sbx_theirs", state: "running", metadata: { owner: "ren-v2-dev", brain: "brn_02" } },
+              {
+                sandboxID: "sbx_mine",
+                state: "running",
+                metadata: { owner: "ren-test-a", brain: "brn_01", generation: "1" },
+              },
+              {
+                sandboxID: "sbx_theirs",
+                state: "running",
+                metadata: { owner: "ren-v2-dev", brain: "brn_02", generation: "1" },
+              },
             ],
       )
     if (url.pathname === "/sandboxes" && request.method === "POST")

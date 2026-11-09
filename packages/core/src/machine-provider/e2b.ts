@@ -339,6 +339,17 @@ export const provider = Effect.gen(function* () {
       const existing = (yield* list(metadata, "running,paused")).at(0)
       if (existing) {
         const binding = { sandboxId: existing.sandboxID, domain: config.domain, port }
+        // oxlint-disable-next-line ren/no-comments -- E2B refuses a network update of a paused sandbox (networking rule 6), so a sandbox that paused after an earlier create resumes first.
+        if (existing.state === "paused")
+          yield* body(
+            "connect",
+            yield* send(
+              "connect",
+              HttpClientRequest.post(`/sandboxes/${binding.sandboxId}/connect`).pipe(
+                HttpClientRequest.bodyJsonUnsafe({ timeout: Duration.toSeconds(createTimeout) }),
+              ),
+            ),
+          )
         yield* updateNetwork(binding, input.network).pipe(
           Effect.catchTag("MachineProvider.Gone", (error) => Effect.fail(failed("network")(error))),
         )
