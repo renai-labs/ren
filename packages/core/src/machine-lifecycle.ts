@@ -514,7 +514,8 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       Effect.catchIf(Schema.is(MachineProvider.Failed), (error) =>
         read(id).pipe(
           Effect.flatMap((row) =>
-            row.phase === "creating" || row.phase === "booting" || row.phase === "waking"
+            // oxlint-disable-next-line ren/no-comments -- EN18: a provider failure counts in every step that calls the provider, so an outage ends in failed and its report, not in endless retries.
+            row.phase === "creating" || row.phase === "booting" || row.phase === "resuming" || row.phase === "waking"
               ? fail(row, error.message, row.phase)
               : Effect.void,
           ),

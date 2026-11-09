@@ -31,6 +31,7 @@ const kind = Effect.gen(function* () {
   const switches = {
     boots: false,
     answers: true,
+    connects: true,
     capacity: false,
     outdated: "current" as "current" | "update" | "replace",
     updates: true,
@@ -77,10 +78,12 @@ const kind = Effect.gen(function* () {
       return Effect.succeed({ binding: { number: made.count }, url: `http://machine-${made.count}.test` })
     },
     connect: (binding, network) =>
-      Effect.sync(() => {
-        networks.push(network.hosts)
-        return { url: `http://machine-${binding.number}.test` }
-      }),
+      switches.connects
+        ? Effect.sync(() => {
+            networks.push(network.hosts)
+            return { url: `http://machine-${binding.number}.test` }
+          })
+        : Effect.fail(new MachineProvider.Failed({ message: "the provider answered 500" })),
     destroy: (binding) => Effect.sync(() => destroyed.push(binding.number)),
     status: () => Effect.succeed("running" as const),
   })
@@ -192,6 +195,18 @@ describe("MachineLifecycle", () => {
         expect(yield* memory.read(id)).toMatchObject({ phase: "ready", failures: 0, retries: 0, retry_at: null })
         expect(reports.filter((report) => report.includes("MachineLifecycle.Failed"))).toHaveLength(4)
       }),
+  )
+
+  it.effect("a machine whose provider fails 3 times at its wake fails, and is reported (EN18)", () =>
+    Effect.gen(function* () {
+      reports.length = 0
+      const memory = yield* kind
+      memory.switches.connects = false
+      const id = memory.add({ phase: "resuming", binding: { number: 1 } })
+      yield* Effect.forEach([1, 2, 3], () => memory.machines.ensure(id), { discard: true })
+      expect(yield* memory.read(id)).toMatchObject({ phase: "failed", failures: 3 })
+      expect(reports.filter((report) => report.includes("MachineLifecycle.Failed"))).toHaveLength(1)
+    }),
   )
 
   it.effect("the Retry button starts a failed machine at once, and the timed retries count from 10 min again", () =>
