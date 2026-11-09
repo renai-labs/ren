@@ -125,6 +125,9 @@ until prepare "$REN_BUNDLES"; do
   echo "The bundles are not ready; the next try is in 5 s" >&2
   sleep 5
 done
+# The tokens are for this download only. An update brings its own, so the
+# brain, the executor and the agent's commands do not get them.
+unset REN_BUNDLES
 tools() { "$@"; }
 if sudo -n systemd-run --quiet --scope --slice=ren-tools.slice true >/dev/null 2>&1; then
   export REN_TOOLS_MEMORY_EVENTS=/sys/fs/cgroup/ren.slice/ren-tools.slice/memory.events

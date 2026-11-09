@@ -84,6 +84,28 @@ describe("start.sh prepare", () => {
     expect(await readFile(join(home, ".ren/brain.version"), "utf8")).toBe("b1-d1\n")
   })
 
+  test("the executor and the agent's commands do not get the bundle tokens", async () => {
+    const home = await mkdtemp(join(work, "home-"))
+    const bin = join(home, "bin")
+    await mkdir(join(home, ".ren"), { recursive: true })
+    await Bun.write(
+      join(home, ".ren/brain.env"),
+      `REN_URL=${server.url.origin}\nREN_BUNDLES='${[dependencies, brain, executor].join(" ")}'\n`,
+    )
+    // oxlint-disable-next-line ren/no-comments -- A fake bun records the executor's environment and removes its version, so the executor loop ends and start.sh of a hand exits.
+    await Bun.write(join(bin, "bun"), `#!/bin/sh\nenv >"$HOME/.ren/executor.env"\nrm "$HOME/.ren/executor.version"\n`)
+    await Bun.$`chmod +x ${join(bin, "bun")}`
+    const started = Bun.spawn(["sh", start], {
+      env: { HOME: home, REN_HAND: "1", PATH: `${bin}:${process.env.PATH}` },
+      stdout: "ignore",
+      stderr: "ignore",
+    })
+    await started.exited
+    const seen = await readFile(join(home, ".ren/executor.env"), "utf8")
+    expect(seen).toContain(`REN_URL=${server.url.origin}`)
+    expect(seen).not.toContain("REN_BUNDLES")
+  })
+
   test("an archive that does not match its sha256 fails the prepare and changes nothing", async () => {
     const home = await mkdtemp(join(work, "home-"))
     expect(await prepare(home, [dependencies, brain, executor])).toBe(0)
