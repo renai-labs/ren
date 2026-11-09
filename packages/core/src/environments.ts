@@ -435,7 +435,6 @@ export const layer = Layer.effect(
           Effect.map((answered) => Option.isSome(answered) && Option.isSome(answered.value)),
         ),
       changeAtWake: () => Effect.succeed("current" as const),
-      updateInPlace: () => Effect.succeed(Option.some("A remote hand does not update in place yet; Ren replaces it")),
     })
     holder.run = hands.run
 

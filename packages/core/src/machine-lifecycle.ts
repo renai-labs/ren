@@ -123,8 +123,8 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly answers: (target: Target) => Effect.Effect<boolean>
   // oxlint-disable-next-line ren/no-comments -- Whether the machine's code is current when it wakes: `update` in place, or `replace` when it cannot be updated in place (EN22, EN27).
   readonly changeAtWake: (row: R) => Effect.Effect<"current" | "update" | "replace">
-  // oxlint-disable-next-line ren/no-comments -- The in-place update of a woken machine: Ren's code when it is out of date, then the steps to its template's new config. None when it worked, or the reason it did not.
-  readonly updateInPlace: (
+  // oxlint-disable-next-line ren/no-comments -- The in-place update of a woken machine: Ren's code when it is out of date, then the steps to its template's new config. None when it worked, or the reason it did not. A kind without it is replaced for any change.
+  readonly updateInPlace?: (
     row: R,
     target: Target,
     steps: ReadonlyArray<MachineProvider.Step>,
@@ -143,7 +143,15 @@ const startKinds: Readonly<Partial<Record<Machine.Phase, string>>> = {
   replacing: "replace",
 }
 
-const afterResume = { current: "waking", update: "updating", replace: "replacing" } as const
+// oxlint-disable-next-line ren/no-comments -- What a woken machine does next: wake as it is, update in place, or, for a change that its kind cannot make in place, be replaced (EN22, EN27).
+const phaseAfterResume = (
+  code: "current" | "update" | "replace",
+  options: { readonly hasSteps: boolean; readonly canUpdateInPlace: boolean },
+) => {
+  if (code === "replace") return "replacing" as const
+  if (code === "current" && !options.hasSteps) return "waking" as const
+  return options.canUpdateInPlace ? ("updating" as const) : ("replacing" as const)
+}
 
 const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
@@ -340,9 +348,13 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     })
     yield* keepAlive({ ...row, keep_alive_until: null }, timing.idle)
     const code = yield* definition.changeAtWake(row)
-    if (code === "replace")
-      yield* Effect.logInfo(`${noun} ${row.id} runs code that cannot update in place; Ren replaces it`)
-    yield* update(row.id, { phase: code === "current" && steps.value.length > 0 ? "updating" : afterResume[code] })
+    const phase = phaseAfterResume(code, {
+      hasSteps: steps.value.length > 0,
+      canUpdateInPlace: Boolean(definition.updateInPlace),
+    })
+    if (phase === "replacing")
+      yield* Effect.logInfo(`${noun} ${row.id} runs code or an image that cannot update in place; Ren replaces it`)
+    yield* update(row.id, { phase })
     return false
   })
 
@@ -352,7 +364,8 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const provider = yield* definition.providerOf(row)
     const desired = yield* definition.desiredSetup(row)
     const steps = stepsInPlace(row, desired, provider)
-    if (!target || Option.isNone(steps)) return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+    if (!target || Option.isNone(steps) || !definition.updateInPlace)
+      return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
     const failure = yield* definition.updateInPlace(row, target, steps.value)
     if (Option.isNone(failure))
       return yield* update(row.id, {

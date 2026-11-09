@@ -26,151 +26,161 @@ const capacityFor = Duration.seconds(30)
 const templateId = EnvironmentTemplate.ID.create()
 
 // oxlint-disable-next-line ren/no-comments -- A kind of machine that lives in memory: its rows in a map, its provider a counter, its ready check and its probe two switches.
-const kind = Effect.gen(function* () {
-  const rows = new Map<string, MachineLifecycle.Row<string>>()
-  const switches = {
-    boots: false,
-    answers: true,
-    connects: true,
-    alive: true,
-    capacity: false,
-    changeAtWake: "current" as "current" | "update" | "replace",
-    updates: true,
-    wanted: { config: {}, image: Option.none(), hosts: Option.none() } as MachineLifecycle.DesiredSetup,
-    system: "system",
-  }
-  const images: Array<Option.Option<string>> = []
-  const networks: Array<Option.Option<ReadonlyArray<string>>> = []
-  const steps: Array<ReadonlyArray<string>> = []
-  const updated: Array<string> = []
-  const destroyed: Array<number> = []
-  const made = { count: 0 }
-  const provider = MachineProvider.make({
-    id: EnvironmentProvider.ID.make("memory"),
-    title: "Memory",
-    description: "Machines in the test’s memory.",
-    canEgress: false,
-    canMount: false,
-    canSample: false,
-    canColocate: true,
-    canLimitHosts: true,
-    systemImage: "system",
-    config: Schema.Struct({
-      packages: Schema.Array(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
-    }),
-    binding: Schema.Struct({ number: Schema.Int }),
-    // oxlint-disable-next-line ren/no-comments -- A config that only adds packages installs them in place; any other change needs a new machine.
-    stepsBetween: (from, to) =>
-      from.packages.every((name) => to.packages.includes(name))
-        ? Option.some(
-            to.packages
-              .filter((name) => !from.packages.includes(name))
-              .map((name) => ({ command: `install ${name}`, user: "root" as const })),
-          )
-        : Option.none(),
-    create: (input) => {
-      images.push(input.image)
-      networks.push(input.network.hosts)
-      if (switches.capacity) {
-        switches.capacity = false
-        return Effect.fail(new MachineProvider.Capacity({ message: "no room", retryAfter: capacityFor }))
-      }
-      made.count += 1
-      return Effect.succeed({ binding: { number: made.count }, url: `http://machine-${made.count}.test` })
-    },
-    connect: (binding, network) =>
-      switches.connects
-        ? Effect.sync(() => {
-            networks.push(network.hosts)
-            return { url: `http://machine-${binding.number}.test` }
-          })
-        : Effect.fail(new MachineProvider.Failed({ message: "the provider answered 500" })),
-    destroy: (binding) => Effect.sync(() => destroyed.push(binding.number)),
-    updateNetwork: (_binding, network) => Effect.sync(() => void networks.push(network.hosts)),
-    keepAlive: () =>
-      switches.alive ? Effect.void : Effect.fail(new MachineProvider.Gone({ message: "the sandbox is gone" })),
-    status: () => Effect.succeed("running" as const),
-  })
-  const read = (id: string) => Effect.sync(() => rows.get(id)).pipe(Effect.flatMap(Effect.fromNullishOr), Effect.orDie)
-  const update = (id: string, values: Partial<MachineLifecycle.Row<string>>) =>
-    Effect.flatMap(read(id), (row) => Effect.sync(() => void rows.set(id, { ...row, ...values })))
-  const holder: { run?: (id: string) => Effect.Effect<void, unknown> } = {}
-  const machines = MachineLifecycle.make({
-    name: "TestLifecycle",
-    noun: "Machine",
-    annotation: "machine",
-    kind: "hand",
-    providerOf: () => Effect.sync(() => ({ ...provider, systemImage: switches.system })),
-    isBehindEgress: () => false,
-    bootWithin: Duration.seconds(1),
-    wakeWithin: Duration.seconds(1),
-    read,
-    update,
-    replace: (row) =>
-      update(row.id, {
-        generation: row.generation + 1,
-        binding: null,
-        url: null,
-        keep_alive_until: null,
-        phase: "creating",
+const kindWith = (options: { readonly canUpdateInPlace: boolean }) =>
+  Effect.gen(function* () {
+    const rows = new Map<string, MachineLifecycle.Row<string>>()
+    const switches = {
+      boots: false,
+      answers: true,
+      connects: true,
+      alive: true,
+      capacity: false,
+      changeAtWake: "current" as "current" | "update" | "replace",
+      updates: true,
+      wanted: { config: {}, image: Option.none(), hosts: Option.none() } as MachineLifecycle.DesiredSetup,
+      system: "system",
+    }
+    const images: Array<Option.Option<string>> = []
+    const networks: Array<Option.Option<ReadonlyArray<string>>> = []
+    const steps: Array<ReadonlyArray<string>> = []
+    const updated: Array<string> = []
+    const destroyed: Array<number> = []
+    const made = { count: 0 }
+    const provider = MachineProvider.make({
+      id: EnvironmentProvider.ID.make("memory"),
+      title: "Memory",
+      description: "Machines in the test’s memory.",
+      canEgress: false,
+      canMount: false,
+      canSample: false,
+      canColocate: true,
+      canLimitHosts: true,
+      systemImage: "system",
+      config: Schema.Struct({
+        packages: Schema.Array(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
       }),
-    forceReplace: (id, generation) =>
-      Effect.flatMap(read(id), (row) =>
-        row.generation === generation && row.phase !== "creating" && row.phase !== "replacing"
-          ? update(id, { phase: "replacing" }).pipe(Effect.as(true))
-          : Effect.succeed(false),
-      ),
-    isNeeded: () => Effect.succeed(true),
-    ensure: (row) => (holder.run ? holder.run(row.id).pipe(Effect.ignore) : Effect.void),
-    proxyFor: () => Effect.succeedNone,
-    retire: () => Effect.void,
-    startup: () => Effect.succeed({ variables: {}, created: Effect.void }),
-    desiredSetup: () => Effect.sync(() => switches.wanted),
-    target: (row) => Option.fromNullishOr(row.url),
-    boot: () => Effect.sync(() => (switches.boots ? Option.none() : Option.some("The machine did not answer"))),
-    wake: () => Effect.succeed(true),
-    changeAtWake: () => Effect.sync(() => switches.changeAtWake),
-    updateInPlace: (row, _target, applied) =>
-      Effect.sync(() => {
-        if (!switches.updates) return Option.some("the new version did not answer")
-        updated.push(row.id)
-        steps.push(applied.map((step) => step.command))
-        switches.changeAtWake = "current"
-        return Option.none()
-      }),
-    answers: () => Effect.sync(() => switches.answers),
-  })
-  holder.run = machines.run
-  const add = (values: Partial<MachineLifecycle.Row<string>> = {}) => {
-    const id = `machine-${rows.size + 1}`
-    rows.set(id, {
-      id,
-      organization_id: Auth.OrganizationID.create(),
-      space_id: Space.ID.create(),
-      provider: null,
-      binding: null,
-      image: null,
-      image_template: null,
-      egress: false,
-      url: null,
-      generation: 1,
-      run_epoch: 0,
-      phase: "creating",
-      failures: 0,
-      failure: null,
-      keep_alive_until: null,
-      last_active_at: null,
-      last_progress_at: null,
-      retry_at: null,
-      retries: 0,
-      unanswered_since: null,
-      network_hosts: null,
-      ...values,
+      binding: Schema.Struct({ number: Schema.Int }),
+      // oxlint-disable-next-line ren/no-comments -- A config that only adds packages installs them in place; any other change needs a new machine.
+      stepsBetween: (from, to) =>
+        from.packages.every((name) => to.packages.includes(name))
+          ? Option.some(
+              to.packages
+                .filter((name) => !from.packages.includes(name))
+                .map((name) => ({ command: `install ${name}`, user: "root" as const })),
+            )
+          : Option.none(),
+      create: (input) => {
+        images.push(input.image)
+        networks.push(input.network.hosts)
+        if (switches.capacity) {
+          switches.capacity = false
+          return Effect.fail(new MachineProvider.Capacity({ message: "no room", retryAfter: capacityFor }))
+        }
+        made.count += 1
+        return Effect.succeed({ binding: { number: made.count }, url: `http://machine-${made.count}.test` })
+      },
+      connect: (binding, network) =>
+        switches.connects
+          ? Effect.sync(() => {
+              networks.push(network.hosts)
+              return { url: `http://machine-${binding.number}.test` }
+            })
+          : Effect.fail(new MachineProvider.Failed({ message: "the provider answered 500" })),
+      destroy: (binding) => Effect.sync(() => destroyed.push(binding.number)),
+      updateNetwork: (_binding, network) => Effect.sync(() => void networks.push(network.hosts)),
+      keepAlive: () =>
+        switches.alive ? Effect.void : Effect.fail(new MachineProvider.Gone({ message: "the sandbox is gone" })),
+      status: () => Effect.succeed("running" as const),
     })
-    return id
-  }
-  return { machines, switches, destroyed, updated, read, update, add, images, networks, steps }
-})
+    const read = (id: string) =>
+      Effect.sync(() => rows.get(id)).pipe(Effect.flatMap(Effect.fromNullishOr), Effect.orDie)
+    const update = (id: string, values: Partial<MachineLifecycle.Row<string>>) =>
+      Effect.flatMap(read(id), (row) => Effect.sync(() => void rows.set(id, { ...row, ...values })))
+    const holder: { run?: (id: string) => Effect.Effect<void, unknown> } = {}
+    const machines = MachineLifecycle.make({
+      name: "TestLifecycle",
+      noun: "Machine",
+      annotation: "machine",
+      kind: "hand",
+      providerOf: () => Effect.sync(() => ({ ...provider, systemImage: switches.system })),
+      isBehindEgress: () => false,
+      bootWithin: Duration.seconds(1),
+      wakeWithin: Duration.seconds(1),
+      read,
+      update,
+      replace: (row) =>
+        update(row.id, {
+          generation: row.generation + 1,
+          binding: null,
+          url: null,
+          keep_alive_until: null,
+          phase: "creating",
+        }),
+      forceReplace: (id, generation) =>
+        Effect.flatMap(read(id), (row) =>
+          row.generation === generation && row.phase !== "creating" && row.phase !== "replacing"
+            ? update(id, { phase: "replacing" }).pipe(Effect.as(true))
+            : Effect.succeed(false),
+        ),
+      isNeeded: () => Effect.succeed(true),
+      ensure: (row) => (holder.run ? holder.run(row.id).pipe(Effect.ignore) : Effect.void),
+      proxyFor: () => Effect.succeedNone,
+      retire: () => Effect.void,
+      startup: () => Effect.succeed({ variables: {}, created: Effect.void }),
+      desiredSetup: () => Effect.sync(() => switches.wanted),
+      target: (row) => Option.fromNullishOr(row.url),
+      boot: () => Effect.sync(() => (switches.boots ? Option.none() : Option.some("The machine did not answer"))),
+      wake: () => Effect.succeed(true),
+      changeAtWake: () => Effect.sync(() => switches.changeAtWake),
+      ...(options.canUpdateInPlace && {
+        updateInPlace: (
+          row: MachineLifecycle.Row<string>,
+          _target: string,
+          applied: ReadonlyArray<MachineProvider.Step>,
+        ) =>
+          Effect.sync(() => {
+            if (!switches.updates) return Option.some("the new version did not answer")
+            updated.push(row.id)
+            steps.push(applied.map((step) => step.command))
+            switches.changeAtWake = "current"
+            return Option.none<string>()
+          }),
+      }),
+      answers: () => Effect.sync(() => switches.answers),
+    })
+    holder.run = machines.run
+    const add = (values: Partial<MachineLifecycle.Row<string>> = {}) => {
+      const id = `machine-${rows.size + 1}`
+      rows.set(id, {
+        id,
+        organization_id: Auth.OrganizationID.create(),
+        space_id: Space.ID.create(),
+        provider: null,
+        binding: null,
+        image: null,
+        image_template: null,
+        egress: false,
+        url: null,
+        generation: 1,
+        run_epoch: 0,
+        phase: "creating",
+        failures: 0,
+        failure: null,
+        keep_alive_until: null,
+        last_active_at: null,
+        last_progress_at: null,
+        retry_at: null,
+        retries: 0,
+        unanswered_since: null,
+        network_hosts: null,
+        ...values,
+      })
+      return id
+    }
+    return { machines, switches, destroyed, updated, read, update, add, images, networks, steps }
+  })
+
+const kind = kindWith({ canUpdateInPlace: true })
 
 describe("MachineLifecycle", () => {
   it.effect(
@@ -488,6 +498,22 @@ describe("MachineLifecycle updates", () => {
           Option.some(["api.example.com", "github.com"]),
         ])
         expect((yield* memory.read(id)).network_hosts).toEqual(["api.example.com", "github.com"])
+      }),
+  )
+
+  it.effect(
+    "a kind that cannot update in place is replaced at its wake for a package its template adds, with no failed update (EN22)",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kindWith({ canUpdateInPlace: false })
+        memory.switches.boots = true
+        memory.switches.wanted = templateImage("image-a", ["ffmpeg"])
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        memory.switches.wanted = templateImage("image-b", ["ffmpeg", "requests"])
+        yield* TestClock.adjust(Duration.minutes(11))
+        yield* memory.machines.access(id)
+        expect(yield* memory.read(id)).toMatchObject({ generation: 2, image: "image-b", failures: 0 })
       }),
   )
 })
