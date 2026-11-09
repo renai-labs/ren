@@ -41,7 +41,25 @@ unpack() {
   rm -f "$1"
 }
 
+versions() {
+  cat "$home/.ren/brain.version" "$home/.ren/executor.version" 2>/dev/null | tr '\n' ' '
+}
+
+# Keeps the code that the brain and the executor run now, and the code they
+# ran before this prepare: the old brain still runs for a moment after an update.
+remove_unused() {
+  for tree in "$code"/brain/* "$code"/executor/*; do
+    [ -e "$tree" ] || continue
+    case " $1 " in *" ${tree##*/} "*) ;; *) rm -rf "$tree" ;; esac
+  done
+  for tree in "$code"/dependencies/*; do
+    [ -e "$tree" ] || continue
+    case " $1 " in *"-${tree##*/} "*) ;; *) rm -rf "$tree" ;; esac
+  done
+}
+
 prepare() {
+  kept=$(versions)
   dependencies=""
   for bundle in $1; do
     kind=${bundle%%:*}
@@ -79,6 +97,7 @@ prepare() {
         ;;
     esac
   done
+  remove_unused "$kept $(versions)"
 }
 
 # The brain runs `start.sh prepare <bundles>` for an update at a wake. It stops

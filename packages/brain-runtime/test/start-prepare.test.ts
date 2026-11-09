@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -82,6 +82,22 @@ describe("start.sh prepare", () => {
     expect(await running.exited).not.toBe(0)
     expect(await readFile(join(home, ".ren/executor.version"), "utf8")).toBe("e2-d1\n")
     expect(await readFile(join(home, ".ren/brain.version"), "utf8")).toBe("b1-d1\n")
+  })
+
+  test("keeps only the code that the brain and the executor run now or ran before", async () => {
+    const home = await mkdtemp(join(work, "home-"))
+    const release = async (number: number) => [
+      await bundle("dependencies", `d${number}`, { "node_modules/shared/index.js": `export const shared = ${number}` }),
+      await bundle("brain", `b${number}`, { "packages/brain-runtime/src/bun.ts": "export {}" }),
+      await bundle("executor", `e${number}`, { "packages/executor/src/main.ts": "export {}" }),
+    ]
+    expect(await prepare(home, await release(7))).toBe(0)
+    expect(await prepare(home, await release(8))).toBe(0)
+    expect(await prepare(home, await release(9))).toBe(0)
+    const code = join(home, ".ren/code")
+    expect((await readdir(join(code, "dependencies"))).toSorted()).toEqual(["d8", "d9"])
+    expect((await readdir(join(code, "brain"))).toSorted()).toEqual(["b8-d8", "b9-d9"])
+    expect((await readdir(join(code, "executor"))).toSorted()).toEqual(["e8-d8", "e9-d9"])
   })
 
   test("the executor and the agent's commands do not get the bundle tokens", async () => {
