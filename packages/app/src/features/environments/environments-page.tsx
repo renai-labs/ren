@@ -20,7 +20,7 @@ import { toast } from "@ren/ui/sonner"
 import { Spinner } from "@ren/ui/spinner"
 import { Textarea } from "@ren/ui/textarea"
 import { EmptyState } from "../../components/empty-state.js"
-import { Page, Row, Rows, SkeletonRows } from "../../components/page.js"
+import { Page, Row, Rows, RowsSample } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { Choice } from "../../components/settings-shared.js"
 import { StatusBadge, type StatusTone } from "../../components/status-badge.js"
@@ -29,7 +29,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { ConfigFields } from "./config-fields.js"
 import { type Draft, EnvironmentForm } from "./environment-form.js"
 
-const buildCheckedEvery = 5000
+const refreshEvery = 5000
 
 const statusOf: Record<EnvironmentTemplateInfo["buildStatus"], { tone: StatusTone; label: string }> = {
   queued: { tone: "neutral", label: "Waiting to build" },
@@ -241,7 +241,7 @@ export function EnvironmentsSettingsPage() {
     ...api["environment-template"].list.queryOptions(EnvironmentForm.listInput),
     refetchInterval: (query) =>
       query.state.data?.items.some((each) => each.buildStatus === "queued" || each.buildStatus === "building")
-        ? buildCheckedEvery
+        ? refreshEvery
         : false,
   })
   const archive = useMutation(api["environment-template"].archive.mutationOptions())
@@ -256,8 +256,8 @@ export function EnvironmentsSettingsPage() {
     </Button>
   )
   return (
-    <Page title="Environments" actions={createButton}>
-      {templates.isPending ? <SkeletonRows label="Loading environments" /> : null}
+    <Page title="Environments" actions={createButton} loading={templates.isPending}>
+      {templates.isPending ? <RowsSample count={3} /> : null}
       {!templates.isPending && items.length === 0 ? (
         <EmptyState action={createButton}>
           No environments yet. An environment sets the packages, size and network of the machines where a space’s chats
