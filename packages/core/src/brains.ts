@@ -382,48 +382,39 @@ export const layer = Layer.effect(
     const background = yield* Effect.scope
     const continuing = new Set<Session.ID>()
 
-    // oxlint-disable-next-line ren/no-comments -- EN35, EN36: one message continues a chat that was busy, or had waiting messages, when its machine was replaced by force. The brain deduplicates by message id, so a second try after a crash sends nothing twice; a failed try stays marked for the next try.
-    const continueChat = Effect.fnUntraced(function* (sessionId: Session.ID, messageId: Session.MessageID) {
-      const row = (yield* database.db
-        .select({ createdBy: chats.created_by })
-        .from(chats)
-        .where(and(eq(chats.id, sessionId), eq(chats.continue_message_id, messageId)))
-        .pipe(Effect.orDie)).at(0)
-      if (!row) return
-      yield* send({
-        sessionId,
-        messageId,
-        prompt: { text: replacedSandbox.text },
-        delivery: "queue",
-        sender: { userId: row.createdBy },
-        synthetic: { description: replacedSandbox.description, source: replacedSandbox.source },
-      }).pipe(
-        Effect.catchTag(["SessionNotStartedError", "BrainRejectedError"], (error) =>
-          Effect.logWarning(`The chat ${sessionId} cannot continue after the replace`, error),
-        ),
-      )
-      yield* database.db
-        .update(chats)
-        .set({ continue_message_id: null })
-        .where(and(eq(chats.id, sessionId), eq(chats.continue_message_id, messageId)))
-        .pipe(Effect.orDie)
-    })
-
+    // oxlint-disable-next-line ren/no-comments -- EN35, EN36: one message continues each chat that a replace marked. The brain sends a message id once, so a try after a crash sends nothing twice; a failed try stays marked for the next pull.
     const continueMarked = Effect.fnUntraced(function* (brainId: Brain.ID) {
       const marked = yield* database.db
-        .select({ sessionId: chats.id, messageId: chats.continue_message_id })
+        .select({ sessionId: chats.id, messageId: chats.continue_message_id, createdBy: chats.created_by })
         .from(chats)
         .where(and(eq(chats.brain_id, brainId), isNotNull(chats.continue_message_id)))
         .pipe(Effect.orDie)
       yield* Effect.forEach(
         marked.flatMap((each) =>
-          each.messageId && !continuing.has(each.sessionId)
-            ? [{ sessionId: each.sessionId, messageId: each.messageId }]
-            : [],
+          each.messageId && !continuing.has(each.sessionId) ? [{ ...each, messageId: each.messageId }] : [],
         ),
         (each) =>
           Effect.sync(() => continuing.add(each.sessionId)).pipe(
-            Effect.andThen(continueChat(each.sessionId, each.messageId)),
+            Effect.andThen(
+              send({
+                sessionId: each.sessionId,
+                messageId: each.messageId,
+                prompt: { text: replacedSandbox.text },
+                delivery: "queue",
+                sender: { userId: each.createdBy },
+                synthetic: { description: replacedSandbox.description, source: replacedSandbox.source },
+              }),
+            ),
+            Effect.catchTag(["SessionNotStartedError", "BrainRejectedError"], (error) =>
+              Effect.logWarning(`The chat ${each.sessionId} cannot continue after the replace`, error),
+            ),
+            Effect.andThen(
+              database.db
+                .update(chats)
+                .set({ continue_message_id: null })
+                .where(and(eq(chats.id, each.sessionId), eq(chats.continue_message_id, each.messageId)))
+                .pipe(Effect.orDie),
+            ),
             Effect.catchCause((cause) =>
               Effect.logWarning(`The chat ${each.sessionId} did not continue; the next pull tries again`, cause),
             ),

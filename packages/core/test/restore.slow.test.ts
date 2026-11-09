@@ -616,11 +616,7 @@ it.live(
         .select({ data: Database.Schema.opencode_message.data })
         .from(Database.Schema.opencode_message)
         .where(eq(Database.Schema.opencode_message.session_id, chat.sessionId))
-        .pipe(
-          Effect.map(
-            (rows) => rows.filter((each) => each.data.includes("The machine was replaced during your turn")).length,
-          ),
-        )
+        .pipe(Effect.map((rows) => rows.filter((each) => each.data.includes("Ren replaced your sandbox")).length))
       yield* continued.pipe(
         Effect.repeat({ until: (count) => count > 0, schedule: Schedule.spaced("200 millis") }),
         Effect.timeout("90 seconds"),
