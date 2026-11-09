@@ -1,6 +1,5 @@
 import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
 import { BrainProvider } from "@ren/core/brain-provider"
-import { MachineProvider } from "@ren/core/machine-provider"
 import { Access } from "@ren/core/access"
 import { CredentialCallers } from "@ren/core/credential-callers"
 import { CredentialRefresh } from "@ren/core/credential-refresh"
@@ -98,7 +97,7 @@ const brainProviders = Layer.unwrap(
     const provider = yield* Config.Literals(["local", "e2b", "cell"], "SANDBOX_PROVIDER").pipe(
       Config.withDefault("local"),
     )
-    if (provider === "cell") return Layer.effect(BrainProvider.Registry, MachineProvider.registry<never, never>([]))
+    if (provider === "cell") return BrainProvider.layer([])
     if (provider === "e2b") return BrainProvider.layer([E2BSandbox.provider])
     const root = yield* Config.String("LOCAL_BRAIN_ROOT").pipe(Config.withDefault(join(tmpdir(), "ren-brains")))
     const entry = yield* Config.String("LOCAL_BRAIN_ENTRY").pipe(

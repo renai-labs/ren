@@ -1,5 +1,4 @@
 import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
-import { MachineProvider } from "@ren/core/machine-provider"
 import { BrainProvider } from "@ren/core/brain-provider"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { EnvironmentNetwork } from "@ren/core/environment-network"
@@ -107,7 +106,7 @@ HttpRouter.serve(Routes.layer).pipe(
       Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
       Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
     ),
-    Layer.effect(BrainProvider.Registry, MachineProvider.registry<never, never>([])),
+    BrainProvider.layer([]),
     Integrations.layer.pipe(Layer.provide(Signer.layerLocal)),
   ]),
   Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal, GitHubApp.layerNone, SlackApp.layerNone)),
