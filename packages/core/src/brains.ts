@@ -400,7 +400,8 @@ export const layer = Layer.effect(
                 sessionId: each.sessionId,
                 messageId: each.messageId,
                 prompt: { text: replacedSandbox.text },
-                delivery: "queue",
+                // oxlint-disable-next-line ren/no-comments -- A steer is delivered before queued messages, so the model reads that its files may be gone before it acts on a message that waited.
+                delivery: "steer",
                 sender: { userId: each.createdBy },
                 synthetic: { description: replacedSandbox.description, source: replacedSandbox.source },
               }),
