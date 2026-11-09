@@ -23,6 +23,14 @@ const seen: Array<Seen> = []
 // oxlint-disable-next-line ren/no-comments -- The tags of the E2B templates that the fake has built, and the status its next build ends with.
 const built = new Map<string, Array<string>>()
 const builds = { status: "ready" as "ready" | "error" }
+// oxlint-disable-next-line ren/no-comments -- As E2B answers: a failed status has the reason's message only, and its log's first page; the logs endpoint gives the last lines.
+const buildLog = [
+  "Building template e2b_tpl/bld_1",
+  "CACHED [base] FROM TEMPLATE ren-brain:system",
+  ...Array.from({ length: 20 }, (_, index) => `[builder 2/2] [stdout]: Get:${index} http://deb.debian.org`),
+  "[builder 2/2] [stderr]: E: Unable to locate package nope",
+  "Build failed: failed to run command: exit status 100",
+].map((message) => ({ timestamp: "2026-11-09T19:00:00Z", level: "debug", message }))
 
 const newest = Date.parse("2026-10-29T12:00:00Z")
 
@@ -60,9 +68,15 @@ const answers: Readonly<Record<string, () => Response>> = {
         ? { status: "ready" }
         : {
             status: "error",
-            reason: { message: "step 2 failed", logEntries: [{ message: "E: Unable to locate package nope" }] },
+            reason: { message: "failed to run command: exit status 100", step: "2", logEntries: null },
+            logEntries: buildLog.slice(0, 2),
           },
     ),
+  "/templates/e2b_tpl/builds/bld_1/logs": () => {
+    const query = seen.at(-1)?.query
+    const newestFirst = query?.get("direction") === "backward" ? buildLog.toReversed() : buildLog
+    return Response.json({ logs: newestFirst.slice(0, Number(query?.get("limit") ?? 100)) })
+  },
 }
 
 const tagsOf = (name: string) => () =>
@@ -305,7 +319,12 @@ describe("E2BSandbox template builds", () => {
       })
       const failed = started._tag === "Building" ? yield* build.status(started.id) : started
       builds.status = "ready"
-      expect(failed).toEqual({ _tag: "Failed", reason: "step 2 failed\nE: Unable to locate package nope" })
+      expect(failed).toEqual({
+        _tag: "Failed",
+        reason: ["failed to run command: exit status 100", ...buildLog.slice(-8).map((entry) => entry.message)].join(
+          "\n",
+        ),
+      })
     }),
   )
 })

@@ -130,15 +130,11 @@ const Started = Schema.Struct({ ...Requested.fields, image: Schema.String })
 
 const BuildStatus = Schema.Struct({
   status: Schema.String,
-  reason: Schema.optional(
-    Schema.NullOr(
-      Schema.Struct({
-        message: Schema.optional(Schema.String),
-        logEntries: Schema.optional(Schema.NullOr(Schema.Array(Schema.Struct({ message: Schema.String })))),
-      }),
-    ),
-  ),
+  reason: Schema.optional(Schema.NullOr(Schema.Struct({ message: Schema.optional(Schema.String) }))),
 })
+
+// oxlint-disable-next-line ren/no-comments -- A failed status gives only the first page of the build log; this endpoint gives its last lines, newest first.
+const BuildLogs = Schema.Struct({ logs: Schema.Array(Schema.Struct({ message: Schema.String })) })
 
 const logLinesShown = 8
 
@@ -461,14 +457,20 @@ export const provider = Effect.gen(function* () {
           return { _tag: "Failed", reason: "E2B no longer knows this build; save the template again" } as const
         const found = yield* strict("build status", response).pipe(Effect.flatMap(decode("build status", BuildStatus)))
         if (found.status === "ready") return { _tag: "Ready", image: build.image } as const
-        if (found.status === "error")
-          return {
-            _tag: "Failed",
-            reason: [
-              found.reason?.message ?? "The build failed",
-              ...(found.reason?.logEntries ?? []).slice(-logLinesShown).map((entry) => entry.message),
-            ].join("\n"),
-          } as const
+        if (found.status === "error") {
+          const lines = yield* send(
+            "build logs",
+            HttpClientRequest.get(`/templates/${build.templateID}/builds/${build.buildID}/logs`).pipe(
+              HttpClientRequest.setUrlParams({ direction: "backward", limit: logLinesShown }),
+            ),
+          ).pipe(
+            Effect.flatMap((response) => strict("build logs", response)),
+            Effect.flatMap(decode("build logs", BuildLogs)),
+            Effect.map((found) => found.logs.toReversed().map((entry) => entry.message)),
+            Effect.orElseSucceed(() => []),
+          )
+          return { _tag: "Failed", reason: [found.reason?.message ?? "The build failed", ...lines].join("\n") } as const
+        }
         return { _tag: "Building", id } as const
       }),
     },
