@@ -3,7 +3,6 @@ export * as E2BSandbox from "./e2b.js"
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { App } from "@ren/schema/app"
 import { Auth } from "@ren/schema/auth"
-import { Brain } from "@ren/schema/brain"
 import { Identifier } from "@ren/schema/identifier"
 import { Space } from "@ren/schema/space"
 import { Workload } from "@ren/schema/workload"
@@ -547,15 +546,15 @@ export const provider = Effect.gen(function* () {
     list: list({}, "running,paused").pipe(
       Effect.map((sandboxes) =>
         sandboxes.flatMap((sandbox) => {
-          const brain = Schema.decodeUnknownOption(Brain.ID)(sandbox.metadata?.brain)
-          if (Option.isNone(brain)) return []
-          return [
-            {
-              binding: { sandboxId: sandbox.sandboxID, domain: config.domain, port: config.port },
-              id: brain.value,
-              generation: Number(sandbox.metadata?.generation ?? "0"),
-            },
-          ]
+          // oxlint-disable-next-line ren/no-comments -- As in metered: a sandbox from before `kind` is a brain's.
+          const workload = Schema.decodeUnknownOption(Workload.Info)({
+            kind: sandbox.metadata?.kind ?? "brain",
+            id: sandbox.metadata?.brain,
+            generation: Number(sandbox.metadata?.generation ?? "0"),
+          })
+          if (Option.isNone(workload)) return []
+          const port = workload.value.kind === "hand" ? EnvironmentApi.port : config.port
+          return [{ ...workload.value, binding: { sandboxId: sandbox.sandboxID, domain: config.domain, port } }]
         }),
       ),
     ),

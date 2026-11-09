@@ -529,7 +529,7 @@ export const layer = Layer.effect(
       { concurrency: "unbounded" },
     ).pipe(
       Stream.runForEach((lost) =>
-        Schema.is(Brain.ID)(lost.id)
+        lost.kind === "brain"
           ? machines.lose({ id: lost.id, generation: lost.generation }, "its machine is gone")
           : Effect.void,
       ),
@@ -626,7 +626,7 @@ export const layer = Layer.effect(
       ))
         .flat()
         .flatMap((each) =>
-          Schema.is(Brain.ID)(each.id)
+          each.kind === "brain"
             ? [{ binding: each.binding, brainId: each.id, generation: each.generation, provider: each.provider }]
             : [],
         )

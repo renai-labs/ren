@@ -72,14 +72,10 @@ export interface Hand {
   readonly workspace: Environment.Directory
 }
 
-export interface Lost {
-  readonly id: string
-  readonly generation: number
-}
+// oxlint-disable-next-line ren/no-comments -- A machine that a provider found gone, named by the labels it was made with (EN34).
+export type Lost = Workload.Info
 
-export interface Listed extends Lost {
-  readonly binding: Schema.Json
-}
+export type Listed = Workload.Info & { readonly binding: Schema.Json }
 
 export interface Metered {
   readonly id: string
@@ -195,9 +191,9 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
   const config = Schema.toCodecJson(definition.config)
   const binding = Schema.toCodecJson(definition.binding)
   const stored =
-    <A>(codec: Schema.Codec<A, Schema.Json>, name: string) =>
+    <A>(schema: Schema.Codec<A, Schema.Json>, name: string) =>
     (value: Schema.Json) =>
-      Schema.decodeUnknownEffect(codec)(value).pipe(
+      Schema.decodeUnknownEffect(schema)(value).pipe(
         Effect.mapError((error) => new Failed({ message: `${definition.id} ${name}: ${error.message}` })),
       )
   const storedBinding = stored(binding, "binding")
@@ -302,7 +298,7 @@ export const waitForExecutor = (http: HttpClient.HttpClient, url: URL, within = 
     ),
   )
 
-export const caVariables = [
+const caVariables = [
   "SSL_CERT_FILE",
   "REQUESTS_CA_BUNDLE",
   "NODE_EXTRA_CA_CERTS",

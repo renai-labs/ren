@@ -1,5 +1,6 @@
 export * as LocalSandbox from "./local.js"
 
+import { Workload } from "@ren/schema/workload"
 import { DateTime, Duration, Effect, FiberMap, Option, Schema, Stream } from "effect"
 import { spawn } from "node:child_process"
 import { mkdir, readdir, rm } from "node:fs/promises"
@@ -22,6 +23,10 @@ const Binding = Schema.Struct({
 type Binding = typeof Binding.Type
 
 const BindingFile = Schema.fromJsonString(Binding)
+
+// oxlint-disable-next-line ren/no-comments -- A local machine always runs a brain (canColocate); its hand is the brain's own.
+const workloadOf = (binding: Binding) =>
+  Schema.decodeUnknownOption(Workload.Info)({ kind: "brain", id: binding.brainId, generation: binding.generation })
 
 const isAlive = (pid: number) =>
   Effect.sync(() => {
@@ -213,10 +218,7 @@ export const provider = (options: {
             const dead = yield* Effect.filter(bindings, (binding) =>
               Effect.map(isAlive(binding.pid), (alive) => !alive),
             )
-            return dead.map((binding): MachineProvider.Lost => ({
-              id: binding.brainId,
-              generation: binding.generation,
-            }))
+            return dead.flatMap((binding) => Option.toArray(workloadOf(binding)))
           }),
         ),
         Stream.flatMap(Stream.fromIterable),
@@ -226,7 +228,7 @@ export const provider = (options: {
         const found = yield* Effect.forEach(names, (name) => stored(join(options.root, name)))
         return found.flatMap((binding) =>
           Option.isSome(binding)
-            ? [{ binding: binding.value, id: binding.value.brainId, generation: binding.value.generation }]
+            ? Option.toArray(Option.map(workloadOf(binding.value), (found) => ({ ...found, binding: binding.value })))
             : [],
         )
       }),
