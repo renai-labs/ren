@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
+import { watch } from "node:fs"
 import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -138,6 +139,42 @@ describe("start.sh prepare", () => {
     const seen = await readFile(join(home, ".ren/executor.env"), "utf8")
     expect(seen).toContain(`REN_URL=${server.url.origin}`)
     expect(seen).not.toContain("REN_BUNDLES")
+  })
+
+  test("the executor's pid file names the executor process, so a new executor bundle stops it", async () => {
+    const home = await mkdtemp(join(work, "home-"))
+    const bin = join(home, "bin")
+    await mkdir(join(home, ".ren"), { recursive: true })
+    await Bun.write(
+      join(home, ".ren/brain.env"),
+      `REN_URL=${server.url.origin}\nREN_BUNDLES='${[dependencies, brain, executor].join(" ")}'\n`,
+    )
+    // oxlint-disable-next-line ren/no-comments -- A fake bun records its own pid and stays running, as the executor does.
+    await Bun.write(join(bin, "bun"), `#!/bin/sh\necho $$ >"$HOME/.ren/fake.pid"\nexec sleep 30\n`)
+    await Bun.$`chmod +x ${join(bin, "bun")}`
+    // oxlint-disable-next-line ren/no-comments -- Its own process group, so the test stops start.sh and everything it started.
+    const started = Bun.spawn(["perl", "-e", "setpgrp; exec @ARGV", "sh", start], {
+      env: { HOME: home, REN_HAND: "1", PATH: `${bin}:${process.env.PATH}` },
+      stdout: "ignore",
+      stderr: "ignore",
+    })
+    const read = (name: string) =>
+      readFile(join(home, ".ren", name), "utf8").then(
+        (text) => text.trim(),
+        () => "",
+      )
+    const both = async () => {
+      const found = [await read("executor.pid"), await read("fake.pid")] as const
+      return found[0] && found[1] ? found : undefined
+    }
+    // oxlint-disable-next-line ren/no-comments -- Each write in ~/.ren checks again, until start.sh and the fake bun both wrote their pid.
+    const written = Promise.withResolvers<readonly [string, string]>()
+    const watcher = watch(join(home, ".ren"), () => void both().then((found) => found && written.resolve(found)))
+    void both().then((found) => found && written.resolve(found))
+    const found = await written.promise
+    watcher.close()
+    process.kill(-started.pid, "SIGKILL")
+    expect(found[0]).toBe(found[1])
   })
 
   test("a second prepare waits until the first one ends, and downloads nothing", async () => {
