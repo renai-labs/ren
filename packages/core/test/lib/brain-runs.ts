@@ -6,7 +6,7 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
 import type { Machine } from "@ren/schema/machine"
-import type { Session } from "@ren/schema/session"
+import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { type Duration, Effect, Layer, ManagedRuntime, Schedule, Schema, Tracer } from "effect"
@@ -169,6 +169,16 @@ export const make = async () => {
             time_updated: Date.now(),
             time_suspended: Date.now(),
           })
+        }),
+      ),
+    marked: (sessionId: Session.ID) =>
+      database.runPromise(
+        Effect.gen(function* () {
+          const db = yield* Database.Service
+          yield* db.db
+            .update(Database.Schema.agent_session)
+            .set({ continue_message_id: Session.MessageID.create() })
+            .where(eq(Database.Schema.agent_session.id, sessionId))
         }),
       ),
     outcome: (sessionId: Session.ID) =>

@@ -84,6 +84,18 @@ describe("brain runs", () => {
     await current.dispose()
   })
 
+  test("a failed brain whose retry time passed starts again with no access when a chat waits to continue (EN19, EN35)", async () => {
+    const found = await runs.seeded()
+    const current = await runs.ren({ lostEvery: "1 hour", config: { BRAIN_PULL_TIMEOUT: "3 seconds" } })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    const ready = await runs.reaches(found.brainId, "ready")
+    process.kill(-BrainRuns.pidOf(ready.binding), "SIGKILL")
+    await runs.marked(found.sessionId)
+    await runs.update(found.brainId, { phase: "failed", failures: 3, retry_at: new Date(Date.now() - 1000) })
+    expect(await runs.reaches(found.brainId, "ready", { generation: 2 })).toMatchObject({ retries: 0, retry_at: null })
+    await current.dispose()
+  })
+
   test("a second lost sandbox within 30 minutes fails its brain's busy chats instead of interrupting them", async () => {
     const found = await runs.seeded()
     const current = await runs.ren({ lostEvery: "1 hour", config: { BRAIN_PULL_TIMEOUT: "3 seconds" } })

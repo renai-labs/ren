@@ -561,6 +561,29 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.orDie)
       yield* Effect.forEach(silent, (row) => machines.check(row.id), { concurrency: 8, discard: true })
+      // oxlint-disable-next-line ren/no-comments -- EN19, EN35: a failed brain whose retry time passed starts again with no access when a chat waits to continue on it; access does the restart.
+      const due = yield* database.db
+        .select({ id: brains.id })
+        .from(brains)
+        .where(
+          and(
+            eq(brains.phase, "failed"),
+            lt(brains.retry_at, at),
+            exists(
+              database.db
+                .select({ id: Database.Schema.agent_session.id })
+                .from(Database.Schema.agent_session)
+                .where(
+                  and(
+                    eq(Database.Schema.agent_session.brain_id, brains.id),
+                    isNotNull(Database.Schema.agent_session.continue_message_id),
+                  ),
+                ),
+            ),
+          ),
+        )
+        .pipe(Effect.orDie)
+      yield* Effect.forEach(due, (row) => machines.access(row.id), { concurrency: 8, discard: true })
     }).pipe(
       Effect.repeat(Schedule.spaced(Duration.divideUnsafe(pullWithin, 3))),
       Effect.delay(pullWithin),
