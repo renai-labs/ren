@@ -68,13 +68,22 @@ const actions = {
   removeMember: Primitive.action(SpaceMember.definition, "archive"),
 }
 
-const templateProvider = Effect.fnUntraced(function* (
+// oxlint-disable-next-line ren/no-comments -- EN3, EN24, EN44: a space holds only a hand that can run: a built template of its organization and, co-located, of the deployment's brain provider. The template read waits for an archive of it.
+const checkHand = Effect.fnUntraced(function* (
+  registry: BrainProvider.Registry["Service"],
   transaction: Database.Transaction,
   actor: Actor.Info,
   hand: Space.Hand,
 ) {
-  if (hand.placement === "none" || !hand.environmentTemplateId) return Option.none<string>()
-  const found = (yield* transaction
+  const brainProvider = hand.placement === "colocated" ? registry.providers.at(0) : undefined
+  if (brainProvider && !brainProvider.canColocate)
+    return yield* new Primitive.Invalid({
+      message: `The brain provider ${brainProvider.info.id} cannot run tools on the brain’s machine; pick a remote hand or none`,
+      field: "hand",
+    })
+  const templateId = hand.placement === "none" ? null : hand.environmentTemplateId
+  if (!templateId) return
+  const template = (yield* transaction
     .select({
       provider: Database.Schema.environment_template.provider,
       image: Database.Schema.environment_template.image,
@@ -83,44 +92,29 @@ const templateProvider = Effect.fnUntraced(function* (
     .from(Database.Schema.environment_template)
     .where(
       and(
-        eq(Database.Schema.environment_template.id, hand.environmentTemplateId),
+        eq(Database.Schema.environment_template.id, templateId),
         eq(Database.Schema.environment_template.organization_id, actor.organizationId),
         isNull(Database.Schema.environment_template.archived_at),
       ),
     )
     .for("share")).at(0)
-  if (!found)
+  if (!template)
     return yield* new Primitive.Invalid({
-      message: `This organization has no environment template ${hand.environmentTemplateId}`,
+      message: `This organization has no environment template ${templateId}`,
       field: "hand",
     })
-  // oxlint-disable-next-line ren/no-comments -- EN44: a space cannot pick a template that has never built. A provider that builds no image is ready at once.
-  if (!found.image && found.buildStatus !== "ready")
+  // oxlint-disable-next-line ren/no-comments -- A provider that builds no image is ready at once.
+  if (!template.image && template.buildStatus !== "ready")
     return yield* new Primitive.Invalid({
-      message: `The environment template ${hand.environmentTemplateId} has no image yet; wait until its build is ready`,
+      message:
+        template.buildStatus === "failed"
+          ? `The environment template ${templateId} has no image: its build failed. Fix the template and save it again.`
+          : `The environment template ${templateId} has no image yet; wait until its build is ready`,
       field: "hand",
     })
-  return Option.some(found.provider)
-})
-
-// oxlint-disable-next-line ren/no-comments -- EN3, EN24: a space holds only a hand that the deployment's brain provider can run. The template read waits for an archive of it.
-const checkHand = Effect.fnUntraced(function* (
-  registry: BrainProvider.Registry["Service"],
-  transaction: Database.Transaction,
-  actor: Actor.Info,
-  hand: Space.Hand,
-) {
-  const template = yield* templateProvider(transaction, actor, hand)
-  const provider = registry.providers.at(0)
-  if (hand.placement !== "colocated" || !provider) return
-  if (!provider.canColocate)
+  if (brainProvider && template.provider !== brainProvider.info.id)
     return yield* new Primitive.Invalid({
-      message: `The brain provider ${provider.info.id} cannot run tools on the brain’s machine; pick a remote hand or none`,
-      field: "hand",
-    })
-  if (Option.exists(template, (each) => each !== provider.info.id))
-    return yield* new Primitive.Invalid({
-      message: `A co-located hand needs a template of the brain provider ${provider.info.id}, not of ${Option.getOrUndefined(template)}`,
+      message: `A co-located hand needs a template of the brain provider ${brainProvider.info.id}, not of ${template.provider}`,
       field: "hand",
     })
 })

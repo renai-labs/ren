@@ -338,12 +338,16 @@ describe("EnvironmentTemplates", () => {
       expect(yield* spaces.update(setup.ada, setup.space.id, { hand: remote }).pipe(Effect.flip)).toMatchObject({
         _tag: "Primitive.Invalid",
         field: "hand",
+        message: `The environment template ${made.id} has no image yet; wait until its build is ready`,
       })
       yield* Deferred.succeed(gate(broken), undefined)
       expect(yield* settled(made.id, setup.admin)).toMatchObject({
         buildStatus: "failed",
         image: null,
         buildError: `${broken} does not build`,
+      })
+      expect(yield* spaces.update(setup.ada, setup.space.id, { hand: remote }).pipe(Effect.flip)).toMatchObject({
+        message: `The environment template ${made.id} has no image: its build failed. Fix the template and save it again.`,
       })
       yield* templates.update(setup.admin, made.id, { config: { label: good } })
       expect(yield* Queue.take(started)).toBe(good)
