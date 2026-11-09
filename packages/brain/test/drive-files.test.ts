@@ -17,7 +17,7 @@ const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
 const it = testEffect(TestEnvironment.layer({ environmentId, workspace }))
 
-const long = Array.from({ length: 900_000 }, (_, line) => `${String(line).padStart(9, "0")}\n`).join("")
+const long = Array.from({ length: 1_200_000 }, (_, line) => `${String(line).padStart(9, "0")}\n`).join("")
 
 const pdf = (bytes: number) => new Uint8Array([...new TextEncoder().encode("%PDF-1.7\n"), ...new Uint8Array(bytes)])
 
@@ -66,7 +66,7 @@ const driveOf = Effect.fnUntraced(function* (files: Readonly<Record<string, stri
 })
 
 it.live(
-  "an image of at most 20 MiB, a PDF of at most 5 MB and a text file of at most 256 KB come with their bytes; a larger file or a zip comes only with its path",
+  "an image of at most 20 MiB, and a PDF or a text file of at most 10 MiB, come with their bytes; a larger file or a zip comes only with its path",
   () =>
     Effect.gen(function* () {
       const folder = "chats/ses_1/uploads/msg_1"
@@ -76,7 +76,7 @@ it.live(
         [`${folder}/photo.png`]: photo,
         [`${folder}/page.html`]: "<p>hi</p>",
         [`${folder}/small.pdf`]: pdf(10),
-        [`${folder}/large.pdf`]: pdf(6_000_000),
+        [`${folder}/large.pdf`]: pdf(11_000_000),
         [`${folder}/report.zip`]: new Uint8Array([80, 75, 3, 4]),
         [`${folder}/big.txt`]: long,
       })
@@ -95,7 +95,7 @@ it.live(
         ["report.zip", "application/zip", false],
         ["big.txt", "text/plain", false],
       ])
-      expect(attached.map((each) => each.file.size)).toEqual([10, photo.length, 9, 19, 6_000_009, 4, long.length])
+      expect(attached.map((each) => each.file.size)).toEqual([10, photo.length, 9, 19, 11_000_009, 4, long.length])
       expect(attached.at(1)?.bytes).toEqual(Option.some(photo))
       expect(attached.at(2)?.bytes.pipe(Option.map((bytes) => new TextDecoder().decode(bytes)))).toEqual(
         Option.some("<p>hi</p>"),

@@ -392,7 +392,7 @@ describe("Channels", () => {
           { url: "bytes:12000000", name: "first.bin", mime: "application/octet-stream" },
           { url: "bytes:12000000", name: "second.bin", mime: "application/octet-stream" },
           { url: "bytes:1000", name: "third.txt", mime: "text/plain" },
-          { url: "bytes:300000", name: "long.txt", mime: "text/plain" },
+          { url: "bytes:11000000", name: "long.txt", mime: "text/plain" },
         ],
       })
       yield* ChannelFixture.receive(ChannelFixture.delivery(found))

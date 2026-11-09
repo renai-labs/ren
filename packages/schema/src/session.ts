@@ -41,16 +41,13 @@ export const Model = Schema.Struct({
 export const Delivery = Schema.Literals(["steer", "queue"]).annotate({ identifier: "Session.Delivery" })
 export type Delivery = typeof Delivery.Type
 
-// oxlint-disable-next-line ren/no-comments -- What a message may send to the model as its own bytes (inline), by kind, and in all. OpenCode refuses one attachment over 20 MiB and shrinks an image itself; a PDF costs tokens by the page and a text file by the byte. A larger file goes by its drive path, and the model reads it with its tools.
+// oxlint-disable-next-line ren/no-comments -- What a message may send to the model as its own bytes (inline), by kind, and in all. OpenCode refuses one attachment over 20 MiB and shrinks an image itself; a PDF and a text file keep ren-v1's 10 MiB. A larger file goes by its drive path, and the model reads it with its tools.
 export const maxInlineBytes = 20 * 1024 * 1024
 
-export const inlineLimitOf = (mime: string) => {
-  if (mime === "application/pdf") return 5_000_000
-  if (mime.startsWith("text/")) return 256_000
-  return maxInlineBytes
-}
+export const inlineLimitOf = (mime: string) =>
+  mime === "application/pdf" || mime.startsWith("text/") ? 10 * 1024 * 1024 : maxInlineBytes
 
-export const inlineLimits = "an image or other file 20 MiB, a PDF 5 MB, a text file 256 KB"
+export const inlineLimits = "an image or other file 20 MiB, a PDF or a text file 10 MiB"
 
 // oxlint-disable-next-line ren/no-comments -- The body of a message with its inline files as base64.
 export const maxBodyBytes = 32 * 1024 * 1024
