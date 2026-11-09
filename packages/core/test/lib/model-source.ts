@@ -3,6 +3,7 @@ export * as ModelSource from "./model-source.js"
 import { Shared } from "@ren/cell/testing"
 import { Testing } from "@ren/db/testing"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { Effect, Layer, Option } from "effect"
 import { Brains } from "../../src/brains.js"
 import { BrainRegistry } from "../../src/brain-registry.js"
@@ -65,6 +66,7 @@ export const chat = Effect.fnUntraced(function* (initial: Models.Access) {
           sessionId,
           harness: "opencode",
           interactive: true,
+          hand: Space.defaultHand,
           ...input,
           initialMessage: {
             messageId: Session.MessageID.create(),

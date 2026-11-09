@@ -33,7 +33,6 @@ import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
 import { Space } from "@ren/core/space"
-import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
 import { PullRequest } from "@ren/core/pull-request"
 import { ReferenceCheck } from "@ren/core/reference-check"
@@ -65,6 +64,9 @@ import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { ChannelRoutes } from "./channel-routes.js"
 import { WebhookRoutes } from "./webhook-routes.js"
+import { BundleRoutes } from "./bundle-routes.js"
+import { Bundles } from "@ren/core/bundles"
+import { Signer } from "@ren/core/signer"
 import { OAuthApps } from "@ren/core/oauth-apps"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
 import { HealthHandler } from "./handlers/api/health.js"
@@ -86,7 +88,6 @@ import { HostPullHandler } from "./handlers/ren-host/pull.js"
 import { HostTokenHandler } from "./handlers/ren-host/token.js"
 import { SessionHandler } from "./handlers/api/session.js"
 import { SpaceHandler } from "./handlers/api/space.js"
-import { SpaceEnvironmentTemplateHandler } from "./handlers/api/space-environment-template.js"
 import { SpaceMemberHandler } from "./handlers/api/space-member.js"
 import { SpaceSettingsHandler } from "./handlers/api/space-settings.js"
 import { TaskHandler } from "./handlers/api/task.js"
@@ -172,7 +173,6 @@ export const layer = Layer.mergeAll(
         SpaceMemberHandler,
         EnvironmentTemplateHandler,
         EnvironmentProviderHandler,
-        SpaceEnvironmentTemplateHandler,
         SpaceSettingsHandler,
         OrganizationSettingsHandler,
         MemoryHandler,
@@ -214,7 +214,6 @@ export const layer = Layer.mergeAll(
         Space.layer,
         SpaceMember.layer,
         EnvironmentTemplates.layer,
-        SpaceEnvironmentTemplate.layer,
         Memory.layer,
         Insights.layer.pipe(Layer.provide(Space.layer)),
         settingsAndAgents,
@@ -260,6 +259,7 @@ export const layer = Layer.mergeAll(
     RenMcp.layer,
     SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
+    BundleRoutes.layer.pipe(Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal)))),
     ChannelRoutes.layer.pipe(
       Layer.provide(intake),
       Layer.provide(SlackTaskActions.layer),

@@ -98,7 +98,7 @@ HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
     ChaosModels.layer,
     RenInference.layerConfig.pipe(Layer.provide([Signer.layerLocal, Access.layer])),
-    Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
+    Environments.layer.pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer])),
     Integrations.layer.pipe(Layer.provide(Signer.layerLocal)),
   ]),
   Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal, GitHubApp.layerNone, SlackApp.layerNone)),

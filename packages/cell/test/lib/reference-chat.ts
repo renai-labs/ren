@@ -5,6 +5,7 @@ import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { TestAccess, type TestGitHub } from "@ren/brain/testing"
 import { TestEnvironment } from "@ren/executor/testing"
+import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import type { Drive } from "@ren/schema/drive"
 import type { Environment } from "@ren/schema/environment"
@@ -122,11 +123,14 @@ export const open = Effect.fnUntraced(function* (
     replace: (generation: number) => Effect.flatMap(accessOf(generation), (access) => memory.set(sessionId, access)),
     forget: memory.remove(sessionId),
     read: host.client.session.get({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
-    pull: (next: ReadonlyArray<Reference.Info>) =>
+    pull: (next: ReadonlyArray<Reference.Info>, chat: Pick<PullChat, "hasHand"> = {}) =>
       Effect.gen(function* () {
         yield* settings.save(TestSettings.layers({ ren: { references: next } }), [])
         yield* harness.configure({
-          settings: { layers: yield* settings.layers, chats: [{ id: sessionId, agent: null, archived: false }] },
+          settings: {
+            layers: yield* settings.layers,
+            chats: [{ id: sessionId, agent: null, archived: false, ...chat }],
+          },
         })
         yield* Shared.appsSettled(harness)
       }),

@@ -14,6 +14,7 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecur
 import { Host } from "./host.js"
 import {
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   GenerationRetiredError,
@@ -49,6 +50,10 @@ export const PullSession = Schema.Struct({
   busy: Schema.Boolean,
   progress: Schema.String.annotate({
     description: "An opaque counter from the harness. It changes when a turn makes progress.",
+  }),
+  background: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "A process that the chat started still runs, such as a background shell. Ren keeps the machine awake for it (EN25). An older brain leaves it out.",
   }),
 }).annotate({ identifier: "Host.PullSession" })
 
@@ -106,6 +111,10 @@ export const PullChat = Schema.Struct({
   archived: Schema.Boolean,
   drives: Schema.optionalKey(Drive.Availability).annotate({
     description: "Omitted for a chat without an environment, and by a Ren without drives.",
+  }),
+  hasHand: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "False when the chat’s space has no hand now: the chat gets no file and shell tools (EN23). Omitted by an older Ren: true.",
   }),
 }).annotate({ identifier: "Host.PullChat" })
 
@@ -169,14 +178,22 @@ const EnvironmentsGroup = HttpApiGroup.make("environments")
   .add(
     HttpApiEndpoint.post("environments.access", "/host/sessions/:id/environment/access", {
       params: SessionParams,
+      query: Schema.Struct({
+        unreachable: Schema.optional(
+          Schema.Literals(["true", "false"]).annotate({
+            description:
+              "`true` when the brain could not reach the session’s environment at its last URL; Ren checks its machine first (EN15).",
+          }),
+        ),
+      }),
       success: Environment.Access,
-      error: [EnvironmentNotFoundError, EnvironmentUnavailableError],
+      error: [EnvironmentNotFoundError, EnvironmentUnavailableError, EnvironmentStartingError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "environments.access",
         summary: "Get access to a session's environment",
         description:
-          "Name the environment and directory of a session of the brain, with a fresh environment token. Ren checks that the session belongs to the brain of the host token.",
+          "Name the environment and directory of a session of the brain, with a fresh environment token. Ren checks that the session belongs to the brain of the host token. `EnvironmentStartingError` means the session’s machine is still starting: ask again in 2 s.",
       }),
     ),
   )

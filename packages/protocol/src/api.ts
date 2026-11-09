@@ -29,7 +29,6 @@ import { ScheduleGroup, ScheduleRunGroup } from "./groups/schedule.js"
 import { WebhookGroup, WebhookRequestGroup } from "./groups/webhook.js"
 import { SessionGroup } from "./groups/session.js"
 import { SpaceGroup } from "./groups/space.js"
-import { SpaceEnvironmentTemplateGroup } from "./groups/space-environment-template.js"
 import { SpaceMemberGroup } from "./groups/space-member.js"
 import { SpaceSettingsGroup } from "./groups/space-settings.js"
 import { TaskGroup } from "./groups/task.js"
@@ -44,7 +43,6 @@ export const Api = HttpApi.make("server")
   .add(SpaceMemberGroup)
   .add(EnvironmentTemplateGroup)
   .add(EnvironmentProviderGroup)
-  .add(SpaceEnvironmentTemplateGroup)
   .add(SpaceSettingsGroup)
   .add(OrganizationSettingsGroup)
   .add(MemoryGroup)

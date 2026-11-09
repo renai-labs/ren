@@ -1,6 +1,7 @@
 import { Auth } from "@ren/schema/auth"
 import { Primitive } from "@ren/schema/primitive"
 import type { Brain } from "@ren/schema/brain"
+import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Factory } from "@ren/schema/factory"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
@@ -31,6 +32,11 @@ export const space = pgTable(
     name: text().notNull(),
     description: text(),
     brain_scope: text().$type<Brain.Scope>().notNull().default("space"),
+    // oxlint-disable-next-line ren/no-comments -- The brain provider the space chose; null for the deployment's first one (EN2).
+    brain_provider: text(),
+    hand_placement: text().$type<Space.Hand["placement"]>().notNull().default("colocated"),
+    // oxlint-disable-next-line ren/no-comments -- No foreign key: environment.sql.ts already references space. Templates are archived, never deleted, and archiving one that a space uses is refused (EN24).
+    environment_template_id: text().$type<EnvironmentTemplate.ID>(),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),
@@ -43,6 +49,11 @@ export const space = pgTable(
       .on(table.organization_id, table.owner_user_id)
       .where(sql`${table.kind} = 'private' and ${table.archived_at} is null`),
     check("space_kind_check", sql`${table.kind} in ('shared', 'private')`),
+    index("space_environment_template_id_idx").on(table.environment_template_id),
+    check(
+      "space_hand_check",
+      sql`case ${table.hand_placement} when 'colocated' then true when 'remote' then ${table.environment_template_id} is not null when 'none' then ${table.environment_template_id} is null else false end`,
+    ),
     check("space_owner_check", sql`(${table.kind} = 'private') = (${table.owner_user_id} is not null)`),
     check(
       "space_name_length_check",

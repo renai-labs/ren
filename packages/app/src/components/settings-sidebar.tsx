@@ -4,6 +4,7 @@ import { Link, useLocation } from "@tanstack/react-router"
 import {
   IconAdjustmentsHorizontal,
   IconArrowLeft,
+  IconBox,
   IconMessagesFilled,
   IconBuilding,
   IconKey,
@@ -45,6 +46,7 @@ export const settingsSections = [
     items: [
       { id: "general", to: "/settings/general", label: "General", icon: IconBuilding, admin: true },
       { id: "members", to: "/settings/members", label: "Members", icon: IconUsers, admin: true },
+      { id: "environments", to: "/settings/environments", label: "Environments", icon: IconBox, admin: true },
       { id: "providers", to: "/settings/providers", label: "Providers", icon: IconServer },
       { id: "channels", to: "/settings/channels", label: "Channels", icon: IconMessagesFilled },
     ],

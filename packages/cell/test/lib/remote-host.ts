@@ -60,9 +60,9 @@ export const open = Effect.fnUntraced(function* (confinement?: RenPlugin.Confine
     EnvironmentAccess.Service,
     EnvironmentAccess.Service.of({
       release: () => Effect.void,
-      open: (sessionId) =>
+      open: (sessionId, options) =>
         Ref.update(opens, (count) => count + 1).pipe(
-          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
+          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId, options)),
         ),
     }),
   )

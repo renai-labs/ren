@@ -81,7 +81,13 @@ export const layer = Layer.effect(
         return yield* Result.match(
           BrainSettings.resolve(
             yield* Ref.get(layers),
-            { agent: chat?.agent ?? null, model, drives: chat?.drives, defaultModels: defaults?.models },
+            {
+              agent: chat?.agent ?? null,
+              model,
+              drives: chat?.drives,
+              hasHand: chat?.hasHand,
+              defaultModels: defaults?.models,
+            },
             lookup,
             defaults?.catalogs,
           ),

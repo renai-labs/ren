@@ -1,9 +1,11 @@
 export * as BrainRuns from "./brain-runs.js"
 
+import { BrainProvider } from "../../src/brain-provider.js"
 import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
+import type { Machine } from "@ren/schema/machine"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
@@ -14,7 +16,6 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Models } from "../../src/models.js"
-import type { SandboxProvider } from "../../src/sandbox-provider.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
 
@@ -57,7 +58,7 @@ export const make = async () => {
       readonly port?: number
       readonly around?: Parameters<typeof Host.serve>[1]
       readonly config?: Record<string, string>
-      readonly sandbox?: Layer.Layer<SandboxProvider.Service, unknown, HttpClient.HttpClient>
+      readonly sandbox?: Layer.Layer<BrainProvider.Registry, unknown, HttpClient.HttpClient>
       readonly keepBrains?: boolean
       readonly tracer?: Tracer.Tracer
     } = {},
@@ -109,14 +110,19 @@ export const make = async () => {
 
   return {
     database,
+    root,
     ren,
     row,
     seeded,
     newBrain: () => seeded().then((found) => found.brainId),
-    reaches: (brainId: Brain.ID, phase: Brain.Phase) =>
+    reaches: (brainId: Brain.ID, phase: Machine.Phase, options: { readonly generation?: number } = {}) =>
       Effect.runPromise(
         Effect.promise(() => row(brainId)).pipe(
-          Effect.repeat({ until: (found) => found.phase === phase, schedule: Schedule.spaced("100 millis") }),
+          Effect.repeat({
+            until: (found) =>
+              found.phase === phase && (options.generation === undefined || found.generation === options.generation),
+            schedule: Schedule.spaced("100 millis"),
+          }),
           Effect.timeoutOrElse({
             duration: "60 seconds",
             orElse: () => Effect.die(new Error(`Brain ${brainId} did not reach ${phase}`)),

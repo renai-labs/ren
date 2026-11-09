@@ -6,11 +6,13 @@ import { desc, eq } from "drizzle-orm"
 import { Array, Clock, Context, DateTime, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { DurableRunner } from "./durable-runner.js"
-import { SandboxProvider } from "./sandbox-provider.js"
+import { BrainProvider } from "./brain-provider.js"
+import { EnvironmentProvider } from "./environment-provider.js"
+import type { MachineProvider } from "./machine-provider.js"
 import { Usage } from "./usage.js"
 
 export interface Interface {
-  readonly sweep: Effect.Effect<void, SandboxProvider.Failed | Usage.Unavailable>
+  readonly sweep: Effect.Effect<void, MachineProvider.Failed | Usage.Unavailable>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SandboxUsage") {}
@@ -30,16 +32,21 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const provider = yield* SandboxProvider.Service
+    const brains = yield* BrainProvider.Registry
+    const hands = yield* EnvironmentProvider.Registry
+    const providers = [
+      ...brains.providers,
+      ...hands.providers.filter((provider) => Option.isNone(brains.get(provider.info.id))),
+    ]
     const usage = yield* Usage.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const sweeping = yield* Semaphore.make(1)
 
-    const sweep = Effect.gen(function* () {
+    const sweepOf = Effect.fnUntraced(function* (provider: MachineProvider.Provider) {
       const newest = yield* database.db
         .select({ time: events.time })
         .from(events)
-        .where(eq(events.source, provider.kind))
+        .where(eq(events.source, provider.info.id))
         .orderBy(desc(events.time))
         .limit(1)
         .pipe(Effect.orDie)
@@ -52,16 +59,16 @@ export const layer = Layer.effect(
         (batch) =>
           usage.record(
             batch.map((span) => ({
-              source: provider.kind,
+              source: provider.info.id,
               id: span.id,
               type: "sandbox.compute",
               time: span.endedAt,
-              workload: Workload.key({ kind: "brain", id: span.brainId, generation: span.generation }),
+              workload: Workload.key(span.workload),
               organization: span.organizationId,
-              brain: span.brainId,
+              ...(span.workload.kind === "brain" ? { brain: span.workload.id } : {}),
               space: span.spaceId,
               payer: "ren",
-              provider: provider.kind,
+              provider: provider.info.id,
               cost_micro_usd: span.costMicroUsd,
               data: {
                 sandbox_id: span.sandboxId,
@@ -73,7 +80,13 @@ export const layer = Layer.effect(
           ),
         { discard: true },
       )
-    }).pipe(sweeping.withPermitsIfAvailable(1), Effect.asVoid, Effect.withSpan("SandboxUsage.sweep"))
+    })
+
+    const sweep = Effect.forEach(providers, sweepOf, { discard: true }).pipe(
+      sweeping.withPermitsIfAvailable(1),
+      Effect.asVoid,
+      Effect.withSpan("SandboxUsage.sweep"),
+    )
 
     yield* DurableRunner.register(SweepRun, (payload) =>
       DurableRunner.supervise(`sandbox-usage:${payload.slot}`, sweep),

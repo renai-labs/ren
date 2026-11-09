@@ -15,9 +15,6 @@ import type {
   EnvironmentTemplateCreateInput,
   EnvironmentTemplateUpdateInput,
   EnvironmentTemplateArchiveInput,
-  SpaceEnvironmentTemplateListInput,
-  SpaceEnvironmentTemplateCreateInput,
-  SpaceEnvironmentTemplateArchiveInput,
   SpaceSettingsGetInput,
   SpaceSettingsUpdateInput,
   OrganizationSettingsGetInput,
@@ -300,37 +297,6 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["environmentProvider", "list"] as const,
             queryFn: (context) => client["environmentProvider"]["list"]({ signal: context.signal }),
-          }),
-      },
-    },
-    "space-environment-template": {
-      list: {
-        queryKey: (input?: SpaceEnvironmentTemplateListInput) =>
-          input === undefined
-            ? (["space-environment-template", "list"] as const)
-            : (["space-environment-template", "list", input] as const),
-        queryOptions: (input: SpaceEnvironmentTemplateListInput) =>
-          queryOptions({
-            queryKey: ["space-environment-template", "list", input] as const,
-            queryFn: (context) => client["space-environment-template"]["list"](input, { signal: context.signal }),
-          }),
-      },
-      create: {
-        mutationKey: () => ["space-environment-template", "create"] as const,
-        mutationOptions: () =>
-          mutationOptions({
-            mutationKey: ["space-environment-template", "create"] as const,
-            mutationFn: (input: SpaceEnvironmentTemplateCreateInput) =>
-              client["space-environment-template"]["create"](input),
-          }),
-      },
-      archive: {
-        mutationKey: () => ["space-environment-template", "archive"] as const,
-        mutationOptions: () =>
-          mutationOptions({
-            mutationKey: ["space-environment-template", "archive"] as const,
-            mutationFn: (input: SpaceEnvironmentTemplateArchiveInput) =>
-              client["space-environment-template"]["archive"](input),
           }),
       },
     },

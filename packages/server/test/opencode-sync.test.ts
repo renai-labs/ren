@@ -660,7 +660,7 @@ describe("OpenCodeSync", () => {
   )
 
   it.live(
-    "a row larger than O2 marks its chat as unable to sync until it changes. The other chats sync, and the step is not failed (E91)",
+    "a row larger than O2 syncs as a short stand-in, and the rest of its chat syncs (EN37, chaos row 10)",
     () =>
       Effect.gen(function* () {
         const host = yield* setup()
@@ -678,7 +678,17 @@ describe("OpenCodeSync", () => {
         expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: true })
         expect((yield* Metric.value(OpenCodeSync.oversizedRows)).count).toBe(before.count + 1)
         expect(captured.annotations.filter((annotation) => annotation["ren.message.id"] === large.id)).toHaveLength(1)
-        expect((yield* SyncTest.remote(host.brain.id)).sessions.map((session) => session.id)).toEqual([host.brain.id])
+        const synced = yield* SyncTest.remote(host.brain.id)
+        expect(synced.sessions.map((session) => String(session.id)).toSorted()).toEqual(
+          [String(host.brain.id), String(child)].toSorted(),
+        )
+        const local = host.db
+          .query<{ id: string }, [string]>("select id from session_message where session_id = ? order by seq, id")
+          .all(child)
+        const remote = synced.messages.filter((message) => String(message.session_id) === String(child))
+        expect(remote.map((message) => message.id).toSorted()).toEqual(local.map((message) => message.id).toSorted())
+        expect(remote.find((message) => message.id === large.id)).toMatchObject({ type: "synthetic" })
+        expect(remote.find((message) => message.id === large.id)?.data).toContain(OpenCodeSync.tooLarge)
         host.proxy.clear()
         expect(yield* sync.step()).toEqual({ drained: true })
         expect(host.proxy.requests.filter(isStart(child))).toEqual([])

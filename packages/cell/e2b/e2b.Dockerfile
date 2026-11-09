@@ -1,8 +1,13 @@
 FROM oven/bun:1.4.2
 
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip \
+  && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip sudo \
   && rm -rf /var/lib/apt/lists/*
+
+# A template's packages reach a running machine in place, as root through sudo (EN22).
+RUN (id -u user >/dev/null 2>&1 || useradd --create-home --shell /bin/bash user) \
+  && echo 'user ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/user \
+  && chmod 0440 /etc/sudoers.d/user
 
 RUN version=v1.75.2 arch="$(dpkg --print-architecture)" \
   && case "$arch" in \
@@ -15,10 +20,7 @@ RUN version=v1.75.2 arch="$(dpkg --print-architecture)" \
   && unzip -q -j /tmp/rclone.zip "*/rclone" -d /usr/local/bin \
   && rm /tmp/rclone.zip
 
-COPY ren.tar.gz /tmp/ren.tar.gz
-RUN mkdir -p /opt/ren && tar -xzf /tmp/ren.tar.gz -C /opt/ren && rm /tmp/ren.tar.gz \
-  && cd /opt/ren && bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts
-
+# Ren's code is not in the image: start.sh downloads it from Ren as bundles (EN26).
 RUN echo '[Slice]' >/etc/systemd/system/ren-tools.slice \
   && echo 'MemoryMax=70%' >>/etc/systemd/system/ren-tools.slice
 

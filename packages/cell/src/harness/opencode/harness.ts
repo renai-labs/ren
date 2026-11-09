@@ -438,7 +438,7 @@ type Opener = (
   apps: Option.Option<AppCatalog.Info>,
   channels: ReadonlyArray<Channel.Provider>,
   ren: Option.Option<OpenCodeMcp.RenAccess>,
-  host: { readonly egress: boolean; readonly sources: GitSources.Interface },
+  host: { readonly egress: boolean; readonly isRemoteHand: boolean; readonly sources: GitSources.Interface },
 ) => Effect.Effect<OpenCodeServer.Instance, Error, Scope.Scope>
 
 const layerWith = (opener: Opener) =>
@@ -487,6 +487,7 @@ const layerWith = (opener: Opener) =>
                 ren,
                 {
                   egress: cell.vars.REN_EGRESS === "1",
+                  isRemoteHand: cell.vars.REN_HAND_PLACEMENT === "remote",
                   sources,
                 },
               )
@@ -527,6 +528,7 @@ export const layerProcess = (database: string, confinement: RenPlugin.Confinemen
       egress: host.egress,
       sources: host.sources,
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
+      isRemoteHand: host.isRemoteHand,
       confinement: {
         workspace: confinement.workspace,
         allow: [
@@ -596,6 +598,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                 agent: chat.agent,
                 model: Option.fromUndefinedOr(picked),
                 drives: chat.drives,
+                hasHand: chat.hasHand,
                 defaultModels: saved?.defaultModels,
               },
               lookup,
@@ -698,7 +701,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                 server,
                 settings,
                 {
-                  ...Struct.omit(input, ["environmentTemplateId", "directory"]),
+                  ...Struct.omit(input, ["directory"]),
                   ...(input.directory && { directory: Environment.Directory.make(input.directory) }),
                 },
                 state.modelCatalogs,
@@ -853,10 +856,18 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
             ),
             Stream.runHead,
           )
+          // oxlint-disable-next-line ren/no-comments -- EN25: a shell that still runs, such as one the agent put in the background, keeps the machine awake.
+          const background = yield* server
+            .shells(info.id, (shells) => shells.list())
+            .pipe(
+              Effect.map((shells) => shells.some((shell) => shell.status === "running")),
+              Effect.orElseSucceed(() => false),
+            )
           return {
             id: info.id,
             root: true,
             inbox,
+            background,
             progress: String(DateTime.toEpochMillis(info.time.updated)),
             unfinished: Option.isSome(lastRelevantMessage) && lastRelevantMessage.value.type !== "idle",
           }
@@ -872,7 +883,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         ...snapshots,
         ...active
           .filter((id) => !snapshots.some((session) => session.id === id))
-          .map((id) => ({ id, root: false, inbox: [], progress: "", unfinished: false })),
+          .map((id) => ({ id, root: false, inbox: [], background: false, progress: "", unfinished: false })),
       ].map((session) => {
         const questionAgesMs = forms
           .filter((form) => form.sessionID === session.id)
@@ -882,6 +893,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           root: session.root,
           active: active.includes(session.id),
           progress: session.progress,
+          background: session.background,
           unfinished: session.unfinished,
           questionAgeMs: questionAgesMs.reduce<number | undefined>(
             (oldest, ms) => Math.max(oldest ?? ms, ms),

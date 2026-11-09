@@ -6,6 +6,7 @@ import { DateTime, Effect, Layer, Option, type Scope } from "effect"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
+import { CodeUpdate } from "./code-update.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { HotReload } from "./hot-reload.js"
@@ -26,6 +27,7 @@ type Services =
   | Sync.Service
   | HotReload.Service
   | Restore.Service
+  | CodeUpdate.Service
 
 const prefix = "/ren"
 
@@ -144,6 +146,13 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
             const harness = yield* Cell.acquire
             yield* harness.setModel(request.params.id, Option.fromNullishOr(request.payload.model))
           }),
+        ),
+      )
+      .handle("brain.update", (request) =>
+        handle(
+          Effect.flatMap(CodeUpdate.Service, (code) =>
+            code.update(request.payload.bundles, request.payload.steps ?? []),
+          ),
         ),
       )
       .handle("brain.wake", () =>

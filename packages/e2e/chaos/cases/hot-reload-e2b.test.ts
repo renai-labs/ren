@@ -1,8 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { BrainProvider } from "@ren/core/brain-provider"
 import { OpenCode } from "@opencode/client"
 import { FakeRen, TestSettings, TestToken } from "@ren/cell/testing"
-import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
-import { SandboxProvider } from "@ren/core/sandbox-provider"
+import { E2BSandbox } from "@ren/core/machine-provider/e2b"
+import { MachineProvider } from "@ren/core/machine-provider"
 const hostTokenHeader = "ren-host-token"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
@@ -46,10 +47,12 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
   }, 120_000)
 
   test("a push does not resume a paused brain; the wake applies the settings and reads the models of the pause", async () => {
-    const provider = ManagedRuntime.make(E2BSandbox.layer.pipe(Layer.provide(FetchHttpClient.layer)))
+    const provider = ManagedRuntime.make(
+      BrainProvider.layer([E2BSandbox.provider]).pipe(Layer.provide(FetchHttpClient.layer)),
+    )
     cleanups.push(() => provider.dispose())
-    const sandbox = <A, E>(use: (service: SandboxProvider.Interface) => Effect.Effect<A, E>) =>
-      provider.runPromise(SandboxProvider.Service.use(use))
+    const sandbox = <A, E>(use: (service: MachineProvider.Provider) => Effect.Effect<A, E>) =>
+      provider.runPromise(BrainProvider.first.pipe(Effect.flatMap(use)))
     const key = await LiteLLM.generate({ duration: "2h", models: [small] })
     cleanups.push(() => LiteLLM.remove(key))
     const ren = FakeRen.start({ port: renPort })
@@ -59,18 +62,23 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
     ren.settings(TestSettings.layers({ ren: { model: { endpointId: "anthropic", modelId: "claude-haiku-5-5" } } }))
     const created = await sandbox((service) =>
       service.create({
-        brainId: brain,
-        generation: 1,
-        organizationId: Auth.OrganizationID.create(),
-        spaceId: Space.ID.create(),
-        env: {
+        labels: {
+          kind: "brain",
+          id: brain,
+          generation: 1,
+          organizationId: Auth.OrganizationID.create(),
+          spaceId: Space.ID.create(),
+        },
+        config: {},
+        variables: {
           REN_URL: renTunnel,
           REN_BRAIN_ID: brain,
           REN_BRAIN_GENERATION: "1",
           OPENCODE_CONFIG: "{}",
           ...TestToken.vars,
         },
-        proxy: Option.none(),
+        image: Option.none(),
+        network: MachineProvider.unrestricted,
       }),
     )
     cleanups.push(() => sandbox((service) => service.destroy(created.binding)))
@@ -115,7 +123,7 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
     expect(pushed).not.toBe(202)
     expect(await sandbox((service) => service.status(created.binding))).toBe("paused")
 
-    await sandbox((service) => service.connect(created.binding, Option.none()))
+    await sandbox((service) => service.connect(created.binding, MachineProvider.unrestricted))
     expect((await call("/ren/wake")).ok).toBe(true)
     expect(ren.pulls.length).toBeGreaterThan(pulledBefore)
     expect(await listed()).toEqual(["anthropic/claude-haiku-5-5", "openai/gpt-5.6-terra"])

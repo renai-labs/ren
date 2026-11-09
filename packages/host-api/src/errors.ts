@@ -60,6 +60,14 @@ export class EnvironmentUnavailableError extends Schema.TaggedError<EnvironmentU
   { httpApiStatus: 503 },
 ) {}
 
+export class EnvironmentStartingError extends Schema.TaggedError<EnvironmentStartingError>()(
+  "EnvironmentStartingError",
+  { message: Schema.String },
+  { httpApiStatus: 503 },
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
+
 export class SyncUnavailableError extends Schema.TaggedError<SyncUnavailableError>()(
   "SyncUnavailableError",
   { message: Schema.String },

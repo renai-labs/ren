@@ -11,7 +11,6 @@ import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { Session } from "@ren/schema/session"
 import type { Skill } from "@ren/schema/skill"
 import { Space } from "@ren/schema/space"
-import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { and, eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { RenSettings } from "../../src/settings/ren.js"
@@ -185,6 +184,7 @@ export const session = Effect.fnUntraced(function* (
       sessionId: id,
       harness: "opencode",
       interactive: true,
+      hand: Space.defaultHand,
       ...start,
     }),
     started_at: null,
@@ -252,11 +252,6 @@ export const environmentTemplate = Effect.fnUntraced(function* (
     provider: EnvironmentProvider.ID.make(options.provider ?? "test"),
     config: { label: "seeded" },
     sessions_per_environment: options.sessionsPerEnvironment ?? 8,
-  })
-  yield* database.db.insert(Database.Schema.space_environment_template).values({
-    id: SpaceEnvironmentTemplate.ID.create(),
-    space_id: yield* team(organizationId),
-    environment_template_id: id,
   })
   return id
 })

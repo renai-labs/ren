@@ -13,6 +13,7 @@ import { AgentQueries } from "../agent/queries.js"
 import { BrainHost } from "../brain-host.js"
 import { Brains } from "../brains.js"
 import { BrainRegistry } from "../brain-registry.js"
+import { SpaceQueries } from "../space/queries.js"
 import { OpenCodeStore } from "./opencode-store.js"
 
 export class NotFound extends Schema.TaggedError<NotFound>()("SessionRunner.NotFound", { message: Schema.String }) {}
@@ -44,7 +45,7 @@ export interface Info extends Owner {
 export interface Interface {
   readonly create: (
     owner: Owner,
-    input: Session.StartInput,
+    input: Omit<Session.StartInput, "hand">,
     options?: { readonly agentId?: Agent.ID },
   ) => Effect.Effect<void, AlreadyExists | NotFound | Brains.BrainRejectedError>
   readonly send: (
@@ -73,10 +74,21 @@ export const layer = Layer.effect(
     return Service.of({
       create: Effect.fn("SessionRunner.create")(function* (
         owner: Owner,
-        input: Session.StartInput,
+        input: Omit<Session.StartInput, "hand">,
         options: { readonly agentId?: Agent.ID } = {},
       ) {
-        const startInput = yield* Schema.encodeEffect(Session.StartInput)(input).pipe(Effect.orDie)
+        // oxlint-disable-next-line ren/no-comments -- Space settings rule 4: the chat keeps the hand that its space has now.
+        const space = (yield* database.db
+          .select({
+            hand_placement: Database.Schema.space.hand_placement,
+            environment_template_id: Database.Schema.space.environment_template_id,
+          })
+          .from(Database.Schema.space)
+          .where(eq(Database.Schema.space.id, owner.spaceId))
+          .pipe(Effect.orDie)).at(0)
+        if (!space) return yield* new NotFound({ message: "Space not found." })
+        const start = { ...input, hand: SpaceQueries.hand(space) }
+        const startInput = yield* Schema.encodeEffect(Session.StartInput)(start).pipe(Effect.orDie)
         const brainId = yield* registry.assign({ ...owner, sessionId: input.sessionId })
         const created = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
@@ -117,7 +129,7 @@ export const layer = Layer.effect(
           }),
         )
         if (created.length === 0) return yield* alreadyExists
-        yield* brain.start(input, { ...owner, brainId })
+        yield* brain.start(start, { ...owner, brainId })
       }),
       send: Effect.fn("SessionRunner.send")(function* (input: Session.SendInput) {
         yield* Effect.annotateCurrentSpan("ren.session.id", input.sessionId)

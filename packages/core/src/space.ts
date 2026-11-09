@@ -13,6 +13,7 @@ import { Access } from "./access.js"
 import { CredentialOffboarding } from "./credential/offboarding.js"
 import { EgressControl } from "./egress-control.js"
 import { AppQueries } from "./app/queries.js"
+import { BrainProvider } from "./brain-provider.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
@@ -67,6 +68,72 @@ const actions = {
   removeMember: Primitive.action(SpaceMember.definition, "archive"),
 }
 
+const templateProvider = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  actor: Actor.Info,
+  hand: Space.Hand,
+) {
+  if (hand.placement === "none" || !hand.environmentTemplateId) return Option.none<string>()
+  const found = (yield* transaction
+    .select({
+      provider: Database.Schema.environment_template.provider,
+      image: Database.Schema.environment_template.image,
+      buildStatus: Database.Schema.environment_template.build_status,
+    })
+    .from(Database.Schema.environment_template)
+    .where(
+      and(
+        eq(Database.Schema.environment_template.id, hand.environmentTemplateId),
+        eq(Database.Schema.environment_template.organization_id, actor.organizationId),
+        isNull(Database.Schema.environment_template.archived_at),
+      ),
+    )
+    .for("share")).at(0)
+  if (!found)
+    return yield* new Primitive.Invalid({
+      message: `This organization has no environment template ${hand.environmentTemplateId}`,
+      field: "hand",
+    })
+  // oxlint-disable-next-line ren/no-comments -- EN44: a space cannot pick a template that has never built. A provider that builds no image is ready at once.
+  if (!found.image && found.buildStatus !== "ready")
+    return yield* new Primitive.Invalid({
+      message: `The environment template ${hand.environmentTemplateId} has no image yet; wait until its build is ready`,
+      field: "hand",
+    })
+  return Option.some(found.provider)
+})
+
+// oxlint-disable-next-line ren/no-comments -- EN3, EN24: a space holds only a hand that its brain provider can run. The template read waits for an archive of it.
+const checkHand = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  actor: Actor.Info,
+  space: typeof Database.Schema.space.$inferSelect,
+  input: Space.UpdateInput,
+) {
+  // ast-grep-ignore: no-nullish-comparison, -- a null brain provider is a change: back to the first one.
+  if (input.brainProvider === undefined && !input.hand) return
+  const hand = input.hand ?? SpaceQueries.hand(space)
+  const template = yield* templateProvider(transaction, actor, hand)
+  if (hand.placement !== "colocated") return
+  // ast-grep-ignore: no-nullish-comparison, -- a null brain provider is a change: back to the first one.
+  const chosen = input.brainProvider === undefined ? space.brain_provider : input.brainProvider
+  const provider = Option.flatMap(yield* Effect.serviceOption(BrainProvider.Registry), (registry) =>
+    chosen ? registry.get(chosen) : Option.fromNullishOr(registry.providers.at(0)),
+  )
+  if (Option.isNone(provider)) return
+  const field = input.hand ? "hand" : "brainProvider"
+  if (!provider.value.canColocate)
+    return yield* new Primitive.Invalid({
+      message: `The brain provider ${provider.value.info.id} cannot run tools on the brain’s machine; pick a remote hand or none`,
+      field,
+    })
+  if (Option.exists(template, (each) => each !== provider.value.info.id))
+    return yield* new Primitive.Invalid({
+      message: `A co-located hand needs a template of the brain provider ${provider.value.info.id}, not of ${Option.getOrUndefined(template)}`,
+      field,
+    })
+})
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -105,6 +172,8 @@ export const layer = Layer.effect(
           name: row.space.name,
           description: canRead ? row.space.description : null,
           brainScope: row.space.brain_scope,
+          brainProvider: row.space.brain_provider,
+          hand: SpaceQueries.hand(row.space),
           memberCount: row.memberCount,
           membershipId: row.membershipId,
           factory: canRead ? TaskFactory.keep(row.space.factory, row.usable) : Factory.empty,
@@ -210,6 +279,16 @@ export const layer = Layer.effect(
             if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource })) {
               return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
             }
+            // oxlint-disable-next-line ren/no-comments -- A space names only a brain provider this deployment registers, or Ren would not start (EN24).
+            if (input.brainProvider) {
+              const registry = yield* Effect.serviceOption(BrainProvider.Registry)
+              if (Option.isSome(registry) && Option.isNone(registry.value.get(input.brainProvider)))
+                return yield* new Primitive.Invalid({
+                  message: `This Ren has no brain provider ${input.brainProvider}; it has ${registry.value.providers.map((provider) => provider.info.id).join(", ")}`,
+                  field: "brainProvider",
+                })
+            }
+            yield* checkHand(transaction, actor, visible.row.space, input)
             if (input.factory) {
               const problem = FactoryCheck.problems(input.factory).at(0)
               if (problem) return yield* new Primitive.Invalid({ message: problem, field: "factory" })
@@ -235,6 +314,8 @@ export const layer = Layer.effect(
                 name: input.name,
                 description: input.description,
                 brain_scope: input.brainScope,
+                brain_provider: input.brainProvider,
+                ...(input.hand && SpaceQueries.handColumns(input.hand)),
                 factory: input.factory,
                 updated_at: sql`now()`,
               })

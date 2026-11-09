@@ -1,3 +1,4 @@
+import { FetchHttpClient } from "effect/http"
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { Shared } from "@ren/cell/testing"
 import type { StubModel } from "@ren/cell/testing"
@@ -11,7 +12,7 @@ import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
-import type { Space } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { Effect, Layer, ManagedRuntime, Redacted, Schema } from "effect"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
@@ -19,6 +20,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Brains } from "../src/brains.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
+import { MachineProvider } from "../src/machine-provider.js"
 import { Environments } from "../src/environments.js"
 import { Models } from "../src/models.js"
 import { TestProvider } from "./lib/environment-provider.js"
@@ -97,10 +99,8 @@ const stackOf = async (config: CoreConfig) => {
         const on = placed.get(environmentId) ?? config.target
         placed.set(environmentId, on)
         return disposed.has(on)
-          ? Effect.fail(
-              new EnvironmentProvider.Gone({ message: `the machine of environment ${environmentId} is gone` }),
-            )
-          : Effect.promise(() => on.serve(environmentId)).pipe(Effect.map((url) => ({ url: new URL(url) })))
+          ? Effect.fail(new MachineProvider.Gone({ message: `the machine of environment ${environmentId} is gone` }))
+          : Effect.promise(() => on.serve(environmentId)).pipe(Effect.map((url) => ({ url })))
       },
     }),
   )
@@ -115,7 +115,7 @@ const stackOf = async (config: CoreConfig) => {
     },
     models,
     environments: Environments.layer
-      .pipe(Layer.provide(Signer.layerLocal))
+      .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
       .pipe(Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)]))),
   }).pipe(
     Layer.provide(
@@ -193,7 +193,7 @@ const start = async (input: { readonly withTemplate?: boolean; readonly first?: 
           sessionId,
           harness: "opencode",
           interactive: false,
-          ...(input.withTemplate !== false && { environmentTemplateId }),
+          hand: input.withTemplate === false ? Space.defaultHand : { placement: "remote", environmentTemplateId },
           ...(input.first && {
             initialMessage: {
               messageId: Session.MessageID.create(),

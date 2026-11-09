@@ -16,6 +16,10 @@ export const Info = Schema.Struct({
   configSchema: Schema.Json.annotate({
     description: "A JSON Schema document (draft 2020-12) of the provider’s config.",
   }),
+  canLimitHosts: Schema.Boolean.annotate({ description: "Its machines can keep to a list of hosts." }),
+  canColocate: Schema.Boolean.annotate({
+    description: "Its machines can run a brain and its tools on one machine: its templates can be co-located hands.",
+  }),
 }).annotate({ identifier: "EnvironmentProvider.Info" })
 
 export const Infos = Schema.Array(Info).annotate({ identifier: "EnvironmentProvider.Infos" })

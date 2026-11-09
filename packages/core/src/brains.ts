@@ -6,6 +6,7 @@ import type { StartBody, Synced } from "@ren/host-api/brain-api"
 import {
   BrainRejectedError,
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   GenerationRetiredError,
@@ -28,7 +29,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq, inArray, isNull } from "drizzle-orm"
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm"
 import {
   ByteSize,
   Cause,
@@ -66,6 +67,7 @@ import { SpaceQueries } from "./space/queries.js"
 export {
   BrainRejectedError,
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   ModelsUnavailableError,
@@ -102,7 +104,11 @@ export interface Interface {
   readonly accessEnvironment: (
     host: CurrentHost["Service"],
     sessionId: Session.ID,
-  ) => Effect.Effect<Environment.Access, EnvironmentNotFoundError | EnvironmentUnavailableError | ForbiddenError>
+    options?: { readonly unreachable?: boolean },
+  ) => Effect.Effect<
+    Environment.Access,
+    EnvironmentNotFoundError | EnvironmentUnavailableError | EnvironmentStartingError | ForbiddenError
+  >
   readonly releaseEnvironment: (
     host: CurrentHost["Service"],
     sessionId: Session.ID,
@@ -309,19 +315,21 @@ export const layer = Layer.effect(
           message: `The creator of ${input.sessionId} can no longer see its space`,
         })
       const target = yield* brainHost.target(placement.brainId)
-      const requested = input.environmentTemplateId
-      const binding = requested
-        ? Option.some(
-            yield* environments
-              .bind({ ...subject, spaceId: placement.spaceId }, requested)
-              .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
-          )
-        : Option.map(
-            yield* environments.findDirectory(subject, yield* handOf(placement.brainId, target.generation)),
-            (directory) => ({ directory, isNew: false }),
-          )
+      const hand = input.hand
+      const colocated =
+        hand.placement === "colocated"
+          ? yield* environments.findDirectory(subject, yield* handOf(placement.brainId, target.generation))
+          : Option.none()
+      const binding =
+        hand.placement === "remote"
+          ? Option.some(
+              yield* environments
+                .bind({ ...subject, spaceId: placement.spaceId }, hand.environmentTemplateId)
+                .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
+            )
+          : Option.map(colocated, (directory) => ({ directory, isNew: false }))
       const payload = {
-        ...Struct.omit(input, ["environmentTemplateId"]),
+        ...Struct.omit(input, ["hand"]),
         ...Option.match(binding, { onNone: () => ({}), onSome: (found) => ({ directory: found.directory }) }),
       } satisfies StartBody
       const api = yield* client.brain(target)
@@ -355,6 +363,81 @@ export const layer = Layer.effect(
           Effect.orDie,
           Effect.map((rows) => Option.fromNullishOr(rows.at(0)?.id)),
         )
+
+    const send = Effect.fn("Brains.send")(function* (input: Session.SendInput) {
+      yield* validatePrompt(input.prompt)
+      const session = yield* brainOf(input.sessionId)
+      const target = yield* brainHost.target(session.brainId).pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
+      const api = yield* client.brain(target)
+      return yield* call(
+        api.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
+      ).pipe(
+        Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))),
+        Effect.tapErrorTag("BrainUnavailable", () => brainHost.unavailable(session.brainId)),
+      )
+    })
+
+    const chats = Database.Schema.agent_session
+
+    const background = yield* Effect.scope
+    const continuing = new Set<Session.ID>()
+
+    // oxlint-disable-next-line ren/no-comments -- EN35, EN36: one message continues a chat that was busy, or had waiting messages, when its machine was replaced by force. The brain deduplicates by message id, so a second try after a crash sends nothing twice; a failed try stays marked for the next try.
+    const continueChat = Effect.fnUntraced(function* (sessionId: Session.ID, messageId: Session.MessageID) {
+      const row = (yield* database.db
+        .select({ createdBy: chats.created_by })
+        .from(chats)
+        .where(and(eq(chats.id, sessionId), eq(chats.continue_message_id, messageId)))
+        .pipe(Effect.orDie)).at(0)
+      if (!row) return
+      yield* send({
+        sessionId,
+        messageId,
+        prompt: { text: lostSandbox.text },
+        delivery: "queue",
+        sender: { userId: row.createdBy },
+        synthetic: { description: lostSandbox.description, source: lostSandbox.source },
+      }).pipe(
+        Effect.catchTag(["SessionNotStartedError", "BrainRejectedError"], (error) =>
+          Effect.logWarning(`The chat ${sessionId} cannot continue after the replace`, error),
+        ),
+      )
+      yield* database.db
+        .update(chats)
+        .set({ continue_message_id: null })
+        .where(and(eq(chats.id, sessionId), eq(chats.continue_message_id, messageId)))
+        .pipe(Effect.orDie)
+    })
+
+    const continueMarked = Effect.fnUntraced(function* (brainId: Brain.ID) {
+      const marked = yield* database.db
+        .select({ sessionId: chats.id, messageId: chats.continue_message_id })
+        .from(chats)
+        .where(and(eq(chats.brain_id, brainId), isNotNull(chats.continue_message_id)))
+        .pipe(Effect.orDie)
+      yield* Effect.forEach(
+        marked.flatMap((each) =>
+          each.messageId && !continuing.has(each.sessionId)
+            ? [{ sessionId: each.sessionId, messageId: each.messageId }]
+            : [],
+        ),
+        (each) =>
+          Effect.sync(() => continuing.add(each.sessionId)).pipe(
+            Effect.andThen(continueChat(each.sessionId, each.messageId)),
+            Effect.catchCause((cause) =>
+              Effect.logWarning(`The chat ${each.sessionId} did not continue; the next pull tries again`, cause),
+            ),
+            Effect.ensuring(Effect.sync(() => continuing.delete(each.sessionId))),
+            Effect.forkIn(background),
+          ),
+        { discard: true },
+      )
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- A chat that a lost sandbox stopped continues at once, with no person or call needed: the note starts the replace and tells the model what it lost. A repeated loss fails the chats instead, and marks none. A pull from the new machine sends what is still marked, also after a Ren restart.
+    yield* brainHost.onInterrupted((interrupted) =>
+      interrupted.repeated ? Effect.void : continueMarked(interrupted.brainId),
+    )
 
     yield* DurableRunner.register(StartRun, (payload) =>
       DurableRunner.supervise(
@@ -395,56 +478,6 @@ export const layer = Layer.effect(
           }),
         ),
       ),
-    )
-
-    const send = Effect.fn("Brains.send")(function* (input: Session.SendInput) {
-      yield* validatePrompt(input.prompt)
-      const session = yield* brainOf(input.sessionId)
-      const target = yield* brainHost.target(session.brainId).pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
-      const api = yield* client.brain(target)
-      return yield* call(
-        api.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
-      ).pipe(
-        Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))),
-        Effect.tapErrorTag("BrainUnavailable", () => brainHost.unavailable(session.brainId)),
-      )
-    })
-
-    // oxlint-disable-next-line ren/no-comments -- A chat that a lost sandbox stopped mid-turn continues on its brain's new sandbox, with no person or call needed: the note starts the replace and tells the model what it lost. A repeated loss fails the chats instead, and no note goes.
-    yield* brainHost.onInterrupted((interrupted) =>
-      interrupted.repeated
-        ? Effect.void
-        : database.db
-            .select({ id: Database.Schema.agent_session.id, createdBy: Database.Schema.agent_session.created_by })
-            .from(Database.Schema.agent_session)
-            .where(
-              and(
-                inArray(Database.Schema.agent_session.id, interrupted.sessionIds),
-                isNull(Database.Schema.agent_session.parent_id),
-              ),
-            )
-            .pipe(
-              Effect.orDie,
-              Effect.flatMap((roots) =>
-                Effect.forEach(
-                  roots,
-                  (root) =>
-                    send({
-                      sessionId: root.id,
-                      messageId: Session.MessageID.create(),
-                      prompt: { text: lostSandbox.text },
-                      delivery: "queue",
-                      sender: { userId: root.createdBy },
-                      synthetic: { description: lostSandbox.description, source: lostSandbox.source },
-                    }).pipe(
-                      Effect.catchCause((cause) =>
-                        Effect.logWarning(`The note about a lost sandbox did not reach ${root.id}`, cause),
-                      ),
-                    ),
-                  { concurrency: "unbounded", discard: true },
-                ),
-              ),
-            ),
     )
 
     return Service.of({
@@ -565,6 +598,8 @@ export const layer = Layer.effect(
           .where(eq(Database.Schema.brain.id, host.brainId))
           .pipe(Effect.orDie)
         yield* brainHost.observe(host.brainId, request.sessions)
+        // oxlint-disable-next-line ren/no-comments -- A pull is the first sign that a new machine is up: the chats that a forced replace marked continue now (EN35, EN36).
+        yield* continueMarked(host.brainId)
         const roots = request.roots ?? []
         const kept =
           roots.length === 0
@@ -583,6 +618,12 @@ export const layer = Layer.effect(
         const channels = yield* database
           .transaction((transaction) => ChannelInstallQueries.servers(transaction, host.organizationId, host.spaceId))
           .pipe(Effect.orDie)
+        // oxlint-disable-next-line ren/no-comments -- EN23: a space with no hand refuses the file and shell tools of its existing chats at their next pull.
+        const hasHand = (yield* database.db
+          .select({ placement: Database.Schema.space.hand_placement })
+          .from(Database.Schema.space)
+          .where(eq(Database.Schema.space.id, host.spaceId))
+          .pipe(Effect.orDie)).some((row) => row.placement !== "none")
         return {
           publicKeys: client.publicKeys,
           ...Option.match(inference, { onNone: () => ({}), onSome: (found) => ({ inference: found }) }),
@@ -592,11 +633,12 @@ export const layer = Layer.effect(
           memory: yield* Memory.roots(database.db, host).pipe(Effect.orDie),
           chats: pulled.chats.map((chat) => {
             const capability = capabilities.get(chat.id)
-            if (!capability) return chat
+            if (!capability) return { id: chat.id, agent: chat.agent, archived: chat.archived, hasHand }
             return {
               id: chat.id,
               agent: chat.agent,
               archived: chat.archived,
+              hasHand,
               drives: drives.availability(host, capability),
             }
           }),
@@ -617,13 +659,15 @@ export const layer = Layer.effect(
       accessEnvironment: Effect.fn("Brains.accessEnvironment")(function* (
         host: CurrentHost["Service"],
         sessionId: Session.ID,
+        options: { readonly unreachable?: boolean } = {},
       ) {
         const subject = yield* inBrain(host, sessionId)
-        return yield* environments.access(subject, yield* handOf(host.brainId, host.generation)).pipe(
+        return yield* environments.access(subject, yield* handOf(host.brainId, host.generation), options).pipe(
           Effect.catchTags({
             "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
             "Environments.Unavailable": (error) =>
               Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
+            "Environments.Starting": (error) => Effect.fail(new EnvironmentStartingError({ message: error.message })),
           }),
         )
       }),

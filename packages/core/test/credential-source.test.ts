@@ -4,6 +4,7 @@ import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
+import { Environment } from "@ren/schema/environment"
 import { Space } from "@ren/schema/space"
 import {
   ConfigProvider,
@@ -156,6 +157,16 @@ describe("CredentialSource.layerMinted", () => {
         yield* Ref.set(revision, "file-2")
         const after = yield* modelKey
         expect([before, after]).toEqual([Option.some("sk-ant-1"), Option.some("sk-ant-2")])
+      }),
+  )
+
+  it.effect(
+    "a remote hand gets DRIVE for its space's drive, which its executor mounts, and none of the brain's own keys",
+    () =>
+      Effect.gen(function* () {
+        const source = yield* CredentialSource.Minted
+        const hand = { ...scope, workload: { kind: "hand" as const, id: Environment.ID.make("env_01"), generation: 1 } }
+        expect((yield* source.candidates(hand, [])).map((candidate) => candidate.label)).toEqual(["DRIVE"])
       }),
   )
 

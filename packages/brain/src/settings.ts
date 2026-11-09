@@ -30,6 +30,7 @@ export const Resolved = Schema.Struct({
   subagents: Schema.Array(Agent),
   references: Reference.List,
   drives: Schema.optionalKey(Drive.Availability),
+  hasHand: Schema.optionalKey(Schema.Boolean),
 }).annotate({ identifier: "BrainSettings.Resolved" })
 
 export interface Chat extends Schema.Schema.Type<typeof ChatSettings> {}
@@ -54,6 +55,7 @@ export interface Placement {
   readonly model: Option.Option<Session.Model>
   readonly defaultModels?: ModelTypes.Defaults | undefined
   readonly drives?: Drive.Availability | undefined
+  readonly hasHand?: boolean | undefined
 }
 
 export type Lookup = (model: Session.Model) => Option.Option<{ readonly variants: ReadonlyArray<string> }>
@@ -164,6 +166,7 @@ export const resolve = (
       ).values(),
     ).toSorted((left, right) => left.alias.localeCompare(right.alias)),
     ...(chat.drives && { drives: chat.drives }),
+    ...(chat.hasHand === false && { hasHand: false }),
   })
 }
 

@@ -69,10 +69,13 @@ describe("SandboxEgress", () => {
       const owner = yield* Seed.owner()
       const brainId = Brain.ID.create()
       yield* Seed.session({ ...owner, brainId })
-      const proxy = yield* sandboxEgress.proxyFor({ brainId, generation: 1, organizationId: owner.organizationId })
+      const proxy = yield* sandboxEgress.proxyFor({
+        workload: { kind: "brain", id: brainId, generation: 1 },
+        organizationId: owner.organizationId,
+      })
       if (Option.isNone(proxy)) return yield* Effect.die(new Error("expected a proxy"))
       invalidations.length = 0
-      yield* sandboxEgress.retire(brainId)
+      yield* sandboxEgress.retire({ kind: "brain", id: brainId })
       expect(
         yield* callers.verify({ kind: "ProxyLogin", username: proxy.value.username, password: proxy.value.password }),
       ).toEqual({ ok: false, reason: "generation_retired" })

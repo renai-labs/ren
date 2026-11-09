@@ -289,18 +289,6 @@ export const layerMinted = Layer.effect(
             },
           ],
         })
-        if (scope.workload.kind !== "brain") return gitHub
-        const granted = yield* cachedGrant(scope).pipe(Effect.option)
-        const endpoints = Option.match(granted, { onNone: () => [], onSome: (found) => found.access.endpoints })
-        const modelHosts = [
-          ...new Set(
-            endpoints.flatMap((endpoint) =>
-              Option.toArray(Option.fromNullishOr(URL.parse(endpoint.baseUrl)?.hostname)),
-            ),
-          ),
-        ]
-        const integrationsHost = Option.filter(integrations.host, () => Option.isSome(scope.spaceId))
-        const personHosts = [...modelHosts, ...Option.toArray(integrationsHost)]
         const drive = Option.match(scope.spaceId, {
           onNone: (): ReadonlyArray<Credentials.Candidate> => [],
           onSome: (): ReadonlyArray<Credentials.Candidate> => [
@@ -314,6 +302,19 @@ export const layerMinted = Layer.effect(
             },
           ],
         })
+        // oxlint-disable-next-line ren/no-comments -- A hand gets its space's drive, which its executor mounts, and none of the brain's own keys (REN, MODELS, INTEGRATIONS).
+        if (scope.workload.kind !== "brain") return [...drive, ...gitHub]
+        const granted = yield* cachedGrant(scope).pipe(Effect.option)
+        const endpoints = Option.match(granted, { onNone: () => [], onSome: (found) => found.access.endpoints })
+        const modelHosts = [
+          ...new Set(
+            endpoints.flatMap((endpoint) =>
+              Option.toArray(Option.fromNullishOr(URL.parse(endpoint.baseUrl)?.hostname)),
+            ),
+          ),
+        ]
+        const integrationsHost = Option.filter(integrations.host, () => Option.isSome(scope.spaceId))
+        const personHosts = [...modelHosts, ...Option.toArray(integrationsHost)]
         return [
           ...drive,
           {
@@ -414,7 +415,7 @@ export const layerMinted = Layer.effect(
           } satisfies Sourced)
         }
         if (candidate.label === Drives.label) {
-          if (scope.workload.kind !== "brain" || Option.isNone(scope.spaceId)) return Option.none()
+          if (Option.isNone(scope.spaceId)) return Option.none()
           const live = yield* database.db
             .select({ id: Database.Schema.space.id })
             .from(Database.Schema.space)

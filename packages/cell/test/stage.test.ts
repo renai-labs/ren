@@ -1,17 +1,5 @@
-import { afterAll, expect, test } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { expect, test } from "bun:test"
 import { Stage } from "../e2b/stage.js"
-
-const tree = await mkdtemp(join(tmpdir(), "ren-stage-test-"))
-afterAll(() => rm(tree, { recursive: true, force: true }))
-
-test("the install tree contains the dependency patch referenced by its root manifest", async () => {
-  await Stage.stage(Stage.root, tree)
-  const patch = "patches/@modelcontextprotocol%2Fclient@2.3.1.patch"
-  expect(await Bun.file(join(tree, patch)).text()).toBe(await Bun.file(join(Stage.root, patch)).text())
-})
 
 test("the staged sources are the workspace files the brain and its hand import, at any depth, and no others", async () => {
   const sources = await Stage.sources(Stage.root)
