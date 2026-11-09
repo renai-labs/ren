@@ -169,6 +169,7 @@ A co-located machine uses the template's last `ready` image while a build runs o
 
 1. A new system image (`E2B_TEMPLATE`) does not rebuild the template images: an admin saves the template again.
 2. An update of the executor bundle restarts the executor, and the processes that it started stop. An update of the brain bundle alone keeps them (chaos rows 12 and 13).
+3. A failed in-place update runs all of its steps again at the next try. A build command must give the same result when it runs two times; if not, its second run fails, and after 3 failures Ren replaces the machine.
 
 ### Networking
 
