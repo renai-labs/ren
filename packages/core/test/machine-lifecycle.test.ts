@@ -113,7 +113,7 @@ const kind = Effect.gen(function* () {
         keep_alive_until: null,
         phase: "creating",
       }),
-    lose: (id, generation) =>
+    forceReplace: (id, generation) =>
       Effect.flatMap(read(id), (row) =>
         row.generation === generation && row.phase !== "creating" && row.phase !== "replacing"
           ? update(id, { phase: "replacing" }).pipe(Effect.as(true))

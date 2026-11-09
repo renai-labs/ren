@@ -203,7 +203,11 @@ export const layer = Layer.effect(
         .returning({ id: Database.Schema.opencode_session.session_id })
     })
 
-    const lose = Effect.fn("BrainLifecycle.lose")(function* (brainId: Brain.ID, generation: number, at: Date) {
+    const forceReplace = Effect.fn("BrainLifecycle.forceReplace")(function* (
+      brainId: Brain.ID,
+      generation: number,
+      at: Date,
+    ) {
       const interrupted = yield* database
         .transaction((transaction) =>
           Effect.gen(function* () {
@@ -368,7 +372,7 @@ export const layer = Layer.effect(
             }),
           )
           .pipe(Effect.orDie),
-      lose,
+      forceReplace,
       isNeeded: (brainId) =>
         database.db
           .select({ id: Database.Schema.agent_session.id })
@@ -530,7 +534,7 @@ export const layer = Layer.effect(
     ).pipe(
       Stream.runForEach((lost) =>
         lost.kind === "brain"
-          ? machines.lose({ id: lost.id, generation: lost.generation }, "its machine is gone")
+          ? machines.forceReplace({ id: lost.id, generation: lost.generation }, "its machine is gone")
           : Effect.void,
       ),
       Effect.withErrorReporting,

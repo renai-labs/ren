@@ -98,7 +98,7 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   // oxlint-disable-next-line ren/no-comments -- In one transaction: the next generation, no binding, url or keep-alive, `creating`, and the kind's own work, such as interrupting busy chats.
   readonly replace: (row: R, at: Date) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- Marks the machine of this generation `replacing`, unless it is already creating or replacing, and does the kind's own work in the same transaction. True when it marked it.
-  readonly lose: (id: Id, generation: number, at: Date) => Effect.Effect<boolean>
+  readonly forceReplace: (id: Id, generation: number, at: Date) => Effect.Effect<boolean>
   // oxlint-disable-next-line ren/no-comments -- Whether work waits for the machine after a forced replace, such as a chat to continue (EN35). Then the replace starts at once.
   readonly isNeeded: (id: Id) => Effect.Effect<boolean>
   // oxlint-disable-next-line ren/no-comments -- Starts the kind's durable run for the row's run epoch, which calls `run`.
@@ -381,8 +381,8 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     return false
   })
 
-  const lose = Effect.fnUntraced(function* (row: Pick<R, "id" | "generation">, reason: string) {
-    if (!(yield* definition.lose(row.id, row.generation, yield* now))) return
+  const forceReplace = Effect.fnUntraced(function* (row: Pick<R, "id" | "generation">, reason: string) {
+    if (!(yield* definition.forceReplace(row.id, row.generation, yield* now))) return
     yield* report(row, new Replaced({ message: `${noun} ${row.id}: ${reason}` }))
     // oxlint-disable-next-line ren/no-comments -- A forced replace starts at once when work waits, so the chats it interrupted continue without anyone asking (EN35).
     if (yield* definition.isNeeded(row.id)) yield* ensure(row.id)
@@ -428,7 +428,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       ? `${noun} ${row.id} does not answer, and its machine stopped at ${DateTime.formatIso(sample.at)} with ${Math.round(sample.memory * 100)}% of its memory and ${Math.round(sample.disk * 100)}% of its disk in use; Ren replaces it`
       : `${noun} ${row.id} does not answer, and its machine reports no samples; Ren replaces it`
     yield* logged(Effect.logError(message, Cause.fail(new Frozen({ message, reason: reasonOf(sample) }))))
-    yield* lose(row, "its machine stopped")
+    yield* forceReplace(row, "its machine stopped")
   })
 
   // oxlint-disable-next-line ren/no-comments -- Counts how long a running machine's brain has given no answer, from the first check that found it silent (EN17).
@@ -456,11 +456,12 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       Effect.option,
     )
     if (Option.isNone(status)) return
-    if (status.value === "gone") return yield* lose(row, "its machine is gone")
+    if (status.value === "gone") return yield* forceReplace(row, "its machine is gone")
     if (row.phase !== "ready") return
     // oxlint-disable-next-line ren/no-comments -- A paused machine wakes; it is never replaced here (E123).
     if (status.value === "paused") return yield* update(row.id, { phase: "resuming" })
-    if (yield* isSilent(row)) return yield* lose(row, `its brain gave no answer for ${Duration.format(timing.silent)}`)
+    if (yield* isSilent(row))
+      return yield* forceReplace(row, `its brain gave no answer for ${Duration.format(timing.silent)}`)
     yield* replaceIfFrozen(row, row.binding, provider)
   })
 
@@ -570,7 +571,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const lifecycle = {
     run,
     keepAwake,
-    lose,
+    forceReplace,
     rest,
     access,
     ensure,

@@ -335,7 +335,7 @@ export const layer = Layer.effect(
           keep_alive_until: null,
           phase: "creating",
         }),
-      lose: (environmentId, generation) =>
+      forceReplace: (environmentId, generation) =>
         database.db
           .update(environments)
           .set({ phase: "replacing" })
