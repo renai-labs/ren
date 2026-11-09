@@ -1,5 +1,5 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
-import { Shared } from "@ren/cell/testing"
+import { Shared } from "@ren/brain-runtime/testing"
 import { Effect } from "effect"
 import { testEffect } from "./lib/effect.js"
 import { ModelSource } from "./lib/model-source.js"

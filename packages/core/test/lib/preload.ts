@@ -1,4 +1,4 @@
 import { afterAll } from "bun:test"
-import { Shared } from "@ren/cell/testing"
+import { Shared } from "@ren/brain-runtime/testing"
 
 afterAll(Shared.dispose)

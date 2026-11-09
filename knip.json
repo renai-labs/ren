@@ -9,12 +9,12 @@
     "packages/*": {
       "entry": ["test/**/*.test.{ts,tsx}", "script/**/*.ts"]
     },
-    "packages/cell": {
+    "packages/brain-runtime": {
       "entry": [
         "src/worker.ts",
         "src/bun.ts",
         "e2b/stage.ts",
-        "e2b/bundle.ts",
+        "machine/bundle.ts",
         "test/lib/environment-worker.ts",
         "test/lib/sync-storage-worker.ts",
         "test/lib/crash-host.ts",

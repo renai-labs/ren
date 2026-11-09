@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { FakeRen } from "@ren/cell/testing"
+import { FakeRen } from "@ren/brain-runtime/testing"
 import { Session } from "@ren/schema/session"
 import { SessionDriver } from "../lib/drivers/session.js"
 import { Ledger } from "../lib/ledger.js"

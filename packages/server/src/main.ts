@@ -102,7 +102,7 @@ const brainProviders = Layer.unwrap(
     if (provider === "e2b") return BrainProvider.layer([E2BSandbox.provider])
     const root = yield* Config.String("LOCAL_BRAIN_ROOT").pipe(Config.withDefault(join(tmpdir(), "ren-brains")))
     const entry = yield* Config.String("LOCAL_BRAIN_ENTRY").pipe(
-      Config.withDefault(join(import.meta.dir, "../../cell/src/bun.ts")),
+      Config.withDefault(join(import.meta.dir, "../../brain-runtime/src/bun.ts")),
     )
     const executor = yield* Config.String("LOCAL_EXECUTOR_ENTRY").pipe(
       Config.withDefault(join(import.meta.dir, "../../executor/src/main.ts")),

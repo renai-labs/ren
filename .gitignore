@@ -38,8 +38,8 @@ test-results/
 .wrangler/
 
 # Staged E2B brain template context
-packages/cell/e2b/ren/
-packages/cell/e2b/ren.tar.gz
+packages/brain-runtime/e2b/ren/
+packages/brain-runtime/e2b/ren.tar.gz
 .expo/
 
 # Android build output

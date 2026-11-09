@@ -16,8 +16,8 @@ COPY package.json bun.lock bunfig.toml tsconfig.base.json tsconfig.json ./
 COPY packages ./packages
 COPY repos/iron-proxy/package.json ./repos/iron-proxy/package.json
 COPY patches ./patches
-RUN bun install --frozen-lockfile --filter '@ren/cell' --filter '@ren/executor' --ignore-scripts \
- && bun packages/cell/e2b/bundle.ts /bundles
+RUN bun install --frozen-lockfile --filter '@ren/brain-runtime' --filter '@ren/executor' --ignore-scripts \
+ && bun packages/brain-runtime/machine/bundle.ts /bundles
 
 FROM oven/bun:1.4.2-slim AS runtime
 WORKDIR /repo

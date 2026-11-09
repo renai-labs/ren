@@ -1,6 +1,6 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { BrainToken } from "@ren/host-api/brain-token"
-import { TestToken } from "@ren/cell/testing"
+import { TestToken } from "@ren/brain-runtime/testing"
 import { Database } from "@ren/db/database"
 import { eq } from "drizzle-orm"
 import { SessionMessage } from "@ren/schema/session/message"

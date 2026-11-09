@@ -25,7 +25,7 @@ The goal: a bump changes the catalog, runs one command, and any break shows as a
 
 ### 0.2 Steps
 
-- [x] A1. Lint: `ren/opencode-boundary` reports `@opencode/*` and `node_modules/@opencode` outside the boundary. The `packages/cell/src/*.ts` ban does not fire today (`cell/src/bun.ts:2` imports `@opencode/util/global`). Move `bun.ts`'s OpenCode paths into the harness; give `@ren/cell/testing` Ren-typed helpers for the chat and server tests; drop `@opencode/*` from `chat` and `server`.
+- [x] A1. Lint: `ren/opencode-boundary` reports `@opencode/*` and `node_modules/@opencode` outside the boundary. The `packages/brain-runtime/src/*.ts` ban does not fire today (`cell/src/bun.ts:2` imports `@opencode/util/global`). Move `bun.ts`'s OpenCode paths into the harness; give `@ren/brain-runtime/testing` Ren-typed helpers for the chat and server tests; drop `@opencode/*` from `chat` and `server`.
 - [x] A2. Storage: move OpenCode's table and column names and their SQL (`brain/src/opencode-sync.ts`) into `opencode-transcript`; `brain` keeps the harness-neutral pass. Clear the harness database child-first (U4).
 - [x] A3. Version: write `agent_session.harness_version` on upload (nothing wrote it). No restore guard: OpenCode reads older rows, and a newer row only reaches an older brain on a rollback, which the procedure rules out.
 - [x] A4. Chat API: `translate.ts` holds one table of the OpenCode events Ren shows and one of its messages; each is `"translated"` or `{ reshaped: reason }`. Typecheck fails when one of them no longer fits Ren's shape or is gone from OpenCode (unknown and JSON, brands and `| undefined` count as equal). Other OpenCode events are dropped, as before. Exceptions on 2.0.27: the `move` inbox item and `shell.created` (session from metadata). The brain leaves out and logs an event or list item it cannot read. Commands are not changed here (U8 in PR 2).
@@ -141,7 +141,7 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 - [ ] Decide
 - Evidence: `core/src/models-dev/snapshot.txt` grew from 5.4 MB to 8.2 MB; it is decoded on first use even with `fetch: false`. About 910 ms and 11 MB of heap on an M-series Mac. The worker bundle grew from 3,990 to 4,441 KiB gzipped.
 - Ren: `cell/src/harness/opencode/server.ts:80,114` (`models: { fetch: false }`).
-- Fix: measure a DO cold boot on old and new (`bun run test:cloudflare` in `packages/cell`). If Ren needs no catalog data (it sets limits and efforts itself), pass `snapshot: false`, after checking what reads the catalog through `canonical`.
+- Fix: measure a DO cold boot on old and new (`bun run test:cloudflare` in `packages/brain-runtime`). If Ren needs no catalog data (it sets limits and efforts itself), pass `snapshot: false`, after checking what reads the catalog through `canonical`.
 
 ### U10. Interrupt of a session that OpenCode does not hold
 
@@ -186,14 +186,14 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
 - [ ] R1. PR 1 deploys before PR 2, so chats synced before the bump carry their OpenCode version.
 - [ ] R2. Deploy the server before any cell or E2B template (U5).
-- [ ] R3. Rebuild the E2B template (`bun run template:e2b` in `packages/cell`) and pass its smoke check; the version bump changes its hash.
+- [ ] R3. Rebuild the E2B template (`bun run template:e2b` in `packages/brain-runtime`) and pass its smoke check; the version bump changes its hash.
 - [ ] R4. Ship to the dev environment first and watch PostHog errors for a day before production.
 
 ## 7. Verify
 
 - [ ] `bun run check` from the repo root.
 - [ ] `REN_SLOW=1 bun turbo test --continue`, compared with `main` (see §8).
-- [ ] `bun run test:cloudflare` in `packages/cell` (Wrangler, not celld).
+- [ ] `bun run test:cloudflare` in `packages/brain-runtime` (Wrangler, not celld).
 - [x] A DO test that opens a database that old created and migrates it to new (m50 to m58, including `DROP COLUMN allowance` and the copy from `kv` to `job`). Every DO test starts empty today. Done: `cell/test/fixtures/databases/<version>.json` and `sync-storage.test.ts`.
 - [ ] Mixed versions: the server decodes rows from old and new cells; a new cell restores a chat that old synced.
 - [ ] By hand with `bun run dev` and `bun run dev:app`: a new chat; a message from Slack; an app MCP tool; a manual and an automatic compaction; a restore after the brain loses its database; subagents; a schedule.

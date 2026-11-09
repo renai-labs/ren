@@ -1,4 +1,4 @@
-import { Shared } from "@ren/cell/testing"
+import { Shared } from "@ren/brain-runtime/testing"
 import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"

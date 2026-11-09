@@ -1,6 +1,6 @@
 export * as ModelProvider from "./model.js"
 
-import { StubModel } from "@ren/cell/testing"
+import { StubModel } from "@ren/brain-runtime/testing"
 import { Option, Schema } from "effect"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { Wait } from "../wait.js"

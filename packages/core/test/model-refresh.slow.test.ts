@@ -1,5 +1,5 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
-import { Shared } from "@ren/cell/testing"
+import { Shared } from "@ren/brain-runtime/testing"
 import { Testing } from "@ren/db/testing"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer, Ref } from "effect"

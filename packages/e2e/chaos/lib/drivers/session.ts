@@ -1,7 +1,7 @@
 export * as SessionDriver from "./session.js"
 
 import type { OpenCodeClient, OpenCodeEvent, SessionMessageInfo } from "@opencode/client"
-import { TestCell } from "@ren/cell/testing"
+import { TestCell } from "@ren/brain-runtime/testing"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import type { ModelProvider } from "../provider/model.js"

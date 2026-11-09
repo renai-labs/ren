@@ -21,7 +21,7 @@
     "@ren/brain": "workspace:*",
     "@ren/environment-api": "workspace:*",
     "@ren/host-api": "workspace:*",
-    "@ren/cell": "workspace:*",
+    "@ren/brain-runtime": "workspace:*",
     "@ren/client": "workspace:*",
     "@ren/core": "workspace:*",
     "@ren/db": "workspace:*",

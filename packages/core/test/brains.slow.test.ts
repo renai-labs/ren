@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:test"
-import { TestToken } from "@ren/cell/testing"
+import { TestToken } from "@ren/brain-runtime/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"

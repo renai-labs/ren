@@ -95,14 +95,14 @@ const packageBoundaries: ReadonlyArray<{
     message:
       "Core never knows about a harness's packages. Take a harness's code through a registry such as TranscriptCodec.",
   },
-  { files: ["packages/cell/**"], ...cellImports },
+  { files: ["packages/brain-runtime/**"], ...cellImports },
   {
-    files: ["packages/cell/src/*.ts"],
+    files: ["packages/brain-runtime/src/*.ts"],
     regex: "^@ren/executor(/|$)",
     message: "The cell host runs no executor. It reaches environments through the Environment API.",
   },
   {
-    files: ["packages/cell/src/harness/**"],
+    files: ["packages/brain-runtime/src/harness/**"],
     regex: "^(@ren/(protocol|executor)(/|$)|cloudflare:)",
     message:
       "A harness never uses Durable Object APIs; the host passes it storage and requests. The cell depends only on schema, the Host API, the Environment API and brain.",

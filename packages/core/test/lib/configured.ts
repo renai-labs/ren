@@ -1,7 +1,7 @@
 export * as Configured from "./configured.js"
 
 import { BrainProviders } from "./brain-providers.js"
-import { Shared } from "@ren/cell/testing"
+import { Shared } from "@ren/brain-runtime/testing"
 import type { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"

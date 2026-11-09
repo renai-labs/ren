@@ -2,7 +2,7 @@ export * as Host from "./host.js"
 
 import { BrainProvider } from "../../src/brain-provider.js"
 import { BunCrypto } from "@effect/platform-bun"
-import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
+import { Shared, TestToken, Wrangler } from "@ren/brain-runtime/testing"
 import { TestEnvironment } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
@@ -36,7 +36,7 @@ import { Seed } from "./seed.js"
 import { Signer } from "../../src/signer.js"
 import { CredentialEnv } from "../../src/credential-env.js"
 
-const entry = join(import.meta.dir, "../../../cell/src/bun.ts")
+const entry = join(import.meta.dir, "../../../brain-runtime/src/bun.ts")
 const executor = join(import.meta.dir, "../../../executor/src/main.ts")
 
 export const keys = [await Effect.runPromise(Signature.generate("test"))] as const

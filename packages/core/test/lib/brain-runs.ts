@@ -1,7 +1,7 @@
 export * as BrainRuns from "./brain-runs.js"
 
 import { BrainProvider } from "../../src/brain-provider.js"
-import { Shared } from "@ren/cell/testing"
+import { Shared } from "@ren/brain-runtime/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"

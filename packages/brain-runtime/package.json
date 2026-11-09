@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@ren/brain-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    "./testing": "./test/lib/testing.ts",
+    "./testing/brain": "./test/lib/brain.ts"
+  },
+  "scripts": {
+    "deploy:celld": "celld deploy",
+    "deploy:cloudflare": "wrangler deploy",
+    "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun ../../script/test.ts",
+    "test:cloudflare": "CELL_RUNTIME=wrangler REN_SLOW=1 bun ../../script/test.ts test/cell.test.ts test/environment-lifecycle-cell.test.ts test/sync-storage.test.ts test/sync-storage.slow.test.ts",
+    "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
+    "typecheck": "tsgo -b",
+    "template:e2b": "bun e2b/stage.ts",
+    "opencode:record": "REN_TEST_HOME_ROOT=$(mktemp -d) bun --preload ../test-harness/src/isolate.ts test/lib/opencode-record.ts",
+    "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts",
+    "test:opencode": "status=0; REN_SLOW=1 bun ../../script/test.ts || status=1; CELL_RUNTIME=wrangler REN_SLOW=1 bun ../../script/test.ts test/cell.test.ts test/sync-storage.test.ts test/sync-storage.slow.test.ts || status=1; exit $status"
+  },
+  "dependencies": {
+    "@effect/ai-openai": "catalog:",
+    "@effect/platform-node-shared": "catalog:",
+    "@opencode/ai": "catalog:",
+    "@opencode/client": "catalog:",
+    "@opencode/core": "catalog:",
+    "@opencode/plugin": "catalog:",
+    "@opencode/schema": "catalog:",
+    "@opencode/server": "catalog:",
+    "@opencode/util": "catalog:",
+    "@ren/brain": "workspace:*",
+    "@ren/environment-api": "workspace:*",
+    "@ren/host-api": "workspace:*",
+    "@ren/opencode-transcript": "workspace:*",
+    "@ren/protocol": "workspace:*",
+    "@ren/schema": "workspace:*",
+    "@ren/telemetry": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@ren/executor": "workspace:*",
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "e2b": "2.19.4",
+    "wrangler": "catalog:"
+  }
+}

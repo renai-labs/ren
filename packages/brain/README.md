@@ -2,7 +2,7 @@
 
 Brain code that is the same on every host and harness. Today: how a brain reaches its environment (`src/environment/`), through the executor's `EnvironmentApi`.
 
-A host (the cell in `packages/cell` today) supplies storage, alarms and an `EnvironmentAccess`; a harness adapter (the OpenCode workspace driver in `packages/cell/src/harness/opencode`) turns an `EnvironmentSession` into its tools.
+A host (the cell in `packages/brain-runtime` today) supplies storage, alarms and an `EnvironmentAccess`; a harness adapter (the OpenCode workspace driver in `packages/brain-runtime/src/harness/opencode`) turns an `EnvironmentSession` into its tools.
 
 ## What belongs here
 
