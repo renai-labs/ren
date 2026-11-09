@@ -20,6 +20,7 @@ import {
   Option,
   Redacted,
   Ref,
+  Schedule,
   Schema,
 } from "effect"
 import { TestClock } from "effect/testing"
@@ -267,6 +268,34 @@ describe("Environments", () => {
       yield* Ref.set(subject.probe.keptAlive, [])
       yield* subject.environments.keepAwake([session.sessionId], new Date())
       expect(yield* Ref.get(subject.probe.keptAlive)).toEqual([environmentId])
+    }),
+  )
+
+  it.live("a remote hand on older Ren code is replaced at its wake, so it never lags its brains (EN27, EN33)", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const bundle = (kind: "dependencies" | "brain" | "executor", version: string) =>
+        database.db
+          .insert(Database.Schema.bundle)
+          .values({ kind, version, sha256: "0".repeat(64), built_at: new Date() })
+          .onConflictDoUpdate({ target: Database.Schema.bundle.kind, set: { version } })
+      yield* bundle("dependencies", "d000000000000001")
+      yield* bundle("brain", "b000000000000001")
+      yield* bundle("executor", "e000000000000001")
+      const subject = yield* environmentsWith({ BRAIN_KEYS: signingKeys })
+      const organizationId = yield* Seed.organization()
+      const session = yield* subjectIn(organizationId)
+      yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+      yield* subject.environments.access(session, Option.none())
+      yield* bundle("executor", "e000000000000002")
+      yield* database.db.update(Database.Schema.environment).set({ keep_alive_until: new Date(Date.now() - 1000) })
+      yield* subject.environments.access(session, Option.none()).pipe(Effect.ignore)
+      expect(
+        (yield* Ref.get(subject.probe.provisions).pipe(
+          Effect.repeat({ until: (all) => all.length === 2, schedule: Schedule.spaced("20 millis") }),
+          Effect.timeoutOption("3 seconds"),
+        )).pipe(Option.map((all) => all.length)),
+      ).toEqual(Option.some(2))
     }),
   )
 

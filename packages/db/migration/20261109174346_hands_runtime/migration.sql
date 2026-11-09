@@ -30,6 +30,7 @@ ALTER TABLE "environment" ADD COLUMN "retry_at" timestamp;--> statement-breakpoi
 ALTER TABLE "environment" ADD COLUMN "retries" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "environment" ADD COLUMN "unanswered_since" timestamp;--> statement-breakpoint
 ALTER TABLE "environment" ADD COLUMN "network_hosts" jsonb;--> statement-breakpoint
+ALTER TABLE "environment" ADD COLUMN "bundles" jsonb;--> statement-breakpoint
 ALTER TABLE "environment_template" ADD COLUMN "networking" jsonb DEFAULT '{"type":"unrestricted"}' NOT NULL;--> statement-breakpoint
 ALTER TABLE "environment_template" ADD COLUMN "build_status" text DEFAULT 'ready' NOT NULL;--> statement-breakpoint
 ALTER TABLE "environment_template" ADD COLUMN "image" text;--> statement-breakpoint

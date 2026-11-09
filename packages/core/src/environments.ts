@@ -9,6 +9,7 @@ import type { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
+import type { Bundle } from "@ren/schema/bundle"
 import type { Space } from "@ren/schema/space"
 import { and, asc, count, eq, exists, gt, inArray, isNull, sql } from "drizzle-orm"
 import {
@@ -110,6 +111,11 @@ export const startingAfter = Duration.seconds(5)
 
 const templates = Database.Schema.environment_template
 const environments = Database.Schema.environment
+
+const versionsOf = (bundles: ReadonlyArray<Bundle.Info>) => {
+  const version = (kind: Bundle.Kind) => bundles.find((bundle) => bundle.kind === kind)?.version ?? ""
+  return { dependencies: version("dependencies"), executor: version("executor") }
+}
 const sessions = Database.Schema.session_environment
 const spaces = Database.Schema.space
 
@@ -276,7 +282,15 @@ export const layer = Layer.effect(
     const network = yield* EnvironmentNetwork.Service
     const renUrl = yield* Config.option(Config.String("REN_URL"))
 
-    type Row = MachineLifecycle.Row<Environment.ID> & { readonly environment_template_id: EnvironmentTemplate.ID }
+    type Row = MachineLifecycle.Row<Environment.ID> & {
+      readonly environment_template_id: EnvironmentTemplate.ID
+      readonly bundles: Readonly<Record<"dependencies" | "executor", string>> | null
+    }
+
+    // oxlint-disable-next-line ren/no-comments -- A hand runs the executor only: it gets the dependencies and the executor bundles, none when this Ren serves no bundles.
+    const currentBundles = Effect.map(Effect.forEach(["dependencies", "executor"] as const, code.current), (found) =>
+      Option.all(found),
+    )
 
     const read = (environmentId: Environment.ID) =>
       database.db
@@ -371,7 +385,7 @@ export const layer = Layer.effect(
       retire: (environmentId) => sandboxEgress.retire({ kind: "hand", id: environmentId }),
       startup: Effect.fnUntraced(function* (row) {
         const keys = yield* signingKeys
-        const bundles = Option.all(yield* Effect.forEach(["dependencies", "executor"] as const, code.current))
+        const bundles = yield* currentBundles
         const variables = {
           ...ExecutorVariables.make(row.id, keys.publicKeys),
           ...sandboxVariables({ "ren.organization.id": row.organization_id, "ren.space.id": row.space_id }),
@@ -383,7 +397,14 @@ export const layer = Layer.effect(
             )).join(" "),
           }),
         }
-        return { variables, created: Effect.void }
+        return {
+          variables,
+          created: database.db
+            .update(environments)
+            .set({ bundles: Option.getOrNull(Option.map(bundles, versionsOf)) })
+            .where(eq(environments.id, row.id))
+            .pipe(Effect.orDie, Effect.asVoid),
+        }
       }),
       desiredSetup: Effect.fnUntraced(function* (row) {
         const template = (yield* database.db
@@ -434,7 +455,15 @@ export const layer = Layer.effect(
           Effect.option,
           Effect.map((answered) => Option.isSome(answered) && Option.isSome(answered.value)),
         ),
-      changeAtWake: () => Effect.succeed("current" as const),
+      // oxlint-disable-next-line ren/no-comments -- A hand has no brain to update its code in place, so newer bundles replace it (EN27, EN33).
+      changeAtWake: Effect.fnUntraced(function* (row) {
+        const bundles = yield* currentBundles
+        if (Option.isNone(bundles)) return "current" as const
+        const versions = versionsOf(bundles.value)
+        return row.bundles?.dependencies === versions.dependencies && row.bundles.executor === versions.executor
+          ? ("current" as const)
+          : ("replace" as const)
+      }),
     })
     holder.run = hands.run
 

@@ -97,6 +97,8 @@ export const environment = pgTable(
     retries: integer().notNull().default(0),
     unanswered_since: timestamp(),
     network_hosts: jsonb().$type<ReadonlyArray<string>>(),
+    // oxlint-disable-next-line ren/no-comments -- The versions of Ren's bundles the machine started with; a newer one replaces it at its wake (EN27).
+    bundles: jsonb().$type<Readonly<Record<"dependencies" | "executor", string>>>(),
     created_at: timestamp().defaultNow().notNull(),
   },
   (table) => [

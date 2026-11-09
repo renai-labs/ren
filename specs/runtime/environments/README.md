@@ -182,7 +182,7 @@ Built: `EnvironmentTemplate.Networking`, and `limited` only on a provider with `
 Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, columns of `MachineLifecycle.Row` on `environment`), with seats (EN43), the provider's workspace for chat folders (`MachineProvider.workspace`, EN42), the executor's answer as the ready check, and the unreachable check (`environments.access?unreachable=true`, EN15). On E2B a hand runs `start.sh` with `REN_HAND=1`: the executor only, open to Ren and the brains.
 
 1. Built: a remote hand goes through the egress like a brain, with a proxy login of its own generation (`SandboxEgress`, workload `hand`). Its credentials are those of its space: one space per environment (`Credentials.scopeOf`).
-2. A remote hand does not update in place: a newer template config replaces it at its wake, and it keeps its executor version until it is replaced.
+2. A remote hand does not update in place: a newer template image or newer bundles of Ren's code replace it at its wake (`environment.bundles`), so it never lags its brains (EN33).
 3. Built: a brain made for a remote hand (`brain.hand_placement`, `REN_HAND_PLACEMENT=remote`) runs OpenCode's `ToolOutput`, `FileSystem`, `Vcs` and `Snapshot` on the hand (`brain-runtime/src/harness/opencode/workspace-driver.ts`, EN13, EN14). A change of the space's hand to or from remote replaces the brain at its wake.
 4. A chat keeps its hand when its space changes the hand, but the space's brain is made for the new hand. Then that chat's saved tool output, files, diff and revert read the other machine's disk. This is accepted: a change of hand moves the chats.
 5. On a remote hand, `Vcs` gives the branches and the diff only; its status, branch list and review base are empty.
