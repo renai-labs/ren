@@ -105,7 +105,8 @@ export const provider = Effect.gen(function* () {
     config: Config,
     binding: Binding,
     create: Effect.fn("Docker.create")(function* (input) {
-      const name = `ren-${input.labels.id}`
+      // oxlint-disable-next-line ren/no-comments -- EN34: one container per id and generation, so a replace whose destroy failed never gets the old container back.
+      const name = `ren-${input.labels.id}-${input.labels.generation}`
       const containerId = yield* Effect.gen(function* () {
         const existing = yield* containerOf(name)
         if (Option.isSome(existing)) return existing.value

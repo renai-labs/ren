@@ -20,7 +20,7 @@ const it = testEffect(Layer.mergeAll(BunServices.layer, FetchHttpClient.layer))
 
 describe.skipIf(!hasDocker)("the Docker environment provider", () => {
   it.live(
-    "makes one container for an environment however often it is asked, serves Ren's executor there, and destroys it",
+    "makes one container for an environment's generation however often it is asked, a new one for the next generation, serves Ren's executor there, and destroys it",
     () =>
       Effect.gen(function* () {
         const provider = yield* Docker.provider
@@ -46,6 +46,9 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
         const binding = created[0].binding
         expect(created[1].binding).toEqual(binding)
         yield* Effect.addFinalizer(() => provider.destroy(binding).pipe(Effect.ignore))
+        const replaced = yield* provider.create({ ...input, labels: { ...input.labels, generation: 2 } })
+        yield* Effect.addFinalizer(() => provider.destroy(replaced.binding).pipe(Effect.ignore))
+        expect(replaced.binding).not.toEqual(binding)
         const url = new URL((yield* provider.connect(binding, MachineProvider.unrestricted)).url)
         const token = yield* EnvironmentToken.sign(TestEnvironment.keys.privateKey, {
           environment: environmentId,
