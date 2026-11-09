@@ -2,9 +2,10 @@ export * as OpenCodeStore from "./opencode-store.js"
 
 import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
+import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
-import { and, asc, desc, eq, getColumns, ilike, inArray, isNull, or, sql } from "drizzle-orm"
-import type { PgTable } from "drizzle-orm/pg-core"
+import { and, asc, desc, eq, getColumns, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm"
+import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core"
 import { Effect, Option, Record, Struct } from "effect"
 
 export interface Cursor {
@@ -138,6 +139,38 @@ export const keepInbox = Effect.fnUntraced(function* (
     .where(eq(Database.Schema.opencode_inbox.session_id, sessionId))
   if (rows.length > 0) yield* transaction.insert(Database.Schema.opencode_inbox).values([...rows])
 })
+
+// oxlint-disable-next-line ren/no-comments -- A chat is busy while its harness session is suspended mid-turn.
+export const isBusy = (sessionId: AnyPgColumn) =>
+  sql<boolean>`exists (select 1 from ${Database.Schema.opencode_session} where ${Database.Schema.opencode_session.session_id} = ${sessionId} and ${Database.Schema.opencode_session.time_suspended} is not null)`
+
+// oxlint-disable-next-line ren/no-comments -- A chat has messages waiting in its harness's inbox.
+export const hasWaiting = (sessionId: AnyPgColumn) =>
+  sql<boolean>`exists (select 1 from ${Database.Schema.opencode_inbox} where ${Database.Schema.opencode_inbox.session_id} = ${sessionId})`
+
+// oxlint-disable-next-line ren/no-comments -- Ends the busy turns of a brain's chats with an outcome, as when its machine is replaced; returns their ids.
+export const endBusyTurns = (
+  transaction: Database.Transaction,
+  brainId: Brain.ID,
+  at: Date,
+  outcome: "interrupted" | "failed",
+) =>
+  transaction
+    .update(Database.Schema.opencode_session)
+    .set({ time_suspended: null, idle_outcome: outcome, time_idle: at.getTime() })
+    .where(
+      and(
+        inArray(
+          Database.Schema.opencode_session.session_id,
+          transaction
+            .select({ id: Database.Schema.agent_session.id })
+            .from(Database.Schema.agent_session)
+            .where(eq(Database.Schema.agent_session.brain_id, brainId)),
+        ),
+        isNotNull(Database.Schema.opencode_session.time_suspended),
+      ),
+    )
+    .returning({ id: Database.Schema.opencode_session.session_id })
 
 export const inbox = (transaction: Database.Transaction, ids: ReadonlyArray<Session.ID>) =>
   transaction

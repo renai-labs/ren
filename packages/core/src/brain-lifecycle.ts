@@ -37,6 +37,7 @@ import { MachineLifecycle } from "./machine-lifecycle.js"
 import { Models } from "./models.js"
 import { BrainProvider } from "./brain-provider.js"
 import { MachineProvider } from "./machine-provider.js"
+import { OpenCodeStore } from "./session/opencode-store.js"
 import { SandboxEgress } from "./sandbox-egress.js"
 
 export type Access = MachineAccess.Access<BrainClient.Target>
@@ -164,43 +165,10 @@ export const layer = Layer.effect(
               eq(chats.brain_id, brainId),
               isNull(chats.parent_id),
               isNull(chats.continue_message_id),
-              or(
-                exists(
-                  transaction
-                    .select({ id: Database.Schema.opencode_session.session_id })
-                    .from(Database.Schema.opencode_session)
-                    .where(
-                      and(
-                        eq(Database.Schema.opencode_session.session_id, chats.id),
-                        isNotNull(Database.Schema.opencode_session.time_suspended),
-                      ),
-                    ),
-                ),
-                exists(
-                  transaction
-                    .select({ id: Database.Schema.opencode_inbox.id })
-                    .from(Database.Schema.opencode_inbox)
-                    .where(eq(Database.Schema.opencode_inbox.session_id, chats.id)),
-                ),
-              ),
+              or(OpenCodeStore.isBusy(chats.id), OpenCodeStore.hasWaiting(chats.id)),
             ),
           )
-      return yield* transaction
-        .update(Database.Schema.opencode_session)
-        .set({ time_suspended: null, idle_outcome: outcome, time_idle: at.getTime() })
-        .where(
-          and(
-            inArray(
-              Database.Schema.opencode_session.session_id,
-              transaction
-                .select({ id: Database.Schema.agent_session.id })
-                .from(Database.Schema.agent_session)
-                .where(eq(Database.Schema.agent_session.brain_id, brainId)),
-            ),
-            isNotNull(Database.Schema.opencode_session.time_suspended),
-          ),
-        )
-        .returning({ id: Database.Schema.opencode_session.session_id })
+      return yield* OpenCodeStore.endBusyTurns(transaction, brainId, at, outcome)
     })
 
     const forceReplace = Effect.fn("BrainLifecycle.forceReplace")(function* (
@@ -682,8 +650,7 @@ export const layer = Layer.effect(
       const busy = yield* database.db
         .selectDistinct({ brainId: chats.brain_id })
         .from(chats)
-        .innerJoin(Database.Schema.opencode_session, eq(Database.Schema.opencode_session.session_id, chats.id))
-        .where(isNotNull(Database.Schema.opencode_session.time_suspended))
+        .where(OpenCodeStore.isBusy(chats.id))
         .pipe(Effect.orDie)
       yield* Effect.forEach(busy, (each) => machines.check(each.brainId), { discard: true })
     }).pipe(Effect.withSpan("BrainLifecycle.cleanup"))
