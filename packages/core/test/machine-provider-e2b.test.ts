@@ -75,6 +75,17 @@ const answerOf = (url: URL) => {
   return name ? tagsOf(name) : answers[url.pathname]
 }
 
+// oxlint-disable-next-line ren/no-comments -- E2B's sandbox list: a paused sandbox for brn_paused, none for any other brain, and two Rens' sandboxes without a filter.
+const listed = (metadata: string) => {
+  if (metadata.includes("brain=brn_paused"))
+    return [{ sandboxID: "sbx_1", state: "paused", metadata: { owner: "ren-test-a", brain: "brn_paused" } }]
+  if (metadata.includes("brain=")) return []
+  return [
+    { sandboxID: "sbx_mine", state: "running", metadata: { owner: "ren-test-a", brain: "brn_01", generation: "1" } },
+    { sandboxID: "sbx_theirs", state: "running", metadata: { owner: "ren-v2-dev", brain: "brn_02", generation: "1" } },
+  ]
+}
+
 // oxlint-disable-next-line ren/no-comments -- A local server answers as the E2B API and as envd. The client below sends every request here and keeps the host it meant in x-target-host.
 const e2b = Bun.serve({
   hostname: "127.0.0.1",
@@ -88,25 +99,7 @@ const e2b = Bun.serve({
       query: url.searchParams,
       body: await request.text(),
     })
-    if (url.pathname === "/v2/sandboxes")
-      return Response.json(
-        url.searchParams.get("metadata")?.includes("brain=brn_paused")
-          ? [{ sandboxID: "sbx_1", state: "paused", metadata: { owner: "ren-test-a", brain: "brn_paused" } }]
-          : url.searchParams.get("metadata")?.includes("brain=")
-            ? []
-            : [
-                {
-                  sandboxID: "sbx_mine",
-                  state: "running",
-                  metadata: { owner: "ren-test-a", brain: "brn_01", generation: "1" },
-                },
-                {
-                  sandboxID: "sbx_theirs",
-                  state: "running",
-                  metadata: { owner: "ren-v2-dev", brain: "brn_02", generation: "1" },
-                },
-              ],
-      )
+    if (url.pathname === "/v2/sandboxes") return Response.json(listed(url.searchParams.get("metadata") ?? ""))
     if (url.pathname === "/sandboxes" && request.method === "POST")
       return Response.json({ sandboxID: "sbx_1", domain: "e2b.test", envdAccessToken: "envd" })
     if (url.pathname === "/files") return Response.json([{ path: url.searchParams.get("path") }])
