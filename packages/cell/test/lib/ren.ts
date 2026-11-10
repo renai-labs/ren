@@ -2,6 +2,7 @@ export * as FakeRen from "./ren.js"
 
 import { BrainToken } from "@ren/host-api/brain-token"
 import {
+  ArtifactNotFoundError,
   EnvironmentNotFoundError,
   EnvironmentStartingError,
   EnvironmentUnavailableError,
@@ -18,6 +19,7 @@ import {
   type PullRequest,
   RenHostApi,
 } from "@ren/host-api/ren-host-api"
+import { Artifact } from "@ren/schema/artifact"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Hand } from "@ren/schema/hand"
@@ -29,7 +31,7 @@ import type { Signature } from "@ren/schema/signature"
 import { Space } from "@ren/schema/space"
 import type { Sync } from "@ren/schema/sync"
 import { SyncApi } from "@ren/host-api/sync-api"
-import { Effect, Layer, Option, Redacted } from "effect"
+import { DateTime, Effect, Layer, Option, Redacted } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { TestSettings } from "./settings.js"
@@ -73,12 +75,22 @@ export const hostToken = (
     }),
   )
 
+export interface Published {
+  readonly info: Artifact.Info
+  readonly files: Artifact.Files
+  readonly deployments: ReadonlyMap<Artifact.DeploymentID, Artifact.Deployment>
+  readonly deployed: boolean
+}
+
 export const start = (options: { readonly hostname?: string; readonly port?: number } = {}) => {
+  const artifacts = new Map<Artifact.ID, Published>()
   const answers = new Map<Session.ID, () => Answer | Promise<Answer>>()
   const calls: Array<Call> = []
   const pulls: Array<PullRequest> = []
   const held: Array<() => void> = []
   const state = {
+    artifactError: null as string | null,
+    artifactDeploying: false,
     refuseHosts: false,
     generation: 1,
     refreshGate: undefined as (() => Promise<void>) | undefined,
@@ -106,6 +118,71 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
     for (const listener of listeners) listener()
   }
   const handlers = Layer.mergeAll(
+    HttpApiBuilder.group(RenHostApi, "artifacts", (group) =>
+      Effect.succeed(
+        group
+          .handle("artifacts.deploy", (request) =>
+            Effect.gen(function* () {
+              const found = artifacts.get(request.params.id)
+              const payload = request.payload
+              const previous = found?.deployments.get(payload.deploymentId)
+              if (previous) return previous
+              const now = yield* DateTime.now
+              const info = {
+                id: request.params.id,
+                spaceId: found?.info.spaceId ?? Space.ID.create(),
+                title: payload.title,
+                activeDeploymentId: payload.deploymentId,
+                url: `https://${request.params.id}.fake.ren/`,
+                createdAt: found?.info.createdAt ?? now,
+                updatedAt: now,
+              }
+              const deployment = {
+                artifactId: request.params.id,
+                deploymentId: payload.deploymentId,
+                status: state.artifactError ? ("failed" as const) : ("ready" as const),
+                url: info.url,
+                error: state.artifactError,
+              }
+              artifacts.set(request.params.id, {
+                info,
+                files: payload.files,
+                deployments: new Map([...(found?.deployments ?? []), [payload.deploymentId, deployment]]),
+                deployed: true,
+              })
+              return { ...deployment, status: "deploying" as const, url: null }
+            }),
+          )
+          .handle("artifacts.status", (request) => {
+            const found = artifacts.get(request.params.id)?.deployments.get(request.params.deploymentId)
+            return found
+              ? Effect.succeed(
+                  state.artifactDeploying
+                    ? {
+                        artifactId: found.artifactId,
+                        deploymentId: found.deploymentId,
+                        status: "deploying" as const,
+                        url: null,
+                        error: null,
+                      }
+                    : found,
+                )
+              : Effect.fail(new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` }))
+          })
+          .handle("artifacts.files", (request) => {
+            const found = artifacts.get(request.params.id)
+            return found
+              ? Effect.succeed(found.files)
+              : Effect.fail(new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` }))
+          })
+          .handle("artifacts.stop", (request) =>
+            Effect.sync(() => {
+              const found = artifacts.get(request.params.id)
+              if (found) artifacts.set(request.params.id, { ...found, deployed: false })
+            }),
+          ),
+      ),
+    ),
     HttpApiBuilder.group(RenHostApi, "environments", (group) =>
       Effect.succeed(
         group
@@ -315,6 +392,13 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
   })
   return {
     url: `http://127.0.0.1:${server.port ?? 0}`,
+    artifacts,
+    artifactError: (error: string | null) => {
+      state.artifactError = error
+    },
+    artifactDeploying: (deploying: boolean) => {
+      state.artifactDeploying = deploying
+    },
     calls,
     pulls,
     synced: (sessionId: Session.ID) => synced.sessions.get(sessionId),

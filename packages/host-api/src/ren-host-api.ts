@@ -1,4 +1,5 @@
 import { AppCatalog } from "@ren/schema/app-catalog"
+import { Artifact } from "@ren/schema/artifact"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Channel } from "@ren/schema/channel"
@@ -14,6 +15,9 @@ import { Context, Effect, Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
 import { Host } from "./host.js"
 import {
+  ArtifactConflictError,
+  ArtifactFailedError,
+  ArtifactNotFoundError,
   EnvironmentNotFoundError,
   EnvironmentStartingError,
   EnvironmentUnavailableError,
@@ -219,6 +223,68 @@ const HandsGroup = HttpApiGroup.make("environments")
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "environments" }))
 
+export const hostBodyBytes = 32 * 1024 * 1024
+
+const ArtifactParams = { id: Artifact.ID }
+
+const ArtifactsGroup = HttpApiGroup.make("artifacts")
+  .add(
+    HttpApiEndpoint.put("artifacts.deploy", "/host/artifacts/:id", {
+      params: ArtifactParams,
+      payload: Artifact.DeployInput,
+      success: Artifact.Deployment.annotate({ httpApiStatus: 202 }),
+      error: [ArtifactConflictError, ArtifactFailedError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.deploy",
+        summary: "Publish an artifact",
+        description:
+          "Store the source and queue a durable deployment. Returns accepted without waiting for deployment. Read status before reporting the artifact as live.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("artifacts.status", "/host/artifacts/:id/deployments/:deploymentId", {
+      params: { ...ArtifactParams, deploymentId: Artifact.DeploymentID },
+      success: Artifact.Deployment,
+      error: ArtifactNotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.status",
+        summary: "Read artifact deployment status",
+        description: "Read a specific deployment’s deploying, ready, failed or stopped status, URL and error.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("artifacts.files", "/host/artifacts/:id/files", {
+      params: ArtifactParams,
+      success: Artifact.Files,
+      error: [ArtifactNotFoundError, ArtifactFailedError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.files",
+        summary: "Read an artifact's files",
+        description: "Read the last published source files, including after the deployment is stopped.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("artifacts.stop", "/host/artifacts/:id", {
+      params: ArtifactParams,
+      error: ArtifactFailedError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.stop",
+        summary: "Remove an artifact deployment",
+        description:
+          "Stop serving an artifact. Keep its record, source files and application data. Removing an unknown artifact succeeds.",
+      }),
+    ),
+  )
+  .middleware(HostAuthentication)
+  .annotateMerge(OpenApi.annotations({ title: "artifacts" }))
+
 const HostGroup = HttpApiGroup.make("host")
   .add(
     HttpApiEndpoint.post("host.refresh", "/host/token/refresh", { success: Host.Refreshed }).annotateMerge(
@@ -236,12 +302,13 @@ export const RenHostApi = HttpApi.make("host")
   .add(PullGroup)
   .add(ModelsGroup)
   .add(HandsGroup)
+  .add(ArtifactsGroup)
   .add(HostGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Host API",
       version: "0.0.0",
       description:
-        "Internal API a brain calls with its host token: to pull its settings and models, to refresh its model keys and host token, and to get access to a session’s environment.",
+        "Internal API a brain calls with its host token: to pull its settings and models, to refresh its model keys and host token, to get access to a session’s environment, and to publish artifacts.",
     }),
   )

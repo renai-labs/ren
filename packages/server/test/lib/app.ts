@@ -25,6 +25,7 @@ import { DurableRunner } from "@ren/core/durable-runner"
 import { HandProvider } from "@ren/core/hand-provider"
 import { Docker } from "@ren/core/machine-provider/docker"
 import { Hands } from "@ren/core/hands"
+import { ArtifactWorkerd } from "@ren/core/artifact-provider/workerd"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
@@ -39,6 +40,8 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
 import { Clock, ConfigProvider, Effect, Layer, Logger, Schema } from "effect"
+import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
+import { Digest } from "effect/crypto"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { PersistedQueue } from "effect/persistence"
 import { Routes } from "../../src/routes.js"
@@ -114,7 +117,14 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
 export const services = Layer.mergeAll(
   Layer.merge(Brains.layer, SpaceShutdown.layer).pipe(
     Layer.provideMerge(BrainHost.layerCell),
-    Layer.provideMerge(DurableRunner.layerMemory),
+    Layer.provideMerge(
+      ClusterWorkflowEngine.layer.pipe(
+        Layer.provideMerge(
+          SingleRunner.layer({ shardingConfig: { shardsPerGroup: 1, entityTerminationTimeout: "100 millis" } }),
+        ),
+        Layer.provide(Digest.layerWebCrypto),
+      ),
+    ),
     Layer.provide(CredentialEnv.layerNone),
   ),
   ChannelRoute.layer.pipe(
@@ -160,6 +170,7 @@ export const services = Layer.mergeAll(
   Layer.provideMerge(EgressControl.layerNone),
   Layer.provideMerge(HandProvider.layer([Docker.provider])),
   Layer.provideMerge(Signer.layerLocal),
+  Layer.provideMerge(ArtifactWorkerd.layer.pipe(Layer.provide(FetchHttpClient.layer))),
   Layer.provide(BunServices.layer),
 )
 
