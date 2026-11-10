@@ -24,7 +24,7 @@ describe("artifacts", () => {
     celld.ren.artifactDeploying(true)
     const created = stub.script({
       tool: run(
-        'return await tools.opencode.artifact_create({ title: "Report", files: { "index.html": "<h1>v1</h1>" } })',
+        'return await tools.opencode.artifact_create({ title: "Report", files: { "index.html": "<h1>v1</h1>", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })',
       ),
     })
     await opened.prompt(created.marker)
@@ -35,6 +35,7 @@ describe("artifacts", () => {
     const first = celld.ren.artifacts.get(id)
     if (!first) throw new Error("Artifact was not stored")
     expect(new TextDecoder().decode(first.files["index.html"])).toBe("<h1>v1</h1>")
+    expect(first.config.durableObjects).toEqual({ STATE: "SampleState" })
     const accepted = await created.called(2)
     expect(JSON.stringify(accepted.body)).toContain("Deployment accepted")
     expect(JSON.stringify(accepted.body)).toContain(first.info.activeDeploymentId ?? "missing deployment")
@@ -51,7 +52,7 @@ describe("artifacts", () => {
         run(`return await tools.opencode.artifact_read({ id: "${id}" })`),
         run(`return await tools.artifact_status({ id: "${id}", deploymentId: "${first.info.activeDeploymentId}" })`),
         run(
-          `return await tools.opencode.artifact_update({ id: "${id}", files: { "index.html": "<h1>v2</h1>", "app.js": "1" } })`,
+          `return await tools.opencode.artifact_update({ id: "${id}", files: { "index.html": "<h1>v2</h1>", "app.js": "1", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })`,
         ),
         run(
           'return await tools.opencode.artifact_create({ title: "Elsewhere", files: { "index.html": "x" }, provider: "local" })',
@@ -61,8 +62,10 @@ describe("artifacts", () => {
     await opened.prompt(updated.marker)
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
     const second = celld.ren.artifacts.get(id)
-    expect(Object.keys(second?.files ?? {}).toSorted()).toEqual(["app.js", "index.html"])
-    expect(second?.info.url).toBe(first.info.url)
+    if (!second) throw new Error("Updated artifact was not stored")
+    expect(Object.keys(second.files).toSorted()).toEqual(["_worker.js", "app.js", "index.html", "ren-artifact.json"])
+    expect(second.config.durableObjects).toEqual(first.config.durableObjects)
+    expect(second.info.url).toBe(first.info.url)
     expect(celld.ren.artifacts.size).toBe(1)
     const outputs = JSON.stringify(await opened.messages())
     expect(outputs).toContain("<h1>v1</h1>")
@@ -76,7 +79,7 @@ describe("artifacts", () => {
     await opened.prompt(deleted.marker)
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
     expect(celld.ren.artifacts.get(id)?.deployed).toBe(false)
-    expect(celld.ren.artifacts.get(id)?.files).toEqual(second?.files)
+    expect(celld.ren.artifacts.get(id)?.files).toEqual(second.files)
   })
 
   test("an accepted deployment reports its background failure in the chat", async () => {

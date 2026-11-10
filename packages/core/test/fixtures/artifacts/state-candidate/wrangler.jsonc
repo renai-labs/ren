@@ -1,0 +1,8 @@
+{
+  "name": "artifact-state-candidate",
+  "main": "_worker.js",
+  "compatibility_date": "2026-06-01",
+  "assets": { "directory": "public", "binding": "ASSETS" },
+  "durable_objects": { "bindings": [{ "name": "STATE", "class_name": "SampleState" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SampleState"] }],
+}
