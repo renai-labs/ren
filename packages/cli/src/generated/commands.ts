@@ -861,6 +861,8 @@ export const CredentialConnect = {
 
 export const EnvironmentProviderList = {}
 
+export const EnvironmentProviderBrains = {}
+
 export const ChannelProviderList = {}
 
 export const ChannelPlaceList = {
@@ -1572,6 +1574,12 @@ export const commands = [
             Command.withDescription("List environment providers"),
             Command.withHandler(() =>
               Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentProviderList()),
+            ),
+          ),
+          Command.make("brains", EnvironmentProviderBrains).pipe(
+            Command.withDescription("List brain providers"),
+            Command.withHandler(() =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentProviderBrains()),
             ),
           ),
         ]),

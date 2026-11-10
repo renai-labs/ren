@@ -543,6 +543,37 @@ describe("brain runs", () => {
     await current.dispose()
   })
 
+  test("a brain for a remote hand boots on its space's brain template: its image and its config", async () => {
+    const found = await runs.seeded()
+    const brainTemplate = await runs.database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        const id = yield* Seed.environmentTemplate(found.organizationId, { provider: "local" })
+        yield* db.db
+          .update(Database.Schema.environment_template)
+          .set({ image: "brain-image", image_config: { label: "brain" }, build_status: "ready" })
+          .where(eq(Database.Schema.environment_template.id, id))
+        yield* db.db
+          .update(Database.Schema.space)
+          .set({
+            hand_placement: "remote",
+            environment_template_id: yield* Seed.environmentTemplate(found.organizationId),
+            brain_template_id: id,
+          })
+          .where(eq(Database.Schema.space.id, found.spaceId))
+        return id
+      }),
+    )
+    const current = await runs.ren()
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    expect(await runs.reaches(found.brainId, "ready")).toMatchObject({
+      hand_placement: "remote",
+      image: "brain-image",
+      image_template: { environmentTemplateId: brainTemplate, config: { label: "brain" } },
+    })
+    await current.dispose()
+  })
+
   test("a brain made before Ren served bundles is replaced once at its wake, with no update it cannot take, and the new one runs the current bundles", async () => {
     const spans: Array<Tracer.NativeSpan> = []
     const brainId = await runs.newBrain()

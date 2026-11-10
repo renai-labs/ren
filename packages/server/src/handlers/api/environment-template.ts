@@ -1,3 +1,4 @@
+import { BrainProvider } from "@ren/core/brain-provider"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Effect } from "effect"
@@ -20,8 +21,9 @@ export const EnvironmentTemplateHandler = HttpApiBuilder.group(Api, "environment
 export const EnvironmentProviderHandler = HttpApiBuilder.group(Api, "environmentProvider", (handlers) =>
   Effect.gen(function* () {
     const registry = yield* EnvironmentProvider.Registry
-    return handlers.handle("environmentProvider.list", () =>
-      Effect.succeed(registry.providers.map((provider) => provider.info)),
-    )
+    const brains = yield* BrainProvider.Registry
+    return handlers
+      .handle("environmentProvider.list", () => Effect.succeed(registry.providers.map((provider) => provider.info)))
+      .handle("environmentProvider.brains", () => Effect.succeed(brains.providers.map((provider) => provider.info)))
   }),
 )

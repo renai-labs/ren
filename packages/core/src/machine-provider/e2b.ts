@@ -113,7 +113,7 @@ const pageSize = 100
 // oxlint-disable-next-line ren/no-comments -- A template's config (templates rule 1). E2B fixes CPU and memory when it builds an image, so they are build settings. A brain without a template decodes {} to the defaults.
 const TemplateConfig = Schema.Struct({
   cpuCount: Schema.Literals([1, 2, 4, 6, 8])
-    .annotate({ title: "CPUs", description: "E2B fixes the size of a machine when it builds the image." })
+    .annotate({ title: "CPUs" })
     .pipe(Schema.withDecodingDefaultKey(Effect.succeed(2 as const))),
   memoryMiB: Schema.Literals([1024, 2048, 4096, 6144, 8192])
     .annotate({ title: "Memory (MiB)" })

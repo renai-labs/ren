@@ -1,6 +1,7 @@
 import { Auth } from "@ren/schema/auth"
 import { Primitive } from "@ren/schema/primitive"
 import type { Brain } from "@ren/schema/brain"
+import type { EnvironmentProvider } from "@ren/schema/environment-provider"
 import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Factory } from "@ren/schema/factory"
 import type { Space } from "@ren/schema/space"
@@ -32,6 +33,9 @@ export const space = pgTable(
     name: text().notNull(),
     description: text(),
     brain_scope: text().$type<Brain.Scope>().notNull().default("space"),
+    // oxlint-disable-next-line ren/no-comments -- Null: the deployment's first brain provider.
+    brain_provider: text().$type<EnvironmentProvider.ID>(),
+    brain_template_id: text().$type<EnvironmentTemplate.ID>(),
     hand_placement: text().$type<Space.Hand["placement"]>().notNull().default("colocated"),
     // oxlint-disable-next-line ren/no-comments -- No foreign key: environment.sql.ts already references space. Templates are archived, never deleted, and archiving one that a space uses is refused (EN24).
     environment_template_id: text().$type<EnvironmentTemplate.ID>(),
@@ -48,9 +52,10 @@ export const space = pgTable(
       .where(sql`${table.kind} = 'private' and ${table.archived_at} is null`),
     check("space_kind_check", sql`${table.kind} in ('shared', 'private')`),
     index("space_environment_template_id_idx").on(table.environment_template_id),
+    index("space_brain_template_id_idx").on(table.brain_template_id),
     check(
       "space_hand_check",
-      sql`case ${table.hand_placement} when 'colocated' then true when 'remote' then ${table.environment_template_id} is not null when 'none' then ${table.environment_template_id} is null else false end`,
+      sql`case ${table.hand_placement} when 'remote' then ${table.environment_template_id} is not null when 'colocated' then ${table.environment_template_id} is null when 'none' then ${table.environment_template_id} is null else false end`,
     ),
     check("space_owner_check", sql`(${table.kind} = 'private') = (${table.owner_user_id} is not null)`),
     check(

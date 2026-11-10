@@ -30,6 +30,7 @@ import type {
   EnvironmentTemplateArchiveInput,
   EnvironmentTemplateArchiveOutput,
   EnvironmentProviderListOutput,
+  EnvironmentProviderBrainsOutput,
   SpaceSettingsGetInput,
   SpaceSettingsGetOutput,
   SpaceSettingsUpdateInput,
@@ -433,6 +434,7 @@ export function make(options: ClientOptions) {
               name: input["name"],
               description: input["description"],
               brainScope: input["brainScope"],
+              brain: input["brain"],
               hand: input["hand"],
             },
             successStatus: 200,
@@ -578,6 +580,11 @@ export function make(options: ClientOptions) {
             declaredStatuses: [401, 403],
             empty: false,
           },
+          requestOptions,
+        ),
+      brains: (requestOptions?: RequestOptions) =>
+        request<EnvironmentProviderBrainsOutput>(
+          { method: "GET", path: `/brain-providers`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
           requestOptions,
         ),
     },

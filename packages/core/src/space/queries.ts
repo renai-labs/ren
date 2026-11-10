@@ -2,6 +2,7 @@ export * as SpaceQueries from "./queries.js"
 
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
+import type { EnvironmentProvider } from "@ren/schema/environment-provider"
 import type { Space } from "@ren/schema/space"
 import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
@@ -35,12 +36,33 @@ export const hand = (
   if (row.hand_placement === "none") return { placement: "none" }
   if (row.hand_placement === "remote" && row.environment_template_id)
     return { placement: "remote", environmentTemplateId: row.environment_template_id }
-  return { placement: "colocated", environmentTemplateId: row.environment_template_id }
+  return { placement: "colocated" }
 }
 
 export const handColumns = (hand: Space.Hand) => ({
   hand_placement: hand.placement,
-  environment_template_id: hand.placement === "none" ? null : hand.environmentTemplateId,
+  environment_template_id: hand.placement === "remote" ? hand.environmentTemplateId : null,
+})
+
+export const brainMachine = (
+  row: Pick<typeof Database.Schema.space.$inferSelect, "brain_provider" | "brain_template_id">,
+  deploymentProvider: EnvironmentProvider.ID | null,
+): Space.BrainMachine => ({
+  provider: row.brain_provider ?? deploymentProvider,
+  environmentTemplateId: row.brain_template_id,
+})
+
+export const machines = (
+  row: Pick<
+    typeof Database.Schema.space.$inferSelect,
+    "brain_provider" | "brain_template_id" | "hand_placement" | "environment_template_id"
+  >,
+  deploymentProvider: EnvironmentProvider.ID | null,
+) => ({ brain: brainMachine(row, deploymentProvider), hand: hand(row) })
+
+export const brainColumns = (brain: Space.BrainMachine) => ({
+  brain_provider: brain.provider,
+  brain_template_id: brain.environmentTemplateId,
 })
 
 export const slugs = Effect.fnUntraced(function* (

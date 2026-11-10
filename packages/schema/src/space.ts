@@ -3,6 +3,7 @@ export * as Space from "./space.js"
 import { Schema } from "effect"
 import { Auth } from "./auth.js"
 import { Brain } from "./brain.js"
+import { EnvironmentProvider } from "./environment-provider.js"
 import { EnvironmentTemplate } from "./environment-template.js"
 import { Factory } from "./factory.js"
 import { Identifier } from "./identifier.js"
@@ -25,13 +26,22 @@ export const Kind = Schema.Literals(["shared", "private"]).annotate({
 })
 export type Kind = typeof Kind.Type
 
-export const Hand = Schema.Union([
-  Schema.Struct({
-    placement: Schema.Literal("colocated"),
-    environmentTemplateId: Schema.NullOr(EnvironmentTemplate.ID).annotate({
-      description: "A template of the deployment’s brain provider. Null: Ren’s system image.",
-    }),
+export const BrainMachine = Schema.Struct({
+  provider: Schema.NullOr(EnvironmentProvider.ID).annotate({
+    description: "The brain provider of the space’s brains. Null when the deployment runs brains in cells.",
   }),
+  environmentTemplateId: Schema.NullOr(EnvironmentTemplate.ID).annotate({
+    description:
+      "A built template of the brain provider: the image, size and host list of the brain’s machine. Null: Ren’s system image.",
+  }),
+}).annotate({
+  identifier: "Space.BrainMachine",
+  description: "The machine of the space’s brains. A change reaches a brain when it wakes.",
+})
+export type BrainMachine = typeof BrainMachine.Type
+
+export const Hand = Schema.Union([
+  Schema.Struct({ placement: Schema.Literal("colocated") }),
   Schema.Struct({ placement: Schema.Literal("remote"), environmentTemplateId: EnvironmentTemplate.ID }),
   Schema.Struct({ placement: Schema.Literal("none") }),
 ]).annotate({
@@ -41,7 +51,7 @@ export const Hand = Schema.Union([
 })
 export type Hand = typeof Hand.Type
 
-export const defaultHand: Hand = { placement: "colocated", environmentTemplateId: null }
+export const defaultHand: Hand = { placement: "colocated" }
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
@@ -57,6 +67,7 @@ export const Info = Schema.Struct({
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
   brainScope: Brain.Scope,
+  brain: BrainMachine,
   hand: Hand,
   memberCount: Schema.Int,
   membershipId: Schema.NullOr(MembershipID),
@@ -94,6 +105,7 @@ export const UpdateInput = Schema.Struct({
   name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NullOr(Schema.String)),
   brainScope: Schema.optional(Brain.Scope),
+  brain: Schema.optional(BrainMachine),
   hand: Schema.optional(Hand),
 }).annotate({ identifier: "Space.UpdateInput" })
 

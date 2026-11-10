@@ -376,7 +376,7 @@ export const start = async (options: {
     const created = creating
       .then(
         () =>
-          direct`UPDATE space SET hand_placement = ${hand.placement}, environment_template_id = ${hand.placement === "none" ? null : hand.environmentTemplateId} WHERE id = ${owner.spaceId}`,
+          direct`UPDATE space SET hand_placement = ${hand.placement}, environment_template_id = ${hand.placement === "remote" ? hand.environmentTemplateId : null} WHERE id = ${owner.spaceId}`,
       )
       .then(() =>
         core(

@@ -239,15 +239,21 @@ export const layer = Layer.effect(
     // oxlint-disable-next-line ren/no-comments -- A brain goes behind the egress when this Ren runs one and its provider can route a sandbox through it. The answer is kept on the row (egress); every later step reads the row, never the setting.
     const isBehindEgress = (provider: MachineProvider.Provider) => egress.enabled && provider.canEgress
 
-    // oxlint-disable-next-line ren/no-comments -- A new brain gets the deployment's brain provider (EN2); an existing one keeps its own. Ren does not start when a brain runs on one it does not register (EN24).
-    const providerOf = (row: Row) =>
-      row.provider
-        ? Option.match(registry.get(row.provider), {
-            onNone: () =>
-              Effect.die(new Error(`Brain ${row.id} runs on ${row.provider}, which this Ren does not register`)),
-            onSome: Effect.succeed,
-          })
-        : BrainProvider.first.pipe(Effect.provideService(BrainProvider.Registry, registry))
+    // oxlint-disable-next-line ren/no-comments -- A new brain gets its space's brain provider, else the deployment's first (EN2); an existing one keeps its own. Ren does not start when a brain runs on one it does not register (EN24).
+    const providerOf = Effect.fnUntraced(function* (row: Row) {
+      const chosen =
+        row.provider ??
+        (yield* database.db
+          .select({ provider: Database.Schema.space.brain_provider })
+          .from(Database.Schema.space)
+          .where(eq(Database.Schema.space.id, row.space_id))
+          .pipe(Effect.orDie)).at(0)?.provider
+      if (!chosen) return yield* BrainProvider.first.pipe(Effect.provideService(BrainProvider.Registry, registry))
+      return yield* Option.match(registry.get(chosen), {
+        onNone: () => Effect.die(new Error(`Brain ${row.id} runs on ${chosen}, which this Ren does not register`)),
+        onSome: Effect.succeed,
+      })
+    })
 
     // oxlint-disable-next-line ren/no-comments -- A brain is made for its space's hand at create. A brain for a remote hand runs OpenCode's tool output, files and git on the hand; a change to or from remote replaces the brain at its wake, so the choice at boot holds for the process's life (EN13).
     const handPlacement = Effect.fnUntraced(function* (spaceId: Space.ID) {
@@ -259,12 +265,11 @@ export const layer = Layer.effect(
       return found?.placement ?? Space.defaultHand.placement
     })
 
-    // oxlint-disable-next-line ren/no-comments -- A co-located hand with a template: the machine runs the template's last image that built, and keeps to its host list (EN3, networking rules 1, 2).
+    // oxlint-disable-next-line ren/no-comments -- A space's brain template, whatever its hand: the brain's machine runs the template's last image that built, and keeps to its host list (EN3, networking rules 1, 2).
     const desiredSetup = Effect.fnUntraced(function* (row: Row) {
       const templates = Database.Schema.environment_template
       const found = (yield* database.db
         .select({
-          placement: Database.Schema.space.hand_placement,
           id: templates.id,
           image: templates.image,
           config: templates.image_config,
@@ -274,11 +279,11 @@ export const layer = Layer.effect(
         .from(Database.Schema.space)
         .leftJoin(
           templates,
-          and(eq(templates.id, Database.Schema.space.environment_template_id), isNull(templates.archived_at)),
+          and(eq(templates.id, Database.Schema.space.brain_template_id), isNull(templates.archived_at)),
         )
         .where(eq(Database.Schema.space.id, row.space_id))
         .pipe(Effect.orDie)).at(0)
-      if (found?.placement !== "colocated" || !found.id || !found.networking)
+      if (!found?.id || !found.networking)
         return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.DesiredSetup
       const template = { environmentTemplateId: found.id, config: found.config }
       const hosts = yield* network.hostsOf({ kind: "brain", id: row.id, generation: row.generation }, found.networking)

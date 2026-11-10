@@ -323,6 +323,7 @@ const extra: ReadonlyArray<EmitCli.Command> = [
   { operation: "drive.delete", path: ["drive", "delete"], arguments: ["path"] },
   { operation: "credential.connect", path: ["credential", "connect"], description: "Sign in to an MCP of a profile" },
   { operation: "environmentProvider.list", path: ["environment", "provider", "list"] },
+  { operation: "environmentProvider.brains", path: ["environment", "provider", "brains"] },
   { operation: "channel-provider.list", path: ["channel", "provider", "list"] },
   { operation: "channel-place.list", path: ["channel", "place", "list"], names: { installId: "install" } },
   { operation: "channel-install.start", path: ["channel", "install", "start"] },

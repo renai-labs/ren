@@ -587,7 +587,7 @@ export const layer = Layer.effect(
         // oxlint-disable-next-line ren/no-comments -- Networking rule 4: a push makes the brain pull at once after a change, so a new connection or allowed host reaches its machines within seconds. One query first: a space with no limited template now, and no machine that still has a host list, has nothing to send.
         const hasHostLists = (yield* database.db
           .select({
-            has: sql<boolean>`exists (select 1 from ${Database.Schema.environment_template} t where t.id = ${Database.Schema.space.environment_template_id} and t.networking->>'type' = 'limited')
+            has: sql<boolean>`exists (select 1 from ${Database.Schema.environment_template} t where t.id in (${Database.Schema.space.brain_template_id}, ${Database.Schema.space.environment_template_id}) and t.networking->>'type' = 'limited')
               or exists (select 1 from ${Database.Schema.brain} b where b.id = ${host.brainId} and b.network_hosts is not null)
               or exists (select 1 from ${Database.Schema.environment} e where e.space_id = ${host.spaceId} and e.network_hosts is not null)`,
           })

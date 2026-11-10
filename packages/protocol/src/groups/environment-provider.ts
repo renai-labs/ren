@@ -17,6 +17,18 @@ export const EnvironmentProviderGroup = HttpApiGroup.make("environmentProvider")
       }),
     ),
   )
+  .add(
+    HttpApiEndpoint.get("environmentProvider.brains", "/brain-providers", {
+      success: EnvironmentProvider.Infos,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "environmentProvider.brains",
+        summary: "List brain providers",
+        description:
+          "Return the providers this deployment runs brains on. A space picks one for its brains, and a template of it for their machine.",
+      }),
+    ),
+  )
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

@@ -63,6 +63,7 @@ type SpaceUpdateInput = {
   readonly name?: SpaceUpdateRequest["payload"]["name"]
   readonly description?: SpaceUpdateRequest["payload"]["description"]
   readonly brainScope?: SpaceUpdateRequest["payload"]["brainScope"]
+  readonly brain?: SpaceUpdateRequest["payload"]["brain"]
   readonly hand?: SpaceUpdateRequest["payload"]["hand"]
 }
 const EndpointSpaceUpdate = (raw: RawClient["space"]) => (input: SpaceUpdateInput) =>
@@ -73,6 +74,7 @@ const EndpointSpaceUpdate = (raw: RawClient["space"]) => (input: SpaceUpdateInpu
       name: input["name"],
       description: input["description"],
       brainScope: input["brainScope"],
+      brain: input["brain"],
       hand: input["hand"],
     },
   }).pipe(Effect.mapError(mapClientError))
@@ -200,8 +202,12 @@ const adaptGroupEnvironmentTemplate = (raw: RawClient["environment-template"]) =
 const EndpointEnvironmentProviderList = (raw: RawClient["environmentProvider"]) => () =>
   raw["environmentProvider.list"]({}).pipe(Effect.mapError(mapClientError))
 
+const EndpointEnvironmentProviderBrains = (raw: RawClient["environmentProvider"]) => () =>
+  raw["environmentProvider.brains"]({}).pipe(Effect.mapError(mapClientError))
+
 const adaptGroupEnvironmentProvider = (raw: RawClient["environmentProvider"]) => ({
   list: EndpointEnvironmentProviderList(raw),
+  brains: EndpointEnvironmentProviderBrains(raw),
 })
 
 type SpaceSettingsGetRequest = Parameters<RawClient["space-settings"]["space-settings.get"]>[0]

@@ -1201,6 +1201,55 @@
         "summary": "List environment providers"
       }
     },
+    "/brain-providers": {
+      "get": {
+        "tags": ["environmentProvider"],
+        "operationId": "environmentProvider.brains",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EnvironmentProvider.Infos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentProvider.Infos"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the providers this deployment runs brains on. A space picks one for its brains, and a template of it for their machine.",
+        "summary": "List brain providers"
+      }
+    },
     "/space-settings/{idOrSlug}": {
       "get": {
         "tags": ["space-settings"],
@@ -12218,7 +12267,10 @@
               "minLength": 1,
               "maxLength": 4096
             },
-            "maxItems": 50
+            "maxItems": 50,
+            "title": "Build commands",
+            "description": "Run in order after the packages. One per line.",
+            "examples": [["corepack enable"]]
           }
         },
         "additionalProperties": false
@@ -12373,31 +12425,41 @@
             "items": {
               "type": "string",
               "minLength": 1
-            }
+            },
+            "title": "APT packages",
+            "examples": [["ffmpeg"]]
           },
           "npm": {
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
-            }
+            },
+            "title": "npm packages",
+            "examples": [["typescript"]]
           },
           "pip": {
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
-            }
+            },
+            "title": "pip packages",
+            "examples": [["requests"]]
           },
           "go": {
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
-            }
+            },
+            "title": "Go modules",
+            "examples": [["golang.org/x/tools/gopls@latest"]]
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "title": "Packages",
+        "description": "One per line."
       },
       "App.Page": {
         "type": "object",
@@ -21029,6 +21091,36 @@
         "type": "string",
         "pattern": "^spp_"
       },
+      "Space.BrainMachine": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentProvider.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The brain provider of the space’s brains. Null when the deployment runs brains in cells."
+          },
+          "environmentTemplateId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentTemplate.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A built template of the brain provider: the image, size and host list of the brain’s machine. Null: Ren’s system image."
+          }
+        },
+        "required": ["provider", "environmentTemplateId"],
+        "additionalProperties": false,
+        "description": "The machine of the space’s brains. A change reaches a brain when it wakes."
+      },
       "Space.CreateInput": {
         "type": "object",
         "properties": {
@@ -21071,20 +21163,9 @@
               "placement": {
                 "type": "string",
                 "enum": ["colocated"]
-              },
-              "environmentTemplateId": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/EnvironmentTemplate.ID"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "description": "A template of the deployment’s brain provider. Null: Ren’s system image."
               }
             },
-            "required": ["placement", "environmentTemplateId"],
+            "required": ["placement"],
             "additionalProperties": false
           },
           {
@@ -21176,6 +21257,9 @@
           "brainScope": {
             "$ref": "#/components/schemas/Brain.Scope"
           },
+          "brain": {
+            "$ref": "#/components/schemas/Space.BrainMachine"
+          },
           "hand": {
             "$ref": "#/components/schemas/Space.Hand"
           },
@@ -21239,6 +21323,7 @@
           "name",
           "description",
           "brainScope",
+          "brain",
           "hand",
           "memberCount",
           "membershipId",
@@ -21334,6 +21419,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Brain.Scope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "brain": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.BrainMachine"
               },
               {
                 "type": "null"

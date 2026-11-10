@@ -1,0 +1,2 @@
+CREATE INDEX "space_brain_template_id_idx" ON "space" ("brain_template_id");--> statement-breakpoint
+ALTER TABLE "space" DROP CONSTRAINT "space_hand_check", ADD CONSTRAINT "space_hand_check" CHECK (case "hand_placement" when 'remote' then "environment_template_id" is not null when 'colocated' then "environment_template_id" is null when 'none' then "environment_template_id" is null else false end);

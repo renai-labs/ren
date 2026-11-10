@@ -30,9 +30,10 @@ Words:
 
 ## 1. What it does
 
-1. The deployment has one brain provider (`e2b` today). A space chooses a hand.
+1. A space chooses its brain machine and its hand (app: Compute tab; a template is a "machine" in the app).
+   - **Brain machine**: a brain provider of the deployment (`e2b` today), and a built template of that provider. Without a template, the brain runs from Ren's system image. This applies with every hand (`Space.brain`).
 2. The hand is one of:
-   - **co-located**: the brain's own machine. With a template, the brain machine runs from the template's image. Without one, it runs from Ren's system image.
+   - **co-located**: the brain's own machine.
    - **remote**: machines of a template, which up to 8 chats share.
    - **none**: no file or shell tools.
 3. An org admin creates a template. Ren builds its image when the admin saves it.
@@ -42,7 +43,7 @@ Words:
 
 Done when:
 
-1. An admin creates an E2B template with apt `ffmpeg`, npm `typescript` and `limited` networking that allows `api.example.com`. A member selects it as the co-located hand of a space. A chat runs `ffmpeg -version` and `tsc -v`, reaches `api.example.com`, and cannot reach `example.org` or an ngrok host.
+1. An admin creates an E2B template with apt `ffmpeg`, npm `typescript` and `limited` networking that allows `api.example.com`. A member selects it as the brain machine of a space with a co-located hand. A chat runs `ffmpeg -version` and `tsc -v`, reaches `api.example.com`, and cannot reach `example.org` or an ngrok host.
 2. The admin adds pip `requests`. After the brain sleeps and wakes, the chat runs `python -c "import requests"`, and its earlier files are still there.
 3. Ren deploys a new brain bundle. After the next wake, the chat's files and a background `python -m http.server` are still there.
 4. The same template as a remote hand passes 1, and revert, the workspace panel and long tool outputs work on the hand.
@@ -149,7 +150,7 @@ Ready check: a brain answers `brain.state` and has pulled from Ren (`core/src/br
 
 ### Space settings
 
-Built: `Space.Hand` (`schema/space.ts`), its checks in `Space.update` (EN3, EN24, EN44, EN45), `SessionRunner.create`, and the refused archive of a template in use (`core/src/environment-templates.ts`). New spaces get co-located with no template.
+Built: `Space.BrainMachine` and `Space.Hand` (`schema/space.ts`), their checks in `Space.update` (EN3, EN24, EN44, EN45), `SessionRunner.create`, `GET /brain-providers`, and the refused archive of a template that a space uses as its brain machine or hand (`core/src/environment-templates.ts`). New spaces get the deployment's first brain provider, no brain template and a co-located hand. A new brain takes its space's brain provider; an existing brain keeps its own until it is replaced.
 
 ### When a change applies
 

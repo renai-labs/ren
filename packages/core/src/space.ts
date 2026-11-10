@@ -2,6 +2,7 @@ export * as Space from "./space.js"
 
 import { Database } from "@ren/db/database"
 import { Agent } from "@ren/schema/agent"
+import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Factory } from "@ren/schema/factory"
 import { FactoryCheck } from "@ren/schema/factory-check"
 import { Space } from "@ren/schema/space"
@@ -68,21 +69,13 @@ const actions = {
   removeMember: Primitive.action(SpaceMember.definition, "archive"),
 }
 
-// oxlint-disable-next-line ren/no-comments -- EN3, EN24, EN44: a space holds only a hand that can run: a built template of its organization and, co-located, of the deployment's brain provider. The template read waits for an archive of it.
-const checkHand = Effect.fnUntraced(function* (
-  registry: BrainProvider.Registry["Service"],
+// oxlint-disable-next-line ren/no-comments -- EN3, EN24, EN44: a space runs only machines that can run: a built template of its organization, for its brain one of its brain provider. The template read waits for an archive of it.
+const checkTemplate = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   actor: Actor.Info,
-  hand: Space.Hand,
+  templateId: EnvironmentTemplate.ID,
+  field: "brain" | "hand",
 ) {
-  const brainProvider = hand.placement === "colocated" ? registry.providers.at(0) : undefined
-  if (brainProvider && !brainProvider.canColocate)
-    return yield* new Primitive.Invalid({
-      message: `The brain provider ${brainProvider.info.id} cannot run tools on the brain’s machine; pick a remote hand or none`,
-      field: "hand",
-    })
-  const templateId = hand.placement === "none" ? null : hand.environmentTemplateId
-  if (!templateId) return
   const template = (yield* transaction
     .select({
       provider: Database.Schema.environment_template.provider,
@@ -101,7 +94,7 @@ const checkHand = Effect.fnUntraced(function* (
   if (!template)
     return yield* new Primitive.Invalid({
       message: `This organization has no environment template ${templateId}`,
-      field: "hand",
+      field,
     })
   // oxlint-disable-next-line ren/no-comments -- A provider that builds no image is ready at once.
   if (!template.image && template.buildStatus !== "ready")
@@ -110,19 +103,57 @@ const checkHand = Effect.fnUntraced(function* (
         template.buildStatus === "failed"
           ? `The environment template ${templateId} has no image: its build failed. Fix the template and save it again.`
           : `The environment template ${templateId} has no image yet; wait until its build is ready`,
-      field: "hand",
+      field,
     })
-  if (brainProvider && template.provider !== brainProvider.info.id)
+  return template.provider
+})
+
+// oxlint-disable-next-line ren/no-comments -- The brain's provider must be one this deployment registers, and its template one of that provider. Returns the provider.
+const checkBrain = Effect.fnUntraced(function* (
+  registry: BrainProvider.Registry["Service"],
+  transaction: Database.Transaction,
+  actor: Actor.Info,
+  brain: Space.BrainMachine,
+) {
+  const provider = Option.flatMap(Option.fromNullishOr(brain.provider), registry.get)
+  if (brain.provider && Option.isNone(provider))
     return yield* new Primitive.Invalid({
-      message: `A co-located hand needs a template of the brain provider ${brainProvider.info.id}, not of ${template.provider}`,
+      message: `This deployment has no brain provider ${brain.provider}`,
+      field: "brain",
+    })
+  if (!brain.environmentTemplateId) return provider
+  const templateProvider = yield* checkTemplate(transaction, actor, brain.environmentTemplateId, "brain")
+  if (templateProvider !== brain.provider)
+    return yield* new Primitive.Invalid({
+      message: `The brain needs a template of its provider ${brain.provider ?? "(none)"}, not of ${templateProvider}`,
+      field: "brain",
+    })
+  return provider
+})
+
+const checkMachines = Effect.fnUntraced(function* (
+  registry: BrainProvider.Registry["Service"],
+  transaction: Database.Transaction,
+  actor: Actor.Info,
+  input: Pick<Space.UpdateInput, "brain" | "hand">,
+  current: { readonly brain: Space.BrainMachine; readonly hand: Space.Hand },
+) {
+  if (!input.brain && !input.hand) return
+  const hand = input.hand ?? current.hand
+  const brainProvider = yield* checkBrain(registry, transaction, actor, input.brain ?? current.brain)
+  if (hand.placement === "colocated" && Option.exists(brainProvider, (provider) => !provider.canColocate))
+    return yield* new Primitive.Invalid({
+      message: `The brain provider ${Option.getOrThrow(brainProvider).info.id} cannot run tools on the brain’s machine; pick a remote hand or none`,
       field: "hand",
     })
+  if (hand.placement === "remote") yield* checkTemplate(transaction, actor, hand.environmentTemplateId, "hand")
 })
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const registry = yield* BrainProvider.Registry
+    const deploymentProvider = registry.providers.at(0)?.info.id ?? null
     const database = yield* Database.Service
     const access = yield* Access.Service
     const control = yield* EgressControl.Service
@@ -158,6 +189,7 @@ export const layer = Layer.effect(
           name: row.space.name,
           description: canRead ? row.space.description : null,
           brainScope: row.space.brain_scope,
+          brain: SpaceQueries.brainMachine(row.space, deploymentProvider),
           hand: SpaceQueries.hand(row.space),
           memberCount: row.memberCount,
           membershipId: row.membershipId,
@@ -264,7 +296,13 @@ export const layer = Layer.effect(
             if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource })) {
               return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
             }
-            if (input.hand) yield* checkHand(registry, transaction, actor, input.hand)
+            yield* checkMachines(
+              registry,
+              transaction,
+              actor,
+              input,
+              SpaceQueries.machines(visible.row.space, deploymentProvider),
+            )
             if (input.factory) {
               const problem = FactoryCheck.problems(input.factory).at(0)
               if (problem) return yield* new Primitive.Invalid({ message: problem, field: "factory" })
@@ -290,6 +328,7 @@ export const layer = Layer.effect(
                 name: input.name,
                 description: input.description,
                 brain_scope: input.brainScope,
+                ...(input.brain && SpaceQueries.brainColumns(input.brain)),
                 ...(input.hand && SpaceQueries.handColumns(input.hand)),
                 factory: input.factory,
                 updated_at: sql`now()`,

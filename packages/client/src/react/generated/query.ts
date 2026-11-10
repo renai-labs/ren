@@ -299,6 +299,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryFn: (context) => client["environmentProvider"]["list"]({ signal: context.signal }),
           }),
       },
+      brains: {
+        queryKey: () => ["environmentProvider", "brains"] as const,
+        queryOptions: () =>
+          queryOptions({
+            queryKey: ["environmentProvider", "brains"] as const,
+            queryFn: (context) => client["environmentProvider"]["brains"]({ signal: context.signal }),
+          }),
+      },
     },
     "space-settings": {
       get: {

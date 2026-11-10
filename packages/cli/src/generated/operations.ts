@@ -1838,6 +1838,13 @@ export const EnvironmentProviderList = () =>
     (client) => client["environmentProvider"]["list"](),
   )
 
+export const EnvironmentProviderBrains = () =>
+  Operation.run(
+    ClientApi.groups["environmentProvider"].endpoints["environmentProvider.brains"],
+    { labels: {} },
+    (client) => client["environmentProvider"]["brains"](),
+  )
+
 export const ChannelProviderList = () =>
   Operation.run(ClientApi.groups["channel-connect"].endpoints["channel-provider.list"], { labels: {} }, (client) =>
     client["channel-connect"]["channel-provider"]["list"](),

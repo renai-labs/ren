@@ -179,7 +179,7 @@ describe("EnvironmentTemplates", () => {
         const setup = yield* team()
         const grace = yield* user(setup.organizationId)
         const made = yield* templates.create(setup.admin, input)
-        expect(setup.space.hand).toEqual({ placement: "colocated", environmentTemplateId: null })
+        expect(setup.space.hand).toEqual({ placement: "colocated" })
         const remote = { placement: "remote", environmentTemplateId: made.id } as const
         expect((yield* spaces.update(grace, setup.space.id, { hand: remote }).pipe(Effect.flip))._tag).toBe(
           "Primitive.NotFound",
@@ -197,21 +197,31 @@ describe("EnvironmentTemplates", () => {
       }),
   )
 
-  it.live("co-located needs a template of the brain provider (EN3, chaos row 28)", () =>
-    Effect.gen(function* () {
-      const templates = yield* EnvironmentTemplates.Service
-      const spaces = yield* Space.Service
-      const setup = yield* team()
-      const made = yield* templates.create(setup.admin, input)
-      const colocated = { placement: "colocated", environmentTemplateId: made.id } as const
-      expect((yield* spaces.update(setup.ada, setup.space.id, { hand: colocated })).hand).toEqual(colocated)
-      const other = yield* Seed.environmentTemplate(setup.organizationId, { provider: "other" })
-      expect(
-        yield* spaces
-          .update(setup.ada, setup.space.id, { hand: { placement: "colocated", environmentTemplateId: other } })
-          .pipe(Effect.flip),
-      ).toMatchObject({ _tag: "Primitive.Invalid", field: "hand" })
-    }),
+  it.live(
+    "a space's brain runs a built template of its brain provider with any hand; an unknown provider or another provider's template is refused (EN3, chaos row 28)",
+    () =>
+      Effect.gen(function* () {
+        const templates = yield* EnvironmentTemplates.Service
+        const spaces = yield* Space.Service
+        const setup = yield* team()
+        const made = yield* templates.create(setup.admin, input)
+        const provider = EnvironmentProvider.ID.make("test")
+        expect(setup.space.brain).toEqual({ provider, environmentTemplateId: null })
+        const brain = { provider, environmentTemplateId: made.id }
+        const remote = { placement: "remote", environmentTemplateId: made.id } as const
+        const updated = yield* spaces.update(setup.ada, setup.space.id, { brain, hand: remote })
+        expect([updated.brain, updated.hand]).toEqual([brain, remote])
+        const other = yield* Seed.environmentTemplate(setup.organizationId, { provider: "other" })
+        const refused = (change: Parameters<typeof spaces.update>[2]) =>
+          spaces.update(setup.ada, setup.space.id, change).pipe(Effect.flip)
+        expect(yield* refused({ brain: { provider, environmentTemplateId: other } })).toMatchObject({
+          _tag: "Primitive.Invalid",
+          field: "brain",
+        })
+        expect(
+          yield* refused({ brain: { provider: EnvironmentProvider.ID.make("nope"), environmentTemplateId: null } }),
+        ).toMatchObject({ _tag: "Primitive.Invalid", field: "brain" })
+      }),
   )
 
   it.live("archiving a template that a space uses is refused, with the spaces (EN24, chaos row 22)", () =>
@@ -223,9 +233,16 @@ describe("EnvironmentTemplates", () => {
       yield* spaces.update(setup.ada, setup.space.id, { hand: { placement: "remote", environmentTemplateId: made.id } })
       expect(yield* templates.archive(setup.admin, made.id).pipe(Effect.flip)).toMatchObject({
         _tag: "Primitive.Conflict",
-        message: "Spaces use this environment template: Team. Pick another hand for them first.",
+        message: "Spaces use this environment template: Team. Pick another brain or hand for them first.",
       })
-      yield* spaces.update(setup.ada, setup.space.id, { hand: { placement: "none" } })
+      yield* spaces.update(setup.ada, setup.space.id, {
+        brain: { provider: EnvironmentProvider.ID.make("test"), environmentTemplateId: made.id },
+        hand: { placement: "none" },
+      })
+      expect((yield* templates.archive(setup.admin, made.id).pipe(Effect.flip))._tag).toBe("Primitive.Conflict")
+      yield* spaces.update(setup.ada, setup.space.id, {
+        brain: { provider: EnvironmentProvider.ID.make("test"), environmentTemplateId: null },
+      })
       expect((yield* templates.archive(setup.admin, made.id)).archivedAt).not.toBeNull()
     }),
   )
