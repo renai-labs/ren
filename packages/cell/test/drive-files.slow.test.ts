@@ -3,7 +3,7 @@ import { TestGitHub } from "@ren/brain/testing"
 import { DriveEnvironment, testEffect } from "@ren/executor/testing"
 import type { Drive } from "@ren/schema/drive"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Layer, Schedule } from "effect"
+import { Effect, Fiber, Layer, Redacted, Schedule, Schema, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ReferenceChat } from "./lib/reference-chat.js"
 import { Shared } from "./lib/shared.js"
@@ -105,15 +105,53 @@ describe.skipIf(!DriveEnvironment.hasDocker)("drive files", () => {
   )
 
   it.live(
-    "show_file puts a file the agent made in the chat's outputs in the drive, and the transcript gives the file for a card",
+    "show_file puts a native image job's default environment output in the drive and the transcript gives it as a card",
     () =>
       Effect.gen(function* () {
         const opened = yield* open
         const chat = opened.chat
-        yield* chat.tool("write", { path: `/tmp/chats/${chat.sessionId}/report.md`, content: "q3 numbers" })
-        const path = `chats/${chat.sessionId}/outputs/report.md`
+        const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+        const gateway = yield* Effect.acquireRelease(
+          Effect.sync(() =>
+            Bun.serve({
+              port: 0,
+              hostname: "127.0.0.1",
+              fetch: () => Response.json({ created: 1, data: [{ b64_json: png }] }),
+            }),
+          ),
+          (server) => Effect.promise(() => server.stop(true)),
+        )
+        yield* chat.configure({
+          models: [
+            ...Shared.access(undefined, stub.url).endpoints,
+            {
+              id: "image",
+              protocol: "openai-chat",
+              baseUrl: `${gateway.url.origin}/v1`,
+              apiKey: { key: Redacted.make("key") },
+              models: [{ id: "painter", type: "image", protocol: "openai-images" }],
+            },
+          ],
+        })
+        const notified = yield* chat.events.pipe(
+          Stream.filter((event) => event.type === "session.inbox.enqueued" && event.data.item.type === "synthetic"),
+          Stream.runHead,
+          Effect.forkScoped({ startImmediately: true }),
+        )
+        yield* chat.tool("experimental_image_generate", { prompt: "A dot" })
+        yield* Fiber.join(notified)
+        const generated = (yield* chat.transcript).items
+          .flatMap((message) => (message.type === "assistant" ? message.content : []))
+          .find((part) => part.type === "tool" && part.name === "experimental_image_generate")
+        const stem =
+          generated?.type === "tool" && generated.state.status === "completed"
+            ? Schema.decodeUnknownSync(Schema.Struct({ path: Schema.String }))(generated.state.metadata).path
+            : ""
+        expect(stem).toStartWith(`/tmp/chats/${chat.sessionId}/.ren/images/`)
+        const name = `${stem.split("/").at(-1)}.png`
+        const path = `chats/${chat.sessionId}/outputs/${name}`
         const result = JSON.stringify(
-          (yield* chat.tool("show_file", { path: "report.md" })).body.messages.findLast(
+          (yield* chat.tool("show_file", { path: `${stem}.png` })).body.messages.findLast(
             (message) => message.role === "tool",
           )?.content ?? "",
         )
@@ -122,12 +160,12 @@ describe.skipIf(!DriveEnvironment.hasDocker)("drive files", () => {
           .flatMap((message) => (message.type === "assistant" ? message.content : []))
           .find((part) => part.type === "tool" && part.name === SessionMessage.showFileTool)
         expect(shown?.type === "tool" && shown.state.status === "completed" && shown.state.metadata).toMatchObject({
-          file: { path, name: "report.md", mime: "text/markdown", size: 10 },
+          file: { path, name, mime: "image/png", size: Buffer.from(png, "base64").length },
         })
         const uploaded = Effect.try(() =>
-          opened.environment.exec(`cat /tmp/s3/drives/org_1/drives/spaces/spc_1/${path}`),
+          opened.environment.exec(`base64 -w0 /tmp/s3/drives/org_1/drives/spaces/spc_1/${path}`),
         ).pipe(Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }))
-        expect(yield* uploaded).toBe("q3 numbers")
+        expect(yield* uploaded).toBe(png)
       }),
   )
 })

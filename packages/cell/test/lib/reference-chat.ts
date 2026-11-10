@@ -106,6 +106,8 @@ export const open = Effect.fnUntraced(function* (
       )
   return {
     sessionId,
+    configure: harness.configure,
+    events: harness.chat.events,
     turn,
     prompt: (files: ReadonlyArray<Session.DriveFile>, text = "Look at these") =>
       harness.chat.prompt(sessionId, {
