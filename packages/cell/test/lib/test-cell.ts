@@ -33,9 +33,10 @@ export interface Target {
   readonly brain: () => Brain.ID
 }
 
-export const make = async (target: Target) => {
+export const make = async (target: Target, models?: Models.Access) => {
   const url = target.url
   const brain = target.brain()
+  if (models) target.ren.models(models, brain)
   const id = `ses_${crypto.randomUUID().replaceAll("-", "")}`
   const client = await TestToken.sign({
     scope: "client",
