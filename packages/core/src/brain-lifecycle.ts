@@ -286,7 +286,12 @@ export const layer = Layer.effect(
       if (!found?.id || !found.networking)
         return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.DesiredSetup
       const template = { environmentTemplateId: found.id, config: found.config }
-      const hosts = yield* network.hostsOf({ kind: "brain", id: row.id, generation: row.generation }, found.networking)
+      const limited = yield* network.hostsOf(
+        { kind: "brain", id: row.id, generation: row.generation },
+        found.networking,
+      )
+      const handHosts = yield* environments.handHosts(row.space_id)
+      const hosts = Option.map(limited, (each) => [...new Set([...each, ...handHosts])].toSorted())
       return {
         config: {},
         image: Option.map(

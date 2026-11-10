@@ -362,6 +362,24 @@ describe("Environments", () => {
       }),
   )
 
+  it.live("a brain with a host list reaches the machines of its space's remote hand, and no other hand's hosts", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const subject = yield* environmentsWith({}, { machineHosts: ["*.hands.test"] })
+      const organizationId = yield* Seed.organization()
+      const spaceId = yield* Seed.team(organizationId)
+      const template = yield* Seed.environmentTemplate(organizationId)
+      const handIs = (hand: {
+        readonly hand_placement: "colocated" | "remote"
+        readonly environment_template_id: EnvironmentTemplate.ID | null
+      }) => database.db.update(Database.Schema.space).set(hand).where(eq(Database.Schema.space.id, spaceId))
+      yield* handIs({ hand_placement: "remote", environment_template_id: template })
+      const remote = yield* subject.environments.handHosts(spaceId)
+      yield* handIs({ hand_placement: "colocated", environment_template_id: null })
+      expect([remote, yield* subject.environments.handHosts(spaceId)]).toEqual([["*.hands.test"], []])
+    }),
+  )
+
   it.live("a configured token lifetime is the access's lifetime", () =>
     Effect.gen(function* () {
       const subject = yield* environmentsWith({ ENVIRONMENT_TOKEN_LIFETIME: "20 seconds" })

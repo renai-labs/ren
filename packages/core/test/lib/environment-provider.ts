@@ -26,6 +26,7 @@ export const make = (
     readonly canMount?: boolean
     readonly canColocate?: boolean
     readonly canLimitHosts?: boolean
+    readonly machineHosts?: ReadonlyArray<string>
     readonly systemImage?: string
     readonly build?: {
       readonly start: (config: typeof Config.Type) => Effect.Effect<MachineProvider.BuildState, MachineProvider.Failed>
@@ -71,6 +72,7 @@ export const make = (
       canSample: false,
       canColocate: options.canColocate ?? false,
       canLimitHosts: options.canLimitHosts ?? false,
+      ...(options.machineHosts && { machineHosts: options.machineHosts }),
       ...(options.systemImage && { systemImage: options.systemImage }),
       config: Config,
       binding: Schema.Struct({ environmentId: Environment.ID }),

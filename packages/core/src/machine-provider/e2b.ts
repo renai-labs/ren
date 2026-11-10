@@ -327,6 +327,7 @@ export const provider = Effect.gen(function* () {
     canEgress: true,
     canMount: true,
     canSample: true,
+    machineHosts: [`*.${config.domain}`],
     canColocate: true,
     canLimitHosts: true,
     systemImage: config.template,

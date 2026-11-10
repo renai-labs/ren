@@ -96,6 +96,8 @@ export interface Interface {
   readonly keepAwake: (sessionIds: ReadonlyArray<Session.ID>, lastProgressAt: Date) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- Sends the awake remote hands of a space their new host list (networking rule 4).
   readonly refreshNetworks: (spaceId: Space.ID) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- The hosts the machines of a space's remote hand answer on; none for another hand. A brain with a host list must reach them.
+  readonly handHosts: (spaceId: Space.ID) => Effect.Effect<ReadonlyArray<string>>
   // oxlint-disable-next-line ren/no-comments -- Destroys the hand sandboxes that no row knows at their generation: a row that is gone or replaced, or a create that half worked.
   readonly cleanup: Effect.Effect<void>
   readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
@@ -662,6 +664,19 @@ export const layer = Layer.effect(
           }),
           { discard: true },
         )
+      }),
+      handHosts: Effect.fn("Environments.handHosts")(function* (spaceId: Space.ID) {
+        const found = (yield* database.db
+          .select({ placement: Database.Schema.space.hand_placement, provider: templates.provider })
+          .from(Database.Schema.space)
+          .leftJoin(templates, eq(templates.id, Database.Schema.space.environment_template_id))
+          .where(eq(Database.Schema.space.id, spaceId))
+          .pipe(Effect.orDie)).at(0)
+        if (found?.placement !== "remote" || !found.provider) return []
+        return Option.match(registry.get(found.provider), {
+          onNone: () => [],
+          onSome: (provider) => provider.machineHosts,
+        })
       }),
       unbind: Effect.fn("Environments.unbind")(function* (subject: Subject) {
         yield* database.db.delete(sessions).where(isSessionOf(subject)).pipe(Effect.orDie)
