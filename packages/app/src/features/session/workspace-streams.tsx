@@ -108,7 +108,7 @@ function LiveView(props: { src: string; title: string; onRetry: () => void }) {
         // oxlint-disable-next-line react/iframe-missing-sandbox -- The live view is on Kernel's origin, so it cannot reach this page; its client needs its own storage.
         sandbox="allow-scripts allow-same-origin"
         referrerPolicy="origin"
-        allow="clipboard-read; clipboard-write"
+        allow="autoplay; clipboard-read; clipboard-write"
         className="size-full border-0 bg-muted"
       />
       {status === "playing" ? null : (
