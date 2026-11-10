@@ -18,6 +18,8 @@ const protocols = {
   "openai-video": { package: "@opencode/ai/providers/openai-compatible" },
 } satisfies Record<Models.ModelProtocol, { readonly canonical?: Provider.ID; readonly package: string }>
 
+const supportedTypes = new Set<Models.Type>(["chat", "image", "transcription", "decision"])
+
 export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.Endpoint>) => {
   if (endpoints.length > 0)
     for (const record of editor.list())
@@ -32,17 +34,18 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
       if (protocol.canonical) provider.canonical = protocol.canonical
       if (endpoint.headers) provider.headers = { ...provider.headers, ...endpoint.headers }
     })
-    const listed = new Set(endpoint.models.map((model) => model.id))
+    const supported = endpoint.models.filter((model) => supportedTypes.has(model.type))
+    const listed = new Set(supported.map((model) => model.id))
     for (const id of editor.get(endpoint.id)?.models.keys() ?? [])
       if (!listed.has(id)) editor.models.remove(endpoint.id, id)
-    for (const model of endpoint.models) {
+    for (const model of supported) {
       // oxlint-disable-next-line ren/no-comments -- OpenCode calls a model with its own package before its provider's (core/src/model.ts:142).
-      const own: { readonly canonical?: Provider.ID; readonly package: string } =
-        protocols[model.protocol ?? endpoint.protocol]
+      const own: { readonly canonical?: Provider.ID; readonly package: string } = protocols[model.protocol]
       editor.models.update(endpoint.id, Model.ID.make(model.id), (info) => {
-        info.modelID = Model.ID.make(model.upstreamId ?? model.id)
-        info.package = model.protocol && own.package
-        info.canonical = model.protocol && own.canonical
+        info.modelID = Model.ID.make(model.id)
+        info.type = model.type
+        info.package = own.package
+        info.canonical = model.type !== "chat" ? undefined : own.canonical
         if (model.name) info.name = model.name
         if (model.input) info.capabilities.input = [...model.input]
         if (model.limit) info.limit = { ...info.limit, ...model.limit }

@@ -224,9 +224,11 @@ export const start = async (): Promise<Instance> => {
   const scripts = new Map<string, Entry>()
 
   const info = { models: StubModel.defaultModels, isDown: false }
-  const modelInfo = (response: ServerResponse) => {
+  const modelInfo = (request: IncomingMessage, response: ServerResponse) => {
     response.writeHead(info.isDown ? 503 : 200, { "content-type": "application/json" })
-    response.end(info.isDown ? "{}" : JSON.stringify({ data: info.models }))
+    response.end(
+      info.isDown ? "{}" : JSON.stringify({ baseUrl: `http://${request.headers.host}/v1`, models: info.models }),
+    )
   }
   const chat = async (request: IncomingMessage, response: ServerResponse) => {
     const decoded = decodeRequest(await readBody(request))
@@ -249,8 +251,8 @@ export const start = async (): Promise<Instance> => {
   }
 
   const server = createServer((request, response) =>
-    request.url === "/model/info"
-      ? modelInfo(response)
+    request.url === "/v1/catalog"
+      ? modelInfo(request, response)
       : void chat(request, response).catch(() => response.socket?.destroy()),
   )
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))

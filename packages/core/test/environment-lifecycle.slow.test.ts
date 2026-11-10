@@ -39,9 +39,12 @@ const encodedKeys = (keys: ReadonlyArray<Signature.PrivateKey>) =>
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
-    inference: Shared.inference(),
     revision: Effect.succeed("test"),
-    catalog: () => Effect.succeed({ endpoints: [] }),
+    providers: Effect.sync(() =>
+      Models.registrations(Models.catalog(Shared.access({ stub: Shared.apiKey("sk-environments") }, stub.url))),
+    ),
+    catalog: () =>
+      Effect.sync(() => Models.catalog(Shared.access({ stub: Shared.apiKey("sk-environments") }, stub.url))),
     grant: () => Effect.sync(() => Shared.access({ stub: Shared.apiKey("sk-environments") }, stub.url)),
   }),
 )

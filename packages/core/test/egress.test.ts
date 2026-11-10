@@ -103,6 +103,7 @@ const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
     catalog: () => Effect.succeed({ endpoints: [] }),
+    providers: Effect.succeed([]),
     revision: Effect.succeed("test"),
     grant: () =>
       Effect.succeed(
@@ -118,7 +119,6 @@ const models = Layer.succeed(
           ],
         }),
       ),
-    inference: Effect.succeedNone,
   }),
 )
 

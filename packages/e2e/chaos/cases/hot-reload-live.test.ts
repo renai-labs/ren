@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { Models } from "@ren/schema/models"
-import { Redacted, Schema, Struct } from "effect"
+import { Redacted, Struct } from "effect"
 import { Platform } from "../lib/platform.js"
 import { LiteLLM } from "../lib/provider/litellm.js"
 import { RealStack } from "../lib/real-stack.js"
@@ -15,8 +15,7 @@ const added = "openai/gpt-5.6-terra"
 const readWithinMs = 45_000
 
 const accessFor = async (key: string): Promise<Models.Access> => {
-  const response = await fetch(`${LiteLLM.url}/model/info`, { headers: { authorization: `Bearer ${key}` } })
-  const catalog = Models.fromInference(Schema.decodeUnknownSync(Models.InferenceModelInfo)(await response.json()))
+  const catalog = await LiteLLM.catalog(key)
   return {
     endpoints: catalog.endpoints.map((endpoint) =>
       Struct.assign(endpoint, { baseUrl: `${LiteLLM.url}/v1`, apiKey: { key: Redacted.make(key) } }),
@@ -44,7 +43,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       })
       await lane.stack.sql`
         INSERT INTO settings (space_id, settings)
-        VALUES (${lane.stack.owner.spaceId}, ${JSON.stringify({ model: { endpointId: "anthropic", modelId: "claude-haiku-5-5" }, permissions: [], references: [] })}::text::jsonb)
+        VALUES (${lane.stack.owner.spaceId}, ${JSON.stringify({ model: { endpointId: "ren", modelId: small }, permissions: [], references: [] })}::text::jsonb)
         ON CONFLICT (owner_id) DO UPDATE SET settings = excluded.settings`
     }, 600_000)
 

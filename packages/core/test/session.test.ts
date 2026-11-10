@@ -8,10 +8,11 @@ import type { Space as SpaceSchema } from "@ren/schema/space"
 import { Task } from "@ren/schema/task"
 import { TaskLink } from "@ren/schema/task-link"
 import { eq } from "drizzle-orm"
-import { DateTime, Deferred, Effect, Fiber, Schedule } from "effect"
+import { DateTime, Deferred, Effect, Fiber, Layer, Schedule } from "effect"
 import { SqlClient, Statement } from "effect/sql"
 import type { Actor } from "../src/actor.js"
 import { Session } from "../src/session.js"
+import { Models } from "../src/models.js"
 import { Space } from "../src/space.js"
 import { Configured } from "./lib/configured.js"
 import { testEffect } from "./lib/effect.js"
@@ -20,6 +21,37 @@ import { Seed } from "./lib/seed.js"
 setDefaultTimeout(60_000)
 
 const it = testEffect(Configured.sessionLayer)
+
+const picker = testEffect(
+  Layer.fresh(Session.layer).pipe(
+    Layer.provideMerge(
+      Layer.merge(
+        Configured.sessionLayer,
+        Layer.effect(
+          Models.Service,
+          Effect.gen(function* () {
+            const source = yield* Models.Service
+            return Models.Service.of({
+              ...source,
+              catalog: (organizationId) =>
+                source.catalog(organizationId).pipe(
+                  Effect.map((catalog) => ({
+                    endpoints: catalog.endpoints.map((endpoint) => ({
+                      ...endpoint,
+                      models: [
+                        ...endpoint.models,
+                        { id: "image", type: "image" as const, protocol: "openai-images" as const },
+                      ],
+                    })),
+                  })),
+                ),
+            })
+          }),
+        ).pipe(Layer.provide(Configured.models)),
+      ),
+    ),
+  ),
+)
 
 type ListInput = Parameters<Session.Interface["list"]>[1]
 
@@ -83,6 +115,15 @@ const listed = (actor: Actor.Info, input: Partial<ListInput> = {}) =>
   )
 
 describe("Session", () => {
+  picker.live("the chat model picker excludes media models on a shared endpoint", () =>
+    Effect.gen(function* () {
+      const owner = yield* Seed.owner()
+      const sessions = yield* Session.Service
+      const listed = yield* sessions.models(actorOf(owner), yield* Seed.session(owner))
+      expect(listed.length).toBeGreaterThan(0)
+      expect(listed.some((model) => model.id === "image")).toBe(false)
+    }),
+  )
   it.live(
     "links lists the chat's tasks the caller can read, their pull requests and issues once each, and its threads",
     () =>

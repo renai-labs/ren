@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test"
 import { Models } from "@ren/schema/models"
-import { DateTime, Redacted, Schema } from "effect"
+import { DateTime, Redacted } from "effect"
 import { SessionDriver } from "../lib/drivers/session.js"
 import { Platform } from "../lib/platform.js"
 import { LiteLLM } from "../lib/provider/litellm.js"
@@ -18,7 +18,9 @@ const bridge = (key: string, expiresAtMs?: number): Models.Access => ({
         key: Redacted.make(key),
         ...(expiresAtMs !== undefined && { expiresAt: DateTime.makeUnsafe(expiresAtMs) }),
       },
-      models: [{ id: model, name: model, limit: { context: 100_000, output: 4000 } }],
+      models: [
+        { id: model, type: "chat", protocol: "openai-chat", name: model, limit: { context: 100_000, output: 4000 } },
+      ],
     },
   ],
 })
@@ -45,13 +47,11 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.live !== undefined |
 
     afterAll(() => lane.stack?.dispose())
 
-    // oxlint-disable-next-line ren/no-comments -- HR15: the brain names LiteLLM's model by its provider and model key, which it reads from /model/info.
     const session = async (access: Models.Access, key: string) => {
-      const response = await fetch(`${LiteLLM.url}/model/info`, { headers: { authorization: `Bearer ${key}` } })
-      const catalog = Models.fromInference(Schema.decodeUnknownSync(Models.InferenceModelInfo)(await response.json()))
+      const catalog = await LiteLLM.catalog(key)
       const found = catalog.endpoints.flatMap((endpoint) =>
         endpoint.models.flatMap((entry) =>
-          (entry.upstreamId ?? entry.id) === model ? [{ endpointId: endpoint.id, modelId: entry.id }] : [],
+          entry.id === model ? [{ endpointId: endpoint.id, modelId: entry.id }] : [],
         ),
       )[0]
       if (!found) throw new Error(`LiteLLM lists no ${model} for the key`)

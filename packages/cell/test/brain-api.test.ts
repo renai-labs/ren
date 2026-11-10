@@ -420,9 +420,11 @@ it.live(
       yield* brain.install({
         endpoints: [
           ...catalog([
-            { id: "stub-model", name: "Stub", limit },
+            { id: "stub-model", type: "chat", protocol: "openai-chat", name: "Stub", limit },
             {
               id: "stub-added",
+              type: "chat",
+              protocol: "openai-chat",
               name: "Stub Added",
               limit: { context: 50_000, output: 2000 },
               efforts: ["low", "high"],
@@ -475,7 +477,16 @@ it.live("an anthropic endpoint becomes a provider with its efforts as variants, 
           protocol: "anthropic-messages",
           baseUrl: Shared.stub().url,
           apiKey: Shared.apiKey("anthropic-key", Date.now() + 3_600_000),
-          models: [{ id: "stub-claude", name: "Gateway Claude", limit, efforts: ["low", "max"] }],
+          models: [
+            {
+              id: "stub-claude",
+              type: "chat",
+              protocol: "anthropic-messages",
+              name: "Gateway Claude",
+              limit,
+              efforts: ["low", "max"],
+            },
+          ],
         },
       ],
     })
@@ -510,7 +521,7 @@ it.live("an openai-responses endpoint named openai keeps the HTTP transport, not
           protocol: "openai-responses",
           baseUrl: Shared.stub().url,
           apiKey: Shared.apiKey("openai-key", Date.now() + 3_600_000),
-          models: [{ id: "stub-gpt", limit }],
+          models: [{ id: "stub-gpt", type: "chat", protocol: "openai-responses", limit }],
         },
       ],
     })
@@ -532,8 +543,8 @@ it.live("a model with its own protocol is called with it, not with its endpoint'
           baseUrl: Shared.stub().url,
           apiKey: Shared.apiKey("gateway-key", Date.now() + 3_600_000),
           models: [
-            { id: "stub-model", limit },
-            { id: "stub-claude", limit, protocol: "anthropic-messages" },
+            { id: "stub-model", type: "chat", protocol: "openai-chat", limit },
+            { id: "stub-claude", type: "chat", limit, protocol: "anthropic-messages" },
           ],
         },
       ],
@@ -560,11 +571,11 @@ it.live("a model removed from the catalog while the harness is open is no longer
     yield* brain.start()
     yield* brain.install(
       catalog([
-        { id: "stub-model", limit },
-        { id: "stub-added", limit },
+        { id: "stub-model", type: "chat", protocol: "openai-chat", limit },
+        { id: "stub-added", type: "chat", protocol: "openai-chat", limit },
       ]),
     )
-    yield* brain.install(catalog([{ id: "stub-model", limit }]))
+    yield* brain.install(catalog([{ id: "stub-model", type: "chat", protocol: "openai-chat", limit }]))
     expect(
       (yield* brain.opencode.model.list()).data.filter(
         (model) => model.providerID === "stub" && model.modelID === "stub-added",
@@ -580,10 +591,10 @@ test.each<[string, Models.Access, Models.Access, Session.Model]>([
   [
     "a model removed from its endpoint",
     catalog([
-      { id: "stub-model", limit },
-      { id: "stub-added", limit },
+      { id: "stub-model", type: "chat", protocol: "openai-chat", limit },
+      { id: "stub-added", type: "chat", protocol: "openai-chat", limit },
     ]),
-    catalog([{ id: "stub-model", limit }]),
+    catalog([{ id: "stub-model", type: "chat", protocol: "openai-chat", limit }]),
     { endpointId: "stub", modelId: "stub-added" },
   ],
   [
@@ -613,14 +624,16 @@ test.todo("REN-1486 an endpoint's base URL and key changed during a turn reach t
     Effect.gen(function* () {
       const brain = yield* BrainTest.Service
       yield* brain.start()
-      yield* brain.install(catalog([{ id: "stub-model", limit }], Shared.apiKey("first-key")))
+      yield* brain.install(
+        catalog([{ id: "stub-model", type: "chat", protocol: "openai-chat", limit }], Shared.apiKey("first-key")),
+      )
       const first = Shared.stub().script({ hold: true })
       const second = Shared.stub().script()
       yield* brain.send(`first ${first.marker}`)
       yield* Effect.promise(() => first.called())
       yield* brain.install(
         catalog(
-          [{ id: "stub-model", limit }],
+          [{ id: "stub-model", type: "chat", protocol: "openai-chat", limit }],
           Shared.apiKey("moved-key"),
           Shared.stub().url.replace(/\/v1$/, "/moved/v1"),
         ),

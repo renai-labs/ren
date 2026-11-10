@@ -1,10 +1,24 @@
 export * as LiteLLM from "./litellm.js"
 
 import { Schema } from "effect"
+import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
+import { Models } from "@ren/schema/models"
 
 const Generated = Schema.Struct({ key: Schema.String })
 
 export const url = (process.env.CHAOS_LITELLM_ADMIN_URL ?? "").replace(/\/$/, "")
+
+export const catalog = async (key: string): Promise<Models.Catalog> => {
+  const response = await fetch(`${process.env.CHAOS_INFERENCE_URL?.replace(/\/$/u, "")}/v1/catalog`, {
+    headers: { authorization: `Bearer ${key}` },
+  })
+  if (!response.ok) throw new Error(`Inference discovery answered ${response.status}`)
+  return {
+    endpoints: [
+      RenInferenceProvider.endpoint(Schema.decodeUnknownSync(Models.InferenceCatalog)(await response.json())),
+    ],
+  } satisfies Models.Catalog
+}
 
 const call = (method: string, route: string, body?: unknown) =>
   fetch(`${url}${route}`, {

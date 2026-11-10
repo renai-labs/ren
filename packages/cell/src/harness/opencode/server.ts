@@ -162,8 +162,6 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   const desired = yield* Ref.make<HarnessConfig.Snapshot>({
     revision: 0,
     models: initial,
-    modelCatalogs: {},
-    modelProviders: {},
     apps: options.apps ?? Option.none(),
     channels: options.channels ?? [],
     memory: Option.none(),
@@ -264,6 +262,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
   yield* Deferred.await(loaded)
+  yield* synced
   if (Option.isSome(connections))
     yield* Watchdog.run({
       events: api.event.subscribe().pipe(Stream.orDie),

@@ -43,9 +43,9 @@ const source: { available: boolean } = { available: true }
 const fixed = Layer.succeed(
   Models.Service,
   Models.Service.of({
-    inference: Shared.inference(),
     revision: Effect.succeed("test"),
     catalog: () => Effect.succeed(Models.catalog(configured)),
+    providers: Effect.succeed(Models.registrations(Models.catalog(configured))),
     grant: () =>
       source.available
         ? Effect.succeed(configured)
@@ -331,7 +331,7 @@ describe("BrainHost pull", () => {
     }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
   )
 
-  it.live("a pull sends the inference URL and no model keys, behind the egress or not (HR3, HR16)", () =>
+  it.live("a pull sends provider registrations and no model keys, behind the egress or not (HR3, HR16)", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const replyOf = Effect.fnUntraced(function* (egress: boolean) {
@@ -348,10 +348,12 @@ describe("BrainHost pull", () => {
             { version: "test", keyIds: [], sessions: [] },
           ),
         ).pipe(Effect.provide(cell("http://127.0.0.1:9")))
-        return reply.inference
+        return reply.providers
       })
-      const expected = { baseUrl: Shared.stub().root }
-      expect([yield* replyOf(true), yield* replyOf(false)]).toEqual([expected, expected])
+      const replies = [yield* replyOf(true), yield* replyOf(false)]
+      const expected = Models.registrations(Models.catalog(configured))
+      expect(replies).toEqual([expected, expected])
+      expect(JSON.stringify(replies)).not.toContain("apiKey")
     }),
   )
 

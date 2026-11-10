@@ -9,7 +9,7 @@ import { Brain } from "@ren/schema/brain"
 import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { Duration, Effect, Layer, ManagedRuntime, Option, Redacted, Schema, Struct } from "effect"
+import { Duration, Effect, Layer, ManagedRuntime, Option, Redacted, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Platform } from "../lib/platform.js"
 import { LiteLLM } from "../lib/provider/litellm.js"
@@ -29,8 +29,7 @@ const unmet =
   (renTunnel && litellmTunnel ? undefined : "C12 needs CHAOS_REN_TUNNEL_URL and CHAOS_LITELLM_TUNNEL_URL")
 
 const accessFor = async (key: string): Promise<Models.Access> => {
-  const response = await fetch(`${LiteLLM.url}/model/info`, { headers: { authorization: `Bearer ${key}` } })
-  const catalog = Models.fromInference(Schema.decodeUnknownSync(Models.InferenceModelInfo)(await response.json()))
+  const catalog = await LiteLLM.catalog(key)
   return {
     endpoints: catalog.endpoints.map((endpoint) =>
       Struct.assign(endpoint, { baseUrl: `${litellmTunnel}/v1`, apiKey: { key: Redacted.make(key) } }),
@@ -56,7 +55,7 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
     cleanups.push(() => ren.stop())
     const brain = Brain.ID.create()
     ren.models(await accessFor(key), brain)
-    ren.settings(TestSettings.layers({ ren: { model: { endpointId: "anthropic", modelId: "claude-haiku-5-5" } } }))
+    ren.settings(TestSettings.layers({ ren: { model: { endpointId: "ren", modelId: small } } }))
     const created = await sandbox((service) =>
       service.create({
         brainId: brain,
@@ -100,7 +99,7 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
     await LiteLLM.allow(key, [small, added])
     ren.settings(
       TestSettings.layers({
-        ren: { model: { endpointId: "anthropic", modelId: "claude-haiku-5-5" }, instructions: "Rule of the pause." },
+        ren: { model: { endpointId: "ren", modelId: small }, instructions: "Rule of the pause." },
       }),
     )
     const pulledBefore = ren.pulls.length

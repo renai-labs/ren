@@ -8,7 +8,7 @@ import { TestToken } from "./token.js"
 import { Wrangler } from "./wrangler.js"
 import { Brain } from "@ren/schema/brain"
 import type { Models } from "@ren/schema/models"
-import { Context, DateTime, Effect, Layer, Option, Redacted, Schedule } from "effect"
+import { Context, DateTime, Effect, Layer, Redacted, Schedule } from "effect"
 import type { Harness } from "../../src/harness/harness.js"
 
 export interface Runtime extends Celld.Instance {
@@ -108,11 +108,14 @@ const endpoints: Readonly<Record<string, Pick<Models.Endpoint, "protocol" | "mod
   stub: {
     protocol: "openai-chat",
     models: [
-      { id: "stub-model", name: "Stub", limit },
-      { id: "stub-other", name: "Stub Other", limit },
+      { id: "stub-model", type: "chat", protocol: "openai-chat", name: "Stub", limit },
+      { id: "stub-other", type: "chat", protocol: "openai-chat", name: "Stub Other", limit },
     ],
   },
-  anthropic: { protocol: "anthropic-messages", models: [{ id: "stub-claude", name: "Stub Claude", limit }] },
+  anthropic: {
+    protocol: "anthropic-messages",
+    models: [{ id: "stub-claude", type: "chat", protocol: "anthropic-messages", name: "Stub Claude", limit }],
+  },
 }
 
 export const apiKey = (key: string, expiresAtMs?: number): Models.ApiKey => ({
@@ -129,13 +132,11 @@ export const access = (
     protocol: endpoints[entry[0]]?.protocol ?? "openai-chat",
     baseUrl,
     apiKey: entry[1],
-    models: endpoints[entry[0]]?.models ?? [{ id: "stub-model", name: "Stub", limit }],
+    models: endpoints[entry[0]]?.models ?? [
+      { id: "stub-model", type: "chat", protocol: "openai-chat", name: "Stub", limit },
+    ],
   })),
 })
-
-// oxlint-disable-next-line ren/no-comments -- Ren's inference URL for a test brain: the stub model serves /model/info with the models of `access`.
-export const inference = (root = kind() === "celld" ? stub().cellRoot : stub().root) =>
-  Effect.succeed(Option.some({ baseUrl: root }))
 
 // oxlint-disable-next-line ren/no-comments -- A catalog change reloads OpenCode's servers in the background (HR19); a test that needs the new tools waits for that reload.
 export const appsSettled = (instance: Pick<Harness.Instance, "configuration">) =>

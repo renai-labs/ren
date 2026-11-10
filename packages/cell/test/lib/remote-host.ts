@@ -26,7 +26,13 @@ const environmentId = Environment.ID.create()
 export const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-remote-")))
 const local = await realpath(await mkdtemp(join(tmpdir(), "ren-remote-local-")))
 const stub = Shared.stub()
-export const gptModel = { id: "gpt-5-stub", name: "Stub GPT", limit: { context: 100_000, output: 4000 } }
+export const gptModel = {
+  id: "gpt-5-stub",
+  type: "chat" as const,
+  protocol: "openai-chat" as const,
+  name: "Stub GPT",
+  limit: { context: 100_000, output: 4000 },
+}
 // oxlint-disable-next-line ren/no-comments -- OpenCode offers `patch` instead of `edit` and `write` to GPT models only.
 const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url, { [gptModel.id]: gptModel }))
 // oxlint-disable-next-line oxc/no-map-spread -- one endpoint gets one more model

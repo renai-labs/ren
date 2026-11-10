@@ -1,4 +1,3 @@
-import { Shared } from "@ren/cell/testing"
 import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
@@ -47,8 +46,8 @@ const revision = Ref.makeUnsafe("file-1")
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
-    inference: Shared.inference(),
     catalog: () => Effect.succeed({ endpoints: [] }),
+    providers: Effect.succeed([]),
     revision: Ref.get(revision),
     grant: () =>
       Effect.gen(function* () {

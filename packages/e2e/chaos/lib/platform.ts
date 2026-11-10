@@ -30,8 +30,10 @@ export const live = unless({
 })
 
 export const litellm = unless({
-  met: Boolean(process.env.CHAOS_LITELLM_ADMIN_URL && process.env.CHAOS_LITELLM_ADMIN_KEY),
-  reason: "LiteLLM key cases need CHAOS_LITELLM_ADMIN_URL and CHAOS_LITELLM_ADMIN_KEY",
+  met: Boolean(
+    process.env.CHAOS_LITELLM_ADMIN_URL && process.env.CHAOS_LITELLM_ADMIN_KEY && process.env.CHAOS_INFERENCE_URL,
+  ),
+  reason: "Gateway key cases need CHAOS_LITELLM_ADMIN_URL, CHAOS_LITELLM_ADMIN_KEY and CHAOS_INFERENCE_URL",
 })
 
 export const e2b = unless({

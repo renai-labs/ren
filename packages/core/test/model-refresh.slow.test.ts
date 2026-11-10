@@ -20,9 +20,11 @@ const refreshes = Ref.makeUnsafe(0)
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
-    inference: Shared.inference(),
     revision: Effect.succeed("test"),
-    catalog: () => Effect.succeed({ endpoints: [] }),
+    catalog: () => Effect.sync(() => Models.catalog(Shared.access({ stub: Shared.apiKey("sk-catalog") }, stub.url))),
+    providers: Effect.sync(() =>
+      Models.registrations(Models.catalog(Shared.access({ stub: Shared.apiKey("sk-catalog") }, stub.url))),
+    ),
     grant: () =>
       Effect.gen(function* () {
         const count = yield* Ref.updateAndGet(granted, (value) => value + 1)
