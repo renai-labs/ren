@@ -60,8 +60,7 @@ it.live(
           return {
             tools: ["read", "shell"].filter((tool) => call.tools.includes(tool)),
             isToldLastItHasTools:
-              request.lastIndexOf("Your file and shell tools run on a separate machine") >
-              request.lastIndexOf("no file or shell tools"),
+              request.lastIndexOf("Your file and shell tools run") > request.lastIndexOf("no file or shell tools"),
           }
         }),
       ).toEqual([

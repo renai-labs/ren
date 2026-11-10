@@ -68,7 +68,9 @@ const notSupported = (sessionId: string) =>
 const environmentInstructions = (server: OpenCodeServer.Instance, environmentDirectory: Option.Option<string>) => {
   if (Option.isSome(environmentDirectory))
     return {
-      [environmentInstructionKey]: `Your file and shell tools run on a separate machine, in ${environmentDirectory.value}. You have full access to that machine.`,
+      [environmentInstructionKey]: server.isRemoteHand
+        ? `Your file and shell tools run on a separate machine, in ${environmentDirectory.value}. You have full access to that machine.`
+        : `Your file and shell tools run in ${environmentDirectory.value}. You have full access to that machine.`,
     }
   if (!server.hasEnvironmentConnections) return {}
   return {

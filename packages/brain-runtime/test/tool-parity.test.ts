@@ -63,6 +63,7 @@ const localHarness = Effect.gen(function* () {
         transfer: Context.get(services, SessionTransfer.Service),
         workspaces: Context.get(services, Workspace.Service),
         hasEnvironmentConnections: false,
+        isRemoteHand: false,
         directoryOf: (sessionId) => join(root, sessionId),
         makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
         activate: () => Effect.void,

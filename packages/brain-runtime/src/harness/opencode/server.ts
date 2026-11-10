@@ -333,6 +333,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     transfer: Context.get(services, SessionTransfer.Service),
     workspaces: Context.get(services, Workspace.Service),
     hasEnvironmentConnections: Option.isSome(connections),
+    isRemoteHand: options.isRemoteHand ?? false,
     directoryOf: options.directoryOf,
     makeDirectory: options.makeDirectory ?? (() => Effect.void),
     activate: (sessionId) => located(sessionId, Effect.void),
@@ -389,6 +390,7 @@ export interface Instance {
   readonly transfer: SessionTransfer.Interface
   readonly workspaces: Workspace.Interface
   readonly hasEnvironmentConnections: boolean
+  readonly isRemoteHand: boolean
   readonly directoryOf: (sessionId: string) => string
   readonly makeDirectory: (directory: string) => Effect.Effect<void>
   readonly activate: (sessionId: string) => Effect.Effect<void, Harness.NotFound>

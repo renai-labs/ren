@@ -94,7 +94,7 @@ const open = Effect.fnUntraced(function* (
     endpoints,
     () => Effect.succeedNone,
     Option.some(environments),
-    { saved: Option.none(), directoryOf: () => local },
+    { saved: Option.none(), directoryOf: () => local, isRemoteHand: options.isRemoteHand ?? false },
   )
   return {
     harness: yield* OpenCodeHarness.make(host, endpoints),
@@ -325,24 +325,23 @@ it.live("interrupting a turn kills its command on the sandbox", () =>
   }),
 )
 
-test.each<[string, boolean, string | undefined]>([
-  ["on an environment", true, undefined],
-  ["without an environment", false, undefined],
-  ["without an environment, under an agent that allows the shell", false, "explore"],
+test.each<[string, boolean, string | undefined, string]>([
+  ["on the brain's own machine", true, undefined, "Your file and shell tools run in "],
+  ["on a remote hand", true, undefined, "Your file and shell tools run on a separate machine"],
+  ["without an environment", false, undefined, "This session has no environment"],
+  ["without an environment, under an agent that allows the shell", false, "explore", "This session has no environment"],
 ])(
-  "a session %s gets the file and shell tools only with an environment, keeps the other tools, and never questions",
-  (_name, onEnvironment, agent) =>
+  "a session %s gets the file and shell tools only with an environment, is told where they run, keeps the other tools, and never questions",
+  (name, onEnvironment, agent, told) =>
     live(
       Effect.gen(function* () {
-        const opened = yield* open()
+        const opened = yield* open(Effect.void, { isRemoteHand: name === "on a remote hand" })
         const session = yield* begin(opened, { onEnvironment, ...(agent && { agent }) })
         const call = yield* session.turn(stub.script(), 1)
         expect(fileTools.filter((tool) => call.tools.includes(tool))).toEqual(onEnvironment ? fileTools : [])
         expect(call.tools).toContain("webfetch")
         expect(call.tools).not.toContain("question")
-        expect(JSON.stringify(call.body.messages)).toContain(
-          onEnvironment ? "Your file and shell tools run on a separate machine" : "This session has no environment",
-        )
+        expect(JSON.stringify(call.body.messages)).toContain(told)
       }),
     ),
 )
