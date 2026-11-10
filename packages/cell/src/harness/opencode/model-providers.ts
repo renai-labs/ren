@@ -10,7 +10,13 @@ const protocols = {
   "anthropic-messages": { canonical: Provider.ID.make("anthropic"), package: "@opencode/ai/providers/anthropic" },
   "openai-responses": { canonical: Provider.ID.make("openai"), package: "@opencode/ai/providers/openai" },
   "openai-chat": { package: "@opencode/ai/providers/openai-compatible" },
-} satisfies Record<Models.Protocol, { readonly canonical?: Provider.ID; readonly package: string }>
+  "openai-images": { package: "@opencode/ai/providers/openai-compatible/images" },
+  "openai-transcription": { package: "@opencode/ai/providers/openai-compatible" },
+  "openai-decisions": { package: "@opencode/ai/providers/openai-compatible" },
+  "openai-speech": { package: "@opencode/ai/providers/openai-compatible" },
+  "openai-realtime": { package: "@opencode/ai/providers/openai-compatible" },
+  "openai-video": { package: "@opencode/ai/providers/openai-compatible" },
+} satisfies Record<Models.ModelProtocol, { readonly canonical?: Provider.ID; readonly package: string }>
 
 export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.Endpoint>) => {
   if (endpoints.length > 0)

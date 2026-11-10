@@ -98,7 +98,7 @@ export const Info = Schema.Struct({
   input: Schema.optionalKey(
     Schema.Array(Modality).annotate({ description: "What the model reads. Absent means text only." }),
   ),
-  protocol: Schema.optionalKey(Protocol).annotate({
+  protocol: Schema.optionalKey(ModelProtocol).annotate({
     description: "The protocol of this model, when it differs from its endpoint’s.",
   }),
 }).annotate({ identifier: "Models.Info" })
@@ -106,6 +106,7 @@ export const Info = Schema.Struct({
 export interface Endpoint extends Schema.Schema.Type<typeof Endpoint> {}
 export const Endpoint = Schema.Struct({
   id: Schema.NonEmptyString,
+  name: Schema.optionalKey(Schema.NonEmptyString),
   protocol: Protocol,
   baseUrl: Schema.String.check(
     Schema.makeFilter((url) => /^https?:$/u.test(URL.parse(url)?.protocol ?? "") || "an http or https URL"),
