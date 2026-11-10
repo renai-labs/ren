@@ -46,6 +46,8 @@ const unreachable = new Set([
   "session.skill.activated",
   "session.synthetic",
   "session.tool.input.delta",
+  "browser.opened",
+  "browser.closed",
 ])
 
 test("every allowlisted event, message, inbox item, permission and form OpenCode produces in a session decodes with Ren's schemas", () =>

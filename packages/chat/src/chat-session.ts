@@ -1027,6 +1027,10 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     readFile: (path: string) => Effect.flatMap(client, (api) => api.file.read({ sessionID: root, path })),
     vcs: Effect.flatMap(client, (api) => api.vcs.get({ sessionID: root })),
     vcsDiff: (mode: SessionVcs.Mode) => Effect.flatMap(client, (api) => api.vcs.diff({ sessionID: root, mode })),
+    browser: Effect.flatMap(client, (api) => api.browser.get({ sessionID: root })),
+    watchBrowser: Stream.unwrap(Effect.map(client, (api) => api.browser.watch({ sessionID: root }))),
+    navigateBrowser: (payload: Parameters<Client["browser"]["navigate"]>[0]["payload"]) =>
+      Effect.flatMap(client, (api) => api.browser.navigate({ sessionID: root, payload })),
     interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root, resume: true })),
     stop: (sessionID: Session.ID) => Effect.flatMap(client, (api) => api.session.interrupt({ sessionID })),
     background: Effect.flatMap(client, (api) => api.session.background({ sessionID: root })),

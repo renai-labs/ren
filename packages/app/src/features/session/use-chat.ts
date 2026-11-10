@@ -245,6 +245,7 @@ export function useChat(
       formExpired: view.formExpired,
     },
     tasks: visibleTasks(tasks, { running, unfinished: SessionTasks.unfinished(tasks) }),
+    browser: state.browser,
     running,
     reverted,
     reverting,

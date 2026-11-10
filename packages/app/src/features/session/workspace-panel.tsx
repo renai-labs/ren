@@ -117,6 +117,7 @@ function Launcher(props: { onPick: (kind: Kind) => void }) {
 export function WorkspacePanel(props: {
   root: Session.ID
   messages: ReadonlyArray<SessionMessage.Info>
+  browser: string | undefined
   maximized: boolean
   onMaximize: (maximized: boolean) => void
   onClose: () => void
@@ -139,6 +140,11 @@ export function WorkspacePanel(props: {
     }
     setTabs([...tabs, tab])
     setActive(tab.id)
+  }
+  const [shownBrowser, setShownBrowser] = useState(props.browser)
+  if (props.browser !== shownBrowser) {
+    setShownBrowser(props.browser)
+    if (props.browser) pick("browser")
   }
   const close = (id: string) => {
     const index = tabs.findIndex((tab) => tab.id === id)
@@ -205,7 +211,7 @@ export function WorkspacePanel(props: {
             {tab.kind === "changes" ? <ChangesTab root={props.root} messages={props.messages} /> : null}
             {tab.kind === "progress" ? <ProgressTab messages={props.messages} /> : null}
             {tab.kind === "computer" ? <ComputerTab /> : null}
-            {tab.kind === "browser" ? <BrowserTab /> : null}
+            {tab.kind === "browser" ? <BrowserTab root={props.root} /> : null}
             {tab.kind === "files" ? <FilesTab root={props.root} /> : null}
             {tab.kind === "terminal" ? <TerminalTab root={props.root} /> : null}
           </TabsContent>

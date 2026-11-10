@@ -594,6 +594,25 @@ describe("running shells", () => {
     expect(ChatState.shells(ended, sessionID)).toEqual([])
   })
 
+  test("a closed browser stays closed until a new one opens, and a close for an older browser is ignored", () => {
+    const browser = (type: "browser.opened" | "browser.closed", id: string, created: number) =>
+      Fixture.event({ id: `evt_${type}_${id}`, created, type, data: { sessionID, id } })
+    const reopened = Reducer.applyAll(ChatState.empty, [
+      browser("browser.opened", "browser_one", 1),
+      browser("browser.closed", "browser_one", 2),
+      browser("browser.opened", "browser_two", 3),
+    ]).state
+    expect(reopened.browser).toEqual({ id: "browser_two", closed: false })
+    expect(Reducer.apply(reopened, browser("browser.closed", "browser_one", 4)).state.browser).toEqual({
+      id: "browser_two",
+      closed: false,
+    })
+    expect(Reducer.apply(reopened, browser("browser.closed", "browser_two", 5)).state.browser).toEqual({
+      id: "browser_two",
+      closed: true,
+    })
+  })
+
   test("a shell tool's result, a shell's completion notice and a user shell re-read the shells once they were read", () => {
     const tool = Fixture.message({
       id: "msg_assistant",

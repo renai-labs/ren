@@ -29,6 +29,7 @@ export interface State {
   readonly forms: Readonly<Record<string, ReadonlyArray<Form.Info>>>
   readonly expired: Readonly<Record<string, ReadonlyArray<Form.Info>>>
   readonly shells: Readonly<Record<string, Shell.Info>> | undefined
+  readonly browser: { readonly id: string; readonly closed: boolean } | undefined
   readonly outbox: ReadonlySet<string>
   readonly compacting: Readonly<Record<string, Compacting>>
   readonly history: ReadonlySet<string>
@@ -47,6 +48,7 @@ export const empty: State = {
   forms: {},
   expired: {},
   shells: undefined,
+  browser: undefined,
   outbox: new Set(),
   compacting: {},
   history: new Set(),

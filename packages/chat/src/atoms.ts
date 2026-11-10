@@ -1,5 +1,6 @@
 export * as ChatAtoms from "./atoms.js"
 
+import type { Browser } from "@ren/schema/browser"
 import type { Session } from "@ren/schema/session"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionMessage } from "@ren/schema/session/message"
@@ -37,6 +38,11 @@ export interface ShellView extends View {
   readonly shellID: Shell.ID
   readonly running: boolean
 }
+
+export type BrowserView =
+  | { readonly status: "none" }
+  | { readonly status: "closed" }
+  | { readonly status: "connecting" | "live" | "failed"; readonly info: Browser.Info }
 
 export interface Options<R, ER> {
   readonly runtime: Atom.AtomRuntime<R | HttpClient.HttpClient, ER>
@@ -255,6 +261,46 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     ),
   )
 
+  const openedBrowser = Atom.family((root: Session.ID) =>
+    Atom.make((get) =>
+      Option.match(AsyncResult.value(get(state(root))), {
+        onNone: () => undefined,
+        onSome: (current) => current.browser,
+      }),
+    ),
+  )
+
+  // oxlint-disable-next-line ren/no-comments -- Following the browser keeps it running, so only a mounted view follows it. When the stream ends, a read tells a closed browser from a lost connection.
+  const browser = Atom.family((root: Session.ID) =>
+    Atom.make((get) => {
+      if (get(openedBrowser(root))?.closed) return Stream.succeed<BrowserView>({ status: "closed" })
+      return Stream.unwrap(
+        Effect.map(get.result(session(root)), (opened) => {
+          const ended = opened.browser.pipe(
+            Effect.map((info): BrowserView => ({ status: "failed", info })),
+            Effect.catchTag("NotFoundError", () => Effect.succeed<BrowserView>({ status: "closed" })),
+          )
+          return Stream.unwrap(
+            opened.browser.pipe(
+              Effect.map((info) =>
+                Stream.succeed<BrowserView>({ status: "connecting", info }).pipe(
+                  Stream.concat(
+                    opened.watchBrowser.pipe(
+                      Stream.map((next): BrowserView => ({ status: "live", info: next })),
+                      Stream.catch(() => Stream.empty),
+                    ),
+                  ),
+                  Stream.concat(Stream.fromEffect(ended)),
+                ),
+              ),
+              Effect.catchTag("NotFoundError", () => Effect.succeed(Stream.succeed<BrowserView>({ status: "none" }))),
+            ),
+          )
+        }),
+      )
+    }),
+  )
+
   const webSearchProviders = Atom.family((view: View) =>
     Atom.make((get) =>
       Effect.flatMap(get.result(session(view.root)), (opened) => opened.webSearchProviders(view.sessionID)),
@@ -319,6 +365,8 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     webSearchProviders,
     shellRunning,
     runningShells,
+    openedBrowser,
+    browser,
     shell,
     shellOutput,
     run,

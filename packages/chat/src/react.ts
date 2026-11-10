@@ -70,6 +70,18 @@ export const useShell = (view: Omit<ChatAtoms.ShellView, "running">) => useAtomV
 
 export const useStatus = (sessionID: Session.ID) => useAtomValue(useAtoms().status(sessionID))
 
+export const useBrowser = (root: Session.ID) => {
+  const atom = useAtoms().browser(root)
+  return { result: useAtomValue(atom), retry: useAtomRefresh(atom) }
+}
+
+const navigateBrowser = (
+  opened: ChatSession.ChatSession,
+  to: Parameters<ChatSession.ChatSession["navigateBrowser"]>[0],
+) => opened.navigateBrowser(to)
+
+export const useBrowserNavigate = (root: Session.ID) => useAction(root, navigateBrowser)
+
 export const useWebSearchProviders = (root: Session.ID, sessionID: Session.ID) => {
   const atom = useAtoms().webSearchProviders({ root, sessionID })
   return { result: useAtomValue(atom), retry: useAtomRefresh(atom) }

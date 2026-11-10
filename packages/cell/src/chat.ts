@@ -546,12 +546,10 @@ const handlers = Layer.mergeAll(
         .handle("browser.get", (request) => browsers.get(request.params.sessionID).pipe(noBrowser))
         .handle("browser.watch", (request) =>
           Effect.flatMap(HttpServerRequest.HttpServerRequest, (http) =>
-            browsers
-              .watch(request.params.sessionID)
-              .pipe(
-                noBrowser,
-                Effect.map((stream) => stream.pipe(Stream.interruptWhen(disconnected(http)))),
-              ),
+            browsers.watch(request.params.sessionID).pipe(
+              noBrowser,
+              Effect.map((stream) => stream.pipe(Stream.interruptWhen(disconnected(http)))),
+            ),
           ),
         )
         .handle("browser.navigate", (request) =>

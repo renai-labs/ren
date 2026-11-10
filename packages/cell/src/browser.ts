@@ -38,14 +38,14 @@ const Stored = Schema.fromJsonString(Opened)
 
 const keyOf = (root: string) => `ren:browser:${root}`
 
-export interface Page {
+interface Page {
   readonly url: string
   readonly title: string
   readonly canGoBack: boolean
   readonly canGoForward: boolean
 }
 
-export interface BrowserControl {
+interface BrowserControl {
   readonly pages: Stream.Stream<Page>
   readonly navigate: (to: BrowserNavigateInput) => Effect.Effect<void, Refused>
 }
@@ -74,7 +74,7 @@ const Navigated = Schema.Struct({ errorText: Schema.optionalKey(Schema.String) }
 const callTimeout = "10 seconds"
 
 // oxlint-disable-next-line ren/no-comments -- A second CDP client next to the agent's: Kernel's proxy gives each client its own connection to Chromium. The page shown is the newest page target, the one the agent opened last.
-export const kernel = Effect.fnUntraced(function* (cdp: string): Effect.fn.Return<BrowserControl, Refused, Scope.Scope> {
+const kernel = Effect.fnUntraced(function* (cdp: string): Effect.fn.Return<BrowserControl, Refused, Scope.Scope> {
   const closed = yield* Deferred.make<void>()
   const pending = new Map<number, Deferred.Deferred<unknown, Refused>>()
   const events = yield* Queue.unbounded<{ readonly method: string; readonly params: unknown }>()
@@ -100,7 +100,7 @@ export const kernel = Effect.fnUntraced(function* (cdp: string): Effect.fn.Retur
     if (typeof event.data !== "string") return
     const message = Option.getOrUndefined(Schema.decodeUnknownOption(Message)(event.data))
     if (!message) return
-    if (message.id !== undefined) {
+    if (message.id) {
       const waiting = pending.get(message.id)
       if (!waiting) return
       Deferred.doneUnsafe(
@@ -136,7 +136,9 @@ export const kernel = Effect.fnUntraced(function* (cdp: string): Effect.fn.Retur
         }),
         Effect.flatMap((result) => Schema.decodeUnknownEffect(schema)(result)),
         Effect.catchTag("SchemaError", (error) =>
-          Effect.fail(new Refused({ message: `The browser answered ${method} with a value Ren cannot read: ${error.message}` })),
+          Effect.fail(
+            new Refused({ message: `The browser answered ${method} with a value Ren cannot read: ${error.message}` }),
+          ),
         ),
         Effect.ensuring(Effect.sync(() => pending.delete(id))),
       )
@@ -168,9 +170,7 @@ export const kernel = Effect.fnUntraced(function* (cdp: string): Effect.fn.Retur
   yield* Stream.fromQueue(events).pipe(
     Stream.runForEach((event) => {
       if (event.method === "Target.targetDestroyed")
-        Option.map(Schema.decodeUnknownOption(TargetDestroyed)(event.params), (found) =>
-          targets.delete(found.targetId),
-        )
+        Option.map(Schema.decodeUnknownOption(TargetDestroyed)(event.params), (found) => targets.delete(found.targetId))
       else if (event.method === "Target.targetCreated" || event.method === "Target.targetInfoChanged") {
         const info = Option.getOrUndefined(Schema.decodeUnknownOption(TargetInfo)(event.params))?.targetInfo
         if (info?.type !== "page") return Effect.void
@@ -178,6 +178,7 @@ export const kernel = Effect.fnUntraced(function* (cdp: string): Effect.fn.Retur
       } else return Effect.void
       return read.pipe(Effect.catch((error) => Effect.logWarning("Ren could not read the browser’s page", error)))
     }),
+    Effect.withErrorReporting,
     Effect.forkScoped,
   )
   yield* call(Schema.Unknown, "Target.setDiscoverTargets", { discover: true })

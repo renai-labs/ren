@@ -812,6 +812,13 @@ const handlers: Handlers = {
     done(state.shells ? { ...state, shells: drop(state.shells, event.data.id) } : state),
   "shell.deleted": (state, event) =>
     done(state.shells ? { ...state, shells: drop(state.shells, event.data.id) } : state),
+  "browser.opened": (state, event) => done({ ...state, browser: { id: event.data.id, closed: false } }),
+  "browser.closed": (state, event) =>
+    done(
+      !state.browser || state.browser.id === event.data.id
+        ? { ...state, browser: { id: event.data.id, closed: true } }
+        : state,
+    ),
 }
 
 const handle = <Type extends Event["type"]>(state: ChatState.State, type: Type, event: Events[Type]) =>

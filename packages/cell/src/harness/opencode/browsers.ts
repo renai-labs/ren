@@ -22,10 +22,12 @@ const Created = Schema.Struct({
 
 export const register = (
   context: Plugin.Context,
-  browsers: Browsers.Interface,
+  found: Option.Option<Browsers.Interface>,
   rootOf: (sessionID: SessionID) => Effect.Effect<SessionID>,
-) =>
-  Effect.all(
+) => {
+  if (Option.isNone(found)) return Effect.void
+  const browsers = found.value
+  return Effect.all(
     [
       // oxlint-disable-next-line ren/no-comments -- Kiosk mode hides Chromium's own toolbar, so the live view shows only the page under the chat's toolbar.
       context.tool.hook("execute.before", (event) =>
@@ -56,3 +58,4 @@ export const register = (
     ],
     { discard: true },
   )
+}

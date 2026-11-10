@@ -657,8 +657,11 @@ export const make = (
             Effect.flatMap((info) => (info.parentID ? rootOf(info.parentID) : Effect.succeed(sessionID))),
             Effect.orElseSucceed(() => sessionID),
           )
-        if (isSession && Option.isSome(browsers))
-          yield* OpenCodeBrowsers.register(context, browsers.value, rootOf)
+        yield* OpenCodeBrowsers.register(
+          context,
+          Option.filter(browsers, () => isSession),
+          rootOf,
+        )
         const claims = Effect.fn("RenPlugin.claims")(function* (
           input: Omit<UsageClaims.Input, "rootSession" | "turn" | "member">,
         ) {

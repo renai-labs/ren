@@ -224,6 +224,12 @@ export function ChatPage() {
   })
   const [panel, setPanel] = useState(false)
   const [maximized, setMaximized] = useState(false)
+  const browser = chat.browser?.closed === false ? chat.browser.id : undefined
+  const [shownBrowser, setShownBrowser] = useState(browser)
+  if (browser !== shownBrowser) {
+    setShownBrowser(browser)
+    if (browser) setPanel(true)
+  }
   return (
     <div className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]">
       <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
@@ -251,6 +257,7 @@ export function ChatPage() {
           <WorkspacePanel
             root={chat.root}
             messages={chat.messages}
+            browser={browser}
             maximized={maximized}
             onMaximize={setMaximized}
             onClose={() => {
