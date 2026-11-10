@@ -13,7 +13,7 @@ import type { HttpApiClient } from "effect/http-api"
 import { HostToken } from "../../host-token.js"
 import type { OpenCodeMcp } from "./mcp.js"
 
-export const providerId = "ren"
+const providerId = "ren"
 
 const Config = Schema.fromJsonString(
   Schema.StructWithRest(
