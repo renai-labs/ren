@@ -1,9 +1,10 @@
 export * as Routes from "./routes.js"
 
-import { RenHostApi } from "@ren/host-api/ren-host-api"
+import { hostBodyBytes, RenHostApi } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
 import { Sync } from "@ren/schema/sync"
 import { Access } from "@ren/core/access"
+import { Artifacts } from "@ren/core/artifacts"
 import { Agent } from "@ren/core/agent"
 import { App } from "@ren/core/app"
 import { AppRegistry } from "@ren/core/app/registry"
@@ -81,6 +82,7 @@ import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
 import { WebhookHandler, WebhookRequestHandler } from "./handlers/api/webhook.js"
 import { HostHandsHandler } from "./handlers/ren-host/hand.js"
+import { HostArtifactsHandler } from "./handlers/ren-host/artifacts.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
 import { HostTokenHandler } from "./handlers/ren-host/token.js"
@@ -246,10 +248,6 @@ export const layer = Layer.mergeAll(
         CredentialRequirements.layer,
       ]),
     ),
-    HttpApiBuilder.layer(RenHostApi).pipe(
-      Layer.provide([HostPullHandler, HostModelsHandler, HostHandsHandler, HostTokenHandler]),
-      Layer.provide(Brains.hostAuthentication),
-    ),
     HttpApiBuilder.layer(UsageIngestApi).pipe(
       Layer.provide(UsageHandler),
       Layer.provide(UsageAuthenticationLayer),
@@ -266,6 +264,20 @@ export const layer = Layer.mergeAll(
       Layer.provide(BrainRegistry.layer),
     ),
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
+  HttpApiBuilder.layer(RenHostApi).pipe(
+    Layer.provide([
+      HostPullHandler,
+      HostModelsHandler,
+      HostHandsHandler,
+      HostArtifactsHandler,
+      HostTokenHandler,
+    ]),
+    Layer.provide([
+      Brains.hostAuthentication,
+      bodyLimit((url) => (url.startsWith("/host/artifacts/") ? hostBodyBytes : 1024 * 1024)),
+    ]),
+    Layer.provide(Artifacts.layer),
+  ),
   WebhookRoutes.layer.pipe(Layer.provide(intake)),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),

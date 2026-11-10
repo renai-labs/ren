@@ -90,6 +90,32 @@ describe("Ren Host API: host token checks", () => {
     }),
   )
 
+  it.live(
+    "an artifact publish takes a body over the 1 MiB host limit, and an entry that is not one of the files is a 400",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* Seed.owner()
+        const sessionId = yield* Seed.session(owner)
+        const http = yield* HttpClient.HttpClient
+        const files = {
+          "a.html": Buffer.from("a").toString("base64"),
+          "b.bin": Buffer.alloc(2 * 1024 * 1024).toString("base64"),
+        }
+        const response = yield* http.execute(
+          HttpClientRequest.put("/host/artifacts/art_1").pipe(
+            HttpClientRequest.bearerToken(yield* hostToken(Brain.ofSession(sessionId), owner.organizationId)),
+            HttpClientRequest.bodyJsonUnsafe({
+              deploymentId: crypto.randomUUID(),
+              title: "Report",
+              config: { entry: "index.html" },
+              files,
+            }),
+          ),
+        )
+        expect(response.status).toBe(400)
+      }),
+  )
+
   it.live("a session with no environment gets a typed not found", () =>
     Effect.gen(function* () {
       const owner = yield* Seed.owner()

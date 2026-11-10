@@ -21,6 +21,7 @@ import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { Hands } from "@ren/core/hands"
+import { ArtifactWorkerd } from "@ren/core/artifact-provider/workerd"
 import { Mailer } from "@ren/core/mailer"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
@@ -111,7 +112,7 @@ HttpRouter.serve(Routes.layer).pipe(
     Integrations.layer.pipe(Layer.provide(Signer.layerLocal)),
   ]),
   Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal, GitHubApp.layerNone, SlackApp.layerNone)),
-  Layer.provide(HandProvider.layer(ChaosHands.providers)),
+  Layer.provide([HandProvider.layer(ChaosHands.providers), ArtifactWorkerd.layer]),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
   Layer.provide(
