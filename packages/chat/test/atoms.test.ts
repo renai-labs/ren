@@ -1,5 +1,5 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
-import { Shared } from "@ren/cell/testing"
+import { KernelPeer, Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
@@ -243,4 +243,64 @@ test("the models atom loads again once the connection is back when its first rea
     yield* made.until(made.atoms.status(id), (value) => AsyncResult.isSuccess(value) && value.value === "reconnecting")
     const models = yield* made.until(made.atoms.models(id), AsyncResult.isSuccess)
     expect(AsyncResult.isSuccess(models) && models.value.length).toBeGreaterThan(0)
+  }).pipe(Effect.scoped, Effect.runPromise))
+
+test("the browser view finds a browser that opened while the chat was disconnected, after it saw another one close", () =>
+  Effect.gen(function* () {
+    const kernel = yield* KernelPeer.make()
+    const streams: Array<ReadableStreamDefaultController<Uint8Array>> = []
+    const network = { back: Promise.resolve() }
+    const made = yield* setupWith(async (path, next) => {
+      if (!path.startsWith("/chat/event")) return next()
+      await network.back
+      const response = await next()
+      const body = response.body
+      if (!body) return response
+      const reader = body.getReader()
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            streams.push(controller)
+          },
+          pull: (controller) =>
+            reader.read().then((chunk) => (chunk.done ? controller.close() : controller.enqueue(chunk.value))),
+          cancel: () => reader.cancel(),
+        }),
+        { status: response.status, headers: response.headers },
+      )
+    })
+    const id = made.brain.id
+    const browsers = made.brain.browsers
+    const opened = (name: string) =>
+      browsers.record(id, {
+        id: name,
+        provider: "kernel",
+        liveView: `https://live.kernel.test/${name}`,
+        cdp: kernel.cdp(name),
+      })
+    const view = made.atoms.browser(id)
+    yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(view)))
+    yield* made.until(made.atoms.status(id), (value) => AsyncResult.isSuccess(value) && value.value === "connected")
+    yield* opened("browser_a")
+    yield* made.until(
+      view,
+      (value) => AsyncResult.isSuccess(value) && value.value.status === "live" && value.value.info.id === "browser_a",
+    )
+    yield* browsers.forget(id, "browser_a")
+    yield* made.until(view, (value) => AsyncResult.isSuccess(value) && value.value.status === "closed")
+
+    const back = Promise.withResolvers<void>()
+    network.back = back.promise
+    streams.at(-1)?.error(new Error("The network dropped"))
+    yield* made.until(made.atoms.status(id), (value) => AsyncResult.isSuccess(value) && value.value === "reconnecting")
+    yield* opened("browser_b")
+    back.resolve()
+    const found = yield* made.until(
+      view,
+      (value) => AsyncResult.isSuccess(value) && value.value.status === "live" && value.value.info.id === "browser_b",
+    )
+    expect(AsyncResult.isSuccess(found) && found.value).toMatchObject({
+      status: "live",
+      info: { id: "browser_b", url: "https://example.com/" },
+    })
   }).pipe(Effect.scoped, Effect.runPromise))

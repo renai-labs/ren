@@ -295,6 +295,7 @@ export const make = Effect.fnUntraced(function* (
     fetch: (path: string, init?: RequestInit) =>
       Effect.promise(() => web.fetch(new Request(`http://cell${path}`, init))),
     store: Context.get(services, ModelStore.Service),
+    browsers: Context.get(services, Browsers.Service),
     opencode,
     driver: OpenCodeDriver.make(opencode, directory),
     transcript: harness.transcript,

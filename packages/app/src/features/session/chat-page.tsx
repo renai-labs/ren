@@ -258,6 +258,7 @@ export function ChatPage() {
             root={chat.root}
             messages={chat.messages}
             browser={browser}
+            open={panel}
             maximized={maximized}
             onMaximize={setMaximized}
             onClose={() => {

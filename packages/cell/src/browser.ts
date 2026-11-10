@@ -80,7 +80,10 @@ const kernel = Effect.fnUntraced(function* (cdp: string): Effect.fn.Return<Brows
   const events = yield* Queue.unbounded<{ readonly method: string; readonly params: unknown }>()
   const socket = yield* Effect.acquireRelease(
     Effect.callback<WebSocket, Refused>((resume) => {
-      const opening = new WebSocket(cdp)
+      const address = new URL(cdp)
+      // oxlint-disable-next-line ren/no-comments -- Kernel returns its CDP address on port 8443 and serves it on 443 too. A sandbox's network sends only ports 80 and 443 to the egress and drops the others.
+      if (address.port === "8443") address.port = ""
+      const opening = new WebSocket(address.toString())
       opening.addEventListener("open", () => resume(Effect.succeed(opening)), { once: true })
       opening.addEventListener(
         "error",

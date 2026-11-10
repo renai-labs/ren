@@ -118,6 +118,7 @@ export function WorkspacePanel(props: {
   root: Session.ID
   messages: ReadonlyArray<SessionMessage.Info>
   browser: string | undefined
+  open: boolean
   maximized: boolean
   onMaximize: (maximized: boolean) => void
   onClose: () => void
@@ -211,7 +212,8 @@ export function WorkspacePanel(props: {
             {tab.kind === "changes" ? <ChangesTab root={props.root} messages={props.messages} /> : null}
             {tab.kind === "progress" ? <ProgressTab messages={props.messages} /> : null}
             {tab.kind === "computer" ? <ComputerTab /> : null}
-            {tab.kind === "browser" ? <BrowserTab root={props.root} /> : null}
+            {/* oxlint-disable-next-line ren/no-comments -- The stream keeps the cloud browser running and billed, so a closed panel does not follow it. */}
+            {tab.kind === "browser" && props.open ? <BrowserTab root={props.root} /> : null}
             {tab.kind === "files" ? <FilesTab root={props.root} /> : null}
             {tab.kind === "terminal" ? <TerminalTab root={props.root} /> : null}
           </TabsContent>

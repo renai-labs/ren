@@ -270,15 +270,22 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     ),
   )
 
-  // oxlint-disable-next-line ren/no-comments -- Following the browser keeps it running, so only a mounted view follows it. When the stream ends, a read tells a closed browser from a lost connection.
+  const connection = Atom.family((root: Session.ID) =>
+    Atom.make((get) =>
+      Option.match(AsyncResult.value(get(state(root))), { onNone: () => 0, onSome: (current) => current.connection }),
+    ),
+  )
+
+  // oxlint-disable-next-line ren/no-comments -- Following the browser keeps it running, so only a mounted view follows it. Events missed while disconnected are not replayed, so the view reads the browser again after each reconnect and each open or close. When the stream ends, a read tells a closed browser from a lost connection.
   const browser = Atom.family((root: Session.ID) =>
     Atom.make((get) => {
-      if (get(openedBrowser(root))?.closed) return Stream.succeed<BrowserView>({ status: "closed" })
+      const missing: BrowserView = { status: get(openedBrowser(root)) ? "closed" : "none" }
+      get(connection(root))
       return Stream.unwrap(
         Effect.map(get.result(session(root)), (opened) => {
           const ended = opened.browser.pipe(
             Effect.map((info): BrowserView => ({ status: "failed", info })),
-            Effect.catchTag("NotFoundError", () => Effect.succeed<BrowserView>({ status: "closed" })),
+            Effect.catchTag("NotFoundError", () => Effect.succeed(missing)),
           )
           return Stream.unwrap(
             opened.browser.pipe(
@@ -293,7 +300,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
                   Stream.concat(Stream.fromEffect(ended)),
                 ),
               ),
-              Effect.catchTag("NotFoundError", () => Effect.succeed(Stream.succeed<BrowserView>({ status: "none" }))),
+              Effect.catchTag("NotFoundError", () => Effect.succeed(Stream.succeed(missing))),
             ),
           )
         }),
