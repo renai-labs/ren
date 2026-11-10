@@ -10,7 +10,6 @@ export const Type = Schema.Literals([
   "audio_speech",
   "realtime",
   "video_generation",
-  "search",
 ]).annotate({
   identifier: "ModelTypes.Type",
 })
@@ -23,13 +22,13 @@ export const modelType = {
   audio_speech: "speech",
   realtime: "realtime",
   video_generation: "video",
-} satisfies Record<Exclude<Type, "search">, Models.Type>
+} satisfies Record<Type, Models.Type>
 
 export interface ModelRef extends Schema.Schema.Type<typeof ModelRef> {}
 export const ModelRef = Schema.Struct({
   providerId: Schema.NonEmptyString.annotate({ description: "The endpoint ID." }),
   modelId: Schema.NonEmptyString.annotate({
-    description: "The model ID on the endpoint, or for search the ID of a search provider the endpoint serves.",
+    description: "The model ID on the endpoint.",
   }),
 }).annotate({ identifier: "ModelTypes.ModelRef" })
 

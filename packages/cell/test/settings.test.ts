@@ -7,6 +7,7 @@ import { testEffect } from "@ren/executor/testing"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
+import { Models } from "@ren/schema/models"
 import { App } from "@ren/schema/app"
 import { AppCatalog } from "@ren/schema/app-catalog"
 import {
@@ -150,6 +151,15 @@ const open = Effect.fnUntraced(function* (
       yield* Shared.appsSettled(harness)
     })
   return { server, harness, client, sessionId, sessionID, turn, pull, directory, access }
+})
+
+const searchEndpoint = (baseUrl: string, providers: ReadonlyArray<string>): Models.Endpoint => ({
+  id: "ren",
+  protocol: "openai-chat",
+  baseUrl,
+  apiKey: { key: Redacted.make("key") },
+  models: [],
+  search: providers.map((id) => ({ id, name: id })),
 })
 
 describe("settings in the cell", () => {
@@ -361,20 +371,15 @@ describe("settings in the cell", () => {
   )
   it.live("Ren search honors explicit OpenCode disablement", () =>
     Effect.gen(function* () {
-      const layers = TestSettings.layers({
-        ren: { defaultModels: { search: { providerId: "ren", modelId: "search" } } },
-      })
+      const layers = TestSettings.layers()
       const opened = yield* open(layers, { config: JSON.stringify({ websearch: false }) })
       yield* opened.pull(layers, {
-        modelCatalogs: { search: { providerId: "ren", models: [{ id: "search" }] } },
-        modelProviders: {
-          search: { id: "ren", baseUrl: "http://127.0.0.1:1/v1", apiKey: { key: Redacted.make("key") } },
-        },
+        models: [...opened.access.endpoints, searchEndpoint("http://127.0.0.1:1/v1", ["search"])],
       })
       expect(
         (yield* opened.client.websearch.providers({
           location: { directory: join(opened.directory, opened.sessionId) },
-        })).data.some((provider) => provider.id === "ren"),
+        })).data.some((provider) => provider.id === "ren/search"),
       ).toBe(true)
       const result = yield* opened.client.websearch
         .query({ query: "Effect", location: { directory: join(opened.directory, opened.sessionId) } })
@@ -383,64 +388,51 @@ describe("settings in the cell", () => {
       if (result._tag === "Failure") expect(String(result.failure)).toContain("disabled")
     }),
   )
-  it.live("Ren search follows the executing agent's default across reloads and leaves with its catalog", () =>
+  it.live("native search selects distinct gateway services without agent defaults and reloads catalogs", () =>
     Effect.gen(function* () {
-      const calls: Array<{ model: string; session: string | null }> = []
+      const calls: Array<{ model: string; session: string | null; path: string; key: string | null }> = []
       const provider = yield* Effect.acquireRelease(
         Effect.sync(() =>
           Bun.serve({
             port: 0,
             hostname: "127.0.0.1",
             fetch: async (request) => {
-              const body = Schema.decodeUnknownSync(Schema.Struct({ search_tool_name: Schema.String }))(
-                await request.json(),
-              )
-              calls.push({ model: body.search_tool_name, session: request.headers.get("ren-session") })
-              return Response.json({ results: [{ url: "https://example.com", snippet: "Result" }] })
+              const body = Schema.decodeUnknownSync(Schema.Struct({ providerID: Schema.String }))(await request.json())
+              calls.push({
+                model: body.providerID,
+                session: request.headers.get("ren-session"),
+                path: new URL(request.url).pathname,
+                key: request.headers.get("authorization"),
+              })
+              return Response.json([{ url: "https://example.com", content: "Result", time: {} }])
             },
           }),
         ),
         (server) => Effect.promise(() => server.stop(true)),
       )
-      const layers = TestSettings.layers({
-        ren: { defaultModels: { search: { providerId: "ren", modelId: "chosen" } } },
-      })
-      const opened = yield* open(layers)
+      const layers = TestSettings.layers()
+      const opened = yield* open(layers, { config: JSON.stringify({ websearch: { provider: "other/chosen" } }) })
       yield* opened.pull(layers, {
-        modelCatalogs: {
-          search: { providerId: "ren", models: [{ id: "first" }, { id: "chosen", upstreamId: "ren/chosen" }] },
-        },
-        modelProviders: {
-          search: { id: "ren", baseUrl: `${provider.url.origin}/v1`, apiKey: { key: Redacted.make("key") } },
-        },
+        models: [
+          ...opened.access.endpoints,
+          searchEndpoint(`${provider.url.origin}/v1`, ["first", "chosen"]),
+          Struct.assign(searchEndpoint(`${provider.url.origin}/other/v1`, ["chosen"]), {
+            id: "other",
+            apiKey: { key: Redacted.make("other-key") },
+          }),
+        ],
       })
+      const providers = (yield* opened.client.websearch.providers({
+        location: { directory: join(opened.directory, opened.sessionId) },
+      })).data.map((provider) => String(provider.id))
+      expect(providers).toEqual(expect.arrayContaining(["ren/first", "ren/chosen", "other/chosen"]))
       yield* opened.turn(stub.script({ tool: { name: "websearch", input: { query: "Effect" } } }))
-      expect(calls).toEqual([{ model: "ren/chosen", session: opened.sessionId }])
-      yield* opened.pull(
-        TestSettings.layers({
-          ren: { defaultModels: { search: { providerId: "ren", modelId: "first" } } },
-          agents: [
-            TestSettings.agent("ren", {}, { isSubagent: false }),
-            TestSettings.agent("explore", { defaultModels: { search: { providerId: "ren", modelId: "chosen" } } }),
-          ],
-        }),
-      )
-      yield* opened.turn(stub.script({ tool: { name: "websearch", input: { query: "Effect" } } }))
-      const child = stub.script({ tool: { name: "websearch", input: { query: "Effect from a subagent" } } })
-      yield* opened.turn(
-        stub.script({
-          tool: {
-            name: "subagent",
-            input: { agent: "explore", description: "Review", prompt: `${child.marker} review` },
-          },
-        }),
-      )
-      expect(calls.slice(1).map((call) => call.model)).toEqual(["first", "ren/chosen"])
-      yield* opened.pull(layers, { modelCatalogs: {} })
+      expect(calls).toEqual([{ model: "chosen", session: null, path: "/other/v1/search", key: "Bearer other-key" }])
+      yield* opened.pull(layers, { models: opened.access.endpoints })
       expect(
         (yield* opened.client.websearch.providers({
           location: { directory: join(opened.directory, opened.sessionId) },
-        })).data.some((provider) => provider.id === "ren"),
+        })).data.some((provider) => provider.id === "ren/chosen" || provider.id === "other/chosen"),
       ).toBe(false)
     }),
   )

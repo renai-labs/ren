@@ -102,11 +102,6 @@ export const resolve = (
   )
   const own = [...shared, primary.settings]
   const find = Models.lookup(catalog)
-  const searches = new Set(
-    catalog.endpoints.flatMap((endpoint) =>
-      (endpoint.search ?? []).map((provider) => JSON.stringify([endpoint.id, provider.id])),
-    ),
-  )
   const defaultModels = (agent: Settings.Info) => {
     const candidates = [
       chat.defaultModels,
@@ -119,8 +114,6 @@ export const resolve = (
           .map((defaults) => {
             const candidate = defaults?.[type]
             if (!candidate) return
-            if (type === "search")
-              return searches.has(JSON.stringify([candidate.providerId, candidate.modelId])) ? candidate : undefined
             const found = find({ providerID: candidate.providerId, id: candidate.modelId })
             if (found?.model.type !== ModelTypes.modelType[type]) return
             return { providerId: found.ref.providerID, modelId: found.ref.id }
