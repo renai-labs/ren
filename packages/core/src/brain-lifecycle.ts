@@ -192,8 +192,8 @@ export const layer = Layer.effect(
             )
             yield* Effect.logWarning(
               repeated
-                ? `The sandbox of brain ${brainId} is gone again within ${Duration.format(timing.relapse)}; its busy chats fail`
-                : `The sandbox of brain ${brainId} is gone; its busy chats are interrupted`,
+                ? `Brain ${brainId} is replaced again within ${Duration.format(timing.relapse)}; its busy chats fail`
+                : `Brain ${brainId} is replaced; its busy chats are interrupted`,
             )
             const sessions = yield* interruptBusy(transaction, brainId, at, repeated ? "failed" : "interrupted")
             return Option.some({ brainId, sessionIds: sessions.map((session) => session.id), repeated })

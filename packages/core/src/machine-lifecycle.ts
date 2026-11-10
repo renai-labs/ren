@@ -487,8 +487,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     if (row.phase !== "ready") return
     // oxlint-disable-next-line ren/no-comments -- A paused machine wakes; it is never replaced here (E123).
     if (status.value === "paused") return yield* update(row.id, { phase: "resuming" })
-    if (yield* isSilent(row))
-      return yield* forceReplace(row, `its brain gave no answer for ${Duration.format(timing.silent)}`)
+    if (yield* isSilent(row)) return yield* forceReplace(row, `it gave no answer for ${Duration.format(timing.silent)}`)
     yield* replaceIfFrozen(row, row.binding, provider)
   })
 
