@@ -1,7 +1,6 @@
 export * as ModelRefresh from "./model-refresh.js"
 
 import { Models } from "@ren/schema/models"
-import type { ModelTypes } from "@ren/schema/model-types"
 import { Context, DateTime, Duration, Effect, Layer, Option, Redacted, Semaphore } from "effect"
 import type { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
@@ -11,20 +10,8 @@ export class Service extends Context.Service<Service, Harness.Refresh>()("@ren/c
 
 export const window = Duration.hours(3)
 
-export const anyEndpoint = "*"
-
-export const forProvider = (provider: ModelTypes.Provider, refresh: Harness.Refresh) =>
-  provider.id === "ren"
-    ? refresh(anyEndpoint).pipe(Effect.map((key) => Option.getOrElse(key, () => provider.apiKey).key))
-    : Effect.succeed(provider.apiKey.key)
-
 const keyOf = (access: Models.Access | undefined, endpointId: string) =>
-  (
-    access?.endpoints.find((endpoint) => endpoint.id === endpointId) ??
-    (endpointId === anyEndpoint ? access?.endpoints.at(0) : undefined)
-  )?.apiKey
-
-const firstKey = (access: Models.Access | undefined) => access?.endpoints.at(0)?.apiKey
+  access?.endpoints.find((endpoint) => endpoint.id === endpointId)?.apiKey
 
 export const layerEgress = Layer.succeed(
   Service,
@@ -57,10 +44,9 @@ const make = Effect.fn("ModelRefresh.make")(function* (url: string | undefined) 
         const stored = Option.getOrUndefined(yield* store.read)
         const current = keyOf(stored, endpointId)
         if (current && fresh(current, now)) return Option.some(current)
-        const kept = current ?? firstKey(stored)
-        if (Option.isNone(client)) return usable(kept, now)
+        if (Option.isNone(client)) return usable(current, now)
         const token = yield* hostToken.current
-        if (Option.isNone(token)) return usable(kept, now)
+        if (Option.isNone(token)) return usable(current, now)
         const body = yield* client.value.models["models.refresh"]().pipe(
           HostToken.withToken(token.value),
           Effect.timeout(HostToken.renAnswersWithin),
@@ -70,14 +56,14 @@ const make = Effect.fn("ModelRefresh.make")(function* (url: string | undefined) 
           !(yield* store.writeIfUnchanged(token.value, body.access, body.hostToken && Redacted.value(body.hostToken)))
         )
           return Option.none()
-        return Option.fromNullishOr(keyOf(body.access, endpointId) ?? firstKey(body.access))
+        return Option.fromNullishOr(keyOf(body.access, endpointId))
       }).pipe(
         Effect.catch((error) =>
           Effect.logWarning("Model access refresh failed; the brain keeps its key until it expires", error).pipe(
             Effect.andThen(
               Effect.gen(function* () {
                 const stored = Option.getOrUndefined(yield* store.read)
-                return usable(keyOf(stored, endpointId) ?? firstKey(stored), yield* DateTime.now)
+                return usable(keyOf(stored, endpointId), yield* DateTime.now)
               }),
             ),
           ),

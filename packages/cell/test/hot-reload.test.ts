@@ -6,6 +6,7 @@ import { GenerationRetiredError } from "@ren/host-api/errors"
 import { PullReply, PullRequest, type PullApps } from "@ren/host-api/ren-host-api"
 import { AppCatalog } from "@ren/schema/app-catalog"
 import { App } from "@ren/schema/app"
+import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { Context, Effect, Fiber, Layer, Option, Schedule, Schema } from "effect"
@@ -28,7 +29,8 @@ import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { HostToken } from "../src/host-token.js"
 import { HotReload } from "../src/hot-reload.js"
-import { Inference } from "../src/inference.js"
+import { ModelCatalog } from "../src/model-catalog.js"
+import { ModelRefresh } from "../src/model-refresh.js"
 import { ModelStore } from "../src/model-store.js"
 import { RenAddress } from "../src/ren-address.js"
 import { FakeRen } from "./lib/ren.js"
@@ -199,6 +201,7 @@ const open = Effect.fnUntraced(function* (
       Layer.provideMerge(
         Layer.mergeAll(
           HostToken.layer(server.url.origin),
+          ModelRefresh.layer(server.url.origin).pipe(Layer.provide(HostToken.layer(server.url.origin))),
           BrainKeys.layer,
           RenAddress.layer(server.url.origin),
           Layer.unwrap(
@@ -257,7 +260,7 @@ const open = Effect.fnUntraced(function* (
           ChatSettings.layer,
           Cell.activityLayer,
           CredentialEnv.layer,
-          Inference.layer,
+          ModelCatalog.layer,
         ),
       ),
       Layer.provideMerge(Fence.layer),
@@ -280,6 +283,7 @@ const open = Effect.fnUntraced(function* (
       return { entered: Effect.promise(() => hold.entered.promise), release: () => hold.release.resolve() }
     },
     env: Context.get(services, CredentialEnv.Service),
+    catalog: Context.get(services, ModelCatalog.Service),
     fence: Context.get(services, Fence.Service),
     failNextWrite: (key: string) => void failing.add(key),
     retire: () => {
@@ -310,6 +314,33 @@ it.live("a pull with the same full state writes nothing and keeps the harness cl
     expect(yield* opened.saved).toEqual(empty)
     expect((yield* opened.env.current).placeholders).toEqual({})
     expect(yield* opened.harness.state).toEqual({ isOpen: false, holders: 0 })
+  }),
+)
+
+it.live("a pull saves registered providers, and a pull without them keeps the last ones", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const endpoints = (ids: ReadonlyArray<string>): Models.Catalog => ({
+      endpoints: [
+        {
+          id: "ren",
+          name: "Ren",
+          protocol: "openai-chat",
+          baseUrl: "https://llm.ren.test/v1",
+          models: ids.map((id) => ({ id, type: "chat" as const, protocol: "openai-chat" as const })),
+          search: [{ id: "ren/search", name: "Search" }],
+        },
+      ],
+    })
+    opened.answer(undefined, { providers: Models.registrations(endpoints(["first"])) })
+    yield* opened.reload.pull
+    expect(yield* opened.catalog.current).toEqual(Option.some(endpoints(["first"])))
+    opened.answer()
+    yield* opened.reload.pull
+    expect(yield* opened.catalog.current).toEqual(Option.some(endpoints(["first"])))
+    opened.answer(undefined, { providers: Models.registrations(endpoints(["first", "second"])) })
+    yield* opened.reload.pull
+    expect(yield* opened.catalog.current).toEqual(Option.some(endpoints(["first", "second"])))
   }),
 )
 

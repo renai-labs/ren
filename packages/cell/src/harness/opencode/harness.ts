@@ -14,7 +14,7 @@ import type { Channel } from "@ren/schema/channel"
 import type { SessionCreateInput, SessionListInput, SessionUpdateInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
 import { Environment } from "@ren/schema/environment"
-import type { Models } from "@ren/schema/models"
+import { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
 import type { PullMemory } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
@@ -32,7 +32,7 @@ import {
   Stream,
   Struct,
 } from "effect"
-import { FetchHttpClient, HttpClientError } from "effect/http"
+import { HttpClientError } from "effect/http"
 import { mkdir, rm, stat } from "node:fs/promises"
 import { BrainStorage } from "../../brain-storage.js"
 import { AppStore } from "../../app-store.js"
@@ -44,7 +44,7 @@ import { GitSources } from "../../git-sources.js"
 import { HarnessStorage } from "../../harness-storage.js"
 import { HostToken } from "../../host-token.js"
 import { ModelRefresh } from "../../model-refresh.js"
-import { Inference } from "../../inference.js"
+import { ModelCatalog } from "../../model-catalog.js"
 import { RenAddress } from "../../ren-address.js"
 import { Harness } from "../harness.js"
 import { OpenCodeAttachments } from "./attachments.js"
@@ -55,7 +55,6 @@ import type { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
 import { OpenCodeServer } from "./server.js"
 import { InstructionEntries } from "./instruction-entries.js"
-import { ModelDiscovery } from "../../model-discovery.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { SessionSettings } from "./session-settings.js"
 import type { HarnessConfig } from "../config.js"
@@ -207,7 +206,7 @@ const resolve = (
   override: Model | null,
   defaults: {
     readonly models?: ModelTypes.Defaults | undefined
-    readonly catalogs: ModelTypes.Catalogs
+    readonly catalog: Models.Catalog
   },
 ) =>
   Option.match(settings, {
@@ -258,7 +257,7 @@ const pick = Effect.fnUntraced(function* (
   options: {
     readonly interactive: boolean
     readonly defaultModels?: ModelTypes.Defaults | undefined
-    readonly catalogs: ModelTypes.Catalogs
+    readonly catalog: Models.Catalog
   },
 ) {
   if (Option.isNone(settings)) {
@@ -271,7 +270,7 @@ const pick = Effect.fnUntraced(function* (
     return yield* new BrainRejectedError({ message: `Unknown model: ${model.value.endpointId}/${model.value.modelId}` })
   const resolved = yield* resolve(client, settings, sessionID, Option.getOrNull(model), {
     models: options.defaultModels,
-    catalogs: options.catalogs,
+    catalog: options.catalog,
   })
   yield* remember(server, settings, sessionID, resolved && { resolved, interactive: options.interactive }, {
     install: true,
@@ -283,7 +282,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   server: OpenCodeServer.Instance,
   settings: Option.Option<ChatSettings.Interface>,
   input: StartBody,
-  catalogs: ModelTypes.Catalogs,
+  catalog: Models.Catalog,
 ) {
   const sessionID = Session.ID.make(input.sessionId)
   const directory = AbsolutePath.make(server.directoryOf(input.sessionId))
@@ -292,7 +291,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   const override = overrideOf(session, input)
   const resolved = yield* resolve(client, settings, sessionID, override.model, {
     models: override.defaultModels,
-    catalogs,
+    catalog,
   })
   const agent = resolved && Agent.ID.make(resolved.primary.name)
   const chosen = resolved?.primary.model ?? override.model ?? undefined
@@ -445,7 +444,7 @@ const layerWith = (opener: Opener) =>
   Layer.unwrap(
     Effect.gen(function* () {
       const cell = yield* Cell.Info
-      const inference = yield* Inference.Service
+      const catalog = yield* ModelCatalog.Service
       const refreshKey = yield* ModelRefresh.Service
       const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
       const settings = cell.vars.REN_URL ? yield* Effect.serviceOption(ChatSettings.Service) : Option.none()
@@ -468,10 +467,8 @@ const layerWith = (opener: Opener) =>
         prepare.pipe(
           Effect.andThen(
             Effect.gen(function* () {
-              const catalog = yield* inference.catalog
-              const baseUrl = yield* inference.baseUrl
-              if (Option.isNone(catalog) || Option.isNone(baseUrl)) return []
-              return yield* ModelDiscovery.endpoints(catalog.value, baseUrl.value, refreshKey)
+              const found = yield* catalog.current
+              return Option.isNone(found) ? [] : yield* ModelCatalog.endpoints(found.value, refreshKey)
             }),
           ),
           Effect.flatMap((endpoints) =>
@@ -494,7 +491,7 @@ const layerWith = (opener: Opener) =>
                 server,
                 endpoints,
                 settings,
-                Option.some({ inference, refreshKey }),
+                Option.some({ catalog, refreshKey }),
                 Option.isSome(memory) ? yield* memory.value.current : Option.none(),
               )
             }),
@@ -538,12 +535,16 @@ export const layerProcess = (database: string, confinement: RenPlugin.Confinemen
     }),
   )
 
+const encodeAccess = Schema.encodeSync(Models.Access)
+
+const encodeModels = (endpoints: ReadonlyArray<Models.Endpoint>) => JSON.stringify(encodeAccess({ endpoints }))
+
 export const make = Effect.fn("OpenCodeHarness.make")(function* (
   server: OpenCodeServer.Instance,
   endpoints: ReadonlyArray<Models.Endpoint>,
   settings: Option.Option<ChatSettings.Interface> = Option.none(),
   models: Option.Option<{
-    readonly inference: Inference.Interface
+    readonly catalog: ModelCatalog.Interface
     readonly refreshKey: Harness.Refresh
   }> = Option.none(),
   memory: Option.Option<PullMemory> = Option.none(),
@@ -552,15 +553,12 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   const state: {
     firstAskedAt: Map<string, number>
     models: ReadonlyArray<Models.Endpoint>
-    modelCatalogs: ModelTypes.Catalogs
-    modelProviders: ModelTypes.Providers
-  } = { firstAskedAt: new Map(), models: endpoints, modelCatalogs: {}, modelProviders: {} }
+  } = { firstAskedAt: new Map(), models: endpoints }
   const mutations = yield* Semaphore.make(1)
   const configure = Effect.fn("OpenCodeHarness.configure")(function* (
     update: HarnessConfig.Update,
   ): Effect.fn.Return<void> {
     const models = update.models ?? state.models
-    const modelCatalogs = update.modelCatalogs ?? state.modelCatalogs
     const pulled =
       update.settings ??
       (Option.isSome(settings)
@@ -570,13 +568,12 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
       const known = server.chats.value
       const native = yield* lookupOf(client)
       const managed = new Set([...state.models, ...models].map((endpoint) => endpoint.id))
+      const find = Models.lookup({ endpoints: models })
       const lookup: BrainSettings.Lookup = (model) => {
-        if (!managed.has(model.endpointId)) return native(model)
-        return Option.fromUndefinedOr(
-          models
-            .find((endpoint) => endpoint.id === model.endpointId)
-            ?.models.find((entry) => entry.id === model.modelId),
-        ).pipe(Option.map((entry) => ({ variants: entry.efforts ?? [] })))
+        const found = find({ providerID: model.endpointId, id: model.modelId })
+        if (found)
+          return found.model.type === "chat" ? Option.some({ variants: found.model.efforts ?? [] }) : Option.none()
+        return managed.has(model.endpointId) ? Option.none() : native(model)
       }
       yield* Effect.forEach(
         pulled.chats,
@@ -599,7 +596,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                 defaultModels: saved?.defaultModels,
               },
               lookup,
-              modelCatalogs,
+              { endpoints: models },
             )
             if (Result.isFailure(resolved)) {
               yield* Effect.logWarning(`Chat ${chat.id} keeps its settings: ${resolved.failure.message}`)
@@ -614,12 +611,8 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
       )
     }
     state.models = models
-    state.modelCatalogs = modelCatalogs
-    state.modelProviders = update.modelProviders ?? state.modelProviders
     yield* server.configure({
       models,
-      modelCatalogs,
-      modelProviders: state.modelProviders,
       ...(update.memory && { memory: update.memory }),
       ...(update.apps && { apps: update.apps }),
       ...(update.channels && { channels: update.channels }),
@@ -629,39 +622,26 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   // oxlint-disable-next-line ren/no-comments -- A pull while the harness was closed saved new layers and memory; an opening resolves each chat from them, not from what the chat had before.
   yield* configure({
     models: endpoints,
-    modelProviders: Option.isSome(models)
-      ? yield* Effect.gen(function* () {
-          const baseUrl = yield* models.value.inference.baseUrl
-          return Option.isSome(baseUrl)
-            ? yield* ModelDiscovery.providers(
-                yield* models.value.inference.modelCatalogs,
-                baseUrl.value,
-                models.value.refreshKey,
-              )
-            : {}
-        })
-      : {},
-    modelCatalogs: Option.isSome(models) ? yield* models.value.inference.modelCatalogs : {},
     ...(Option.isSome(settings) && {
       settings: { layers: yield* settings.value.layers, chats: yield* settings.value.chats },
     }),
     ...(Option.isSome(memory) && { memory }),
   })
-  const reader = Option.isSome(models)
-    ? Option.some(
-        yield* ModelDiscovery.make({
-          inference: models.value.inference,
-          keyFor: models.value.refreshKey,
-          apply: (next, modelCatalogs, modelProviders) =>
-            mutations.withPermit(configure({ models: next, modelCatalogs, modelProviders })),
-        }).pipe(Effect.provide(FetchHttpClient.layer)),
-      )
-    : Option.none()
-  const refreshModels = Option.match(reader, { onNone: () => Effect.void, onSome: (found) => found.refresh })
-  const knowing = Effect.fnUntraced(function* (model: Model | null | undefined) {
-    if (!model) return
-    if (Option.isSome((yield* lookupOf(client))(model))) return
-    yield* refreshModels
+  const applied = { value: encodeModels(endpoints) }
+  const refreshModels = Option.match(models, {
+    onNone: () => Effect.void,
+    onSome: (found) =>
+      mutations.withPermit(
+        Effect.gen(function* () {
+          const catalog = yield* found.catalog.current
+          if (Option.isNone(catalog)) return
+          const next = yield* ModelCatalog.endpoints(catalog.value, found.refreshKey)
+          const encoded = encodeModels(next)
+          if (encoded === applied.value) return
+          yield* configure({ models: next })
+          applied.value = encoded
+        }),
+      ),
   })
 
   return {
@@ -671,11 +651,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     configuration: server.configuration,
     refreshModels,
     start: (input: StartBody) =>
-      knowing(input.model).pipe(
-        Effect.andThen(
-          mutations.withPermit(Effect.suspend(() => start(client, server, settings, input, state.modelCatalogs))),
-        ),
-      ),
+      mutations.withPermit(Effect.suspend(() => start(client, server, settings, input, { endpoints: state.models }))),
     send: (input: SendInput) =>
       attach(server, input).pipe(
         Effect.flatMap((attachments) => mutations.withPermit(send(client, input, attachments))),
@@ -701,7 +677,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                   ...Struct.omit(input, ["environmentTemplateId", "directory"]),
                   ...(input.directory && { directory: Environment.Directory.make(input.directory) }),
                 },
-                state.modelCatalogs,
+                { endpoints: state.models },
               ),
             ),
           )
@@ -795,34 +771,30 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         ),
     },
     setModel: (sessionId: string, model: Option.Option<Model>) =>
-      knowing(Option.getOrUndefined(model)).pipe(
-        Effect.andThen(
-          mutations.withPermit(
-            Effect.gen(function* () {
-              const sessionID = Session.ID.make(sessionId)
-              const session = yield* findSession(client, sessionID)
-              if (Option.isNone(session))
-                return yield* new SessionNotStartedError({ message: `Session ${sessionId} has not been started` })
-              const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
-              yield* pick(client, server, settings, sessionID, model, {
+      mutations.withPermit(
+        Effect.gen(function* () {
+          const sessionID = Session.ID.make(sessionId)
+          const session = yield* findSession(client, sessionID)
+          if (Option.isNone(session))
+            return yield* new SessionNotStartedError({ message: `Session ${sessionId} has not been started` })
+          const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
+          yield* pick(client, server, settings, sessionID, model, {
+            interactive: saved?.interactive ?? true,
+            defaultModels: saved?.defaultModels,
+            catalog: { endpoints: state.models },
+          })
+          yield* client.session
+            .update({
+              sessionID,
+              metadata: SessionSettings.metadata(session, {
+                start: saved?.start ?? null,
+                model: Option.getOrNull(model),
                 interactive: saved?.interactive ?? true,
-                defaultModels: saved?.defaultModels,
-                catalogs: state.modelCatalogs,
-              })
-              yield* client.session
-                .update({
-                  sessionID,
-                  metadata: SessionSettings.metadata(session, {
-                    start: saved?.start ?? null,
-                    model: Option.getOrNull(model),
-                    interactive: saved?.interactive ?? true,
-                    ...(saved?.defaultModels && { defaultModels: saved.defaultModels }),
-                  }),
-                })
-                .pipe(Effect.orDie)
-            }),
-          ),
-        ),
+                ...(saved?.defaultModels && { defaultModels: saved.defaultModels }),
+              }),
+            })
+            .pipe(Effect.orDie)
+        }),
       ),
     onTurn: (hooks) =>
       Option.match(server.chats, {

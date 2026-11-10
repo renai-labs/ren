@@ -13,8 +13,10 @@ import { CredentialEnv } from "./credential-env.js"
 import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
-import { Inference } from "./inference.js"
 import { MemoryStore } from "./memory-store.js"
+import { ModelCatalog } from "./model-catalog.js"
+import { ModelDiscovery } from "./model-discovery.js"
+import { ModelRefresh } from "./model-refresh.js"
 import { RenAddress } from "./ren-address.js"
 
 const deletedKey = "ren:deleted"
@@ -45,7 +47,8 @@ export const layer = Layer.effect(
     const fence = yield* Fence.Service
     const harness = yield* Harness.Service
     const credentialEnv = yield* CredentialEnv.Service
-    const inference = yield* Inference.Service
+    const catalog = yield* ModelCatalog.Service
+    const keyFor = yield* ModelRefresh.Service
     const url = info.vars.REN_URL
     if (!url) return Service.of({ pull: Effect.void, push: Effect.void, tick: Effect.void })
     const host = yield* HostToken.client(url).pipe(
@@ -113,7 +116,8 @@ export const layer = Layer.effect(
         : false
       yield* keys.save(reply.publicKeys)
       yield* credentialEnv.apply(reply.env)
-      const inferenceChanged = yield* inference.saveBaseUrl(Option.fromNullishOr(reply.inference?.baseUrl))
+      if (reply.providers) yield* catalog.register(reply.providers)
+      yield* ModelDiscovery.refresh(catalog, keyFor).pipe(Effect.provide(FetchHttpClient.layer))
       const settingsChanged = yield* settings.save(reply.layers, reply.chats)
       yield* Effect.scoped(
         Effect.gen(function* () {
@@ -127,7 +131,7 @@ export const layer = Layer.effect(
               ...(memoryChanged && { memory: yield* memory.current }),
               ...(settingsChanged && { settings: { layers: yield* settings.layers, chats: yield* settings.chats } }),
             })
-          if (inferenceChanged) yield* opened.refreshModels
+          yield* opened.refreshModels
           // oxlint-disable-next-line ren/no-comments -- HR22: a chat Ren deleted leaves the harness at once; a busy one is interrupted first. Its folder goes after 7 days of Ren naming it deleted (E109, E114).
           yield* Effect.forEach(
             reply.deleted,

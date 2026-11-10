@@ -30,7 +30,7 @@ import { Harness } from "./harness/harness.js"
 import { CredentialEnv } from "./credential-env.js"
 import { GitSources } from "./git-sources.js"
 import { HostToken } from "./host-token.js"
-import { Inference } from "./inference.js"
+import { ModelCatalog } from "./model-catalog.js"
 import { ModelStore } from "./model-store.js"
 import { ModelRefresh } from "./model-refresh.js"
 import { Reconcile } from "./reconcile.js"
@@ -225,7 +225,7 @@ export const hostLayer = Layer.unwrap(
           AppStore.layer,
           ChannelStore.layer,
           MemoryStore.layer,
-          Inference.layer,
+          ModelCatalog.layer,
         ),
       ),
       Layer.provideMerge(Fence.layer),

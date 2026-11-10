@@ -2,6 +2,7 @@ export * as ChatSettings from "./chat-settings.js"
 
 import { BrainSettings } from "@ren/brain/settings"
 import type { ModelTypes } from "@ren/schema/model-types"
+import type { Models } from "@ren/schema/models"
 import { PullChat } from "@ren/host-api/ren-host-api"
 import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
@@ -30,7 +31,7 @@ export interface Interface {
     lookup: BrainSettings.Lookup,
     defaults?: {
       readonly models?: ModelTypes.Defaults | undefined
-      readonly catalogs: ModelTypes.Catalogs
+      readonly catalog: Models.Catalog
     },
   ) => Effect.Effect<BrainSettings.Resolved, BrainSettings.Unconfigured>
 }
@@ -83,7 +84,7 @@ export const layer = Layer.effect(
             yield* Ref.get(layers),
             { agent: chat?.agent ?? null, model, drives: chat?.drives, defaultModels: defaults?.models },
             lookup,
-            defaults?.catalogs,
+            defaults?.catalog,
           ),
           { onFailure: Effect.fail, onSuccess: Effect.succeed },
         )

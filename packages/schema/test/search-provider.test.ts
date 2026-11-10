@@ -1,19 +1,31 @@
 import { expect, test } from "bun:test"
 import { Schema } from "effect"
-import { SearchProvider } from "../src/search-provider.js"
+import { Models } from "../src/models.js"
 
-test("a public search catalog strips credentials and rejects ambiguous provider IDs", () => {
-  const decode = Schema.decodeUnknownSync(SearchProvider.Catalog)
-  expect(decode({ providerID: "ren", providers: [], baseUrl: "https://example.com", apiKey: "secret" })).toEqual({
-    providerID: "ren",
-    providers: [],
+test("an endpoint's search providers have unique IDs, and its catalog entry carries no key", () => {
+  const endpoint = {
+    id: "ren",
+    protocol: "openai-chat",
+    baseUrl: "https://llm.ren.test/v1",
+    apiKey: { key: "secret" },
+    models: [],
+    search: [{ id: "ren/search", name: "Search" }],
+  }
+  expect(Schema.decodeUnknownSync(Models.Catalog)({ endpoints: [endpoint] })).toEqual({
+    endpoints: [
+      { id: "ren", protocol: "openai-chat", baseUrl: "https://llm.ren.test/v1", models: [], search: endpoint.search },
+    ],
   })
   expect(() =>
-    decode({
-      providerID: "ren",
-      providers: [
-        { id: "same", name: "One" },
-        { id: "same", name: "Two" },
+    Schema.decodeUnknownSync(Models.Catalog)({
+      endpoints: [
+        {
+          ...endpoint,
+          search: [
+            { id: "same", name: "One" },
+            { id: "same", name: "Two" },
+          ],
+        },
       ],
     }),
   ).toThrow()

@@ -1,6 +1,7 @@
 export * as Models from "./models.js"
 
-import { Schema, SchemaTransformation, Struct } from "effect"
+import { Schema, Struct } from "effect"
+import { SearchProvider } from "./search-provider.js"
 
 export interface ApiKey extends Schema.Schema.Type<typeof ApiKey> {}
 export const ApiKey = Schema.Struct({
@@ -40,53 +41,15 @@ export const Type = Schema.Literals([
 ]).annotate({ identifier: "Models.Type" })
 export type Type = typeof Type.Type
 
-const Mode = Schema.Literals([
-  ...Type.literals,
-  "responses",
-  "completion",
-  "image_generation",
-  "audio_transcription",
-  "decisions",
-  "audio_speech",
-  "video_generation",
-])
-const types = {
-  chat: "chat",
-  responses: "chat",
-  completion: "chat",
-  image: "image",
-  image_generation: "image",
-  transcription: "transcription",
-  audio_transcription: "transcription",
-  decision: "decision",
-  decisions: "decision",
-  speech: "speech",
-  audio_speech: "speech",
-  realtime: "realtime",
-  video: "video",
-  video_generation: "video",
-} satisfies Record<typeof Mode.Type, Type>
-const StoredType = Mode.pipe(
-  Schema.decodeTo(Type, SchemaTransformation.transform({ decode: (mode) => types[mode], encode: (type) => type })),
-)
-
 export interface Ref extends Schema.Schema.Type<typeof Ref> {}
 export const Ref = Schema.Struct({ providerID: Schema.NonEmptyString, id: Schema.NonEmptyString }).annotate({
   identifier: "Models.Ref",
 })
 
-export const managedProviderID = "ren"
-
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: Schema.NonEmptyString,
-  type: Schema.optionalKey(StoredType).annotate({ description: "What the model does. Absent means chat." }),
-  modelID: Schema.optionalKey(Schema.NonEmptyString).annotate({
-    description: "The name sent to the provider. Defaults to id.",
-  }),
-  upstreamId: Schema.optionalKey(
-    Schema.NonEmptyString.annotate({ description: "Legacy wire alias. Use modelID for new entries." }),
-  ),
+  type: Type,
   name: Schema.optionalKey(Schema.NonEmptyString),
   limit: Schema.optionalKey(
     Schema.Struct({
@@ -98,9 +61,7 @@ export const Info = Schema.Struct({
   input: Schema.optionalKey(
     Schema.Array(Modality).annotate({ description: "What the model reads. Absent means text only." }),
   ),
-  protocol: Schema.optionalKey(ModelProtocol).annotate({
-    description: "The protocol of this model, when it differs from its endpoint’s.",
-  }),
+  protocol: ModelProtocol,
 }).annotate({ identifier: "Models.Info" })
 
 export interface Endpoint extends Schema.Schema.Type<typeof Endpoint> {}
@@ -114,33 +75,60 @@ export const Endpoint = Schema.Struct({
   headers: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
   apiKey: ApiKey,
   models: Schema.Array(Info),
+  search: Schema.optionalKey(
+    SearchProvider.Providers.annotate({
+      description: "The search providers the endpoint serves at `POST {baseUrl}/search`. Absent means none.",
+    }),
+  ),
 }).annotate({ identifier: "Models.Endpoint" })
+
+const uniqueIds = Schema.makeFilter(
+  (endpoints: ReadonlyArray<{ readonly id: string }>) =>
+    new Set(endpoints.map((endpoint) => endpoint.id)).size === endpoints.length || "endpoint ids are unique",
+)
 
 export interface Access extends Schema.Schema.Type<typeof Access> {}
 export const Access = Schema.Struct({
-  endpoints: Schema.Array(Endpoint).check(
-    Schema.makeFilter(
-      (endpoints) =>
-        new Set(endpoints.map((endpoint) => endpoint.id)).size === endpoints.length || "endpoint ids are unique",
-    ),
-  ),
+  endpoints: Schema.Array(Endpoint).check(uniqueIds),
 }).annotate({ identifier: "Models.Access" })
+
+export interface CatalogEndpoint extends Schema.Schema.Type<typeof CatalogEndpoint> {}
+export const CatalogEndpoint = Endpoint.mapFields(Struct.omit(["apiKey"])).annotate({
+  identifier: "Models.CatalogEndpoint",
+  description: "An endpoint without its key.",
+})
 
 export interface Catalog extends Schema.Schema.Type<typeof Catalog> {}
 export const Catalog = Schema.Struct({
-  endpoints: Schema.Array(
-    Endpoint.mapFields(Struct.pick(["id", "protocol", "models"])).annotate({ identifier: "Models.CatalogEndpoint" }),
-  ),
+  endpoints: Schema.Array(CatalogEndpoint).check(uniqueIds),
 }).annotate({ identifier: "Models.Catalog" })
 
 export const catalog = (access: Access): Catalog => ({
-  endpoints: access.endpoints.map((endpoint) => Struct.pick(endpoint, ["id", "protocol", "models"])),
+  endpoints: access.endpoints.map((endpoint) => Struct.omit(endpoint, ["apiKey"])),
 })
 
-export const modelID = (model: Info) => model.modelID ?? model.upstreamId ?? model.id
+export interface Registration extends Schema.Schema.Type<typeof Registration> {}
+export const Registration = Schema.Struct({
+  ...Endpoint.mapFields(Struct.pick(["id", "name", "protocol", "baseUrl", "headers"])).fields,
+  catalog: Schema.Union([Schema.Literal("inference"), Endpoint.mapFields(Struct.pick(["models", "search"]))]),
+}).annotate({ identifier: "Models.Registration" })
+
+export const Providers = Schema.Array(Registration).check(uniqueIds).annotate({ identifier: "Models.Providers" })
+export type Providers = typeof Providers.Type
+
+export const registrations = (catalog: Catalog): Providers =>
+  catalog.endpoints.map((endpoint) => ({
+    ...Struct.omit(endpoint, ["models", "search"]),
+    catalog: Struct.pick(endpoint, ["models", "search"]),
+  }))
+
+export interface InferenceCatalog extends Schema.Schema.Type<typeof InferenceCatalog> {}
+export const InferenceCatalog = Schema.Struct({
+  baseUrl: Endpoint.fields.baseUrl,
+  models: Schema.Array(Info),
+}).annotate({ identifier: "Models.InferenceCatalog" })
 
 export const lookup = (catalog: Catalog) => {
-  const providers = new Set(catalog.endpoints.map((endpoint) => endpoint.id))
   const models = new Map(
     catalog.endpoints.flatMap((endpoint) =>
       endpoint.models.map((model) => {
@@ -149,20 +137,7 @@ export const lookup = (catalog: Catalog) => {
       }),
     ),
   )
-  const aliases = new Map(
-    [...models.values()].flatMap((found) => {
-      const slash = found.ref.id.indexOf("/")
-      if (found.ref.providerID !== managedProviderID || slash <= 0) return []
-      return [[JSON.stringify([found.ref.id.slice(0, slash), found.ref.id.slice(slash + 1)]), found] as const]
-    }),
-  )
-  return (ref: Ref) => {
-    const key = JSON.stringify([ref.providerID, ref.id])
-    return (
-      models.get(key) ??
-      (providers.has(ref.providerID) && ref.providerID !== managedProviderID ? undefined : aliases.get(key))
-    )
-  }
+  return (ref: Ref) => models.get(JSON.stringify([ref.providerID, ref.id]))
 }
 
 export const placeholderKey = "ren:MODELS"
@@ -172,100 +147,3 @@ export const personHeader = "ren-member"
 export const personLabel = "PERSON"
 
 export const personPlaceholder = (memberId: string) => `ren:${personLabel}.${memberId}`
-
-export interface InferenceModelInfo extends Schema.Schema.Type<typeof InferenceModelInfo> {}
-export const InferenceModelInfo = Schema.Struct({
-  data: Schema.Array(
-    Schema.Struct({
-      model_name: Schema.String,
-      model_info: Schema.Struct({
-        model_key: Schema.optionalKey(Schema.NullOr(Schema.String)),
-        provider_key: Schema.optionalKey(Schema.NullOr(Schema.String)),
-        display_name: Schema.optionalKey(Schema.NullOr(Schema.String)),
-        mode: Schema.optionalKey(Schema.NullOr(Schema.String)),
-        hidden: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
-        max_input_tokens: Schema.optionalKey(Schema.NullOr(Schema.Number)),
-        max_output_tokens: Schema.optionalKey(Schema.NullOr(Schema.Number)),
-        modalities: Schema.optionalKey(
-          Schema.NullOr(Schema.Struct({ input: Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.String))) })),
-        ),
-        default_variant: Schema.optionalKey(Schema.NullOr(Schema.String)),
-        variants: Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.Struct({ id: Schema.String })))),
-      }),
-    }),
-  ),
-}).annotate({
-  identifier: "Models.InferenceModelInfo",
-  description: "The body of the inference gateway’s GET /model/info.",
-})
-
-export const defaultOutputLimit = 32_000
-
-const isModality = Schema.is(Modality)
-
-const positive = (value: number | null | undefined) =>
-  typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
-
-type Entry = InferenceModelInfo["data"][number]
-
-const protocols: Readonly<Record<string, Protocol>> = { anthropic: "anthropic-messages", openai: "openai-responses" }
-
-const endpointProtocol = (endpointId: string) => protocols[endpointId] ?? "openai-chat"
-
-const protocolOf = (found: Entry["model_info"]): Protocol => {
-  if (found.provider_key === "anthropic") return "anthropic-messages"
-  if (found.mode === "responses") return "openai-responses"
-  return "openai-chat"
-}
-
-const effortsOf = (found: Entry["model_info"]) => {
-  const efforts = (found.variants ?? []).map((variant) => variant.id)
-  const preferred = found.default_variant
-  if (!preferred || !efforts.includes(preferred)) return efforts
-  return [preferred, ...efforts.filter((effort) => effort !== preferred)]
-}
-
-const infoOf = (entry: Entry, id: string, inherited: Protocol): Info => {
-  const found = entry.model_info
-  const protocol = protocolOf(found)
-  const context = positive(found.max_input_tokens)
-  const efforts = effortsOf(found)
-  const input = (found.modalities?.input ?? []).filter(isModality)
-  return {
-    id,
-    ...(id !== entry.model_name && entry.model_name && { upstreamId: entry.model_name }),
-    ...(found.display_name && { name: found.display_name }),
-    ...(context && { limit: { context, output: positive(found.max_output_tokens) ?? defaultOutputLimit } }),
-    input: input.length > 0 ? input : ["text"],
-    ...(efforts.length > 0 && { efforts }),
-    ...(protocol !== inherited && { protocol }),
-  }
-}
-
-const chatModes = new Set(["chat", "responses", "completion"])
-
-export const fromInference = (info: InferenceModelInfo): Catalog => {
-  const models = info.data.flatMap((entry) => {
-    const found = entry.model_info
-    if (!found.model_key || !found.provider_key || found.hidden) return []
-    if (found.mode && !chatModes.has(found.mode)) return []
-    return [
-      {
-        endpointId: found.provider_key,
-        model: infoOf(entry, found.model_key, endpointProtocol(found.provider_key)),
-      },
-    ]
-  })
-  const ids = [...new Set(models.map((each) => each.endpointId))].toSorted()
-  return {
-    endpoints: ids.map((id) => ({
-      id,
-      protocol: endpointProtocol(id),
-      models: [
-        ...new Map(
-          models.filter((each) => each.endpointId === id).map((each) => [each.model.id, each.model] as const),
-        ).values(),
-      ].toSorted((left, right) => left.id.localeCompare(right.id)),
-    })),
-  }
-}

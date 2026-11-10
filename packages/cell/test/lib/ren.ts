@@ -21,7 +21,7 @@ import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import type { AppCatalog } from "@ren/schema/app-catalog"
-import type { Models } from "@ren/schema/models"
+import { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import type { Signature } from "@ren/schema/signature"
@@ -156,10 +156,10 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
             const host = yield* CurrentHost
             pulls.push(request.payload)
             record("pull", host.brainId, undefined, 200)
-            const baseUrl = modelsOf(host.brainId)?.endpoints.at(0)?.baseUrl.replace(/\/v1$/u, "")
+            const access = modelsOf(host.brainId)
             return {
               publicKeys: [...TestToken.publicKeys],
-              ...(baseUrl && { inference: { baseUrl } }),
+              ...(access && { providers: Models.registrations(Models.catalog(access)) }),
               ...(state.apps && { apps: state.apps }),
               env: { variables: {}, placeholders: state.env },
               layers: state.settings,

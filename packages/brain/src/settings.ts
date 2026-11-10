@@ -2,12 +2,13 @@ export * as BrainSettings from "./settings.js"
 
 import { Drive } from "@ren/schema/drive"
 import { ModelTypes } from "@ren/schema/model-types"
+import { Models } from "@ren/schema/models"
 import { Permission } from "@ren/schema/permission"
 import { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import { Settings } from "@ren/schema/settings"
-import { Array, Option, Result, Schema, Struct } from "effect"
+import { Array, Option, Predicate, Result, Schema, Struct } from "effect"
 
 export class Unconfigured extends Schema.TaggedError<Unconfigured>()("BrainSettings.Unconfigured", {
   message: Schema.String,
@@ -90,7 +91,7 @@ export const resolve = (
   layers: Layers,
   chat: Placement,
   lookup: Lookup,
-  catalogs: ModelTypes.Catalogs = {},
+  catalog: Models.Catalog = { endpoints: [] },
 ): Result.Result<Resolved, Unconfigured> => {
   const primary =
     layers.agents.find((agent) => !agent.isSubagent && agent.name === chat.agent) ??
@@ -100,6 +101,12 @@ export const resolve = (
     layer.settings ? [layer.settings] : [],
   )
   const own = [...shared, primary.settings]
+  const find = Models.lookup(catalog)
+  const searches = new Set(
+    catalog.endpoints.flatMap((endpoint) =>
+      (endpoint.search ?? []).map((provider) => JSON.stringify([endpoint.id, provider.id])),
+    ),
+  )
   const defaultModels = (agent: Settings.Info) => {
     const candidates = [
       chat.defaultModels,
@@ -108,15 +115,17 @@ export const resolve = (
     ]
     const defaults = Object.fromEntries(
       ModelTypes.Type.literals.flatMap((type) => {
-        const catalog = catalogs[type]
         const selected = candidates
-          .map((candidate) => candidate?.[type])
-          .find(
-            (candidate) =>
-              candidate &&
-              catalog?.providerId === candidate.providerId &&
-              catalog.models.some((model) => model.id === candidate.modelId),
-          )
+          .map((defaults) => {
+            const candidate = defaults?.[type]
+            if (!candidate) return
+            if (type === "search")
+              return searches.has(JSON.stringify([candidate.providerId, candidate.modelId])) ? candidate : undefined
+            const found = find({ providerID: candidate.providerId, id: candidate.modelId })
+            if (found?.model.type !== ModelTypes.modelType[type]) return
+            return { providerId: found.ref.providerID, modelId: found.ref.id }
+          })
+          .find(Predicate.isNotUndefined)
         return selected ? [[type, selected] as const] : []
       }),
     )

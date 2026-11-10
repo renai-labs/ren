@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import type { Permission } from "@ren/schema/permission"
 import type { ModelTypes } from "@ren/schema/model-types"
+import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import { Settings } from "@ren/schema/settings"
-import { Option, Result } from "effect"
+import { Option, Result, Struct } from "effect"
 import { BrainSettings } from "../src/settings.js"
 
 const layer = (settings: Partial<Settings.Info>): Settings.Info => ({ permissions: [], references: [], ...settings })
@@ -70,11 +71,72 @@ const resolve = (
 const rule = (action: string, resource: string, effect: Permission.RuleEffect) => ({ action, resource, effect })
 
 describe("BrainSettings.resolve", () => {
+  test("defaults resolve only exact catalog IDs, and a search default only on an endpoint that serves it", () => {
+    const served: Models.Catalog = {
+      endpoints: [
+        {
+          id: "ren",
+          protocol: "openai-chat",
+          baseUrl: "https://llm.ren.test/v1",
+          models: [
+            { id: "openai/image", type: "image", protocol: "openai-images" },
+            { id: "ren/group/audio", type: "transcription", protocol: "openai-transcription" },
+          ],
+          search: [{ id: "ren/search/deep", name: "Search" }],
+        },
+        {
+          id: "other",
+          protocol: "openai-chat",
+          baseUrl: "https://other.test/v1",
+          models: [],
+        },
+      ],
+    }
+    const resolved = (defaultModels: ModelTypes.Defaults) =>
+      Result.getOrThrow(
+        BrainSettings.resolve(
+          read({ ren: layer({ model: stub, defaultModels }), agents: [primary()] }),
+          { agent: null, model: Option.none() },
+          lookup,
+          served,
+        ),
+      ).primary.defaultModels
+    expect(
+      resolved({
+        image_generation: { providerId: "ren", modelId: "openai/image" },
+        audio_transcription: { providerId: "ren", modelId: "ren/group/audio" },
+        search: { providerId: "ren", modelId: "ren/search/deep" },
+      }),
+    ).toEqual({
+      image_generation: { providerId: "ren", modelId: "openai/image" },
+      audio_transcription: { providerId: "ren", modelId: "ren/group/audio" },
+      search: { providerId: "ren", modelId: "ren/search/deep" },
+    })
+    expect(
+      resolved({
+        image_generation: { providerId: "openai", modelId: "image" },
+        search: { providerId: "other", modelId: "ren/search/deep" },
+      }),
+    ).toBeUndefined()
+  })
   test("model defaults resolve independently through chat, executing agent, space, organization and Ren", () => {
     const selection = (modelId: string) => ({ providerId: "ren", modelId })
-    const catalogs: ModelTypes.Catalogs = {
-      image_generation: { providerId: "ren", models: ["ren", "org", "space", "agent", "chat"].map((id) => ({ id })) },
-      audio_transcription: { providerId: "ren", models: [{ id: "audio" }] },
+    const catalogs: Models.Catalog = {
+      endpoints: [
+        {
+          id: "ren",
+          protocol: "openai-chat",
+          baseUrl: "https://llm.ren.test/v1",
+          models: [
+            ...["ren", "org", "space", "agent", "chat"].map((id) => ({
+              id,
+              type: "image" as const,
+              protocol: "openai-images" as const,
+            })),
+            { id: "audio", type: "transcription", protocol: "openai-transcription" },
+          ],
+        },
+      ],
     }
     const layers = read({
       ren: layer({
@@ -104,18 +166,43 @@ describe("BrainSettings.resolve", () => {
       selection("agent"),
     )
     expect(
-      resolved({}, { ...catalogs, image_generation: { providerId: "ren", models: [{ id: "org" }, { id: "ren" }] } })
-        .primary.defaultModels?.image_generation,
+      resolved(
+        {},
+        {
+          endpoints: catalogs.endpoints.map((endpoint) => ({
+            ...endpoint,
+            models: endpoint.models.filter((model) => ["org", "ren", "audio"].includes(model.id)),
+          })),
+        },
+      ).primary.defaultModels?.image_generation,
     ).toEqual(selection("org"))
     expect(
-      resolved({}, { ...catalogs, image_generation: { providerId: "ren", models: [{ id: "ren" }] } }).primary
-        .defaultModels?.image_generation,
+      resolved(
+        {},
+        {
+          endpoints: catalogs.endpoints.map((endpoint) => ({
+            ...endpoint,
+            models: endpoint.models.filter((model) => ["ren", "audio"].includes(model.id)),
+          })),
+        },
+      ).primary.defaultModels?.image_generation,
     ).toEqual(selection("ren"))
     expect(
-      resolved({}, { ...catalogs, image_generation: { providerId: "custom", models: [{ id: "agent" }] } }).primary
-        .defaultModels,
+      resolved(
+        {},
+        {
+          endpoints: catalogs.endpoints.map((endpoint) =>
+            Struct.evolve(endpoint, {
+              models: (models) =>
+                models.map((model) =>
+                  model.type === "image" ? Struct.assign(model, { type: "decision" as const }) : model,
+                ),
+            }),
+          ),
+        },
+      ).primary.defaultModels,
     ).toEqual({ audio_transcription: selection("audio") })
-    expect(resolved({}, {}).primary.defaultModels).toBeUndefined()
+    expect(resolved({}, { endpoints: [] }).primary.defaultModels).toBeUndefined()
   })
   test("the main agent gets the layers' instructions in order and the most specific model; a subagent gets its own instructions and falls back to that model", () => {
     const resolved = resolve({

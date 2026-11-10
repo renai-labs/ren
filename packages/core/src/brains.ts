@@ -574,7 +574,12 @@ export const layer = Layer.effect(
                 .from(Database.Schema.agent_session)
                 .where(inArray(Database.Schema.agent_session.id, [...roots]))
                 .pipe(Effect.orDie)
-        const inference = yield* models.inference
+        const providers = yield* models.providers.pipe(
+          Effect.tapError((error) =>
+            Effect.logWarning("Provider registration is unavailable for a pull; the brain keeps its providers", error),
+          ),
+          Effect.option,
+        )
         const capabilities = yield* environments.capabilities(
           host.organizationId,
           pulled.chats.map((chat) => chat.id),
@@ -585,7 +590,7 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         return {
           publicKeys: client.publicKeys,
-          ...Option.match(inference, { onNone: () => ({}), onSome: (found) => ({ inference: found }) }),
+          ...Option.match(providers, { onNone: () => ({}), onSome: (found) => ({ providers: found }) }),
           ...Option.match(apps, { onNone: () => ({}), onSome: (catalog) => ({ apps: catalog }) }),
           channels,
           layers: pulled.layers,
