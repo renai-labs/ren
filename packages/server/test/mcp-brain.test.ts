@@ -170,6 +170,16 @@ describe("Ren MCP for a brain", () => {
       }),
   )
 
+  it.live("lists only the Ren tools, not the Slack MCP's tools and guides (#260)", () =>
+    Effect.gen(function* () {
+      const headers = yield* (yield* chat()).headers()
+      const tools = yield* send(headers, "tools/list")
+      expect(tools.text).toContain('"name":"me_get"')
+      expect(tools.text).not.toContain('"name":"send_message"')
+      expect((yield* send(headers, "resources/list")).text).not.toContain("slack://guides/")
+    }),
+  )
+
   it.live("answers 401 to a sender that Ren refuses, a host token that it refuses and a call that names no chat", () =>
     Effect.gen(function* () {
       const subject = yield* chat()

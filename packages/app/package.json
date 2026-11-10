@@ -10,12 +10,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsgo -b",
     "generate": "tsr generate",
     "check:generated": "bun run generate && git diff --exit-code -- src/route-tree.gen.ts"
   },
   "dependencies": {
     "@better-auth/oauth-provider": "catalog:",
+    "@bufbuild/cel": "catalog:",
     "@effect/atom-react": "catalog:",
     "@heroicons/react": "2.2.0",
     "@ren/chat": "workspace:*",

@@ -96,6 +96,7 @@ export const layer = Layer.effect(
                 environment: input.environment,
                 skills: input.skills,
                 mcps: input.mcps,
+                webhooks: input.webhooks,
               })
               .returning()
               .pipe(
@@ -144,6 +145,7 @@ export const layer = Layer.effect(
                 environment: input.environment ?? null,
                 skills: input.skills,
                 mcps: input.mcps,
+                webhooks: input.webhooks,
                 revision: sql`${Database.Schema.app.revision} + 1`,
                 updated_at: sql`now()`,
               })

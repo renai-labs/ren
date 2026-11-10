@@ -5,6 +5,7 @@ import type { ModelTypes } from "@ren/schema/model-types"
 import { AbsolutePath, Agent, Session, SessionMessage } from "@opencode/client/effect"
 import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
+import { Global } from "@opencode/util/global"
 import { SessionInbox } from "@opencode/schema/session-inbox"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { BrainSettings } from "@ren/brain/settings"
@@ -31,10 +32,8 @@ import {
   Stream,
   Struct,
 } from "effect"
-import { FetchHttpClient } from "effect/http"
+import { FetchHttpClient, HttpClientError } from "effect/http"
 import { mkdir, rm, stat } from "node:fs/promises"
-// oxlint-disable-next-line ren/no-node-modules-import -- @opencode/core exports no package.json and no version, and the harness version must be the installed one.
-import opencode from "../../../node_modules/@opencode/core/package.json"
 import { BrainStorage } from "../../brain-storage.js"
 import { AppStore } from "../../app-store.js"
 import { ChannelStore } from "../../channel-store.js"
@@ -49,6 +48,7 @@ import { Inference } from "../../inference.js"
 import { RenAddress } from "../../ren-address.js"
 import { Harness } from "../harness.js"
 import { OpenCodeAttachments } from "./attachments.js"
+import { OpenCodeVersion } from "./version.js"
 import { OpenCodeChat } from "./chat.js"
 import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
 import type { OpenCodeMcp } from "./mcp.js"
@@ -326,17 +326,21 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
     install: true,
   })
   const changes = InstructionEntries.changes(
-    yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
+    yield* client.experimental.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
     environmentInstructions(server, environmentDirectory),
   )
   yield* Effect.forEach(
     changes.put,
-    (entry) => client.session.instructions.entry.put({ sessionID, key: entry.key, value: entry.value }),
+    (entry) => client.experimental.session.instructions.entry.put({ sessionID, key: entry.key, value: entry.value }),
     { discard: true },
   ).pipe(Effect.orDie)
-  yield* Effect.forEach(changes.remove, (key) => client.session.instructions.entry.remove({ sessionID, key }), {
-    discard: true,
-  }).pipe(Effect.orDie)
+  yield* Effect.forEach(
+    changes.remove,
+    (key) => client.experimental.session.instructions.entry.remove({ sessionID, key }),
+    {
+      discard: true,
+    },
+  ).pipe(Effect.orDie)
   if (input.initialMessage) {
     const initial = { ...input.initialMessage, sessionId: input.sessionId }
     yield* attach(server, initial).pipe(
@@ -358,6 +362,20 @@ const attach = (
       "Harness.Rejected": (error) => Effect.fail(rejected(error)),
     }),
   )
+
+const answered = Effect.fnUntraced(function* (error: Effect.Error<ReturnType<OpenCodeClient["session"]["prompt"]>>) {
+  const http = error._tag === "ClientError" ? error.cause : error
+  if (HttpClientError.isHttpClientError(http)) {
+    const response = http.response
+    if (!response) return yield* Effect.die(error)
+    const body = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
+    return yield* new BrainRejectedError({
+      message: `OpenCode answered the message with ${response.status}${body ? `: ${body}` : ""}`,
+    })
+  }
+  if (Schema.isSchemaError(error) || error._tag === "ClientError") return yield* Effect.die(error)
+  return yield* new BrainRejectedError({ message: error.message })
+})
 
 const send = Effect.fn("OpenCodeHarness.send")(function* (
   client: OpenCodeClient,
@@ -385,7 +403,7 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
         metadata: { source: input.synthetic.source },
         delivery: input.delivery,
       })
-      .pipe(Effect.orDie)
+      .pipe(Effect.catch(answered))
     return { messageId: input.messageId }
   }
   yield* client.session
@@ -401,14 +419,15 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
         ...(input.sender.memberId && { memberID: input.sender.memberId }),
         ...(input.channel && { channel: input.channel }),
         ...(input.schedule && { schedule: input.schedule }),
+        ...(input.webhook && { webhook: input.webhook }),
         ...(input.task && { task: input.task }),
       },
     })
-    .pipe(Effect.orDie)
+    .pipe(Effect.catch(answered))
   return { messageId: input.messageId }
 })
 
-export const version = opencode.version
+export const version = OpenCodeVersion.installed
 
 type Opener = (
   endpoints: ReadonlyArray<Models.Endpoint>,
@@ -508,7 +527,13 @@ export const layerProcess = (database: string, confinement: RenPlugin.Confinemen
       egress: host.egress,
       sources: host.sources,
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
-      confinement,
+      confinement: {
+        workspace: confinement.workspace,
+        allow: [
+          ...confinement.allow,
+          ...[Global.Path.data, Global.Path.cache, Global.Path.config, Global.Path.tmp].map((path) => `${path}/`),
+        ],
+      },
       makeDirectory: (directory) => Effect.promise(() => mkdir(directory, { recursive: true })),
     }),
   )
@@ -687,6 +712,14 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           Effect.gen(function* () {
             const info = OpenCodeRows.session(data.session)
             const messages = yield* Effect.forEach(data.messages, OpenCodeRows.message)
+            const inbox = yield* Effect.forEach(data.chat.inbox, (row) =>
+              Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(row.payload).pipe(
+                Effect.flatMap((payload) =>
+                  Schema.decodeUnknownEffect(SessionInbox.Item)({ type: row.type, payload, delivery: row.delivery }),
+                ),
+                Effect.map((item) => ({ id: SessionMessage.ID.make(row.id), item })),
+              ),
+            )
             // oxlint-disable-next-line ren/no-comments -- Only the brain's own hand is on this disk: its folder is made before the import, and a folder that was gone means its files were lost (E105, E113).
             const isOwnHand =
               server.hasEnvironmentConnections && info.location.directory === server.directoryOf(data.chat.id)
@@ -716,22 +749,33 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
             }
             // oxlint-disable-next-line ren/no-comments -- Queued messages go back in the chat's inbox with their ids and order, and start no turn (E110).
             yield* Effect.forEach(
-              data.chat.inbox.filter((row) => row.type === "user"),
-              (row) =>
-                Schema.decodeUnknownEffect(Schema.fromJsonString(SessionInbox.UserPayload))(row.payload).pipe(
-                  Effect.flatMap((payload) =>
-                    client.session.prompt({
-                      text: payload.text,
-                      ...(payload.metadata && { metadata: payload.metadata }),
-                      ...(payload.agents && { agents: payload.agents }),
-                      ...(payload.skills && { skills: payload.skills }),
-                      sessionID: info.id,
-                      id: SessionMessage.ID.make(row.id),
-                      delivery: row.delivery === "steer" ? "steer" : "queue",
-                      resume: false,
-                    }),
-                  ),
-                ),
+              inbox,
+              Effect.fnUntraced(function* (queued) {
+                const item = queued.item
+                if (item.type === "synthetic") {
+                  yield* server.sessions.synthetic({
+                    sessionID: info.id,
+                    id: queued.id,
+                    text: item.payload.text,
+                    ...(typeof item.payload.description === "string" && { description: item.payload.description }),
+                    ...(item.payload.metadata && { metadata: item.payload.metadata }),
+                    delivery: item.delivery,
+                    resume: false,
+                  })
+                }
+                if (item.type === "user") {
+                  yield* client.session.prompt({
+                    sessionID: info.id,
+                    id: queued.id,
+                    text: item.payload.text,
+                    ...(item.payload.metadata && { metadata: item.payload.metadata }),
+                    ...(item.payload.agents && { agents: item.payload.agents }),
+                    ...(item.payload.skills && { skills: item.payload.skills }),
+                    delivery: item.delivery,
+                    resume: false,
+                  })
+                }
+              }),
               { discard: true },
             )
             if (isLost)
@@ -851,7 +895,8 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               .prompt({ sessionID: item.sessionID, id: item.id, delivery: item.delivery, text: item.payload.text })
               .pipe(Effect.orDie)
           }),
-          wait: (ms: number) => client.session.wait({ sessionID: session.id }).pipe(Effect.timeout(ms), Effect.ignore),
+          wait: (ms: number) =>
+            client.experimental.session.wait({ sessionID: session.id }).pipe(Effect.timeout(ms), Effect.ignore),
           interrupt: client.session.interrupt({ sessionID: session.id }).pipe(Effect.orDie, Effect.asVoid),
         }
       })

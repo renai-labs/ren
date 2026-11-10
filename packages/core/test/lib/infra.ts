@@ -7,6 +7,7 @@ import { Infra } from "@ren/schema/infra"
 import { eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Layer, Schema, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
+import { PersistedQueue } from "effect/persistence"
 import { Access } from "../../src/access.js"
 import type { Actor } from "../../src/actor.js"
 import { Agent } from "../../src/agent.js"
@@ -20,6 +21,8 @@ import { DurableRunner } from "../../src/durable-runner.js"
 import { EgressControl } from "../../src/egress-control.js"
 import { Envelope } from "../../src/envelope.js"
 import { InfraSpecs } from "../../src/infra-specs.js"
+import { Intake } from "../../src/intake.js"
+import { Webhooks } from "../../src/webhooks.js"
 import { Memory } from "../../src/memory.js"
 import { OAuthFetch } from "../../src/oauth-fetch.js"
 import { OrganizationSettings } from "../../src/organization-settings.js"
@@ -38,7 +41,9 @@ const runner = Layer.succeed(
     create: () => Effect.void,
     send: (input) => Effect.succeed({ messageId: input.messageId }),
     get: () => Effect.fail(new SessionRunner.NotFound({ message: "Session not found." })),
+    startedWith: () => Effect.succeed(false),
     onStartRejected: () => Effect.void,
+    onInterrupted: () => Effect.void,
   }),
 )
 
@@ -55,6 +60,11 @@ export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>
         ChannelMappings.layer,
         Memory.layer,
         Schedules.layer.pipe(Layer.provide(ScheduleTrigger.layerPostgres), Layer.provide(runner)),
+        Webhooks.layer.pipe(
+          Layer.provide(Intake.layer),
+          Layer.provide(Intake.receivers(Effect.succeed([]))),
+          Layer.provide(PersistedQueue.layer.pipe(Layer.provide(PersistedQueue.layerStoreMemory))),
+        ),
       ),
     ),
     Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer, Credentials.layer)),

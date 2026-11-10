@@ -16,5 +16,6 @@ export const TaskHandler = HttpApiBuilder.group(Api, "task", (handlers) =>
       .handle("task.assign", Primitive.update(tasks.assign))
       .handle("task.start", Primitive.action(tasks.start))
       .handle("task.review", Primitive.action(tasks.review))
+      .handle("task.finish", Primitive.update(tasks.finish))
   }),
 )

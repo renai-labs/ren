@@ -5,12 +5,15 @@ import { Permission } from "@opencode/schema/permission"
 import { SessionID } from "@opencode/schema/session-id"
 import { SessionMessage } from "@opencode/schema/session-message"
 import type { Session as OpenCodeSession } from "@opencode/schema/session"
+import { RelativePath } from "@opencode/schema/schema"
 import { Skill } from "@opencode/schema/skill"
 import type { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
+import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
-import { Clock, Effect, Option, Predicate, Schema, Stream } from "effect"
+import { Clock, Effect, Option, Predicate, Result, Schema, Stream } from "effect"
+import { Base64 } from "effect/encoding"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
 import { OpenCodeEvents } from "./events.js"
@@ -18,6 +21,8 @@ import { Translate } from "@ren/opencode-transcript/translate"
 import { OpenCodeAttachments } from "./attachments.js"
 
 const capabilities = SessionCapabilities.of("opencode")
+
+const readLimit = 1024 * 1024
 
 const Speaker = Schema.Struct({
   userID: Schema.String,
@@ -33,7 +38,10 @@ const missing = (error: { readonly message: string }) => Effect.fail(new Harness
 const conflict = (error: { readonly message: string }) => Effect.fail(new Harness.Conflict({ message: error.message }))
 const rejected = (error: { readonly message: string }) => Effect.fail(new Harness.Rejected({ message: error.message }))
 const absent = () => Effect.succeed(false)
+const shellMissing = (shellId: string) =>
+  Effect.fail(new Harness.NotFound({ message: `Shell ${shellId} is not running or kept` }))
 const located = { SessionNotFoundError: missing, LocationNotFoundError: missing }
+const hiddenCommands = new Set(["goal"])
 
 const readOne = <A, B>(item: A, translate: (item: A) => Option.Option<B>) =>
   Option.match(translate(item), {
@@ -45,7 +53,13 @@ const readOne = <A, B>(item: A, translate: (item: A) => Option.Option<B>) =>
   })
 
 const readAll = <A, B>(items: ReadonlyArray<A>, translate: (item: A) => Option.Option<B>) =>
-  Effect.forEach(items, (item) => readOne(item, translate))
+  Effect.forEach(items, (item) =>
+    Option.match(translate(item), {
+      onNone: () =>
+        Effect.as(Effect.logError("The brain cannot read a value OpenCode returned; the list leaves it out", item), []),
+      onSome: (read) => Effect.succeed([read]),
+    }),
+  ).pipe(Effect.map((reads) => reads.flat()))
 
 export const make = (
   host: Pick<
@@ -57,6 +71,7 @@ export const make = (
     | "skills"
     | "commands"
     | "findFiles"
+    | "environment"
     | "webSearchProviders"
     | "activate"
     | "chats"
@@ -92,9 +107,15 @@ export const make = (
     events: OpenCodeEvents.stream(host.fetch).pipe(
       Stream.mapEffect((raw) =>
         Effect.gen(function* () {
-          const translated = Translate.frame(raw, yield* Clock.currentTimeMillis)
-          if (Option.isNone(translated) && Translate.isAllowed(raw))
-            return yield* Effect.fail(new Error("The brain cannot read an OpenCode event Ren supports", { cause: raw }))
+          const created = yield* Clock.currentTimeMillis
+          const translated = Translate.frame(raw, created)
+          if (Option.isNone(translated) && Translate.isAllowed(raw)) {
+            yield* Effect.logError(
+              "The brain cannot read an OpenCode event Ren supports; clients reread their state",
+              raw,
+            )
+            return [{ id: `evt_resync_${created}`, created, type: "server.connected", data: {} }] as const
+          }
           return Option.toArray(translated)
         }),
       ),
@@ -233,7 +254,7 @@ export const make = (
         Effect.gen(function* () {
           const sessionID = SessionID.make(sessionId)
           yield* api.session.interrupt({ sessionID }).pipe(Effect.catchTags(located, Effect.die))
-          yield* api.session.wait({ sessionID }).pipe(Effect.catchTags(located, Effect.die))
+          yield* api.experimental.session.wait({ sessionID }).pipe(Effect.catchTags(located, Effect.die))
           const staged = yield* api.session.revert
             .stage({ sessionID, messageID: SessionMessage.ID.make(messageId) })
             .pipe(
@@ -264,23 +285,95 @@ export const make = (
         .update({ sessionID: SessionID.make(sessionId), inboxID: SessionMessage.ID.make(inboxId), delivery })
         .pipe(Effect.catchTags({ SessionNotFoundError: missing, ConflictError: conflict }, Effect.die)),
     command: (sessionId, command) =>
-      api.session
-        .command({
-          sessionID: SessionID.make(sessionId),
-          name: command.name,
-          text: command.text,
-          delivery: command.delivery,
-          ...(command.agents && { agents: command.agents }),
-          ...(command.skills && {
-            skills: command.skills.map((skill) => ({ ...skill, id: Skill.ID.make(skill.id) })),
-          }),
-        })
-        .pipe(Effect.catchTags({ ...located, CommandNotFoundError: missing }, Effect.die)),
+      hiddenCommands.has(command.name)
+        ? Effect.fail(new Harness.NotFound({ message: `Command not found: ${command.name}` }))
+        : api.session
+            .command({
+              sessionID: SessionID.make(sessionId),
+              name: command.name,
+              text: command.text,
+              delivery: command.delivery,
+              ...(command.agents && { agents: command.agents }),
+              ...(command.skills && {
+                skills: command.skills.map((skill) => ({ ...skill, id: Skill.ID.make(skill.id) })),
+              }),
+            })
+            .pipe(
+              Effect.catchTags(
+                { ...located, CommandNotFoundError: missing, CommandExecutionError: rejected },
+                Effect.die,
+              ),
+            ),
     agents: (sessionId) => host.agents(sessionId).pipe(Effect.flatMap((all) => readAll(all, Translate.agent))),
     skills: (sessionId) => host.skills(sessionId).pipe(Effect.flatMap((all) => readAll(all, Translate.skill))),
-    commands: (sessionId) => host.commands(sessionId).pipe(Effect.flatMap((all) => readAll(all, Translate.command))),
+    commands: (sessionId) =>
+      host.commands(sessionId).pipe(
+        Effect.flatMap((all) =>
+          readAll(
+            all.filter((command) => !hiddenCommands.has(command.name)),
+            Translate.command,
+          ),
+        ),
+      ),
     files: (sessionId, search) =>
       host.findFiles(sessionId, search).pipe(Effect.flatMap((all) => readAll(all, Translate.file))),
+    listFiles: (sessionId, path) =>
+      host
+        .environment(sessionId, (environment) =>
+          environment.files.list({ ...(path && { path }) }).pipe(
+            Effect.catchTag("FileSystem.NotFoundError", () =>
+              Effect.fail(
+                new Harness.NotFound({
+                  message: `${path ?? "The session’s folder"} is not a folder on the environment`,
+                }),
+              ),
+            ),
+          ),
+        )
+        .pipe(Effect.flatMap((all) => readAll(all, Translate.file))),
+    readFile: (sessionId, path) =>
+      host.environment(sessionId, (environment) =>
+        environment.files.read({ path: RelativePath.make(path) }).pipe(
+          Effect.catchTag("FileSystem.NotFoundError", () =>
+            Effect.fail(new Harness.NotFound({ message: `${path} is not a file on the environment` })),
+          ),
+          Effect.flatMap((file) => {
+            const truncated = file.size > readLimit
+            const bytes =
+              file.size === 0
+                ? Effect.succeed(new Uint8Array())
+                : file.stream({ bytesToRead: Math.min(file.size, readLimit) }).pipe(Stream.mkUint8Array, Effect.orDie)
+            return Effect.map(bytes, (read): SessionCatalog.FileContent => {
+              const text = read.includes(0)
+                ? Result.fail(undefined)
+                : Result.try(() =>
+                    new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(read, { stream: truncated }),
+                  )
+              return {
+                path,
+                mime: file.mime,
+                size: file.size,
+                truncated,
+                ...(Result.isSuccess(text)
+                  ? { encoding: "utf8", content: text.success }
+                  : { encoding: "base64", content: Base64.encode(read) }),
+              }
+            })
+          }),
+        ),
+      ),
+    vcs: (sessionId) =>
+      host
+        .environment(sessionId, (environment) => environment.vcs.info())
+        .pipe(Effect.flatMap((info) => readOne(info, Translate.vcs))),
+    vcsDiff: (sessionId, options) =>
+      host.environment(sessionId, (environment) =>
+        environment.vcs
+          .diff(options.mode, { ...(Predicate.isNumber(options.context) && { context: options.context }) })
+          .pipe(
+            Effect.catchTag("Vcs.DiffError", (error) => Effect.fail(new Harness.Rejected({ message: error.message }))),
+          ),
+      ),
     webSearchProviders: (sessionId) =>
       host
         .webSearchProviders(sessionId)
@@ -315,16 +408,32 @@ export const make = (
         ),
     shells: (sessionId) =>
       host.shells(sessionId, (shell) => shell.list()).pipe(Effect.flatMap((all) => readAll(all, Translate.shell))),
+    createShell: (sessionId, input) =>
+      host
+        .environment(sessionId, (environment) =>
+          environment.shell
+            .create({
+              command: input.command,
+              ...(input.timeout && { timeout: input.timeout }),
+              metadata: { sessionID: sessionId },
+            })
+            .pipe(
+              Effect.catchTag("AppProcessError", (error) =>
+                Effect.fail(new Harness.Rejected({ message: error.message })),
+              ),
+            ),
+        )
+        .pipe(Effect.flatMap((info) => readOne(info, Translate.shell))),
+    shell: (sessionId, shellId) =>
+      host
+        .shells(sessionId, (shell) =>
+          shell.get(shellId).pipe(Effect.catchTag("Shell.NotFoundError", () => shellMissing(shellId))),
+        )
+        .pipe(Effect.flatMap((info) => readOne(info, Translate.shell))),
     shellOutput: (sessionId, shellId, page) =>
       host
         .shells(sessionId, (shell) =>
-          shell
-            .output(shellId, page)
-            .pipe(
-              Effect.catchTag("Shell.NotFoundError", () =>
-                Effect.fail(new Harness.NotFound({ message: `Shell ${shellId} is not running or kept` })),
-              ),
-            ),
+          shell.output(shellId, page).pipe(Effect.catchTag("Shell.NotFoundError", () => shellMissing(shellId))),
         )
         .pipe(Effect.map((output): Shell.Output => output)),
     removeShell: (sessionId, shellId) =>

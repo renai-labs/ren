@@ -134,7 +134,7 @@ export function PageTabsTrigger(props: { value: string; count?: number | undefin
     // ast-grep-ignore: require-tabs-list -- callers put PageTabsTrigger inside PageTabsList
     <TabsTrigger
       value={props.value}
-      className="h-8 flex-none gap-2 px-3 font-normal data-active:font-medium group-data-[variant=default]/tabs-list:data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-secondary"
+      className="h-8 flex-none gap-2 px-3 font-normal data-active:border-transparent data-active:bg-secondary data-active:font-medium group-data-[variant=default]/tabs-list:data-active:shadow-none"
     >
       {props.children}
       {props.count === undefined ? null : <span className="text-muted-foreground">{props.count}</span>}

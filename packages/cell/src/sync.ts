@@ -1,11 +1,12 @@
 export * as Sync from "./sync.js"
 
-import { OpenCodeSync } from "@ren/brain/opencode-sync"
+import { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
 import { Session } from "@ren/schema/session"
 import { Clock, Context, Duration, Effect, Layer, Option, Random, Ref, Schema, type Scope } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { BrainStorage } from "./brain-storage.js"
 import { HostToken } from "./host-token.js"
+import { OpenCodeVersion } from "./harness/opencode/version.js"
 import { SyncClient } from "./sync-client.js"
 import { RenAddress } from "./ren-address.js"
 
@@ -92,6 +93,7 @@ export const layerWith = (reader: Effect.Effect<OpenCodeSync.Reader, never, Scop
           Effect.provide(RenAddress.http.pipe(Layer.provide(FetchHttpClient.layer))),
         ),
         reader: yield* reader,
+        version: OpenCodeVersion.installed,
         restoring,
         mark: (id, state) =>
           restoring.pipe(

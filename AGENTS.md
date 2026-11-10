@@ -28,7 +28,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 
 - The default branch is `main`.
 - Commits and PR titles use `type(scope): summary` with one of `feat`, `fix`, `docs`, `chore`, `refactor`, `test`. The scope is optional.
-- Branch names are at most three hyphenated words, with no prefix such as `feat/`.
+- Branch names are at most three hyphenated words, with no prefix such as `feat/`. A branch for a Ren task starts with the lowercase task ID: `renai-35-github-linkback`.
 - A branch that adds or pulls a git subtree (`repos/effect`, `repos/iron-proxy`) lands on `main` with its history: a fast-forward or a merge commit. Rebase-merge and squash-merge drop the subtree commits; GitHub's rebase also refuses, because a subtree squash commit has no parent and its files sit at the root.
 
 ## Layering
@@ -38,7 +38,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 - `environment-api` is the internal contract between a brain and an environment's executor, and the environment token Ren signs for it: it depends only on `schema`; `core` signs, `brain` calls and `executor` serves.
 - `executor` runs on an environment's machine and serves the Environment API. It depends only on `schema`, `telemetry` and `environment-api`.
 - `brain` holds brain code that is the same on every host and every harness: how a brain reaches its environment. It depends only on `schema` and `environment-api`.
-- `opencode-transcript` translates OpenCode rows and types into the Chat API types. It depends only on `schema`, `@opencode/schema` and `@opencode/core/session/info`. `cell` and `server` use it; `core` never imports it.
+- `opencode-transcript` holds what Ren knows about OpenCode's storage: it syncs OpenCode's tables to Ren (`OpenCodeSync`), reads its rows and translates them into the Chat API types. It depends only on `schema`, `@opencode/schema` and `@opencode/core/session/info`. `cell` and `server` use it; `core` never imports it.
 - `client` may depend only on `schema` and `protocol`. `chat` builds on `client`, `schema` and `protocol` and is the live chat runtime for every client platform. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `chat`, `schema`, `ui` and `util`, and uses `better-auth/client` for auth flows.
 - `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`.
 - `telemetry` is how a process sends telemetry: OTLP export from the standard `OTEL_*` variables, and PostHog's error reporter in `posthog.ts`, the only module that knows a telemetry vendor. It imports nothing from Ren. `core`, `server`, `cell` and `executor` use it; only a process's main file provides `PostHog.layer`.
@@ -72,11 +72,12 @@ Lint enforces most style rules. Run `bun run check` and follow each message. The
 - Do not write placeholder tests, or tests that compare lists of keys, coverage matrices or specification text.
 - Do not use mocks or real-time waits. Use real dependencies, and use `TestClock`, a latch or an event that the test can see.
 - For a bug that has no fix, write a `test.todo` with the issue ID in its name. After the fix, run `bun test --todo` and change each `test.todo` that passes to `test`.
-- Run `bun run test` from the package directory. Tests cannot run from the repo root.
+- Run `bun run test` from the package directory. It runs the test files that import a file changed since the branch left `main`; `bun run test:all` runs them all.
 - A test that takes more than 5 seconds is slow. When you add or change a test, or any run shows a test that takes that long, move it to a `<name>.slow.test.ts` file beside the original and share its helpers through `test/lib`. `bun run test` prints only failures, so run `bun test <file>` to see each test's duration. `bun run test` skips `*.slow.test.ts` files unless `REN_SLOW=1` is set. A test that runs into its timeout is broken, not slow: fix it, do not move it.
 
 ## Checks
 
-- Run `bun run check` from the repo root before pushing. The pre-push hook reuses or runs it, and attaches it and the latest affected test runs to the commit (`CONTRIBUTING.md`, Signoff). Run `bun run format` to fix formatting.
-- A package's `test` script and the root `lint` and `typecheck` scripts go through `script/signoff/record.ts`. Keep it there when you change one.
+- Run `bun run check` from the repo root. It covers what changed since the branch left `main`; `bun run check:all` covers everything, and the pre-push hook reuses or runs it and attaches it and the latest test runs to the commit (`CONTRIBUTING.md`, Signoff). Run `bun run format` to fix formatting.
+- A package's `test:all` script and the root `lint` and `typecheck` scripts go through `script/signoff/record.ts`. Keep it there when you change one.
 - Run `bun typecheck` from a package directory to typecheck one package. Never run `tsc` directly.
+- Typecheck uses project references. A package's `tsconfig.src.json` emits declarations to `node_modules/.ts-dist`, and a dependent reads those instead of the package's source. `tsconfig.tests.json` covers `test` and `script`; `tsconfig.json` lists both. When you add a dependency between packages, add the reference to both files.

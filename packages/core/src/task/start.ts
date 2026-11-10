@@ -19,8 +19,8 @@ export interface Review {
 
 const note =
   "Read the task and its trail with `task_get`, then work your part. When your part is complete, hand off with " +
-  "`task_assign`. When a person must decide, use `task_review` and end your turn. Never set the status to `done` " +
-  "or `dismissed`, and do not create a second task for the same work."
+  "`task_assign` to the agent that fits. Use `task_review` only when you are blocked and a person must decide. " +
+  "Never set the status to `done` or `dismissed`, and do not create a second task for the same work."
 
 interface Described {
   readonly name: string
@@ -85,7 +85,10 @@ const factorySection = (
       ...(runs ? [`Run ${runs.used + 1} of ${runs.max} for ${name(agentId)}.`] : []),
       `Handoffs: ${choices.handoffs.used} of ${choices.handoffs.max}.`,
     ].join(" "),
-    "If no agent fits, or a person must decide, use task_review.",
+    ...(TaskFactory.canFinish(factory, agentId)
+      ? ["When the result is ready for a person or a merge, finish with task_finish."]
+      : []),
+    "When you are blocked and a person must decide, use task_review.",
   ]
 }
 

@@ -3,16 +3,13 @@ export * as Channel from "./channel.js"
 import { Schema } from "effect"
 import { Agent } from "./agent.js"
 import { ChannelOrigin } from "./channel-origin.js"
-import { Identifier } from "./identifier.js"
+import { Task } from "./task.js"
 import { TaskLink } from "./task-link.js"
 
 export const Provider = ChannelOrigin.Provider
 export type Provider = ChannelOrigin.Provider
 
 export const titles: Readonly<Record<Provider, string>> = { slack: "Slack", linear: "Linear", github: "GitHub" }
-
-export const ThreadID = Identifier.make("cth", "Channel.ThreadID")
-export type ThreadID = typeof ThreadID.Type
 
 export const TriggerID = Schema.NonEmptyString.annotate({
   identifier: "Channel.TriggerID",
@@ -44,6 +41,42 @@ export const FileRef = Schema.Struct({
   size: Schema.optionalKey(Schema.Int),
 }).annotate({ identifier: "Channel.FileRef" })
 
+export interface ThreadData extends Schema.Schema.Type<typeof ThreadData> {}
+export const ThreadData = Schema.Struct({
+  slack: Schema.optionalKey(
+    Schema.Struct({
+      actionToken: Schema.optionalKey(Schema.String).annotate({
+        description:
+          "Slack’s action_token of the message: for a short time, the bot searches Slack with it as the sender.",
+      }),
+    }),
+  ),
+}).annotate({
+  identifier: "Channel.ThreadData",
+  description:
+    "Provider data that a message brings for the tools that act on its thread, under the key of its provider. The thread keeps the data of its latest message.",
+})
+
+export interface ThreadState extends Schema.Schema.Type<typeof ThreadState> {}
+export const ThreadState = Schema.Struct({
+  url: Schema.optionalKey(Schema.String),
+  placeName: Schema.optionalKey(Schema.String),
+  lastMessage: Schema.optionalKey(Schema.String.annotate({ description: "The provider’s id of the latest message." })),
+  lastMessageAt: Schema.optionalKey(Schema.DateTimeUtcFromString),
+  lastReplyAt: Schema.optionalKey(Schema.DateTimeUtcFromString),
+  ...ThreadData.fields,
+}).annotate({
+  identifier: "Channel.ThreadState",
+  description:
+    "What a channel keeps on a thread for its current chat: where to reply, and when it last asked and answered. A thread that moves to another chat starts empty.",
+})
+
+const Sender = Schema.Struct({
+  accountId: Schema.NonEmptyString,
+  name: Schema.optionalKey(Schema.String),
+  handle: Schema.optionalKey(Schema.String),
+})
+
 export interface Event extends Schema.Schema.Type<typeof Event> {}
 export const Event = Schema.Struct({
   provider: Provider,
@@ -64,34 +97,82 @@ export const Event = Schema.Struct({
   message: Schema.NonEmptyString.annotate({
     description: "The provider’s id of the message: a Slack ts, a Linear activity, a GitHub comment.",
   }),
-  sender: Schema.Struct({
-    accountId: Schema.NonEmptyString,
-    name: Schema.optionalKey(Schema.String),
-    handle: Schema.optionalKey(Schema.String),
-  }),
+  sender: Sender,
   text: Schema.String,
   files: Schema.Array(FileRef),
   trigger: Schema.optionalKey(TriggerID).annotate({
     description:
       "Set when nobody mentioned Ren. Only a mapping with this trigger on answers, with its prompt in place of the text.",
   }),
+  data: Schema.optionalKey(ThreadData),
 }).annotate({ identifier: "Channel.Event" })
 
-export interface Signal extends Schema.Schema.Type<typeof Signal> {}
-export const Signal = Schema.Struct({
-  kind: Schema.Literal("pull_request_merged"),
-  install: Schema.NonEmptyString,
-  link: Schema.Struct({
-    kind: TaskLink.Kind,
-    key: Schema.String.annotate({ description: "The canonical key of the linked item, such as acme/web#41." }),
+export const CardAction = Schema.Literals([
+  "approve",
+  "start",
+  "request_review",
+  "done",
+  "dismiss",
+  "assign_to_me",
+]).annotate({ identifier: "Channel.CardAction", description: "A button on a task card that changes the task." })
+export type CardAction = typeof CardAction.Type
+
+const SignalLink = Schema.Struct({
+  kind: TaskLink.Kind,
+  key: Schema.String.annotate({ description: "The canonical key of the linked item, such as acme/web#41." }),
+})
+
+export const Signal = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("pull_request_merged"),
+    install: Schema.NonEmptyString,
+    link: SignalLink,
+    url: Schema.String,
   }),
-  url: Schema.String,
-}).annotate({ identifier: "Channel.Signal", description: "A provider event that changes tasks and starts no turn." })
+  Schema.Struct({
+    kind: Schema.Literal("mentioned"),
+    install: Schema.NonEmptyString,
+    link: SignalLink,
+    url: Schema.String,
+    sender: Sender.annotate({ description: "Who opened or edited the item." }),
+    text: Schema.String.annotate({ description: "The text that can name tasks, such as a branch, title and body." }),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("links_shared"),
+    install: Schema.NonEmptyString,
+    place: Schema.String.annotate({ description: "The Slack channel, or COMPOSER for a message not yet sent." }),
+    message: Schema.String.annotate({ description: "The ts of the message that has the links." }),
+    unfurl: Schema.optionalKey(Schema.Struct({ id: Schema.String, source: Schema.String })),
+    urls: Schema.Array(Schema.String),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("details_requested"),
+    install: Schema.NonEmptyString,
+    place: Schema.optionalKey(Schema.String).annotate({ description: "The Slack channel of the card, if any." }),
+    trigger: Schema.String.annotate({ description: "The trigger_id that opens the details." }),
+    url: Schema.String,
+    externalId: Schema.optionalKey(Schema.String),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("card_action"),
+    install: Schema.NonEmptyString,
+    sender: Sender.annotate({ description: "Who clicked." }),
+    taskId: Task.ID,
+    action: CardAction,
+    responseUrl: Schema.optionalKey(Schema.String).annotate({
+      description: "Where a private reply to the person who clicked goes.",
+    }),
+  }),
+]).annotate({
+  identifier: "Channel.Signal",
+  description: "A provider event that changes or shows tasks and starts no turn.",
+})
+export type Signal = typeof Signal.Type
 
 export const Parsed = Schema.Union([
   Schema.TaggedStruct("Handshake", { body: Schema.Json }),
   Schema.TaggedStruct("Ignore", { reason: Schema.String }),
-  Schema.TaggedStruct("Event", { event: Event }),
+  Schema.TaggedStruct("Event", { event: Event, signal: Schema.optionalKey(Signal) }),
   Schema.TaggedStruct("Uninstalled", { install: Schema.NonEmptyString }),
   Schema.TaggedStruct("Signal", { signal: Signal }),
 ]).annotate({ identifier: "Channel.Parsed" })

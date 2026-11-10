@@ -69,6 +69,7 @@ const operations = EnvironmentApi.Rpcs.toLayer(
     const executor = yield* Executor.Service
     return EnvironmentApi.Rpcs.of({
       "executor.hello": () => Effect.succeed(executor.hello),
+      "executor.memory": () => Effect.flatMap(EnvironmentApi.Caller, (caller) => executor.memory(caller.brain)),
       "process.spawn": (input) =>
         Effect.flatMap(EnvironmentApi.Caller, (caller) => executor.spawn(caller.brain, input)),
       "process.output": (input) =>

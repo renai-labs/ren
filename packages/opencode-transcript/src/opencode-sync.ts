@@ -44,6 +44,7 @@ export interface Remote {
       readonly ids: ReadonlyArray<string>
       readonly inbox: ReadonlyArray<Sync.OpenCodeInboxRow>
       readonly revertMessageId: string | null
+      readonly harnessVersion: string
     },
   ) => Effect.Effect<void, RemoteError>
   readonly restore: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Sync.RestoredChat>, RemoteError>
@@ -53,6 +54,7 @@ export interface Remote {
 export interface Options {
   readonly remote: Remote
   readonly reader: Reader
+  readonly version: string
   readonly restoring: Effect.Effect<ReadonlySet<Session.ID>>
   readonly mark: (id: Session.ID, state: { readonly isRestoring: boolean }) => Effect.Effect<void>
 }
@@ -256,6 +258,7 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
       revertMessageId: staged
         ? Option.getOrNull(Option.map(Schema.decodeUnknownOption(Revert)(staged), (found) => found.messageID))
         : null,
+      harnessVersion: options.version,
     })
     return "committed" as const
   })

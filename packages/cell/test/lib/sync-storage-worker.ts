@@ -4,6 +4,7 @@ import { Harness } from "../../src/harness/harness.js"
 import { SessionCell } from "../../src/session-cell.js"
 import worker from "../../src/worker.js"
 import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
+import { OpenCodeSnapshot } from "./opencode-snapshot.js"
 
 const tables = ["event_sequence", "session_message", "session_v2"]
 
@@ -100,8 +101,35 @@ class SyncStorageCell extends SessionCell {
     const url = new URL(request.url)
     this.watched = url.searchParams.get("session") ?? this.watched
     const sessionId = this.watched
+    if (url.pathname === "/test/seed-database") {
+      const snapshot = Schema.decodeUnknownSync(OpenCodeSnapshot.Snapshot)(await request.json())
+      this.ctx.storage.transactionSync(() => {
+        this.ctx.storage.sql.exec("pragma defer_foreign_keys = on")
+        for (const table of snapshot.tables) this.ctx.storage.sql.exec(table.sql)
+        for (const table of snapshot.tables)
+          for (const row of table.rows) {
+            const columns = Object.keys(row)
+            this.ctx.storage.sql.exec(
+              `insert into "${table.name.replaceAll('"', '""')}" (${columns.map((column) => `"${column.replaceAll('"', '""')}"`).join(", ")}) values (${columns.map(() => "?").join(", ")})`,
+              ...Object.values(row),
+            )
+          }
+        for (const sql of snapshot.indexes) this.ctx.storage.sql.exec(sql)
+      })
+      await this.ctx.storage.put("ren:harness-version", snapshot.version)
+      return new Response(null, { status: 204 })
+    }
     if (url.pathname === "/test/older-harness") {
       await this.runtime.runPromise(Effect.flatMap(Harness.Service, (harness) => harness.close))
+      for (const statement of [
+        'create table if not exists linked_ref (session_id text references "linked session"(id) on delete cascade, hash text references linked_blob(hash) on delete cascade)',
+        "create table if not exists linked_blob (hash text primary key)",
+        'create table if not exists "linked session" (id text primary key)',
+        "insert or ignore into linked_blob values ('blob')",
+        "insert or ignore into \"linked session\" values ('session')",
+        "insert into linked_ref values ('session', 'blob')",
+      ])
+        this.ctx.storage.sql.exec(statement)
       await Promise.all(
         [...url.searchParams]
           .filter((entry) => entry[0].startsWith("ren:"))

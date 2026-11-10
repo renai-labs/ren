@@ -5,7 +5,6 @@ import type { ChannelInstall } from "@ren/schema/channel-install"
 import type { ChannelMapping } from "@ren/schema/channel-mapping"
 import type { Credential } from "@ren/schema/credential"
 import type { Envelope } from "@ren/schema/envelope"
-import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { boolean, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { agent } from "./agent.sql.js"
@@ -92,29 +91,3 @@ export const channel_install_state = pgTable("channel_install_state", {
   expires_at: timestamp().notNull(),
   consumed_at: timestamp(),
 })
-
-export const channel_thread = pgTable(
-  "channel_thread",
-  {
-    id: text().$type<Channel.ThreadID>().primaryKey(),
-    organization_id: text()
-      .$type<Auth.OrganizationID>()
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    provider: text().$type<Channel.Provider>().notNull(),
-    install: text().notNull(),
-    thread: text().notNull(),
-    session_id: text().$type<Session.ID>().notNull(),
-    url: text(),
-    place_name: text(),
-    last_message: text(),
-    last_message_at: timestamp(),
-    last_reply_at: timestamp(),
-    created_at: timestamp().defaultNow().notNull(),
-    updated_at: timestamp().defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("channel_thread_provider_install_thread_uidx").on(table.provider, table.install, table.thread),
-    index("channel_thread_session_id_idx").on(table.session_id),
-  ],
-)

@@ -29,6 +29,19 @@ export const actions = {
   update: Primitive.action(Task.definition, "update"),
 }
 
+export const isReady = (task: typeof Database.Schema.task) => sql<boolean>`(
+  ${task.status} in ('todo', 'in_progress')
+  and ${task.agent_id} is null
+  and ${task.human_review} = false
+  and (
+    select ${Database.Schema.task_event.kind} from ${Database.Schema.task_event}
+    where ${Database.Schema.task_event.task_id} = ${task.id}
+      and ${Database.Schema.task_event.kind} in ('assigned', 'started', 'finished')
+    order by ${Database.Schema.task_event.created_at} desc, ${Database.Schema.task_event.id} desc
+    limit 1
+  ) = 'finished'
+)`
+
 export const linking = (organizationId: Auth.OrganizationID, ref: TaskLink.Ref) =>
   and(
     eq(Database.Schema.task.organization_id, organizationId),

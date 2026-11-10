@@ -198,13 +198,15 @@ const authentication = HttpRouter.middleware(
 
 export const layer = tools.pipe(
   Layer.provideMerge(
-    McpServer.layerHttp({
-      name: "ren",
-      version: "0.0.0",
-      instructions,
-      path: Auth.mcpPath,
-      protocols: [McpProtocol.v2026_07_28, McpProtocol.v2025_11_25, McpProtocol.v2025_06_18],
-    }),
+    Layer.fresh(
+      McpServer.layerHttp({
+        name: "ren",
+        version: "0.0.0",
+        instructions,
+        path: Auth.mcpPath,
+        protocols: [McpProtocol.v2026_07_28, McpProtocol.v2025_11_25, McpProtocol.v2025_06_18],
+      }),
+    ),
   ),
   Layer.provide(authentication),
   Layer.provide(Actor.layer),

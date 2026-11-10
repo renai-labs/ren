@@ -3,6 +3,7 @@ export * as SessionMessage from "./message.js"
 import { Schema } from "effect"
 import { ChannelOrigin } from "../channel-origin.js"
 import { ScheduleOrigin } from "../schedule-origin.js"
+import { WebhookOrigin } from "../webhook-origin.js"
 import { TaskAssignment } from "../task-assignment.js"
 import { Identifier } from "../identifier.js"
 import { SessionError } from "./error.js"
@@ -151,6 +152,7 @@ export const User = Schema.Struct({
   sender: Schema.optionalKey(Sender),
   channel: Schema.optionalKey(ChannelOrigin.Info),
   schedule: Schema.optionalKey(ScheduleOrigin.Info),
+  webhook: Schema.optionalKey(WebhookOrigin.Info),
   task: Schema.optionalKey(TaskAssignment.Info),
 }).annotate({ identifier: "SessionMessage.User" })
 

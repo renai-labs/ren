@@ -6,8 +6,9 @@ import type { State as BrainState } from "@ren/host-api/brain-api"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
+import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
-import { and, eq, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
+import { and, eq, gt, inArray, isNotNull, isNull, lt, notExists, notInArray, or, sql } from "drizzle-orm"
 import {
   Cause,
   Clock,
@@ -18,6 +19,7 @@ import {
   Effect,
   Layer,
   Option,
+  Ref,
   Schedule,
   Schema,
   Stream,
@@ -58,6 +60,13 @@ export interface Interface {
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Hand>>
   readonly check: (brainId: Brain.ID) => Effect.Effect<void>
   readonly cleanup: Effect.Effect<void>
+  readonly onInterrupted: (listener: (interrupted: Interrupted) => Effect.Effect<void>) => Effect.Effect<void>
+}
+
+// oxlint-disable-next-line ren/no-comments -- The chats that a lost sandbox stopped mid-turn. A repeated loss (within timing.relapse of the last one) fails them instead, so the next step is a person's, not another sandbox that dies the same way.
+export interface Interrupted {
+  readonly sessionIds: ReadonlyArray<Session.ID>
+  readonly repeated: boolean
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainLifecycle") {}
@@ -88,6 +97,8 @@ export const timing = {
   poll: Duration.seconds(1),
   probeTimeout: Duration.seconds(3),
   sampleMaxAge: Duration.seconds(60),
+  pull: Duration.seconds(90),
+  relapse: Duration.minutes(30),
   fullShare: 0.95,
   failures: 3,
 }
@@ -119,7 +130,10 @@ export const layer = Layer.effect(
     const egress = yield* SandboxEgress.Service
     const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(Config.withDefault(timing.wake))
     const bootWithin = yield* Config.Duration("BRAIN_BOOT_TIMEOUT").pipe(Config.withDefault(timing.boot))
+    const pullWithin = yield* Config.Duration("BRAIN_PULL_TIMEOUT").pipe(Config.withDefault(timing.pull))
     const sandboxVariables = yield* Deployment.sandboxVariables
+    const scope = yield* Effect.scope
+    const interruptedListeners = yield* Ref.make<ReadonlyArray<(interrupted: Interrupted) => Effect.Effect<void>>>([])
 
     const read = (brainId: Brain.ID) =>
       database.db
@@ -270,7 +284,7 @@ export const layer = Layer.effect(
         yield* update(row.id, { binding: null, url: null })
         return false
       }
-      yield* update(row.id, { phase: "ready", failures: 0, failure: null })
+      yield* update(row.id, { phase: "ready", failures: 0, failure: null, last_pulled_at: yield* now })
       yield* keepAlive(yield* read(row.id), timing.idle)
       return true
     })
@@ -328,14 +342,19 @@ export const layer = Layer.effect(
           `Brain ${row.id} answers but did not confirm its wake within ${Duration.format(wakeWithin)}`,
         )
       }
-      yield* update(row.id, { phase: "ready", failures: 0, failure: null })
+      yield* update(row.id, { phase: "ready", failures: 0, failure: null, last_pulled_at: yield* now })
       return true
     })
 
-    const interruptBusy = (transaction: Database.Transaction, brainId: Brain.ID, at: Date) =>
+    const interruptBusy = (
+      transaction: Database.Transaction,
+      brainId: Brain.ID,
+      at: Date,
+      outcome: "interrupted" | "failed",
+    ) =>
       transaction
         .update(Database.Schema.opencode_session)
-        .set({ time_suspended: null, idle_outcome: "interrupted", time_idle: at.getTime() })
+        .set({ time_suspended: null, idle_outcome: outcome, time_idle: at.getTime() })
         .where(
           and(
             inArray(
@@ -348,6 +367,7 @@ export const layer = Layer.effect(
             isNotNull(Database.Schema.opencode_session.time_suspended),
           ),
         )
+        .returning({ id: Database.Schema.opencode_session.session_id })
 
     const replace = Effect.fnUntraced(function* (row: Row) {
       yield* database
@@ -363,7 +383,7 @@ export const layer = Layer.effect(
                 phase: "creating",
               })
               .where(eq(brains.id, row.id))
-            yield* interruptBusy(transaction, row.id, yield* now)
+            yield* interruptBusy(transaction, row.id, yield* now, "interrupted")
           }),
         )
         .pipe(Effect.orDie)
@@ -376,12 +396,13 @@ export const layer = Layer.effect(
     })
 
     const lose = Effect.fn("BrainLifecycle.lose")(function* (lost: SandboxProvider.Lost) {
-      yield* database
+      const at = yield* now
+      const interrupted = yield* database
         .transaction((transaction) =>
           Effect.gen(function* () {
-            const marked = yield* transaction
-              .update(brains)
-              .set({ phase: "replacing" })
+            const found = (yield* transaction
+              .select({ lostAt: brains.lost_at })
+              .from(brains)
               .where(
                 and(
                   eq(brains.id, lost.brainId),
@@ -389,13 +410,35 @@ export const layer = Layer.effect(
                   notInArray(brains.phase, ["creating", "replacing"]),
                 ),
               )
-              .returning({ id: brains.id })
-            if (marked.length === 0) return
-            yield* Effect.logWarning(`The sandbox of brain ${lost.brainId} is gone; its busy chats are interrupted`)
-            yield* interruptBusy(transaction, lost.brainId, yield* now)
+              .for("update")).at(0)
+            if (!found) return Option.none<Interrupted>()
+            yield* transaction
+              .update(brains)
+              .set({ phase: "replacing", lost_at: at })
+              .where(eq(brains.id, lost.brainId))
+            const repeated = Option.exists(
+              Option.fromNullishOr(found.lostAt),
+              (last) => at.getTime() - last.getTime() < Duration.toMillis(timing.relapse),
+            )
+            yield* Effect.logWarning(
+              repeated
+                ? `The sandbox of brain ${lost.brainId} is gone again within ${Duration.format(timing.relapse)}; its busy chats fail`
+                : `The sandbox of brain ${lost.brainId} is gone; its busy chats are interrupted`,
+            )
+            const sessions = yield* interruptBusy(transaction, lost.brainId, at, repeated ? "failed" : "interrupted")
+            return Option.some({ sessionIds: sessions.map((session) => session.id), repeated })
           }),
         )
         .pipe(Effect.orDie)
+      if (Option.isNone(interrupted) || interrupted.value.sessionIds.length === 0) return
+      yield* Effect.forEach(
+        yield* Ref.get(interruptedListeners),
+        (listener) =>
+          listener(interrupted.value).pipe(
+            Effect.catchCause((cause) => Effect.logError("A lost sandbox's chats could not be handled", cause)),
+          ),
+        { discard: true },
+      ).pipe(Effect.withErrorReporting, Effect.forkIn(scope))
     })
 
     yield* provider.lost.pipe(Stream.runForEach(lose), Effect.withErrorReporting, Effect.forkScoped)
@@ -481,6 +524,31 @@ export const layer = Layer.effect(
       if (status.value === "paused") return yield* update(row.id, { phase: "resuming" })
       yield* replaceIfFrozen(row, row.binding)
     })
+
+    // oxlint-disable-next-line ren/no-comments -- An awake brain pulls every 30 s, also when no person or call uses it. A ready brain whose keep-alive runs and that has not pulled within pullWithin is checked, so a frozen sandbox is found without an access. Right after Ren starts, no pull has reached it yet, so it waits one pullWithin first.
+    yield* Effect.gen(function* () {
+      const at = yield* now
+      const silent = yield* database.db
+        .select({ id: brains.id })
+        .from(brains)
+        .where(
+          and(
+            eq(brains.phase, "ready"),
+            gt(brains.keep_alive_until, at),
+            or(
+              isNull(brains.last_pulled_at),
+              lt(brains.last_pulled_at, new Date(at.getTime() - Duration.toMillis(pullWithin))),
+            ),
+          ),
+        )
+        .pipe(Effect.orDie)
+      yield* Effect.forEach(silent, (row) => check(row.id), { concurrency: 8, discard: true })
+    }).pipe(
+      Effect.repeat(Schedule.spaced(Duration.divideUnsafe(pullWithin, 3))),
+      Effect.delay(pullWithin),
+      Effect.withErrorReporting,
+      Effect.forkScoped,
+    )
 
     const rest = Effect.fnUntraced(function* (row: Pick<Row, "id" | "generation" | "binding">) {
       if (!row.binding) return
@@ -715,6 +783,7 @@ export const layer = Layer.effect(
         const lastProgress = progressed ? at : row.last_progress_at
         yield* update(brainId, {
           progress: Object.fromEntries(sessions.map((session) => [session.id, session.progress])),
+          last_pulled_at: at,
           ...(progressed && { last_progress_at: at }),
         })
         const moving =
@@ -728,6 +797,11 @@ export const layer = Layer.effect(
       }),
       cleanup,
       check,
+      onInterrupted: Effect.fn("BrainLifecycle.onInterrupted")(function* (
+        listener: (interrupted: Interrupted) => Effect.Effect<void>,
+      ) {
+        yield* Ref.update(interruptedListeners, (listeners) => [...listeners, listener])
+      }),
       hand: Effect.fn("BrainLifecycle.hand")(function* (brainId: Brain.ID) {
         const row = yield* read(brainId)
         if (!row.binding) return Option.none()

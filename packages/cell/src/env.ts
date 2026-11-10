@@ -2,7 +2,13 @@ export * as Env from "./env.js"
 
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
-import { Effect, Schema } from "effect"
+import { Effect, Schema, SchemaGetter } from "effect"
+
+const OpenCodeConfig = Schema.fromJsonString(
+  Schema.StructWithRest(Schema.Struct({ plugins: Schema.optional(Schema.Array(Schema.Unknown)) }), [
+    Schema.Record(Schema.String, Schema.Unknown),
+  ]),
+)
 
 const Millis = (fallback: number) =>
   Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThan(0)).pipe(
@@ -22,7 +28,20 @@ export const Vars = Schema.Struct({
   PARK_AFTER_MS: Millis(600_000),
   CHAT_IDLE_MS: Millis(120_000),
   CHAT_HEARTBEAT_MS: Millis(15_000),
-  OPENCODE_CONFIG: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed("{}"))),
+  OPENCODE_CONFIG: OpenCodeConfig.pipe(
+    Schema.decode({
+      decode: SchemaGetter.transform((config) => ({
+        ...config,
+        plugins: [...(config.plugins ?? []), "-opencode.plan"],
+      })),
+      encode: SchemaGetter.passthrough(),
+    }),
+    Schema.decodeTo(Schema.flip(OpenCodeConfig)),
+    Schema.withDecodingDefault(Effect.succeed("{}")),
+  ).annotate({
+    description:
+      "OpenCode’s config as JSON. Ren removes OpenCode’s Plan plugin, which puts any agent named plan in read-only Plan mode.",
+  }),
   REN_URL: Schema.optional(Schema.String),
   REN_EGRESS: Schema.optional(Schema.Literal("1")).annotate({
     description: "The brain runs behind Ren’s egress: it holds no host token and keeps REN_URL (C8, C49).",

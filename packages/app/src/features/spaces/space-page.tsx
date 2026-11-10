@@ -17,9 +17,16 @@ export function SpaceLayout() {
   const space = useSpace()
   const navigate = useNavigate()
   const archive = useMutation(api.space.archive.mutationOptions())
-  const tab = Routing.useRenderedPath().split("/").at(3) ?? "overview"
+  const path = Routing.useRenderedPath().split("/")
+  const tab = path.at(3) ?? "overview"
   const factory = (tab === "overview" || tab === "kanban") && isSoftwareFactory(space)
   const section = spaceSections[tab] ?? spaceSections.overview
+  if (tab === "webhooks" && path.at(4))
+    return (
+      <Suspense fallback={<SpaceSectionSkeleton />}>
+        <Outlet />
+      </Suspense>
+    )
   if (factory)
     return (
       <div className="flex min-h-0 w-full flex-1 flex-col px-8 pt-2">

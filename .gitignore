@@ -40,6 +40,13 @@ test-results/
 # Staged E2B brain template context
 packages/cell/e2b/ren/
 packages/cell/e2b/ren.tar.gz
+.expo/
+
+# Android build output
+.gradle/
+.cxx/
+packages/mobile/android/build/
+packages/mobile/android/app/build/
 
 # Local notes, never committed
 specs/ren-v1-hld/

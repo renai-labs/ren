@@ -6,7 +6,13 @@
   "globalPassThroughEnv": ["CI", "DATABASE_URL", "REN_MEMORY_LEASE"],
   "tasks": {
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": ["^typecheck"],
+      "outputs": ["node_modules/.ts-dist/**"]
+    },
+    "//#typecheck:root": {
+      "dependsOn": ["@ren/test-harness#typecheck"],
+      "inputs": ["script/**", "tsconfig.json"],
+      "outputs": ["node_modules/.ts-dist/**"]
     },
     "build": {
       "dependsOn": ["transit"],
@@ -16,15 +22,34 @@
       "dependsOn": ["^transit"]
     },
     "lint": {
-      "dependsOn": ["transit"],
+      "dependsOn": ["^typecheck"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/oxlint.config.ts", "$TURBO_ROOT$/script/oxlint/**"],
       "outputs": []
     },
-    "test": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/script/test.ts", "$TURBO_ROOT$/packages/test-harness/src/**"],
-      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
-      "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"],
+    "//#lint:root": {
+      "dependsOn": ["//#typecheck:root"],
+      "inputs": ["script/**", "oxlint.config.ts", "tsconfig.json"],
+      "outputs": []
+    },
+    "//#lint:rules": {
+      "inputs": ["packages/**/*.{ts,tsx}", "script/**", "!**/node_modules/**", "!**/generated/**", "!**/*.gen.ts"],
+      "outputs": []
+    },
+    "//#lint:unused": {
+      "inputs": [
+        "packages/**",
+        "script/**",
+        "knip.json",
+        "package.json",
+        "bun.lock",
+        "oxlint.config.ts",
+        ".opencode/plugins/**",
+        "!**/node_modules/**"
+      ],
+      "outputs": []
+    },
+    "//#format:check": {
+      "inputs": ["**", "!**/node_modules/**", "!.turbo/**"],
       "outputs": []
     },
     "@ren/e2e#test": {
@@ -40,6 +65,24 @@
       "dependsOn": ["transit"],
       "env": ["PUBLIC_*"],
       "outputs": ["dist/**"]
+    },
+    "test:all": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/script/test.ts", "$TURBO_ROOT$/packages/test-harness/src/**"],
+      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
+      "outputs": [],
+      "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"]
+    },
+    "test:opencode": {
+      "dependsOn": ["^build"],
+      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
+      "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"],
+      "cache": false
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"],
+      "cache": false
     }
   }
 }

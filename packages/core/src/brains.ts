@@ -81,6 +81,7 @@ export interface Placement {
 export interface Interface {
   readonly start: (input: Session.StartInput, placement: Placement) => Effect.Effect<void, BrainRejectedError>
   readonly onStartRejected: (listener: (sessionId: Session.ID) => Effect.Effect<void>) => Effect.Effect<void>
+  readonly onInterrupted: BrainHost.Interface["onInterrupted"]
   readonly send: (
     input: Session.SendInput,
   ) => Effect.Effect<Session.Accepted, BrainHost.BrainUnavailable | BrainRejectedError | SessionNotStartedError>
@@ -174,6 +175,15 @@ export const StartRun = DurableRunner.make("StartRun", {
   idempotencyKey: (payload) =>
     `start:${payload.input.sessionId}:${payload.input.initialMessage?.messageId ?? ""}:${payload.epoch}`,
 })
+
+const lostSandbox = {
+  description: "The sandbox stopped and Ren replaced it",
+  source: "brain",
+  text:
+    "Your sandbox stopped answering, most often because it ran out of memory, and Ren replaced it with a new one. " +
+    "The command that was running did not finish, and its output is lost. Files that were only on the old sandbox " +
+    "can be gone. Check what is there before you continue, and do not run the same heavy command again in one go.",
+}
 
 const failedAsUnavailable = (cause: BrainHost.BrainFailed) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))
 
@@ -387,6 +397,56 @@ export const layer = Layer.effect(
       ),
     )
 
+    const send = Effect.fn("Brains.send")(function* (input: Session.SendInput) {
+      yield* validatePrompt(input.prompt)
+      const session = yield* brainOf(input.sessionId)
+      const target = yield* brainHost.target(session.brainId).pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
+      const api = yield* client.brain(target)
+      return yield* call(
+        api.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
+      ).pipe(
+        Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))),
+        Effect.tapErrorTag("BrainUnavailable", () => brainHost.unavailable(session.brainId)),
+      )
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- A chat that a lost sandbox stopped mid-turn continues on its brain's new sandbox, with no person or call needed: the note starts the replace and tells the model what it lost. A repeated loss fails the chats instead, and no note goes.
+    yield* brainHost.onInterrupted((interrupted) =>
+      interrupted.repeated
+        ? Effect.void
+        : database.db
+            .select({ id: Database.Schema.agent_session.id, createdBy: Database.Schema.agent_session.created_by })
+            .from(Database.Schema.agent_session)
+            .where(
+              and(
+                inArray(Database.Schema.agent_session.id, interrupted.sessionIds),
+                isNull(Database.Schema.agent_session.parent_id),
+              ),
+            )
+            .pipe(
+              Effect.orDie,
+              Effect.flatMap((roots) =>
+                Effect.forEach(
+                  roots,
+                  (root) =>
+                    send({
+                      sessionId: root.id,
+                      messageId: Session.MessageID.create(),
+                      prompt: { text: lostSandbox.text },
+                      delivery: "queue",
+                      sender: { userId: root.createdBy },
+                      synthetic: { description: lostSandbox.description, source: lostSandbox.source },
+                    }).pipe(
+                      Effect.catchCause((cause) =>
+                        Effect.logWarning(`The note about a lost sandbox did not reach ${root.id}`, cause),
+                      ),
+                    ),
+                  { concurrency: "unbounded", discard: true },
+                ),
+              ),
+            ),
+    )
+
     return Service.of({
       start: Effect.fn("Brains.start")(function* (input: Session.StartInput, placement: Placement) {
         if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
@@ -395,25 +455,13 @@ export const layer = Layer.effect(
           Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
         )
       }),
+      onInterrupted: brainHost.onInterrupted,
       onStartRejected: Effect.fn("Brains.onStartRejected")(function* (
         listener: (sessionId: Session.ID) => Effect.Effect<void>,
       ) {
         yield* Ref.update(rejectedListeners, (listeners) => [...listeners, listener])
       }),
-      send: Effect.fn("Brains.send")(function* (input: Session.SendInput) {
-        yield* validatePrompt(input.prompt)
-        const session = yield* brainOf(input.sessionId)
-        const target = yield* brainHost
-          .target(session.brainId)
-          .pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
-        const api = yield* client.brain(target)
-        return yield* call(
-          api.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
-        ).pipe(
-          Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))),
-          Effect.tapErrorTag("BrainUnavailable", () => brainHost.unavailable(session.brainId)),
-        )
-      }),
+      send,
       access: Effect.fn("Brains.access")(function* (
         sessionId: Session.ID,
         member: { readonly userId: Auth.UserID; readonly memberId: typeof Auth.MemberID.Type; readonly name?: string },

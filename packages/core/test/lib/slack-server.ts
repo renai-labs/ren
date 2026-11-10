@@ -1,5 +1,6 @@
 export * as SlackServer from "./slack-server.js"
 
+import { Schema } from "effect"
 import { createHmac } from "node:crypto"
 
 const signingSecret = "slack-signing"
@@ -38,12 +39,23 @@ interface Reply {
   readonly text: string
   readonly bot_id?: string
   readonly files?: ReadonlyArray<object>
+  readonly thread_ts?: string
+  readonly reply_count?: number
+}
+
+export interface Posted {
+  ts: string
+  readonly user: string
+  text: string
+  blocks?: unknown
+  metadata?: unknown
 }
 
 interface Channel {
   readonly id: string
   readonly name: string
   readonly is_private: boolean
+  readonly is_mpim?: boolean
 }
 
 export interface Instance {
@@ -53,14 +65,18 @@ export interface Instance {
   readonly channels: Array<Channel>
   readonly uploads: Map<string, string>
   readonly replies: Array<Reply>
+  readonly threads: Map<string, Array<Posted>>
   readonly users: Map<string, User>
-  readonly files: Map<string, string>
+  readonly files: Map<string, string | Uint8Array<ArrayBuffer>>
+  readonly answers: Map<string, (params: Params) => object>
   readonly posted: Array<{ readonly method: string; readonly token: string; readonly params: Params }>
+  readonly responses: Array<unknown>
   readonly options: {
     pageSize: number
     revokeError: string | undefined
     postError: string | undefined
     chartError: string | undefined
+    metadataError: string | undefined
   }
   readonly stop: () => void
 }
@@ -76,6 +92,11 @@ const refuse = (error: string) => Response.json({ ok: false, error })
 const tokenOf = (request: Request) => request.headers.get("authorization")?.replace(/^Bearer /u, "") ?? ""
 
 const known = (state: State, token: string) => [...state.grants.values()].some((grant) => grant.token === token)
+
+const download = (state: State, request: Request, file: string) =>
+  known(state, tokenOf(request)) && state.files.has(file)
+    ? new Response(state.files.get(file))
+    : new Response(null, { status: 403 })
 
 const exchange = (state: State, params: Params) => {
   const grant = state.grants.get(params.code ?? "")
@@ -100,6 +121,19 @@ const conversations = (state: State, params: Params) => {
 }
 
 const replies = (state: State, params: Params) => {
+  const thread = state.threads.get(`${params.channel}:${params.ts}`)
+  if (thread)
+    return answer({
+      messages:
+        params.include_all_metadata === "true"
+          ? thread
+          : thread.map((message) => ({
+              ts: message.ts,
+              user: message.user,
+              text: message.text,
+              blocks: message.blocks,
+            })),
+    })
   const start = Number(params.cursor ?? "0")
   const next = start + Number(params.limit ?? "50")
   const messages = state.replies.filter((reply) => !params.latest || Number(reply.ts) < Number(params.latest))
@@ -123,23 +157,74 @@ const lookup = (state: State, name: string, params: Params, origin: string) => {
         })
       : refuse("user_not_found")
   }
+  if (name === "users.lookupByEmail") {
+    const found = [...state.users].find((entry) => entry[1].email === params.email)
+    return found ? answer({ user: { id: found[0] } }) : refuse("users_not_found")
+  }
   return name === "chat.getPermalink"
     ? answer({ permalink: `${origin}/archives/${params.channel}/p${(params.message_ts ?? "").replace(".", "")}` })
     : undefined
+}
+
+const decodeJson = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))
+
+const parsed = (value: string | undefined): unknown => (value === undefined ? undefined : decodeJson(value))
+
+const keep = (state: State, name: string, params: Params, ts: string) => {
+  if (name === "chat.postMessage") {
+    state.threads.get(`${params.channel}:${params.thread_ts}`)?.push({
+      ts,
+      user: "UBOT",
+      text: params.text ?? "",
+      blocks: parsed(params.blocks),
+      metadata: parsed(params.metadata),
+    })
+  }
+  if (name === "chat.update") {
+    const found = [...state.threads.values()].flat().find((message) => message.ts === params.ts)
+    if (!found) return
+    found.text = params.text ?? found.text
+    found.blocks = parsed(params.blocks) ?? found.blocks
+    found.metadata = parsed(params.metadata) ?? found.metadata
+  }
 }
 
 const post = (state: State, name: string, token: string, params: Params) => {
   state.posted.push({ method: name, token, params })
   if (state.options.chartError && params.blocks?.includes('"data_visualization"'))
     return refuse(state.options.chartError)
-  return state.options.postError ? refuse(state.options.postError) : answer({ ts: `${state.posted.length}.0` })
+  if (state.options.metadataError && params.metadata) return refuse(state.options.metadataError)
+  if (state.options.postError) return refuse(state.options.postError)
+  const ts = `${state.posted.length}.0`
+  keep(state, name, params, ts)
+  return answer({ ts })
+}
+
+const canned = (state: State, name: string, token: string, params: Params) => {
+  const reply = state.answers.get(name)
+  if (!reply) return
+  state.posted.push({ method: name, token, params })
+  const body = reply(params)
+  return "error" in body && typeof body.error === "string" ? refuse(body.error) : answer(body)
+}
+
+const reads: Readonly<Record<string, (state: State, params: Params) => Response>> = {
+  "conversations.open": (_, params) => answer({ channel: { id: `D${(params.users ?? "").replaceAll(",", "")}` } }),
+  "conversations.history": replies,
+  "conversations.replies": replies,
+  "conversations.list": conversations,
+  "conversations.info": (state, params) => {
+    const found = state.channels.find((channel) => channel.id === params.channel)
+    return found ? answer({ channel: found }) : refuse("channel_not_found")
+  },
 }
 
 const method = (state: State, name: string, token: string, params: Params, origin: string) => {
   if (name === "oauth.v2.access") return exchange(state, params)
   if (!known(state, token)) return refuse("invalid_auth")
-  const looked = lookup(state, name, params, origin)
-  if (looked) return looked
+  const found =
+    canned(state, name, token, params) ?? lookup(state, name, params, origin) ?? reads[name]?.(state, params)
+  if (found) return found
   switch (name) {
     case "auth.revoke":
       if (state.options.revokeError) return refuse(state.options.revokeError)
@@ -150,14 +235,6 @@ const method = (state: State, name: string, token: string, params: Params, origi
         upload_url: `${origin}/upload/F${state.uploads.size + 1}`,
         file_id: `F${state.uploads.size + 1}`,
       })
-    case "conversations.replies":
-      return replies(state, params)
-    case "conversations.list":
-      return conversations(state, params)
-    case "conversations.info": {
-      const found = state.channels.find((channel) => channel.id === params.channel)
-      return found ? answer({ channel: found }) : refuse("channel_not_found")
-    }
     default:
       return post(state, name, token, params)
   }
@@ -170,10 +247,19 @@ export const start = (): Instance => {
     channels: [],
     uploads: new Map(),
     replies: [],
+    threads: new Map(),
     users: new Map(),
     files: new Map(),
+    answers: new Map(),
     posted: [],
-    options: { pageSize: 200, revokeError: undefined, postError: undefined, chartError: undefined },
+    responses: [],
+    options: {
+      pageSize: 200,
+      revokeError: undefined,
+      postError: undefined,
+      chartError: undefined,
+      metadataError: undefined,
+    },
   }
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -185,11 +271,12 @@ export const start = (): Instance => {
         state.uploads.set(uploaded, await request.text())
         return new Response(null, { status: 200 })
       }
+      if (url.pathname.startsWith("/response/") && request.method === "POST") {
+        state.responses.push(await request.json())
+        return new Response(null, { status: 200 })
+      }
       const file = /^\/files\/(F\d+)$/u.exec(url.pathname)?.[1]
-      if (file && request.method === "GET")
-        return known(state, tokenOf(request)) && state.files.has(file)
-          ? new Response(state.files.get(file))
-          : new Response(null, { status: 403 })
+      if (file && request.method === "GET") return download(state, request, file)
       const name = /^\/api\/([\w.]+)$/u.exec(url.pathname)?.[1]
       if (request.method !== "POST" || !name) return new Response(null, { status: 404 })
       const params = Object.fromEntries(new URLSearchParams(await request.text()))

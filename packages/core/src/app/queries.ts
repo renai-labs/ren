@@ -52,6 +52,7 @@ export const appInfo = (row: Row, dependsOn: ReadonlyArray<string>): App.Info =>
   ...(row.environment && { environment: row.environment }),
   mcps: row.mcps,
   skills: row.skills,
+  webhooks: row.webhooks,
   dependsOn,
   revision: row.revision,
   createdAt: DateTime.fromDateUnsafe(row.created_at),

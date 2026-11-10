@@ -1,13 +1,12 @@
-import { scheduleTask, useAtomValue } from "@effect/atom-react"
+import { scheduleTask } from "@effect/atom-react"
 import { ChatAtoms, type ChatSession, Outbox } from "@ren/chat"
-import { ChatReact } from "@ren/chat/react"
 import { Ren } from "@ren/client/effect"
 import type { SessionInfo, SessionPage } from "@ren/client"
 import type { Session } from "@ren/schema/session"
 import { useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query"
-import { Effect, Layer, Option, Schema, Stream, SubscriptionRef } from "effect"
+import { Effect, Layer, Option, Schema } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
-import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
+import { Atom, AtomRegistry } from "effect/reactivity"
 import { useEffect } from "react"
 import type { Platform } from "../platform/platform.js"
 import { RouterContext } from "./router-context.js"
@@ -86,33 +85,6 @@ export function handoff(platform: Platform.Info, userId: string, sessionID: Sess
 export function resetSession(queryClient: QueryClient) {
   forget()
   queryClient.clear()
-}
-
-const autoApproveFamilies = new WeakMap<
-  ChatAtoms.ChatAtoms,
-  (sessionID: Session.ID) => Atom.Atom<AsyncResult.AsyncResult<boolean, unknown>>
->()
-
-const autoApproveFamily = (atoms: ChatAtoms.ChatAtoms) => {
-  const found = autoApproveFamilies.get(atoms)
-  if (found) return found
-  const family = Atom.family((sessionID: Session.ID) =>
-    Atom.make((get) =>
-      Stream.unwrap(
-        Effect.map(get.result(atoms.session(sessionID)), (opened) => SubscriptionRef.changes(opened.autoApprove)),
-      ),
-    ),
-  )
-  autoApproveFamilies.set(atoms, family)
-  return family
-}
-
-export function useAutoApprove(sessionID: Session.ID) {
-  const result = useAtomValue(autoApproveFamily(ChatReact.useAtoms())(sessionID))
-  const set = ChatReact.useAction(sessionID, (opened, approval: { readonly enabled: boolean }) =>
-    SubscriptionRef.set(opened.autoApprove, approval.enabled),
-  )
-  return { enabled: AsyncResult.isSuccess(result) && result.value, set }
 }
 
 const patchSession = (

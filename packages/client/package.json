@@ -15,9 +15,10 @@
   "scripts": {
     "generate": "bun run script/generate.ts",
     "check:generated": "bun run generate && git diff --exit-code -- src/generated src/effect/generated src/react/generated src/chat/generated src/chat/effect/generated",
-    "test": "bun ../../script/signoff/record.ts bun test --timeout 30000 --only-failures",
+    "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun test --timeout 30000 --only-failures",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo -b",
+    "test:all": "bun ../../script/signoff/record.ts bun test --timeout 30000 --only-failures"
   },
   "dependencies": {
     "@ren/protocol": "workspace:*",

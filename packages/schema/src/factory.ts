@@ -32,6 +32,11 @@ export interface Entry extends Schema.Schema.Type<typeof Entry> {}
 export const Entry = Schema.Struct({
   agentId: Schema.String,
   maxRuns: Schema.optionalKey(MaxRuns),
+  finish: Schema.optionalKey(
+    Schema.Literal(true).annotate({
+      description: "It can finish the task: the factory’s work is done and the task waits for a person or a merge.",
+    }),
+  ),
   to: Schema.optionalKey(
     Schema.Array(Edge).annotate({
       description: "The agents it can hand off to. Without it, any agent.",

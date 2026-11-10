@@ -28,6 +28,7 @@ import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ChatSettings } from "../src/chat-settings.js"
+import { Env } from "../src/env.js"
 import { Inference } from "../src/inference.js"
 import type { Harness } from "../src/harness/harness.js"
 import type { HarnessConfig } from "../src/harness/config.js"
@@ -81,7 +82,11 @@ const open = Effect.fnUntraced(function* (
       createEmbeddedRoutes(
         {
           database: { path: options.database ?? ":memory:" },
-          config: { directory, project: false, content: options.config ?? Shared.vars(stub.url).OPENCODE_CONFIG },
+          config: {
+            directory,
+            project: false,
+            content: options.config ?? Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url)).OPENCODE_CONFIG,
+          },
           models: { fetch: false },
           fs: { filewatcher: false, fff: false },
         },
@@ -131,7 +136,7 @@ const open = Effect.fnUntraced(function* (
         delivery: "steer",
         sender: { userId: "user_1" },
       })
-      .pipe(Effect.andThen(client.session.wait({ sessionID })), Effect.orDie)
+      .pipe(Effect.andThen(client.experimental.session.wait({ sessionID })), Effect.orDie)
   const pull = (layers: SessionSettings.Layers, update: Omit<HarnessConfig.Update, "settings"> = {}) =>
     Effect.gen(function* () {
       yield* settings.save(layers, [{ id: sessionId, agent: null, archived: false }])
@@ -273,7 +278,7 @@ describe("settings in the cell", () => {
         yield* opened.client.session
           .prompt({ sessionID: opened.sessionID, text: `${turn.marker} go` })
           .pipe(Effect.orDie)
-        yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+        yield* opened.client.experimental.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
         expect(calls.toSorted((a, b) => a.path.localeCompare(b.path))).toEqual([
           { path: "/v1/audio/transcriptions", model: "ren/audio_transcription", key: "Bearer fresh-key" },
           { path: "/v1/decisions", model: "ren/decisions", key: "Bearer fresh-key" },
@@ -556,7 +561,7 @@ describe("settings in the cell", () => {
         .pipe(Effect.orDie)
       yield* opened.pull(TestSettings.layers({ ren: { instructions: "Next config." } }))
       parent.release()
-      yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+      yield* opened.client.experimental.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
       expect(parent.calls[0]?.system).toContain("Parent config.")
       expect(child.calls[0]?.system).toContain("Next config.")
       expect(child.calls[0]?.system).not.toContain("Parent config.")
@@ -613,7 +618,7 @@ describe("settings in the cell", () => {
       expect(queued.calls[0]?.system).not.toContain("Before the update.")
       expect(queued.calls[0]?.body.model).toBe(added.id)
       queued.release()
-      yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+      yield* opened.client.experimental.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
     }),
   )
   it.live("a catalog that takes a name OpenCode already uses keeps the applied catalog and names both sources", () =>
@@ -708,14 +713,14 @@ describe("settings in the cell", () => {
       const child = stub.script()
       const turn = stub.script()
       yield* opened.client.session.prompt({ sessionID, text: `${turn.marker} go` }).pipe(Effect.orDie)
-      yield* opened.client.session.wait({ sessionID }).pipe(Effect.orDie)
+      yield* opened.client.experimental.session.wait({ sessionID }).pipe(Effect.orDie)
       expect(turn.calls[0]?.system).toContain("Pulled after reopening.")
       expect(turn.calls[0]?.body.model).toBe("stub-other")
       const permission = stub.script({
         tools: [{ name: "subagent", input: { agent: "explore", description: "Look", prompt: `${child.marker} look` } }],
       })
       yield* opened.client.session.prompt({ sessionID, text: `${permission.marker} go` }).pipe(Effect.orDie)
-      yield* opened.client.session.wait({ sessionID }).pipe(Effect.orDie)
+      yield* opened.client.experimental.session.wait({ sessionID }).pipe(Effect.orDie)
       expect(child.calls).toHaveLength(0)
       expect(yield* opened.client.session.form.list({ sessionID }).pipe(Effect.orDie)).toEqual([])
       yield* opened.harness.setModel(sessionId, Option.none())
@@ -737,6 +742,21 @@ describe("settings in the cell", () => {
         agent: "ren",
         model: { providerID: "stub", id: "stub-model" },
       })
+    }),
+  )
+
+  it.live("a main agent named plan runs as Ren's agent, without OpenCode's Plan mode", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(
+        TestSettings.layers({
+          ren: { instructions: "Hand off when done." },
+          agents: [TestSettings.agent("plan", {}, { isSubagent: false })],
+        }),
+      )
+      const script = stub.script()
+      yield* opened.turn(script)
+      expect(script.calls[0]?.system).toContain("Hand off when done.")
+      expect(JSON.stringify(script.calls[0]?.body.messages)).not.toContain("Plan mode")
     }),
   )
 
@@ -869,7 +889,7 @@ describe("settings in the cell", () => {
           text: `${mentioned.marker} use them`,
           skills: [{ id: Skill.ID.make("secret") }, { id: Skill.ID.make("open") }],
         })
-        .pipe(Effect.andThen(opened.client.session.wait({ sessionID: opened.sessionID })), Effect.orDie)
+        .pipe(Effect.andThen(opened.client.experimental.session.wait({ sessionID: opened.sessionID })), Effect.orDie)
       const sent = JSON.stringify(mentioned.calls.at(0)?.body.messages)
       expect([sent.includes(`secret ${body}`), sent.includes(`open ${body}`)]).toEqual([false, true])
       expect(sent).toContain("Ren did not load the skill secret: it is not allowed in this chat.")
@@ -969,7 +989,7 @@ describe("settings in the cell", () => {
             decision: "always",
           })
           .pipe(Effect.orDie)
-        yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+        yield* opened.client.experimental.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
         yield* until(["session.execution.succeeded"])
         const second = stub.script(fetchOnce("second"))
         yield* send(second)
@@ -1017,7 +1037,7 @@ describe("settings in the cell", () => {
       expect(yield* offers(other)).toBe(true)
       expect(yield* offers(opened.sessionId)).toBe(true)
       held.release()
-      yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+      yield* opened.client.experimental.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
     }),
   )
   it.live("a removed endpoint loses its credential at once, also while a busy chat's Location had it", () =>
@@ -1048,7 +1068,7 @@ describe("settings in the cell", () => {
       yield* opened.harness.configure({ models: both.filter((endpoint) => endpoint.id !== "anthropic") })
       expect(yield* stored).toBe(false)
       held.release()
-      yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+      yield* opened.client.experimental.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
     }),
   )
   it.live("a 401 renews the key once and the call runs again; a second 401 fails the turn", () =>

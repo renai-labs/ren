@@ -104,6 +104,43 @@ To continue a chat in more depth, open it in the [web app](/docs/surfaces/web-ap
 
 {/* Media placeholder (clip `channels/slack/mention`): Mention Ren in a channel, watch 👀 and the task list update, get the reply with follow-up buttons, then open the same chat in the web app. Answers: what does working with Ren in Slack look like end to end? */}
 
+## What Ren can do in Slack
+
+In a chat, Ren uses the Slack tools as its own bot, not as you. It can:
+
+- **Messages:** Answer in the thread, and when you ask, send, schedule, edit, and delete messages in other channels and threads, add reactions, and post files.
+- **Reading:** Read channels, threads, reactions, and files, and look up people, channels, and members.
+- **Search:** Search messages and files in public channels, as the person whose message started the chat. Search works only in chats that start from a Slack mention or DM, for a short time after that message.
+- **Canvases:** Create, read, and update canvases. Ren shares each new canvas with the channel of the thread, or with the channel you name. Canvases need a paid Slack plan.
+
+In a shared space, Ren does not read or post in DMs or group DMs. DMs and group DMs work only in your personal space.
+
+Workspaces that installed Ren before these tools must install it again: search, canvases, emoji, and group DMs need new Slack permissions.
+
+## Task cards
+
+A [task](/docs/concepts/tasks/) URL in Slack shows a task card. The card shows the task ID, title, status, priority, agent, latest pull request and latest chat. Select the card to see the description, links, chats and latest activity.
+
+- **Threads:** A task created from a thread links it. Ren posts one card in each linked thread. When the task changes, Ren edits the card.
+- **Notices:** When a task needs a person or is done, Ren posts a notice with the card in each linked thread. The notice tags the task's owner, else its creator.
+- **Who sees the title:** Everyone in the channel can see a card. The title, description, links and chats show only in a channel mapped to the task's space. Elsewhere the card shows the task ID.
+- **Other links:** Chat links do not get a card. Ren's own messages do not unfurl links.
+- **Buttons:** The card's buttons follow the task's state. A click acts as you, so you must have a Ren account and be a member of the task's space. Otherwise, only you see a reply that tells you why.
+
+| Task state                | Buttons      | More actions              |
+| ------------------------- | ------------ | ------------------------- |
+| No agent and no owner     | Assign to me | Open in Ren, Dismiss      |
+| No agent, with an owner   | Open in Ren  | Dismiss                   |
+| Has an agent, not started | Start        | Open in Ren, Dismiss      |
+| In progress               | Open session | Request review, Mark done |
+| Needs review, with a PR   | Approve      | Open session, Open PR     |
+| Needs review, with no PR  | Start build  | Open plan                 |
+| Done or dismissed         | Open in Ren  | Open PR                   |
+
+**Start build** approves the review, as **Approve** does. To request changes or assign an agent, open the task in Ren.
+
+Workspaces that installed Ren before task cards must install it again: the cards need new Slack permissions.
+
 ## Who Ren acts as
 
 Ren matches you to a Ren user if you signed in to Ren with Slack, or by the email on your Slack profile. You must also be a member of the [space](/docs/concepts/spaces/) of the project.

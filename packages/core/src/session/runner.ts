@@ -7,7 +7,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { and, eq, isNull } from "drizzle-orm"
+import { and, eq, isNull, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
 import { AgentQueries } from "../agent/queries.js"
 import { BrainHost } from "../brain-host.js"
@@ -51,8 +51,10 @@ export interface Interface {
     input: Session.SendInput,
   ) => Effect.Effect<Session.Accepted, NotFound | BrainHost.BrainUnavailable | Brains.BrainRejectedError>
   readonly get: (sessionId: Session.ID) => Effect.Effect<Info, NotFound>
+  readonly startedWith: (sessionId: Session.ID, messageId: Session.MessageID) => Effect.Effect<boolean>
   // oxlint-disable-next-line ren/no-comments -- A started chat whose start the brain refused later; create returns before the brain starts.
   readonly onStartRejected: (listener: (sessionId: Session.ID) => Effect.Effect<void>) => Effect.Effect<void>
+  readonly onInterrupted: Brains.Interface["onInterrupted"]
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SessionRunner") {}
@@ -154,6 +156,23 @@ export const layer = Layer.effect(
         )
       }, Observability.Trace.chatSend),
       onStartRejected: brain.onStartRejected,
+      onInterrupted: brain.onInterrupted,
+      startedWith: Effect.fn("SessionRunner.startedWith")(function* (
+        sessionId: Session.ID,
+        messageId: Session.MessageID,
+      ) {
+        const found = yield* database.db
+          .select({ id: Database.Schema.agent_session.id })
+          .from(Database.Schema.agent_session)
+          .where(
+            and(
+              eq(Database.Schema.agent_session.id, sessionId),
+              sql`${Database.Schema.agent_session.start_input} -> 'initialMessage' ->> 'messageId' = ${messageId}`,
+            ),
+          )
+          .pipe(Effect.orDie)
+        return found.length > 0
+      }),
       get: Effect.fn("SessionRunner.get")(function* (sessionId: Session.ID) {
         const row = (yield* database.transaction((transaction) =>
           transaction

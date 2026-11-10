@@ -1,6 +1,10 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "./tsconfig.base.json",
-  "compilerOptions": {},
-  "include": ["script"]
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.ts-dist/tsbuildinfo"
+  },
+  "include": ["script"],
+  "references": [{ "path": "./packages/test-harness/tsconfig.src.json" }]
 }

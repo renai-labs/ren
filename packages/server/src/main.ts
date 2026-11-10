@@ -24,6 +24,7 @@ import { GitHub } from "@ren/core/channel-provider/github"
 import { Slack } from "@ren/core/channel-provider/slack"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { GitHubApp } from "@ren/core/github-app"
+import { GitHubTaskCard } from "@ren/core/github-task-card"
 import { PersonCredentials } from "@ren/core/person-credentials"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
@@ -58,12 +59,16 @@ import { PostHog } from "@ren/telemetry/posthog"
 import { Telemetry } from "@ren/telemetry/telemetry"
 import { Config, Effect, Layer, Option, References } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
+import { PersistedQueue } from "effect/persistence"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { EgressRoutes } from "./egress.js"
+import { IntakeOrigins } from "./intake-origins.js"
 import { Routes } from "./routes.js"
 import { Signer } from "@ren/core/signer"
 import { SlackApp } from "@ren/core/slack-app"
+import { SlackTaskCard } from "@ren/core/slack-task-card"
+import { TaskCard } from "@ren/core/task-card"
 import { EgressControl } from "@ren/core/egress-control"
 
 const host = Layer.unwrap(
@@ -143,7 +148,13 @@ const observability = Layer.mergeAll(
   Layer.unwrap(Effect.map(Config.LogLevel("TRACE_LEVEL").pipe(Config.withDefault("Info")), Observability.layer)),
 )
 
+const queue = Layer.merge(
+  PersistedQueue.layer,
+  PersistedQueue.layerCleanup({ timeToLive: "1 day", failedTimeToLive: "30 days" }),
+).pipe(Layer.provide(PersistedQueue.layerStoreSql()))
+
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
+  Layer.provide(IntakeOrigins.layer),
   Layer.provide([
     Layer.mergeAll(
       Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provideMerge(host), Layer.provide(CredentialEnv.layer)),
@@ -151,15 +162,19 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       RenInferenceRemoval.layer,
       BillingEnrollment.layer.pipe(Layer.provide(Billing.layerConfig)),
     ),
-    Layer.mergeAll(ChannelNotice.layer, ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer))).pipe(
-      Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider]))),
-    ),
+    Layer.mergeAll(
+      Layer.mergeAll(ChannelNotice.layer, TaskCard.layer).pipe(
+        Layer.provideMerge(Layer.mergeAll(GitHubTaskCard.layer, SlackTaskCard.layer)),
+      ),
+      ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer)),
+    ).pipe(Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider])))),
     Mailer.layer,
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
+  Layer.provideMerge(queue),
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([models, Environments.layer, GitHubApp.layer, Integrations.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),

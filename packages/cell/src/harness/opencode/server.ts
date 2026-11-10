@@ -3,6 +3,7 @@ export * as OpenCodeServer from "./server.js"
 import { Agent } from "@opencode/core/agent"
 import { Command } from "@opencode/core/command"
 import { Credential } from "@opencode/core/credential"
+import { FileSystem } from "@opencode/core/filesystem"
 import { FileSystemSearch } from "@opencode/core/filesystem/search"
 // ast-grep-ignore: no-import-alias -- this module declares the cell's own Instance, and OpenCode's is a value
 import { Instance as OpenCodeInstance } from "@opencode/core/instance/service"
@@ -14,6 +15,7 @@ import { Shell } from "@opencode/core/shell"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { SessionTransfer } from "@opencode/core/session/transfer"
 import { Skill } from "@opencode/core/skill"
+import { Vcs } from "@opencode/core/vcs"
 import { WebSearch } from "@opencode/core/websearch"
 import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
@@ -23,6 +25,8 @@ import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
 import type { Models } from "@ren/schema/models"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
+// ast-grep-ignore: no-import-alias -- OpenCode's Session service is imported by that name above
+import { Session as RenSession } from "@ren/schema/session"
 import {
   Context,
   Deferred,
@@ -39,7 +43,6 @@ import {
 } from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import manifest from "../../../package.json"
-import type { FileSystem } from "@opencode/schema/filesystem"
 import { SessionID } from "@opencode/schema/session-id"
 import { Harness } from "../harness.js"
 import { OpenCodeChat } from "./chat.js"
@@ -50,6 +53,7 @@ import { RenPlugin } from "./plugin.js"
 import { GitSources } from "../../git-sources.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeExecution } from "./execution.js"
+import { Watchdog } from "./watchdog.js"
 import type { LayerNode } from "@opencode/util/effect/layer-node"
 import type { HarnessConfig } from "../config.js"
 
@@ -260,6 +264,35 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
   yield* Deferred.await(loaded)
+  if (Option.isSome(connections))
+    yield* Watchdog.run({
+      events: api.event.subscribe().pipe(Stream.orDie),
+      shells: (sessionId) =>
+        located(sessionId, Shell.Service).pipe(
+          Effect.flatMap((shell) => shell.list()),
+          Effect.orElseSucceed(() => []),
+        ),
+      memory: (sessionId) =>
+        connections.value.connect(RenSession.ID.make(sessionId)).pipe(
+          Effect.flatMap((connection) => connection.client["executor.memory"]()),
+          Effect.scoped,
+          Effect.option,
+        ),
+      background: (sessionId) => sessions.background(SessionID.make(sessionId)).pipe(Effect.orDie),
+      notify: (notice) =>
+        sessions
+          .synthetic({
+            sessionID: SessionID.make(notice.sessionID),
+            text: notice.text,
+            description: notice.description,
+          })
+          .pipe(Effect.orDie),
+      kill: (sessionId, shell) =>
+        located(sessionId, Shell.Service).pipe(
+          Effect.flatMap((shells) => shells.remove(shell.id)),
+          Effect.orDie,
+        ),
+    })
   const resuming = runtime.runFork(
     Context.get(services, SessionRestart.Service).resumeSuspendedSessions.pipe(
       Effect.catchCause((cause) => Effect.logError("Resuming the suspended sessions failed", cause)),
@@ -270,6 +303,17 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     fetch,
     client: api,
     shells: (sessionId, use) => located(sessionId, Shell.Service).pipe(Effect.flatMap(use)),
+    environment: (sessionId, use) =>
+      located(
+        sessionId,
+        Effect.all({ location: Location.Service, files: FileSystem.Service, vcs: Vcs.Service, shell: Shell.Service }),
+      ).pipe(
+        Effect.filterOrFail(
+          (found) => Boolean(found.location.workspaceID),
+          () => new Harness.Rejected({ message: `Session ${sessionId} has no environment` }),
+        ),
+        Effect.flatMap(use),
+      ),
     agents: (sessionId) => located(sessionId, Agent.Service).pipe(Effect.flatMap((agents) => agents.list())),
     skills: (sessionId) => located(sessionId, Skill.Service).pipe(Effect.flatMap((skills) => skills.list())),
     commands: (sessionId) => located(sessionId, Command.Service).pipe(Effect.flatMap((commands) => commands.list())),
@@ -308,6 +352,12 @@ export const client = (fetch: (request: Request) => Promise<Response>): Effect.E
     Effect.provideService(FetchHttpClient.Fetch, (input, init) => fetch(new Request(input, init))),
   )
 
+interface Environment {
+  readonly files: FileSystem.Interface
+  readonly vcs: Vcs.Interface
+  readonly shell: Shell.Interface
+}
+
 export interface Instance {
   readonly fetch: (request: Request) => Promise<Response>
   readonly client: OpenCodeClient
@@ -315,6 +365,10 @@ export interface Instance {
     sessionId: string,
     use: (shell: Shell.Interface) => Effect.Effect<A, E>,
   ) => Effect.Effect<A, E | Harness.NotFound>
+  readonly environment: <A, E>(
+    sessionId: string,
+    use: (services: Environment) => Effect.Effect<A, E>,
+  ) => Effect.Effect<A, E | Harness.NotFound | Harness.Rejected>
   readonly agents: (sessionId: string) => Effect.Effect<ReadonlyArray<Agent.Info>, Harness.NotFound>
   readonly skills: (sessionId: string) => Effect.Effect<ReadonlyArray<Skill.Info>, Harness.NotFound>
   readonly commands: (sessionId: string) => Effect.Effect<ReadonlyArray<Command.Info>, Harness.NotFound>

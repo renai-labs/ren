@@ -183,6 +183,7 @@ it.live(
           requiredCredentials: current.requiredCredentials,
           mcps: { gmail: ProfilesFixture.remote("Mail") },
           skills: {},
+          webhooks: {},
           dependsOn: ["base"],
           expectedRevision: current.revision,
         }),

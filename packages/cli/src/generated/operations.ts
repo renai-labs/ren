@@ -825,6 +825,21 @@ export const TaskReview = (input: Command.Command.Config.Infer<typeof Commands.T
     (client, request) => client["task"]["review"]({ ...request.params, payload: request.payload }),
   )
 
+export const TaskFinish = (input: Command.Command.Config.Infer<typeof Commands.TaskFinish>) =>
+  Operation.run(
+    ClientApi.groups["task"].endpoints["task.finish"],
+    {
+      params: { id: input["id"] },
+      payload: { note: input["note"] },
+      input: input["input"],
+      labels: { id: "<task>", note: "--note" },
+      lookups: {
+        id: (client, value) => client["task"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["task"]["finish"]({ ...request.params, ...request.payload }),
+  )
+
 export const TaskCommentCreate = (input: Command.Command.Config.Infer<typeof Commands.TaskCommentCreate>) =>
   Operation.run(
     ClientApi.groups["task-comment"].endpoints["task-comment.create"],
@@ -1039,6 +1054,187 @@ export const ScheduleRun = (input: Command.Command.Config.Infer<typeof Commands.
       },
     },
     (client, request) => client["schedule"]["run"]({ ...request.params, ...request.payload }),
+  )
+
+export const WebhookList = (input: Command.Command.Config.Infer<typeof Commands.WebhookList>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.list"],
+    {
+      query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+      labels: { spaceId: "--space", page: "--page", pageSize: "--page-size" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["list"]({ ...request.query }),
+  )
+
+export const WebhookGet = (input: Command.Command.Config.Infer<typeof Commands.WebhookGet>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.get"],
+    { params: { idOrSlug: input["idOrSlug"] }, labels: { idOrSlug: "<webhook>" } },
+    (client, request) => client["webhook"]["get"]({ ...request.params }),
+  )
+
+export const WebhookCreate = (input: Command.Command.Config.Infer<typeof Commands.WebhookCreate>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.create"],
+    {
+      payload: { spaceId: input["spaceId"], slug: input["slug"], agentId: input["agentId"] },
+      input: input["input"],
+      labels: { spaceId: "--space", slug: "--slug", agentId: "--agent" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        agentId: (client, value) =>
+          client["agent"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["create"]({ ...request.payload }),
+  )
+
+export const WebhookUpdate = (input: Command.Command.Config.Infer<typeof Commands.WebhookUpdate>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.update"],
+    {
+      params: { id: input["id"] },
+      payload: {
+        name: input["name"],
+        message: input["message"],
+        agentId: input["agentId"],
+        fallbackUserId: input["fallbackUserId"],
+        mode: input["mode"],
+      },
+      input: input["input"],
+      labels: {
+        id: "<webhook>",
+        name: "--name",
+        message: "--message",
+        agentId: "--agent",
+        fallbackUserId: "--fallback-user-id",
+        mode: "--mode",
+      },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        agentId: (client, value) =>
+          client["agent"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["update"]({ ...request.params, ...request.payload }),
+  )
+
+export const WebhookArchive = (input: Command.Command.Config.Infer<typeof Commands.WebhookArchive>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.archive"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<webhook>" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["archive"]({ ...request.params }),
+  )
+
+export const WebhookRotateUrl = (input: Command.Command.Config.Infer<typeof Commands.WebhookRotateUrl>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.rotateUrl"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<webhook>" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["rotateUrl"]({ ...request.params, ...request.payload }),
+  )
+
+export const WebhookSetSigningSecret = (input: Command.Command.Config.Infer<typeof Commands.WebhookSetSigningSecret>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.setSigningSecret"],
+    {
+      params: { id: input["id"] },
+      payload: { secret: input["secret"] },
+      input: input["input"],
+      labels: { id: "<webhook>", secret: "--secret" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["setSigningSecret"]({ ...request.params, ...request.payload }),
+  )
+
+export const WebhookRevealSigningSecret = (
+  input: Command.Command.Config.Infer<typeof Commands.WebhookRevealSigningSecret>,
+) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.revealSigningSecret"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<webhook>" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["revealSigningSecret"]({ ...request.params, ...request.payload }),
+  )
+
+export const WebhookTest = (input: Command.Command.Config.Infer<typeof Commands.WebhookTest>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.test"],
+    {
+      params: { id: input["id"] },
+      payload: { requestIds: input["requestIds"] },
+      input: input["input"],
+      labels: { id: "<webhook>", requestIds: "--request-ids" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["test"]({ ...request.params, ...request.payload }),
+  )
+
+export const WebhookReplay = (input: Command.Command.Config.Infer<typeof Commands.WebhookReplay>) =>
+  Operation.run(
+    ClientApi.groups["webhook"].endpoints["webhook.replay"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<webhook>" },
+      lookups: {
+        id: (client, value) => client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook"]["replay"]({ ...request.params, ...request.payload }),
+  )
+
+export const WebhookRequestList = (input: Command.Command.Config.Infer<typeof Commands.WebhookRequestList>) =>
+  Operation.run(
+    ClientApi.groups["webhook-request"].endpoints["webhook-request.list"],
+    {
+      query: {
+        webhookId: input["webhookId"],
+        outcome: input["outcome"],
+        page: input["page"],
+        pageSize: input["pageSize"],
+      },
+      labels: { webhookId: "--webhook", outcome: "--outcome", page: "--page", pageSize: "--page-size" },
+      lookups: {
+        webhookId: (client, value) =>
+          client["webhook"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["webhook-request"]["list"]({ ...request.query }),
+  )
+
+export const WebhookRequestGet = (input: Command.Command.Config.Infer<typeof Commands.WebhookRequestGet>) =>
+  Operation.run(
+    ClientApi.groups["webhook-request"].endpoints["webhook-request.get"],
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<webhook-request>" } },
+    (client, request) => client["webhook-request"]["get"]({ ...request.params, ...request.payload }),
   )
 
 export const CredentialList = (input: Command.Command.Config.Infer<typeof Commands.CredentialList>) =>
@@ -1464,6 +1660,45 @@ export const SessionProfiles = (input: Command.Command.Config.Infer<typeof Comma
       },
     },
     (client, request) => client["app-profile-reach"]["session"]["profiles"]({ ...request.params }),
+  )
+
+export const SessionLinks = (input: Command.Command.Config.Infer<typeof Commands.SessionLinks>) =>
+  Operation.run(
+    ClientApi.groups["link"].endpoints["session.links"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<session>" },
+      lookups: {
+        id: (client, value) => client["session"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["link"]["session"]["links"]({ ...request.params }),
+  )
+
+export const SessionPullRequests = (input: Command.Command.Config.Infer<typeof Commands.SessionPullRequests>) =>
+  Operation.run(
+    ClientApi.groups["link"].endpoints["session.pullRequests"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<session>" },
+      lookups: {
+        id: (client, value) => client["session"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["link"]["session"]["pullRequests"]({ ...request.params }),
+  )
+
+export const TaskPullRequests = (input: Command.Command.Config.Infer<typeof Commands.TaskPullRequests>) =>
+  Operation.run(
+    ClientApi.groups["link"].endpoints["task.pullRequests"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<task>" },
+      lookups: {
+        id: (client, value) => client["task"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["link"]["task"]["pullRequests"]({ ...request.params }),
   )
 
 export const AppProfileDelete = (input: Command.Command.Config.Infer<typeof Commands.AppProfileDelete>) =>

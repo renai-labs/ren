@@ -127,12 +127,15 @@ const begin = Effect.fnUntraced(function* (
     readonly onEnvironment?: boolean
     readonly agent?: string
     readonly url?: string
+    readonly prepare?: (directory: string) => Promise<void>
   } = {},
 ) {
   const sessionId = Session.ID.create()
   const onEnvironment = options.onEnvironment ?? true
   if (onEnvironment)
     yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* TestEnvironment.url), sessionId))
+  const prepare = options.prepare
+  if (prepare) yield* Effect.promise(() => prepare(folder(sessionId)))
   yield* restart(opened.harness, sessionId, onEnvironment ? folder(sessionId) : undefined, options.agent)
   const send = (script: StubModel.Script) => sendTo(opened.harness, sessionId, script)
   return {
@@ -494,6 +497,110 @@ it.live("the Chat API lists the shells that still run, reads a shell's output fr
   }),
 )
 
+it.live("a client runs a command on the session's sandbox, follows its output and reads how it ended", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const chat = opened.harness.chat
+    const events = yield* chat.events.pipe(
+      Stream.filter((event) => event.type === "shell.created" || event.type === "shell.exited"),
+      Stream.take(2),
+      Stream.runCollect,
+      Effect.forkScoped,
+    )
+    const started = yield* chat.createShell(session.sessionId, { command: "echo hi; pwd; exit 3" })
+    expect(started).toMatchObject({ sessionID: session.sessionId, status: "running", command: "echo hi; pwd; exit 3" })
+    expect((yield* Fiber.join(events)).map((event) => event.type)).toEqual(["shell.created", "shell.exited"])
+    expect(yield* chat.shell(session.sessionId, started.id)).toMatchObject({
+      id: started.id,
+      sessionID: session.sessionId,
+      status: "exited",
+      exit: 3,
+    })
+    expect((yield* chat.shellOutput(session.sessionId, started.id, {})).output).toBe(
+      `hi\n${folder(session.sessionId)}\n`,
+    )
+  }),
+)
+
+it.live(
+  "the Chat API lists a folder on the sandbox and reads its files: text as utf8, anything else as base64, and the start of a large file",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const session = yield* begin(opened, {
+        prepare: (directory) =>
+          Promise.all([
+            Bun.write(join(directory, "notes.md"), "# Notes ✓\n"),
+            Bun.write(join(directory, "src/image.bin"), new Uint8Array([137, 80, 0, 255])),
+            Bun.write(join(directory, "src/large.txt"), "a".repeat(2 * 1024 * 1024)),
+          ]).then(() => undefined),
+      })
+      const chat = opened.harness.chat
+      expect(yield* chat.listFiles(session.sessionId, undefined)).toEqual([
+        { path: "src/", type: "directory" },
+        { path: "notes.md", type: "file" },
+      ])
+      expect(yield* chat.listFiles(session.sessionId, "src/")).toEqual([
+        { path: "src/image.bin", type: "file" },
+        { path: "src/large.txt", type: "file" },
+      ])
+      expect(yield* chat.readFile(session.sessionId, "notes.md")).toEqual({
+        path: "notes.md",
+        mime: "text/markdown",
+        size: 12,
+        encoding: "utf8",
+        content: "# Notes ✓\n",
+        truncated: false,
+      })
+      expect(yield* chat.readFile(session.sessionId, "src/image.bin")).toMatchObject({
+        encoding: "base64",
+        content: "iVAA/w==",
+        truncated: false,
+      })
+      const large = yield* chat.readFile(session.sessionId, "src/large.txt")
+      expect([large.size, large.content.length, large.truncated]).toEqual([2 * 1024 * 1024, 1024 * 1024, true])
+      expect(
+        (yield* Effect.all([
+          chat.readFile(session.sessionId, "missing.md").pipe(Effect.flip),
+          chat.listFiles(session.sessionId, "missing/").pipe(Effect.flip),
+        ])).map((error) => error._tag),
+      ).toEqual(["Harness.NotFound", "Harness.NotFound"])
+    }),
+)
+
+it.live(
+  "the Chat API reads the session's repository on the sandbox: its branch, and a diff that includes a file nobody added yet",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const git = (directory: string, ...args: ReadonlyArray<string>) =>
+        Bun.spawn(["git", "-c", "user.email=ren@example.com", "-c", "user.name=Ren", ...args], { cwd: directory })
+          .exited
+      const session = yield* begin(opened, {
+        prepare: async (directory) => {
+          await Bun.write(join(directory, "kept.txt"), "one\n")
+          await git(directory, "init", "-q", "-b", "main")
+          await git(directory, "add", ".")
+          await git(directory, "commit", "-qm", "first")
+        },
+      })
+      const directory = folder(session.sessionId)
+      yield* Effect.promise(() =>
+        Promise.all([Bun.write(join(directory, "kept.txt"), "two\n"), Bun.write(join(directory, "new.txt"), "new\n")]),
+      )
+      const chat = opened.harness.chat
+      expect(yield* chat.vcs(session.sessionId)).toEqual({
+        provider: "git",
+        branch: { current: "main", default: "main" },
+      })
+      expect(yield* chat.vcsDiff(session.sessionId, { mode: "working" })).toMatchObject([
+        { file: "kept.txt", status: "modified", additions: 1, deletions: 1 },
+        { file: "new.txt", status: "added", additions: 1, deletions: 0 },
+      ])
+    }),
+)
+
 it.live(
   "a client cannot run a command in the cell: the shell refuses a location without a sandbox, and nothing runs",
   () =>
@@ -551,7 +658,9 @@ it.live("V3 a revert with files to a turn that changed a file on the sandbox lis
     const second = stub.script({ tool: { name: "write", input: { path: file, content: "two\n" } } })
     const sent = yield* session.send(second)
     yield* Effect.promise(() => second.called(2))
-    yield* opened.host.client.session.wait({ sessionID: SessionID.make(session.sessionId) }).pipe(Effect.orDie)
+    yield* opened.host.client.experimental.session
+      .wait({ sessionID: SessionID.make(session.sessionId) })
+      .pipe(Effect.orDie)
     const staged = yield* opened.host.sessions.revert.stage({
       sessionID: SessionID.make(session.sessionId),
       messageID: SessionMessage.ID.make(sent.messageId),
@@ -844,7 +953,9 @@ it.live(
       const opened = yield* open()
       const session = yield* begin(opened)
       yield* session.turn(stub.script(), 1)
-      yield* opened.host.client.session.wait({ sessionID: SessionID.make(session.sessionId) }).pipe(Effect.orDie)
+      yield* opened.host.client.experimental.session
+        .wait({ sessionID: SessionID.make(session.sessionId) })
+        .pipe(Effect.orDie)
       expect(yield* opened.opens).toBe(0)
       const value = crypto.randomUUID()
       yield* Effect.promise(() => Bun.write(join(folder(session.sessionId), "marker.txt"), value))

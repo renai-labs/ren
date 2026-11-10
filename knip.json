@@ -21,7 +21,7 @@
         "test/**/*.test.ts",
         "test/lib/preload.ts"
       ],
-      "ignoreBinaries": ["celld", "e2b"],
+      "ignoreBinaries": ["celld", "e2b", "mktemp"],
       "ignoreDependencies": ["cloudflare"]
     },
     "packages/core": {

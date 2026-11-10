@@ -20,11 +20,13 @@ import { InfraGroup } from "./groups/infra.js"
 import { InsightsGroup } from "./groups/insights.js"
 import { InvitationGroup } from "./groups/invitation.js"
 import { LabelGroup } from "./groups/label.js"
+import { LinkGroup } from "./groups/link.js"
 import { MeGroup } from "./groups/me.js"
 import { MemoryGroup } from "./groups/memory.js"
 import { OrganizationSettingsGroup } from "./groups/organization-settings.js"
 import { RenInferenceGroup } from "./groups/ren-inference.js"
 import { ScheduleGroup, ScheduleRunGroup } from "./groups/schedule.js"
+import { WebhookGroup, WebhookRequestGroup } from "./groups/webhook.js"
 import { SessionGroup } from "./groups/session.js"
 import { SpaceGroup } from "./groups/space.js"
 import { SpaceEnvironmentTemplateGroup } from "./groups/space-environment-template.js"
@@ -58,9 +60,12 @@ export const Api = HttpApi.make("server")
   .add(TaskGroup)
   .add(TaskCommentGroup)
   .add(TaskActivityGroup)
+  .add(LinkGroup)
   .add(LabelGroup)
   .add(ScheduleGroup)
   .add(ScheduleRunGroup)
+  .add(WebhookGroup)
+  .add(WebhookRequestGroup)
   .add(CredentialGroup)
   .add(CredentialConnectGroup)
   .add(OAuthSessionGroup)

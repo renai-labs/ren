@@ -12,17 +12,21 @@
   "scripts": {
     "print-policies": "bun run script/print-policies.ts",
     "publish-apps": "bun run script/publish-apps.ts",
+    "slack-manifest": "bun run script/slack-manifest.ts",
     "ren:settings": "bun run script/ren-settings.ts",
-    "test": "bun ../../script/signoff/record.ts bun ../../script/test.ts",
+    "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun ../../script/test.ts",
     "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/brain-host.test.ts test/environment-lifecycle.test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b tsconfig.json tsconfig.tests.json"
+    "typecheck": "tsgo -b",
+    "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts",
+    "test:opencode": "REN_SLOW=1 bun ../../script/test.ts test/opencode- test/restore.slow.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-sts": "catalog:",
     "@aws-sdk/s3-presigned-post": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
+    "@bufbuild/cel": "catalog:",
     "@effect/sql-pg": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@ren/db": "workspace:*",
@@ -34,7 +38,9 @@
     "disposable-email-domains-js": "catalog:",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
-    "slackify-markdown": "5.0.0"
+    "slackify-markdown": "5.0.0",
+    "standardwebhooks": "catalog:",
+    "stripe": "catalog:"
   },
   "devDependencies": {
     "@effect/platform-bun": "catalog:",

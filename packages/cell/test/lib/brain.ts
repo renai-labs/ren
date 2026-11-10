@@ -9,7 +9,20 @@ import { ChatApi } from "@ren/protocol/chat"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Context, DateTime, Effect, FiberHandle, Layer, Option, Queue, Ref, Schema, Semaphore } from "effect"
+import {
+  Context,
+  DateTime,
+  Effect,
+  FiberHandle,
+  Layer,
+  Option,
+  Predicate,
+  Queue,
+  Ref,
+  Schema,
+  Semaphore,
+  Stream,
+} from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -24,6 +37,7 @@ import { Harness } from "../../src/harness/harness.js"
 import type { HarnessConfig } from "../../src/harness/config.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../../src/harness/opencode/server.js"
+import { OpenCodeEvents } from "../../src/harness/opencode/events.js"
 import { Fence } from "../../src/fence.js"
 import { HostToken } from "../../src/host-token.js"
 import { HotReload } from "../../src/hot-reload.js"
@@ -33,6 +47,7 @@ import { ModelStore } from "../../src/model-store.js"
 import { Restore } from "../../src/restore.js"
 import { Sync } from "../../src/sync.js"
 import { ModelsTest } from "./models.js"
+import { OpenCodeDriver } from "./opencode-driver.js"
 import { Shared } from "./shared.js"
 import { TestToken } from "./token.js"
 
@@ -56,6 +71,7 @@ export const make = Effect.fnUntraced(function* (
     readonly vars?: Readonly<Record<string, string>>
     readonly plugin?: Plugin.Plugin
     readonly apps?: AppCatalog.Info
+    readonly unreadableEvent?: string
   } = {},
 ) {
   const vars = Schema.decodeUnknownSync(Env.Vars)({ ...Shared.vars(Shared.stub().url), ...options.vars })
@@ -143,7 +159,31 @@ export const make = Effect.fnUntraced(function* (
     Option.none(),
     { saved: Option.none(), directoryOf: () => directory, apps: Option.fromUndefinedOr(options.apps) },
   )
-  const harness = yield* OpenCodeHarness.make(host, [])
+  const harness = yield* OpenCodeHarness.make(
+    options.unreadableEvent
+      ? {
+          ...host,
+          fetch: (request) =>
+            new URL(request.url).pathname === "/api/event"
+              ? Promise.resolve(
+                  new Response(
+                    OpenCodeEvents.stream(host.fetch).pipe(
+                      Stream.map((event) =>
+                        Predicate.hasProperty(event, "type") && event.type === options.unreadableEvent
+                          ? { ...event, data: {} }
+                          : event,
+                      ),
+                      Stream.map((event) => new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)),
+                      Stream.toReadableStream,
+                    ),
+                    { headers: { "content-type": "text/event-stream" } },
+                  ),
+                )
+              : host.fetch(request),
+        }
+      : host,
+    [],
+  )
   const waits = yield* Queue.unbounded<number>()
   const cell = Context.merge(
     services,
@@ -249,6 +289,8 @@ export const make = Effect.fnUntraced(function* (
       Effect.promise(() => web.fetch(new Request(`http://cell${path}`, init))),
     store: Context.get(services, ModelStore.Service),
     opencode,
+    driver: OpenCodeDriver.make(opencode, directory),
+    transcript: harness.transcript,
     harness: host.fetch,
     chat,
     chatAs,

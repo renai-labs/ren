@@ -380,7 +380,7 @@ const handlers = Layer.mergeAll(
           ),
         )
         .handle("session.command", (request) =>
-          run((harness) => harness.chat.command(request.params.sessionID, request.payload).pipe(notFound)),
+          run((harness) => harness.chat.command(request.params.sessionID, request.payload).pipe(notFound, rejected)),
         )
         .handle("session.model.switch", (request) =>
           run((harness) =>
@@ -439,6 +439,14 @@ const handlers = Layer.mergeAll(
         .handle("shell.list", (request) =>
           run((harness) => harness.chat.shells(request.params.sessionID).pipe(notFound)),
         )
+        .handle("shell.create", (request) =>
+          run((harness) =>
+            harness.chat.createShell(request.params.sessionID, request.payload).pipe(notFound, rejected),
+          ),
+        )
+        .handle("shell.get", (request) =>
+          run((harness) => harness.chat.shell(request.params.sessionID, request.params.shellID).pipe(notFound)),
+        )
         .handle("shell.output", (request) =>
           run((harness) =>
             harness.chat
@@ -477,17 +485,46 @@ const handlers = Layer.mergeAll(
   ),
   HttpApiBuilder.group(ChatApi, "file", (group) =>
     Effect.map(harnessed, (run) =>
-      group.handle("file.search", (request) =>
-        run((harness) =>
-          harness.chat
-            .files(request.params.sessionID, {
-              query: request.query.query,
-              ...(request.query.type && { type: request.query.type }),
-              ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
-            })
-            .pipe(notFound),
+      group
+        .handle("file.search", (request) =>
+          run((harness) =>
+            harness.chat
+              .files(request.params.sessionID, {
+                query: request.query.query,
+                ...(request.query.type && { type: request.query.type }),
+                ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
+              })
+              .pipe(notFound),
+          ),
+        )
+        .handle("file.list", (request) =>
+          run((harness) =>
+            harness.chat.listFiles(request.params.sessionID, request.query.path).pipe(notFound, rejected),
+          ),
+        )
+        .handle("file.read", (request) =>
+          run((harness) =>
+            harness.chat.readFile(request.params.sessionID, request.query.path).pipe(notFound, rejected),
+          ),
         ),
-      ),
+    ),
+  ),
+  HttpApiBuilder.group(ChatApi, "vcs", (group) =>
+    Effect.map(harnessed, (run) =>
+      group
+        .handle("vcs.get", (request) =>
+          run((harness) => harness.chat.vcs(request.params.sessionID).pipe(notFound, rejected)),
+        )
+        .handle("vcs.diff", (request) =>
+          run((harness) =>
+            harness.chat
+              .vcsDiff(request.params.sessionID, {
+                mode: request.query.mode ?? "working",
+                ...(Predicate.isNumber(request.query.context) && { context: request.query.context }),
+              })
+              .pipe(notFound, rejected),
+          ),
+        ),
     ),
   ),
   HttpApiBuilder.group(ChatApi, "websearch", (group) =>

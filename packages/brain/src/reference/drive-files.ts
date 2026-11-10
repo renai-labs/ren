@@ -16,6 +16,8 @@ export interface Attached {
 
 const readable = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "application/json"])
 
+const maxDocumentBytes = 5_000_000
+
 const read = (client: EnvironmentClient.Client, path: string, size: number) =>
   Effect.forEach(
     Array.from(
@@ -61,7 +63,8 @@ export const attach = Effect.fn("DriveFiles.attach")(function* (
         const mime = Drive.typeOf(file.path)
         const size = info.sizeBytes
         const bytes =
-          size <= Session.maxFileBytes && (mime.startsWith("text/") || readable.has(mime))
+          size <= (mime.startsWith("image/") ? Session.maxFileBytes : maxDocumentBytes) &&
+          (mime.startsWith("text/") || readable.has(mime))
             ? Option.some(yield* read(client, path, size).pipe(Effect.mapError(failed)))
             : Option.none<Uint8Array>()
         return { file: { path: file.path, name: file.name, mime, size }, bytes }

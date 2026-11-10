@@ -23,6 +23,9 @@ export interface Interface {
   readonly unavailable: (brainId: Brain.ID) => Effect.Effect<void>
   readonly retry: (brainId: Brain.ID) => Effect.Effect<void>
   readonly notify: (brainId: Brain.ID) => Effect.Effect<void>
+  readonly onInterrupted: (
+    listener: (interrupted: BrainLifecycle.Interrupted) => Effect.Effect<void>,
+  ) => Effect.Effect<void>
 }
 
 // oxlint-disable-next-line ren/no-comments -- HR12: a push never waits more than 2 s for a brain, and a failure is ignored: the brain's next timed pull brings the change.
@@ -85,6 +88,7 @@ export const layerCell = Layer.effect(
       unavailable: () => Effect.void,
       retry: () => Effect.void,
       notify: (brainId) => pushTo(client, brainId, Effect.map(target(brainId), Option.some)),
+      onInterrupted: () => Effect.void,
     })
   }),
 )
@@ -104,6 +108,7 @@ export const layerSandbox = Layer.effect(
       unavailable: lifecycle.check,
       retry: lifecycle.retry,
       notify: (brainId) => pushTo(client, brainId, lifecycle.awake(brainId)),
+      onInterrupted: lifecycle.onInterrupted,
     })
   }),
 )

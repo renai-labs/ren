@@ -15,6 +15,7 @@ const definition = (app: AppSchema.Info) => ({
   requiredCredentials: app.requiredCredentials,
   mcps: app.mcps,
   skills: app.skills,
+  webhooks: app.webhooks,
   dependsOn: app.dependsOn,
 })
 

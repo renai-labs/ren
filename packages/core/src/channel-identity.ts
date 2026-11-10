@@ -10,7 +10,7 @@ import { ChannelProvider } from "./channel-provider.js"
 export interface Interface {
   readonly find: (
     organizationId: Auth.OrganizationID,
-    event: Channel.Event,
+    event: Pick<Channel.Event, "provider" | "install" | "sender">,
   ) => Effect.Effect<Option.Option<Auth.UserID>>
 }
 
@@ -29,7 +29,10 @@ export const layer = Layer.effect(
       Option.map(Option.fromNullishOr(rows.at(0)?.userId), (id) => Auth.UserID.make(id))
 
     return Service.of({
-      find: Effect.fn("ChannelIdentity.find")(function* (organizationId: Auth.OrganizationID, event: Channel.Event) {
+      find: Effect.fn("ChannelIdentity.find")(function* (
+        organizationId: Auth.OrganizationID,
+        event: Pick<Channel.Event, "provider" | "install" | "sender">,
+      ) {
         const linked = firstUser(
           yield* database.db
             .select({ userId: account.userId })

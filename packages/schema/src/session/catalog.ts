@@ -33,6 +33,16 @@ export const File = Schema.Struct({ path: Schema.String, type: FileType }).annot
   identifier: "SessionCatalog.File",
 })
 
+export interface FileContent extends Schema.Schema.Type<typeof FileContent> {}
+export const FileContent = Schema.Struct({
+  path: Schema.String,
+  mime: Schema.String,
+  size: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  encoding: Schema.Literals(["utf8", "base64"]),
+  content: Schema.String,
+  truncated: Schema.Boolean,
+}).annotate({ identifier: "SessionCatalog.FileContent" })
+
 export interface WebSearchProvider extends Schema.Schema.Type<typeof WebSearchProvider> {}
 export const WebSearchProvider = Schema.Struct({ id: Schema.String, name: Schema.String }).annotate({
   identifier: "SessionCatalog.WebSearchProvider",

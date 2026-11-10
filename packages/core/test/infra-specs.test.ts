@@ -71,6 +71,7 @@ describe("InfraSpecs", () => {
               agents: {},
               apps: {},
               schedules: {},
+              webhooks: {},
               channels: {},
               memory: { "memory.md": "" },
               uses: { agents: ["build"] },
@@ -88,6 +89,7 @@ describe("InfraSpecs", () => {
               },
               apps: {},
               schedules: {},
+              webhooks: {},
               channels: {},
               memory: { "memory.md": "" },
               uses: { agents: [] },
@@ -203,7 +205,7 @@ describe("InfraSpecs", () => {
                 maxHandoffs: 8,
                 agents: [
                   { agent: "ren", to: [{ agent: "build" }] },
-                  { agent: "build", maxRuns: 3, to: [{ agent: "review" }] },
+                  { agent: "build", maxRuns: 3, finish: true, to: [{ agent: "review" }] },
                   { agent: "review", to: [{ agent: "build", max: 2, else: "ren", start: "continue" }] },
                 ],
               },
@@ -438,9 +440,9 @@ describe("InfraSpecs", () => {
       const plan = yield* infra.plan(o.admin, {
         bindings: Schema.decodeUnknownSync(Infra.Bindings)({
           organization: o.bindings.organization,
-          spaces: { home: { timezone: "Asia/Kolkata", webhooks: { hook: { secret: "HOOK" } } }, gone: {} },
+          spaces: { home: { timezone: "Asia/Kolkata" }, gone: {} },
         }),
-        spec: spec({ home: { name: "Home", webhooks: { hook: { purpose: "Deploys." } } } }),
+        spec: spec({ home: { name: "Home" } }),
       })
 
       expect(plan.problems).toEqual([
@@ -449,8 +451,6 @@ describe("InfraSpecs", () => {
           message: "deploy.yaml binds space “gone”, which the spec does not declare.",
         },
         { path: "deploy.yaml/spaces/home/timezone", message: "Infra does not apply the timezone of a space yet." },
-        { path: "deploy.yaml/spaces/home/webhooks", message: "Infra does not apply webhooks yet." },
-        { path: "spaces/home/webhooks", message: "Infra does not apply webhooks yet." },
       ])
     }),
   )

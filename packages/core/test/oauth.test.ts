@@ -371,6 +371,7 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
           requiredCredentials: [],
           mcps: {},
           skills: {},
+          webhooks: {},
           dependsOn: [],
           expectedRevision: dropped.app.revision,
         })

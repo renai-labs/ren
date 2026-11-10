@@ -191,7 +191,7 @@ const toCall = (body: ChatRequest, request: Request): Call => {
   const summarizes = prompt.includes("## Objective")
   const kind = summarizes ? "compaction" : "turn"
   return {
-    kind: system.includes("title generator") ? "title" : kind,
+    kind: system.includes("You name conversations") ? "title" : kind,
     path: new URL(request.url).pathname,
     marker: (prompt === restarted || summarizes
       ? prompts.findLast((candidate) => markerPattern.test(candidate))

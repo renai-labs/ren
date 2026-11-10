@@ -17,7 +17,7 @@ import {
   Stream,
 } from "effect"
 import { TestClock } from "effect/testing"
-import { OpenCodeSync } from "@ren/brain/opencode-sync"
+import { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
 import { Cell } from "../src/cell.js"
 import { Harness } from "../src/harness/harness.js"
 import { OpenCodeChat } from "../src/harness/opencode/chat.js"
@@ -88,6 +88,7 @@ const setup = Effect.gen(function* () {
       skills: () => Effect.die(new Error("alarm must not read skills")),
       commands: () => Effect.die(new Error("alarm must not read commands")),
       findFiles: () => Effect.die(new Error("alarm must not search files")),
+      environment: () => Effect.die(new Error("alarm must not reach the environment")),
       webSearchProviders: () => Effect.die(new Error("alarm must not read web search providers")),
       activate: () => Effect.die(new Error("alarm must not activate sessions")),
       chats: Option.none(),
@@ -374,7 +375,7 @@ opencode.effect("a question unanswered for the park time is interrupted, and the
     yield* Fiber.join(waiting)
     yield* brain.alarm
     const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     yield* brain.alarm
     expect(yield* brain.state).toMatchObject(closed)
     expect(
@@ -402,7 +403,7 @@ opencode.effect("a prompt queued behind a running turn runs after it, and the ha
     expect((yield* brain.state).isOpen).toBe(true)
     yield* Effect.promise(() => second.called())
     const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.experimental.session.wait({ sessionID })
     yield* brain.alarm
     expect(yield* brain.state).toMatchObject(closed)
     expect(
@@ -424,7 +425,7 @@ opencode.effect(
       yield* brain.start()
       const sessionID = SessionID.make(brain.id)
       yield* brain.send(`once ${Shared.stub().script().marker}`)
-      yield* brain.opencode.session.wait({ sessionID })
+      yield* brain.opencode.experimental.session.wait({ sessionID })
       yield* Effect.forEach(
         Array.from({ length: 60 }),
         () => brain.opencode.session.switchAgent({ sessionID, agent: Agent.ID.make("build") }),

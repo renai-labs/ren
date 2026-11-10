@@ -1,17 +1,13 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test"
-import { Database } from "bun:sqlite"
-import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
-import { Sync } from "@ren/schema/sync"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { SessionID } from "@opencode/schema/session-id"
 import { SessionCatalog } from "@ren/schema/session/catalog"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
-import { DateTime, Effect, Layer, Option, Predicate, Schedule, Schema, SubscriptionRef } from "effect"
+import { DateTime, Effect, Layer, Option, Predicate, Schedule, SubscriptionRef } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChatSession } from "../src/chat-session.js"
 import { ChatState } from "../src/chat-state.js"
@@ -121,6 +117,24 @@ const logged = (brain: Brain, log: Array<string>) =>
       ),
     ),
   )
+
+test("an unreadable live rename rereads the persisted title without another user action", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make({ unreadableEvent: "session.renamed" })
+      yield* brain.start()
+      const log: Array<string> = []
+      const chat = yield* ChatSession.make({ sessionID: brain.id, access }).pipe(Effect.provide(logged(brain, log)))
+      yield* chat.open(brain.id)
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.state, (state) => Boolean(state.info[brain.id]))
+      const streams = log.filter((path) => path.endsWith("/event")).length
+      yield* brain.driver.rename(brain.id, "Recovered title")
+      const recovered = yield* ChatTest.until(chat.state, (state) => state.info[brain.id]?.title === "Recovered title")
+      expect(recovered.info[brain.id]?.title).toBe("Recovered title")
+      expect(log.filter((path) => path.endsWith("/event"))).toHaveLength(streams)
+    }),
+  ))
 
 test("while access is starting the history comes from Ren, a page that is too large is asked again smaller, and at ready the brain's history shows each message once (E108, E111)", () =>
   ChatTest.live(
@@ -254,7 +268,7 @@ test("a question whose turn stopped shows as expired, and answering it sends one
       const asked = yield* ChatTest.until(chat.state, (state) => (state.forms[brain.id] ?? []).length > 0)
       const form = asked.forms[brain.id]?.at(0)
       if (!form) return yield* Effect.die(new Error("No question"))
-      yield* brain.opencode.session.interrupt({ sessionID: SessionID.make(brain.id) })
+      yield* brain.driver.interrupt(brain.id)
       yield* ChatTest.until(chat.state, (state) =>
         ChatState.expiredForms(state, brain.id).some((each) => each.id === form.id),
       )
@@ -317,23 +331,12 @@ test("a chat restored while its event stream is open shows each restored message
       const source = yield* BrainTest.make({ database: join(folder, "source.db") })
       yield* source.start()
       yield* source.send(stub.script().marker)
-      yield* source.opencode.session.wait({ sessionID: SessionID.make(source.id) })
-      const database = new Database(join(folder, "source.db"), { readonly: true })
-      const info = OpenCodeRows.session(database.query("select * from session_v2 where id = ?").get(source.id))
-      const messages = yield* Effect.forEach(
-        Schema.decodeUnknownSync(Schema.Array(Sync.OpenCodeMessageRow))(
-          database
-            .query("select id, session_id, type, seq, data from session_message where session_id = ? order by seq, id")
-            .all(source.id),
-        ),
-        OpenCodeRows.message,
-      )
-      database.close()
+      yield* source.driver.wait(source.id)
       const target = yield* BrainTest.make({ id: source.id, database: join(folder, "target.db") })
       const chat = yield* open(target)
       yield* chat.open(target.id).pipe(Effect.ignore)
       yield* ChatTest.until(chat.status, (status) => status === "connected")
-      yield* target.opencode.session.import({ info, messages, location: info.location })
+      yield* target.driver.copy({ database: join(folder, "source.db"), id: source.id })
       const expected = (yield* target.chat.session["session.messages"]({
         params: { sessionID: target.id },
         query: { limit: 200 },
@@ -475,10 +478,7 @@ test("a permission request arrives live and leaves once the member answers it", 
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
-      yield* brain.opencode.session.update({
-        sessionID: SessionID.make(brain.id),
-        permissions: [{ action: "webfetch", resource: "*", effect: "ask" }],
-      })
+      yield* brain.driver.permissions(brain.id, [{ action: "webfetch", resource: "*", effect: "ask" }])
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
       yield* ChatTest.until(chat.status, (status) => status === "connected")
@@ -499,10 +499,7 @@ test("auto-approve answers a live request once, and one asked before it was enab
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
-      yield* brain.opencode.session.update({
-        sessionID: SessionID.make(brain.id),
-        permissions: [{ action: "webfetch", resource: "*", effect: "ask" }],
-      })
+      yield* brain.driver.permissions(brain.id, [{ action: "webfetch", resource: "*", effect: "ask" }])
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
       yield* ChatTest.until(chat.status, (status) => status === "connected")
@@ -547,7 +544,7 @@ test("coalesces duplicate gestures until the admission request settles", () =>
         chat.state,
         (state) => settled(brain.id)(state) && ChatState.messages(state, brain.id).length >= 6,
       )
-      const reply = stub.script({ reply: "after the summary" })
+      const reply = stub.script({ ...summarized, reply: "after the summary" })
       const results = yield* Effect.all([chat.compact(), chat.compact(), chat.prompt({ text: reply.marker })], {
         concurrency: "unbounded",
       })
@@ -628,10 +625,7 @@ test("a rename reaches the chat after its session read, so a stale read cannot u
       yield* brain.start()
       const chat = yield* open(brain)
       yield* ChatTest.until(chat.status, (status) => status === "connected")
-      yield* Effect.all([
-        chat.open(brain.id),
-        brain.opencode.session.update({ sessionID: SessionID.make(brain.id), title: "Renamed live" }),
-      ])
+      yield* Effect.all([chat.open(brain.id), brain.driver.rename(brain.id, "Renamed live")])
       const renamed = yield* ChatTest.until(chat.state, (state) => state.info[brain.id]?.title === "Renamed live")
       expect(renamed.info[brain.id]?.title).toBe("Renamed live")
     }),
@@ -720,6 +714,7 @@ test("a queued prompt is withdrawn at once, and one the session took meanwhile s
       const held = stub.script({ hold: true })
       yield* chat.prompt({ text: held.marker })
       yield* Effect.promise(() => held.called())
+      yield* ChatTest.until(chat.state, (state) => ChatState.pending(state, brain.id).length === 0)
       const withdrawn = yield* chat.prompt({ text: stub.script().marker, delivery: "queue" })
       yield* chat.cancelInput(withdrawn)
       const after = yield* SubscriptionRef.get(chat.state)
@@ -903,8 +898,7 @@ test("a running shell shows as background work, its output reads from a cursor, 
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
       yield* ChatTest.until(chat.status, (status) => status === "connected")
-      const sessionID = SessionID.make(brain.id)
-      yield* brain.opencode.session.shell({ sessionID, command: "printf 'hello world'" })
+      yield* brain.driver.shell(brain.id, "printf 'hello world'")
       const printed = yield* ChatTest.until(chat.state, (state) =>
         ChatState.messages(state, brain.id).some((message) => message.type === "shell" && message.status !== "running"),
       )
@@ -914,7 +908,7 @@ test("a running shell shows as background work, its output reads from a cursor, 
       expect(yield* chat.shellOutput(brain.id, shellID, 0)).toMatchObject({ output: "hello world", cursor: 11 })
       expect(yield* chat.shellOutput(brain.id, shellID, 6)).toMatchObject({ output: "world", cursor: 11 })
 
-      yield* brain.opencode.session.shell({ sessionID, command: "sleep 30" }).pipe(Effect.forkScoped)
+      yield* brain.driver.shell(brain.id, "sleep 30").pipe(Effect.forkScoped)
       const running = yield* ChatTest.until(chat.state, (state) => ChatState.shells(state, brain.id).length > 0)
       const [sleeping] = ChatState.shells(running, brain.id)
       if (!sleeping) return yield* Effect.die(new Error("No running shell"))

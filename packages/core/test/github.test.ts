@@ -166,7 +166,7 @@ describe("GitHub", () => {
   )
 
   app.live(
-    "a pull request opened, not as a draft, or marked ready for review is a pull_request_ready trigger from its author",
+    "a pull request opened, not as a draft, or marked ready for review is a pull_request_ready trigger from its author, and an open names its tasks",
     () =>
       Effect.gen(function* () {
         const provider = GitHub.make(yield* client)
@@ -182,6 +182,9 @@ describe("GitHub", () => {
                 pull_request: {
                   number: 41,
                   html_url: "https://github.com/acme/api/pull/41",
+                  title: "Fix the deploy",
+                  body: "Closes ACME-7",
+                  head: { ref: "acme-7-fix-deploy" },
                   draft: overrides.draft ?? false,
                   user: { id: 1, login: "hubot", type: "User" },
                 },
@@ -202,14 +205,29 @@ describe("GitHub", () => {
             files: [],
             trigger: "pull_request_ready",
           },
+          signal: {
+            kind: "mentioned",
+            install: "77",
+            link: { kind: "github_pr", key: "acme/api#41" },
+            url: "https://github.com/acme/api/pull/41",
+            sender: { accountId: "583231", handle: "octocat" },
+            text: "acme-7-fix-deploy\nFix the deploy\nCloses ACME-7",
+          },
         })
         const others = yield* Effect.all([
           pulled("ready_for_review", { draft: false }),
           pulled("opened", { draft: true }),
+          pulled("edited"),
           pulled("synchronize"),
           pulled("opened", { sender: { id: 9001, login: "ren-test[bot]", type: "Bot" } }),
         ])
-        expect(others.map((parsed) => parsed._tag)).toEqual(["Event", "Ignore", "Ignore", "Ignore"])
+        expect(others.map((parsed) => [parsed._tag, "signal" in parsed])).toEqual([
+          ["Event", false],
+          ["Signal", true],
+          ["Signal", true],
+          ["Ignore", false],
+          ["Signal", true],
+        ])
       }),
   )
 
@@ -248,6 +266,43 @@ describe("GitHub", () => {
         yield* closed({ merged: true, sender: { id: 41898282, login: "github-actions[bot]", type: "Bot" } }),
       ).toEqual(signal)
       expect((yield* closed({ merged: false }))._tag).toBe("Ignore")
+    }),
+  )
+
+  app.live("an issue opened or edited names its tasks; other issue actions are ignored", () =>
+    Effect.gen(function* () {
+      const provider = GitHub.make(yield* client)
+      const issue = (action: string) =>
+        provider.parse(
+          request(
+            "issues",
+            JSON.stringify({
+              action,
+              installation: { id: 77 },
+              sender: octocat,
+              repository: { id: 8812, full_name: "acme/api", private: false },
+              issue: {
+                number: 12,
+                html_url: "https://github.com/acme/api/issues/12",
+                title: "Deploy fails",
+                body: null,
+              },
+            }),
+          ),
+        )
+      expect(yield* issue("opened")).toEqual({
+        _tag: "Signal",
+        signal: {
+          kind: "mentioned",
+          install: "77",
+          link: { kind: "github_issue", key: "acme/api#12" },
+          url: "https://github.com/acme/api/issues/12",
+          sender: { accountId: "583231", handle: "octocat" },
+          text: "Deploy fails",
+        },
+      })
+      expect((yield* issue("edited"))._tag).toBe("Signal")
+      expect((yield* issue("closed"))._tag).toBe("Ignore")
     }),
   )
 

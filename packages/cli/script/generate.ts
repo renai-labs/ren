@@ -134,7 +134,7 @@ const resources: ReadonlyArray<Resource> = [
     name: "task",
     one: "a task",
     many: "tasks",
-    descriptions: { assign: "Assign a task", start: "Start a task", review: "Review a task" },
+    descriptions: { assign: "Assign a task", start: "Start a task", review: "Review a task", finish: "Finish a task" },
   },
   {
     group: "task-comment",
@@ -166,6 +166,30 @@ const resources: ReadonlyArray<Resource> = [
     one: "a schedule",
     many: "schedules",
     descriptions: { pause: "Pause a schedule", resume: "Resume a schedule", run: "Run a schedule now" },
+  },
+  {
+    group: "webhook",
+    about: "Manage webhooks",
+    path: ["webhook"],
+    name: "webhook",
+    one: "a webhook",
+    many: "webhooks",
+    descriptions: {
+      rotateUrl: "Replace a webhook’s URL",
+      setSigningSecret: "Set a webhook’s signing secret",
+      revealSigningSecret: "Show a webhook’s signing secret",
+      test: "Test a parser on a webhook’s recorded requests",
+      replay: "Start the chats of a webhook’s recorded requests, 100 at a time",
+    },
+  },
+  {
+    group: "webhook-request",
+    about: "Read the requests that reached a webhook",
+    path: ["webhook-request"],
+    name: "webhook-request",
+    one: "a webhook request",
+    many: "webhook requests",
+    descriptions: { get: "Show one request with its headers and body" },
   },
   {
     group: "credential",
@@ -251,6 +275,7 @@ const references: Readonly<
   taskId: { operation: "task.get", title: "Task" },
   parentId: { operation: "task.get", title: "Parent task" },
   scheduleId: { operation: "schedule.get", title: "Schedule" },
+  webhookId: { operation: "webhook.get", title: "Webhook" },
   environmentTemplateId: { operation: "environment-template.get", title: "Environment template", name: "template" },
   profileId: { operation: "app-profile.get", title: "App profile" },
 }
@@ -273,6 +298,24 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     path: ["session", "profiles"],
     description: "List the profiles a chat reaches",
     ...resolved("session", "session.get"),
+  },
+  {
+    operation: "session.links",
+    path: ["session", "links"],
+    description: "List a chat’s tasks, pull requests, issues and threads",
+    ...resolved("session", "session.get"),
+  },
+  {
+    operation: "session.pullRequests",
+    path: ["session", "pull-requests"],
+    description: "List a chat’s pull requests and their state",
+    ...resolved("session", "session.get"),
+  },
+  {
+    operation: "task.pullRequests",
+    path: ["task", "pull-requests"],
+    description: "List a task’s pull requests and their state",
+    ...resolved("task", "task.get"),
   },
   {
     operation: "app-profile.delete",

@@ -14,24 +14,27 @@ docker compose up -d
 
 ## Development
 
-| Command            | What it does                                      |
-| ------------------ | ------------------------------------------------- |
-| `bun run dev`      | Start the API server on port 4000 with watch      |
-| `bun run dev:app`  | Start the web app (proxies the API to the server) |
-| `bun run dev:site` | Start the docs site                               |
-| `bun run generate` | Regenerate `openapi.json` and the clients         |
-| `bun run format`   | Format the repo with oxfmt                        |
-| `bun run check`    | Lint, check formatting and typecheck everything   |
+| Command                                 | What it does                                       |
+| --------------------------------------- | -------------------------------------------------- |
+| `bun run dev`                           | Start the API server on port 4000 with watch       |
+| `bun run dev:app`                       | Start the web app (proxies the API to the server)  |
+| `bun run dev:site`                      | Start the docs site                                |
+| `bun run generate`                      | Regenerate `openapi.json` and the clients          |
+| `bun run format`                        | Format the repo with oxfmt                         |
+| `bun run check`                         | Typecheck and lint what changed since `main`       |
+| `bun run test`                          | Run the tests that cover what changed since `main` |
+| `bun run check:all`, `bun run test:all` | The same for everything                            |
 
 The web app and the API run on separate origins. The app is served under `/app/` (`http://localhost:5173/app/` in development, `https://useren.ai/app/` in production) and calls the API directly at `VITE_REN_API_URL` (default `http://localhost:4000` in development, `https://api.useren.ai` in production) with credentials. The server allows the origins in `TRUSTED_ORIGINS` (CORS and Better Auth) and builds email links from `APP_URL`, which includes `/app`.
 
 ## Verification
 
-Run tests and typechecks from the affected package, not the repo root:
+Run tests and typechecks from the affected package, or from the repo root for every changed package:
 
 ```sh
 cd packages/core
 bun run test
+bun run test:all
 bun typecheck
 ```
 
@@ -41,8 +44,8 @@ Database tests need Postgres from `docker compose up -d`. End-to-end tests live 
 
 Pull requests have no CI. `git push` signs off each commit it sends instead, from your machine:
 
-- `bun run lint`, `bun run typecheck` and each package's `bun run test` record their result for the exact files they ran on, in `.git/ren-signoff`. A run with extra arguments, such as one test file, is not recorded.
-- The pre-push hook reuses the runs that match the pushed commit's files, and runs lint and typecheck when they are missing. A lint or typecheck failure blocks the push. It never runs tests: the signoff shows the latest test run of each package affected since `main`, or that it did not run on these files. When the working directory differs from the pushed commit, the hook runs `bun run check` as before and reuses only earlier matching runs.
+- `bun run lint`, `bun run typecheck` and each package's `bun run test` and `bun run test:all` record their result for the exact files they ran on, in `.git/ren-signoff`. A run with extra arguments, such as one test file, is not recorded.
+- The pre-push hook reuses the runs that match the pushed commit's files, and runs lint and typecheck when they are missing. A lint or typecheck failure blocks the push. It never runs tests: the signoff shows the latest test run of each package affected since `main`, or that it did not run on these files. A `bun run test` run counts when it ran at least one test file; the status names the packages where only the changed files ran. When the working directory differs from the pushed commit, the hook runs `bun run check:all` as before and reuses only earlier matching runs. `bun run check` is the faster run for the inner loop and does not sign off.
 - When GitHub accepts the push, the `reference-transaction` hook posts the `signoff/lint`, `signoff/typecheck` and `signoff/test` statuses on the commit with `gh`. Nothing blocks a merge, and a commit pushed without the hooks has no statuses.
 - `gh` must be logged in with access to commit statuses, and the push must go to a named remote such as `origin`.
 

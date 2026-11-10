@@ -140,7 +140,7 @@ export function TaskPage(props: { session: ((dock: ReactNode) => ReactNode) | nu
           </PropertySection>
           {task.links.length > 0 ? (
             <PropertySection title="Links">
-              <TaskLinks links={task.links} />
+              <LinksProperty task={task} />
             </PropertySection>
           ) : null}
           <PropertySection title="Labels">
@@ -149,6 +149,11 @@ export function TaskPage(props: { session: ((dock: ReactNode) => ReactNode) | nu
           <PropertySection title="Space">
             <SpaceProperty task={task} onAssign={reassign} />
           </PropertySection>
+          {task.createdBy.sessionId ? (
+            <PropertySection title="Created in session">
+              <CreatedInProperty sessionId={task.createdBy.sessionId} onOpenSession={openSession} />
+            </PropertySection>
+          ) : null}
         </aside>
       </div>
       <ConfirmDialog
@@ -688,6 +693,31 @@ function LabelPicker(props: { task: TaskInfo; onChange: (patch: Patch) => void }
         </CommandGroup>
       </CommandList>
     </Command>
+  )
+}
+
+function LinksProperty(props: { task: TaskInfo }) {
+  const { api } = RouterContext.useRouterContext()
+  const pullRequests = useQuery({
+    ...api.link.task.pullRequests.queryOptions({ id: props.task.id }),
+    enabled: props.task.links.some((link) => link.kind === "github_pr"),
+  })
+  return <TaskLinks links={props.task.links} pullRequests={pullRequests.data} />
+}
+
+function CreatedInProperty(props: { sessionId: string; onOpenSession: (session: string | undefined) => void }) {
+  const { api } = RouterContext.useRouterContext()
+  const session = useQuery({ ...api.session.get.queryOptions({ idOrSlug: props.sessionId }), retry: false })
+  return (
+    <Button
+      variant="ghost"
+      className={cn(propertyButton, "max-w-full")}
+      aria-label="Open the session that created this task"
+      onClick={() => props.onOpenSession(props.sessionId)}
+    >
+      <IconMessage />
+      <span className="truncate">{session.data?.title ?? "Session"}</span>
+    </Button>
   )
 }
 

@@ -11,9 +11,10 @@
   "scripts": {
     "generate": "bun run script/generate-openapi.ts",
     "check:generated": "bun run script/generate-openapi.ts --check",
-    "test": "bun ../../script/signoff/record.ts bun test --only-failures",
+    "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun test --only-failures",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo -b",
+    "test:all": "bun ../../script/signoff/record.ts bun test --only-failures"
   },
   "dependencies": {
     "@ren/schema": "workspace:*",

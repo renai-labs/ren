@@ -1,8 +1,9 @@
 import { describe, expect } from "bun:test"
 import { Database } from "bun:sqlite"
-import { AbsolutePath, Session, SessionMessage } from "@opencode/client/effect"
-import { OpenCodeSync } from "@ren/brain/opencode-sync"
-import { SqliteReader } from "@ren/brain/sqlite-reader"
+import { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
+import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
+import { SqliteReader } from "@ren/opencode-transcript/sqlite-reader"
+import { OpenCodeFixtures } from "@ren/opencode-transcript/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { Sync } from "@ren/schema/sync"
 import { Shared, type StubModel, SyncClient } from "@ren/cell/testing"
@@ -11,7 +12,7 @@ import { Seed } from "@ren/core/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import type { Session as RenSession } from "@ren/schema/session"
-import { Clock, Deferred, Duration, Effect, Fiber, Layer, Logger, Metric, References, Schema } from "effect"
+import { Clock, Deferred, Duration, Effect, Fiber, Layer, Logger, Metric, References, Schema, Stream } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { TestClock } from "effect/testing"
 import { mkdtemp, rm } from "node:fs/promises"
@@ -99,10 +100,10 @@ const logs = () => {
 
 const renId = Schema.decodeUnknownSync(Sync.Checkpoint.fields.id)
 
-const setup = Effect.fnUntraced(function* () {
+const setup = Effect.fnUntraced(function* (input: { readonly id?: RenSession.ID; readonly isStarted?: boolean } = {}) {
   const file = join(yield* folder, "opencode.db")
-  const brain = yield* SyncTest.isolated(BrainTest.make({ database: file }))
-  yield* brain.start({ interactive: false, title: "Sync" })
+  const brain = yield* SyncTest.isolated(BrainTest.make({ database: file, ...(input.id && { id: input.id }) }))
+  if (input.isStarted ?? true) yield* brain.start({ interactive: false, title: "Sync" })
   const owner = yield* Seed.owner()
   yield* Seed.session(owner, { sessionId: brain.id })
   const server = yield* HttpServer.HttpServer
@@ -112,10 +113,9 @@ const setup = Effect.fnUntraced(function* () {
   const db = new Database(file)
   yield* Effect.addFinalizer(() => Effect.sync(() => db.close()))
   const reader = yield* SqliteReader.make(file)
-  const client = brain.opencode
-  const root = Session.ID.make(brain.id)
-  const location = { directory: AbsolutePath.make(brain.directory) }
-  const sync = (input: { readonly reader?: OpenCodeSync.Reader } = {}) =>
+  const driver = brain.driver
+  const root = brain.id
+  const sync = (input: { readonly reader?: OpenCodeSync.Reader; readonly version?: string } = {}) =>
     SyncClient.make(
       proxy.url,
       Effect.sync(() => token.value),
@@ -124,6 +124,7 @@ const setup = Effect.fnUntraced(function* () {
         OpenCodeSync.make({
           remote,
           reader: input.reader ?? reader,
+          version: input.version ?? "2.0.27",
           restoring: Effect.sync(() => new Set(host.restoring)),
           mark: (id, state) =>
             Effect.sync(() => void (state.isRestoring ? host.restoring.add(id) : host.restoring.delete(id))),
@@ -131,24 +132,18 @@ const setup = Effect.fnUntraced(function* () {
       ),
       Effect.provide(FetchHttpClient.layer),
     )
-  const create = (parentID?: Session.ID) =>
-    client.session.create({ location, ...(parentID && { parentID }) }).pipe(
-      Effect.orDie,
-      Effect.map((session) => session.id),
-    )
-  const turn = Effect.fnUntraced(function* (sessionID: Session.ID, script: StubModel.Script = stub.script()) {
-    yield* client.session.prompt({ sessionID, text: `Go ${script.marker}` }).pipe(Effect.orDie)
+  const create = (parentId?: RenSession.ID) => driver.create({ ...(parentId && { parentId }) })
+  const turn = Effect.fnUntraced(function* (id: RenSession.ID, script: StubModel.Script = stub.script()) {
+    yield* driver.prompt(id, `Go ${script.marker}`)
     yield* Effect.promise(() => script.called())
-    yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
+    yield* driver.wait(id)
   })
-  const rename = (sessionID: Session.ID, title: string) =>
-    client.session.update({ sessionID, title }).pipe(Effect.orDie)
   const expectEqual = Effect.gen(function* () {
     const expected = local(db, brain.id)
     expect(yield* SyncTest.remote(brain.id)).toEqual(expected)
     return expected
   })
-  return { brain, owner, root, proxy, token, host, db, reader, client, sync, create, turn, rename, expectEqual }
+  return { brain, owner, root, proxy, token, host, db, reader, driver, sync, create, turn, expectEqual }
 })
 
 describe("OpenCodeSync", () => {
@@ -172,13 +167,13 @@ describe("OpenCodeSync", () => {
         )
         yield* Effect.promise(() => child.called())
         const retry = stub.script({ status: 503 })
-        yield* host.client.session.prompt({ sessionID: host.root, text: retry.marker }).pipe(Effect.orDie)
+        yield* host.driver.prompt(host.root, retry.marker)
         yield* Effect.promise(() => retry.called())
         retry.set({})
         yield* Effect.promise(() => retry.called(2))
-        yield* host.client.session.wait({ sessionID: host.root }).pipe(Effect.orDie)
-        yield* host.client.session.shell({ sessionID: host.root, command: "echo shell" }).pipe(Effect.orDie)
-        yield* host.client.session.wait({ sessionID: host.root }).pipe(Effect.orDie)
+        yield* host.driver.wait(host.root)
+        yield* host.driver.shell(host.root, "echo shell")
+        yield* host.driver.wait(host.root)
         expect(yield* sync.step()).toEqual({ drained: true })
         const synced = yield* host.expectEqual
         expect(synced.sessions).toHaveLength(2)
@@ -199,10 +194,7 @@ describe("OpenCodeSync", () => {
       const before = yield* host.expectEqual
       const second = before.messages.filter((message) => message.type === "user")[1]
       if (!second) return yield* Effect.die(new Error("The second user message is missing"))
-      yield* host.client.session.revert
-        .stage({ sessionID: host.root, messageID: SessionMessage.ID.make(second.id) })
-        .pipe(Effect.orDie)
-      yield* host.client.session.revert.commit({ sessionID: host.root }).pipe(Effect.orDie)
+      yield* host.driver.revert(host.root, second.id)
       yield* sync.step()
       const after = yield* host.expectEqual
       expect(after.messages.map((message) => message.id)).not.toContain(second.id)
@@ -254,7 +246,7 @@ describe("OpenCodeSync", () => {
           [isStart(host.root), nth(2, isBatch(host.root)), isCommit(host.root)],
           (match, index) =>
             Effect.gen(function* () {
-              yield* host.rename(host.root, `Case ${index}`)
+              yield* host.driver.rename(host.root, `Case ${index}`)
               host.proxy.once({ match, fault: "fail" })
               expect(yield* sync.step()).toEqual({ drained: false, failed: true })
               expect(yield* sync.step()).toEqual({ drained: true })
@@ -343,7 +335,7 @@ describe("OpenCodeSync", () => {
       yield* host.turn(host.root)
       host.proxy.once({
         match: isCommit(host.root),
-        before: () => Effect.runPromise(host.rename(host.root, "Renamed during the pass")),
+        before: () => Effect.runPromise(host.driver.rename(host.root, "Renamed during the pass")),
       })
       yield* sync.step()
       yield* sync.step()
@@ -356,7 +348,7 @@ describe("OpenCodeSync", () => {
     Effect.gen(function* () {
       const host = yield* setup()
       const sync = yield* host.sync()
-      yield* host.rename(host.root, "a\u0000b")
+      yield* host.driver.rename(host.root, "a\u0000b")
       expect(yield* sync.step()).toEqual({ drained: true })
       expect((yield* SyncTest.remote(host.brain.id)).sessions.map((session) => session.title)).toEqual(["a\uFFFDb"])
     }),
@@ -407,6 +399,249 @@ describe("OpenCodeSync", () => {
     }),
   )
 
+  it.live(
+    "after a turn, a subagent and a shell command, each OpenCode table with rows is one that sync reads or one that Ren keeps out on purpose",
+    () =>
+      Effect.gen(function* () {
+        const host = yield* setup()
+        const child = stub.script()
+        yield* host.turn(
+          host.root,
+          stub.script({
+            reasoning: "Planning",
+            tool: {
+              name: "subagent",
+              input: { agent: "general", description: "Look", prompt: `${child.marker} look` },
+            },
+          }),
+        )
+        yield* host.driver.shell(host.root, "echo shell")
+        yield* host.driver.wait(host.root)
+        const known = new Set([
+          "session_v2",
+          "session_message",
+          "session_inbox",
+          "event_sequence",
+          "migration",
+          "project",
+          "worktree",
+          "instruction_blob",
+          "instruction_state",
+        ])
+        const filled = host.db
+          .query<{ name: string }, []>("select name from sqlite_master where type = 'table'")
+          .all()
+          .map((table) => table.name)
+          .filter((name) => host.db.query(`select 1 from "${name}" limit 1`).get() !== null)
+        expect(filled.filter((name) => !known.has(name))).toEqual([])
+        const storage = [
+          {
+            name: "session_v2",
+            synced: Object.keys(Sync.OpenCodeSessionRow.fields),
+            omitted: {
+              fork_session_id: "Import flattens forks",
+              fork_boundary: "Import flattens forks",
+              share_url: "OpenCode sharing is not exposed by Ren",
+              summary_diffs: "Whole patches are not part of the saved transcript",
+              revert: "Synced separately as revertMessageId",
+              time_compacting: "In-flight compaction is restarted",
+              time_busy: "When the running turn started belongs to the running host",
+              resume_attempts: "Retry accounting belongs to the running host",
+            },
+          },
+          {
+            name: "session_message",
+            synced: Object.keys(Sync.OpenCodeMessageRow.fields),
+            omitted: {
+              time_created: "Message times live in data",
+              time_updated: "Message times live in data",
+            },
+          },
+          { name: "session_inbox", synced: Object.keys(Sync.OpenCodeInboxRow.fields), omitted: {} },
+          {
+            name: "event_sequence",
+            synced: ["aggregate_id", "seq"],
+            omitted: { owner_id: "The new host owns the restored aggregate" },
+          },
+        ]
+        for (const table of storage) {
+          const actual = host.db
+            .query<{ name: string }, []>(`pragma table_info(${table.name})`)
+            .all()
+            .map((column) => column.name)
+            .toSorted()
+          expect({ table: table.name, columns: actual }).toEqual({
+            table: table.name,
+            columns: [...table.synced, ...Object.keys(table.omitted)].toSorted(),
+          })
+        }
+      }),
+  )
+
+  it.live("a commit records the OpenCode version that wrote the rows", () =>
+    Effect.gen(function* () {
+      const host = yield* setup()
+      yield* host.turn(host.root)
+      const sync = yield* host.sync({ version: "2.10.0" })
+      expect(yield* sync.step()).toEqual({ drained: true })
+      expect(yield* SyncTest.harnessVersion(host.root)).toBe("2.10.0")
+    }),
+  )
+
+  describe.each(OpenCodeFixtures.recordings.map((recording) => [recording.version, recording] as const))(
+    "chats recorded on OpenCode %s",
+    (_, recording) => {
+      const rootOf = (chat: OpenCodeFixtures.Chat): RenSession.ID => {
+        const parent = recording.chats.find((each) => each.session.id === chat.session.parent_id)
+        return parent ? rootOf(parent) : chat.session.id
+      }
+      const Compaction = Schema.fromJsonString(
+        Schema.Struct({ summary: Schema.String, recent: Schema.optionalKey(Schema.String) }),
+      )
+      for (const root of recording.chats.filter((chat) => chat.session.parent_id === null))
+        it.live(
+          `chat ${root.session.id} comes back through sync and restore, runs a turn with its whole context, and syncs back with no row changed`,
+          () =>
+            Effect.gen(function* () {
+              const group = recording.chats.filter((chat) => rootOf(chat) === root.session.id)
+              const host = yield* setup({ id: root.session.id, isStarted: false })
+              const delivered: Array<string> = []
+              const connected = yield* Deferred.make<void>()
+              const observed = yield* Deferred.make<void>()
+              const barrier = `Delivery checked ${crypto.randomUUID()}`
+              const events = yield* host.brain.chat.event["event.subscribe"]()
+              yield* events.pipe(
+                Stream.runForEach((event) =>
+                  Effect.gen(function* () {
+                    if (event.type === "server.connected") yield* Deferred.succeed(connected, undefined)
+                    if (
+                      event.type === "session.inbox.delivered" &&
+                      event.data.sessionID === root.session.id &&
+                      root.inbox.some((row) => row.id === event.data.inboxID)
+                    )
+                      delivered.push(event.data.inboxID)
+                    if (event.type === "session.renamed" && event.data.title === barrier)
+                      yield* Deferred.succeed(observed, undefined)
+                  }),
+                ),
+                Effect.forkScoped,
+              )
+              yield* Deferred.await(connected)
+              const remote = yield* SyncClient.make(
+                host.proxy.url,
+                Effect.sync(() => host.token.value),
+              ).pipe(Effect.provide(FetchHttpClient.layer))
+              yield* Effect.forEach(
+                group,
+                Effect.fnUntraced(function* (chat) {
+                  const params = {
+                    id: chat.session.id,
+                    upload: yield* remote.startUpload(chat.session.id, chat.session.parent_id),
+                  }
+                  yield* remote.uploadMessages(params, chat.messages)
+                  yield* remote.commit(params, {
+                    session: { ...chat.session, directory: host.brain.directory },
+                    seq: 1,
+                    ids: chat.messages.map((message) => message.id),
+                    inbox: chat.inbox,
+                    revertMessageId: null,
+                    harnessVersion: recording.version,
+                  })
+                }),
+                { discard: true },
+              )
+              const sync = yield* host.sync()
+              yield* sync.restore({
+                sessionId: root.session.id,
+                exists: host.brain.transcript.has,
+                start: () => Effect.void,
+                import: host.brain.transcript.restore,
+              })
+              for (const chat of group) {
+                const inbox = Schema.decodeUnknownSync(Schema.Array(Sync.OpenCodeInboxRow))(
+                  host.db
+                    .query("select * from session_inbox where session_id = ? order by enqueued_seq")
+                    .all(chat.session.id),
+                )
+                expect(
+                  inbox.map((row) => ({ id: row.id, type: row.type, payload: row.payload, delivery: row.delivery })),
+                ).toEqual(
+                  chat.inbox.map((row) => ({
+                    id: row.id,
+                    type: row.type,
+                    payload: row.payload,
+                    delivery: row.delivery,
+                  })),
+                )
+                const restored = Schema.decodeUnknownSync(Sync.OpenCodeSessionRow)(
+                  host.db.query("select * from session_v2 where id = ?").get(chat.session.id),
+                )
+                expect({ agent: restored.agent, model: restored.model, permission: restored.permission }).toEqual({
+                  agent: chat.session.agent,
+                  model: chat.session.model,
+                  permission: chat.session.permission,
+                })
+                expect(restored.time_suspended).toBeNull()
+              }
+              expect(yield* sync.step()).toEqual({ drained: true })
+              expect(
+                (yield* remote.restore(root.session.id))
+                  .flatMap((chat) => chat.inbox)
+                  .map((row) => ({
+                    id: row.id,
+                    type: row.type,
+                    payload: row.payload,
+                    delivery: row.delivery,
+                  })),
+              ).toEqual(
+                group
+                  .flatMap((chat) => chat.inbox)
+                  .map((row) => ({
+                    id: row.id,
+                    type: row.type,
+                    payload: row.payload,
+                    delivery: row.delivery,
+                  })),
+              )
+              const script = stub.script()
+              yield* host.turn(root.session.id, script)
+              const context = JSON.stringify(script.calls.at(0)?.body.messages)
+              const compactions = root.messages.flatMap((message) =>
+                message.type === "compaction" ? [Schema.decodeUnknownSync(Compaction)(message.data)] : [],
+              )
+              for (const compaction of compactions) {
+                expect(context).toContain(JSON.stringify(compaction.summary).slice(1, -1))
+                if (compaction.recent) expect(context).toContain(JSON.stringify(compaction.recent).slice(1, -1))
+              }
+              expect(yield* sync.step()).toEqual({ drained: true })
+              const synced = new Map((yield* SyncTest.remote(root.session.id)).messages.map((row) => [row.id, row]))
+              for (const queued of root.inbox) {
+                const delivered = synced.get(queued.id)
+                expect(delivered?.type).toBe(queued.type)
+                expect(delivered && OpenCodeRows.stored(delivered)).toMatchObject(
+                  Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)))(
+                    queued.payload,
+                  ),
+                )
+              }
+              for (const message of group.flatMap((chat) => chat.messages)) {
+                const row = synced.get(message.id)
+                const actual: unknown = row && OpenCodeRows.stored(row)
+                expect(actual).toEqual(OpenCodeRows.stored(message))
+              }
+              yield* host.turn(root.session.id)
+              yield* host.driver.rename(root.session.id, barrier)
+              yield* Deferred.await(observed)
+              expect(delivered.toSorted()).toEqual(root.inbox.map((row) => row.id).toSorted())
+              expect(
+                yield* host.brain.chat.session["session.inbox.list"]({ params: { sessionID: root.session.id } }),
+              ).toEqual([])
+            }),
+          60_000,
+        )
+    },
+  )
+
   it.live("a session that OpenCode deletes during a pass does not commit, and the next step does not send it", () =>
     Effect.gen(function* () {
       const host = yield* setup()
@@ -414,7 +649,7 @@ describe("OpenCodeSync", () => {
       const child = yield* host.create(host.root)
       host.proxy.once({
         match: isStart(child),
-        before: () => Effect.runPromise(host.client.session.remove({ sessionID: child }).pipe(Effect.orDie)),
+        before: () => Effect.runPromise(host.driver.remove(child)),
       })
       yield* sync.step()
       expect(host.proxy.requests.filter(isCommit(child))).toEqual([])
@@ -554,22 +789,22 @@ describe("OpenCodeSync", () => {
         })
         const first = yield* host.sync()
         const script = stub.script({ hold: true })
-        yield* host.client.session.prompt({ sessionID: host.root, text: script.marker }).pipe(Effect.orDie)
+        yield* host.driver.prompt(host.root, script.marker)
         yield* Effect.promise(() => script.called())
         expect(yield* passed(first)).toEqual({ drained: true, passed: true })
         expect(yield* SyncTest.status(host.root)).toBe("busy")
         const interval = Duration.toMillis(OpenCodeSync.busyInterval)
-        yield* host.rename(host.root, "One")
+        yield* host.driver.rename(host.root, "One")
         expect(yield* passed(first)).toEqual({ drained: false, throttledUntil: interval, passed: false })
         expect(paths(host.proxy.requests)).toEqual([checkpoints])
         yield* TestClock.adjust(OpenCodeSync.busyInterval).pipe(Effect.provideContext(clock))
         expect(yield* passed(first)).toEqual({ drained: true, passed: true })
-        yield* host.rename(host.root, "Two")
+        yield* host.driver.rename(host.root, "Two")
         expect(yield* passed(first)).toEqual({ drained: false, throttledUntil: 2 * interval, passed: false })
         const restarted = yield* host.sync()
         expect(yield* passed(restarted)).toEqual({ drained: true, passed: true })
         script.release()
-        yield* host.client.session.wait({ sessionID: host.root }).pipe(Effect.orDie)
+        yield* host.driver.wait(host.root)
         expect(yield* passed(restarted)).toEqual({ drained: true, passed: true })
         expect(yield* SyncTest.status(host.root)).toBe("idle")
         yield* host.expectEqual
@@ -587,8 +822,8 @@ describe("OpenCodeSync", () => {
         const child = yield* host.create(unknown)
         const captured = logs()
         expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: true })
-        yield* host.rename(unknown, "Changed")
-        yield* host.rename(child, "Changed")
+        yield* host.driver.rename(unknown, "Changed")
+        yield* host.driver.rename(child, "Changed")
         expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: true })
         expect(captured.messages.filter((message) => message.includes(unknown))).toHaveLength(1)
         expect(paths(host.proxy.requests).filter((path) => path.includes(unknown))).toEqual([uploads(unknown)])
@@ -726,7 +961,7 @@ describe("OpenCodeSync", () => {
           .pipe(Effect.exit)
         expect(restoring._tag).toBe("Failure")
         expect([...host.host.restoring]).toEqual([renId(host.root)])
-        yield* Effect.forEach([host.root, child, other], (id) => host.rename(id, "Changed"))
+        yield* Effect.forEach([host.root, child, other], (id) => host.driver.rename(id, "Changed"))
         host.proxy.clear()
         expect(yield* sync.step()).toEqual({ drained: true })
         expect(host.proxy.requests.filter(isStart(other))).toHaveLength(1)

@@ -1,0 +1,707 @@
+{
+  "version": "2.0.27",
+  "root": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+  "tables": [
+    {
+      "name": "account_state",
+      "sql": "CREATE TABLE `account_state` (\n          `id` integer PRIMARY KEY,\n          `active_account_id` text,\n          `active_org_id` text,\n          CONSTRAINT `fk_account_state_active_account_id_account_id_fk` FOREIGN KEY (`active_account_id`) REFERENCES `account`(`id`) ON DELETE SET NULL\n        )",
+      "rows": []
+    },
+    {
+      "name": "account",
+      "sql": "CREATE TABLE `account` (\n          `id` text PRIMARY KEY,\n          `email` text NOT NULL,\n          `url` text NOT NULL,\n          `access_token` text NOT NULL,\n          `refresh_token` text NOT NULL,\n          `token_expiry` integer,\n          `time_created` integer NOT NULL,\n          `time_updated` integer NOT NULL\n        )",
+      "rows": []
+    },
+    {
+      "name": "control_account",
+      "sql": "CREATE TABLE `control_account` (\n          `email` text NOT NULL,\n          `url` text NOT NULL,\n          `access_token` text NOT NULL,\n          `refresh_token` text NOT NULL,\n          `token_expiry` integer,\n          `active` integer NOT NULL,\n          `time_created` integer NOT NULL,\n          `time_updated` integer NOT NULL,\n          CONSTRAINT `control_account_pk` PRIMARY KEY(`email`, `url`)\n        )",
+      "rows": []
+    },
+    {
+      "name": "credential",
+      "sql": "CREATE TABLE `credential` (\n          `id` text PRIMARY KEY,\n          `integration_id` text,\n          `label` text NOT NULL,\n          `value` text NOT NULL,\n          `connector_id` text,\n          `method_id` text,\n          `active` integer,\n          `time_created` integer NOT NULL,\n          `time_updated` integer NOT NULL\n        )",
+      "rows": []
+    },
+    {
+      "name": "event_sequence",
+      "sql": "CREATE TABLE `event_sequence` (\n          `aggregate_id` text PRIMARY KEY,\n          `seq` integer NOT NULL,\n          `owner_id` text\n        )",
+      "rows": [
+        {
+          "aggregate_id": "01486b03c0b40e3cf4a02b98892c4891be40427a",
+          "seq": 0,
+          "owner_id": null
+        },
+        {
+          "aggregate_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "seq": 74,
+          "owner_id": null
+        },
+        {
+          "aggregate_id": "ses_e494c841effeqodRuUWBXya5yr",
+          "seq": 12,
+          "owner_id": null
+        }
+      ]
+    },
+    {
+      "name": "event",
+      "sql": "CREATE TABLE `event` (\n          `id` text PRIMARY KEY,\n          `aggregate_id` text NOT NULL,\n          `seq` integer NOT NULL,\n          `created` integer DEFAULT 0 NOT NULL,\n          `type` text NOT NULL,\n          `data` text NOT NULL,\n          CONSTRAINT `fk_event_aggregate_id_event_sequence_aggregate_id_fk` FOREIGN KEY (`aggregate_id`) REFERENCES `event_sequence`(`aggregate_id`) ON DELETE CASCADE\n        )",
+      "rows": []
+    },
+    {
+      "name": "kv",
+      "sql": "CREATE TABLE `kv` (\n          `key` text PRIMARY KEY,\n          `value` text NOT NULL,\n          `time_created` integer NOT NULL,\n          `time_updated` integer NOT NULL\n        )",
+      "rows": []
+    },
+    {
+      "name": "permission",
+      "sql": "CREATE TABLE `permission` (\n          `id` text PRIMARY KEY,\n          `project_id` text NOT NULL,\n          `action` text NOT NULL,\n          `resource` text NOT NULL,\n          `time_created` integer NOT NULL,\n          `time_updated` integer NOT NULL,\n          CONSTRAINT `fk_permission_project_id_project_id_fk` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE\n        )",
+      "rows": []
+    },
+    {
+      "name": "project_directory",
+      "sql": "CREATE TABLE `project_directory` (\n          `project_id` text NOT NULL,\n          `directory` text NOT NULL,\n          `type` text,\n          `strategy` text,\n          `time_created` integer NOT NULL,\n          CONSTRAINT `project_directory_pk` PRIMARY KEY(`project_id`, `directory`),\n          CONSTRAINT `fk_project_directory_project_id_project_id_fk` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE\n        )",
+      "rows": []
+    },
+    {
+      "name": "project",
+      "sql": "CREATE TABLE `project` (\n          `id` text PRIMARY KEY,\n          `worktree` text NOT NULL,\n          `vcs` text,\n          `name` text,\n          `icon_url` text,\n          `icon_url_override` text,\n          `icon_color` text,\n          `time_created` integer NOT NULL,\n          `time_updated` integer NOT NULL,\n          `time_initialized` integer,\n          `time_active` integer DEFAULT 0 NOT NULL,\n          `time_archived` integer,\n          `sandboxes` text NOT NULL,\n          `commands` text\n        )",
+      "rows": [
+        {
+          "id": "01486b03c0b40e3cf4a02b98892c4891be40427a",
+          "worktree": "/Users/shrey/Workspace/repos/renai/ren",
+          "vcs": "git",
+          "name": null,
+          "icon_url": null,
+          "icon_url_override": null,
+          "icon_color": null,
+          "time_created": 1794066578085,
+          "time_updated": 1794066578085,
+          "time_initialized": null,
+          "time_active": 1794066578089,
+          "time_archived": null,
+          "sandboxes": "[]",
+          "commands": null
+        },
+        {
+          "id": "38021611ec636fe03e12242c924a07f1ebe93137",
+          "worktree": "/private/var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.dKUkr0fJPa/file-jbwss7/tmp/ren-brain-87yvhR",
+          "vcs": null,
+          "name": null,
+          "icon_url": null,
+          "icon_url_override": null,
+          "icon_color": null,
+          "time_created": 1794066578242,
+          "time_updated": 1794066578242,
+          "time_initialized": null,
+          "time_active": 1794066578264,
+          "time_archived": null,
+          "sandboxes": "[]",
+          "commands": null
+        }
+      ]
+    },
+    {
+      "name": "instruction_blob",
+      "sql": "CREATE TABLE `instruction_blob` (\n          `hash` text PRIMARY KEY,\n          `value` text\n        )",
+      "rows": [
+        {
+          "hash": "930443f3beaa7bf7911c1ddf26902ab17000c18a1423fd141f5e240609e90b2e",
+          "value": "{\"total\":8,\"shown\":8,\"namespaces\":[{\"name\":\"opencode\",\"description\":\"Tools for managing OpenCode itself, such as working with sessions and worktrees, searching the available models, and reading MCP resources.\",\"count\":8,\"entries\":[{\"path\":\"opencode.list_mcp_resources\",\"line\":\"  - tools.opencode.list_mcp_resources({\\n  /** MCP server name as configured. Omit to list every server. */\\n  server?: string,\\n}): Promise<{\\n  resources: Array<{\\n      server: string,\\n      name: string,\\n      uri: string,\\n      description?: string,\\n      mimeType?: string,\\n    }>,\\n  templates: Array<{\\n      server: string,\\n      name: string,\\n      uriTemplate: string,\\n      description?: string,\\n      mimeType?: string,\\n    }>,\\n}> // List documents, records, and other data exposed by MCP servers. Use this when the user refers to something that is no...\"},{\"path\":\"opencode.models\",\"line\":\"  - tools.opencode.models({\\n  /** Text to search for in model names and IDs. */\\n  query?: string,\\n  /** Provider ID or name to filter by. Try your own provider first. */\\n  provider?: string,\\n  /** Include older versions of each model family. By default only the newest version is listed. */\\n  all?: boolean,\\n  /** Maximum number of models to return. Defaults to 20. @integer @minimum 1 @maximum 100 */\\n  limit?: number,\\n  /** Number of models to skip, for paging through results. @integer @minimum 0 @maximum 9007199254740991 */\\n  offset?: number,\\n}): Promise<{\\n  /** Matching models grouped by provider. Your own provider comes first. */\\n  providers: Array<{\\n      id: string,\\n      name: string,\\n      /** Newest first. */\\n      models: Array<{\\n          /** providerID/modelID */\\n          id: string,\\n          name: string,\\n          /** Release date as a Unix timestamp in milliseconds, or 0 when unknown. */\\n          released: number,\\n          variants: Array<string>,\\n          /** Pricing in USD per million tokens. */\\n          cost: Array<{\\n              tier?: {\\n                type: \\\"context\\\",\\n                /** @integer @minimum -9007199254740991 @maximum 9007199254740991 */\\n                size: number,\\n              },\\n              input: number,\\n              output: number,\\n              cache: {\\n                read: number,\\n                write: number,\\n              },\\n            }>,\\n          status: \\\"alpha\\\" | \\\"beta\\\" | \\\"deprecated\\\" | \\\"active\\\",\\n        }>,\\n    }>,\\n  /** Number of matching models across all pages. @integer @minimum -9007199254740991 @maximum 9007199254740991 */\\n  total: number,\\n  /** Offset of the next page, or null on the last page. */\\n  next: number | null,\\n}> // Search the models available to use. Use this to turn a model name the user mentions into an exact reference before ru...\"},{\"path\":\"opencode.read_mcp_resource\",\"line\":\"  - tools.opencode.read_mcp_resource({\\n  /** The server field of the discovered resource. */\\n  server: string,\\n  /** Exact resource URI from discovery, an expanded uriTemplate, or the user. */\\n  uri: string,\\n}): Promise<{\\n  server: string,\\n  uri: string,\\n  contents: Array<{\\n        type: \\\"text\\\",\\n        uri: string,\\n        text: string,\\n        mimeType?: string,\\n      } | {\\n        type: \\\"blob\\\",\\n        uri: string,\\n        blob: string,\\n        mimeType?: string,\\n      }>,\\n}> // Read one MCP resource by server and URI. Not for local files. Always return the full contents rather than slicing or ...\"},{\"path\":\"opencode.session_move\",\"line\":\"  - tools.opencode.session_move({\\n  /** Omit to move the current session. @pattern ^ses */\\n  sessionID?: string,\\n  /** Destination directory, relative to the target session's directory or absolute. Supports ~. @minLength 1 */\\n  directory: string,\\n}): Promise<{\\n  /** @pattern ^ses */\\n  sessionID: string,\\n  directory: string,\\n}> // Move a session to another directory, or omit sessionID to move the current session. The current session moves at the ...\"},{\"path\":\"opencode.session_rename\",\"line\":\"  - tools.opencode.session_rename({\\n  /** Omit to rename the current session. @pattern ^ses */\\n  sessionID?: string,\\n  /** New session title. @minLength 1 */\\n  title: string,\\n}): Promise<{\\n  /** @pattern ^ses */\\n  sessionID: string,\\n  title: string,\\n}> // Rename a session, or omit sessionID to rename the current session. Use a short, specific title that summarizes the wo...\"},{\"path\":\"opencode.worktree_create\",\"line\":\"  - tools.opencode.worktree_create({\\n  name: string,\\n}): Promise<{\\n  directory: string,\\n}> // Create a named worktree. Returns its directory.\"},{\"path\":\"opencode.worktree_list\",\"line\":\"  - tools.opencode.worktree_list(): Promise<{\\n  worktrees: Array<{\\n      directory: string,\\n      strategy?: string,\\n    }>,\\n}> // List a repository's worktrees.\"},{\"path\":\"opencode.worktree_remove\",\"line\":\"  - tools.opencode.worktree_remove({\\n  /** Absolute path of the worktree to remove. @minLength 1 */\\n  directory: string,\\n  /** Discard modified and untracked files. Only set this when the user has confirmed forced removal. */\\n  force?: boolean,\\n}): Promise<{\\n  directory: string,\\n  removed: boolean,\\n}> // Remove a worktree. The repository location selects configuration; directory identifies the worktree to remove.\"}]}]}"
+        },
+        {
+          "hash": "8394362d28c82fa4d13c7a9f5568c05680f6687e07db8f426a0e3c92f3027dc9",
+          "value": "[{\"id\":\"opencode\",\"name\":\"OpenCode\",\"description\":\"Use this skill for any question about OpenCode itself, including how OpenCode works, using or configuring it, migrating from V1 to V2, troubleshooting it, developing plugins or integrations, using the OpenCode SDK, clients, server, or API, and contributing to the OpenCode codebase. Also use it for OpenCode agents, commands, skills, tools, permissions, MCP servers, providers, models, themes, keybinds, formatters, the CLI, TUI, desktop app, and web app.\"},{\"id\":\"report\",\"name\":\"Report\",\"description\":\"Use when the user wants to report an opencode issue or bug. Collect standard diagnostics, add user-specific reproduction context, and publish the issue with GitHub CLI.\"}]"
+        },
+        {
+          "hash": "52842fc7a9d26d4c5bc7e09406e655e0dbca8bff01999769b56d50cc104a399f",
+          "value": "\"Sat Nov 07 2026\""
+        },
+        {
+          "hash": "dfcb67606bf3dc55c5a16db7f5584b5eceb30743267464a5492fa43fb6010880",
+          "value": "\"<env>\\n  Working directory: /var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.dKUkr0fJPa/file-jbwss7/tmp/ren-brain-87yvhR\\n  Workspace root folder: /private/var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.dKUkr0fJPa/file-jbwss7/tmp/ren-brain-87yvhR\\n  Is directory a git repo: no\\n  Platform: darwin\\n  Prefer /private/var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.dKUkr0fJPa/file-jbwss7/tmp/opencode over generic system temporary directories such as /tmp; it is pre-created and approved for external access.\\n</env>\""
+        }
+      ]
+    },
+    {
+      "name": "instruction_entry",
+      "sql": "CREATE TABLE `instruction_entry` (\n          `session_id` text NOT NULL,\n          `key` text NOT NULL,\n          `value` text,\n          `removed` integer DEFAULT false NOT NULL,\n          `time_created` integer NOT NULL,\n          `time_updated` integer NOT NULL,\n          CONSTRAINT `instruction_entry_pk` PRIMARY KEY(`session_id`, `key`),\n          CONSTRAINT `fk_instruction_entry_session_id_session_v2_id_fk` FOREIGN KEY (`session_id`) REFERENCES `session_v2`(`id`) ON DELETE CASCADE\n        )",
+      "rows": []
+    },
+    {
+      "name": "instruction_state",
+      "sql": "CREATE TABLE `instruction_state` (\n          `session_id` text PRIMARY KEY,\n          `epoch_start` integer NOT NULL,\n          `through_seq` integer NOT NULL,\n          `initial_values` text NOT NULL,\n          `current_values` text NOT NULL,\n          CONSTRAINT `fk_instruction_state_session_id_session_v2_id_fk` FOREIGN KEY (`session_id`) REFERENCES `session_v2`(`id`) ON DELETE CASCADE\n        )",
+      "rows": [
+        {
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "epoch_start": 73,
+          "through_seq": 73,
+          "initial_values": "{\"core/codemode\":\"930443f3beaa7bf7911c1ddf26902ab17000c18a1423fd141f5e240609e90b2e\",\"core/skill-guidance\":\"8394362d28c82fa4d13c7a9f5568c05680f6687e07db8f426a0e3c92f3027dc9\",\"core/date\":\"52842fc7a9d26d4c5bc7e09406e655e0dbca8bff01999769b56d50cc104a399f\",\"core/environment\":\"dfcb67606bf3dc55c5a16db7f5584b5eceb30743267464a5492fa43fb6010880\"}",
+          "current_values": "{\"core/codemode\":\"930443f3beaa7bf7911c1ddf26902ab17000c18a1423fd141f5e240609e90b2e\",\"core/skill-guidance\":\"8394362d28c82fa4d13c7a9f5568c05680f6687e07db8f426a0e3c92f3027dc9\",\"core/date\":\"52842fc7a9d26d4c5bc7e09406e655e0dbca8bff01999769b56d50cc104a399f\",\"core/environment\":\"dfcb67606bf3dc55c5a16db7f5584b5eceb30743267464a5492fa43fb6010880\"}"
+        },
+        {
+          "session_id": "ses_e494c841effeqodRuUWBXya5yr",
+          "epoch_start": 3,
+          "through_seq": 3,
+          "initial_values": "{\"core/codemode\":\"930443f3beaa7bf7911c1ddf26902ab17000c18a1423fd141f5e240609e90b2e\",\"core/skill-guidance\":\"8394362d28c82fa4d13c7a9f5568c05680f6687e07db8f426a0e3c92f3027dc9\",\"core/date\":\"52842fc7a9d26d4c5bc7e09406e655e0dbca8bff01999769b56d50cc104a399f\",\"core/environment\":\"dfcb67606bf3dc55c5a16db7f5584b5eceb30743267464a5492fa43fb6010880\"}",
+          "current_values": "{\"core/codemode\":\"930443f3beaa7bf7911c1ddf26902ab17000c18a1423fd141f5e240609e90b2e\",\"core/skill-guidance\":\"8394362d28c82fa4d13c7a9f5568c05680f6687e07db8f426a0e3c92f3027dc9\",\"core/date\":\"52842fc7a9d26d4c5bc7e09406e655e0dbca8bff01999769b56d50cc104a399f\",\"core/environment\":\"dfcb67606bf3dc55c5a16db7f5584b5eceb30743267464a5492fa43fb6010880\"}"
+        }
+      ]
+    },
+    {
+      "name": "session_inbox",
+      "sql": "CREATE TABLE `session_inbox` (\n          `id` text PRIMARY KEY,\n          `session_id` text NOT NULL,\n          `type` text NOT NULL,\n          `payload` text NOT NULL,\n          `delivery` text NOT NULL,\n          `enqueued_seq` integer NOT NULL,\n          `time_created` integer NOT NULL,\n          CONSTRAINT `fk_session_inbox_session_id_session_v2_id_fk` FOREIGN KEY (`session_id`) REFERENCES `session_v2`(`id`) ON DELETE CASCADE\n        )",
+      "rows": []
+    },
+    {
+      "name": "session_message",
+      "sql": "CREATE TABLE `session_message` (\n          `id` text PRIMARY KEY,\n          `session_id` text NOT NULL,\n          `type` text NOT NULL,\n          `seq` integer NOT NULL,\n          `time_created` integer NOT NULL,\n          `time_updated` integer NOT NULL,\n          `data` text NOT NULL,\n          CONSTRAINT `fk_session_message_session_id_session_v2_id_fk` FOREIGN KEY (`session_id`) REFERENCES `session_v2`(`id`) ON DELETE CASCADE\n        )",
+      "rows": [
+        {
+          "id": "msg_01M6VB6YV0NFGYT3WQ2FMKPPP7",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "user",
+          "seq": 4,
+          "time_created": 1794066578342,
+          "time_updated": 1794066578343,
+          "data": "{\"metadata\":{\"userID\":\"user_1\"},\"time\":{\"created\":1794066578342},\"text\":\"stub_0c6ff3b947f2\"}"
+        },
+        {
+          "id": "msg_1b6b37bc8001pU7x0jx8TcZNXP",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "assistant",
+          "seq": 7,
+          "time_created": 1794066578381,
+          "time_updated": 1794066578425,
+          "data": "{\"time\":{\"created\":1794066578381,\"streamed\":1794066578398,\"completed\":1794066578425},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"reasoning\",\"text\":\"Planning the look\",\"state\":{\"reasoningField\":\"reasoning_content\"},\"time\":{\"created\":1794066578393,\"completed\":1794066578396}},{\"type\":\"tool\",\"id\":\"call_460c14b1\",\"name\":\"subagent\",\"executed\":false,\"state\":{\"status\":\"completed\",\"input\":{\"agent\":\"general\",\"description\":\"Look\",\"prompt\":\"stub_cb78152a5027 look\"},\"content\":[{\"type\":\"text\",\"text\":\"<subagent sessionID=\\\"ses_e494c841effeqodRuUWBXya5yr\\\" state=\\\"completed\\\">\\nstub reply\\n</subagent>\"}],\"metadata\":{\"sessionID\":\"ses_e494c841effeqodRuUWBXya5yr\",\"status\":\"completed\",\"truncated\":false}},\"time\":{\"created\":1794066578395,\"ran\":1794066578397,\"completed\":1794066578424}}],\"finish\":\"tool-calls\",\"rawFinish\":\"tool_calls\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b6b37be3002lzMDwN8n1OOqt9",
+          "session_id": "ses_e494c841effeqodRuUWBXya5yr",
+          "type": "user",
+          "seq": 4,
+          "time_created": 1794066578407,
+          "time_updated": 1794066578407,
+          "data": "{\"time\":{\"created\":1794066578407},\"text\":\"You are a subagent spawned by another session.\\nstub_cb78152a5027 look\"}"
+        },
+        {
+          "id": "msg_1b6b37be9001AaoBiyCSUMqCvG",
+          "session_id": "ses_e494c841effeqodRuUWBXya5yr",
+          "type": "assistant",
+          "seq": 5,
+          "time_created": 1794066578413,
+          "time_updated": 1794066578420,
+          "data": "{\"time\":{\"created\":1794066578413,\"streamed\":1794066578419,\"completed\":1794066578420},\"agent\":\"general\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"reasoning\",\"text\":\"Reading the files\",\"state\":{\"reasoningField\":\"reasoning_content\"},\"time\":{\"created\":1794066578415,\"completed\":1794066578418}},{\"type\":\"text\",\"text\":\"stub reply\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b6b37bf5002WnLJ31WzecsAhI",
+          "session_id": "ses_e494c841effeqodRuUWBXya5yr",
+          "type": "idle",
+          "seq": 12,
+          "time_created": 1794066578421,
+          "time_updated": 1794066578422,
+          "data": "{\"time\":{\"created\":1794066578421},\"outcome\":\"succeeded\"}"
+        },
+        {
+          "id": "msg_1b6b37bfc001Xby5gGxPmL3Hv2",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "assistant",
+          "seq": 16,
+          "time_created": 1794066578432,
+          "time_updated": 1794066578438,
+          "data": "{\"time\":{\"created\":1794066578432,\"streamed\":1794066578438,\"completed\":1794066578438},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"reasoning\",\"text\":\"Planning the look\",\"state\":{\"reasoningField\":\"reasoning_content\"},\"time\":{\"created\":1794066578436,\"completed\":1794066578437}},{\"type\":\"text\",\"text\":\"stub reply\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b6b37c07002vhkcU6rPIs0bD7",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "idle",
+          "seq": 23,
+          "time_created": 1794066578439,
+          "time_updated": 1794066578439,
+          "data": "{\"time\":{\"created\":1794066578439},\"outcome\":\"succeeded\"}"
+        },
+        {
+          "id": "msg_01M6VB6Z08J3K45S2KA85D0R4E",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "user",
+          "seq": 26,
+          "time_created": 1794066578444,
+          "time_updated": 1794066578444,
+          "data": "{\"metadata\":{\"userID\":\"user_1\"},\"time\":{\"created\":1794066578444},\"text\":\"stub_e3f60f9c2c5f\"}"
+        },
+        {
+          "id": "msg_1b6b37c0d001GzTYEADovVKnsL",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "assistant",
+          "seq": 27,
+          "time_created": 1794066578448,
+          "time_updated": 1794066578455,
+          "data": "{\"time\":{\"created\":1794066578448,\"streamed\":1794066578453,\"completed\":1794066578455},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"tool\",\"id\":\"call_1ee9887c\",\"name\":\"skill\",\"executed\":false,\"state\":{\"status\":\"error\",\"input\":{\"name\":\"missing\"},\"error\":{\"type\":\"tool.execution\",\"message\":\"Invalid arguments for tool \\\"skill\\\":\\n- id: Missing key\\n\\nArguments provided:\\n{}\\n\\nUpdate the arguments and call the tool again.\"}},\"time\":{\"created\":1794066578451,\"ran\":1794066578452,\"completed\":1794066578454}}],\"finish\":\"tool-calls\",\"rawFinish\":\"tool_calls\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b6b37c1a001q3z3Xpi7lerHTv",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "assistant",
+          "seq": 34,
+          "time_created": 1794066578461,
+          "time_updated": 1794066578464,
+          "data": "{\"time\":{\"created\":1794066578461,\"streamed\":1794066578464,\"completed\":1794066578464},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"text\",\"text\":\"stub reply\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b6b37c21002t43RwjTogPQCb8",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "idle",
+          "seq": 39,
+          "time_created": 1794066578465,
+          "time_updated": 1794066578465,
+          "data": "{\"time\":{\"created\":1794066578465},\"outcome\":\"succeeded\"}"
+        },
+        {
+          "id": "msg_01M6VB6Z11RHXYTHGY56R1FEER",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "user",
+          "seq": 42,
+          "time_created": 1794066578470,
+          "time_updated": 1794066578470,
+          "data": "{\"metadata\":{\"userID\":\"user_1\",\"channel\":{\"provider\":\"slack\",\"place\":\"C0RECORD\",\"sender\":\"U0RECORD\"}},\"time\":{\"created\":1794066578470},\"text\":\"stub_282ce0bcd97a\"}"
+        },
+        {
+          "id": "msg_1b6b37c28001tzldT68Lm3a2kJ",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "assistant",
+          "seq": 43,
+          "time_created": 1794066578474,
+          "time_updated": 1794066578478,
+          "data": "{\"time\":{\"created\":1794066578474,\"streamed\":1794066578477,\"completed\":1794066578478},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"text\",\"text\":\"stub reply\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b6b37c2e00342EHzVEST6uBqA",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "idle",
+          "seq": 48,
+          "time_created": 1794066578478,
+          "time_updated": 1794066578478,
+          "data": "{\"time\":{\"created\":1794066578478},\"outcome\":\"succeeded\"}"
+        },
+        {
+          "id": "msg_1b6b37c320016BASxVdWJPCDAJ",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "shell",
+          "seq": 49,
+          "time_created": 1794066578482,
+          "time_updated": 1794066578487,
+          "data": "{\"metadata\":{\"background\":true},\"time\":{\"created\":1794066578482,\"completed\":1794066578486},\"shellID\":\"sh_1b6b37c30001JCRbqbGKSoTqmh\",\"command\":\"echo recorded\",\"status\":\"exited\",\"exit\":0,\"output\":{\"output\":\"recorded\\n\",\"cursor\":9,\"size\":9,\"truncated\":false}}"
+        },
+        {
+          "id": "msg_1b6b37c38001GfyrlwIXTwi6FB",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "synthetic",
+          "seq": 54,
+          "time_created": 1794066578492,
+          "time_updated": 1794066578493,
+          "data": "{\"metadata\":{\"source\":\"shell\",\"shellID\":\"sh_1b6b37c30001JCRbqbGKSoTqmh\",\"state\":\"completed\",\"truncated\":false,\"exit\":0},\"time\":{\"created\":1794066578492},\"text\":\"The following shell command was executed by the user:\\n<shell id=\\\"sh_1b6b37c30001JCRbqbGKSoTqmh\\\" state=\\\"completed\\\" command=\\\"echo recorded\\\">\\nrecorded\\n\\n</shell>\"}"
+        },
+        {
+          "id": "msg_1b6b37c3a001I7aB6MraZkdS3U",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "synthetic",
+          "seq": 55,
+          "time_created": 1794066578493,
+          "time_updated": 1794066578493,
+          "data": "{\"metadata\":{\"source\":\"ren.files-reset\"},\"time\":{\"created\":1794066578493},\"text\":\"stub_7a6c58b291e0 The chat's workspace files were lost.\"}"
+        },
+        {
+          "id": "msg_1b6b37c3f00181SJZbQgrfrJlH",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "assistant",
+          "seq": 56,
+          "time_created": 1794066578498,
+          "time_updated": 1794066578511,
+          "data": "{\"time\":{\"created\":1794066578498,\"streamed\":1794066578510,\"completed\":1794066578510},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[{\"type\":\"text\",\"text\":\"stub reply\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b6b37c4f0026Hlgrw3hilFYBd",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "idle",
+          "seq": 61,
+          "time_created": 1794066578511,
+          "time_updated": 1794066578511,
+          "data": "{\"time\":{\"created\":1794066578511},\"outcome\":\"succeeded\"}"
+        },
+        {
+          "id": "msg_01M6VB6Z2GZSPEG0Q2ZRS1ZMD2",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "user",
+          "seq": 64,
+          "time_created": 1794066578517,
+          "time_updated": 1794066578517,
+          "data": "{\"metadata\":{\"userID\":\"user_1\"},\"time\":{\"created\":1794066578517},\"text\":\"stub_944e2ece1ae3\"}"
+        },
+        {
+          "id": "msg_1b6b37c560017jNl3iXI3h8pmu",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "assistant",
+          "seq": 65,
+          "time_created": 1794066578522,
+          "time_updated": 1794066578530,
+          "data": "{\"time\":{\"created\":1794066578522,\"completed\":1794066578529},\"agent\":\"build\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"content\":[],\"finish\":\"error\",\"error\":{\"type\":\"provider.invalid-request\",\"message\":\"stub model status 400\",\"status\":400,\"response\":{\"body\":\"{\\\"error\\\":{\\\"message\\\":\\\"stub model status 400\\\",\\\"type\\\":\\\"stub_error\\\"}}\"}}}"
+        },
+        {
+          "id": "msg_1b6b37c63001tuNHX5ecvLC5v6",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "idle",
+          "seq": 67,
+          "time_created": 1794066578531,
+          "time_updated": 1794066578531,
+          "data": "{\"time\":{\"created\":1794066578531},\"outcome\":\"failed\",\"error\":{\"type\":\"provider.invalid-request\",\"message\":\"stub model status 400\",\"status\":400,\"response\":{\"body\":\"{\\\"error\\\":{\\\"message\\\":\\\"stub model status 400\\\",\\\"type\\\":\\\"stub_error\\\"}}\"}}}"
+        },
+        {
+          "id": "msg_1b6b37c64001SL610iLhE30C1a",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "compaction",
+          "seq": 71,
+          "time_created": 1794066578535,
+          "time_updated": 1794066578546,
+          "data": "{\"time\":{\"created\":1794066578535},\"status\":\"completed\",\"reason\":\"manual\",\"model\":{\"id\":\"stub-model\",\"providerID\":\"stub\"},\"summary\":\"## Objective\\n- the summary\",\"recent\":\"[User]: stub_944e2ece1ae3\",\"cost\":0,\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}"
+        },
+        {
+          "id": "msg_1b6b37c72001MFdPd5hNPzQXS8",
+          "session_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "type": "idle",
+          "seq": 74,
+          "time_created": 1794066578546,
+          "time_updated": 1794066578546,
+          "data": "{\"time\":{\"created\":1794066578546},\"outcome\":\"succeeded\"}"
+        }
+      ]
+    },
+    {
+      "name": "session_pending",
+      "sql": "CREATE TABLE `session_pending` (\n          `id` text PRIMARY KEY,\n          `session_id` text NOT NULL,\n          `type` text NOT NULL,\n          `data` text NOT NULL,\n          `delivery` text,\n          `admitted_seq` integer NOT NULL,\n          `time_created` integer NOT NULL,\n          CONSTRAINT `fk_session_pending_session_id_session_v2_id_fk` FOREIGN KEY (`session_id`) REFERENCES `session_v2`(`id`) ON DELETE CASCADE\n        )",
+      "rows": []
+    },
+    {
+      "name": "session_v2",
+      "sql": "CREATE TABLE `session_v2` (\n          `id` text PRIMARY KEY,\n          `project_id` text NOT NULL,\n          `workspace_id` text,\n          `parent_id` text,\n          `fork_session_id` text,\n          `fork_boundary` text,\n          `slug` text NOT NULL,\n          `directory` text NOT NULL,\n          `path` text,\n          `title` text,\n          `version` text NOT NULL,\n          `share_url` text,\n          `summary_additions` integer,\n          `summary_deletions` integer,\n          `summary_files` integer,\n          `summary_diffs` text,\n          `metadata` text,\n          `cost` real DEFAULT 0 NOT NULL,\n          `tokens_input` integer DEFAULT 0 NOT NULL,\n          `tokens_output` integer DEFAULT 0 NOT NULL,\n          `tokens_reasoning` integer DEFAULT 0 NOT NULL,\n          `tokens_cache_read` integer DEFAULT 0 NOT NULL,\n          `tokens_cache_write` integer DEFAULT 0 NOT NULL,\n          `revert` text,\n          `permission` text,\n          `agent` text,\n          `model` text,\n          `time_created` integer NOT NULL,\n          `time_updated` integer NOT NULL,\n          `time_idle` integer,\n          `time_viewed` integer,\n          `idle_outcome` text,\n          `time_compacting` integer,\n          `time_archived` integer,\n          `time_suspended` integer,\n          `resume_attempts` integer DEFAULT 0 NOT NULL,\n          CONSTRAINT `fk_session_v2_project_id_project_id_fk` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE\n        )",
+      "rows": [
+        {
+          "id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "project_id": "38021611ec636fe03e12242c924a07f1ebe93137",
+          "workspace_id": null,
+          "parent_id": null,
+          "fork_session_id": null,
+          "fork_boundary": null,
+          "slug": "playful-planet",
+          "directory": "/var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.dKUkr0fJPa/file-jbwss7/tmp/ren-brain-87yvhR",
+          "path": "../../../../../../../../../../var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.dKUkr0fJPa/file-jbwss7/tmp/ren-brain-87yvhR",
+          "title": "Stub title",
+          "version": "unknown",
+          "share_url": null,
+          "summary_additions": null,
+          "summary_deletions": null,
+          "summary_files": null,
+          "summary_diffs": null,
+          "metadata": "{\"ren\":{\"start\":null,\"model\":null,\"defaultModels\":{},\"interactive\":true}}",
+          "cost": 0,
+          "tokens_input": 80,
+          "tokens_output": 40,
+          "tokens_reasoning": 0,
+          "tokens_cache_read": 0,
+          "tokens_cache_write": 0,
+          "revert": null,
+          "permission": "[]",
+          "agent": null,
+          "model": null,
+          "time_created": 1794066578242,
+          "time_updated": 1794066578532,
+          "time_idle": 1794066578546,
+          "time_viewed": null,
+          "idle_outcome": "succeeded",
+          "time_compacting": null,
+          "time_archived": null,
+          "time_suspended": null,
+          "resume_attempts": 0
+        },
+        {
+          "id": "ses_e494c841effeqodRuUWBXya5yr",
+          "project_id": "38021611ec636fe03e12242c924a07f1ebe93137",
+          "workspace_id": null,
+          "parent_id": "ses_01M6VB6YJQB7DJHXT6K4WKZ0CT",
+          "fork_session_id": null,
+          "fork_boundary": null,
+          "slug": "clever-circuit",
+          "directory": "/var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.dKUkr0fJPa/file-jbwss7/tmp/ren-brain-87yvhR",
+          "path": "../../../../../../../../../../var/folders/g4/jj8gkczj7yxg11mmkwzsz6tc0000gn/T/tmp.dKUkr0fJPa/file-jbwss7/tmp/ren-brain-87yvhR",
+          "title": "Look",
+          "version": "unknown",
+          "share_url": null,
+          "summary_additions": null,
+          "summary_deletions": null,
+          "summary_files": null,
+          "summary_diffs": null,
+          "metadata": "{\"ren\":{\"start\":null,\"model\":null,\"defaultModels\":{},\"interactive\":true}}",
+          "cost": 0,
+          "tokens_input": 10,
+          "tokens_output": 5,
+          "tokens_reasoning": 0,
+          "tokens_cache_read": 0,
+          "tokens_cache_write": 0,
+          "revert": null,
+          "permission": "[]",
+          "agent": "general",
+          "model": null,
+          "time_created": 1794066578402,
+          "time_updated": 1794066578420,
+          "time_idle": 1794066578421,
+          "time_viewed": null,
+          "idle_outcome": "succeeded",
+          "time_compacting": null,
+          "time_archived": null,
+          "time_suspended": null,
+          "resume_attempts": 0
+        }
+      ]
+    },
+    {
+      "name": "workspace",
+      "sql": "CREATE TABLE `workspace` (\n          `id` text PRIMARY KEY,\n          `provider` text NOT NULL,\n          `binding` text,\n          `created_at` integer NOT NULL,\n          `last_used_at` integer NOT NULL\n        )",
+      "rows": []
+    },
+    {
+      "name": "worktree",
+      "sql": "CREATE TABLE `worktree` (\n          `project_id` text NOT NULL,\n          `directory` text NOT NULL,\n          `strategy` text,\n          `time_created` integer NOT NULL,\n          CONSTRAINT `worktree_pk` PRIMARY KEY(`project_id`, `directory`),\n          CONSTRAINT `fk_worktree_project_id_project_id_fk` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE\n        )",
+      "rows": [
+        {
+          "project_id": "01486b03c0b40e3cf4a02b98892c4891be40427a",
+          "directory": "/Users/shrey/Workspace/repos/renai/ren",
+          "strategy": null,
+          "time_created": 1794066578088
+        }
+      ]
+    },
+    {
+      "name": "migration",
+      "sql": "CREATE TABLE \"migration\" (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)",
+      "rows": [
+        {
+          "id": "20260127222353_familiar_lady_ursula",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260211171708_add_project_commands",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260213144116_wakeful_the_professor",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260225215848_workspace",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260227213759_add_session_workspace_id",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260228203230_blue_harpoon",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260303231226_add_workspace_fields",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260309230000_move_org_to_state",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260312043431_session_message_cursor",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260323234822_events",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260410174513_workspace-name",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260413175956_chief_energizer",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260423070820_add_icon_url_override",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260427172553_slow_nightmare",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260428004200_add_session_path",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260501142318_next_venus",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260504145000_add_sync_owner",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260507164347_add_workspace_time",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260510033149_session_usage",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260511000411_data_migration_state",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260511173437_session-metadata",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260601010001_normalize_storage_paths",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260601202201_amazing_prowler",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260602002951_lowly_union_jack",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260602182828_add_project_directories",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260603001617_session_message_projection_indexes",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260603040000_session_message_projection_order",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260603141458_session_input_inbox",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260603160727_jittery_ezekiel_stane",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260604172448_event_sourced_session_input",
+          "time_completed": 1794066578032
+        },
+        {
+          "id": "20260605003541_add_session_context_snapshot",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260605042240_add_context_epoch_agent",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260611035744_credential",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260611192811_lush_chimera",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260612174303_project_dir_strategy",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260622142730_simplify_session_context_epoch",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260622170816_reset_v2_session_state",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260622202450_simplify_session_input",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260804233008_loose_psylocke",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260805200742_import_legacy_credentials",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260808023530_workspace_domain",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260811161259_execution_claim_attempts",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260812181746_session_inbox",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260812213948_worktree",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260819222447_session_viewed_state",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260823191254_nullable_workspace_binding",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260910120000_clear_v1_session_permission",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20260923013825_project_time_active",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20261007190000_azure_cli_external_credential",
+          "time_completed": 1794066578033
+        },
+        {
+          "id": "20261010180456_project_time_archived",
+          "time_completed": 1794066578033
+        }
+      ]
+    }
+  ],
+  "indexes": [
+    "CREATE UNIQUE INDEX `event_aggregate_seq_idx` ON `event` (`aggregate_id`,`seq`)",
+    "CREATE INDEX `event_aggregate_type_seq_idx` ON `event` (`aggregate_id`,`type`,`seq`)",
+    "CREATE UNIQUE INDEX `permission_project_action_resource_idx` ON `permission` (`project_id`,`action`,`resource`)",
+    "CREATE INDEX `session_inbox_session_delivery_seq_idx` ON `session_inbox` (`session_id`,`delivery`,`enqueued_seq`)",
+    "CREATE UNIQUE INDEX `session_inbox_session_enqueued_seq_idx` ON `session_inbox` (`session_id`,`enqueued_seq`)",
+    "CREATE UNIQUE INDEX `session_message_session_seq_idx` ON `session_message` (`session_id`,`seq`)",
+    "CREATE INDEX `session_message_session_type_seq_idx` ON `session_message` (`session_id`,`type`,`seq`)",
+    "CREATE INDEX `session_message_session_time_created_id_idx` ON `session_message` (`session_id`,`time_created`,`id`)",
+    "CREATE INDEX `session_message_time_created_idx` ON `session_message` (`time_created`)",
+    "CREATE INDEX `session_pending_session_delivery_seq_idx` ON `session_pending` (`session_id`,`delivery`,`admitted_seq`)",
+    "CREATE UNIQUE INDEX `session_pending_session_compaction_idx` ON `session_pending` (`session_id`) WHERE \"session_pending\".\"type\" = 'compaction'",
+    "CREATE UNIQUE INDEX `session_pending_session_admitted_seq_idx` ON `session_pending` (`session_id`,`admitted_seq`)",
+    "CREATE INDEX `session_v2_project_idx` ON `session_v2` (`project_id`)",
+    "CREATE INDEX `session_v2_workspace_idx` ON `session_v2` (`workspace_id`)",
+    "CREATE INDEX `session_v2_parent_idx` ON `session_v2` (`parent_id`)",
+    "CREATE INDEX `session_v2_time_suspended_idx` ON `session_v2` (`time_suspended`) WHERE \"session_v2\".\"time_suspended\" is not null"
+  ]
+}

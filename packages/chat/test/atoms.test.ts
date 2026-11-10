@@ -1,5 +1,4 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
-import { SessionID } from "@opencode/schema/session-id"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -185,7 +184,7 @@ test("the shell output atom reads a shell's output through the root session", ()
       made.atoms.status(brain.id),
       (value) => AsyncResult.isSuccess(value) && value.value === "connected",
     )
-    yield* brain.opencode.session.shell({ sessionID: SessionID.make(brain.id), command: "printf 'hello world'" })
+    yield* brain.driver.shell(brain.id, "printf 'hello world'")
     const state = yield* made.until(
       made.atoms.state(brain.id),
       (value) =>
@@ -212,12 +211,10 @@ test("the shell output atom reads a shell's output through the root session", ()
 test("the models atom loads again once the connection is back when its first read failed", () =>
   Effect.gen(function* () {
     const streams: Array<ReadableStreamDefaultController<Uint8Array>> = []
-    const failures = { models: 1 }
+    const network = { isDown: true }
     const made = yield* setupWith(async (path, next) => {
-      if (path.startsWith("/chat/model") && failures.models > 0) {
-        failures.models -= 1
+      if (path.startsWith("/chat/model") && network.isDown)
         return new Response("The brain is restarting", { status: 503 })
-      }
       const response = await next()
       const body = response.body
       if (!path.startsWith("/chat/event") || !body) return response
@@ -241,6 +238,7 @@ test("the models atom loads again once the connection is back when its first rea
     yield* Effect.addFinalizer(() => Effect.sync(unmountModels))
     yield* made.until(made.atoms.status(id), (value) => AsyncResult.isSuccess(value) && value.value === "connected")
     yield* made.until(made.atoms.models(id), AsyncResult.isFailure)
+    network.isDown = false
     streams.at(-1)?.error(new Error("The network dropped"))
     yield* made.until(made.atoms.status(id), (value) => AsyncResult.isSuccess(value) && value.value === "reconnecting")
     const models = yield* made.until(made.atoms.models(id), AsyncResult.isSuccess)

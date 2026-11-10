@@ -181,6 +181,26 @@ it.live("kills the whole group, and forces it after the delay", () =>
   }),
 )
 
+it.live("reports the machine's memory and the resident memory of each running process tree of the brain", () =>
+  Effect.gen(function* () {
+    const parent = yield* run({ command: "sh", arguments: ["-c", "sleep 30 & echo started; wait"] })
+    yield* parent.events.pipe(Stream.take(1), Stream.runDrain)
+    const leaf = yield* run({ command: "sleep", arguments: ["30"] })
+    const other = yield* parent.executor.spawn(Brain.ID.create(), { command: "sleep", arguments: ["30"] })
+    const exited = yield* run({ command: "true", arguments: [] })
+    yield* exited.events.pipe(Stream.runDrain)
+    const report = yield* parent.executor.memory(brain)
+    expect(report.usedBytes).toBeGreaterThan(0)
+    expect(report.limitBytes).toBeGreaterThanOrEqual(report.usedBytes)
+    const byId = new Map(report.processes.map((process) => [process.id, process]))
+    expect(byId.get(leaf.id)?.pid).toBe(leaf.pid)
+    expect(byId.get(leaf.id)?.rssBytes).toBeGreaterThan(0)
+    expect(byId.get(parent.id)?.rssBytes).toBeGreaterThan(byId.get(leaf.id)?.rssBytes ?? Number.POSITIVE_INFINITY)
+    expect(byId.has(other.id)).toBe(false)
+    expect(byId.has(exited.id)).toBe(false)
+  }),
+)
+
 it.live("hides a process from other brains", () =>
   Effect.gen(function* () {
     const process = yield* run({ command: "true", arguments: [] })

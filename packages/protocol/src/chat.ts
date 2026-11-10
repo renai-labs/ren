@@ -8,6 +8,7 @@ import { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import { SessionStatus } from "@ren/schema/session/status"
+import { SessionVcs } from "@ren/schema/session/vcs"
 import { Shell } from "@ren/schema/shell"
 import { Schema, SchemaGetter } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/http-api"
@@ -106,6 +107,38 @@ export const FileSearchQuery = Schema.Struct({
   type: Schema.optional(SessionCatalog.FileType),
   limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 200 }))),
 }).annotate({ identifier: "Chat.FileSearchQuery" })
+
+const FolderPath = Schema.String.check(
+  Schema.makeFilter(
+    (path) =>
+      (!path.startsWith("/") && !path.split("/").includes("..")) ||
+      "A path relative to the session’s folder, without `..`",
+  ),
+).annotate({ description: "A path relative to the session’s folder. A folder may end with `/`." })
+
+export const FileListQuery = Schema.Struct({
+  path: Schema.optional(FolderPath).annotate({ description: "The folder to list. Defaults to the session’s folder." }),
+}).annotate({ identifier: "Chat.FileListQuery" })
+
+export const FileReadQuery = Schema.Struct({ path: FolderPath }).annotate({ identifier: "Chat.FileReadQuery" })
+
+export const VcsDiffQuery = Schema.Struct({
+  mode: Schema.optional(SessionVcs.Mode).annotate({
+    description:
+      "`working` compares HEAD with the working copy, `branch` the branch’s base with the working copy, and `committed` the base with HEAD. Defaults to `working`.",
+  }),
+  context: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))).annotate({
+    description: "Unchanged lines around each hunk. Omit for full-file patches.",
+  }),
+}).annotate({ identifier: "Chat.VcsDiffQuery" })
+
+export interface ShellCreateInput extends Schema.Schema.Type<typeof ShellCreateInput> {}
+export const ShellCreateInput = Schema.Struct({
+  command: Schema.Trimmed.check(Schema.isNonEmpty()).annotate({ description: "Runs in the session’s folder." }),
+  timeout: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))).annotate({
+    description: "Milliseconds after which the command is stopped. Without it, the command runs until it ends.",
+  }),
+}).annotate({ identifier: "Chat.ShellCreateInput" })
 
 export const ShellOutputQuery = Schema.Struct({
   cursor: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))),
@@ -383,13 +416,13 @@ export const SessionGroup = HttpApiGroup.make("session")
       params,
       payload: CommandInput,
       success: HttpApiSchema.NoContent,
-      error: NotFoundError,
+      error: [NotFoundError, InvalidRequestError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "session.command",
         summary: "Run a command",
         description:
-          "Run a command from `command.list` with its arguments. The command sends its prompt to the session like `session.prompt`, under an ID the session picks. A command the session does not know is not found.",
+          "Run a command from `command.list` with its arguments. The command sends its prompt to the session like `session.prompt`, under an ID the session picks. A command the session does not know is not found; a command that fails is an invalid request.",
       }),
     ),
   )
@@ -481,6 +514,35 @@ export const ShellGroup = HttpApiGroup.make("shell")
     ),
   )
   .add(
+    HttpApiEndpoint.post("shell.create", "/chat/session/:sessionID/shell", {
+      params,
+      payload: ShellCreateInput,
+      success: Shell.Info,
+      error: [NotFoundError, InvalidRequestError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "shell.create",
+        summary: "Run a shell command",
+        description:
+          "Run a command in the session’s environment, without a terminal or input, and return it at once while it runs. Follow it with `shell.output`, and the `shell.created` and `shell.exited` events. A session without an environment refuses it.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("shell.get", "/chat/session/:sessionID/shell/:shellID", {
+      params: { ...params, shellID: Shell.ID },
+      success: Shell.Info,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "shell.get",
+        summary: "Read a shell command",
+        description:
+          "Return a shell command that runs or ran where the session works, with its status and exit code. A command the session no longer keeps is not found.",
+      }),
+    ),
+  )
+  .add(
     HttpApiEndpoint.get("shell.output", "/chat/session/:sessionID/shell/:shellID/output", {
       params: { ...params, shellID: Shell.ID },
       query: ShellOutputQuery,
@@ -566,8 +628,71 @@ export const FileGroup = HttpApiGroup.make("file")
       }),
     ),
   )
+  .add(
+    HttpApiEndpoint.get("file.list", "/chat/session/:sessionID/file/list", {
+      params,
+      query: FileListQuery,
+      success: Schema.Array(SessionCatalog.File),
+      error: [NotFoundError, InvalidRequestError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "file.list",
+        summary: "List a folder",
+        description:
+          "Return the files and folders directly in a folder of the session’s environment, folders first. Paths are relative to the session’s folder; a folder ends with `/`. A folder that is missing is not found, and a session without an environment refuses it.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("file.read", "/chat/session/:sessionID/file/read", {
+      params,
+      query: FileReadQuery,
+      success: SessionCatalog.FileContent,
+      error: [NotFoundError, InvalidRequestError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "file.read",
+        summary: "Read a file",
+        description:
+          "Return a file of the session’s environment: text as `utf8`, anything else as `base64`. A large file returns its start, with `truncated` set. A file that is missing is not found, and a session without an environment refuses it.",
+      }),
+    ),
+  )
   .middleware(ChatAccess)
   .annotateMerge(OpenApi.annotations({ title: "file" }))
+
+export const VcsGroup = HttpApiGroup.make("vcs")
+  .add(
+    HttpApiEndpoint.get("vcs.get", "/chat/session/:sessionID/vcs", {
+      params,
+      success: SessionVcs.Info,
+      error: [NotFoundError, InvalidRequestError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "vcs.get",
+        summary: "Read version control",
+        description:
+          "Return the version control of the session’s folder and its current and default branch. Without `provider`, the folder is not a repository and `vcs.diff` has nothing to show. A session without an environment refuses it.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("vcs.diff", "/chat/session/:sessionID/vcs/diff", {
+      params,
+      query: VcsDiffQuery,
+      success: Schema.Array(SessionInfo.FileDiff),
+      error: [NotFoundError, InvalidRequestError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "vcs.diff",
+        summary: "Diff the session’s folder",
+        description:
+          "Return a patch for each file that changed in the session’s repository, including files nobody has added yet. A folder that is not a repository returns no files. A comparison the repository cannot make, such as `committed` without a base branch, is refused, as is a session without an environment.",
+      }),
+    ),
+  )
+  .middleware(ChatAccess)
+  .annotateMerge(OpenApi.annotations({ title: "vcs" }))
 
 export const WebSearchGroup = HttpApiGroup.make("websearch")
   .add(
@@ -596,6 +721,7 @@ export const ChatApi = HttpApi.make("chat")
   .add(SkillGroup)
   .add(CommandGroup)
   .add(FileGroup)
+  .add(VcsGroup)
   .add(WebSearchGroup)
   .annotateMerge(
     OpenApi.annotations({

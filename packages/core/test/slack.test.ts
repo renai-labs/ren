@@ -3,6 +3,7 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
+import { Task } from "@ren/schema/task"
 import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChannelProvider } from "../src/channel-provider.js"
@@ -138,6 +139,97 @@ describe("Slack", () => {
       }),
   )
 
+  it.live("a shared link and an opened card are signals of the authorizing team; one with no target is ignored", () =>
+    Effect.gen(function* () {
+      const links = [{ url: "https://ren.test/app/tasks/ACME-36", domain: "ren.test" }]
+      expect(
+        yield* parsed({
+          type: "link_shared",
+          channel: "C07",
+          message_ts: "1712.33",
+          links,
+          unfurl_id: "U1",
+          source: "conversations_history",
+        }),
+      ).toEqual({
+        _tag: "Signal",
+        signal: {
+          kind: "links_shared",
+          install: "T01",
+          place: "C07",
+          message: "1712.33",
+          unfurl: { id: "U1", source: "conversations_history" },
+          urls: ["https://ren.test/app/tasks/ACME-36"],
+        },
+      })
+      expect(
+        yield* parsed({
+          type: "entity_details_requested",
+          channel: "C07",
+          trigger_id: "trigger",
+          entity_url: "https://ren.test/app/tasks/ACME-36",
+          external_ref: { id: "tsk_1" },
+        }),
+      ).toEqual({
+        _tag: "Signal",
+        signal: {
+          kind: "details_requested",
+          install: "T01",
+          place: "C07",
+          trigger: "trigger",
+          url: "https://ren.test/app/tasks/ACME-36",
+          externalId: "tsk_1",
+        },
+      })
+      expect(yield* parsed({ type: "link_shared", channel: "C07", links })).toMatchObject({ _tag: "Ignore" })
+      expect(yield* parsed({ type: "entity_details_requested", trigger_id: "trigger" })).toMatchObject({
+        _tag: "Ignore",
+      })
+    }),
+  )
+
+  it.live(
+    "a click on a task card button is a signal of the clicker; a link button or another interaction is ignored",
+    () =>
+      Effect.gen(function* () {
+        const slackProvider = yield* provider
+        const clicked = (payload: object) => {
+          const body = new URLSearchParams({ payload: JSON.stringify(payload) }).toString()
+          return slackProvider.parse({
+            headers: new Headers({
+              ...SlackServer.sign(body, Math.floor(Date.now() / 1000)),
+              "content-type": "application/x-www-form-urlencoded",
+            }),
+            body,
+          })
+        }
+        const taskId = Task.ID.make("tsk_01M6NZMF5TRCM677MMNXB5MHQN")
+        const click = (actionId: string) => ({
+          type: "block_actions",
+          team: { id: "T01" },
+          user: { id: "U01", team_id: "T02" },
+          response_url: "https://hooks.slack.com/actions/T01/1/a",
+          actions: [{ action_id: actionId, value: taskId }],
+        })
+        expect(yield* clicked(click("ren_task.approve"))).toEqual({
+          _tag: "Signal",
+          signal: {
+            kind: "card_action",
+            install: "T01",
+            sender: { accountId: "T02:U01" },
+            taskId,
+            action: "approve",
+            responseUrl: "https://hooks.slack.com/actions/T01/1/a",
+          },
+        })
+        expect(yield* clicked(click("ren_task.open_pr"))).toMatchObject({ _tag: "Ignore" })
+        expect(
+          yield* clicked({ ...click("ren_task.approve"), actions: [{ action_id: "ren_task.approve" }] }),
+        ).toMatchObject({ _tag: "Ignore" })
+        expect(yield* clicked({ type: "view_submission", team: { id: "T01" } })).toMatchObject({ _tag: "Ignore" })
+      }),
+  )
+
   it.live("places are the public and private channels on every page; more than 25 pages is an error", () =>
     Effect.gen(function* () {
       const slackProvider = yield* provider
@@ -185,6 +277,7 @@ describe("Slack", () => {
             ts: "1712.40",
             thread_ts: "1712.33",
             text: "<@UBOT> the deploy failed",
+            action_token: "12345.98765.abcd",
           }),
         ).toEqual({
           _tag: "Event",
@@ -198,6 +291,7 @@ describe("Slack", () => {
             sender: { accountId: "T01:U01" },
             text: "the deploy failed",
             files: [],
+            data: { slack: { actionToken: "12345.98765.abcd" } },
           },
         })
         expect(
@@ -465,6 +559,7 @@ describe("Slack", () => {
         expect(slack.posted.at(-1)?.params).toEqual({
           channel: "C07",
           thread_ts: "1712.33",
+          unfurl_links: "false",
           text: longest,
           blocks: JSON.stringify([{ type: "markdown", text: longest }]),
         })
@@ -711,7 +806,7 @@ describe("Slack", () => {
       expect(slack.posted.at(-1)).toEqual({
         method: "chat.postMessage",
         token: found.token,
-        params: { channel: "C1", text: "Ren answers here for Eng" },
+        params: { channel: "C1", text: "Ren answers here for Eng", unfurl_links: "false" },
       })
       slack.options.postError = "not_in_channel"
       const gone = yield* Effect.flip(slackProvider.announce(found.workspace, place, "again"))

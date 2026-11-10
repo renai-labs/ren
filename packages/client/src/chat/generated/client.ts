@@ -48,6 +48,10 @@ import type {
   SessionStatusOutput,
   ShellListInput,
   ShellListOutput,
+  ShellCreateInput,
+  ShellCreateOutput,
+  ShellGetInput,
+  ShellGetOutput,
   ShellOutputInput,
   ShellOutputOutput,
   ShellRemoveInput,
@@ -60,6 +64,14 @@ import type {
   CommandListOutput,
   FileSearchInput,
   FileSearchOutput,
+  FileListInput,
+  FileListOutput,
+  FileReadInput,
+  FileReadOutput,
+  VcsGetInput,
+  VcsGetOutput,
+  VcsDiffInput,
+  VcsDiffOutput,
   WebsearchProvidersInput,
   WebsearchProvidersOutput,
 } from "./types.js"
@@ -479,7 +491,7 @@ export function make(options: ClientOptions) {
               skills: input["skills"],
             },
             successStatus: 204,
-            declaredStatuses: [403, 404, 503],
+            declaredStatuses: [400, 403, 404, 503],
             empty: true,
           },
           requestOptions,
@@ -510,6 +522,29 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/chat/session/${encodeURIComponent(input.sessionID)}/shell`,
+            successStatus: 200,
+            declaredStatuses: [403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: ShellCreateInput, requestOptions?: RequestOptions) =>
+        request<ShellCreateOutput>(
+          {
+            method: "POST",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/shell`,
+            body: { command: input["command"], timeout: input["timeout"] },
+            successStatus: 200,
+            declaredStatuses: [400, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: ShellGetInput, requestOptions?: RequestOptions) =>
+        request<ShellGetOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/shell/${encodeURIComponent(input.shellID)}`,
             successStatus: 200,
             declaredStatuses: [403, 404, 503],
             empty: false,
@@ -588,6 +623,55 @@ export function make(options: ClientOptions) {
             query: { query: input["query"], type: input["type"], limit: input["limit"] },
             successStatus: 200,
             declaredStatuses: [403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      list: (input: FileListInput, requestOptions?: RequestOptions) =>
+        request<FileListOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/file/list`,
+            query: { path: input["path"] },
+            successStatus: 200,
+            declaredStatuses: [400, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      read: (input: FileReadInput, requestOptions?: RequestOptions) =>
+        request<FileReadOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/file/read`,
+            query: { path: input["path"] },
+            successStatus: 200,
+            declaredStatuses: [400, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    vcs: {
+      get: (input: VcsGetInput, requestOptions?: RequestOptions) =>
+        request<VcsGetOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/vcs`,
+            successStatus: 200,
+            declaredStatuses: [400, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      diff: (input: VcsDiffInput, requestOptions?: RequestOptions) =>
+        request<VcsDiffOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/vcs/diff`,
+            query: { mode: input["mode"], context: input["context"] },
+            successStatus: 200,
+            declaredStatuses: [400, 403, 404, 503],
             empty: false,
           },
           requestOptions,

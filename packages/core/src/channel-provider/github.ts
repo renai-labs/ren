@@ -6,6 +6,7 @@ import { Clock, Effect, Option, Redacted, Schema } from "effect"
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { ChannelProvider } from "../channel-provider.js"
 import { GitHubApp } from "../github-app.js"
+import { PullRequest } from "../pull-request.js"
 
 const Envelope = Schema.Struct({
   action: Schema.optionalKey(Schema.String),
@@ -35,25 +36,26 @@ const PullRequestEvent = Schema.Struct({
   pull_request: Schema.Struct({
     number: Schema.Number,
     html_url: Schema.String,
+    title: Schema.optionalKey(Schema.String),
+    body: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    head: Schema.optionalKey(Schema.Struct({ ref: Schema.String })),
     draft: Schema.optionalKey(Schema.Boolean),
     merged: Schema.optionalKey(Schema.Boolean),
     user: Account,
   }),
 })
 
+const IssueEvent = Schema.Struct({
+  action: Schema.String,
+  installation: Schema.Struct({ id: Schema.Number }),
+  sender: Account,
+  issue: Schema.Struct({ html_url: Schema.String, title: Schema.String, body: Schema.NullOr(Schema.String) }),
+})
+
 const Issue = Schema.Struct({
   title: Schema.String,
   state: Schema.String,
   pull_request: Schema.optionalKey(Schema.Struct({})),
-})
-
-const Pull = Schema.Struct({
-  title: Schema.String,
-  state: Schema.String,
-  draft: Schema.optionalKey(Schema.Boolean),
-  merged: Schema.optionalKey(Schema.Boolean),
-  head: Schema.Struct({ ref: Schema.String }),
-  base: Schema.Struct({ ref: Schema.String }),
 })
 
 const Reactions = Schema.Array(
@@ -96,6 +98,10 @@ const decodeComment = Schema.decodeUnknownEffect(Comment)
 
 const decodePullRequest = Schema.decodeUnknownEffect(PullRequestEvent)
 
+const decodeIssue = Schema.decodeUnknownEffect(IssueEvent)
+
+const mentionActions: ReadonlySet<string> = new Set(["opened", "edited", "reopened"])
+
 export const pullRequestReady: Channel.Trigger = {
   id: "pull_request_ready",
   title: "Review pull requests when ready",
@@ -114,12 +120,6 @@ const subjectOf = (message: string) => {
 const malformed = (error: Schema.SchemaError) => new ChannelProvider.Malformed({ message: error.message })
 
 const ignore = (reason: string) => ({ _tag: "Ignore", reason }) satisfies Channel.Parsed
-
-const stateOf = (pull: typeof Pull.Type) => {
-  if (pull.merged) return "merged"
-  if (pull.draft && pull.state === "open") return "draft"
-  return pull.state
-}
 
 export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
   const secret = Redacted.value(app.settings.webhookSecret)
@@ -188,13 +188,42 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       ? { _tag: "Signal", signal: { kind: "pull_request_merged", install: String(body.installation.id), link, url } }
       : ignore(`GitHub pull_request.closed names no pull request on ${web.host}`)
   }
+  const mentionIn = (
+    body: {
+      readonly action: string
+      readonly installation: { readonly id: number }
+      readonly sender: typeof Account.Type
+    },
+    htmlUrl: string,
+    parts: ReadonlyArray<string | null | undefined>,
+  ): Channel.Signal | undefined => {
+    const url = mentionActions.has(body.action) ? webUrl(htmlUrl) : undefined
+    const link = url ? TaskLink.classify(url) : undefined
+    return url && link && (link.kind === "github_pr" || link.kind === "github_issue")
+      ? {
+          kind: "mentioned",
+          install: String(body.installation.id),
+          link,
+          url,
+          sender: { accountId: String(body.sender.id), handle: body.sender.login },
+          text: parts.filter(Boolean).join("\n"),
+        }
+      : undefined
+  }
+  const fromIssue = (body: typeof IssueEvent.Type): Channel.Parsed => {
+    const mention = mentionIn(body, body.issue.html_url, [body.issue.title, body.issue.body])
+    return mention ? { _tag: "Signal", signal: mention } : ignore(`GitHub issues.${body.action} is not handled`)
+  }
   const fromPullRequest = (delivery: string, body: typeof PullRequestEvent.Type): Channel.Parsed => {
     const pull = body.pull_request
     if (body.action === "closed" && pull.merged) return fromMerge(body)
+    const mention = mentionIn(body, pull.html_url, [pull.head?.ref, pull.title, pull.body])
+    const unhandled = (reason: string): Channel.Parsed =>
+      mention ? { _tag: "Signal", signal: mention } : ignore(reason)
     if (!(body.action === "ready_for_review" || (body.action === "opened" && !pull.draft)))
-      return ignore(`GitHub pull_request.${body.action}${pull.draft ? " of a draft" : ""} is not handled`)
+      return unhandled(`GitHub pull_request.${body.action}${pull.draft ? " of a draft" : ""} is not handled`)
     if (body.sender.type === "Bot" || String(body.sender.id) === app.settings.botUserId)
-      return ignore(`GitHub pull_request.${body.action} is from the bot ${body.sender.login}`)
+      return unhandled(`GitHub pull_request.${body.action} is from the bot ${body.sender.login}`)
     const url = webUrl(pull.html_url)
     return {
       _tag: "Event",
@@ -215,6 +244,7 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
         files: [],
         trigger: pullRequestReady.id,
       },
+      ...(mention && { signal: mention }),
     }
   }
   return {
@@ -234,6 +264,11 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       if (event === "ping") return { _tag: "Handshake", body: {} } satisfies Channel.Parsed
       if (event === "installation" && envelope.action === "deleted" && envelope.installation)
         return { _tag: "Uninstalled", install: String(envelope.installation.id) } satisfies Channel.Parsed
+      if (event === "issues")
+        return yield* decodeIssue(body).pipe(
+          Effect.map(fromIssue),
+          Effect.orElseSucceed(() => ignore("GitHub issues has no installation or issue")),
+        )
       const kind = commentEvents[event]
       if (!kind && event !== "pull_request")
         return ignore(`GitHub ${[event, envelope.action].filter(Boolean).join(".")} is not handled`)
@@ -276,9 +311,9 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
           : `Ready for review, by @${event.sender.handle ?? event.sender.accountId}`
         if (!issue.pull_request)
           return Option.some({ text: `Issue #${number} “${issue.title}”, ${issue.state}\n${triggering}`, files: [] })
-        const pull = yield* read(`/pulls/${number}`, Pull)
+        const pull = yield* read(`/pulls/${number}`, PullRequest.Pull)
         return Option.some({
-          text: `Pull request #${number} “${pull.title}”, ${stateOf(pull)}, ${pull.head.ref} → ${pull.base.ref}\n${triggering}`,
+          text: `Pull request #${number} “${pull.title}”, ${PullRequest.stateOf(pull)}, ${pull.head.ref} → ${pull.base.ref}\n${triggering}`,
           files: [],
         })
       },

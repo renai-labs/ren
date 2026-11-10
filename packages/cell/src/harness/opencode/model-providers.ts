@@ -21,7 +21,7 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
     editor.update(endpoint.id, (provider) => {
       provider.activation = "enabled"
       provider.package = protocol.package
-      provider.settings = { ...provider.settings, baseURL: endpoint.baseUrl }
+      provider.settings = { ...provider.settings, baseURL: endpoint.baseUrl, transport: "http" }
       if (protocol.canonical) provider.canonical = protocol.canonical
       if (endpoint.headers) provider.headers = { ...provider.headers, ...endpoint.headers }
     })

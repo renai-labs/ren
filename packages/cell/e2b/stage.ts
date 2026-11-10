@@ -38,7 +38,10 @@ const Manifest = Schema.Struct({
   imports: Schema.optionalKey(Schema.Unknown),
 })
 
-const Root = Schema.Struct({ packageManager: Schema.String })
+const Root = Schema.Struct({
+  packageManager: Schema.String,
+  patchedDependencies: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+})
 
 // oxlint-disable-next-line ren/no-comments -- Follows imports at any depth (ren-v1 INV-105). A file that no entry point imports never reaches the image, so its change never rebuilds the template.
 export const sources = async (repository: string) => {
@@ -96,26 +99,35 @@ const smoke = async (tag: string) => {
   return answered
 }
 
-if (import.meta.main) {
-  const imported = await sources(root)
+export const stage = async (repository: string, tree: string) => {
+  const imported = await sources(repository)
+  const patches = Object.values(
+    Schema.decodeUnknownSync(Root)(await Bun.file(join(repository, "package.json")).json()).patchedDependencies ?? {},
+  )
   // oxlint-disable-next-line ren/no-comments -- Every workspace manifest, because `--frozen-lockfile` checks the whole lockfile.
   const staged = [
-    ...(await Bun.$`git ls-files --cached --others --exclude-standard`.cwd(root).text())
+    ...(await Bun.$`git ls-files --cached --others --exclude-standard`.cwd(repository).text())
       .split("\n")
       .filter(
         (file) =>
           ["package.json", "bun.lock", "bunfig.toml"].includes(file) || /^packages\/[^/]+\/package\.json$/.test(file),
       ),
     ...imported,
+    ...patches,
   ]
-  const context = await mkdtemp(join(tmpdir(), "ren-brain-"))
-  const tree = join(context, "ren")
   await Promise.all(
     staged.map(async (file) => {
       await mkdir(dirname(join(tree, file)), { recursive: true })
-      await Bun.write(join(tree, file), Bun.file(join(root, file)))
+      await Bun.write(join(tree, file), Bun.file(join(repository, file)))
     }),
   )
+  return { imported, patches }
+}
+
+if (import.meta.main) {
+  const context = await mkdtemp(join(tmpdir(), "ren-brain-"))
+  const tree = join(context, "ren")
+  const staged = await stage(root, tree)
   // oxlint-disable-next-line ren/no-comments -- The install of e2b.Dockerfile, for the sandbox's platform. Each link names the version and peers a package resolves to, so the links change exactly when the image's dependencies do, whatever else changes in bun.lock.
   await Bun.$`bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts --os linux --cpu x64`
     .cwd(tree)
@@ -127,7 +139,7 @@ if (import.meta.main) {
       .map(async (link) => `${link} -> ${await readlink(join(tree, link))}\n`),
   )
   const manifests = await Promise.all(
-    [...new Set(imported.map((file) => file.slice(0, file.indexOf("/src/"))))].map(async (directory) => ({
+    [...new Set(staged.imported.map((file) => file.slice(0, file.indexOf("/src/"))))].map(async (directory) => ({
       path: `${directory}/package.json`,
       content: new TextEncoder().encode(
         JSON.stringify(
@@ -138,7 +150,8 @@ if (import.meta.main) {
   )
   const entries = await Promise.all(
     [
-      ...imported.map((file) => join(root, file)),
+      ...staged.imported.map((file) => join(root, file)),
+      ...staged.patches.map((file) => join(root, file)),
       ...dockerfiles.map((file) => join(import.meta.dir, file)),
       join(import.meta.dir, "start.sh"),
     ].map(async (path) => ({ path: path.slice(root.length + 1), content: await Bun.file(path).bytes() })),

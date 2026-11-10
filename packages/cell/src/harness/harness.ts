@@ -13,6 +13,7 @@ import type { SessionInfo } from "@ren/schema/session/info"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import type { SessionStatus } from "@ren/schema/session/status"
+import type { SessionVcs } from "@ren/schema/session/vcs"
 import type { Shell } from "@ren/schema/shell"
 import type { Sync } from "@ren/schema/sync"
 import { Context, Effect, Exit, Layer, Option, Schema, Scope, type Stream } from "effect"
@@ -102,7 +103,7 @@ export interface Chat {
     inboxId: SessionMessage.ID,
     delivery: SessionInbox.Delivery,
   ) => Effect.Effect<void, NotFound | Conflict>
-  readonly command: (sessionId: Session.ID, command: Command) => Effect.Effect<void, NotFound>
+  readonly command: (sessionId: Session.ID, command: Command) => Effect.Effect<void, NotFound | Rejected>
   readonly agents: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Agent>, NotFound>
   readonly skills: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Skill>, NotFound>
   readonly commands: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Command>, NotFound>
@@ -110,6 +111,19 @@ export interface Chat {
     sessionId: Session.ID,
     search: { readonly query: string; readonly type?: SessionCatalog.FileType; readonly limit?: number },
   ) => Effect.Effect<ReadonlyArray<SessionCatalog.File>, NotFound>
+  readonly listFiles: (
+    sessionId: Session.ID,
+    path: string | undefined,
+  ) => Effect.Effect<ReadonlyArray<SessionCatalog.File>, NotFound | Rejected>
+  readonly readFile: (
+    sessionId: Session.ID,
+    path: string,
+  ) => Effect.Effect<SessionCatalog.FileContent, NotFound | Rejected>
+  readonly vcs: (sessionId: Session.ID) => Effect.Effect<SessionVcs.Info, NotFound | Rejected>
+  readonly vcsDiff: (
+    sessionId: Session.ID,
+    options: { readonly mode: SessionVcs.Mode; readonly context?: number },
+  ) => Effect.Effect<ReadonlyArray<SessionInfo.FileDiff>, NotFound | Rejected>
   readonly webSearchProviders: (
     sessionId: Session.ID,
   ) => Effect.Effect<ReadonlyArray<SessionCatalog.WebSearchProvider>, NotFound>
@@ -126,6 +140,11 @@ export interface Chat {
   ) => Effect.Effect<void, NotFound | Conflict | Rejected>
   readonly cancelForm: (sessionId: Session.ID, formId: Form.ID) => Effect.Effect<void, NotFound | Conflict>
   readonly shells: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Shell.Info>, NotFound>
+  readonly createShell: (
+    sessionId: Session.ID,
+    input: { readonly command: string; readonly timeout?: number | undefined },
+  ) => Effect.Effect<Shell.Info, NotFound | Rejected>
+  readonly shell: (sessionId: Session.ID, shellId: Shell.ID) => Effect.Effect<Shell.Info, NotFound>
   readonly shellOutput: (
     sessionId: Session.ID,
     shellId: Shell.ID,

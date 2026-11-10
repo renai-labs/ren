@@ -11,20 +11,42 @@ export class Service extends Context.Service<Service, { readonly clear: Effect.E
   "@ren/cell/HarnessStorage",
 ) {}
 
-const Names = Schema.Array(Schema.Struct({ type: Schema.String, name: Schema.String }))
+const Entries = Schema.Array(Schema.Struct({ type: Schema.String, name: Schema.String }))
+
+const ForeignKeys = Schema.Array(Schema.Struct({ table: Schema.String }))
 
 export const layerDurableObject = (storage: DurableObjectStorage) =>
   Layer.succeed(
     Service,
     Service.of({
-      clear: Effect.sync(() => {
-        const found = Schema.decodeUnknownSync(Names)([
-          ...storage.sql.exec(
-            "select type, name from sqlite_master where type in ('table', 'view') and name not like '\\_%' escape '\\' and name not like 'sqlite\\_%' escape '\\' order by rowid desc",
-          ),
-        ])
-        for (const entry of found) storage.sql.exec(`drop ${entry.type} if exists "${entry.name}"`)
-      }),
+      clear: Effect.sync(() =>
+        storage.transactionSync(() => {
+          const drop = (left: typeof Entries.Type) => {
+            if (left.length === 0) return
+            const referenced = new Set(
+              left.flatMap((entry) =>
+                Schema.decodeUnknownSync(ForeignKeys)([
+                  ...storage.sql.exec(`pragma foreign_key_list("${entry.name.replaceAll('"', '""')}")`),
+                ])
+                  .map((parent) => parent.table.toLowerCase())
+                  .filter((parent) => parent !== entry.name.toLowerCase()),
+              ),
+            )
+            const free = left.filter((entry) => !referenced.has(entry.name.toLowerCase()))
+            const next = free.length > 0 ? free : left
+            for (const entry of next)
+              storage.sql.exec(`drop ${entry.type} if exists "${entry.name.replaceAll('"', '""')}"`)
+            drop(left.filter((entry) => !next.includes(entry)))
+          }
+          drop(
+            Schema.decodeUnknownSync(Entries)([
+              ...storage.sql.exec(
+                "select type, name from sqlite_master where type in ('table', 'view') and name not like '\\_%' escape '\\' and name not like 'sqlite\\_%' escape '\\' order by rowid desc",
+              ),
+            ]),
+          )
+        }),
+      ),
     }),
   )
 

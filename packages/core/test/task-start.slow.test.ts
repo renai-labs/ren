@@ -218,7 +218,7 @@ describe("Task factory", () => {
             maxHandoffs: 20,
             agents: [
               { agentId: build, to: [{ agentId: review, max: 2 }] },
-              { agentId: review, maxRuns: 1, to: [{ agentId: build }] },
+              { agentId: review, maxRuns: 1, finish: true, to: [{ agentId: build }] },
             ],
           },
         })
@@ -239,15 +239,17 @@ describe("Task factory", () => {
           "Hand off with task_assign to one of:\n- review (used 0 of 2; then the task goes to human review)",
         )
         expect(first.text).toContain("Handoffs: 0 of 20.")
+        expect(first.text).not.toContain("task_finish")
+        expect(first.text).toContain("When you are blocked and a person must decide, use task_review.")
         const reviewer = TaskFixture.actingAs(
           o.ada,
           o.factory.id,
           review,
           yield* sessionOf(yield* tasks.assign(builder, created.id, { agentId: review })),
         )
-        expect((yield* Effect.promise(() => script.called(2))).text).toContain(
-          "Run 1 of 1 for review. Handoffs: 1 of 20.",
-        )
+        const second = yield* Effect.promise(() => script.called(2))
+        expect(second.text).toContain("Run 1 of 1 for review. Handoffs: 1 of 20.")
+        expect(second.text).toContain("When the result is ready for a person or a merge, finish with task_finish.")
         expect((yield* Effect.flip(tasks.start(reviewer, created.id, { mode: "continue" })))._tag).toBe(
           "Primitive.Conflict",
         )

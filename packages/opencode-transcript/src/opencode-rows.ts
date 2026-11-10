@@ -1,8 +1,10 @@
 export * as OpenCodeRows from "./opencode-rows.js"
 
 import { fromRow } from "@opencode/core/session/info"
+import { Agent } from "@opencode/schema/agent"
 import { ProjectID } from "@opencode/schema/project-id"
 import { SessionID } from "@opencode/schema/session-id"
+import { SessionLegacy } from "@opencode/schema/session-legacy"
 import { SessionMessage } from "@opencode/schema/session-message"
 import { WorkspaceID } from "@opencode/schema/workspace-id"
 import { Sync } from "@ren/schema/sync"
@@ -16,6 +18,7 @@ const SessionRow = Schema.Struct({
   parent_id: Schema.NullOr(SessionID),
   project_id: ProjectID,
   workspace_id: Schema.NullOr(WorkspaceID),
+  agent: Schema.NullOr(Agent.ID),
   metadata: JsonColumn(Schema.Record(Schema.String, Schema.Json)),
   permission: JsonColumn(
     Schema.Array(
@@ -43,11 +46,21 @@ export const session = (row: unknown) =>
     summary_diffs: null,
     revert: null,
     time_compacting: null,
+    time_busy: null,
     resume_attempts: 0,
   })
+
+const input = (row: typeof Sync.OpenCodeMessageRow.Type, data: typeof MessageData.Type) => ({
+  ...SessionLegacy.message(row.type, data),
+  id: row.id,
+  type: row.type,
+})
+
+export const stored = (row: typeof Sync.OpenCodeMessageRow.Type) =>
+  input(row, Schema.decodeUnknownSync(MessageData)(row.data))
 
 export const message = (row: typeof Sync.OpenCodeMessageRow.Type) =>
   Exit.match(Schema.decodeUnknownExit(MessageData)(row.data), {
     onFailure: Exit.failCause,
-    onSuccess: (data) => Schema.decodeUnknownExit(SessionMessage.Info)({ ...data, id: row.id, type: row.type }),
+    onSuccess: (data) => Schema.decodeUnknownExit(SessionMessage.Info)(input(row, data)),
   })

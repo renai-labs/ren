@@ -185,20 +185,10 @@ function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => vo
       ) : (
         <ChatBreadcrumb chat={chat} />
       )}
-      {chat.child ? null : (
-        <ChatActions
-          sessionId={chat.root}
-          title={chat.title}
-          spaceId={chat.spaceId}
-          capabilities={chat.capabilities}
-          prompted={chat.prompted}
-          reverted={chat.reverted}
-          onUndo={chat.undo}
-          onRestore={chat.restore}
-          onCompact={chat.compact}
-          onArchive={chat.archive}
-        />
-      )}
+      <ChatActions
+        sessionId={chat.child ?? chat.root}
+        archive={chat.child ? undefined : { title: chat.title, onArchive: chat.archive }}
+      />
       <Button
         variant="ghost"
         size="icon"
@@ -259,6 +249,7 @@ export function ChatPage() {
       >
         <div className={cn("h-full", maximized ? "w-full" : "w-(--panel-width)")}>
           <WorkspacePanel
+            root={chat.root}
             messages={chat.messages}
             maximized={maximized}
             onMaximize={setMaximized}

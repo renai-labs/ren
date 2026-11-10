@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
+import { IntakeThread } from "@ren/schema/intake-thread"
 import type { Task as TaskSchema } from "@ren/schema/task"
 import { eq } from "drizzle-orm"
 import { Deferred, Effect, Fiber } from "effect"
@@ -99,6 +100,44 @@ describe("Task", () => {
       yield* members.create(o.grace, { spaceId: o.eng.id, userId: o.ada.userId })
       expect((yield* tasks.get(build, hidden.id)).id).toBe(hidden.id)
       expect((yield* tasks.create(build, { spaceId: o.eng.id, title: "Eng from the factory" })).spaceId).toBe(o.eng.id)
+    }),
+  )
+
+  it.live("a task an agent creates links the Slack threads of the agent's session", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const tasks = yield* Task.Service
+      const activity = yield* TaskActivity.Service
+      const o = yield* org
+      const build = yield* o.agentIn(o.ada, o.factory.id)
+      const thread = "https://acme.slack.com/archives/C07/p1712000000000100"
+      yield* database.db.insert(Database.Schema.intake_thread).values(
+        ["C07:1712.000100", "C07:1712.000200"].map((id, index) => ({
+          id: IntakeThread.ID.create(),
+          organization_id: o.organizationId,
+          origin: "slack" as const,
+          origin_id: "T01",
+          thread_key: id,
+          current_session_id: build.agent.sessionId,
+          channel_state: index === 0 ? { url: thread } : {},
+        })),
+      )
+      const pull = "https://github.com/renai-labs/ren/pull/12"
+      const created = yield* tasks.create(build, { spaceId: o.factory.id, title: "Add SSO", links: [pull] })
+      expect(created.links.map((link) => [link.kind, link.url])).toEqual([
+        ["github_pr", pull],
+        ["slack_thread", thread],
+      ])
+      expect((yield* activity.list(o.ada, { taskId: created.id, ...page })).items.at(-1)).toMatchObject({
+        event: { data: { _tag: "link", added: [pull, thread], removed: [] } },
+      })
+      const other = TaskFixture.actingAs(
+        o.ada,
+        o.factory.id,
+        build.agent.agentId,
+        yield* Seed.session({ organizationId: o.organizationId, spaceId: o.factory.id, createdBy: o.ada.userId }),
+      )
+      expect((yield* tasks.create(other, { spaceId: o.factory.id, title: "Fix billing" })).links).toEqual([])
     }),
   )
 

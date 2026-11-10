@@ -1,7 +1,7 @@
 export * as SlackApp from "./slack-app.js"
 
 import type { Auth } from "@ren/schema/auth"
-import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
+import { Config, Context, Effect, Layer, Option, Predicate, Redacted, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { ChannelSecrets } from "./channel-secrets.js"
 
@@ -21,11 +21,14 @@ export interface Settings {
 
 export const botScopes = [
   "app_mentions:read",
+  "canvases:read",
+  "canvases:write",
   "channels:history",
   "channels:join",
   "channels:read",
   "chat:write",
   "chat:write.public",
+  "emoji:read",
   "files:read",
   "files:write",
   "groups:history",
@@ -33,12 +36,29 @@ export const botScopes = [
   "im:history",
   "im:read",
   "im:write",
+  "links:read",
+  "links:write",
+  "mpim:history",
+  "mpim:read",
   "reactions:read",
   "reactions:write",
+  "search:read.files",
+  "search:read.public",
   "users:read",
   "users:read.email",
   "users.profile:read",
 ]
+
+export const botEvents = [
+  "app_mention",
+  "app_uninstalled",
+  "entity_details_requested",
+  "link_shared",
+  "message.im",
+  "tokens_revoked",
+]
+
+export const userScopes = ["email", "openid", "profile"]
 
 export const maxFileBytes = 32 * 1024 * 1024
 
@@ -81,15 +101,14 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
 
   const post = <S extends Schema.Top>(
     method: string,
-    params: Readonly<Record<string, Param>>,
+    params: Readonly<Record<string, Param | undefined>>,
     schema: S,
     token?: Redacted.Redacted,
   ) => {
     const form = Object.fromEntries(
-      Object.entries(params).map(([key, value]) => [
-        key,
-        typeof value === "object" ? JSON.stringify(value) : String(value),
-      ]),
+      Object.entries(params).flatMap(([key, value]) =>
+        Predicate.isUndefined(value) ? [] : [[key, typeof value === "object" ? JSON.stringify(value) : String(value)]],
+      ),
     )
     const request = HttpClientRequest.post(`${app.api}/${method}`).pipe(
       HttpClientRequest.bodyUrlParams(form),
@@ -160,7 +179,26 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
       ),
     )
 
-  return { settings: app, post, upload, download }
+  const respond = (url: string, message: object) =>
+    http
+      .execute(
+        HttpClientRequest.post(url).pipe(
+          HttpClientRequest.bodyJsonUnsafe({ response_type: "ephemeral", replace_original: false, ...message }),
+        ),
+      )
+      .pipe(
+        Effect.flatMap((response) =>
+          response.status >= 200 && response.status < 300
+            ? Effect.void
+            : Effect.fail(new Failed({ message: `Slack answered ${response.status} to a response URL` })),
+        ),
+        Effect.timeout(timeLimit),
+        Effect.mapError((cause) =>
+          cause instanceof Failed ? cause : new Failed({ message: `Slack did not take the reply: ${String(cause)}` }),
+        ),
+      )
+
+  return { settings: app, post, upload, download, respond }
 })
 
 export type Client = Effect.Success<ReturnType<typeof make>>

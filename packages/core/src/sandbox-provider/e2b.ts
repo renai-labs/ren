@@ -103,7 +103,6 @@ export const layer = Layer.effect(
       api: Config.String("E2B_API_URL").pipe(Config.withDefault("https://api.e2b.dev")),
       domain: Config.String("E2B_DOMAIN").pipe(Config.withDefault("e2b.app")),
       port: Config.Int("BRAIN_PORT").pipe(Config.withDefault(4800)),
-      maxRunning: Config.Int("SANDBOX_MAX_RUNNING").pipe(Config.withDefault(10)),
       owner: Config.String("E2B_OWNER").pipe(Config.withDefault(defaultOwner)),
       vcpuSecond: Config.Number("E2B_VCPU_SECOND_MICRO_USD"),
       gibSecond: Config.Number("E2B_GIB_SECOND_MICRO_USD"),
@@ -236,12 +235,6 @@ export const layer = Layer.effect(
           )
           return { binding: Schema.encodeSync(Binding)(binding), url: urlOf(binding) }
         }
-        const running = yield* list({}, "running")
-        if (running.length >= config.maxRunning)
-          return yield* new SandboxProvider.Capacity({
-            message: `${running.length} development sandboxes run; the limit is ${config.maxRunning} (SANDBOX_MAX_RUNNING)`,
-            retryAfter: Duration.seconds(30),
-          })
         const response = yield* send(
           "create",
           HttpClientRequest.post("/sandboxes").pipe(

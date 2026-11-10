@@ -10,4 +10,5 @@ export const TaskGroup = Primitive.group(Task.definition, "sdk", [
   Primitive.action(Task.definition, "assign", { invalid: true }),
   Primitive.action(Task.definition, "start"),
   Primitive.action(Task.definition, "review"),
+  Primitive.action(Task.definition, "finish", { invalid: true }),
 ])

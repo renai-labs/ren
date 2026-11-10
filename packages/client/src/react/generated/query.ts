@@ -76,10 +76,14 @@ import type {
   TaskAssignInput,
   TaskStartInput,
   TaskReviewInput,
+  TaskFinishInput,
   TaskCommentCreateInput,
   TaskCommentUpdateInput,
   TaskCommentArchiveInput,
   TaskActivityListInput,
+  LinkSessionLinksInput,
+  LinkSessionPullRequestsInput,
+  LinkTaskPullRequestsInput,
   LabelListInput,
   LabelCreateInput,
   LabelUpdateInput,
@@ -93,6 +97,18 @@ import type {
   ScheduleResumeInput,
   ScheduleRunInput,
   ScheduleRunListInput,
+  WebhookListInput,
+  WebhookGetInput,
+  WebhookCreateInput,
+  WebhookUpdateInput,
+  WebhookArchiveInput,
+  WebhookRotateUrlInput,
+  WebhookSetSigningSecretInput,
+  WebhookRevealSigningSecretInput,
+  WebhookTestInput,
+  WebhookReplayInput,
+  WebhookRequestListInput,
+  WebhookRequestGetInput,
   CredentialListInput,
   CredentialGetInput,
   CredentialCreateInput,
@@ -852,6 +868,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationFn: (input: TaskReviewInput) => client["task"]["review"](input),
           }),
       },
+      finish: {
+        mutationKey: () => ["task", "finish"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task", "finish"] as const,
+            mutationFn: (input: TaskFinishInput) => client["task"]["finish"](input),
+          }),
+      },
     },
     "task-comment": {
       create: {
@@ -888,6 +912,45 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryKey: ["task-activity", "list", input] as const,
             queryFn: (context) => client["task-activity"]["list"](input, { signal: context.signal }),
           }),
+      },
+    },
+    link: {
+      session: {
+        links: {
+          queryKey: (input?: LinkSessionLinksInput) =>
+            input === undefined
+              ? (["link", "session", "links"] as const)
+              : (["link", "session", "links", input] as const),
+          queryOptions: (input: LinkSessionLinksInput) =>
+            queryOptions({
+              queryKey: ["link", "session", "links", input] as const,
+              queryFn: (context) => client["link"]["session"]["links"](input, { signal: context.signal }),
+            }),
+        },
+        pullRequests: {
+          queryKey: (input?: LinkSessionPullRequestsInput) =>
+            input === undefined
+              ? (["link", "session", "pullRequests"] as const)
+              : (["link", "session", "pullRequests", input] as const),
+          queryOptions: (input: LinkSessionPullRequestsInput) =>
+            queryOptions({
+              queryKey: ["link", "session", "pullRequests", input] as const,
+              queryFn: (context) => client["link"]["session"]["pullRequests"](input, { signal: context.signal }),
+            }),
+        },
+      },
+      task: {
+        pullRequests: {
+          queryKey: (input?: LinkTaskPullRequestsInput) =>
+            input === undefined
+              ? (["link", "task", "pullRequests"] as const)
+              : (["link", "task", "pullRequests", input] as const),
+          queryOptions: (input: LinkTaskPullRequestsInput) =>
+            queryOptions({
+              queryKey: ["link", "task", "pullRequests", input] as const,
+              queryFn: (context) => client["link"]["task"]["pullRequests"](input, { signal: context.signal }),
+            }),
+        },
       },
     },
     label: {
@@ -1001,6 +1064,109 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["schedule-run", "list", input] as const,
             queryFn: (context) => client["schedule-run"]["list"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    webhook: {
+      list: {
+        queryKey: (input?: WebhookListInput) =>
+          input === undefined ? (["webhook", "list"] as const) : (["webhook", "list", input] as const),
+        queryOptions: (input: WebhookListInput) =>
+          queryOptions({
+            queryKey: ["webhook", "list", input] as const,
+            queryFn: (context) => client["webhook"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: WebhookGetInput) =>
+          input === undefined ? (["webhook", "get"] as const) : (["webhook", "get", input] as const),
+        queryOptions: (input: WebhookGetInput) =>
+          queryOptions({
+            queryKey: ["webhook", "get", input] as const,
+            queryFn: (context) => client["webhook"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["webhook", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["webhook", "create"] as const,
+            mutationFn: (input: WebhookCreateInput) => client["webhook"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["webhook", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["webhook", "update"] as const,
+            mutationFn: (input: WebhookUpdateInput) => client["webhook"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["webhook", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["webhook", "archive"] as const,
+            mutationFn: (input: WebhookArchiveInput) => client["webhook"]["archive"](input),
+          }),
+      },
+      rotateUrl: {
+        mutationKey: () => ["webhook", "rotateUrl"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["webhook", "rotateUrl"] as const,
+            mutationFn: (input: WebhookRotateUrlInput) => client["webhook"]["rotateUrl"](input),
+          }),
+      },
+      setSigningSecret: {
+        mutationKey: () => ["webhook", "setSigningSecret"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["webhook", "setSigningSecret"] as const,
+            mutationFn: (input: WebhookSetSigningSecretInput) => client["webhook"]["setSigningSecret"](input),
+          }),
+      },
+      revealSigningSecret: {
+        mutationKey: () => ["webhook", "revealSigningSecret"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["webhook", "revealSigningSecret"] as const,
+            mutationFn: (input: WebhookRevealSigningSecretInput) => client["webhook"]["revealSigningSecret"](input),
+          }),
+      },
+      test: {
+        mutationKey: () => ["webhook", "test"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["webhook", "test"] as const,
+            mutationFn: (input: WebhookTestInput) => client["webhook"]["test"](input),
+          }),
+      },
+      replay: {
+        mutationKey: () => ["webhook", "replay"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["webhook", "replay"] as const,
+            mutationFn: (input: WebhookReplayInput) => client["webhook"]["replay"](input),
+          }),
+      },
+    },
+    "webhook-request": {
+      list: {
+        queryKey: (input?: WebhookRequestListInput) =>
+          input === undefined ? (["webhook-request", "list"] as const) : (["webhook-request", "list", input] as const),
+        queryOptions: (input: WebhookRequestListInput) =>
+          queryOptions({
+            queryKey: ["webhook-request", "list", input] as const,
+            queryFn: (context) => client["webhook-request"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        mutationKey: () => ["webhook-request", "get"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["webhook-request", "get"] as const,
+            mutationFn: (input: WebhookRequestGetInput) => client["webhook-request"]["get"](input),
           }),
       },
     },
