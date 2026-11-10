@@ -71,7 +71,7 @@ const resolve = (
 const rule = (action: string, resource: string, effect: Permission.RuleEffect) => ({ action, resource, effect })
 
 describe("BrainSettings.resolve", () => {
-  test("defaults resolve only exact catalog IDs, and a search default only on an endpoint that serves it", () => {
+  test("defaults resolve only exact catalog model IDs", () => {
     const served: Models.Catalog = {
       endpoints: [
         {
@@ -82,7 +82,6 @@ describe("BrainSettings.resolve", () => {
             { id: "openai/image", type: "image", protocol: "openai-images" },
             { id: "ren/group/audio", type: "transcription", protocol: "openai-transcription" },
           ],
-          search: [{ id: "ren/search/deep", name: "Search" }],
         },
         {
           id: "other",
@@ -105,17 +104,14 @@ describe("BrainSettings.resolve", () => {
       resolved({
         image_generation: { providerId: "ren", modelId: "openai/image" },
         audio_transcription: { providerId: "ren", modelId: "ren/group/audio" },
-        search: { providerId: "ren", modelId: "ren/search/deep" },
       }),
     ).toEqual({
       image_generation: { providerId: "ren", modelId: "openai/image" },
       audio_transcription: { providerId: "ren", modelId: "ren/group/audio" },
-      search: { providerId: "ren", modelId: "ren/search/deep" },
     })
     expect(
       resolved({
         image_generation: { providerId: "openai", modelId: "image" },
-        search: { providerId: "other", modelId: "ren/search/deep" },
       }),
     ).toBeUndefined()
   })

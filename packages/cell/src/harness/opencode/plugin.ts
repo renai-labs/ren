@@ -678,9 +678,10 @@ export const make = (
         yield* tool.transform((editor) => {
           if (!isSession) return
           OpenCodeModelTools.register(editor, modelTools)
-          OpenCodeSearch.withExecution(editor)
         })
-        yield* context.websearch.transform((editor) => isSession && OpenCodeSearch.register(editor, modelTools))
+        yield* context.websearch.transform((editor) =>
+          OpenCodeSearch.register(editor, { current: applied, keyFor: refreshKey }),
+        )
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {
             delete event.headers[Models.personHeader]

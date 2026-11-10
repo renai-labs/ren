@@ -17886,7 +17886,10 @@
           "decisions": {
             "$ref": "#/components/schemas/ModelTypes.ModelRef"
           },
-          "search": {
+          "audio_speech": {
+            "$ref": "#/components/schemas/ModelTypes.ModelRef"
+          },
+          "realtime": {
             "$ref": "#/components/schemas/ModelTypes.ModelRef"
           },
           "video_generation": {
@@ -17900,11 +17903,13 @@
         "properties": {
           "providerId": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "The endpoint ID."
           },
           "modelId": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "The model ID on the endpoint."
           }
         },
         "required": ["providerId", "modelId"],
