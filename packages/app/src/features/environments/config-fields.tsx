@@ -20,6 +20,11 @@ const resolve = (node: JsonValue | undefined, definitions: Node): Node | undefin
   return EnvironmentForm.isNode(found) ? found : undefined
 }
 
+const exampleOf = (node: Node) => {
+  const first = Array.isArray(node.examples) ? node.examples.at(0) : undefined
+  return Array.isArray(first) ? first.filter((line) => typeof line === "string").join("\n") : undefined
+}
+
 const textOf = (value: JsonValue | undefined) =>
   typeof value === "string" || typeof value === "number" ? String(value) : ""
 
@@ -39,6 +44,7 @@ function ObjectField(props: PropertyProps) {
   return (
     <FieldSet>
       <FieldLegend variant="label">{props.title}</FieldLegend>
+      {props.description ? <FieldDescription>{props.description}</FieldDescription> : null}
       <Fields
         node={props.node}
         definitions={props.definitions}
@@ -81,9 +87,10 @@ function ListField(props: PropertyProps) {
           const next = event.currentTarget.value.split("\n")
           props.onChange(next.some((line) => line.trim()) ? next : undefined)
         }}
+        placeholder={exampleOf(props.node)}
         className="min-h-16 font-mono text-xs"
       />
-      <FieldDescription>{props.description ?? "One per line."}</FieldDescription>
+      {props.description ? <FieldDescription>{props.description}</FieldDescription> : null}
     </Field>
   )
 }

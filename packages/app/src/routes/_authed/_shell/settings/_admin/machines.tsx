@@ -3,8 +3,8 @@ import { EnvironmentsSettingsPage } from "../../../../../features/environments/e
 import { EnvironmentForm } from "../../../../../features/environments/environment-form.js"
 import { Loader } from "../../../../../lib/loader.js"
 
-export const Route = createFileRoute("/_authed/_shell/settings/_admin/environments")({
-  head: () => ({ meta: [{ title: "Environments · Ren" }] }),
+export const Route = createFileRoute("/_authed/_shell/settings/_admin/machines")({
+  head: () => ({ meta: [{ title: "Machines · Ren" }] }),
   loader: (options) => {
     Loader.start(
       options.context.queryClient.query(

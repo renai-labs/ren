@@ -13,11 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@ren/ui/dialog"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@ren/ui/field"
+import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
-import { RadioGroup, RadioGroupItem } from "@ren/ui/radio-group"
 import { toast } from "@ren/ui/sonner"
 import { Spinner } from "@ren/ui/spinner"
+import { Switch } from "@ren/ui/switch"
 import { Textarea } from "@ren/ui/textarea"
 import { EmptyState } from "../../components/empty-state.js"
 import { Page, Row, Rows, RowsSample } from "../../components/page.js"
@@ -47,33 +47,29 @@ function NetworkingFields(props: {
   const limited = props.value.type === "limited" ? props.value : undefined
   const canLimitHosts = props.provider?.canLimitHosts ?? false
   return (
-    <FieldSet>
-      <FieldLegend variant="label">Networking</FieldLegend>
-      <RadioGroup
-        value={props.value.type}
-        disabled={props.disabled}
-        onValueChange={(type) =>
-          props.onChange(
-            type === "limited"
-              ? { type: "limited", allowPackageManagers: true, allowMcpServers: true, allowedHosts: [] }
-              : EnvironmentForm.unrestricted,
-          )
-        }
-      >
-        <Field orientation="horizontal">
-          <RadioGroupItem value="unrestricted" id="networking-unrestricted" />
-          <FieldLabel htmlFor="networking-unrestricted">Any host</FieldLabel>
-        </Field>
-        <Field orientation="horizontal" data-disabled={!canLimitHosts || undefined}>
-          <RadioGroupItem value="limited" id="networking-limited" disabled={!canLimitHosts} />
-          <FieldLabel htmlFor="networking-limited">Only listed hosts</FieldLabel>
-        </Field>
-      </RadioGroup>
-      {canLimitHosts ? null : (
-        <FieldDescription>This provider cannot limit hosts, so its environments reach any host.</FieldDescription>
-      )}
+    <FieldGroup className="gap-3">
+      <Field orientation="horizontal" data-disabled={!canLimitHosts || undefined}>
+        <FieldContent>
+          <FieldLabel htmlFor="networking-limited">Limit hosts</FieldLabel>
+          <FieldDescription>
+            {canLimitHosts ? "Off: the machine reaches any host." : "This provider can’t limit hosts."}
+          </FieldDescription>
+        </FieldContent>
+        <Switch
+          id="networking-limited"
+          checked={Boolean(limited)}
+          disabled={props.disabled || !canLimitHosts}
+          onCheckedChange={(on) =>
+            props.onChange(
+              on
+                ? { type: "limited", allowPackageManagers: true, allowMcpServers: true, allowedHosts: [] }
+                : EnvironmentForm.unrestricted,
+            )
+          }
+        />
+      </Field>
       {limited ? (
-        <FieldGroup className="gap-3 pt-2">
+        <>
           <Field>
             <FieldLabel htmlFor="networking-hosts">Allowed hosts</FieldLabel>
             <Textarea
@@ -84,7 +80,7 @@ function NetworkingFields(props: {
               placeholder={"api.example.com\n*.github.com"}
               className="min-h-16 font-mono text-xs"
             />
-            <FieldDescription>The hosts of the space’s credentials are always allowed.</FieldDescription>
+            <FieldDescription>One per line. Hosts of the space’s keys are always allowed.</FieldDescription>
           </Field>
           <Field orientation="horizontal">
             <Checkbox
@@ -104,14 +100,14 @@ function NetworkingFields(props: {
             />
             <FieldLabel htmlFor="networking-mcp">Allow the space’s MCP servers</FieldLabel>
           </Field>
-        </FieldGroup>
+        </>
       ) : null}
-    </FieldSet>
+    </FieldGroup>
   )
 }
 
 function TemplateDialog(props: {
-  template: EnvironmentTemplateInfo | undefined
+  template?: EnvironmentTemplateInfo | undefined
   providers: ReadonlyArray<EnvironmentProviderInfo>
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -151,7 +147,7 @@ function TemplateDialog(props: {
             setError("")
             void save().then(
               () => {
-                toast.success(props.template ? "Environment saved" : "Environment created")
+                toast.success(props.template ? "Machine saved" : "Machine created")
                 props.onOpenChange(false)
               },
               (failure: unknown) => setError(errorMessage(failure)),
@@ -159,11 +155,8 @@ function TemplateDialog(props: {
           }}
         >
           <DialogHeader>
-            <DialogTitle>{props.template ? "Edit environment" : "Create environment"}</DialogTitle>
-            <DialogDescription>
-              The machine where a space’s chats run their file and shell tools. Ren builds its image when you save a new
-              config; a machine gets it when it wakes.
-            </DialogDescription>
+            <DialogTitle>{props.template ? "Edit machine" : "Create machine"}</DialogTitle>
+            <DialogDescription>Packages, size and network for a space’s brain or tools.</DialogDescription>
           </DialogHeader>
           <FieldGroup className="gap-4">
             <Field>
@@ -206,7 +199,7 @@ function TemplateDialog(props: {
               onChange={(next) => setDraft({ ...draft, networking: next })}
             />
             <Field>
-              <FieldLabel htmlFor="environment-sessions">Chats per environment</FieldLabel>
+              <FieldLabel htmlFor="environment-sessions">Chats per machine</FieldLabel>
               <Input
                 id="environment-sessions"
                 type="number"
@@ -217,7 +210,7 @@ function TemplateDialog(props: {
                   setDraft({ ...draft, sessionsPerEnvironment: Number(event.currentTarget.value) || 1 })
                 }
               />
-              <FieldDescription>More chats get another environment of the same template.</FieldDescription>
+              <FieldDescription>More chats start another copy.</FieldDescription>
             </Field>
             {error ? <FieldError className="whitespace-pre-wrap">{error}</FieldError> : null}
           </FieldGroup>
@@ -225,7 +218,7 @@ function TemplateDialog(props: {
             <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
             <Button type="submit" disabled={pending || !provider}>
               {pending ? <Spinner data-icon="inline-start" /> : null}
-              {props.template ? "Save environment" : "Create environment"}
+              {props.template ? "Save machine" : "Create machine"}
             </Button>
           </DialogFooter>
         </form>
@@ -252,17 +245,14 @@ export function EnvironmentsSettingsPage() {
   const createButton = (
     <Button onClick={() => setEditing({ template: undefined })} disabled={providerList.length === 0}>
       <IconPlus />
-      Create environment
+      Create machine
     </Button>
   )
   return (
-    <Page title="Environments" actions={createButton} loading={templates.isPending}>
+    <Page title="Machines" actions={createButton} loading={templates.isPending}>
       {templates.isPending ? <RowsSample count={3} /> : null}
       {!templates.isPending && items.length === 0 ? (
-        <EmptyState action={createButton}>
-          No environments yet. An environment sets the packages, size and network of the machines where a space’s chats
-          run their tools.
-        </EmptyState>
+        <EmptyState action={createButton}>No machines yet.</EmptyState>
       ) : null}
       {items.length > 0 ? (
         <Rows>
@@ -293,14 +283,13 @@ export function EnvironmentsSettingsPage() {
                         { id: template.id },
                         {
                           onError: (failure) =>
-                            toast.error("Couldn’t archive the environment", { description: errorMessage(failure) }),
+                            toast.error("Couldn’t archive the machine", { description: errorMessage(failure) }),
                         },
                       ),
                     confirm: {
                       title: `Archive ${template.name}`,
-                      description:
-                        "Its running machines are destroyed with their workspace files. A space that uses it must pick another first.",
-                      action: "Archive environment",
+                      description: "Its running copies and their files are deleted.",
+                      action: "Archive machine",
                     },
                   },
                 ]}
@@ -315,7 +304,9 @@ export function EnvironmentsSettingsPage() {
           template={editing.template}
           providers={providerList}
           open
-          onOpenChange={(open) => (open ? undefined : setEditing(undefined))}
+          onOpenChange={(open) => {
+            if (!open) setEditing(undefined)
+          }}
         />
       ) : null}
     </Page>

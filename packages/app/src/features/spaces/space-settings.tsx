@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react"
-import type { SettingsInfo, SpaceHand } from "@ren/client"
+import type { SettingsInfo } from "@ren/client"
 import { Session } from "@ren/schema/session"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
@@ -7,7 +7,6 @@ import { InstructionsField } from "../../components/instructions-field.js"
 import { EditableText } from "../../components/editable-text.js"
 import { ModelPicker } from "../../components/model-picker.js"
 import { Row, Rows, Section } from "../../components/page.js"
-import { Choice } from "../../components/settings-shared.js"
 import { useAutosave } from "../../lib/use-autosave.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useMe } from "../../lib/use-me.js"
@@ -17,54 +16,6 @@ import { RouterContext } from "../../lib/router-context.js"
 const modelsProbe = Session.ID.create()
 
 type Space = ReturnType<typeof useSpace>
-
-const ownMachine = "colocated"
-
-const noHand = "none"
-
-const remotePrefix = "remote:"
-
-const valueOf = (hand: SpaceHand) => {
-  if (hand.placement === "remote") return `${remotePrefix}${hand.environmentTemplateId}`
-  return hand.placement === "colocated" ? (hand.environmentTemplateId ?? ownMachine) : hand.placement
-}
-
-const handOf = (value: string): SpaceHand => {
-  if (value === noHand) return { placement: "none" }
-  if (value.startsWith(remotePrefix))
-    return { placement: "remote", environmentTemplateId: value.slice(remotePrefix.length) }
-  return { placement: "colocated", environmentTemplateId: value === ownMachine ? null : value }
-}
-
-// oxlint-disable-next-line ren/no-comments -- A co-located hand: Ren's standard machine or a template that built, of a provider whose machines run the brain too (EN3). A remote hand: machines of any template that built, which chats share (EN43). None removes the file and shell tools (EN23).
-function Hand(props: { space: Space; save: (change: { hand: SpaceHand }) => Promise<unknown> }) {
-  const { api } = RouterContext.useRouterContext()
-  const templates = useQuery(api["environment-template"].list.queryOptions({ page: 1, pageSize: 50 }))
-  const providers = useQuery(api.environmentProvider.list.queryOptions())
-  const colocated = new Set((providers.data ?? []).filter((each) => each.canColocate).map((each) => each.id))
-  const built = (templates.data?.items ?? []).filter(
-    (template) => Boolean(template.image) || template.buildStatus === "ready",
-  )
-  return (
-    <Choice
-      label="Tools run on"
-      options={[
-        { value: ownMachine, label: "Ren’s standard machine" },
-        ...built
-          .filter((template) => colocated.has(template.provider))
-          .map((template) => ({ value: template.id, label: template.name })),
-        ...built.map((template) => ({
-          value: `${remotePrefix}${template.id}`,
-          label: `${template.name}, shared machines`,
-        })),
-        { value: noHand, label: "No machine" },
-      ]}
-      value={valueOf(props.space.hand)}
-      disabled={!props.space.canUpdate}
-      onChange={(value) => void props.save({ hand: handOf(value) })}
-    />
-  )
-}
 
 function useSpaceSettings(spaceId: string) {
   const { api } = RouterContext.useRouterContext()
@@ -116,7 +67,7 @@ function Details(props: { space: Space; model: ReactNode }) {
   const queryClient = useQueryClient()
   const update = useMutation(api.space.update.mutationOptions())
   const space = props.space
-  const save = (change: { name?: string; description?: string | null; hand?: SpaceHand }) =>
+  const save = (change: { name?: string; description?: string | null }) =>
     update.mutateAsync(
       { id: space.id, ...change },
       {
@@ -149,13 +100,6 @@ function Details(props: { space: Space; model: ReactNode }) {
         </Row>,
         <Row key="model" title="Default model" description="New chats in this space start with it.">
           {props.model}
-        </Row>,
-        <Row
-          key="hand"
-          title="Tools run on"
-          description="The machine of a chat’s file and shell tools. A change reaches it when it wakes; with no machine, chats have no file or shell tools."
-        >
-          <Hand space={space} save={save} />
         </Row>,
       ]}
     </Rows>

@@ -15,6 +15,7 @@ import {
   IconLock,
   IconSelector,
   IconSettings,
+  IconCpu,
   IconUsers,
   IconWebhook,
 } from "@tabler/icons-react"
@@ -50,6 +51,7 @@ const spaceSections = [
   { value: "overview", label: "Overview", icon: IconLayoutDashboard, to: "/spaces/$spaceId" },
   { value: "kanban", label: "Kanban", icon: IconLayoutKanban, to: "/spaces/$spaceId/kanban" },
   { value: "settings", label: "Settings", icon: IconSettings, to: "/spaces/$spaceId/settings" },
+  { value: "compute", label: "Compute", icon: IconCpu, to: "/spaces/$spaceId/compute" },
   { value: "members", label: "Members", icon: IconUsers, to: "/spaces/$spaceId/members" },
   { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
   { value: "repositories", label: "Repositories", icon: GitMark, to: "/spaces/$spaceId/repositories" },
