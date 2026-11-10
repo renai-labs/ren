@@ -343,6 +343,32 @@ describe("MachineLifecycle", () => {
 
 describe("MachineLifecycle keep-awake", () => {
   it.effect(
+    "a turn that runs one 40-min command with no progress keeps its machine awake to the end, with a cron's access every 2 min (chaos row 45)",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kind
+        memory.switches.boots = true
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        yield* memory.update(id, { last_progress_at: new Date(yield* Clock.currentTimeMillis) })
+        const seen = yield* Effect.forEach(
+          Array.from({ length: 80 }, (_, index) => index + 1),
+          (pull) =>
+            Effect.gen(function* () {
+              yield* TestClock.adjust(Duration.seconds(30))
+              const row = yield* memory.read(id)
+              yield* memory.machines.keepAwake(row, { isBusy: true, hasBackground: true })
+              const access = pull % 4 === 0 ? (yield* memory.machines.access(id))._tag : "Ready"
+              const left =
+                ((yield* memory.read(id)).keep_alive_until?.getTime() ?? 0) - (yield* Clock.currentTimeMillis)
+              return access === "Ready" && left > 0
+            }),
+        )
+        expect(seen.filter((awake) => !awake)).toHaveLength(0)
+      }),
+  )
+
+  it.effect(
     "a background process keeps an idle machine awake up to 2 h after the last turn's progress, and no longer (EN25)",
     () =>
       Effect.gen(function* () {
