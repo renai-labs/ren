@@ -491,7 +491,7 @@ it.live(
 )
 
 it.live(
-  "a chat restored into a missing folder on the brain's own hand gets the folder back, one note, and a files reset time in Ren; a kept folder gets no note",
+  "a chat restored into a missing folder on the brain's own hand gets the folder back, one note that the app shows, and a files reset time in Ren; a kept folder gets no note",
   () =>
     Effect.gen(function* () {
       const script = stub.script()
@@ -507,29 +507,33 @@ it.live(
       yield* chat.idle
       const Note = Schema.Struct({
         type: Schema.String,
+        description: Schema.optional(Schema.String),
         metadata: Schema.optional(Schema.Struct({ source: Schema.optional(Schema.String) })),
         payload: Schema.optional(
-          Schema.Struct({ metadata: Schema.optional(Schema.Struct({ source: Schema.optional(Schema.String) })) }),
+          Schema.Struct({
+            description: Schema.optional(Schema.String),
+            metadata: Schema.optional(Schema.Struct({ source: Schema.optional(Schema.String) })),
+          }),
         ),
       })
       const isNote = (item: typeof Note.Type) =>
         item.type === "synthetic" &&
         (item.metadata?.source === "ren.files-reset" || item.payload?.metadata?.source === "ren.files-reset")
       const notes = Effect.all([chat.chat("/message?limit=200"), chat.chat("/inbox")]).pipe(
-        Effect.map(
-          (found) =>
-            [
-              ...Schema.decodeUnknownSync(Schema.Struct({ items: Schema.Array(Note) }))(found[0]).items,
-              ...Schema.decodeUnknownSync(Schema.Array(Note))(found[1]),
-            ].filter(isNote).length,
+        Effect.map((found) =>
+          [
+            ...Schema.decodeUnknownSync(Schema.Struct({ items: Schema.Array(Note) }))(found[0]).items,
+            ...Schema.decodeUnknownSync(Schema.Array(Note))(found[1]),
+          ].filter(isNote),
         ),
       )
       yield* chat.synced
       yield* Host.forgetHarness(chat.brainId)
-      expect(yield* notes).toBe(0)
+      expect(yield* notes).toHaveLength(0)
       yield* chat.synced
       yield* Host.forgetHarness(chat.brainId, { folderOf: chat.sessionId })
-      expect(yield* notes).toBe(1)
+      const shown = (yield* notes).map((note) => note.description ?? note.payload?.description ?? "")
+      expect([shown.length, shown.every((description) => description.length > 0)]).toEqual([1, true])
       yield* chat.synced
       const sessions = yield* Session.Service
       const actor = { userId: chat.owner.createdBy, organizationId: chat.owner.organizationId, roles: ["owner"] }

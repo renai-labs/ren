@@ -803,6 +803,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               yield* client.session.synthetic({
                 sessionID: info.id,
                 text: "This chat moved to a new machine. Its workspace files from before the move are gone; the chat history is kept.",
+                description: "Moved to a new machine. Workspace files from before the move are gone.",
                 metadata: { source: filesReset },
                 resume: false,
               })
