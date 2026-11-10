@@ -26,6 +26,7 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
     const protocol: { readonly canonical?: Provider.ID; readonly package: string } = protocols[endpoint.protocol]
     editor.update(endpoint.id, (provider) => {
       provider.activation = "enabled"
+      if (endpoint.name) provider.name = endpoint.name
       provider.package = protocol.package
       provider.settings = { ...provider.settings, baseURL: endpoint.baseUrl, transport: "http" }
       if (protocol.canonical) provider.canonical = protocol.canonical
@@ -43,6 +44,7 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
         info.package = model.protocol && own.package
         info.canonical = model.protocol && own.canonical
         if (model.name) info.name = model.name
+        if (model.input) info.capabilities.input = [...model.input]
         if (model.limit) info.limit = { ...info.limit, ...model.limit }
         info.variants = [
           ...Variant.resolve(
