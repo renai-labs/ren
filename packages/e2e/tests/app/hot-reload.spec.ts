@@ -9,14 +9,11 @@ const listRead = 45_000
 const controlURL = `http://127.0.0.1:${ports.mailbox}/models`
 
 const entry = (providerKey: string, modelKey: string, name: string) => ({
-  model_name: modelKey,
-  model_info: {
-    model_key: modelKey,
-    provider_key: providerKey,
-    display_name: name,
-    max_input_tokens: 100_000,
-    max_output_tokens: 4000,
-  },
+  id: `${providerKey}/${modelKey}`,
+  type: "chat",
+  protocol: "openai-chat",
+  name,
+  limit: { context: 100_000, output: 4000 },
 })
 
 const defaults = [

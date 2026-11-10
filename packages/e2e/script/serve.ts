@@ -6,6 +6,7 @@ import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
 import { TestEnvironment } from "@ren/executor/testing"
 import { Signature } from "@ren/schema/signature"
+import { Models } from "@ren/schema/models"
 import { Effect, Layer, Redacted, Schema } from "effect"
 import { realpathSync } from "fs"
 import os from "os"
@@ -22,10 +23,7 @@ const serverURL = `http://127.0.0.1:${ports.server}`
 const admin = new Bun.SQL(databaseURL.href)
 await admin.unsafe(`CREATE DATABASE "${name}"`)
 
-const ModelEntry = Schema.Struct({
-  model_name: Schema.String,
-  model_info: Schema.Record(Schema.String, Schema.Unknown),
-})
+const ModelEntries = Schema.Array(Models.Info)
 
 let log = ""
 const children: Bun.Subprocess[] = []
@@ -34,7 +32,7 @@ const mailbox = Bun.serve({
   hostname: "127.0.0.1",
   fetch: async (request) => {
     if (request.method === "POST" && new URL(request.url).pathname === "/models") {
-      Shared.stub().modelInfo.set(Schema.decodeUnknownSync(Schema.Array(ModelEntry))(await request.json()))
+      Shared.stub().modelInfo.set(Schema.decodeUnknownSync(ModelEntries)(await request.json()))
       return new Response(null, { status: 204 })
     }
     const to = new URL(request.url).searchParams.get("to") ?? ""

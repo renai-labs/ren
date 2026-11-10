@@ -1,6 +1,7 @@
 export * as StubModel from "./stub-model.js"
 
 import { Effect, Option, Schema } from "effect"
+import type { Models } from "@ren/schema/models"
 
 interface Behaviour {
   readonly reply?: string
@@ -39,25 +40,19 @@ export interface Script {
   readonly called: (count?: number) => Promise<Call>
 }
 
-export interface ModelInfoEntry {
-  readonly model_name: string
-  readonly model_info: Readonly<Record<string, unknown>>
-}
+export type ModelInfoEntry = Models.Info
 
 export const modelEntry = (
   providerKey: string,
   modelKey: string,
   options: { readonly name?: string; readonly variants?: ReadonlyArray<string> } = {},
 ): ModelInfoEntry => ({
-  model_name: modelKey,
-  model_info: {
-    model_key: modelKey,
-    provider_key: providerKey,
-    ...(options.name && { display_name: options.name }),
-    max_input_tokens: 100_000,
-    max_output_tokens: 4000,
-    ...(options.variants && { variants: options.variants.map((id) => ({ id, name: id })) }),
-  },
+  id: `${providerKey}/${modelKey}`,
+  type: "chat",
+  protocol: providerKey === "anthropic" ? "anthropic-messages" : "openai-chat",
+  ...(options.name && { name: options.name }),
+  limit: { context: 100_000, output: 4000 },
+  ...(options.variants && { efforts: options.variants }),
 })
 
 export const defaultModels: ReadonlyArray<ModelInfoEntry> = [
@@ -73,6 +68,7 @@ export interface Server {
   readonly cellRoot: string
   readonly modelInfo: {
     readonly set: (models: ReadonlyArray<ModelInfoEntry>) => void
+    readonly search: (providers: ReadonlyArray<{ readonly id: string; readonly name: string }>) => void
     readonly down: (isDown: boolean) => void
     readonly reads: ReadonlyArray<string | null>
   }
@@ -318,14 +314,23 @@ export const start = (): Server => {
     return entry
   }
 
-  const info: { models: ReadonlyArray<ModelInfoEntry>; isDown: boolean; reads: Array<string | null> } = {
+  const info: {
+    models: ReadonlyArray<ModelInfoEntry>
+    search: ReadonlyArray<{ readonly id: string; readonly name: string }>
+    isDown: boolean
+    reads: Array<string | null>
+  } = {
     models: defaultModels,
+    search: [],
     isDown: false,
     reads: [],
   }
   const modelInfo = (request: Request) => {
     info.reads.push(request.headers.get("authorization"))
-    return info.isDown ? new Response("down", { status: 503 }) : Response.json({ data: info.models })
+    if (info.isDown) return new Response("down", { status: 503 })
+    return new URL(request.url).pathname.endsWith("/v1/search/providers")
+      ? Response.json(info.search)
+      : Response.json({ baseUrl: `${new URL(request.url).origin}/v1`, models: info.models })
   }
   const chat = async (request: Request) => {
     const endpoint = Object.entries(endpoints).find((entry) => new URL(request.url).pathname.endsWith(entry[0]))?.[1]
@@ -357,7 +362,10 @@ export const start = (): Server => {
     hostname: "0.0.0.0",
     port: 0,
     idleTimeout: 0,
-    fetch: (request) => (new URL(request.url).pathname.endsWith("/model/info") ? modelInfo(request) : chat(request)),
+    fetch: (request) =>
+      ["/v1/catalog", "/v1/search/providers"].some((path) => new URL(request.url).pathname.endsWith(path))
+        ? modelInfo(request)
+        : chat(request),
   })
 
   return {
@@ -368,6 +376,9 @@ export const start = (): Server => {
     modelInfo: {
       set: (models) => {
         info.models = models
+      },
+      search: (providers) => {
+        info.search = providers
       },
       down: (isDown) => {
         info.isDown = isDown

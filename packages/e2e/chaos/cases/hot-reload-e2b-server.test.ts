@@ -15,6 +15,8 @@ import { Envelope } from "@ren/core/envelope"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
 import { Models } from "@ren/core/models"
+import { RenInference } from "@ren/core/ren-inference"
+import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { SandboxProvider } from "@ren/core/sandbox-provider"
 import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
@@ -119,7 +121,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
     await direct`INSERT INTO space_member (id, space_id, user_id) VALUES (${Space.MembershipID.create()}, ${owner.spaceId}, ${owner.createdBy})`
     await direct`
       INSERT INTO settings (space_id, settings)
-      VALUES (${owner.spaceId}, ${JSON.stringify({ model: { endpointId: "anthropic", modelId: "claude-haiku-5-5" }, permissions: [], references: [] })}::text::jsonb)`
+      VALUES (${owner.spaceId}, ${JSON.stringify({ model: { endpointId: "ren", modelId: small }, permissions: [], references: [] })}::text::jsonb)`
 
     const key = await LiteLLM.generate({ duration: "2h", models: [small] })
     cleanups.push(() => LiteLLM.remove(key))
@@ -129,8 +131,8 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
       ENVIRONMENT_KEYS: encoded(TestEnvironment.keys.privateKey),
       REN_URL: renTunnel,
       E2B_TEMPLATE: template,
-      REN_INFERENCE_GATEWAY_URL: LiteLLM.url,
-      REN_INFERENCE_GATEWAY_BRAIN_URL: litellmTunnel,
+      REN_INFERENCE_GATEWAY_URL: process.env.CHAOS_INFERENCE_URL ?? "",
+      REN_INFERENCE_BRAIN_URL: litellmTunnel,
       REN_INFERENCE_GATEWAY_KEY: key,
       ENVELOPE_KEYS: JSON.stringify([
         { id: "local:e2b", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
@@ -215,7 +217,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
             Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
             Layer.provide(Settings.layer),
-            Layer.provide(Models.layerInferenceGateway),
+            Layer.provide(Models.layer([RenInferenceProvider.make]).pipe(Layer.provide(RenInference.layerNone))),
             Layer.provide(
               Environments.layer
                 .pipe(Layer.provide(Signer.layerLocal))
@@ -274,7 +276,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
       const written = Date.now()
       // oxlint-disable-next-line no-await-in-loop -- one write at a time
       await direct`
-        UPDATE settings SET settings = ${JSON.stringify({ model: { endpointId: "anthropic", modelId: "claude-haiku-5-5" }, instructions, permissions: [], references: [] })}::text::jsonb
+        UPDATE settings SET settings = ${JSON.stringify({ model: { endpointId: "ren", modelId: small }, instructions, permissions: [], references: [] })}::text::jsonb
         WHERE space_id = ${owner.spaceId}`
       // oxlint-disable-next-line no-await-in-loop -- one write at a time
       const pulled = await Wait.until("a pull after the write", 20_000, async () => pulls.find((at) => at >= written))

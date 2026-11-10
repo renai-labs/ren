@@ -55,7 +55,13 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     const stack = current().stack
     const endpoint = stack.access().endpoints[0]
     if (!endpoint) throw new Error("the access has no endpoint")
-    const gpt = { id: "gpt-5-chaos", name: "GPT Chaos", limit: { context: 100_000, output: 4000 } }
+    const gpt = {
+      id: "gpt-5-chaos",
+      type: "chat" as const,
+      protocol: "openai-chat" as const,
+      name: "GPT Chaos",
+      limit: { context: 100_000, output: 4000 },
+    }
     stack.provider.modelInfo.set([...StubModel.defaultModels, StubModel.modelEntry(endpoint.id, gpt.id)])
     const session = await stack.session({
       models: { endpoints: [{ ...endpoint, models: [...endpoint.models, gpt] }] },

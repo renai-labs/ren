@@ -192,12 +192,14 @@ export const layer = Layer.effect(
         Effect.orDie,
         Effect.map((found) =>
           found.endpoints.flatMap((endpoint) =>
-            endpoint.models.map((model): SessionModel.Choice => ({
-              id: model.id,
-              providerID: endpoint.id,
-              name: model.name ?? model.id,
-              variants: (model.efforts ?? []).map((effort) => ({ id: effort })),
-            })),
+            endpoint.models
+              .filter((model) => model.type === "chat")
+              .map((model): SessionModel.Choice => ({
+                id: model.id,
+                providerID: endpoint.id,
+                name: model.name ?? model.id,
+                variants: (model.efforts ?? []).map((effort) => ({ id: effort })),
+              })),
           ),
         ),
       )
