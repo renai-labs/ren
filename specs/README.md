@@ -27,6 +27,7 @@ Generated clients follow the protocol `HttpApi`.
 | [infra.md](infra.md)                                                 | Apply of webhooks, environments and timezones; listings                                                                         |
 | [usage.md](usage.md)                                                 | The billing check, reconciliation, an automated usage e2e case, the PostHog and billing loops, cleanup of finished durable runs |
 | [runtime/README.md](runtime/README.md)                               | The `FeatureFlags` service and the flag list                                                                                    |
+| [runtime/artifact-hosting.md](runtime/artifact-hosting.md)           | Artifact providers: the workerd layer and OpenCode adapter, application tests, the Cloudflare layer, user-supplied providers    |
 | [runtime/e2b-brain/README.md](runtime/e2b-brain/README.md)           | Harness-neutral sync, restore leftovers, live E2B tests, retries                                                                |
 | [runtime/opencode-upgrade.md](runtime/opencode-upgrade.md)           | The OpenCode boundary and bump command, then the 2.2.6 upgrade                                                                  |
 | [runtime/hot-reload/README.md](runtime/hot-reload/README.md)         | Tests not written, a model key per brain                                                                                        |
