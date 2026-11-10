@@ -25,7 +25,7 @@ export const register = (
             headers: {},
           }).pipe(Effect.provide(FetchHttpClient.layer)),
       })
-      // ast-grep-ignore: no-nullish-comparison -- An explicit false disables search and must not be replaced by the default.
-      if (editor.default.get() === undefined) editor.default.set(id)
+      editor.default.set(editor.default.get() ?? id)
     }
+  editor.default.set(editor.default.get() ?? "random")
 }
