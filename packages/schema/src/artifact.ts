@@ -20,15 +20,14 @@ export const ProviderID = Schema.NonEmptyString.pipe(
 )
 export type ProviderID = typeof ProviderID.Type
 
-export const OperationID = Schema.String.check(Schema.isUUID()).pipe(
-  Schema.brand("Artifact.OperationID"),
+export const DeploymentID = Schema.String.check(Schema.isUUID()).pipe(
+  Schema.brand("Artifact.DeploymentID"),
   Schema.annotate({
-    identifier: "Artifact.OperationID",
-    description:
-      "Names one publish. A retry with the same id, after the publish succeeded, returns the artifact as it is.",
+    identifier: "Artifact.DeploymentID",
+    description: "Names one deployment. Retrying it returns its workflow result without starting another deployment.",
   }),
 )
-export type OperationID = typeof OperationID.Type
+export type DeploymentID = typeof DeploymentID.Type
 
 export const workerPath = "_worker.js"
 
@@ -50,26 +49,50 @@ export const Files = Schema.Record(Drive.Path, Schema.Uint8ArrayFromBase64.check
   })
 export type Files = typeof Files.Type
 
+export const Status = Schema.Literals(["deploying", "ready", "failed", "stopped"]).annotate({
+  identifier: "Artifact.Status",
+})
+export type Status = typeof Status.Type
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
   spaceId: Space.ID,
   title: Primitive.Name,
-  url: Schema.String,
+  url: Schema.NullOr(Schema.String),
+  activeDeploymentId: Schema.NullOr(DeploymentID),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
 }).annotate({ identifier: "Artifact.Info" })
 
-export interface PublishInput extends Schema.Schema.Type<typeof PublishInput> {}
-export const PublishInput = Schema.Struct({
-  operationId: OperationID,
-  title: Primitive.Name,
+export interface Config extends Schema.Schema.Type<typeof Config> {}
+export const Config = Schema.Struct({
   entry: Drive.Path.annotate({ description: "The file a person opens first, such as index.html." }),
+}).annotate({ identifier: "Artifact.Config" })
+
+export interface Deployment extends Schema.Schema.Type<typeof Deployment> {}
+export const Deployment = Schema.Struct({
+  artifactId: ID,
+  deploymentId: DeploymentID,
+  status: Status,
+  url: Schema.NullOr(Schema.String),
+  error: Schema.NullOr(Schema.String),
+}).annotate({ identifier: "Artifact.Deployment" })
+
+export interface DeployInput extends Schema.Schema.Type<typeof DeployInput> {}
+export const DeployInput = Schema.Struct({
+  deploymentId: DeploymentID,
+  title: Primitive.Name,
+  config: Config,
   files: Files,
 })
   .check(
     Schema.makeFilter(
-      (input) => Object.hasOwn(input.files, input.entry) || { path: ["entry"], issue: "Name one of the files." },
+      (input) =>
+        Object.hasOwn(input.files, input.config.entry) || {
+          path: ["config", "entry"],
+          issue: "Name one of the files.",
+        },
     ),
   )
-  .annotate({ identifier: "Artifact.PublishInput" })
+  .annotate({ identifier: "Artifact.DeployInput" })

@@ -213,6 +213,7 @@
         "slackify-markdown": "5.0.0",
         "standardwebhooks": "catalog:",
         "stripe": "catalog:",
+        "wrangler": "catalog:",
       },
       "devDependencies": {
         "@effect/platform-bun": "catalog:",

@@ -30,18 +30,20 @@ the build step, not hosting.
 
 ## 2. Terms
 
-| Term     | Meaning                                                                |
-| -------- | ---------------------------------------------------------------------- |
-| Artifact | One published application. This is not Ren's integration `App`.        |
-| Provider | The service that runs a published version and gives it a URL.          |
-| Harness  | OpenCode. It names each new artifact (`art_…`), and Ren keeps that id. |
+| Term       | Meaning                                                                |
+| ---------- | ---------------------------------------------------------------------- |
+| Artifact   | One published application. This is not Ren's integration `App`.        |
+| Deployment | One attempt to run the application's files on its provider.            |
+| Provider   | The service that runs a published version and gives it a URL.          |
+| Harness    | OpenCode. It names each new artifact (`art_…`), and Ren keeps that id. |
 
 ## 3. Ownership
 
-- Core (`Artifacts.Service`) owns the artifact, its files and idempotency.
+- Core (`Artifacts.Service`) owns the artifact and its saved files. Durable
+  workflows own deployment input, progress and results.
   Callers never branch on the provider.
-- `ArtifactProvider.Service` runs a version. It gets the artifact id, the operation
-  ID, the entry and the files, and returns an opaque reference and a URL.
+- `ArtifactProvider.Service` deploys the files. It gets the artifact ID, deployment
+  ID, config and files, and returns an opaque binding and a URL.
 - The brain's OpenCode plugin is a thin adapter over the Ren Host API. It holds no
   provider credentials.
 - Access is by space: a brain reads, publishes and removes only artifacts of the
@@ -58,55 +60,82 @@ the build step, not hosting.
 
 ## 5. Provider contract (`@ren/core/artifact-provider`)
 
-| Operation | Input                                                 | Result                                      |
-| --------- | ----------------------------------------------------- | ------------------------------------------- |
-| `publish` | Artifact, operation, entry, files, previous reference | Reference and URL, after the version serves |
-| `remove`  | Reference                                             | Done; a missing deployment is removed       |
+| Operation | Input                                                 | Result                                       |
+| --------- | ----------------------------------------------------- | -------------------------------------------- |
+| `deploy`  | Artifact, deployment, config, files, previous binding | Binding and URL, after the deployment serves |
+| `stop`    | Artifact ID and optional binding                      | Deployment stopped; source and data kept     |
 
 Rules:
 
-1. `publish` returns only when the requested version answers requests.
+1. The provider's `deploy` returns only when the deployment answers requests.
+   Core runs it in a durable workflow, outside the request that accepts the deployment.
 2. If the new version fails to start, the previous version keeps serving.
 3. The URL stays the same across updates of one artifact.
 4. Application data survives code updates (`--persist-to` in the workerd layer).
-5. `remove` is repeatable.
+5. `stop` is repeatable.
 
 ## 6. Domain rules (`@ren/core/artifacts`)
 
-Ren keeps one row per artifact and the published files as one `.tar.gz` in the
-drive bucket, at `<org>/artifacts/<artifact>/<operation>.tar.gz`. It keeps no
-version history.
+Ren keeps one row per artifact: identity and ownership, title, provider,
+`code_archive`, `config`, `binding`, `url`, `active_deployment_id` and timestamps.
+`config.entry` names the file to open. Config is input; binding is the provider's
+output, following the environment provider convention.
 
-Publish:
+`code_archive` is the S3 location of the saved application files, packaged as one
+`.tar.gz` under `<org>/artifacts/<artifact>/<deployment>/`. Packaging keeps all
+files together for storage and deployment; it does not mean version history.
+No code is stored in Postgres.
 
-1. An id in another space is a `Conflict`. The operation ID of the last publish
-   returns the artifact as it is.
-2. Upload the archive, then call `provider.publish`.
-3. On success, save the artifact (created on the first publish) and delete the
-   previous archive. On failure, delete the new archive; the previous version
-   keeps serving and stays readable.
+The artifact row does not store deployment status, errors or a second source
+deployment ID. Workflow storage holds the candidate code archive, config and
+result for each deployment. The workflow key includes artifact ID and deployment
+ID; a completed key is not reused for a new deployment.
 
-Two publishes of one artifact at the same time are not guarded yet.
+Deploy:
 
-Remove calls `provider.remove`, deletes the archive, then deletes the artifact.
+1. Check ownership and store the candidate files in S3. In one SQL transaction,
+   claim the artifact and enqueue the deployment with its immutable input and a
+   settlement job. A rollback removes both the claim and the queued work.
+2. Return `202 Accepted` with artifact and deployment IDs before provider startup.
+3. Allow only one active deployment per artifact. Claiming active work and
+   persisting its input must be crash-safe; no recovery path may depend on input
+   that existed only in the lost HTTP request.
+4. The workflow calls `provider.deploy`. Success updates the saved code, config,
+   binding and URL. Failure preserves the last successful source and records the
+   error in the workflow result.
+5. The settlement job clears the active pointer only after the workflow result
+   is durable, and only if the pointer still identifies this work.
+
+Stop takes a separate active claim and settles any active deployment before
+removing the provider deployment. Its settlement job clears the stop claim only
+after cleanup finishes; the stop request waits for this cleanup. A
+new deployment cannot race this cleanup. Keep the artifact row, S3 code, local
+code, config and application data. Stopping an unknown artifact or an already
+stopped deployment succeeds. A new deployment can start it again.
 Deleting a chat or a brain does not remove its artifacts.
 
 ## 7. Host API and OpenCode
 
 `RenHostApi` group `artifacts`, keyed by the artifact id:
 
-| Endpoint                        | Does                                             |
-| ------------------------------- | ------------------------------------------------ |
-| `PUT /host/artifacts/:id`       | Publish. Creates the artifact on the first call. |
-| `GET /host/artifacts/:id/files` | The files of the version that serves             |
-| `DELETE /host/artifacts/:id`    | Remove                                           |
+| Endpoint                                            | Does                                            |
+| --------------------------------------------------- | ----------------------------------------------- |
+| `PUT /host/artifacts/:id`                           | Store source and accept a background deployment |
+| `GET /host/artifacts/:id/deployments/:deploymentId` | That deployment's progress or final result      |
+| `GET /host/artifacts/:id/files`                     | Last published files, even after stopping       |
+| `DELETE /host/artifacts/:id`                        | Stop the deployment; keep source and data       |
 
 The plugin registers provider `ren` with `ctx.experimental.artifact.transform`,
 makes it the default, and turns on OpenCode's `experimental.artifacts` flag. It
-sends one operation ID per tool call and retries a lost response with the same ID.
+sends one deployment ID per tool call and retries a lost response with the same ID.
+Tool results explicitly say the deployment was accepted, not that it is live.
+The `artifact_status` tool exposes status without making the agent wait. A
+persisted plugin watch sends a synthetic completion message to the originating
+chat when that deployment finishes. Notification retries reuse
+the same message ID, and the watch resumes after a brain restart.
 
-Later, with the first screen that needs them: version history, a status read
-(whether the URL serves), the chat that made an artifact, and a public API.
+Later, with the first screen that needs them: version history, live health checks,
+the chat that made an artifact, and a public API.
 
 ## 8. Phases
 
@@ -130,7 +159,7 @@ keep data, and removal.
 `ArtifactCloudflare.layer`: upload each artifact as a user Worker to a shared
 dispatch namespace (staging and production), with a version tag. Ren's dispatch
 Worker routes `<artifact>.<domain>` to it. Confirm the version tag through the
-dispatch route before `publish` returns. Needs `CLOUDFLARE_ACCOUNT_ID`,
+dispatch route before the provider's `deploy` returns. Needs `CLOUDFLARE_ACCOUNT_ID`,
 `CLOUDFLARE_API_TOKEN`, the namespace, and the artifacts domain.
 
 Done when: switching the layer at the composition root changes no caller and
