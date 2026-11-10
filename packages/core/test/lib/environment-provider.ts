@@ -32,6 +32,8 @@ export const make = (
       readonly status: (id: string) => Effect.Effect<MachineProvider.BuildState, MachineProvider.Failed>
     }
     readonly endpoint?: (environmentId: Environment.ID) => Effect.Effect<{ readonly url: string }, MachineProvider.Gone>
+    // oxlint-disable-next-line ren/no-comments -- Where a create puts the machine; the endpoint then reaches it there. The endpoint by default.
+    readonly place?: (environmentId: Environment.ID) => Effect.Effect<{ readonly url: string }>
     readonly creating?: Effect.Effect<void>
   } = {},
 ) =>
@@ -49,6 +51,16 @@ export const make = (
       options.endpoint ??
       ((environmentId: Environment.ID): Effect.Effect<{ readonly url: string }, MachineProvider.Gone> =>
         Effect.succeed({ url: `http://${environmentId.toLowerCase()}.test/` }))
+    // oxlint-disable-next-line ren/no-comments -- Like E2B: a machine that is gone answers gone to every call, also when the test ended it through its endpoint.
+    const isGone = (environmentId: Environment.ID) =>
+      Effect.flatMap(Ref.get(gone), (all) =>
+        all.has(environmentId)
+          ? Effect.succeed(true)
+          : endpoint(environmentId).pipe(
+              Effect.as(false),
+              Effect.catchTag("MachineProvider.Gone", () => Effect.succeed(true)),
+            ),
+      )
     const build = options.build
     const provider = MachineProvider.make({
       id: EnvironmentProvider.ID.make(options.id ?? "test"),
@@ -78,7 +90,10 @@ export const make = (
             },
           ])
           yield* Ref.update(networks, (all) => [...all, input.network])
-          return { binding: { environmentId }, url: `http://${environmentId.toLowerCase()}.test/` }
+          const found = yield* (options.place ?? endpoint)(environmentId).pipe(
+            Effect.mapError((error) => new MachineProvider.Failed({ message: error.message })),
+          )
+          return { binding: { environmentId }, url: found.url }
         }),
       connect: (binding) =>
         Effect.gen(function* () {
@@ -92,9 +107,14 @@ export const make = (
         const ended = yield* Ref.get(destroyed)
         return (yield* Ref.get(made)).filter((each) => !ended.includes(each.binding.environmentId))
       }),
-      keepAlive: (binding) => Ref.update(keptAlive, (all) => [...all, binding.environmentId]),
+      keepAlive: (binding) =>
+        Effect.flatMap(isGone(binding.environmentId), (isEnded) =>
+          isEnded
+            ? Effect.fail(new MachineProvider.Gone({ message: `environment ${binding.environmentId} is gone` }))
+            : Ref.update(keptAlive, (all) => [...all, binding.environmentId]),
+        ),
       status: (binding) =>
-        Effect.map(Ref.get(gone), (all) => (all.has(binding.environmentId) ? ("gone" as const) : ("running" as const))),
+        Effect.map(isGone(binding.environmentId), (isEnded) => (isEnded ? ("gone" as const) : ("running" as const))),
       ...(build && {
         build: {
           start: (input: { readonly config: typeof Config.Type }) => build.start(input.config),
