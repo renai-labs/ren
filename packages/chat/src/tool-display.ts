@@ -13,6 +13,7 @@ export type Status = "running" | "completed" | "failed"
 export type GroupItem = SessionMessage.Content | { readonly type: "shell" } | { readonly type: "notice" }
 
 const actions: Readonly<Record<string, string>> = {
+  experimental_image_generate: "Creating image",
   shell: "Running",
   bash: "Running",
   execute: "Executing",
@@ -62,6 +63,7 @@ const actions: Readonly<Record<string, string>> = {
 }
 
 const results: Readonly<Record<string, string>> = {
+  experimental_image_generate: "Image generation started",
   shell: "Ran",
   bash: "Ran",
   read: "Read",
@@ -85,6 +87,7 @@ const results: Readonly<Record<string, string>> = {
 }
 
 const failures: Readonly<Record<string, string>> = {
+  experimental_image_generate: "Failed to create image",
   shell: "Failed to run",
   bash: "Failed to run",
   execute: "Failed to execute",
@@ -126,6 +129,7 @@ const kinds: Readonly<Record<string, Kind>> = {
 }
 
 const names: Readonly<Record<string, string>> = {
+  experimental_image_generate: "Image generation",
   read: "Read",
   list: "List",
   glob: "Glob",
@@ -217,6 +221,7 @@ const files: Subject = (_input, metadata) => count(metadata.files, "file")
 const delegated: Subject = (input, metadata) => text(input.description) ?? text(metadata.sessionID)
 
 const subjects: Readonly<Record<string, Subject>> = {
+  experimental_image_generate: (input) => text(input.prompt),
   shell: command,
   bash: command,
   execute: (input) => text(input.code)?.split("\n").at(0),
@@ -246,6 +251,8 @@ export const subtitle = (tool: SessionMessage.Tool) =>
 
 export const output = (tool: SessionMessage.Tool) => {
   const value = ToolState.output(tool)
+  if (tool.name === "experimental_image_generate" && value && /^Image job \S+ started in background\b/u.test(value))
+    return "Image generation started"
   return value && kind(tool) === "command" ? TimelineText.shellOutput(value) : value
 }
 
