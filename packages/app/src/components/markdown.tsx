@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react"
+import { createContext, use, type ComponentProps, type ReactNode } from "react"
 import {
   Streamdown,
   defaultRehypePlugins,
@@ -68,7 +68,41 @@ function MarkdownImage({ node: _node, src, alt, ...props }: ComponentProps<"img"
   )
 }
 
-const components = { code: MarkdownCode, img: MarkdownImage }
+type WorkspaceImageRenderer = (path: string, alt: string) => ReactNode
+const WorkspaceImages = createContext<WorkspaceImageRenderer | undefined>(undefined)
+
+function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & ExtraProps) {
+  const render = use(WorkspaceImages)
+  const path = node?.properties["data-workspace-image"]
+  if (typeof path === "string" && render) return render(path, typeof children === "string" ? children : "")
+  return <span {...props}>{children}</span>
+}
+
+const components = { code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
+
+interface MarkdownNode {
+  type: string
+  tagName?: string
+  properties?: Record<string, unknown>
+  children?: MarkdownNode[]
+  value?: string
+}
+
+const workspaceImages = () => (tree: MarkdownNode) => {
+  const visit = (node: MarkdownNode) => {
+    const src = node.properties?.src
+    if (node.tagName === "img" && typeof src === "string" && /^(?:\.\/)?\.ren\/images\/[^?#]+$/u.test(src)) {
+      const path = src.replace(/^\.\//u, "")
+      if (!path.split("/").includes("..")) {
+        node.tagName = "span"
+        node.children = [{ type: "text", value: typeof node.properties?.alt === "string" ? node.properties.alt : "" }]
+        node.properties = { "data-workspace-image": path }
+      }
+    }
+    for (const child of node.children ?? []) visit(child)
+  }
+  visit(tree)
+}
 
 const appLink = "#ren-app:"
 
@@ -82,6 +116,11 @@ const withDataImages = (schema: unknown) => {
 const rehypePlugins: Array<(typeof defaultRehypePlugins)[string]> = Object.entries(defaultRehypePlugins).map(
   ([name, plugin]) => (name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin),
 )
+const workspaceRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) => {
+  const safe: (typeof defaultRehypePlugins)[string] =
+    name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin
+  return name === "harden" ? [workspaceImages, safe] : [safe]
+})
 
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)
@@ -93,6 +132,7 @@ export function Markdown(props: {
   streaming?: boolean | undefined
   className?: string | undefined
   apps?: ReadonlyArray<CatalogApp> | undefined
+  workspaceImage?: WorkspaceImageRenderer | undefined
 }) {
   const apps = props.apps ?? []
   const withApps =
@@ -113,17 +153,19 @@ export function Markdown(props: {
           },
         }
   return (
-    <Streamdown
-      controls={false}
-      tableMaxHeight={0}
-      urlTransform={urlTransform}
-      rehypePlugins={rehypePlugins}
-      components={withApps}
-      isAnimating={props.streaming === true}
-      animated={streamAnimation}
-      className={cn("min-w-0 text-sm/relaxed", props.className)}
-    >
-      {mentionLinks(props.children, apps)}
-    </Streamdown>
+    <WorkspaceImages value={props.workspaceImage}>
+      <Streamdown
+        controls={false}
+        tableMaxHeight={0}
+        urlTransform={urlTransform}
+        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+        components={withApps}
+        isAnimating={props.streaming === true}
+        animated={streamAnimation}
+        className={cn("min-w-0 text-sm/relaxed", props.className)}
+      >
+        {mentionLinks(props.children, apps)}
+      </Streamdown>
+    </WorkspaceImages>
   )
 }

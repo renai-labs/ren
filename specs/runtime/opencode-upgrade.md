@@ -167,7 +167,7 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 ## 4. Hygiene
 
 - [x] Move `client.session.wait` and `client.session.instructions.entry.*` to `client.experimental.session.*` (9a9386edbc deprecates the old names; removed in 2.3). Ren: `cell/src/harness/opencode/chat.ts:214`, `harness.ts:328-336,833`, `cell/src/cell.ts:180`, tests.
-- [ ] Remove `experimental_image_generate` in Ren's tool transform; Ren has its own `image_generation` (`model-tools.ts`). New registers it when the catalog has an image model.
+- [ ] Keep `experimental_image_generate`. The [media model refactor](media-models.md) replaces Ren's `image_generation` with the built-in tool and supplies provider configuration, defaults and credentials through OpenCode's integration.
 - [ ] Add `browser` to the reserved skill ids (`plugin.ts:55-60`).
 - [ ] Ren's `title` hook (`plugin.ts:318-334`) frames the conversation, and new now frames it too. Remove the hook and its assertion (`cell/test/settings.test.ts:1137-1138`) if the title still comes out right with Claude.
 - [ ] Update the comments that name 2.0.27 and are still true on 2.2.6: `cell/src/harness/opencode/mcp.ts:28,281`, `plugin.ts:52`. Fix the stale line reference in `model-providers.ts:32` (`model.ts:210`).

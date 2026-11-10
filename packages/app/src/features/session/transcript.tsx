@@ -86,6 +86,7 @@ import { useMentionedApps } from "../../lib/use-app.js"
 import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
+import { WorkspaceImage } from "./workspace-image.js"
 
 interface Person {
   readonly name: string
@@ -1131,21 +1132,52 @@ function SmoothMarkdown(props: {
   streaming: boolean
   className: string
   apps?: ReadonlyArray<CatalogApp> | undefined
+  root?: Session.ID | undefined
+  images?: ReadonlyMap<string, string> | undefined
 }) {
   const text = useSmoothText(props.text, { streaming: props.streaming })
+  const root = props.root
   return (
     <Markdown
       streaming={props.streaming || text.length < props.text.length}
       apps={props.apps}
       className={props.className}
+      workspaceImage={
+        root
+          ? (path, alt) => <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} />
+          : undefined
+      }
     >
       {text}
     </Markdown>
   )
 }
 
-function AnswerBlock(props: { text: string; streaming: boolean; copy: string | undefined }) {
+function AnswerBlock(props: {
+  text: string
+  streaming: boolean
+  copy: string | undefined
+  root: Session.ID
+  messages: ReadonlyArray<SessionMessage.Info>
+}) {
   const apps = useMentionedApps(props.text)
+  const images = new Map(
+    props.messages.flatMap((message) =>
+      message.type !== "assistant"
+        ? []
+        : message.content.flatMap((part) => {
+            if (part.type !== "tool" || part.state.status !== "completed") return []
+            const input = part.state.input
+            return part.state.content.flatMap((content) => {
+              if (content.type !== "file" || !content.uri.startsWith("data:image/")) return []
+              const source = content.name ?? (part.name === "read" ? (input.path ?? input.filePath) : undefined)
+              if (typeof source !== "string") return []
+              const path = source.replace(/^.*\/(?=\.ren\/images\/)/u, "").replace(/^\.\//u, "")
+              return [[path, content.uri] as const]
+            })
+          }),
+    ),
+  )
   return (
     <Message>
       <MessageContent>
@@ -1153,6 +1185,8 @@ function AnswerBlock(props: { text: string; streaming: boolean; copy: string | u
           <BubbleContent className="text-base leading-[1.7]">
             <SmoothMarkdown
               text={props.text}
+              root={props.root}
+              images={images}
               streaming={props.streaming}
               apps={apps}
               className="text-base leading-[1.7]"
@@ -1205,7 +1239,15 @@ function BlockView(props: {
       </Message>
     )
   if (block.kind === "answer")
-    return <AnswerBlock text={block.text} streaming={block.streaming} copy={props.copyOf(block.turn, block.key)} />
+    return (
+      <AnswerBlock
+        root={props.transcript.view.root}
+        messages={props.transcript.messages}
+        text={block.text}
+        streaming={block.streaming}
+        copy={props.copyOf(block.turn, block.key)}
+      />
+    )
   if (block.kind === "reply") return <ChannelReplyMessage tool={block.tool} />
   if (block.kind === "connect")
     return (

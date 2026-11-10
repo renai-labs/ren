@@ -33,6 +33,31 @@ const tool = (
 }
 
 describe("tool display", () => {
+  test("presents native image submission without claiming the image is finished", () => {
+    const input = { prompt: "Mount Fuji at sunrise", path: "/workspace/images/fuji.png" }
+    const completed = tool("experimental_image_generate", "completed", input, {
+      output:
+        "Image job image_123 started in background with ren/ren/gpt-image-2.5-flare. It will be saved as /workspace/images/fuji.png",
+    })
+    expect(ToolDisplay.label(tool("experimental_image_generate", "running", input))).toBe("Creating image")
+    expect(ToolDisplay.label(completed)).toBe("Image generation started")
+    expect(ToolDisplay.name(completed)).toBe("Image generation")
+    expect(ToolDisplay.subtitle(completed)).toBe("Mount Fuji at sunrise")
+    expect(ToolDisplay.output(completed)).toBe("Image generation started")
+    expect(ToolDisplay.subtitle(tool("experimental_image_generate", "running", { path: input.path }))).toBeUndefined()
+  })
+
+  test("preserves native image generation failures and other tool receipts", () => {
+    const failed = tool("experimental_image_generate", "error", {}, { error: "Image provider unavailable" })
+    expect(ToolDisplay.label(failed)).toBe("Failed to create image")
+    expect(ToolDisplay.error(failed)).toBe("Image provider unavailable")
+    expect(
+      ToolDisplay.output(tool("experimental_image_generate", "completed", {}, { output: "Unable to start image job" })),
+    ).toBe("Unable to start image job")
+    const output = "Image job image_123 started in background with provider/model"
+    expect(ToolDisplay.output(tool("other_tool", "completed", {}, { output }))).toBe(output)
+  })
+
   test("labels a running tool by its action and a finished one by its result", () => {
     expect(ToolDisplay.label(tool("read", "running"))).toBe("Reading")
     expect(ToolDisplay.label(tool("read", "completed"))).toBe("Read")
