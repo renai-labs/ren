@@ -26,7 +26,8 @@
       "ignoreDependencies": ["cloudflare"]
     },
     "packages/core": {
-      "entry": ["test/**/*.test.ts", "test/lib/preload.ts", "script/**/*.ts"]
+      "entry": ["test/**/*.test.ts", "test/lib/preload.ts", "test/fixtures/artifacts/**/_worker.js", "script/**/*.ts"],
+      "ignoreDependencies": ["cloudflare"]
     },
     "packages/executor": {
       "entry": ["test/**/*.test.ts"],
