@@ -13,6 +13,7 @@ import { DurableRunner } from "../src/durable-runner.js"
 import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
+import { ArtifactSamples } from "./lib/artifact-samples.js"
 
 const runtime = Artifacts.layer.pipe(
   Layer.provide(ArtifactWorkerd.layer),
@@ -74,6 +75,139 @@ const stop = (artifacts: Artifacts.Interface, owner: Artifacts.Owner, id: Artifa
   })
 
 describe("Artifacts with durable workflows and workerd", () => {
+  it.live(
+    "publishes the report and server-code dashboard through Ren",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const owner = yield* Seed.owner()
+        const id = artifactId()
+        yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
+        const samples = yield* Effect.promise(() => ArtifactSamples.files("dashboard"))
+        const report = deployment()
+        yield* artifacts.deploy(owner, id, {
+          title: "Report",
+          deploymentId: report,
+          config: { entry: "report.html" },
+          files: Object.fromEntries(Object.entries(samples).filter(([path]) => path !== "_worker.js")),
+        })
+        const reportReady = yield* settle(artifacts, owner, id, report)
+        expect(reportReady.status).toBe("ready")
+        expect((yield* read(reportReady.url ?? "")).body).toContain("Quarterly operating report")
+        const attempt = deployment()
+        yield* artifacts.deploy(owner, id, {
+          title: "Dashboard",
+          deploymentId: attempt,
+          config: { entry: "index.html" },
+          files: samples,
+        })
+        const ready = yield* settle(artifacts, owner, id, attempt)
+        expect(ready.status).toBe("ready")
+        const origin = new URL(ready.url ?? "").origin
+        expect((yield* read(`${origin}/report.html`)).body).toContain("Quarterly operating report")
+        expect((yield* read(`${origin}/`)).body).toContain("Operations dashboard")
+        expect((yield* read(`${origin}/api/metrics`)).body).toContain("18420")
+        expect((yield* read(`${origin}/api/missing`)).status).toBe(404)
+      }),
+    120_000,
+  )
+
+  it.live(
+    "keeps SQLite objects across updates and stop/redeploy",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const owner = yield* Seed.owner()
+        const id = artifactId()
+        yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
+        const source = yield* Effect.promise(() =>
+          Bun.file(new URL("./fixtures/artifacts/state-candidate/_worker.js", import.meta.url)).text(),
+        )
+        const input = {
+          title: "Guestbook",
+          config: { entry: "index.html", durableObjects: { STATE: "SampleState" } },
+          files: yield* Effect.promise(() => ArtifactSamples.files("state-candidate")),
+        }
+        const publish = (files = input.files) =>
+          Effect.gen(function* () {
+            const attempt = deployment()
+            yield* artifacts.deploy(owner, id, { ...input, files, deploymentId: attempt })
+            return yield* settle(artifacts, owner, id, attempt)
+          })
+        const first = yield* publish()
+        expect(first.status).toBe("ready")
+        const url = first.url ?? ""
+        const origin = new URL(url).origin
+        const sockets = yield* Effect.acquireRelease(
+          Effect.promise(async () => {
+            const connect = () => {
+              const socket = new WebSocket(`${origin.replace("http:", "ws:")}/room`)
+              return new Promise<WebSocket>((resolve, reject) => {
+                socket.addEventListener("open", () => resolve(socket), { once: true })
+                socket.addEventListener("error", reject, { once: true })
+              })
+            }
+            return Promise.all([connect(), connect()])
+          }),
+          (sockets) =>
+            Effect.sync(() => {
+              for (const socket of sockets) socket.close()
+            }),
+        )
+        yield* Effect.promise(async () => {
+          const second = sockets.at(1)
+          const received = new Promise<string>((resolve) =>
+            second?.addEventListener("message", (event) => resolve(String(event.data)), { once: true }),
+          )
+          sockets.at(0)?.send("Durable hello")
+          expect(await received).toContain("Durable hello")
+          for (const socket of sockets) socket.close()
+        })
+        yield* Effect.promise(() =>
+          fetch(`${origin}/api/entries/welcome`, { method: "PUT", body: JSON.stringify({ text: "Persistent" }) }),
+        )
+        expect(
+          (yield* publish({
+            ...input.files,
+            "_worker.js": text(source.replace('"1" : SAMPLE_VERSION', '"2" : SAMPLE_VERSION')),
+          })).status,
+        ).toBe("ready")
+        expect((yield* read(`${origin}/api/entries`)).body).toContain("Persistent")
+        expect((yield* read(`${origin}/api/entries`)).body).toContain('"version":"2"')
+        const broken = yield* publish({ ...input.files, "_worker.js": text("export default {") })
+        expect(broken.status).toBe("failed")
+        expect((yield* read(`${origin}/api/entries`)).body).toContain("Persistent")
+        yield* stop(artifacts, owner, id)
+        const renamed = deployment()
+        yield* artifacts.deploy(owner, id, {
+          ...input,
+          deploymentId: renamed,
+          config: { entry: "index.html", durableObjects: { STATE: "RenamedState" } },
+        })
+        expect((yield* settle(artifacts, owner, id, renamed)).error).toContain("removal and renaming")
+        const resumed = yield* publish()
+        expect(resumed.status).toBe("ready")
+        expect((yield* read(`${new URL(resumed.url ?? "").origin}/api/entries`)).body).toContain("Persistent")
+        const resumedOrigin = new URL(resumed.url ?? "").origin
+        expect(
+          (yield* Effect.promise(() =>
+            fetch(`${resumedOrigin}/api/entries/welcome`, { method: "PUT", body: JSON.stringify({ text: "Edited" }) }),
+          )).status,
+        ).toBe(200)
+        expect((yield* read(`${resumedOrigin}/api/entries`)).body).toContain("Edited")
+        expect(
+          yield* Effect.promise(() => fetch(`${resumedOrigin}/api/entries/welcome`, { method: "DELETE" })),
+        ).toHaveProperty("status", 204)
+        expect((yield* read(`${resumedOrigin}/api/entries`)).body).not.toContain("Edited")
+        expect((yield* read(`${new URL(resumed.url ?? "").origin}/api/messages`)).body).toContain("Durable hello")
+        const removed = deployment()
+        yield* artifacts.deploy(owner, id, { ...input, config: { entry: "index.html" }, deploymentId: removed })
+        expect((yield* settle(artifacts, owner, id, removed)).error).toContain("removal and renaming")
+        expect((yield* read(`${new URL(resumed.url ?? "").origin}/api/entries`)).status).toBe(200)
+      }),
+    120_000,
+  )
+
   it.live(
     "rolls the deployment claim and durable enqueue back together",
     () =>

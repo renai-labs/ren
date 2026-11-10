@@ -77,6 +77,7 @@ export const hostToken = (
 
 export interface Published {
   readonly info: Artifact.Info
+  readonly config: Artifact.Config
   readonly files: Artifact.Files
   readonly deployments: ReadonlyMap<Artifact.DeploymentID, Artifact.Deployment>
   readonly deployed: boolean
@@ -147,6 +148,7 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
               artifacts.set(request.params.id, {
                 info,
                 files: payload.files,
+                config: payload.config,
                 deployments: new Map([...(found?.deployments ?? []), [payload.deploymentId, deployment]]),
                 deployed: true,
               })
