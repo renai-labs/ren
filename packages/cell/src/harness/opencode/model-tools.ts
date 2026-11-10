@@ -42,10 +42,10 @@ const TranscribeInput = Transcription.Parameters.mapFields((fields) => ({
 }))
 const DecideInput = Decisions.Parameters.mapFields((fields) => ({ ...fields, model }))
 
-export const available = (snapshot: HarnessConfig.Snapshot, type: ModelTypes.Type) =>
+const available = (snapshot: HarnessConfig.Snapshot, type: ModelTypes.Type) =>
   snapshot.models.some((endpoint) => endpoint.models.some((model) => model.type === ModelTypes.modelType[type]))
 
-export const select = Effect.fn("OpenCodeModelTools.select")(function* (
+const select = Effect.fn("OpenCodeModelTools.select")(function* (
   input: Pick<Input, "current" | "sessionId" | "keyFor">,
   type: ModelTypes.Type,
   agentName: string | undefined,
