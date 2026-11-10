@@ -30,10 +30,10 @@ export const withArtifacts = (config: string) => {
 const answersWithin = Duration.minutes(3)
 
 const prompt = [
-  "Publishing is asynchronous: create and update only accept a deployment. Do not wait in a loop. Continue other work; a completion message will arrive in this chat. Use artifact_status with the artifact id and deploymentId to check deploying, ready, failed or stopped. Only say the app is live when status is ready; report any error when it is failed. An update's existing URL may still serve the previous app while deploying.",
-  "Ren publishes the files at a URL that anyone with the link can open, and keeps the URL when you update the artifact.",
-  `Every file is served as it is, at its path. A file named ${Artifact.workerPath} is an ES module Worker (export default { fetch(request, env) }): it answers the requests that no file matches, and reaches the files with env.ASSETS.fetch(request).`,
-  "The Worker runs in Cloudflare’s workerd: no Node APIs and no imports, so bundle it first. Test it with `npx wrangler dev` before you publish.",
+  "Publishing is asynchronous. Create/update returns a deploymentId; continue working and await the completion message. Use artifact_status with the artifact id and deploymentId when needed, without polling in a loop. Only report the app as live after status is ready; report errors when it is failed. During updates, the URL may still serve the previous version.",
+  `Static files are served at their paths. ${Artifact.workerPath} handles unmatched requests and can access assets through env.ASSETS.fetch(request). Use an ES-module Worker with a default fetch export. Node APIs are unavailable; bundle dependencies except workerd runtime imports.`,
+  'For persistent SQLite, include ren-artifact.json with {"durableObjects":{"STATE":"MyState"}}. Export MyState extends DurableObject from _worker.js, importing DurableObject from cloudflare:workers. Access it through env.STATE.get(env.STATE.idFromName("stable-name")); use this.ctx.storage.sql inside the class.',
+  "Keep existing binding-to-class mappings unchanged. Data survives updates and stop/redeploy while provider storage is retained. WebSocket clients must reconnect after deployment. The manifest is publicly served; include no secrets.",
 ].join(" ")
 
 class Unreachable extends Schema.TaggedError<Unreachable>()("OpenCodeArtifacts.Unreachable", {
@@ -69,10 +69,16 @@ const register = (
     input: { readonly title: string; readonly entry: string; readonly files: Readonly<Record<string, Uint8Array>> },
   ) =>
     Effect.gen(function* () {
+      const manifest = input.files["ren-artifact.json"]
+      const state = manifest
+        ? yield* Schema.decodeUnknownEffect(
+            Schema.fromJsonString(Schema.Struct({ durableObjects: Artifact.DurableObjects })),
+          )(new TextDecoder().decode(manifest))
+        : {}
       const payload = yield* Schema.decodeUnknownEffect(Artifact.DeployInput.pipe(Schema.toType))({
         deploymentId: crypto.randomUUID(),
         title: input.title,
-        config: { entry: input.entry },
+        config: { entry: input.entry, ...state },
         files: input.files,
       })
       const info = yield* call(ren, id, (client, artifactId) =>
