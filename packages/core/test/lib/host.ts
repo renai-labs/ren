@@ -55,6 +55,13 @@ const environmentKeys = JSON.stringify([
   },
 ])
 
+export const runner = ClusterWorkflowEngine.layer.pipe(
+  Layer.provideMerge(
+    SingleRunner.layer({ shardingConfig: { shardsPerGroup: 1, entityTerminationTimeout: "100 millis" } }),
+  ),
+  Layer.provide(BunCrypto.layer),
+)
+
 export const noTemplates = Hands.layer
   .pipe(Layer.provide(DurableRunner.layerMemory))
   .pipe(Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone]))
@@ -110,12 +117,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
         Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal))),
       ),
     ),
-    Layer.provideMerge(
-      ClusterWorkflowEngine.layer.pipe(
-        Layer.provideMerge(SingleRunner.layer({ shardingConfig: { entityTerminationTimeout: "100 millis" } })),
-        Layer.provide(BunCrypto.layer),
-      ),
-    ),
+    Layer.provideMerge(runner),
     Layer.provideMerge(
       (options.keepBrains ? Layer.empty : destroyBrains).pipe(
         Layer.provideMerge(options.sandbox ?? BrainProvider.layer([local(options)])),

@@ -44,6 +44,7 @@ import { Harness } from "../harness.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { OpenCodeModelTools } from "./model-tools.js"
+import { OpenCodeArtifacts } from "./artifacts.js"
 import { basename, resolve } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
@@ -708,6 +709,7 @@ export const make = (
           OpenCodeModelTools.register(editor, modelTools)
         })
         yield* context.websearch.transform((editor) => editor.default.set(editor.default.get() ?? "random"))
+        yield* OpenCodeArtifacts.install(context, { ren, isSession, sessionId })
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {
             delete event.headers[Models.personHeader]
