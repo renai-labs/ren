@@ -1,5 +1,6 @@
 import type { EnvironmentTemplateInfo, SpaceBrainMachine, SpaceHand, SpaceInfo } from "@ren/client"
 import { toast } from "@ren/ui/sonner"
+import { Switch } from "@ren/ui/switch"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Row, Rows, Section } from "../../components/page.js"
 import { Choice } from "../../components/settings-shared.js"
@@ -7,7 +8,11 @@ import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { EnvironmentForm } from "./environment-form.js"
 
-type Save = (change: { brain?: SpaceBrainMachine; hand?: SpaceHand }) => Promise<unknown>
+type Save = (change: {
+  brainScope?: SpaceInfo["brainScope"]
+  brain?: SpaceBrainMachine
+  hand?: SpaceHand
+}) => Promise<unknown>
 
 const brainsMachine = "colocated"
 
@@ -56,6 +61,14 @@ function BrainSection(props: { space: SpaceInfo; save: Save }) {
     <Section title="Brain" description="Where the agent runs.">
       <Rows>
         {[
+          <Row key="scope" title="Isolate chats" description="Each chat gets its own brain.">
+            <Switch
+              checked={props.space.brainScope === "session"}
+              disabled={!props.space.canUpdate}
+              onCheckedChange={(on) => void props.save({ brainScope: on ? "session" : "space" })}
+              aria-label="Isolate chats"
+            />
+          </Row>,
           <Row key="provider" title="Provider">
             <Choice
               label="Brain provider"
