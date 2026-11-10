@@ -18,6 +18,7 @@ import { HostMcp } from "@ren/host-api/host-mcp"
 import type { Memory } from "@ren/schema/memory"
 import { AppCatalog } from "@ren/schema/app-catalog"
 import { Models } from "@ren/schema/models"
+import type { ModelTypes } from "@ren/schema/model-types"
 import { Channel } from "@ren/schema/channel"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { WebhookOrigin } from "@ren/schema/webhook-origin"
@@ -91,6 +92,12 @@ const memoryText = (tag: string, root: Memory.Root | null, attributes = "") =>
   [`<${tag}${attributes}${root?.truncated ? ' truncated="true"' : ""}>`, root?.content ?? "", `</${tag}>`].join("\n")
 
 const rank = { allow: 0, ask: 1, deny: 2 } as const
+
+const mediaTypes: Readonly<Partial<Record<string, ModelTypes.Type>>> = {
+  experimental_image_generate: "image_generation",
+  audio_transcription: "audio_transcription",
+  decisions: "decisions",
+}
 
 export type Chat = BrainSettings.Chat
 
@@ -411,6 +418,17 @@ export const make = (
           }),
         )
         if (isSession) {
+          yield* tool.hook("execute.before", (event) =>
+            Effect.sync(() => {
+              if (
+                event.tool !== "experimental_image_generate" ||
+                !Predicate.isObject(event.input) ||
+                Predicate.isNotUndefined(event.input.path)
+              )
+                return
+              event.input = { ...event.input, path: resolve(folder, ".ren", "images", `image_${crypto.randomUUID()}`) }
+            }),
+          )
           yield* tool.transform((editor) => {
             for (const name of channelReplies)
               editor.update(name, (found) => {
@@ -595,6 +613,11 @@ export const make = (
           yield* tool.hook("execute.before", (event) =>
             Effect.sync(() => {
               if (event.tool === "subagent") event.input = withoutModel(event.input)
+              const type = mediaTypes[event.tool]
+              if (!type || !Predicate.isObject(event.input)) return
+              const selected = Option.getOrUndefined(agentOf(event.agent))?.defaultModels?.[type]
+              if (Predicate.isUndefined(event.input.model) && selected)
+                event.input = { ...event.input, model: `${selected.providerId}/${selected.modelId}` }
             }),
           )
           yield* context.permission.hook("evaluate", (event) =>
@@ -673,10 +696,14 @@ export const make = (
           directory: context.location.directory,
           connections: Option.filter(connections, () => Boolean(workspaceID)),
           keyFor: refreshKey,
+          permission: context.permission,
           headers: (call) => claims({ session: call.sessionID, agent: call.agent, kind: "primary" }),
         }
         yield* tool.transform((editor) => {
-          if (!isSession) return
+          if (!isSession) {
+            editor.remove("experimental_image_generate")
+            return
+          }
           OpenCodeModelTools.register(editor, modelTools)
         })
         yield* context.websearch.transform((editor) =>

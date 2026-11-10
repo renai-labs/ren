@@ -2,19 +2,18 @@ export * as OpenCodeModelTools from "./model-tools.js"
 
 import { NodeFileSystem } from "@effect/platform-node-shared"
 import type { ToolEditor } from "@opencode/plugin/effect/tool"
+import type { PermissionDomain } from "@opencode/plugin/effect/permission"
 import type { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { Tool } from "@opencode/schema/tool"
-import type { ModelTypes } from "@ren/schema/model-types"
+import { ModelTypes } from "@ren/schema/model-types"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer, Option, Ref, Schema, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { basename } from "node:path"
 import { Decisions } from "../../decisions.js"
-import { ImageGeneration } from "../../image-generation.js"
-import { Images } from "../../images.js"
+import { ProviderHttp } from "../../provider-http.js"
 import { Transcription } from "../../transcription.js"
 import { WorkspaceFiles } from "../../workspace-files.js"
-import { ModelRefresh } from "../../model-refresh.js"
 import type { HarnessConfig } from "../config.js"
 import type { Harness } from "../harness.js"
 
@@ -24,6 +23,7 @@ export interface Input {
   readonly directory: string
   readonly connections: Option.Option<EnvironmentConnections.Interface>
   readonly keyFor: Harness.Refresh
+  readonly permission: PermissionDomain
   readonly headers: (call: {
     readonly sessionID: string
     readonly agent: string
@@ -42,27 +42,8 @@ const TranscribeInput = Transcription.Parameters.mapFields((fields) => ({
 }))
 const DecideInput = Decisions.Parameters.mapFields((fields) => ({ ...fields, model }))
 
-const configured = (snapshot: HarnessConfig.Snapshot, type: ModelTypes.Type) => {
-  const provider = snapshot.modelProviders[type]
-  const catalog = snapshot.modelCatalogs[type]
-  return provider && catalog?.providerId === provider.id ? { provider, catalog } : undefined
-}
-
-export const available = (snapshot: HarnessConfig.Snapshot, sessionId: string, type: ModelTypes.Type) => {
-  const config = configured(snapshot, type)
-  const chat = snapshot.chats.get(sessionId)
-  return Boolean(
-    config &&
-    chat &&
-    [chat.resolved.primary, ...chat.resolved.subagents].some((agent) => {
-      const selected = agent.defaultModels?.[type]
-      return (
-        selected?.providerId === config.provider.id &&
-        config.catalog.models.some((model) => model.id === selected.modelId)
-      )
-    }),
-  )
-}
+export const available = (snapshot: HarnessConfig.Snapshot, type: ModelTypes.Type) =>
+  snapshot.models.some((endpoint) => endpoint.models.some((model) => model.type === ModelTypes.modelType[type]))
 
 export const select = Effect.fn("OpenCodeModelTools.select")(function* (
   input: Pick<Input, "current" | "sessionId" | "keyFor">,
@@ -78,17 +59,25 @@ export const select = Effect.fn("OpenCodeModelTools.select")(function* (
       (agent) => agent.name === (agentName ?? chat.resolved.primary.name),
     )
   const selected = agent?.defaultModels?.[type]
-  const config = configured(current, type)
-  if (!agent || !selected || !config || selected.providerId !== config.provider.id)
-    return yield* new Tool.Error({ message: `No ${type} provider and default model are configured for this agent.` })
-  const modelId = override ?? selected.modelId
-  const model = config.catalog.models.find((model) => model.id === modelId)
-  if (!model) return yield* new Tool.Error({ message: `Unknown ${type} model: ${modelId}` })
+  if (!agent) return yield* new Tool.Error({ message: "No executing agent is configured." })
+  const models = current.models.flatMap((endpoint) =>
+    endpoint.models.filter((model) => model.type === ModelTypes.modelType[type]).map((model) => ({ endpoint, model })),
+  )
+  const ref = override ?? (selected && `${selected.providerId}/${selected.modelId}`)
+  const found = ref
+    ? models.find(
+        (item) =>
+          `${item.endpoint.id}/${item.model.id}` === ref ||
+          (item.endpoint.id === selected?.providerId && item.model.id === ref),
+      )
+    : (models.find((item) => item.endpoint.id === agent.model.endpointId) ?? models.at(0))
+  if (!found) return yield* new Tool.Error({ message: `Unknown ${type} model: ${ref ?? "none available"}` })
   return {
     agent: agent.name,
-    provider: config.provider,
-    model: model.upstreamId ?? model.id,
-    key: ModelRefresh.forProvider(config.provider, input.keyFor),
+    provider: found.endpoint,
+    model: found.model.id,
+    key: ProviderHttp.key(found.endpoint, input.keyFor),
+    ref: `${found.endpoint.id}/${found.model.id}`,
   }
 })
 
@@ -101,29 +90,15 @@ export const register = (editor: ToolEditor, input: Input) => {
     }),
     NodeFileSystem.layer,
   )
-  const models = (type: ModelTypes.Type) => snapshot.modelCatalogs[type]?.models.map((model) => model.id).join(", ")
-  if (available(snapshot, input.sessionId, "image_generation"))
-    editor.add({
-      name: "image_generation",
-      description: `Generate images, or edit the supplied workspace images. Results are saved to workspace files. Without a model argument, use the agent’s configured image model. Available models: ${models("image_generation")}.`,
-      input: ImageGeneration.Input,
-      output: ImageGeneration.Output,
-      options: { codemode: true },
-      execute: (args, context) =>
-        Effect.gen(function* () {
-          const selected = yield* select(input, "image_generation", context.agent, args.model)
-          return {
-            output: yield* ImageGeneration.run({ ...args, model: selected.model }, yield* input.headers(context)).pipe(
-              Effect.provide(Layer.mergeAll(Images.layerRen(selected.provider, selected.key), files)),
-            ),
-          }
-        }).pipe(
-          Effect.provide(FetchHttpClient.layer),
-          Effect.scoped,
-          Effect.mapError((error) => new Tool.Error({ message: error.message, error })),
-        ),
-    })
-  if (available(snapshot, input.sessionId, "audio_transcription"))
+  const models = (type: ModelTypes.Type) =>
+    snapshot.models
+      .flatMap((endpoint) =>
+        endpoint.models
+          .filter((model) => model.type === ModelTypes.modelType[type])
+          .map((model) => `${endpoint.id}/${model.id}`),
+      )
+      .join(", ")
+  if (available(snapshot, "audio_transcription"))
     editor.add({
       name: "audio_transcription",
       description: `Transcribe a workspace audio file using the executing agent’s configured transcription model. Available models: ${models("audio_transcription")}.`,
@@ -133,6 +108,12 @@ export const register = (editor: ToolEditor, input: Input) => {
       execute: (args, context) =>
         Effect.gen(function* () {
           const selected = yield* select(input, "audio_transcription", context.agent, args.model)
+          yield* input.permission.assert({
+            action: "audio_transcription",
+            resources: [selected.ref],
+            sessionID: context.sessionID,
+            agent: context.agent,
+          })
           return {
             output: yield* Effect.gen(function* () {
               const workspace = yield* WorkspaceFiles.Service
@@ -150,7 +131,7 @@ export const register = (editor: ToolEditor, input: Input) => {
           Effect.mapError((error) => new Tool.Error({ message: error.message, error })),
         ),
     })
-  if (available(snapshot, input.sessionId, "decisions"))
+  if (available(snapshot, "decisions"))
     editor.add({
       name: "decisions",
       description: `Answer named predicate, choice, or score questions about input using the executing agent’s configured decision model. Refusals are returned per question. Available models: ${models("decisions")}.`,
@@ -160,6 +141,12 @@ export const register = (editor: ToolEditor, input: Input) => {
       execute: (args, context) =>
         Effect.gen(function* () {
           const selected = yield* select(input, "decisions", context.agent, args.model)
+          yield* input.permission.assert({
+            action: "decisions",
+            resources: [selected.ref],
+            sessionID: context.sessionID,
+            agent: context.agent,
+          })
           return {
             output: yield* Decisions.decide(selected.provider, selected.key, {
               ...args,

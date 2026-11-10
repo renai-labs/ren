@@ -10,7 +10,21 @@ import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Shell } from "@ren/schema/shell"
-import { Context, Deferred, Effect, Exit, Fiber, Layer, Option, Ref, Schedule, Schema, Scope, Stream } from "effect"
+import {
+  Context,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Option,
+  Redacted,
+  Ref,
+  Schedule,
+  Schema,
+  Scope,
+  Stream,
+} from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath, stat } from "node:fs/promises"
 import { createServer, type Socket } from "node:net"
@@ -171,6 +185,61 @@ const refusedTurn = Effect.fnUntraced(function* (session: {
 })
 
 const marker = crypto.randomUUID()
+
+it.live("the native image tool saves its default output in the chat's environment and read can open it", () =>
+  Effect.gen(function* () {
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    const provider = yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        Bun.serve({
+          port: 0,
+          hostname: "127.0.0.1",
+          fetch: () => Response.json({ created: 1, data: [{ b64_json: png }] }),
+        }),
+      ),
+      (server) => Effect.promise(() => server.stop(true)),
+    )
+    const opened = yield* open()
+    yield* opened.harness.configure({
+      models: [
+        ...Shared.access(undefined, stub.url).endpoints,
+        {
+          id: "image",
+          protocol: "openai-chat",
+          baseUrl: `${provider.url.origin}/v1`,
+          apiKey: { key: Redacted.make("key") },
+          models: [{ id: "painter", type: "image", protocol: "openai-images" }],
+        },
+      ],
+    })
+    const session = yield* begin(opened)
+    const notified = yield* opened.harness.chat.events.pipe(
+      Stream.filter((event) => event.type === "session.inbox.enqueued" && event.data.item.type === "synthetic"),
+      Stream.runHead,
+      Effect.forkScoped({ startImmediately: true }),
+    )
+    yield* session.turn(stub.script({ tool: { name: "experimental_image_generate", input: { prompt: "A dot" } } }))
+    yield* Fiber.join(notified)
+    const page = yield* opened.harness.chat.messages(session.sessionId, {})
+    const generated = page.items
+      .flatMap((message) => (message.type === "assistant" ? message.content : []))
+      .find((part) => part.type === "tool" && part.name === "experimental_image_generate")
+    const stem =
+      generated?.type === "tool" && generated.state.status === "completed"
+        ? Schema.decodeUnknownSync(Schema.Struct({ path: Schema.String }))(generated.state.metadata).path
+        : ""
+    expect(stem.startsWith(`${folder(session.sessionId)}/`)).toBe(true)
+    const file = `${stem}.png`
+    yield* session.turn(stub.script({ tool: { name: "read", input: { path: file } } }), 1)
+    yield* opened.host.client.experimental.session.wait({ sessionID: SessionID.make(session.sessionId) })
+    expect(JSON.stringify(yield* opened.harness.chat.messages(session.sessionId, {}))).toContain(
+      "Image read successfully",
+    )
+    expect(yield* Effect.promise(async () => Buffer.from(await Bun.file(file).arrayBuffer()).toString("base64"))).toBe(
+      png,
+    )
+  }),
+)
 
 test.each<
   [
