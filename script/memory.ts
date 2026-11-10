@@ -4,12 +4,14 @@ import { Memory } from "@ren/test-harness/memory"
 
 const usage = `Usage:
   bun run memory                              free memory and who holds the budget
-  bun run memory queue [--mib=1536] -- <cmd>  run cmd once the budget has room for it
+  bun run memory queue [--mib=1536] [--units=1] -- <cmd>
+                                              run cmd once the budget has room for at least one unit of mib,
+                                              with TURBO_CONCURRENCY set to the units it got
   bun run memory profile -- <cmd>             run cmd and print how much memory it took at its peak`
 
 const args = parseArgs({
   args: process.argv.slice(2),
-  options: { mib: { type: "string", default: "1536" } },
+  options: { mib: { type: "string", default: "1536" }, units: { type: "string", default: "1" } },
   allowPositionals: true,
 })
 const action = args.positionals[0] ?? "status"
@@ -33,7 +35,11 @@ if (action === "status") {
 } else if (action === "queue" && command.length > 0) {
   const mib = Number(args.values.mib)
   if (!Number.isSafeInteger(mib) || mib < 1) throw new Error("--mib must be a positive whole number")
-  const lease = await Budget.acquire({ purpose: command.join(" "), unitMiB: mib, units: 1, onWait: console.error })
+  const units = Number(args.values.units)
+  if (!Number.isSafeInteger(units) || units < 1) throw new Error("--units must be a positive whole number")
+  const lease = await Budget.acquire({ purpose: command.join(" "), unitMiB: mib, units, onWait: console.error })
+  if (lease.units < units) console.error(`Running ${lease.units} of ${units} tasks at a time to fit the memory budget`)
+  process.env.TURBO_CONCURRENCY = String(lease.units)
   process.exitCode = await run(command)
   lease.release()
 } else if (action === "profile" && command.length > 0) {
