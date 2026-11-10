@@ -543,6 +543,48 @@ describe("brain runs", () => {
     await current.dispose()
   })
 
+  test("a brain made before Ren served bundles is replaced once at its wake, with no update it cannot take, and the new one runs the current bundles", async () => {
+    const spans: Array<Tracer.NativeSpan> = []
+    const brainId = await runs.newBrain()
+    const current = await runs.ren({
+      tracer: Tracer.make({
+        span: (options) => {
+          const span = new Tracer.NativeSpan(options)
+          spans.push(span)
+          return span
+        },
+      }),
+    })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
+    expect(await runs.reaches(brainId, "ready")).toMatchObject({ generation: 1, bundles: null })
+    const versions = { dependencies: "1111111111111111", brain: "2222222222222222", executor: "3333333333333333" }
+    const write = (values: ReadonlyArray<typeof Database.Schema.bundle.$inferInsert>) =>
+      runs.database.runPromise(
+        Effect.gen(function* () {
+          const db = yield* Database.Service
+          yield* db.db.delete(Database.Schema.bundle)
+          if (values.length > 0) yield* db.db.insert(Database.Schema.bundle).values([...values])
+        }),
+      )
+    await write(
+      (["dependencies", "brain", "executor"] as const).map((kind) => ({
+        kind,
+        version: versions[kind],
+        sha256: "a".repeat(64),
+        built_at: new Date(),
+      })),
+    )
+    await runs.update(brainId, { phase: "resuming" })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
+    expect(await runs.reaches(brainId, "ready", { generation: 2 })).toMatchObject({ bundles: versions })
+    await runs.update(brainId, { phase: "resuming" })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
+    expect(await runs.reaches(brainId, "ready")).toMatchObject({ generation: 2 })
+    expect(spans.filter((span) => span.attributes.get("url.path") === "/ren/update")).toHaveLength(0)
+    await write([])
+    await current.dispose()
+  })
+
   test("a brain run that ended runs again when the brain needs it", async () => {
     const brainId = await runs.newBrain()
     const current = await runs.ren()
