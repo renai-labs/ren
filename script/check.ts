@@ -19,7 +19,7 @@ const tasks = async (filter: string, script: string) =>
     )
   ).flat()
 
-const run = await Bun.$`bun turbo run --concurrency=3 --output-logs=errors-only ${[
+const run = await Bun.$`bun turbo run --output-logs=errors-only ${[
   ...(await tasks(`...[${base}]`, "typecheck")),
   ...(await tasks(`[${base}]`, "lint")),
   "//#typecheck:root",
