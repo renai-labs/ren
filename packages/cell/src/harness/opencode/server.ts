@@ -50,6 +50,7 @@ import { Credentials } from "./credentials.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
+import type { Browsers } from "../../browser.js"
 import { GitSources } from "../../git-sources.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeExecution } from "./execution.js"
@@ -67,6 +68,7 @@ export interface Options {
   readonly sources?: GitSources.Interface
   readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
   readonly egress?: boolean
+  readonly browsers?: Browsers.Interface
 }
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
@@ -259,6 +261,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
         lastSpeaker,
       })),
       { egress: options.egress ?? false, lastUserMessage },
+      Option.fromUndefinedOr(options.browsers),
     ),
   )
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.

@@ -24,6 +24,7 @@ import { AppStore } from "./app-store.js"
 import { ChannelStore } from "./channel-store.js"
 import { MemoryStore } from "./memory-store.js"
 import { BrainStorage } from "./brain-storage.js"
+import { Browsers } from "./browser.js"
 import { Env } from "./env.js"
 import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
@@ -226,6 +227,7 @@ export const hostLayer = Layer.unwrap(
           ChannelStore.layer,
           MemoryStore.layer,
           Inference.layer,
+          Browsers.layer,
         ),
       ),
       Layer.provideMerge(Fence.layer),

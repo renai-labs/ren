@@ -421,6 +421,38 @@ const EndpointWebsearchProviders = (raw: RawClient["websearch"]) => (input: Webs
 
 const adaptGroupWebsearch = (raw: RawClient["websearch"]) => ({ providers: EndpointWebsearchProviders(raw) })
 
+type BrowserGetRequest = Parameters<RawClient["browser"]["browser.get"]>[0]
+type BrowserGetInput = { readonly sessionID: BrowserGetRequest["params"]["sessionID"] }
+const EndpointBrowserGet = (raw: RawClient["browser"]) => (input: BrowserGetInput) =>
+  raw["browser.get"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+
+type BrowserWatchRequest = Parameters<RawClient["browser"]["browser.watch"]>[0]
+type BrowserWatchInput = { readonly sessionID: BrowserWatchRequest["params"]["sessionID"] }
+const EndpointBrowserWatch = (raw: RawClient["browser"]) => (input: BrowserWatchInput) =>
+  Stream.unwrap(
+    raw["browser.watch"]({ params: { sessionID: input["sessionID"] } }).pipe(
+      Effect.mapError(mapClientError),
+      Effect.map((stream) => stream.pipe(Stream.mapError(mapClientError))),
+    ),
+  )
+
+type BrowserNavigateRequest = Parameters<RawClient["browser"]["browser.navigate"]>[0]
+type BrowserNavigateInput = {
+  readonly sessionID: BrowserNavigateRequest["params"]["sessionID"]
+  readonly payload: BrowserNavigateRequest["payload"]
+}
+const EndpointBrowserNavigate = (raw: RawClient["browser"]) => (input: BrowserNavigateInput) =>
+  raw["browser.navigate"]({
+    params: { sessionID: input["sessionID"] },
+    payload: input["payload"],
+  } as BrowserNavigateRequest).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupBrowser = (raw: RawClient["browser"]) => ({
+  get: EndpointBrowserGet(raw),
+  watch: EndpointBrowserWatch(raw),
+  navigate: EndpointBrowserNavigate(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   event: adaptGroupEvent(raw["event"]),
   model: adaptGroupModel(raw["model"]),
@@ -432,6 +464,7 @@ const adaptClient = (raw: RawClient) => ({
   file: adaptGroupFile(raw["file"]),
   vcs: adaptGroupVcs(raw["vcs"]),
   websearch: adaptGroupWebsearch(raw["websearch"]),
+  browser: adaptGroupBrowser(raw["browser"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

@@ -35,6 +35,7 @@ import {
 import { FetchHttpClient, HttpClientError } from "effect/http"
 import { mkdir, rm, stat } from "node:fs/promises"
 import { BrainStorage } from "../../brain-storage.js"
+import { Browsers } from "../../browser.js"
 import { AppStore } from "../../app-store.js"
 import { ChannelStore } from "../../channel-store.js"
 import { MemoryStore } from "../../memory-store.js"
@@ -438,7 +439,11 @@ type Opener = (
   apps: Option.Option<AppCatalog.Info>,
   channels: ReadonlyArray<Channel.Provider>,
   ren: Option.Option<OpenCodeMcp.RenAccess>,
-  host: { readonly egress: boolean; readonly sources: GitSources.Interface },
+  host: {
+    readonly egress: boolean
+    readonly sources: GitSources.Interface
+    readonly browsers: Option.Option<Browsers.Interface>
+  },
 ) => Effect.Effect<OpenCodeServer.Instance, Error, Scope.Scope>
 
 const layerWith = (opener: Opener) =>
@@ -454,6 +459,7 @@ const layerWith = (opener: Opener) =>
       const memory = yield* Effect.serviceOption(MemoryStore.Service)
       const address = yield* Effect.serviceOption(RenAddress.Service)
       const hostToken = yield* Effect.serviceOption(HostToken.Service)
+      const browsers = yield* Effect.serviceOption(Browsers.Service)
       const found = yield* Effect.serviceOption(GitSources.Service)
       const sources = Option.isSome(found) ? found.value : yield* GitSources.make()
       const ren =
@@ -488,6 +494,7 @@ const layerWith = (opener: Opener) =>
                 {
                   egress: cell.vars.REN_EGRESS === "1",
                   sources,
+                  browsers,
                 },
               )
               return yield* make(
@@ -513,6 +520,7 @@ export const layer = (storage: DurableObjectStorage) =>
       ren,
       egress: host.egress,
       sources: host.sources,
+      ...Option.match(host.browsers, { onNone: () => ({}), onSome: (browsers) => ({ browsers }) }),
       directoryOf: (sessionId) => `/workspace/${sessionId}`,
     }),
   )
@@ -526,6 +534,7 @@ export const layerProcess = (database: string, confinement: RenPlugin.Confinemen
       ren,
       egress: host.egress,
       sources: host.sources,
+      ...Option.match(host.browsers, { onNone: () => ({}), onSome: (browsers) => ({ browsers }) }),
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
       confinement: {
         workspace: confinement.workspace,

@@ -161,6 +161,8 @@ type Checked<Expected, Actual extends Expected> = Actual
 export type EventCompatibility = Checked<
   EventCoverage,
   {
+    "browser.closed": { gone: "browser.closed" }
+    "browser.opened": { gone: "browser.opened" }
     "form.cancelled": "translated"
     "form.created": "translated"
     "form.replied": "translated"

@@ -155,6 +155,16 @@ export type SessionVcsInfo = { provider?: string; branch: { current?: string; de
 
 export type SessionCatalogWebSearchProvider = { id: string; name: string }
 
+export type BrowserInfo = {
+  id: string
+  provider: "kernel"
+  liveView: string
+  url: string
+  title: string
+  canGoBack: boolean
+  canGoForward: boolean
+}
+
 export type SessionEventSessionAgentSelected = {
   id: string
   created: number
@@ -216,6 +226,20 @@ export type SessionEventSessionRevertCleared = {
   created: number
   type: "session.revert.cleared"
   data: { sessionID: SessionID }
+}
+
+export type SessionEventBrowserOpened = {
+  id: string
+  created: number
+  type: "browser.opened"
+  data: { sessionID: SessionID; id: string }
+}
+
+export type SessionEventBrowserClosed = {
+  id: string
+  created: number
+  type: "browser.closed"
+  data: { sessionID: SessionID; id: string }
 }
 
 export type SessionEventSessionCreated = {
@@ -989,6 +1013,8 @@ export type SessionEventEvent =
   | SessionEventShellCreated
   | SessionEventShellExited
   | SessionEventShellDeleted
+  | SessionEventBrowserOpened
+  | SessionEventBrowserClosed
 
 export type SessionMessageAssistant = {
   id: SessionMessageID
@@ -1497,3 +1523,18 @@ export type VcsDiffOutput = Array<SessionInfoFileDiff>
 export type WebsearchProvidersInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
 export type WebsearchProvidersOutput = Array<SessionCatalogWebSearchProvider>
+
+export type BrowserGetInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type BrowserGetOutput = BrowserInfo
+
+export type BrowserWatchInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type BrowserWatchOutput = BrowserInfo
+
+export type BrowserNavigateInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly payload: { readonly url: string } | { readonly history: "back" | "forward" | "reload" }
+}
+
+export type BrowserNavigateOutput = void

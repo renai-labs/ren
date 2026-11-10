@@ -48,7 +48,9 @@ import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
 import { OpenCodeMcp } from "./mcp.js"
+import type { Browsers } from "../../browser.js"
 import type { GitSources } from "../../git-sources.js"
+import { OpenCodeBrowsers } from "./browsers.js"
 import { OpenCodeCopies } from "./copies.js"
 import { OpenCodeEnvironmentTools } from "./environment-tools.js"
 import { OpenCodeReferences } from "./references.js"
@@ -312,6 +314,7 @@ export const make = (
       sessionId: string,
     ) => Effect.Effect<{ readonly id: string; readonly speaker: OpenCodeChat.Speaker | undefined } | undefined>
   },
+  browsers: Option.Option<Browsers.Interface>,
 ) =>
   Plugin.define({
     id: "ren",
@@ -654,6 +657,8 @@ export const make = (
             Effect.flatMap((info) => (info.parentID ? rootOf(info.parentID) : Effect.succeed(sessionID))),
             Effect.orElseSucceed(() => sessionID),
           )
+        if (isSession && Option.isSome(browsers))
+          yield* OpenCodeBrowsers.register(context, browsers.value, rootOf)
         const claims = Effect.fn("RenPlugin.claims")(function* (
           input: Omit<UsageClaims.Input, "rootSession" | "turn" | "member">,
         ) {

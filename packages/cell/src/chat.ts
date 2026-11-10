@@ -15,12 +15,13 @@ import { Clock, Deferred, Effect, Layer, Option, Predicate, Ref, Result, Schema,
 import { Base64Url } from "effect/encoding"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
+import { Browsers } from "./browser.js"
 import { Cell } from "./cell.js"
 import { Harness } from "./harness/harness.js"
 import { HotReload } from "./hot-reload.js"
 import { Restore } from "./restore.js"
 
-type Services = Cell.Info | Cell.Activity | Harness.Service | HotReload.Service | Restore.Service
+type Services = Cell.Info | Cell.Activity | Harness.Service | HotReload.Service | Restore.Service | Browsers.Service
 
 const prefix = "/chat"
 
@@ -144,11 +145,13 @@ const events = (scope: Effect.Success<typeof scopeOf>) =>
     Effect.gen(function* () {
       const info = yield* Cell.Info
       const harness = yield* Cell.acquire
+      const browsers = yield* Browsers.Service
       const allowed = new Set(Option.toArray(scope.sid))
       const shells = new Map<string, string>()
+      const all = Stream.merge(harness.chat.events, browsers.events)
       const live = Option.isNone(scope.sid)
-        ? harness.chat.events
-        : harness.chat.events.pipe(
+        ? all
+        : all.pipe(
             Stream.filter((event) => {
               if (event.type === "session.created" && event.data.parentID && allowed.has(event.data.parentID))
                 allowed.add(event.data.sessionID)
@@ -221,6 +224,16 @@ const conflict = <A, E, R>(effect: Effect.Effect<A, E | Harness.Conflict, R>) =>
 
 const rejected = <A, E, R>(effect: Effect.Effect<A, E | Harness.Rejected, R>) =>
   Effect.catchIf(effect, Schema.is(Harness.Rejected), (error) =>
+    Effect.fail(new InvalidRequestError({ message: error.message })),
+  )
+
+const noBrowser = <A, E, R>(effect: Effect.Effect<A, E | Browsers.NotFound, R>) =>
+  Effect.catchIf(effect, Schema.is(Browsers.NotFound), (error) =>
+    Effect.fail(new NotFoundError({ message: error.message })),
+  )
+
+const refusedBrowser = <A, E, R>(effect: Effect.Effect<A, E | Browsers.Refused, R>) =>
+  Effect.catchIf(effect, Schema.is(Browsers.Refused), (error) =>
     Effect.fail(new InvalidRequestError({ message: error.message })),
   )
 
@@ -524,6 +537,25 @@ const handlers = Layer.mergeAll(
               })
               .pipe(notFound, rejected),
           ),
+        ),
+    ),
+  ),
+  HttpApiBuilder.group(ChatApi, "browser", (group) =>
+    Effect.map(Browsers.Service, (browsers) =>
+      group
+        .handle("browser.get", (request) => browsers.get(request.params.sessionID).pipe(noBrowser))
+        .handle("browser.watch", (request) =>
+          Effect.flatMap(HttpServerRequest.HttpServerRequest, (http) =>
+            browsers
+              .watch(request.params.sessionID)
+              .pipe(
+                noBrowser,
+                Effect.map((stream) => stream.pipe(Stream.interruptWhen(disconnected(http)))),
+              ),
+          ),
+        )
+        .handle("browser.navigate", (request) =>
+          browsers.navigate(request.params.sessionID, request.payload).pipe(noBrowser, refusedBrowser),
         ),
     ),
   ),

@@ -74,6 +74,12 @@ import type {
   VcsDiffOutput,
   WebsearchProvidersInput,
   WebsearchProvidersOutput,
+  BrowserGetInput,
+  BrowserGetOutput,
+  BrowserWatchInput,
+  BrowserWatchOutput,
+  BrowserNavigateInput,
+  BrowserNavigateOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -686,6 +692,42 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [403, 404, 503],
             empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    browser: {
+      get: (input: BrowserGetInput, requestOptions?: RequestOptions) =>
+        request<BrowserGetOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/browser`,
+            successStatus: 200,
+            declaredStatuses: [403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      watch: (input: BrowserWatchInput, requestOptions?: RequestOptions): AsyncIterable<BrowserWatchOutput> =>
+        sse<BrowserWatchOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/browser/watch`,
+            successStatus: 200,
+            declaredStatuses: [403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      navigate: (input: BrowserNavigateInput, requestOptions?: RequestOptions) =>
+        request<BrowserNavigateOutput>(
+          {
+            method: "POST",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/browser/navigate`,
+            body: input["payload"],
+            successStatus: 204,
+            declaredStatuses: [400, 403, 404, 503],
+            empty: true,
           },
           requestOptions,
         ),

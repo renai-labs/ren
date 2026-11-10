@@ -29,6 +29,7 @@ import { join } from "node:path"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { HttpApiClient, HttpApiTest } from "effect/http-api"
 import { Brain } from "../../src/brain.js"
+import { Browsers } from "../../src/browser.js"
 import { Cell } from "../../src/cell.js"
 import { Chat } from "../../src/chat.js"
 import { ChatSettings } from "../../src/chat-settings.js"
@@ -128,6 +129,7 @@ export const make = Effect.fnUntraced(function* (
       Layer.effect(Sync.Service, Sync.make(Option.none())),
       ChatSettings.layer,
       Inference.layer,
+      Browsers.layer,
     ).pipe(Layer.provideMerge(ModelsTest.storage())),
   )
   const record = Effect.fnUntraced(function* (access: Models.Access, hostToken?: string) {
@@ -157,7 +159,12 @@ export const make = Effect.fnUntraced(function* (
     [],
     Context.get(services, ModelRefresh.Service),
     Option.none(),
-    { saved: Option.none(), directoryOf: () => directory, apps: Option.fromUndefinedOr(options.apps) },
+    {
+      saved: Option.none(),
+      directoryOf: () => directory,
+      apps: Option.fromUndefinedOr(options.apps),
+      browsers: Context.get(services, Browsers.Service),
+    },
   )
   const harness = yield* OpenCodeHarness.make(
     options.unreadableEvent

@@ -211,6 +211,9 @@ export const ShellExited = define("shell.exited", {
 })
 export const ShellDeleted = define("shell.deleted", { id: Shell.ID })
 
+export const BrowserOpened = define("browser.opened", { ...base, id: Schema.String })
+export const BrowserClosed = define("browser.closed", { ...base, id: Schema.String })
+
 export const definitions = [
   Created,
   AgentSelected,
@@ -263,6 +266,8 @@ export const definitions = [
   ShellCreated,
   ShellExited,
   ShellDeleted,
+  BrowserOpened,
+  BrowserClosed,
 ] as const
 
 export const Event = Schema.Union(definitions).annotate({ identifier: "SessionEvent.Event" })

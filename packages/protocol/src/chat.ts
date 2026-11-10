@@ -1,3 +1,4 @@
+import { Browser } from "@ren/schema/browser"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { Session } from "@ren/schema/session"
@@ -712,6 +713,59 @@ export const WebSearchGroup = HttpApiGroup.make("websearch")
   .middleware(ChatAccess)
   .annotateMerge(OpenApi.annotations({ title: "websearch" }))
 
+export type BrowserNavigateInput = typeof BrowserNavigateInput.Type
+export const BrowserNavigateInput = Schema.Union([
+  Schema.Struct({ url: Schema.Trimmed.check(Schema.isNonEmpty()).annotate({ description: "The address to open." }) }),
+  Schema.Struct({ history: Schema.Literals(["back", "forward", "reload"]) }),
+]).annotate({ identifier: "Chat.BrowserNavigateInput" })
+
+export const BrowserGroup = HttpApiGroup.make("browser")
+  .add(
+    HttpApiEndpoint.get("browser.get", "/chat/session/:sessionID/browser", {
+      params,
+      success: Browser.Info,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "browser.get",
+        summary: "Read the browser",
+        description:
+          "Return the newest cloud browser the session opened and the page Ren last read in it. It does not connect to the browser, so `url` can be old or empty. A session without an open browser is not found.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("browser.watch", "/chat/session/:sessionID/browser/watch", {
+      params,
+      success: HttpApiSchema.StreamSse({ data: Browser.Info }),
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "browser.watch",
+        summary: "Follow the browser",
+        description:
+          "Connect to the newest cloud browser the session opened and stream its current page each time it changes. The connection keeps the browser running while a client follows it. The stream ends when the browser closes. A session without an open browser is not found.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("browser.navigate", "/chat/session/:sessionID/browser/navigate", {
+      params,
+      payload: BrowserNavigateInput,
+      success: HttpApiSchema.NoContent,
+      error: [NotFoundError, InvalidRequestError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "browser.navigate",
+        summary: "Navigate the browser",
+        description:
+          "Open `url` in the current page of the session’s newest cloud browser, or go `back`, `forward` or `reload` it. A session without an open browser is not found; a step the browser refuses is an invalid request.",
+      }),
+    ),
+  )
+  .middleware(ChatAccess)
+  .annotateMerge(OpenApi.annotations({ title: "browser" }))
+
 export const ChatApi = HttpApi.make("chat")
   .add(EventGroup)
   .add(ModelGroup)
@@ -723,6 +777,7 @@ export const ChatApi = HttpApi.make("chat")
   .add(FileGroup)
   .add(VcsGroup)
   .add(WebSearchGroup)
+  .add(BrowserGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Chat API",
