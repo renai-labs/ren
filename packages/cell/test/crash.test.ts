@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { ManagedRuntime } from "effect"
+import { Effect, ManagedRuntime } from "effect"
+import type { Models } from "@ren/schema/models"
 import { Shared } from "./lib/shared.js"
 import { StubModel } from "./lib/stub-model.js"
 import { TestCell } from "./lib/test-cell.js"
@@ -20,8 +21,8 @@ const restart = async () => {
   await celld.start()
 }
 
-const started = async () => {
-  const opened = await TestCell.make(celld)
+const started = async (models?: Models.Access, target = celld) => {
+  const opened = await TestCell.make(target, models)
   await opened.start()
   return {
     ...opened,
@@ -129,23 +130,34 @@ describe("crash recovery", () => {
     script.release()
   })
 
-  test("killed after a newer key is configured during a turn: the resumed model call carries the newer key", async () => {
-    const opened = await started()
-    await configure(opened, { stub: managed("sk-older", Date.now() + hour) })
-    await brainStart(opened)
-    const script = stub.script({ hold: true, reply: "cut off" })
-    const sent = await opened.brain(`/ren/sessions/${opened.id}/messages`, {
-      messageId: `msg_${crypto.randomUUID().replaceAll("-", "")}`,
-      prompt: { text: `send ${script.marker}` },
-      sender: { userId: "user_1" },
-    })
-    expect(sent.status).toBe(200)
-    await script.called()
-    await configure(opened, { stub: managed("sk-newer", Date.now() + 2 * hour) })
-    script.set({ reply: "resumed" })
-    await restart()
-    expect(await script.called(2)).toMatchObject({ text: StubModel.restarted, authorization: "Bearer sk-newer" })
-    expect(await opened.ended()).toEqual(TestCell.idle)
-    expect(await opened.outcome()).toBe("succeeded")
-  })
+  test("killed after a newer key is configured during a turn: the resumed model call carries the newer key", () =>
+    runtime.runPromise(
+      Effect.acquireUseRelease(
+        Effect.promise(() => Shared.make()),
+        (target) =>
+          Effect.promise(async () => {
+            const opened = await started(Shared.access({ stub: managed("sk-older", Date.now() + hour) }), target)
+            await brainStart(opened)
+            const script = stub.script({ hold: true, reply: "cut off" })
+            const sent = await opened.brain(`/ren/sessions/${opened.id}/messages`, {
+              messageId: `msg_${crypto.randomUUID().replaceAll("-", "")}`,
+              prompt: { text: `send ${script.marker}` },
+              sender: { userId: "user_1" },
+            })
+            expect(sent.status).toBe(200)
+            await script.called()
+            await configure(opened, { stub: managed("sk-newer", Date.now() + 2 * hour) })
+            script.set({ reply: "resumed" })
+            await target.kill()
+            await target.start()
+            expect(await script.called(2)).toMatchObject({
+              text: StubModel.restarted,
+              authorization: "Bearer sk-newer",
+            })
+            expect(await opened.ended()).toEqual(TestCell.idle)
+            expect(await opened.outcome()).toBe("succeeded")
+          }),
+        (target) => Effect.promise(() => target.dispose()),
+      ),
+    ))
 })
