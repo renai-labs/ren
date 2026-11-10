@@ -5,7 +5,7 @@ import { Config, Duration, Effect, Layer, Option, Schedule, Schema } from "effec
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { spawn } from "node:child_process"
 import { closeSync, openSync } from "node:fs"
-import { mkdir, rm } from "node:fs/promises"
+import { mkdir, rename, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -139,14 +139,40 @@ export const layer = Layer.effect(
       binding: Binding,
       deploy: Effect.fn("ArtifactWorkerd.deploy")(function* (input) {
         const directory = join(config.root, input.artifactId)
+        const objects = input.config.durableObjects ?? {}
+        if (Object.keys(objects).length && !Object.hasOwn(input.files, Artifact.workerPath))
+          return yield* new ArtifactProvider.Failed({
+            message: "Durable Objects require _worker.js with exported classes",
+          })
+        const savedObjects = Bun.file(join(directory, "durable-objects.json"))
+        const previousObjects = (yield* Effect.promise(() => savedObjects.exists()))
+          ? yield* Effect.tryPromise({ try: () => savedObjects.text(), catch: failed }).pipe(
+              Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Artifact.DurableObjects))),
+              Effect.mapError(failed),
+            )
+          : {}
+        if (Object.entries(previousObjects).some(([name, className]) => objects[name] !== className))
+          return yield* new ArtifactProvider.Failed({
+            message: "Keep existing Durable Object binding and class names; removal and renaming are not supported",
+          })
         const before = yield* readServing(directory)
         const port = Option.isSome(input.previous)
           ? input.previous.value.port
           : yield* Option.match(before, { onNone: () => freePort, onSome: (serving) => Effect.succeed(serving.port) })
         const binding = { directory, port, path: input.config.entry === "index.html" ? "/" : `/${input.config.entry}` }
         const url = `http://${config.host}:${port}${binding.path}`
-        if (Option.exists(before, (serving) => serving.deploymentId === input.deploymentId) && (yield* answers(port)))
+        const saveObjects = Effect.tryPromise({
+          try: async () => {
+            const temporary = join(directory, `${input.deploymentId}.objects.json`)
+            await Bun.write(temporary, JSON.stringify(objects))
+            await rename(temporary, join(directory, "durable-objects.json"))
+          },
+          catch: failed,
+        })
+        if (Option.exists(before, (serving) => serving.deploymentId === input.deploymentId) && (yield* answers(port))) {
+          yield* saveObjects
           return { binding, url }
+        }
         const deploymentDirectory = join(directory, "deployments", input.deploymentId)
         const worker = Object.hasOwn(input.files, Artifact.workerPath)
         yield* Effect.tryPromise({
@@ -169,6 +195,10 @@ export const layer = Layer.effect(
                 compatibility_date: compatibilityDate,
                 ...(worker && { main: Artifact.workerPath, no_bundle: true }),
                 assets: { directory: "public", ...(worker && { binding: "ASSETS" }) },
+                durable_objects: {
+                  bindings: Object.entries(objects).map(([name, className]) => ({ name, class_name: className })),
+                },
+                migrations: [{ tag: "sqlite-v1", new_sqlite_classes: [...new Set(Object.values(objects))] }],
               }),
             )
           },
@@ -176,13 +206,18 @@ export const layer = Layer.effect(
         })
         if (Option.isSome(before)) yield* stop(before.value.pid)
         yield* start(directory, input.deploymentId, port).pipe(
+          Effect.andThen(saveObjects),
           Effect.onInterrupt(() =>
             Option.isSome(before) && before.value.deploymentId !== input.deploymentId
               ? start(directory, before.value.deploymentId, port).pipe(Effect.ignore)
               : Effect.void,
           ),
           Effect.tapError(() =>
-            Option.isSome(before) ? start(directory, before.value.deploymentId, port).pipe(Effect.ignore) : Effect.void,
+            Effect.gen(function* () {
+              const candidate = yield* readServing(directory)
+              if (Option.isSome(candidate)) yield* stop(candidate.value.pid)
+              if (Option.isSome(before)) yield* start(directory, before.value.deploymentId, port).pipe(Effect.ignore)
+            }),
           ),
         )
         return { binding, url }

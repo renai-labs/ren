@@ -65,9 +65,26 @@ export const Info = Schema.Struct({
   updatedAt: Schema.DateTimeUtc,
 }).annotate({ identifier: "Artifact.Info" })
 
+export const DurableObjects = Schema.Record(
+  Schema.String,
+  Schema.String.check(Schema.isPattern(/^[A-Za-z_][A-Za-z0-9_]*$/u)),
+)
+  .check(
+    Schema.makeFilter(
+      (bindings) =>
+        Object.keys(bindings).every((name) => /^(?!ASSETS$)[A-Za-z_][A-Za-z0-9_]*$/u.test(name)) ||
+        "Use JavaScript binding identifiers other than ASSETS.",
+    ),
+  )
+  .annotate({
+    identifier: "Artifact.DurableObjects",
+    description: "Binding names mapped to exported SQLite Durable Object class names. Keep names stable.",
+  })
+
 export interface Config extends Schema.Schema.Type<typeof Config> {}
 export const Config = Schema.Struct({
   entry: Drive.Path.annotate({ description: "The file a person opens first, such as index.html." }),
+  durableObjects: Schema.optional(DurableObjects),
 }).annotate({ identifier: "Artifact.Config" })
 
 export interface Deployment extends Schema.Schema.Type<typeof Deployment> {}
