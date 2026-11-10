@@ -7,7 +7,6 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
-  S3Client,
   S3ServiceException,
   type _Object,
 } from "@aws-sdk/client-s3"
@@ -26,6 +25,7 @@ import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { DrivePolicy } from "./drives/policy.js"
 import { Primitive } from "./primitive.js"
+import { ObjectStorage } from "./object-storage.js"
 import { SpaceQueries } from "./space/queries.js"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Drives.Unavailable", {
@@ -119,36 +119,16 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.all({
-      bucket: Config.String("DRIVE_BUCKET"),
-      region: Config.String("DRIVE_REGION").pipe(Config.withDefault("us-east-1")),
-      endpoint: Config.option(Config.String("DRIVE_ENDPOINT")),
       roleArn: Config.String("DRIVE_ROLE_ARN"),
-      accessKeyId: Config.option(Config.String("DRIVE_ACCESS_KEY_ID")),
-      secretAccessKey: Config.option(Config.Redacted("DRIVE_SECRET_ACCESS_KEY")),
       maxFileBytes: Config.ByteSize("DRIVE_MAX_FILE_SIZE").pipe(Config.withDefault(ByteSize.bytes(Drive.maxFileBytes))),
     })
     const database = yield* Database.Service
     const access = yield* Access.Service
-    const client = {
-      region: config.region,
-      ...(Option.isSome(config.endpoint) && { endpoint: config.endpoint.value }),
-      ...(Option.isSome(config.accessKeyId) &&
-        Option.isSome(config.secretAccessKey) && {
-          credentials: {
-            accessKeyId: config.accessKeyId.value,
-            secretAccessKey: Redacted.value(config.secretAccessKey.value),
-          },
-        }),
-    }
-    const s3 = new S3Client({ ...client, forcePathStyle: Option.isSome(config.endpoint) })
-    const sts = new STSClient(client)
-    yield* Effect.addFinalizer(() =>
-      Effect.sync(() => {
-        s3.destroy()
-        sts.destroy()
-      }),
-    )
-    const bucket = config.bucket
+    const storage = yield* ObjectStorage.Service
+    const s3 = storage.s3
+    const sts = new STSClient(storage.client)
+    yield* Effect.addFinalizer(() => Effect.sync(() => sts.destroy()))
+    const bucket = storage.bucket
     const maxFileBytes = ByteSize.toNumberUnsafe(config.maxFileBytes)
     const lifetime = Duration.toSeconds(linkLifetime)
 
@@ -331,16 +311,16 @@ export const layer = Layer.effect(
                 organizationId: owner.organizationId,
                 ...(kind === "space" && { spaceId: owner.spaceId }),
               }),
-              region: config.region,
-              ...(Option.isSome(config.endpoint) && { endpoint: config.endpoint.value }),
+              region: storage.region,
+              ...(Option.isSome(storage.endpoint) && { endpoint: storage.endpoint.value }),
               placeholder,
             },
             access: kinds[kind].access,
           })),
         }
       },
-      hosts: Option.match(config.endpoint, {
-        onNone: () => [`${bucket}.s3.${config.region}.amazonaws.com`],
+      hosts: Option.match(storage.endpoint, {
+        onNone: () => [`${bucket}.s3.${storage.region}.amazonaws.com`],
         onSome: (endpoint) => [new URL(endpoint).hostname],
       }),
       keys: Effect.fn("Drives.keys")(function* (owner) {
@@ -408,4 +388,4 @@ export const layer = Layer.effect(
       }),
     })
   }),
-)
+).pipe(Layer.provide(ObjectStorage.layer))
