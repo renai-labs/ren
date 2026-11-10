@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test"
 import { Auth } from "@ren/schema/auth"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Space } from "@ren/schema/space"
-import { Clock, DateTime, Duration, Effect, ErrorReporter, Fiber, Option, Schema } from "effect"
+import { Clock, DateTime, Deferred, Duration, Effect, ErrorReporter, Fiber, Option, Schema } from "effect"
 import { TestClock } from "effect/testing"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { MachineLifecycle } from "../src/machine-lifecycle.js"
@@ -40,7 +40,9 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       wanted: { config: {}, image: Option.none(), hosts: Option.none() } as MachineLifecycle.DesiredSetup,
       system: "system",
       sample: Option.none<MachineProvider.Sample>(),
+      held: Option.none<{ readonly entered: Deferred.Deferred<void>; readonly release: Deferred.Deferred<void> }>(),
     }
+    const running = new Set<string>()
     const images: Array<Option.Option<string>> = []
     const networks: Array<Option.Option<ReadonlyArray<string>>> = []
     const steps: Array<ReadonlyArray<string>> = []
@@ -125,7 +127,15 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
             : Effect.succeed(false),
         ),
       isNeeded: () => Effect.succeed(true),
-      ensure: (row) => (holder.run ? holder.run(row.id).pipe(Effect.ignore) : Effect.void),
+      // oxlint-disable-next-line ren/no-comments -- Like the durable run: one run per machine at a time; an ensure during it does nothing.
+      ensure: (row) =>
+        !holder.run || running.has(row.id)
+          ? Effect.void
+          : Effect.sync(() => running.add(row.id)).pipe(
+              Effect.andThen(holder.run(row.id)),
+              Effect.ignore,
+              Effect.ensuring(Effect.sync(() => running.delete(row.id))),
+            ),
       proxyFor: () => Effect.succeedNone,
       retire: () => Effect.void,
       startup: () => Effect.succeed({ variables: {}, created: Effect.void }),
@@ -140,13 +150,21 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
           _target: string,
           applied: ReadonlyArray<MachineProvider.Step>,
         ) =>
-          Effect.sync(() => {
-            if (!switches.updates) return Option.some("the new version did not answer")
-            updated.push(row.id)
-            steps.push(applied.map((step) => step.command))
-            switches.changeAtWake = "current"
-            return Option.none<string>()
-          }),
+          Option.match(switches.held, {
+            onNone: () => Effect.void,
+            onSome: (held) =>
+              Deferred.succeed(held.entered, undefined).pipe(Effect.andThen(Deferred.await(held.release))),
+          }).pipe(
+            Effect.andThen(
+              Effect.sync(() => {
+                if (!switches.updates) return Option.some("the new version did not answer")
+                updated.push(row.id)
+                steps.push(applied.map((step) => step.command))
+                switches.changeAtWake = "current"
+                return Option.none<string>()
+              }),
+            ),
+          ),
       }),
       answers: () => Effect.sync(() => switches.answers),
     })
@@ -369,6 +387,31 @@ describe("MachineLifecycle updates", () => {
         found.memory.switches.changeAtWake = "update"
         expect((yield* found.memory.machines.access(found.id))._tag).toBe("Starting")
         expect(found.memory.updated).toEqual([found.id])
+        expect(yield* found.memory.read(found.id)).toMatchObject({ phase: "ready", generation: 1 })
+      }),
+  )
+
+  it.effect(
+    "an access during an update in place answers Starting, never the old url, and the machine is ready once, on its generation, when the update ends (chaos row 49)",
+    () =>
+      Effect.gen(function* () {
+        const found = yield* asleep()
+        found.memory.switches.changeAtWake = "update"
+        const held = { entered: yield* Deferred.make<void>(), release: yield* Deferred.make<void>() }
+        found.memory.switches.held = Option.some(held)
+        const first = yield* found.memory.machines.access(found.id).pipe(Effect.forkChild)
+        yield* Deferred.await(held.entered)
+        const during = yield* found.memory.machines.access(found.id)
+        const phase = (yield* found.memory.read(found.id)).phase
+        yield* Deferred.succeed(held.release, undefined)
+        yield* Fiber.join(first)
+        const after = yield* found.memory.machines.access(found.id)
+        expect([during._tag, phase, after._tag, found.memory.updated]).toEqual([
+          "Starting",
+          "updating",
+          "Ready",
+          [found.id],
+        ])
         expect(yield* found.memory.read(found.id)).toMatchObject({ phase: "ready", generation: 1 })
       }),
   )
