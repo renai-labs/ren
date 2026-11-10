@@ -13,9 +13,10 @@ export const register = (
   input: { readonly current: Ref.Ref<HarnessConfig.Snapshot>; readonly keyFor: Harness.Refresh },
 ) => {
   for (const endpoint of Ref.getUnsafe(input.current).models)
-    for (const service of endpoint.search ?? [])
+    for (const service of endpoint.search ?? []) {
+      const id = `${encodeURIComponent(endpoint.id)}/${encodeURIComponent(service.id)}`
       editor.add({
-        id: `${encodeURIComponent(endpoint.id)}/${encodeURIComponent(service.id)}`,
+        id,
         name: `${endpoint.name ?? endpoint.id}: ${service.name}`,
         execute: (args) =>
           InferenceSearch.search(endpoint, ProviderHttp.key(endpoint, input.keyFor), {
@@ -24,4 +25,7 @@ export const register = (
             headers: {},
           }).pipe(Effect.provide(FetchHttpClient.layer)),
       })
+      // ast-grep-ignore: no-nullish-comparison -- An explicit false disables search and must not be replaced by the default.
+      if (editor.default.get() === undefined) editor.default.set(id)
+    }
 }

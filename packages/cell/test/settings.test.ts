@@ -309,6 +309,36 @@ describe("settings in the cell", () => {
         ])
       }),
   )
+  it.live("Ren search works without provider consent by default", () =>
+    Effect.gen(function* () {
+      const calls: string[] = []
+      const provider = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          Bun.serve({
+            port: 0,
+            hostname: "127.0.0.1",
+            fetch: (request) => {
+              calls.push(new URL(request.url).pathname)
+              return Response.json([{ url: "https://example.com", content: "Result", time: {} }])
+            },
+          }),
+        ),
+        (server) => Effect.promise(() => server.stop(true)),
+      )
+      const layers = TestSettings.layers()
+      const opened = yield* open(layers)
+      yield* opened.pull(layers, {
+        models: [...opened.access.endpoints, searchEndpoint(`${provider.url.origin}/v1`, ["search"])],
+      })
+      const result = yield* opened.client.websearch.query({
+        query: "Effect",
+        location: { directory: join(opened.directory, opened.sessionId) },
+      })
+      expect(String(result.data.providerID)).toBe("ren/search")
+      yield* opened.turn(stub.script({ tool: { name: "websearch", input: { query: "Effect" } } }))
+      expect(calls).toEqual(["/v1/search", "/v1/search"])
+    }),
+  )
   it.live("Ren search honors explicit OpenCode disablement", () =>
     Effect.gen(function* () {
       const layers = TestSettings.layers()
