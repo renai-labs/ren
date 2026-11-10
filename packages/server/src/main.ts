@@ -215,7 +215,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
     Layer.unwrap(
       Effect.map(Config.String("SANDBOX_PROVIDER").pipe(Config.withDefault("local")), (provider) =>
         // oxlint-disable-next-line ren/no-comments -- E2B makes hands as well as brains: its templates are co-located hands today (EN3).
-        EnvironmentProvider.layer(provider === "e2b" ? [Docker.provider, E2BSandbox.provider] : [Docker.provider]),
+        EnvironmentProvider.layer(provider === "e2b" ? [E2BSandbox.provider] : [Docker.provider]),
       ),
     ),
   ),
