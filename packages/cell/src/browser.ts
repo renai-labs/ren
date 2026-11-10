@@ -26,8 +26,8 @@ export class NotFound extends Schema.TaggedError<NotFound>()("Browsers.NotFound"
 
 export class Refused extends Schema.TaggedError<Refused>()("Browsers.Refused", { message: Schema.String }) {}
 
-export interface Opened extends Schema.Schema.Type<typeof Opened> {}
-export const Opened = Schema.Struct({
+interface Opened extends Schema.Schema.Type<typeof Opened> {}
+const Opened = Schema.Struct({
   id: Schema.String,
   provider: Schema.Literal("kernel"),
   liveView: Schema.String,
