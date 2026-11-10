@@ -113,7 +113,7 @@ it.live("gives a reader with a window only the last bytes it keeps, and counts t
   }),
 )
 
-it.live("refuses a spawn whose output file cannot be made, and starts no process", () =>
+it.live("refuses a spawn whose output file cannot be made, with the file system's reason, and starts no process", () =>
   Effect.gen(function* () {
     const blocker = join(workspace, `${crypto.randomUUID()}.txt`)
     yield* Effect.promise(() => writeFile(blocker, "a file, not a folder"))
@@ -123,6 +123,7 @@ it.live("refuses a spawn whose output file cannot be made, and starts no process
       .spawn(brain, { command: "touch", arguments: [marker], outputFile: join(blocker, "sh_1.out") })
       .pipe(Effect.flip)
     expect([error._tag, existsSync(marker)]).toEqual(["SpawnFailedError", false])
+    expect(error.message).toMatch(/ENOTDIR|EEXIST/)
   }),
 )
 

@@ -139,14 +139,16 @@ export const layer = Layer.effect(
       const outputPath = input.outputFile
       const outputFile = outputPath
         ? yield* Effect.acquireRelease(
-            Effect.tryPromise(async () => {
-              await mkdir(dirname(path(outputPath)), { recursive: true })
-              return open(path(outputPath), "w")
+            Effect.tryPromise({
+              try: async () => {
+                await mkdir(dirname(path(outputPath)), { recursive: true })
+                return open(path(outputPath), "w")
+              },
+              catch: (cause) => new EnvironmentApi.SpawnFailedError({ message: message(cause) }),
             }),
             (file) => Effect.promise(() => file.close()),
           ).pipe(
             Scope.provide(entryScope),
-            Effect.mapError((cause) => new EnvironmentApi.SpawnFailedError({ message: message(cause) })),
             Effect.onError(() => Scope.close(entryScope, Exit.void)),
           )
         : undefined
