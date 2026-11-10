@@ -193,7 +193,7 @@ Built: remote hand machines on `MachineLifecycle` (`core/src/environments.ts`, c
 ### Keep-alive and detection
 
 1. Each `access` keeps a machine awake for 10 min. Each pull with progress during a turn keeps it awake for 30 min. A turn with no progress for 30 min gets no more time (today, `brain-lifecycle.ts:81-93`).
-2. Ren checks a machine when a call to it fails, and in the daily cleanup (one run per UTC day, `brain-lifecycle.ts` `CleanupRun`). Every 30 s, Ren also checks each awake brain that has not pulled for 90 s (`BRAIN_PULL_TIMEOUT`), so a silent brain is found with no access (EN16). A remote hand does not pull, so only the first two find it. The 5 min of EN17 count only while these checks find the brain silent: a brain that still pulls is checked only when a call to it fails.
+2. Ren checks a machine when a call to it fails, and in the daily cleanup (one run per UTC day, `brain-lifecycle.ts` `CleanupRun`). Every 30 s, Ren also checks each awake brain that has not pulled for 90 s (`BRAIN_PULL_TIMEOUT`), so a silent brain is found with no access (EN16). A remote hand does not pull, so only the first two find it. The 5 min of EN17 count only while these checks find the brain silent: a brain that still pulls is checked only when a call to it fails. A brain that answers these checks but has not pulled within 90 s also counts as silent (2026-11-10), so a brain that cannot reach Ren is replaced too (`brain-lifecycle.ts`, `answers`).
 3. An unknown answer never destroys a machine: a provider error, an unreadable status or an unreadable version means keep (I11). Nothing is destroyed because a list does not show it (I12).
 
 ### Failure and recovery

@@ -469,12 +469,22 @@ export const layer = Layer.effect(
         yield* update(row.id, { bundles: versionsOf(bundles) })
         return Option.none()
       }),
+      // oxlint-disable-next-line ren/no-comments -- EN17: a brain answers only while it also reaches Ren. One that answers Ren but has not pulled within pullWithin counts as silent, so it is replaced after `silent` like one that does not answer. An older brain leaves pulledAt out.
       answers: (target) =>
         client.brain(target).pipe(
           Effect.flatMap((api) => api.brain["brain.state"]()),
           Effect.timeoutOption(MachineLifecycle.timing.probeTimeout),
           Effect.option,
-          Effect.map((answered) => Option.isSome(answered) && Option.isSome(answered.value)),
+          Effect.flatMap((answered) =>
+            Effect.map(DateTime.now, (at) => {
+              if (Option.isNone(answered) || Option.isNone(answered.value)) return false
+              const state = answered.value.value
+              if (!("pulledAt" in state)) return true
+              return Option.exists(Option.fromNullishOr(state.pulledAt), (pulledAt) =>
+                Duration.isLessThan(DateTime.distance(pulledAt, at), pullWithin),
+              )
+            }),
+          ),
         ),
     })
 
