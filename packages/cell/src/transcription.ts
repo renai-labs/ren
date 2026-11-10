@@ -1,9 +1,8 @@
 export * as Transcription from "./transcription.js"
 
 import { Generated, OpenAiClientGenerated } from "@effect/ai-openai"
-import type { ModelTypes } from "@ren/schema/model-types"
 import { Cause, Effect, Redacted, Schema, Struct } from "effect"
-import { ModelHttp } from "./model-http.js"
+import { ProviderHttp } from "./provider-http.js"
 
 export const Parameters = Generated.CreateTranscriptionRequestMultipart.mapFields(
   Struct.pick(["language", "prompt", "temperature"]),
@@ -22,8 +21,8 @@ interface Request extends Schema.Schema.Type<typeof Parameters> {
 }
 
 export const transcribe = Effect.fn("Transcription.transcribe")(
-  function* (provider: ModelTypes.Provider, key: Effect.Effect<Redacted.Redacted>, request: Request) {
-    const client = yield* OpenAiClientGenerated.make(ModelHttp.options(provider, key, request.headers))
+  function* (provider: ProviderHttp.Connection, key: Effect.Effect<Redacted.Redacted>, request: Request) {
+    const client = yield* OpenAiClientGenerated.make(ProviderHttp.options(provider, key, request.headers))
     return yield* client.createTranscription({
       payload: { ...Struct.omit(request, ["headers"]), response_format: "json" },
     })
