@@ -11,6 +11,31 @@ const connected: SessionEvent.Frame = { id: "evt_connected", created: 1, type: "
 const heartbeat: SessionEvent.Frame = { id: "evt_heartbeat", created: 1, type: "server.heartbeat", data: {} }
 const ended: SessionEvent.Frame = { id: "evt_ended", created: 1, type: "stream.ended", data: { reason: "idle" } }
 
+effect("a terminal startup failure parks without reconnecting until explicitly woken", () =>
+  Effect.gen(function* () {
+    const statuses = yield* Queue.unbounded<Connection.Status>()
+    const attempts = { count: 0 }
+    const connection = yield* Connection.make({
+      subscribe: Effect.suspend(() => {
+        attempts.count += 1
+        return Effect.fail(new Error("The machine failed to start"))
+      }),
+      canReconnect: Effect.succeed(false),
+      onFrames: () => Effect.void,
+      onStatus: (status) => Queue.offer(statuses, status).pipe(Effect.asVoid),
+    })
+    expect(yield* Queue.take(statuses)).toBe("connecting")
+    expect(yield* Queue.take(statuses)).toBe("parked")
+    yield* TestClock.adjust("1 minute")
+    expect(attempts.count).toBe(1)
+    expect(yield* connection.status).toBe("parked")
+    yield* connection.wake
+    expect(yield* Queue.take(statuses)).toBe("connecting")
+    expect(yield* Queue.take(statuses)).toBe("parked")
+    expect(attempts.count).toBe(2)
+  }),
+)
+
 interface Subscription {
   readonly queue: Queue.Queue<SessionEvent.Frame, Error | Cause.Done>
   readonly closed: Deferred.Deferred<void>

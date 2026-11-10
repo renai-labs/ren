@@ -3,6 +3,7 @@ import type { EnvironmentProviderInfo, EnvironmentTemplateInfo, EnvironmentTempl
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { IconArchive, IconPencil, IconPlus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
+import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
 import { Checkbox } from "@ren/ui/checkbox"
 import {
   Dialog,
@@ -12,6 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@ren/ui/dialog"
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
@@ -227,6 +229,29 @@ function TemplateDialog(props: {
   )
 }
 
+function BuildError(props: { template: EnvironmentTemplateInfo }) {
+  if (!props.template.buildError) return null
+  return (
+    <Dialog>
+      <DialogTrigger render={<Button variant="ghost" size="sm" />}>Details</DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Build failed</DialogTitle>
+          <DialogDescription>{props.template.name}</DialogDescription>
+        </DialogHeader>
+        <CodeBlock variant="destructive" size="sm">
+          <CodeBlockContent wrap className="max-h-80">
+            {props.template.buildError}
+          </CodeBlockContent>
+        </CodeBlock>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function EnvironmentsSettingsPage() {
   const { api } = RouterContext.useRouterContext()
   const providers = useQuery(api.environmentProvider.list.queryOptions())
@@ -268,9 +293,9 @@ export function EnvironmentsSettingsPage() {
               description={[
                 titleOf(template.provider),
                 template.networking.type === "limited" ? "Only listed hosts" : "Any host",
-                ...(template.buildError ? [template.buildError] : []),
               ].join(" · ")}
             >
+              <BuildError template={template} />
               <RowMenu
                 label={`Actions for ${template.name}`}
                 items={[

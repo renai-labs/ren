@@ -260,23 +260,34 @@ export type PromptInputBoot = Exclude<ChatSession.Boot, { readonly _tag: "Ready"
 function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void) | undefined }) {
   if (props.boot._tag === "Failed")
     return (
-      <span className="flex min-w-0 items-center gap-2 text-xs">
-        <span className="truncate text-destructive">
-          {props.boot.reason.split("\n").at(0)?.trim() || "The sandbox failed to start."}
-        </span>
-        <Button variant="link" size="sm" className="pointer-events-auto h-auto px-0" onClick={props.onRetry}>
+      <div className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2">
+        <span className="mr-auto min-w-0 text-sm text-muted-foreground">Couldn’t start this chat</span>
+        <Popover>
+          <PopoverTrigger render={<Button variant="ghost" size="sm" />}>Details</PopoverTrigger>
+          <PopoverContent side="top" align="end" className="w-80">
+            <PopoverTitle>Startup error</PopoverTitle>
+            <p className="max-h-40 overflow-y-auto overscroll-contain font-mono text-xs/5 break-all whitespace-pre-wrap text-muted-foreground">
+              {props.boot.reason}
+            </p>
+          </PopoverContent>
+        </Popover>
+        <Button variant="outline" size="sm" onClick={props.onRetry}>
           Retry
         </Button>
-      </span>
+      </div>
     )
   if (props.boot._tag === "Reconnecting")
     return (
-      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         <IconLoader2 className="size-3.5 animate-spin" />
         Reconnecting…
       </span>
     )
-  return <BootLine />
+  return (
+    <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0">
+      <BootLine />
+    </span>
+  )
 }
 
 const bootPhrases = [
@@ -583,11 +594,7 @@ export function PromptInput(props: {
         <RepositoriesDialog spaceId={props.spaceId} onClose={() => setRepositories(false)} />
       ) : null}
       <InputGroup className="rounded-xl bg-card shadow-soft dark:bg-card">
-        {status ? (
-          <span className="pointer-events-none absolute top-4 left-4 flex">
-            <PromptInputStatus boot={status} onRetry={props.onRetry} />
-          </span>
-        ) : null}
+        {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} /> : null}
         <MentionOverlay textarea={textarea} text={text} marks={marks} />
         <InputGroupTextarea
           value={text}

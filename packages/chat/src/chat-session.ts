@@ -260,6 +260,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const client = accessLock.withPermits(1)(
     Effect.gen(function* () {
+      const currentBoot = yield* SubscriptionRef.get(boot)
+      if (currentBoot._tag === "Failed") return yield* new AccessFailed({ cause: new Error(currentBoot.reason) })
       const now = yield* Clock.currentTimeMillis
       if (
         Option.isSome(cached.current) &&
@@ -524,6 +526,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const connection = yield* Connection.make({
     ...options.connection,
     subscribe: Effect.map(client, (api) => api.event.subscribe()),
+    canReconnect: Effect.map(SubscriptionRef.get(boot), (current) => current._tag !== "Failed"),
     onFrames,
     onStatus: (next) =>
       Effect.gen(function* () {
