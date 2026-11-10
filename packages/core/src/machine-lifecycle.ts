@@ -454,8 +454,12 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const message = sample
       ? `${noun} ${row.id} does not answer, and its machine stopped at ${DateTime.formatIso(sample.at)} with ${Math.round(sample.memory * 100)}% of its memory and ${Math.round(sample.disk * 100)}% of its disk in use; Ren replaces it`
       : `${noun} ${row.id} does not answer, and its machine reports no samples; Ren replaces it`
-    yield* logged(Effect.logError(message, Cause.fail(new Frozen({ message, reason: reasonOf(sample) }))))
-    yield* forceReplace(row, "its machine stopped")
+    const reason = reasonOf(sample)
+    yield* logged(Effect.logError(message, Cause.fail(new Frozen({ message, reason }))))
+    yield* forceReplace(
+      row,
+      reason === "unknown" ? "its machine stopped" : `its machine stopped with its ${reason} full`,
+    )
   })
 
   // oxlint-disable-next-line ren/no-comments -- Counts how long a running machine's brain has given no answer, from the first check that found it silent (EN17).

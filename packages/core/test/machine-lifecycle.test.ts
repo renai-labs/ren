@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test"
 import { Auth } from "@ren/schema/auth"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Space } from "@ren/schema/space"
-import { Clock, Duration, Effect, ErrorReporter, Fiber, Option, Schema } from "effect"
+import { Clock, DateTime, Duration, Effect, ErrorReporter, Fiber, Option, Schema } from "effect"
 import { TestClock } from "effect/testing"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { MachineLifecycle } from "../src/machine-lifecycle.js"
@@ -26,7 +26,7 @@ const capacityFor = Duration.seconds(30)
 const templateId = EnvironmentTemplate.ID.create()
 
 // oxlint-disable-next-line ren/no-comments -- A kind of machine that lives in memory: its rows in a map, its provider a counter, its ready check and its probe two switches.
-const kindWith = (options: { readonly canUpdateInPlace: boolean }) =>
+const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSample?: boolean }) =>
   Effect.gen(function* () {
     const rows = new Map<string, MachineLifecycle.Row<string>>()
     const switches = {
@@ -39,6 +39,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean }) =>
       updates: true,
       wanted: { config: {}, image: Option.none(), hosts: Option.none() } as MachineLifecycle.DesiredSetup,
       system: "system",
+      sample: Option.none<MachineProvider.Sample>(),
     }
     const images: Array<Option.Option<string>> = []
     const networks: Array<Option.Option<ReadonlyArray<string>>> = []
@@ -52,7 +53,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean }) =>
       description: "Machines in the test’s memory.",
       canEgress: false,
       canMount: false,
-      canSample: false,
+      canSample: options.canSample ?? false,
       canColocate: true,
       canLimitHosts: true,
       systemImage: "system",
@@ -91,6 +92,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean }) =>
       keepAlive: () =>
         switches.alive ? Effect.void : Effect.fail(new MachineProvider.Gone({ message: "the sandbox is gone" })),
       status: () => Effect.succeed("running" as const),
+      lastSample: () => Effect.sync(() => switches.sample),
     })
     const read = (id: string) =>
       Effect.sync(() => rows.get(id)).pipe(Effect.flatMap(Effect.fromNullishOr), Effect.orDie)
@@ -279,6 +281,29 @@ describe("MachineLifecycle", () => {
         yield* memory.machines.check(id)
         expect(yield* memory.read(id)).toMatchObject({ phase: "ready", generation: 2 })
         expect(reports.filter((report) => report.includes("MachineLifecycle.Replaced"))).toHaveLength(1)
+      }),
+  )
+
+  it.effect(
+    "a running machine that does not answer is kept while its samples are fresh, and replaced once they stop, with the full resource named (B5.5, EN17)",
+    () =>
+      Effect.gen(function* () {
+        reports.length = 0
+        const memory = yield* kindWith({ canUpdateInPlace: true, canSample: true })
+        memory.switches.boots = true
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        memory.switches.answers = false
+        memory.switches.sample = Option.some({ at: yield* DateTime.now, memory: 0.4, disk: 0.99 })
+        yield* memory.machines.check(id)
+        const fresh = yield* memory.read(id)
+        yield* TestClock.adjust(Duration.minutes(2))
+        yield* memory.machines.check(id)
+        expect([fresh.generation, fresh.phase]).toEqual([1, "ready"])
+        expect(yield* memory.read(id)).toMatchObject({ phase: "ready", generation: 2 })
+        expect(reports).toEqual([
+          "MachineLifecycle.Replaced: Machine machine-1: its machine stopped with its disk full",
+        ])
       }),
   )
 
