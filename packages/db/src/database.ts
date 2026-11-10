@@ -33,7 +33,9 @@ const make = makeWithDefaults({
 
 type Client = Effect.Success<typeof make>
 
-export type Transaction = Parameters<Parameters<Client["transaction"]>[0]>[0]
+type ClientTransaction = Parameters<Parameters<Client["transaction"]>[0]>[0]
+
+export interface Transaction extends ClientTransaction {}
 
 export interface Interface {
   readonly db: Client
