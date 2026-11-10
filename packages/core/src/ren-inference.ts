@@ -34,7 +34,6 @@ export interface Interface {
     input: RenInference.RenameInput,
   ) => Effect.Effect<RenInference.Connection, Failure>
   readonly remove: (actor: Actor.Info, id: string) => Effect.Effect<void, Failure>
-  readonly catalog: (organizationId: Auth.OrganizationID) => Effect.Effect<Models.Catalog, Unavailable>
   readonly grant: (
     brainId: Brain.ID,
     organizationId: Auth.OrganizationID,
@@ -199,13 +198,6 @@ export const layer = Layer.effect(
         yield* manageable(actor, id)
         yield* send(yield* personOf(actor), "DELETE", `/v1/connections/${encodeURIComponent(id)}`)
       }),
-      catalog: Effect.fn("RenInference.catalog")(function* (organizationId) {
-        return yield* onlyUnavailable(
-          call({ org: organizationId }, "GET", "/model/info", Models.InferenceModelInfo).pipe(
-            Effect.map(Models.fromInference),
-          ),
-        )
-      }),
       grant: Effect.fn("RenInference.grant")(function* (brainId, organizationId, spaceId) {
         return yield* onlyUnavailable(
           call({ org: organizationId }, "POST", "/v1/keys", Models.ApiKey, { brainId, spaceId }),
@@ -225,7 +217,6 @@ export const layerNone = Layer.succeed(
     list: () => Effect.fail(notConfigured()),
     rename: () => Effect.fail(notConfigured()),
     remove: () => Effect.fail(notConfigured()),
-    catalog: () => Effect.fail(notConfigured()),
     grant: () => Effect.fail(notConfigured()),
     removeMember: () => Effect.void,
   }),

@@ -41,7 +41,7 @@ import { OpenCodeEvents } from "../../src/harness/opencode/events.js"
 import { Fence } from "../../src/fence.js"
 import { HostToken } from "../../src/host-token.js"
 import { HotReload } from "../../src/hot-reload.js"
-import { Inference } from "../../src/inference.js"
+import { ModelCatalog } from "../../src/model-catalog.js"
 import { ModelRefresh } from "../../src/model-refresh.js"
 import { ModelStore } from "../../src/model-store.js"
 import { Restore } from "../../src/restore.js"
@@ -127,14 +127,12 @@ export const make = Effect.fnUntraced(function* (
       ),
       Layer.effect(Sync.Service, Sync.make(Option.none())),
       ChatSettings.layer,
-      Inference.layer,
+      ModelCatalog.layer,
     ).pipe(Layer.provideMerge(ModelsTest.storage())),
   )
   const record = Effect.fnUntraced(function* (access: Models.Access, hostToken?: string) {
     yield* Context.get(services, ModelStore.Service).write(access, hostToken)
-    const inference = Context.get(services, Inference.Service)
-    yield* inference.saveCatalog(Models.catalog(access))
-    yield* inference.saveBaseUrl(Option.some(Shared.stub().root))
+    yield* Context.get(services, ModelCatalog.Service).save(Models.catalog(access))
   })
   yield* record(Shared.access(undefined, Shared.stub().url))
   const host = yield* OpenCodeServer.make(

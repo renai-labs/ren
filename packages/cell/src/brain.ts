@@ -9,7 +9,7 @@ import { Cell } from "./cell.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { HotReload } from "./hot-reload.js"
-import { Inference } from "./inference.js"
+import { ModelCatalog } from "./model-catalog.js"
 import { ModelRefresh } from "./model-refresh.js"
 import { ModelStore } from "./model-store.js"
 import { Restore } from "./restore.js"
@@ -20,7 +20,7 @@ type Services =
   | Cell.Activity
   | Harness.Service
   | ModelStore.Service
-  | Inference.Service
+  | ModelCatalog.Service
   | ModelRefresh.Service
   | HostToken.Service
   | Sync.Service
@@ -33,16 +33,14 @@ export const owns = (pathname: string) => pathname === prefix || pathname.starts
 
 // oxlint-disable-next-line ren/no-comments -- E60, HR14: a brain without a valid host token or without a model list pulls and reads the models at once, then answers.
 const check = Effect.gen(function* () {
-  const inference = yield* Inference.Service
+  const models = yield* ModelCatalog.Service
   const info = yield* Cell.Info
   const hostToken = yield* HostToken.Service
   if (info.vars.REN_URL && !(yield* hostToken.isValid))
     return Option.some(new ModelsNotConfiguredError({ message: "The brain’s host token is missing or expired" }))
-  const catalog = yield* inference.catalog
+  const catalog = yield* models.current
   if (Option.isNone(catalog) || catalog.value.endpoints.length === 0)
-    return Option.some(
-      new ModelsNotConfiguredError({ message: "The brain has no model list: the inference service did not answer" }),
-    )
+    return Option.some(new ModelsNotConfiguredError({ message: "The brain has no model list: Ren sent none" }))
   const store = yield* ModelStore.Service
   const now = yield* DateTime.now
   const expired = Option.getOrUndefined(yield* store.read)?.endpoints.find((endpoint) =>
@@ -62,9 +60,7 @@ const check = Effect.gen(function* () {
 const configured = Effect.gen(function* () {
   if (Option.isNone(yield* check)) return
   const hotReload = yield* HotReload.Service
-  const refreshKey = yield* ModelRefresh.Service
   yield* hotReload.pull
-  yield* refreshKey(ModelRefresh.anyEndpoint)
   const harness = yield* Cell.acquire
   yield* harness.refreshModels
   const again = yield* check
@@ -153,7 +149,6 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
             const harness = yield* Harness.Service
             const sync = yield* Sync.Service
             yield* hotReload.pull
-            // oxlint-disable-next-line ren/no-comments -- HR26: a resumed sandbox keeps its memory, so its model list is from before the pause.
             const opened = yield* harness.getIfOpen
             if (Option.isSome(opened)) yield* opened.value.refreshModels
             yield* sync.flush

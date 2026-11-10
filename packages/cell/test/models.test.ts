@@ -8,76 +8,57 @@ import type { Models } from "@ren/schema/models"
 import { Session as RenSession } from "@ren/schema/session"
 import { Usage } from "@ren/schema/usage"
 import { Context, Effect, Layer, Option, Redacted } from "effect"
-import { FetchHttpClient, HttpServer } from "effect/http"
+import { HttpServer } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
-import { ModelDiscovery } from "../src/model-discovery.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
-import { Inference } from "../src/inference.js"
+import { ModelCatalog } from "../src/model-catalog.js"
 import { ModelsTest } from "./lib/models.js"
 import { Shared } from "./lib/shared.js"
-import { StubModel } from "./lib/stub-model.js"
+import { SettingsHarness } from "./lib/settings-harness.js"
+import { TestSettings } from "./lib/settings.js"
 
 const it = testEffect(Layer.empty)
 
 const stub = Shared.stub()
 
-const reader = Effect.gen(function* () {
-  const inference = Context.get(
-    yield* Layer.build(Inference.layer.pipe(Layer.provide(ModelsTest.storage()))),
-    Inference.Service,
-  )
-  yield* inference.saveBaseUrl(Option.some(stub.root))
-  const applied: Array<ReadonlyArray<string>> = []
-  const models = yield* ModelDiscovery.make({
-    inference,
-    keyFor: () => Effect.succeed(Option.some({ key: Redacted.make("stub-key") })),
-    apply: (endpoints: ReadonlyArray<Models.Endpoint>) =>
-      Effect.sync(() => {
-        applied.push(endpoints.flatMap((endpoint) => endpoint.models.map((model) => `${endpoint.id}/${model.id}`)))
-      }),
-  }).pipe(Effect.provide(FetchHttpClient.layer))
-  yield* Effect.addFinalizer(() =>
-    Effect.sync(() => {
-      stub.modelInfo.down(false)
-      stub.modelInfo.set(StubModel.defaultModels)
-    }),
-  )
-  return { inference, refresh: models.refresh, applied }
-})
-
-it.live(
-  "The gateway down at boot leaves the brain without a list until it answers, then the list arrives (test 34)",
-  () =>
-    Effect.gen(function* () {
-      stub.modelInfo.down(true)
-      const opened = yield* reader
-      yield* opened.refresh
-      expect(yield* opened.inference.catalog).toEqual(Option.none())
-      stub.modelInfo.down(false)
-      yield* opened.refresh
-      expect(
-        Option.map(yield* opened.inference.catalog, (catalog) => catalog.endpoints.map((each) => each.id)),
-      ).toEqual(Option.some(["anthropic", "stub"]))
-    }),
-)
-
-it.live("The gateway down after a read keeps the last list: models do not go and come back (test 35)", () =>
+it.live("Ren's catalog reaches OpenCode when it changes, and stays when a pull brings none (tests 34, 35)", () =>
   Effect.gen(function* () {
-    const opened = yield* reader
-    yield* opened.refresh
-    const first = opened.applied.length
-    const stored = yield* opened.inference.catalog
-    stub.modelInfo.down(true)
-    yield* opened.refresh
-    expect(opened.applied).toHaveLength(first)
-    expect(yield* opened.inference.catalog).toEqual(stored)
-    stub.modelInfo.set([...StubModel.defaultModels, StubModel.modelEntry("stub", "stub-new")])
-    stub.modelInfo.down(false)
-    yield* opened.refresh
-    expect(opened.applied.at(-1)).toContain("stub/stub-new")
+    const catalog = Context.get(
+      yield* Layer.build(ModelCatalog.layer.pipe(Layer.provide(ModelsTest.storage()))),
+      ModelCatalog.Service,
+    )
+    const opened = yield* SettingsHarness.open(TestSettings.layers(), {
+      catalog,
+      refreshKey: (id) => Effect.succeed(id === "ren" ? Option.some({ key: Redacted.make("ren-key") }) : Option.none()),
+    })
+    const listed = opened.client.model
+      .list()
+      .pipe(
+        Effect.map((page) => page.data.filter((model) => model.providerID === "ren").map((model) => String(model.id))),
+      )
+    const ren = (ids: ReadonlyArray<string>): Models.Catalog => ({
+      endpoints: [
+        {
+          id: "ren",
+          protocol: "openai-chat",
+          baseUrl: stub.url,
+          models: ids.map((id) => ({ id, type: "chat" as const, protocol: "openai-chat" as const })),
+        },
+      ],
+    })
+    yield* opened.harness.refreshModels
+    expect(yield* listed).toEqual([])
+    yield* catalog.save(ren(["stub/stub-model"]))
+    yield* opened.harness.refreshModels
+    expect(yield* listed).toEqual(["stub/stub-model"])
+    yield* opened.harness.refreshModels
+    expect(yield* listed).toEqual(["stub/stub-model"])
+    yield* catalog.save(ren(["stub/stub-model", "stub/stub-new"]))
+    yield* opened.harness.refreshModels
+    expect((yield* listed).toSorted()).toEqual(["stub/stub-model", "stub/stub-new"])
   }),
 )
 

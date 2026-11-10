@@ -12,6 +12,7 @@ import { GitHubApp } from "../src/github-app.js"
 import { Models } from "../src/models.js"
 import { PullRequest } from "../src/pull-request.js"
 import { RenInference } from "../src/ren-inference.js"
+import { RenInferenceProvider } from "../src/ren-inference/provider.js"
 import { Session } from "../src/session.js"
 import { SessionRunner } from "../src/session/runner.js"
 import { Signer } from "../src/signer.js"
@@ -34,7 +35,7 @@ const live = {
   organization: process.env.REN_INFERENCE_LIVE_ORG ?? "",
 }
 
-const models = Models.layerRenInference.pipe(
+const models = Models.layer([RenInferenceProvider.make]).pipe(
   Layer.provideMerge(RenInference.layer),
   Layer.provide([Layer.fresh(Signer.layerLocal), FetchHttpClient.layer, Access.layer]),
   Layer.provide(Testing.layer),
@@ -43,6 +44,7 @@ const models = Models.layerRenInference.pipe(
       ConfigProvider.fromUnknown({
         REN_INFERENCE_URL: live.service,
         REN_INFERENCE_BRAIN_URL: live.gateway,
+        REN_INFERENCE_GATEWAY_KEY: live.gatewayKey,
         REN_INFERENCE_KEYS: live.keys,
       }),
     ),

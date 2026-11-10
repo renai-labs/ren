@@ -5,6 +5,7 @@ import { Channel } from "@ren/schema/channel"
 import { Drive } from "@ren/schema/drive"
 import { Environment } from "@ren/schema/environment"
 import { Memory } from "@ren/schema/memory"
+import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
 import { Signature } from "@ren/schema/signature"
@@ -76,13 +77,6 @@ export const PullEnv = Schema.Struct({
     }),
 }).annotate({ identifier: "Host.PullEnv", description: "The env vars of the brain’s processes." })
 
-export interface PullInference extends Schema.Schema.Type<typeof PullInference> {}
-export const PullInference = Schema.Struct({
-  baseUrl: Schema.String.annotate({
-    description: "The root URL of the inference gateway. The brain reads `/model/info` from it.",
-  }),
-}).annotate({ identifier: "Host.PullInference" })
-
 export interface PullApps extends Schema.Schema.Type<typeof PullApps> {}
 export const PullApps = Schema.Struct({
   fingerprint: Schema.String,
@@ -112,8 +106,9 @@ export const PullChat = Schema.Struct({
 export interface PullReply extends Schema.Schema.Type<typeof PullReply> {}
 export const PullReply = Schema.Struct({
   publicKeys: Schema.Array(Signature.PublicKey),
-  inference: Schema.optionalKey(PullInference).annotate({
-    description: "Omitted when Ren has no inference service; the brain then has no models.",
+  providers: Schema.optionalKey(Models.Providers).annotate({
+    description:
+      "Registered providers without keys. The brain discovers each provider’s catalog and gets its key from `models.refresh`. Omitted when registration is unavailable; the brain keeps its last providers.",
   }),
   apps: Schema.optionalKey(PullApps).annotate({
     description: "The resolved app catalog. Omitted when unsupported or unavailable.",
@@ -142,7 +137,7 @@ const PullGroup = HttpApiGroup.make("pull")
         identifier: "pull",
         summary: "Pull a brain’s settings, env vars and app catalog",
         description:
-          "Send the state of the brain’s chats. The reply sends the full state: each settings layer, the env vars, the supported app catalog and the inference URL. The brain compares it with what it has and applies only what changed (HR9). It lists the brain’s chats with their primary agent.",
+          "Send the state of the brain’s chats. The reply sends each settings layer, env vars, app catalog and provider registrations. The brain applies changes and discovers provider catalogs directly.",
       }),
     ),
   )

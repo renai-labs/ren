@@ -40,6 +40,7 @@ import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
+import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Retention } from "@ren/core/retention"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
@@ -108,12 +109,10 @@ const host = Layer.unwrap(
 )
 
 const models = Layer.unwrap(
-  Effect.map(Config.option(Config.String("REN_INFERENCE_URL")), (url) =>
-    Option.isSome(url)
-      ? Models.layerRenInference
-      : Models.layerInferenceGateway.pipe(Layer.provide(FetchHttpClient.layer)),
+  Effect.map(RenInferenceProvider.configured, (isConfigured) =>
+    Models.layer(isConfigured ? [RenInferenceProvider.make] : []),
   ),
-).pipe(Layer.provideMerge(RenInference.layerConfig), Layer.provide(Access.layer))
+).pipe(Layer.provide(FetchHttpClient.layer), Layer.provideMerge(RenInference.layerConfig), Layer.provide(Access.layer))
 
 // oxlint-disable-next-line ren/no-comments -- Every stored credential is sealed with ENVELOPE_KEYS; without a key the server would start and then refuse each credential save, so it does not start.
 const envelope = Layer.unwrap(Effect.as(Config.Redacted("ENVELOPE_KEYS"), Envelope.layerLocal))
