@@ -29,7 +29,7 @@ How each fault is made:
 
 | ID  | Rule                                                                                                                                                            |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| I1  | A machine id has at most one live machine per generation. Machines of older generations are gone within 1 h.                                                    |
+| I1  | A machine id has at most one live machine per generation. Machines of older generations are gone within a day (the daily cleanup).                              |
 | I2  | Every state has an exit: `failed` has its retry timer, `capacity` waits, and each other state ends within its time limit.                                       |
 | I3  | Ren replaces a machine only when it is asleep and outdated in a way that in-place cannot fix, Gone, frozen, silent for 5 min, or after 3 failed in-place steps. |
 | I4  | Every chat on a replaced machine shows the "files reset" notice when it is restored.                                                                            |
@@ -38,7 +38,7 @@ How each fault is made:
 | I7  | After a machine's next wake, no tool runs on a template other than the space's current choice.                                                                  |
 | I8  | No tool call works with an expired token. After Ren comes back, calls work within 30 s.                                                                         |
 | I9  | A `limited` machine never reaches a host that is not on its list.                                                                                               |
-| I10 | No machine runs for more than 1 h without a row in Ren's database.                                                                                              |
+| I10 | No machine runs for more than a day without a row in Ren's database.                                                                                            |
 | I11 | An unknown answer never destroys a machine: a provider error, an unreadable status or an unreadable version means keep.                                         |
 | I12 | Nothing is destroyed because a list does not show it.                                                                                                           |
 | I13 | A process restart or a replace never lands on a turn that started after Ren decided it.                                                                         |
@@ -109,7 +109,7 @@ How each fault is made:
 
 | #   | Case                                                        | Expected                                                                       | Kind  |
 | --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------ | ----- |
-| 36  | Ren is killed during create, replace, update or build       | No duplicate machines; leaks are gone within 1 h                               | live  |
+| 36  | Ren is killed during create, replace, update or build       | No duplicate machines; leaks are gone within a day                             | live  |
 | 37  | Two Ren servers during a wake (a deploy)                    | The wake ends. Report the delay.                                               | local |
 | 38  | Ren down for 20 min mid-turn                                | Tool calls fail after the token expires and work within 30 s after Ren is back | live  |
 | 39  | Ren down for 40 min mid-turn                                | Machines pause, then resume when Ren is back                                   | live  |
