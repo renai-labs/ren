@@ -81,8 +81,11 @@ export interface Interface {
     hand: Option.Option<Hand>,
   ) => Effect.Effect<ReadonlyMap<Session.ID, Capability>>
   readonly unbind: (subject: Subject) => Effect.Effect<void>
-  // oxlint-disable-next-line ren/no-comments -- A chat's tools run on its space's current hand (2026-11-09): binds the chat to the space's remote template, or unbinds it for the brain's own machine or none.
-  readonly follow: (placement: Subject & Placement) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- Remote hands rule 4: each pull moves the chats that the brain reports idle to their space's current hand: binds a chat to the space's remote template, or unbinds it for the brain's own machine or none.
+  readonly follow: (
+    space: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
+    sessionIds: ReadonlyArray<Session.ID>,
+  ) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- EN15: `unreachable` when the brain could not reach the session's hand at its last URL; Ren checks that machine first.
   readonly access: (
     subject: Subject,
@@ -625,28 +628,40 @@ export const layer = Layer.effect(
           }),
         )
       }),
-      follow: Effect.fn("Environments.follow")(function* (placement: Subject & Placement) {
-        const space = (yield* database.db
+      follow: Effect.fn("Environments.follow")(function* (
+        space: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
+        sessionIds: ReadonlyArray<Session.ID>,
+      ) {
+        if (sessionIds.length === 0) return
+        const hand = (yield* database.db
           .select({
             placement: Database.Schema.space.hand_placement,
             templateId: Database.Schema.space.environment_template_id,
           })
           .from(Database.Schema.space)
-          .where(eq(Database.Schema.space.id, placement.spaceId))
+          .where(eq(Database.Schema.space.id, space.spaceId))
           .pipe(Effect.orDie)).at(0)
-        const wanted = space?.placement === "remote" ? space.templateId : null
-        const bound =
+        const wanted = hand?.placement === "remote" ? hand.templateId : null
+        const bound = new Map(
           (yield* database.db
-            .select({ templateId: sessions.environment_template_id })
+            .select({ sessionId: sessions.session_id, templateId: sessions.environment_template_id })
             .from(sessions)
-            .where(isSessionOf(placement))
-            .pipe(Effect.orDie)).at(0)?.templateId ?? null
-        if (bound === wanted) return
-        if (bound) yield* database.db.delete(sessions).where(isSessionOf(placement)).pipe(Effect.orDie)
-        if (wanted)
-          yield* bind(placement, wanted).pipe(
-            Effect.catch((error) => Effect.logWarning(`Session ${placement.sessionId} keeps no hand`, error)),
-          )
+            .where(and(inArray(sessions.session_id, [...sessionIds]), eq(sessions.space_id, space.spaceId)))
+            .pipe(Effect.orDie)).map((row) => [row.sessionId, row.templateId] as const),
+        )
+        yield* Effect.forEach(
+          sessionIds.filter((sessionId) => (bound.get(sessionId) ?? null) !== wanted),
+          Effect.fnUntraced(function* (sessionId) {
+            const placement = { sessionId, ...space }
+            if (bound.has(sessionId))
+              yield* database.db.delete(sessions).where(isSessionOf(placement)).pipe(Effect.orDie)
+            if (wanted)
+              yield* bind(placement, wanted).pipe(
+                Effect.catch((error) => Effect.logWarning(`Session ${sessionId} keeps no hand`, error)),
+              )
+          }),
+          { discard: true },
+        )
       }),
       unbind: Effect.fn("Environments.unbind")(function* (subject: Subject) {
         yield* database.db.delete(sessions).where(isSessionOf(subject)).pipe(Effect.orDie)

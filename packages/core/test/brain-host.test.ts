@@ -312,6 +312,59 @@ describe("BrainHost pull", () => {
     }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
   )
 
+  it.live(
+    "a pull moves an idle chat to its space's current hand only from a brain made for that hand (remote hands rules 3, 4)",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* seeded
+        const database = yield* Database.Service
+        const brain = yield* Brains.Service
+        const brainId = Brain.ofSession(subject.sessionId)
+        const host = {
+          brainId,
+          organizationId: subject.owner.organizationId,
+          spaceId: subject.owner.spaceId,
+          generation: 1,
+        }
+        const template = yield* Seed.environmentTemplate(subject.owner.organizationId)
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ hand_placement: "remote", environment_template_id: template })
+          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+        yield* database.db.insert(Database.Schema.session_environment).values({
+          session_id: subject.sessionId,
+          space_id: subject.owner.spaceId,
+          environment_template_id: template,
+        })
+        yield* database.db
+          .update(Database.Schema.brain)
+          .set({ hand_placement: "remote" })
+          .where(eq(Database.Schema.brain.id, brainId))
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ hand_placement: "colocated", environment_template_id: null })
+          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+        const request = {
+          version: "test",
+          keyIds: [],
+          sessions: [{ id: subject.sessionId, busy: false, progress: "0" }],
+        }
+        const bound = database.db
+          .select({ template: Database.Schema.session_environment.environment_template_id })
+          .from(Database.Schema.session_environment)
+          .where(eq(Database.Schema.session_environment.session_id, subject.sessionId))
+          .pipe(Effect.map((rows) => rows.at(0)?.template ?? null))
+        yield* brain.pull(host, request)
+        const onRemoteBrain = yield* bound
+        yield* database.db
+          .update(Database.Schema.brain)
+          .set({ hand_placement: "colocated" })
+          .where(eq(Database.Schema.brain.id, brainId))
+        yield* brain.pull(host, request)
+        expect([onRemoteBrain, yield* bound]).toEqual([template, null])
+      }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
+  )
+
   it.live("a catalog whose space is archived is omitted while the rest of pull still succeeds", () =>
     Effect.gen(function* () {
       const subject = yield* seeded

@@ -6,6 +6,7 @@ import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
+import type { Session } from "@ren/schema/session"
 import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { eq, sql } from "drizzle-orm"
@@ -323,41 +324,42 @@ describe("Environments", () => {
     }),
   )
 
-  it.live("a chat follows its space's current hand: another template, the brain's own machine, then remote again", () =>
-    Effect.gen(function* () {
-      const database = yield* Database.Service
-      const subject = yield* environmentsWith()
-      const organizationId = yield* Seed.organization()
-      const session = yield* subjectIn(organizationId)
-      const spaceId = (yield* database.db
-        .select({ spaceId: Database.Schema.agent_session.space_id })
-        .from(Database.Schema.agent_session)
-        .where(eq(Database.Schema.agent_session.id, session.sessionId))).at(0)?.spaceId
-      if (!spaceId) return yield* Effect.die(new Error("The session has no space"))
-      const placement = { ...session, spaceId }
-      const first = yield* Seed.environmentTemplate(organizationId)
-      const second = yield* Seed.environmentTemplate(organizationId)
-      const handIs = (hand: {
-        readonly hand_placement: "colocated" | "remote"
-        readonly environment_template_id: EnvironmentTemplate.ID | null
-      }) => database.db.update(Database.Schema.space).set(hand).where(eq(Database.Schema.space.id, spaceId))
-      const bound = database.db
-        .select({ template: Database.Schema.session_environment.environment_template_id })
-        .from(Database.Schema.session_environment)
-        .where(eq(Database.Schema.session_environment.session_id, session.sessionId))
-        .pipe(Effect.map((rows) => rows.at(0)?.template ?? null))
-      yield* handIs({ hand_placement: "remote", environment_template_id: first })
-      yield* subject.environments.bind(placement, first)
-      yield* handIs({ hand_placement: "remote", environment_template_id: second })
-      yield* subject.environments.follow(placement)
-      const afterSecond = yield* bound
-      yield* handIs({ hand_placement: "colocated", environment_template_id: null })
-      yield* subject.environments.follow(placement)
-      const afterOwn = yield* bound
-      yield* handIs({ hand_placement: "remote", environment_template_id: first })
-      yield* subject.environments.follow(placement)
-      expect([afterSecond, afterOwn, yield* bound]).toEqual([second, null, first])
-    }),
+  it.live(
+    "the idle chats a pull names follow their space's current hand: another template, the brain's own machine, then remote again; a busy chat keeps its hand",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const subject = yield* environmentsWith()
+        const organizationId = yield* Seed.organization()
+        const spaceId = yield* Seed.team(organizationId)
+        const idle = yield* Seed.subject(organizationId, spaceId)
+        const busy = yield* Seed.subject(organizationId, spaceId)
+        const space = { organizationId, spaceId }
+        const first = yield* Seed.environmentTemplate(organizationId)
+        const second = yield* Seed.environmentTemplate(organizationId)
+        const handIs = (hand: {
+          readonly hand_placement: "colocated" | "remote"
+          readonly environment_template_id: EnvironmentTemplate.ID | null
+        }) => database.db.update(Database.Schema.space).set(hand).where(eq(Database.Schema.space.id, spaceId))
+        const bound = (sessionId: Session.ID) =>
+          database.db
+            .select({ template: Database.Schema.session_environment.environment_template_id })
+            .from(Database.Schema.session_environment)
+            .where(eq(Database.Schema.session_environment.session_id, sessionId))
+            .pipe(Effect.map((rows) => rows.at(0)?.template ?? null))
+        yield* handIs({ hand_placement: "remote", environment_template_id: first })
+        yield* subject.environments.bind(idle, first)
+        yield* subject.environments.bind(busy, first)
+        yield* handIs({ hand_placement: "remote", environment_template_id: second })
+        yield* subject.environments.follow(space, [idle.sessionId])
+        const afterSecond = [yield* bound(idle.sessionId), yield* bound(busy.sessionId)]
+        yield* handIs({ hand_placement: "colocated", environment_template_id: null })
+        yield* subject.environments.follow(space, [idle.sessionId])
+        const afterOwn = yield* bound(idle.sessionId)
+        yield* handIs({ hand_placement: "remote", environment_template_id: first })
+        yield* subject.environments.follow(space, [idle.sessionId])
+        expect([afterSecond, afterOwn, yield* bound(idle.sessionId)]).toEqual([[second, first], null, first])
+      }),
   )
 
   it.live("a configured token lifetime is the access's lifetime", () =>

@@ -29,7 +29,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq, inArray, isNotNull, isNull, not, sql } from "drizzle-orm"
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
 import { Cause, Clock, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schedule, Schema, Struct } from "effect"
 import { HttpClientError } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
@@ -47,7 +47,6 @@ import { Memory } from "./memory.js"
 import { Models } from "./models.js"
 import { Settings } from "./settings.js"
 import { SessionPolicy } from "./session/policy.js"
-import { OpenCodeStore } from "./session/opencode-store.js"
 import { SpaceQueries } from "./space/queries.js"
 
 export {
@@ -348,24 +347,6 @@ export const layer = Layer.effect(
     const send = Effect.fn("Brains.send")(function* (input: Session.SendInput) {
       yield* validatePrompt(input.prompt)
       const session = yield* brainOf(input.sessionId)
-      // oxlint-disable-next-line ren/no-comments -- A chat's tools run on its space's current hand: a message that starts a turn moves the chat first, never one sent during a turn. The brain dropped its connection when the last turn ended.
-      const isIdle =
-        (yield* database.db
-          .select({ id: Database.Schema.agent_session.id })
-          .from(Database.Schema.agent_session)
-          .where(
-            and(
-              eq(Database.Schema.agent_session.id, input.sessionId),
-              not(OpenCodeStore.isBusy(Database.Schema.agent_session.id)),
-            ),
-          )
-          .pipe(Effect.orDie)).length > 0
-      if (isIdle)
-        yield* environments.follow({
-          sessionId: input.sessionId,
-          organizationId: session.organizationId,
-          spaceId: session.spaceId,
-        })
       const target = yield* brainHost.target(session.brainId).pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
       const api = yield* client.brain(target)
       return yield* call(
@@ -589,6 +570,18 @@ export const layer = Layer.effect(
           .where(eq(Database.Schema.brain.id, host.brainId))
           .pipe(Effect.orDie)
         yield* brainHost.observe(host.brainId, request.sessions)
+        // oxlint-disable-next-line ren/no-comments -- Remote hands rule 4: the chats the brain reports idle move to their space's current hand, whoever sends their next message. Only a brain made for that hand moves them (rule 3); another is replaced at its wake, and the new brain's first pull moves them.
+        const kinds = (yield* database.db
+          .select({ brain: Database.Schema.brain.hand_placement, space: Database.Schema.space.hand_placement })
+          .from(Database.Schema.brain)
+          .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.brain.space_id))
+          .where(eq(Database.Schema.brain.id, host.brainId))
+          .pipe(Effect.orDie)).at(0)
+        if (kinds && (kinds.brain === "remote") === (kinds.space === "remote"))
+          yield* environments.follow(
+            { organizationId: host.organizationId, spaceId: host.spaceId },
+            request.sessions.flatMap((session) => (session.busy ? [] : [session.id])),
+          )
         // oxlint-disable-next-line ren/no-comments -- A pull is the first sign that a new machine is up: the chats that a forced replace marked continue now (EN35, EN36).
         yield* continueMarked(host.brainId)
         // oxlint-disable-next-line ren/no-comments -- Networking rule 4: a push makes the brain pull at once after a change, so a new connection or allowed host reaches its machines within seconds. One query first: a space with no limited template now, and no machine that still has a host list, has nothing to send.
