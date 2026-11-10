@@ -4,7 +4,7 @@ import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Space } from "@ren/schema/space"
-import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted } from "effect"
+import { ConfigProvider, DateTime, Duration, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { E2BSandbox } from "../src/machine-provider/e2b.js"
 import { MachineProvider } from "../src/machine-provider.js"
@@ -23,6 +23,8 @@ const seen: Array<Seen> = []
 // oxlint-disable-next-line ren/no-comments -- The tags of the E2B templates that the fake has built, and the status its next build ends with.
 const built = new Map<string, Array<string>>()
 const builds = { status: "ready" as "ready" | "error" }
+// oxlint-disable-next-line ren/no-comments -- The next create answers 429, as E2B does when the team has no room (chaos row 42).
+const full = { next: false }
 // oxlint-disable-next-line ren/no-comments -- As E2B answers: a failed status has the reason's message only, and its log's first page; the logs endpoint gives the last lines.
 const buildLog = [
   "Building template e2b_tpl/bld_1",
@@ -84,6 +86,12 @@ const tagsOf = (name: string) => () =>
     ? Response.json((built.get(name) ?? []).map((tag) => ({ tag })))
     : new Response("not found", { status: 404 })
 
+const created = () => {
+  if (!full.next) return Response.json({ sandboxID: "sbx_1", domain: "e2b.test", envdAccessToken: "envd" })
+  full.next = false
+  return new Response("rate limited", { status: 429, headers: { "retry-after": "20" } })
+}
+
 const answerOf = (url: URL) => {
   const name = url.pathname.match(/^\/templates\/([^/]+)\/tags$/)?.[1]
   return name ? tagsOf(name) : answers[url.pathname]
@@ -114,8 +122,7 @@ const e2b = Bun.serve({
       body: await request.text(),
     })
     if (url.pathname === "/v2/sandboxes") return Response.json(listed(url.searchParams.get("metadata") ?? ""))
-    if (url.pathname === "/sandboxes" && request.method === "POST")
-      return Response.json({ sandboxID: "sbx_1", domain: "e2b.test", envdAccessToken: "envd" })
+    if (url.pathname === "/sandboxes" && request.method === "POST") return created()
     if (url.pathname === "/files") return Response.json([{ path: url.searchParams.get("path") }])
     const answer = answerOf(url)
     if (answer) return answer()
@@ -261,6 +268,28 @@ describe("E2BSandbox with an egress", () => {
       const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
       expect(JSON.parse(create?.body ?? "{}").network).toBeUndefined()
     }),
+  )
+})
+
+describe("E2BSandbox capacity", () => {
+  it.live(
+    "a create that E2B answers 429 is Capacity with E2B's Retry-After, so the machine waits instead of failing (chaos row 42)",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* BrainProvider.first
+        full.next = true
+        const error = yield* provider
+          .create({
+            labels: { kind: "brain", id: Brain.ID.make("brn_03"), generation: 1, ...owner },
+            config: {},
+            variables: {},
+            image: Option.none(),
+            network: MachineProvider.unrestricted,
+          })
+          .pipe(Effect.flip)
+        expect(error._tag).toBe("MachineProvider.Capacity")
+        expect(error._tag === "MachineProvider.Capacity" && Duration.toSeconds(error.retryAfter)).toBe(20)
+      }),
   )
 })
 
