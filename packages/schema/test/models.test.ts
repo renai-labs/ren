@@ -7,6 +7,45 @@ const decode = Schema.decodeUnknownSync(Models.InferenceModelInfo)
 const entry = (model_name: string, model_info: Record<string, unknown>) => ({ model_name, model_info })
 
 describe("Models.fromInference", () => {
+  test("catalog lookup prefers exact connections and resolves old chat references only from known gateway models", () => {
+    const lookup = Models.lookup({
+      endpoints: [
+        {
+          id: "ren",
+          protocol: "openai-chat",
+          models: [
+            { id: "openai/chat" },
+            { id: "openai/gateway-only" },
+            { id: "other/group/image", type: "image" },
+            { id: "ren/local" },
+          ],
+        },
+        { id: "openai", protocol: "openai-chat", models: [{ id: "chat", modelID: "direct-chat" }] },
+      ],
+    })
+    expect(lookup({ providerID: "openai", id: "chat" })?.ref).toEqual({ providerID: "openai", id: "chat" })
+    expect(lookup({ providerID: "other", id: "group/image" })?.ref).toEqual({
+      providerID: "ren",
+      id: "other/group/image",
+    })
+    expect(lookup({ providerID: "ren", id: "other/group/image" })?.ref).toEqual({
+      providerID: "ren",
+      id: "other/group/image",
+    })
+    expect(lookup({ providerID: "other", id: "missing" })).toBeUndefined()
+    expect(lookup({ providerID: "openai", id: "gateway-only" })).toBeUndefined()
+    expect(lookup({ providerID: "ren", id: "local" })?.ref).toEqual({ providerID: "ren", id: "ren/local" })
+  })
+
+  test("old cached media types decode to native types without breaking their wire aliases", () => {
+    const model = Schema.decodeUnknownSync(Models.Info)({
+      id: "image",
+      type: "image_generation",
+      upstreamId: "image-route",
+    })
+    expect(model.type).toBe("image")
+    expect(Models.modelID(model)).toBe("image-route")
+  })
   test("groups models by provider, keeps Ren's ids, gives a model its own protocol when it differs and drops hidden models", () => {
     const catalog = Models.fromInference(
       decode({

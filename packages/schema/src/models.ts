@@ -1,6 +1,6 @@
 export * as Models from "./models.js"
 
-import { Schema, Struct } from "effect"
+import { Schema, SchemaTransformation, Struct } from "effect"
 
 export interface ApiKey extends Schema.Schema.Type<typeof ApiKey> {}
 export const ApiKey = Schema.Struct({
@@ -18,11 +18,63 @@ export const Modality = Schema.Literals(["text", "image", "pdf", "audio", "video
 })
 export type Modality = typeof Modality.Type
 
+export const Type = Schema.Literals([
+  "chat",
+  "image",
+  "transcription",
+  "decision",
+  "speech",
+  "realtime",
+  "video",
+]).annotate({ identifier: "Models.Type" })
+export type Type = typeof Type.Type
+
+const Mode = Schema.Literals([
+  ...Type.literals,
+  "responses",
+  "completion",
+  "image_generation",
+  "audio_transcription",
+  "decisions",
+  "audio_speech",
+  "video_generation",
+])
+const types = {
+  chat: "chat",
+  responses: "chat",
+  completion: "chat",
+  image: "image",
+  image_generation: "image",
+  transcription: "transcription",
+  audio_transcription: "transcription",
+  decision: "decision",
+  decisions: "decision",
+  speech: "speech",
+  audio_speech: "speech",
+  realtime: "realtime",
+  video: "video",
+  video_generation: "video",
+} satisfies Record<typeof Mode.Type, Type>
+const StoredType = Mode.pipe(
+  Schema.decodeTo(Type, SchemaTransformation.transform({ decode: (mode) => types[mode], encode: (type) => type })),
+)
+
+export interface Ref extends Schema.Schema.Type<typeof Ref> {}
+export const Ref = Schema.Struct({ providerID: Schema.NonEmptyString, id: Schema.NonEmptyString }).annotate({
+  identifier: "Models.Ref",
+})
+
+export const managedProviderID = "ren"
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: Schema.NonEmptyString,
+  type: Schema.optionalKey(StoredType).annotate({ description: "What the model does. Absent means chat." }),
+  modelID: Schema.optionalKey(Schema.NonEmptyString).annotate({
+    description: "The name sent to the provider. Defaults to id.",
+  }),
   upstreamId: Schema.optionalKey(
-    Schema.NonEmptyString.annotate({ description: "The name sent upstream. Defaults to the id." }),
+    Schema.NonEmptyString.annotate({ description: "Legacy wire alias. Use modelID for new entries." }),
   ),
   name: Schema.optionalKey(Schema.NonEmptyString),
   limit: Schema.optionalKey(
@@ -72,6 +124,34 @@ export const Catalog = Schema.Struct({
 export const catalog = (access: Access): Catalog => ({
   endpoints: access.endpoints.map((endpoint) => Struct.pick(endpoint, ["id", "protocol", "models"])),
 })
+
+export const modelID = (model: Info) => model.modelID ?? model.upstreamId ?? model.id
+
+export const lookup = (catalog: Catalog) => {
+  const providers = new Set(catalog.endpoints.map((endpoint) => endpoint.id))
+  const models = new Map(
+    catalog.endpoints.flatMap((endpoint) =>
+      endpoint.models.map((model) => {
+        const ref = { providerID: endpoint.id, id: model.id }
+        return [JSON.stringify([ref.providerID, ref.id]), { ref, model }] as const
+      }),
+    ),
+  )
+  const aliases = new Map(
+    [...models.values()].flatMap((found) => {
+      const slash = found.ref.id.indexOf("/")
+      if (found.ref.providerID !== managedProviderID || slash <= 0) return []
+      return [[JSON.stringify([found.ref.id.slice(0, slash), found.ref.id.slice(slash + 1)]), found] as const]
+    }),
+  )
+  return (ref: Ref) => {
+    const key = JSON.stringify([ref.providerID, ref.id])
+    return (
+      models.get(key) ??
+      (providers.has(ref.providerID) && ref.providerID !== managedProviderID ? undefined : aliases.get(key))
+    )
+  }
+}
 
 export const placeholderKey = "ren:MODELS"
 
