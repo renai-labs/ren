@@ -5,7 +5,7 @@ import type { Session } from "@ren/schema/session"
 import { Context, Effect, FileSystem, Layer, Schema } from "effect"
 import { dirname, resolve } from "node:path"
 
-export class Failure extends Schema.TaggedError<Failure>()("WorkspaceFiles.Failure", {
+class Failure extends Schema.TaggedError<Failure>()("WorkspaceFiles.Failure", {
   path: Schema.String,
   message: Schema.String,
   cause: Schema.Defect(),
