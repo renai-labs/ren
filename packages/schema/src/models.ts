@@ -13,6 +13,17 @@ export const Protocol = Schema.Literals(["anthropic-messages", "openai-responses
 })
 export type Protocol = typeof Protocol.Type
 
+export const ModelProtocol = Schema.Literals([
+  ...Protocol.literals,
+  "openai-images",
+  "openai-transcription",
+  "openai-decisions",
+  "openai-speech",
+  "openai-realtime",
+  "openai-video",
+]).annotate({ identifier: "Models.ModelProtocol" })
+export type ModelProtocol = typeof ModelProtocol.Type
+
 export const Modality = Schema.Literals(["text", "image", "pdf", "audio", "video"]).annotate({
   identifier: "Models.Modality",
 })
