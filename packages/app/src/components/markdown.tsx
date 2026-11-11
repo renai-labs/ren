@@ -79,9 +79,9 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
   return <span {...props}>{children}</span>
 }
 
-function MarkdownInput({ node: _node, type, checked }: ComponentProps<"input"> & ExtraProps) {
-  if (type !== "checkbox") return null
-  return <Checkbox checked={checked === true} readOnly className="mr-2 inline-flex align-text-bottom" />
+function MarkdownInput(props: ComponentProps<"input"> & ExtraProps) {
+  if (props.type !== "checkbox") return null
+  return <Checkbox checked={props.checked === true} readOnly className="mr-2 inline-flex align-text-bottom" />
 }
 
 const components = { code: MarkdownCode, img: MarkdownImage, input: MarkdownInput, span: MarkdownSpan }
