@@ -82,7 +82,8 @@ export const ProcessMemory = Schema.Struct({
 export interface MemoryReport extends Schema.Schema.Type<typeof MemoryReport> {}
 export const MemoryReport = Schema.Struct({
   usedBytes: Schema.Int.annotate({
-    description: "The memory in use by the executor’s cgroup, or by the whole machine when it has no cgroup limit",
+    description:
+      "The memory in use by the executor’s cgroup without the file cache the kernel can reclaim, or by the whole machine when it has no cgroup limit",
   }),
   limitBytes: Schema.Int.annotate({ description: "The cgroup’s memory limit, or the machine’s memory" }),
   processes: Schema.Array(ProcessMemory).annotate({ description: "The brain’s running processes" }),

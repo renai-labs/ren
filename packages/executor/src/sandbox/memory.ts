@@ -8,8 +8,6 @@ import { dirname, join } from "node:path"
 
 const kibibyte = 1024
 
-const cgroupRoot = "/sys/fs/cgroup"
-
 export interface Row {
   readonly pid: number
   readonly ppid: number
@@ -53,19 +51,23 @@ const text = (path: string) =>
 
 const machine = () => ({ usedBytes: totalmem() - freemem(), limitBytes: totalmem() })
 
-export const usage = Effect.gen(function* () {
-  const own = yield* text("/proc/self/cgroup")
-  const path = Option.flatMap(own, (lines) => Option.fromNullishOr(/^0::(.*)$/mu.exec(lines)?.at(1)))
-  if (Option.isNone(path)) return machine()
-  let directory = join(cgroupRoot, path.value)
-  while (directory.startsWith(cgroupRoot)) {
-    const max = Option.map(yield* text(join(directory, "memory.max")), Number)
-    if (Option.isSome(max) && Number.isFinite(max.value)) {
-      const current = Option.map(yield* text(join(directory, "memory.current")), Number)
-      return { usedBytes: Option.getOrElse(current, () => 0), limitBytes: max.value }
+export const usage = (root = "/") =>
+  Effect.gen(function* () {
+    const cgroupRoot = join(root, "sys/fs/cgroup")
+    const own = yield* text(join(root, "proc/self/cgroup"))
+    const path = Option.flatMap(own, (lines) => Option.fromNullishOr(/^0::(.*)$/mu.exec(lines)?.at(1)))
+    if (Option.isNone(path)) return machine()
+    let directory = join(cgroupRoot, path.value)
+    while (directory.startsWith(cgroupRoot)) {
+      const max = Option.map(yield* text(join(directory, "memory.max")), Number)
+      if (Option.isSome(max) && Number.isFinite(max.value)) {
+        const current = Option.getOrElse(Option.map(yield* text(join(directory, "memory.current")), Number), () => 0)
+        const stat = Option.getOrElse(yield* text(join(directory, "memory.stat")), () => "")
+        const reclaimable = Number(/^inactive_file (\d+)$/mu.exec(stat)?.at(1) ?? 0)
+        return { usedBytes: Math.max(0, current - reclaimable), limitBytes: max.value }
+      }
+      if (directory === cgroupRoot) break
+      directory = dirname(directory)
     }
-    if (directory === cgroupRoot) break
-    directory = dirname(directory)
-  }
-  return machine()
-})
+    return machine()
+  })

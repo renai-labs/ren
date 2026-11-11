@@ -286,11 +286,6 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
             description: notice.description,
           })
           .pipe(Effect.orDie),
-      kill: (sessionId, shell) =>
-        located(sessionId, Shell.Service).pipe(
-          Effect.flatMap((shells) => shells.remove(shell.id)),
-          Effect.orDie,
-        ),
     })
   const resuming = runtime.runFork(
     Context.get(services, SessionRestart.Service).resumeSuspendedSessions.pipe(

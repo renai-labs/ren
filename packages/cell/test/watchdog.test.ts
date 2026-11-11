@@ -10,11 +10,10 @@ const it = testEffect(Layer.empty)
 const mebibyte = 1024 * 1024
 
 interface Call {
-  readonly kind: "background" | "notify" | "kill"
+  readonly kind: "background" | "notify"
   readonly sessionID: string
   readonly text?: string
   readonly description?: string
-  readonly shell?: string
 }
 
 const harness = Effect.fnUntraced(function* (settings?: Partial<Watchdog.Settings>) {
@@ -29,15 +28,6 @@ const harness = Effect.fnUntraced(function* (settings?: Partial<Watchdog.Setting
     memory: () => Ref.get(memory),
     background: (sessionID) => record({ kind: "background", sessionID }),
     notify: (input) => record({ kind: "notify", ...input }),
-    kill: (sessionID, shell) =>
-      record({ kind: "kill", sessionID, shell: shell.id }).pipe(
-        Effect.andThen(
-          Ref.update(
-            shells,
-            (all) => new Map([...all, [sessionID, (all.get(sessionID) ?? []).filter((each) => each.id !== shell.id)]]),
-          ),
-        ),
-      ),
     ...(settings && { settings }),
   })
   const emit = (type: string, sessionID: string) =>
@@ -136,51 +126,5 @@ it.effect("memory above the high mark tells the session once per rise, with its 
     yield* report(85)
     yield* TestClock.adjust(Watchdog.defaults.sampleEvery)
     expect((yield* test.calls).map((call) => call.kind)).toEqual(["notify", "notify"])
-  }),
-)
-
-it.effect("memory above the critical mark kills the session's command only when it is the largest, and says why", () =>
-  Effect.gen(function* () {
-    const test = yield* harness()
-    yield* test.running("S", [check])
-    yield* test.emit("session.execution.started", "S")
-    yield* test.emit("session.execution.succeeded", "S")
-    yield* Ref.set(
-      test.memory,
-      Option.some({
-        usedBytes: 93 * mebibyte,
-        limitBytes: 100 * mebibyte,
-        processes: [
-          { pid: 10, rssBytes: 20 * mebibyte },
-          { pid: 20, rssBytes: 60 * mebibyte },
-        ],
-      }),
-    )
-    yield* TestClock.adjust(Watchdog.defaults.sampleEvery)
-    expect((yield* test.calls).map((call) => call.kind)).toEqual(["notify"])
-    yield* Ref.set(
-      test.memory,
-      Option.some({
-        usedBytes: 93 * mebibyte,
-        limitBytes: 100 * mebibyte,
-        processes: [
-          { pid: 10, rssBytes: 60 * mebibyte },
-          { pid: 20, rssBytes: 20 * mebibyte },
-        ],
-      }),
-    )
-    yield* TestClock.adjust(Watchdog.defaults.sampleEvery)
-    const calls = yield* test.calls
-    expect(calls.slice(1)).toEqual([
-      { kind: "kill", sessionID: "S", shell: check.id },
-      {
-        kind: "notify",
-        sessionID: "S",
-        text: expect.stringContaining("`bun run check` was stopped: it used 60 MB"),
-        description: "Stopped `bun run check` at 93% memory.",
-      },
-    ])
-    yield* TestClock.adjust(Watchdog.defaults.sampleEvery)
-    expect((yield* test.calls).length).toBe(3)
   }),
 )
