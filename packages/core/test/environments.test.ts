@@ -31,6 +31,7 @@ import { CredentialCallers } from "../src/credential-callers.js"
 import { EnvironmentNetwork } from "../src/environment-network.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
+import { DurableRunner } from "../src/durable-runner.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/environment-provider.js"
 import { TestSandboxEgress } from "./lib/sandbox-egress.js"
@@ -73,6 +74,7 @@ const environmentsWith = Effect.fnUntraced(function* (
   const context = yield* Layer.build(
     Layer.fresh(
       Environments.layer.pipe(
+        Layer.provide(DurableRunner.layerMemory),
         Layer.provide([noExecutor, ren.network ?? EnvironmentNetwork.layerNone]),
         Layer.provide(Bundles.layer),
         Layer.provide(Signer.layerLocal),

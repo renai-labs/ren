@@ -116,20 +116,24 @@ export const layer = Layer.effect(
     const interruptedListeners = yield* Ref.make<ReadonlyArray<(interrupted: Interrupted) => Effect.Effect<void>>>([])
     const network = yield* EnvironmentNetwork.Service
 
-    const read = (brainId: Brain.ID) =>
+    const find = (brainId: Brain.ID) =>
       database.db
         .select()
         .from(brains)
         .where(eq(brains.id, brainId))
         .pipe(
           Effect.orDie,
-          Effect.flatMap((rows) =>
-            Option.match(Option.fromNullishOr(rows.at(0)), {
-              onNone: () => Effect.die(new Error(`Brain ${brainId} does not exist`)),
-              onSome: Effect.succeed,
-            }),
-          ),
+          Effect.map((rows) => Option.fromNullishOr(rows.at(0))),
         )
+
+    const read = (brainId: Brain.ID) =>
+      Effect.flatMap(
+        find(brainId),
+        Option.match({
+          onNone: () => Effect.die(new Error(`Brain ${brainId} does not exist`)),
+          onSome: Effect.succeed,
+        }),
+      )
 
     const update = (
       brainId: Brain.ID,
@@ -356,7 +360,7 @@ export const layer = Layer.effect(
       isBehindEgress,
       bootWithin,
       wakeWithin,
-      read,
+      find,
       update,
       replace: (row, at) =>
         database

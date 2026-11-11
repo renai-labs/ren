@@ -25,6 +25,7 @@ import { Brains } from "../src/brains.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { MachineProvider } from "../src/machine-provider.js"
 import { Environments } from "../src/environments.js"
+import { DurableRunner } from "../src/durable-runner.js"
 import { Models } from "../src/models.js"
 import { TestProvider } from "./lib/environment-provider.js"
 import { Host } from "./lib/host.js"
@@ -121,6 +122,7 @@ const stackOf = async (config: CoreConfig) => {
     },
     models,
     environments: Environments.layer
+      .pipe(Layer.provide(DurableRunner.layerMemory))
       .pipe(Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]))
       .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
       .pipe(Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)]))),

@@ -31,24 +31,12 @@ import {
 } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
-import {
-  Clock,
-  Config,
-  Context,
-  DateTime,
-  Duration,
-  Effect,
-  Fiber,
-  FiberMap,
-  Layer,
-  Option,
-  Redacted,
-  Schema,
-  Struct,
-} from "effect"
+import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
 import { HttpClient } from "effect/http"
+import { WorkflowEngine } from "effect/workflow"
 import { Bundles } from "./bundles.js"
 import { Deployment } from "./deployment.js"
+import { DurableRunner } from "./durable-runner.js"
 import { EnvironmentNetwork } from "./environment-network.js"
 import { EnvironmentProvider } from "./environment-provider.js"
 import { MachineLifecycle } from "./machine-lifecycle.js"
@@ -146,6 +134,11 @@ export const startingAfter = Duration.seconds(5)
 
 // oxlint-disable-next-line ren/no-comments -- How long a chat holds its place on a hand machine after its last turn or file request.
 export const reservation = Duration.days(3)
+
+const HandRun = DurableRunner.make("HandRun", {
+  payload: { environmentId: Environment.ID, epoch: Schema.Int },
+  idempotencyKey: (payload) => `hand:${payload.environmentId}:${payload.epoch}`,
+})
 
 const templates = Database.Schema.environment_template
 const environments = Database.Schema.environment
@@ -348,7 +341,7 @@ export const layer = Layer.effect(
       Option.all(found),
     )
 
-    const read = (environmentId: Environment.ID) =>
+    const find = (environmentId: Environment.ID) =>
       database.db
         .select({ environment: environments, organizationId: templates.organization_id, provider: templates.provider })
         .from(environments)
@@ -358,9 +351,10 @@ export const layer = Layer.effect(
           Effect.orDie,
           Effect.flatMap((rows) => {
             const found = rows.at(0)
-            const spaceId = found?.environment.space_id
-            if (!found || !spaceId) return Effect.die(new Error(`Environment ${environmentId} has no space`))
-            return Effect.succeed({
+            if (!found) return Effect.succeedNone
+            const spaceId = found.environment.space_id
+            if (!spaceId) return Effect.die(new Error(`Environment ${environmentId} has no space`))
+            return Effect.succeedSome({
               ...found.environment,
               space_id: spaceId,
               organization_id: found.organizationId,
@@ -368,6 +362,15 @@ export const layer = Layer.effect(
             } satisfies Row)
           }),
         )
+
+    const read = (environmentId: Environment.ID) =>
+      Effect.flatMap(
+        find(environmentId),
+        Option.match({
+          onNone: () => Effect.die(new Error(`Environment ${environmentId} does not exist`)),
+          onSome: Effect.succeed,
+        }),
+      )
 
     // oxlint-disable-next-line ren/no-comments -- The provider and the labels of a hand come from its template and space, so only its own columns change.
     const update = (
@@ -418,9 +421,9 @@ export const layer = Layer.effect(
       } satisfies MachineLifecycle.DesiredSetup
     })
 
-    const runs = yield* FiberMap.make<Environment.ID>()
+    const engine = yield* WorkflowEngine.WorkflowEngine
 
-    // oxlint-disable-next-line ren/no-comments -- A remote hand's machine (EN1): the state machine of a brain's, with the executor's answer as its ready check. Its provider answers only when the executor does (MachineProvider.waitForExecutor). One server runs it (EN31); an access after a restart starts it again from its row.
+    // oxlint-disable-next-line ren/no-comments -- A remote hand's machine (EN1): the state machine of a brain's, with the executor's answer as its ready check. Its provider answers only when the executor does (MachineProvider.waitForExecutor).
     const hands = MachineLifecycle.make<Environment.ID, Row, Target, never>({
       name: "EnvironmentLifecycle",
       noun: "Environment",
@@ -430,7 +433,7 @@ export const layer = Layer.effect(
       isBehindEgress,
       bootWithin: MachineLifecycle.timing.boot,
       wakeWithin: MachineLifecycle.timing.wake,
-      read,
+      find,
       update,
       replace: (row) =>
         update(row.id, {
@@ -457,15 +460,10 @@ export const layer = Layer.effect(
             Effect.map((rows) => rows.length > 0),
           ),
       isNeeded: () => Effect.succeed(false),
-      ensure: (row): Effect.Effect<void> =>
-        FiberMap.run(
-          runs,
-          row.id,
-          Effect.suspend(() => hands.run(row.id)).pipe(
-            Effect.catchCause((cause) => Effect.logWarning(`A step of environment ${row.id} failed`, cause)),
-          ),
-          { onlyIfMissing: true },
-        ).pipe(Effect.asVoid),
+      ensure: (row) =>
+        DurableRunner.ensure(HandRun, { environmentId: row.id, epoch: row.run_epoch }).pipe(
+          Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+        ),
       proxyFor: (row) =>
         sandboxEgress.proxyFor({
           workload: { kind: "hand", id: row.id, generation: row.generation },
@@ -524,6 +522,18 @@ export const layer = Layer.effect(
       }),
     })
 
+    yield* DurableRunner.register(HandRun, (payload) =>
+      DurableRunner.supervise(`hand:${payload.environmentId}`, hands.run(payload.environmentId)).pipe(
+        Effect.andThen(
+          database.db
+            .update(environments)
+            .set({ run_epoch: payload.epoch + 1 })
+            .where(and(eq(environments.id, payload.environmentId), eq(environments.run_epoch, payload.epoch)))
+            .pipe(Effect.orDie),
+        ),
+      ),
+    )
+
     // oxlint-disable-next-line ren/no-comments -- Deletes each hand machine where `where` holds, under its template's lock as an assign takes it, so a chat that takes a place meanwhile keeps its machine. Then destroys it with its files. Returns what it could not destroy; the daily cleanup tries again.
     const remove = Effect.fnUntraced(function* (where: SQL | undefined) {
       const found = yield* database.db
@@ -553,7 +563,6 @@ export const layer = Layer.effect(
       return yield* Effect.forEach(
         removed.flat(),
         Effect.fnUntraced(function* (machine) {
-          yield* FiberMap.remove(runs, machine.id)
           yield* sandboxEgress.retire({ kind: "hand", id: machine.id })
           const provider = registry.get(machine.provider)
           if (!machine.binding || Option.isNone(provider)) return []
@@ -569,8 +578,12 @@ export const layer = Layer.effect(
     const ready = Effect.fnUntraced(function* (environmentId: Environment.ID) {
       const first = yield* hands.access(environmentId)
       if (first._tag === "Ready") return first.target
-      const running = yield* FiberMap.get(runs, environmentId)
-      if (Option.isSome(running)) yield* Fiber.await(running.value).pipe(Effect.timeoutOption(startingAfter))
+      if (first._tag === "Failed") return yield* new Unavailable({ message: first.reason })
+      const row = yield* read(environmentId)
+      yield* DurableRunner.join(HandRun, { environmentId, epoch: row.run_epoch }).pipe(
+        Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+        Effect.timeoutOption(startingAfter),
+      )
       const next = yield* hands.access(environmentId)
       if (next._tag === "Ready") return next.target
       if (next._tag === "Failed") return yield* new Unavailable({ message: next.reason })

@@ -121,7 +121,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       isBehindEgress: () => false,
       bootWithin: Duration.seconds(1),
       wakeWithin: Duration.seconds(1),
-      read,
+      find: (id) => Effect.sync(() => Option.fromNullishOr(rows.get(id))),
       update,
       replace: (row) =>
         update(row.id, {

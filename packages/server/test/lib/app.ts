@@ -138,7 +138,9 @@ export const services = Layer.mergeAll(
   Layer.provideMerge([BrainClient.layer, Settings.layer]),
   Layer.provideMerge([
     Models.layerNone,
-    Environments.layer.pipe(Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer])),
+    Environments.layer.pipe(
+      Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer, DurableRunner.layerMemory]),
+    ),
     BrainProvider.layer([]),
   ]),
   Layer.provideMerge(RenInference.layerConfig),

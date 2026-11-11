@@ -103,7 +103,7 @@ HttpRouter.serve(Routes.layer).pipe(
     ChaosModels.layer,
     RenInference.layerConfig.pipe(Layer.provide([Signer.layerLocal, Access.layer])),
     Environments.layer.pipe(
-      Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
+      Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer, DurableRunner.layerMemory]),
       Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
     ),
     BrainProvider.layer([]),

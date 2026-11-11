@@ -101,7 +101,7 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly isBehindEgress: (provider: MachineProvider.Provider) => boolean
   readonly bootWithin: Duration.Duration
   readonly wakeWithin: Duration.Duration
-  readonly read: (id: Id) => Effect.Effect<R>
+  readonly find: (id: Id) => Effect.Effect<Option.Option<R>>
   // oxlint-disable-next-line ren/no-comments -- With `only`, the write happens only while the row still has that phase and generation, so a write after a wait cannot undo a change made during it.
   readonly update: (
     id: Id,
@@ -190,7 +190,14 @@ const stepsInPlace = <Id extends string>(row: Row<Id>, desired: DesiredSetup, pr
 export const make = <Id extends string, R extends Row<Id>, Target, E>(definition: Definition<Id, R, Target, E>) => {
   const name = definition.name
   const noun = definition.noun
-  const read = definition.read
+  const read = (id: Id) =>
+    Effect.flatMap(
+      definition.find(id),
+      Option.match({
+        onNone: () => Effect.die(new Error(`${noun} ${id} does not exist`)),
+        onSome: Effect.succeed,
+      }),
+    )
   const update = definition.update
   const annotate = (row: Pick<R, "id" | "generation">) =>
     Effect.annotateLogs({
@@ -231,10 +238,14 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     )
   })
 
+  // oxlint-disable-next-line ren/no-comments -- True when this failure was the last one allowed, so the machine is now `failed`.
   const fail = Effect.fnUntraced(function* (row: R, reason: string, next: Machine.Phase) {
     const failures = row.failures + 1
     yield* Effect.logWarning(`${noun} ${row.id} failed (${failures}/${timing.failures}): ${reason}`)
-    if (failures < timing.failures) return yield* update(row.id, { failures, failure: reason, phase: next })
+    if (failures < timing.failures) {
+      yield* update(row.id, { failures, failure: reason, phase: next })
+      return false
+    }
     const wait = timing.retries[Math.min(row.retries, timing.retries.length - 1)] ?? Duration.hours(1)
     yield* update(row.id, {
       failures,
@@ -243,6 +254,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       retry_at: new Date((yield* now).getTime() + Duration.toMillis(wait)),
     })
     yield* report(row, new Failed({ message: `${noun} ${row.id} failed: ${reason}` }))
+    return true
   })
 
   const ready = (row: R) =>
@@ -545,15 +557,19 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     capacity: (row) => update(row.id, { phase: row.binding ? "resuming" : "creating" }).pipe(Effect.as(false)),
   } satisfies Record<Machine.Phase, (row: R) => Effect.Effect<boolean, unknown>>
 
+  // oxlint-disable-next-line ren/no-comments -- True when the run is done: the machine is ready or failed, or its row was deleted meanwhile.
   const step = Effect.fn(`${name}.step`)(function* (id: Id) {
-    const row = yield* read(id)
-    return yield* phases[row.phase](row)
+    const found = yield* definition.find(id)
+    if (Option.isNone(found)) return true
+    return yield* phases[found.value.phase](found.value)
   })
 
   // oxlint-disable-next-line ren/no-comments -- The body of the kind's durable run: steps until the machine is ready or failed.
   const run = (id: Id) =>
     Effect.gen(function* () {
-      const first = yield* read(id)
+      const found = yield* definition.find(id)
+      if (Option.isNone(found)) return
+      const first = found.value
       let worked = false
       while (!(yield* step(id))) {
         worked = true
@@ -565,11 +581,11 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
           startKinds[first.phase] ?? (first.binding ? "resume" : "new"),
         )
     }).pipe(
-      // oxlint-disable-next-line ren/no-comments -- EN18: every provider failure counts, so an outage ends in failed and its report, not in endless retries.
+      // oxlint-disable-next-line ren/no-comments -- EN18: every provider failure counts, so an outage ends in failed and its report, not in endless retries. The run tries again until the machine is failed, then ends.
       Effect.catchIf(Schema.is(MachineProvider.Failed), (error) =>
         read(id).pipe(
           Effect.flatMap((row) => fail(row, error.message, row.phase)),
-          Effect.andThen(Effect.fail(error)),
+          Effect.flatMap((isFailed) => (isFailed ? Effect.void : Effect.fail(error))),
         ),
       ),
     )

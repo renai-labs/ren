@@ -41,6 +41,12 @@ export const ensure = <Name extends string, Payload extends Workflow.AnyStructSc
   payload: Payload["~type.make.in"],
 ) => run.execute(payload, { discard: true }).pipe(Effect.asVoid)
 
+// oxlint-disable-next-line ren/no-comments -- Starts the run of this key if it does not run, and waits for its end. A caller that stops waiting does not stop the run.
+export const join = <Name extends string, Payload extends Workflow.AnyStructSchema>(
+  run: Run<Name, Payload>,
+  payload: Payload["~type.make.in"],
+) => run.execute(payload).pipe(Effect.asVoid)
+
 export const supervised = <Name extends string, Payload extends Workflow.AnyStructSchema, E>(
   run: Run<Name, Payload>,
   handler: (payload: Payload["Type"]) => Effect.Effect<void, E>,

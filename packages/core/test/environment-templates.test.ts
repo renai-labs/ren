@@ -79,6 +79,7 @@ const it = testEffect(
   Layer.mergeAll(
     builds,
     Environments.layer.pipe(
+      Layer.provide(DurableRunner.layerMemory),
       Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone]),
       Layer.provide(Bundles.layer),
       Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),

@@ -42,6 +42,7 @@ import { Envelope } from "../src/envelope.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
+import { DurableRunner } from "../src/durable-runner.js"
 import { Models } from "../src/models.js"
 import { AppProfiles } from "../src/app/profiles.js"
 import { testEffect } from "./lib/effect.js"
@@ -591,6 +592,7 @@ describe("BrainHost pull", () => {
               ]),
               (probes) => {
                 const environments = Environments.layer.pipe(
+                  Layer.provide(DurableRunner.layerMemory),
                   Layer.provide([EnvironmentNetwork.layerNone, Bundles.layer]),
                   Layer.provide([Signer.layerLocal, FetchHttpClient.layer, TestSandboxEgress.layer]),
                   Layer.provide(EnvironmentProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
@@ -720,6 +722,7 @@ describe("BrainHost environments", () => {
     const environments = yield* Layer.build(
       Layer.fresh(
         Environments.layer.pipe(
+          Layer.provide(DurableRunner.layerMemory),
           Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
           Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
         ),

@@ -12,6 +12,7 @@ import { Bundles } from "../src/bundles.js"
 import { EnvironmentNetwork } from "../src/environment-network.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
+import { DurableRunner } from "../src/durable-runner.js"
 import { SandboxEgress } from "../src/sandbox-egress.js"
 import { Signer } from "../src/signer.js"
 import { SpaceCompute } from "../src/space-compute.js"
@@ -27,6 +28,7 @@ const compute = Effect.gen(function* () {
     Layer.fresh(SpaceCompute.layer).pipe(
       Layer.provide(
         Environments.layer.pipe(
+          Layer.provide(DurableRunner.layerMemory),
           Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
           Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
           Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),

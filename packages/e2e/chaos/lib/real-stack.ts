@@ -276,7 +276,14 @@ export const start = async (options: {
           Layer.provide(ChaosModels.layer),
           Layer.provide(
             Environments.layer
-              .pipe(Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]))
+              .pipe(
+                Layer.provide([
+                  SandboxEgress.layerNone,
+                  EnvironmentNetwork.layerNone,
+                  Bundles.layer,
+                  DurableRunner.layerMemory,
+                ]),
+              )
               .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
               .pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers))),
           ),
