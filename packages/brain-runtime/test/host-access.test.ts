@@ -193,6 +193,24 @@ it.effect("while Ren answers that the hand is starting, the access asks again ev
   }),
 )
 
+it.live("a connection lost on the way is asked again once at once, not a Ren that does not answer", () =>
+  Effect.gen(function* () {
+    const relay = yield* Relay.make(Relay.portOf(ren.url))
+    const subject = yield* build(relay.url)
+    const access = yield* accessFor(subject.sessionId)
+    const answers: Array<() => FakeRen.Answer> = [
+      () => {
+        Effect.runSync(relay.cut)
+        return { type: "hold" }
+      },
+    ]
+    ren.answer(subject.sessionId, () => (answers.shift() ?? (() => ({ type: "access", access }) as const))())
+    yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
+    const opened = yield* subject.access.open(subject.sessionId, { unreachable: false })
+    expect([opened.url.href, ren.accessCalls(subject.sessionId)]).toEqual([access.url.href, 2])
+  }),
+)
+
 it.effect("a connection lost after Ren said the hand is starting is asked again, not a Ren that does not answer", () =>
   Effect.gen(function* () {
     const relay = yield* Relay.make(Relay.portOf(ren.url))

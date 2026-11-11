@@ -4,7 +4,7 @@ import { EnvironmentAccess } from "@ren/brain/environment/access"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import type { Session } from "@ren/schema/session"
 import { Duration, Effect, Layer, Option, Schedule } from "effect"
-import { FetchHttpClient } from "effect/http"
+import { FetchHttpClient, HttpClientError } from "effect/http"
 import { Cell } from "./cell.js"
 import { CredentialEnv } from "./credential-env.js"
 import { HostToken } from "./host-token.js"
@@ -13,6 +13,9 @@ import { RenAddress } from "./ren-address.js"
 
 // oxlint-disable-next-line ren/no-comments -- Ren answers EnvironmentStartingError while the chat's hand starts; a new remote hand takes about 2 minutes (E2B gives its executor 2 minutes, `handBootWithin`). The brain asks again every 2 seconds, also after a lost connection during that wait.
 export const handStartsWithin = Duration.minutes(3)
+
+// oxlint-disable-next-line ren/no-comments -- A connection lost on the way, such as a kept-alive one that the other side closed. The access asks again once at once, so one lost connection is not a Ren that does not answer.
+const isLost = (error: unknown) => HttpClientError.isHttpClientError(error) && error.reason._tag === "TransportError"
 
 export const layer = Layer.effect(
   EnvironmentAccess.Service,
@@ -38,15 +41,14 @@ export const layer = Layer.effect(
         }).pipe(
           HostToken.withToken(presented.token),
           Effect.timeout(HostToken.renAnswersWithin),
+          Effect.retry({ times: 1, while: isLost }),
           Effect.tapError((error) =>
             Effect.sync(() => {
               if (error._tag === "EnvironmentStartingError") wait.starting = true
             }),
           ),
           Effect.retry({
-            while: (error) =>
-              error._tag === "EnvironmentStartingError" ||
-              (wait.starting && error._tag === "HttpClientError" && error.reason._tag === "TransportError"),
+            while: (error) => error._tag === "EnvironmentStartingError" || (wait.starting && isLost(error)),
             schedule: Schedule.spaced("2 seconds"),
           }),
           Effect.timeoutOrElse({
