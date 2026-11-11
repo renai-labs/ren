@@ -94,9 +94,6 @@ export const provider = Effect.gen(function* () {
     // oxlint-disable-next-line ren/no-comments -- A Docker environment has no egress yet, so its processes get no placeholders (R19, §11.1).
     canEgress: false,
     canMount: false,
-    canSample: false,
-    canColocate: false,
-    canLimitHosts: false,
     config: Config,
     binding: Binding,
     create: Effect.fn("Docker.create")(function* (input) {

@@ -465,12 +465,12 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     provider: MachineProvider.Provider,
   ) {
     const isFirst = !row.unanswered_since
-    if (!provider.canSample) {
+    if (Option.isNone(provider.lastSample)) {
       if (!isFirst) return
       const message = `${noun} ${row.id} does not answer, and its provider reports no samples of its machine; Ren keeps it`
       return yield* Effect.logError(message, Cause.fail(new Unreachable({ message }))).pipe(annotate(row))
     }
-    const found = yield* provider.lastSample(binding).pipe(
+    const found = yield* provider.lastSample.value(binding).pipe(
       Effect.tapError((error) => Effect.logWarning("The sandbox samples are unknown", error)),
       Effect.option,
     )
@@ -654,7 +654,8 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const hosts = Option.getOrNull(applied)
     if (JSON.stringify(hosts) === JSON.stringify(row.network_hosts)) return
     const provider = yield* definition.providerOf(row)
-    yield* provider.updateNetwork(row.binding, { proxy: yield* proxyOf(row, provider), hosts: applied }).pipe(
+    if (Option.isNone(provider.updateNetwork)) return
+    yield* provider.updateNetwork.value(row.binding, { proxy: yield* proxyOf(row, provider), hosts: applied }).pipe(
       Effect.andThen(update(row.id, { network_hosts: hosts })),
       Effect.catch((error) => Effect.logWarning(`${noun} ${row.id} did not get its new host list`, error)),
       annotate(row),

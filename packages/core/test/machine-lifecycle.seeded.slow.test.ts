@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { BrainProvider } from "../src/brain-provider.js"
 import { Brain } from "@ren/schema/brain"
-import { Effect, Random, Schema } from "effect"
+import { Effect, Option, Random, Schema } from "effect"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
 import { MachineProvider } from "../src/machine-provider.js"
 import { BrainRuns } from "./lib/brain-runs.js"
@@ -56,7 +56,10 @@ const faulty = () => {
       return {
         ...provider,
         status: (binding) => (faults.status ? unknown : provider.status(binding)),
-        lastSample: (binding) => (faults.status ? unknown : provider.lastSample(binding)),
+        lastSample: Option.map(
+          provider.lastSample,
+          (lastSample) => (binding: Schema.Json) => (faults.status ? unknown : lastSample(binding)),
+        ),
         list: Effect.suspend(() =>
           faults.partialList ? Effect.map(provider.list, (all) => all.slice(1)) : provider.list,
         ),

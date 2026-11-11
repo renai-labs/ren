@@ -34,7 +34,7 @@ export interface Labels {
   readonly spaceId: Space.ID
 }
 
-// oxlint-disable-next-line ren/no-comments -- Where a machine's traffic may go: through the egress with a proxy login, and to these hosts only (none: to any host). A provider without canLimitHosts gets no hosts.
+// oxlint-disable-next-line ren/no-comments -- Where a machine's traffic may go: through the egress with a proxy login, and to these hosts only (none: to any host). A provider without updateNetwork gets no hosts.
 export interface Network {
   readonly proxy: Option.Option<Proxy>
   readonly hosts: Option.Option<ReadonlyArray<string>>
@@ -127,11 +127,6 @@ interface Definition<Config, Binding> {
   // oxlint-disable-next-line ren/no-comments -- Whether this provider can send a machine's traffic through the egress with a proxy login (E2B BYOP, HTTPS_PROXY locally), which replaces ren:<LABEL> placeholders (R19, R57).
   readonly canEgress: boolean
   readonly canMount: boolean
-  readonly canSample: boolean
-  // oxlint-disable-next-line ren/no-comments -- Whether its machines can run a brain and that brain's tools on one machine (EN3).
-  readonly canColocate: boolean
-  // oxlint-disable-next-line ren/no-comments -- Whether it can keep a machine to a list of hosts (a template's `limited` networking).
-  readonly canLimitHosts: boolean
   // oxlint-disable-next-line ren/no-comments -- The hosts its machines answer on, such as `*.e2b.app`: a brain with a host list reaches its remote hands there.
   readonly machineHosts?: ReadonlyArray<string>
   readonly systemImage?: string
@@ -147,7 +142,7 @@ interface Definition<Config, Binding> {
     network: Network,
   ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly destroy: (binding: Binding) => Effect.Effect<void, Failed>
-  // oxlint-disable-next-line ren/no-comments -- Sends a running machine its new host list (networking rule 4).
+  // oxlint-disable-next-line ren/no-comments -- Sends a running machine its new host list (networking rule 4). A provider with it can keep a machine to a list of hosts (a template's `limited` networking).
   readonly updateNetwork?: (binding: Binding, network: Network) => Effect.Effect<void, Gone | Failed>
   readonly build?: Build<Config>
   // oxlint-disable-next-line ren/no-comments -- The steps that bring a machine made from one config to another in place, or none when only a new machine can (EN22).
@@ -155,6 +150,7 @@ interface Definition<Config, Binding> {
   readonly keepAlive?: (binding: Binding, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly status?: (binding: Binding) => Effect.Effect<Status, Failed>
   readonly lastSample?: (binding: Binding) => Effect.Effect<Option.Option<Sample>, Failed>
+  // oxlint-disable-next-line ren/no-comments -- The brain's own machine as its tools' hand. A provider with it can run a brain and its tools on one machine (EN3).
   readonly hand?: (binding: Binding) => Hand
   readonly list?: Effect.Effect<ReadonlyArray<Lost & { readonly binding: Binding }>, Failed>
   readonly lost?: Stream.Stream<Lost>
@@ -165,9 +161,6 @@ export interface Provider {
   readonly info: EnvironmentProvider.Info
   readonly canEgress: boolean
   readonly canMount: boolean
-  readonly canSample: boolean
-  readonly canColocate: boolean
-  readonly canLimitHosts: boolean
   readonly machineHosts: ReadonlyArray<string>
   readonly systemImage: string | null
   readonly workspace: Option.Option<string>
@@ -178,13 +171,13 @@ export interface Provider {
     network: Network,
   ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
-  readonly updateNetwork: (binding: Schema.Json, network: Network) => Effect.Effect<void, Gone | Failed>
+  readonly updateNetwork: Option.Option<(binding: Schema.Json, network: Network) => Effect.Effect<void, Gone | Failed>>
   readonly build: Option.Option<Build<Schema.Json>>
   readonly stepsBetween: (from: Schema.Json, to: Schema.Json) => Option.Option<ReadonlyArray<Step>>
   readonly keepAlive: (binding: Schema.Json, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly status: (binding: Schema.Json) => Effect.Effect<Status, Failed>
-  readonly lastSample: (binding: Schema.Json) => Effect.Effect<Option.Option<Sample>, Failed>
-  readonly hand: (binding: Schema.Json) => Effect.Effect<Hand, Failed>
+  readonly lastSample: Option.Option<(binding: Schema.Json) => Effect.Effect<Option.Option<Sample>, Failed>>
+  readonly hand: Option.Option<(binding: Schema.Json) => Effect.Effect<Hand, Failed>>
   readonly list: Effect.Effect<ReadonlyArray<Listed>, Failed>
   readonly lost: Stream.Stream<Lost>
   readonly metered: (since: Option.Option<DateTime.Utc>) => Effect.Effect<ReadonlyArray<Metered>, Failed>
@@ -218,27 +211,19 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
         Effect.mapError((error) => new Failed({ message: `${definition.id} ${name}: ${error.message}` })),
       )
   const storedBinding = stored(binding, "binding")
+  const storedConfig = stored(config, "config")
   const encode = (value: Binding) => Schema.encodeEffect(binding)(value).pipe(Effect.orDie)
-  const keepAlive = definition.keepAlive
-  const status = definition.status
-  const lastSample = definition.lastSample
-  const hand = definition.hand
-  const list = definition.list
-  const updateNetwork = definition.updateNetwork
   return {
     info: {
       id: definition.id,
       title: definition.title,
       description: definition.description,
       configSchema: Schema.decodeUnknownSync(Schema.Json)(Schema.toJsonSchemaDocument(definition.config)),
-      canLimitHosts: definition.canLimitHosts,
-      canColocate: definition.canColocate,
+      canLimitHosts: definition.updateNetwork !== undefined,
+      canColocate: definition.hand !== undefined,
     },
     canEgress: definition.canEgress,
     canMount: definition.canMount,
-    canSample: definition.canSample,
-    canColocate: definition.canColocate,
-    canLimitHosts: definition.canLimitHosts,
     machineHosts: definition.machineHosts ?? [],
     systemImage: definition.systemImage ?? null,
     workspace: Option.fromUndefinedOr(definition.workspace),
@@ -248,10 +233,7 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
         Effect.mapError((error) => new InvalidConfig({ message: error.message })),
       ),
     create: (input) =>
-      stored(
-        config,
-        "config",
-      )(input.config).pipe(
+      storedConfig(input.config).pipe(
         Effect.flatMap((decoded) => definition.create({ ...input, config: decoded })),
         Effect.flatMap((created) =>
           Effect.map(encode(created.binding), (encoded) => ({ binding: encoded, url: created.url })),
@@ -260,8 +242,11 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
     connect: (value, network) =>
       storedBinding(value).pipe(Effect.flatMap((found) => definition.connect(found, network))),
     destroy: (value) => storedBinding(value).pipe(Effect.flatMap(definition.destroy)),
-    updateNetwork: (value, network) =>
-      updateNetwork ? storedBinding(value).pipe(Effect.flatMap((found) => updateNetwork(found, network))) : Effect.void,
+    updateNetwork: Option.map(
+      Option.fromUndefinedOr(definition.updateNetwork),
+      (updateNetwork) => (value: Schema.Json, network: Network) =>
+        storedBinding(value).pipe(Effect.flatMap((found) => updateNetwork(found, network))),
+    ),
     stepsBetween: (from, to) => {
       const decode = Schema.decodeUnknownOption(config)
       return Option.flatMap(
@@ -271,30 +256,36 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
     },
     build: Option.map(Option.fromUndefinedOr(definition.build), (build) => ({
       start: (input: BuildInput<Schema.Json>) =>
-        stored(
-          config,
-          "config",
-        )(input.config).pipe(Effect.flatMap((decoded) => build.start({ ...input, config: decoded }))),
+        storedConfig(input.config).pipe(Effect.flatMap((decoded) => build.start({ ...input, config: decoded }))),
       status: build.status,
     })),
     keepAlive: (value, duration) =>
-      keepAlive ? storedBinding(value).pipe(Effect.flatMap((found) => keepAlive(found, duration))) : Effect.void,
+      Option.match(Option.fromUndefinedOr(definition.keepAlive), {
+        onNone: () => Effect.void,
+        onSome: (keepAlive) => storedBinding(value).pipe(Effect.flatMap((found) => keepAlive(found, duration))),
+      }),
     status: (value) =>
-      status
-        ? storedBinding(value).pipe(Effect.flatMap(status))
-        : Effect.fail(new Failed({ message: `${definition.id} reports no status` })),
-    lastSample: (value) => (lastSample ? storedBinding(value).pipe(Effect.flatMap(lastSample)) : Effect.succeedNone),
-    hand: (value) =>
-      hand
-        ? storedBinding(value).pipe(Effect.map(hand))
-        : Effect.fail(new Failed({ message: `${definition.id} runs no hand beside a brain` })),
-    list: list
-      ? Effect.flatMap(list, (listed) =>
+      Option.match(Option.fromUndefinedOr(definition.status), {
+        onNone: () => Effect.fail(new Failed({ message: `${definition.id} reports no status` })),
+        onSome: (status) => storedBinding(value).pipe(Effect.flatMap(status)),
+      }),
+    lastSample: Option.map(
+      Option.fromUndefinedOr(definition.lastSample),
+      (lastSample) => (value: Schema.Json) => storedBinding(value).pipe(Effect.flatMap(lastSample)),
+    ),
+    hand: Option.map(
+      Option.fromUndefinedOr(definition.hand),
+      (hand) => (value: Schema.Json) => storedBinding(value).pipe(Effect.map(hand)),
+    ),
+    list: Option.match(Option.fromUndefinedOr(definition.list), {
+      onNone: () => Effect.succeed([]),
+      onSome: (list) =>
+        Effect.flatMap(list, (listed) =>
           Effect.forEach(listed, (each) =>
             Effect.map(encode(each.binding), (encoded) => ({ ...each, binding: encoded })),
           ),
-        )
-      : Effect.succeed([]),
+        ),
+    }),
     lost: definition.lost ?? Stream.empty,
     metered: definition.metered ?? (() => Effect.succeed([])),
   }

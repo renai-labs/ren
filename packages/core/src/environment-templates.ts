@@ -115,7 +115,7 @@ export const layer = Layer.effect(
       provider: EnvironmentProvider.ID,
       networking: EnvironmentTemplate.Networking | undefined,
     ) {
-      if (networking?.type !== "limited" || Option.exists(registry.get(provider), (found) => found.canLimitHosts))
+      if (networking?.type !== "limited" || Option.exists(registry.get(provider), (found) => found.info.canLimitHosts))
         return
       return yield* new Primitive.Invalid({
         message: `${provider} machines cannot keep to a list of hosts; use unrestricted networking.`,

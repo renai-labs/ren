@@ -824,8 +824,9 @@ export const layer = Layer.effect(
         // oxlint-disable-next-line ren/no-comments -- A brain made for remote hands runs no executor, so its own machine is no hand.
         if (!row.binding || row.hand_placement === "remote") return Option.none()
         const provider = yield* providerOf(row)
+        if (Option.isNone(provider.hand)) return Option.none()
         return Option.some({
-          ...(yield* provider.hand(row.binding).pipe(Effect.orDie)),
+          ...(yield* provider.hand.value(row.binding).pipe(Effect.orDie)),
           egress: row.egress,
           canMount: provider.canMount,
         })

@@ -1,7 +1,7 @@
 export * as LocalSandbox from "./local.js"
 
 import { Workload } from "@ren/schema/workload"
-import { DateTime, Duration, Effect, FiberMap, Option, Schema, Stream } from "effect"
+import { Duration, Effect, FiberMap, Option, Schema, Stream } from "effect"
 import { spawn } from "node:child_process"
 import { mkdir, readdir, rm } from "node:fs/promises"
 import { createServer } from "node:net"
@@ -24,7 +24,7 @@ type Binding = typeof Binding.Type
 
 const BindingFile = Schema.fromJsonString(Binding)
 
-// oxlint-disable-next-line ren/no-comments -- A local machine always runs a brain (canColocate); its hand is the brain's own.
+// oxlint-disable-next-line ren/no-comments -- A local machine always runs a brain; its hand is the brain's own.
 const workloadOf = (binding: Binding) =>
   Schema.decodeUnknownOption(Workload.Info)({ kind: "brain", id: binding.brainId, generation: binding.generation })
 
@@ -83,9 +83,6 @@ export const provider = (options: {
       description: "A process on the machine that runs Ren.",
       canEgress: true,
       canMount: false,
-      canSample: true,
-      canColocate: true,
-      canLimitHosts: false,
       ...(options.systemImage && { systemImage: options.systemImage }),
       config: Schema.Struct({}),
       binding: Binding,
@@ -197,13 +194,6 @@ export const provider = (options: {
       status: Effect.fn("LocalSandbox.status")(function* (binding) {
         if (!(yield* isAlive(binding.pid))) return "gone" as const
         return paused.has(binding.pid) ? ("paused" as const) : ("running" as const)
-      }),
-      lastSample: Effect.fn("LocalSandbox.lastSample")(function* (binding) {
-        const state = new TextDecoder()
-          .decode(Bun.spawnSync(["ps", "-o", "stat=", "-p", String(binding.pid)]).stdout)
-          .trim()
-        if (state === "" || state.startsWith("T")) return Option.none()
-        return Option.some({ at: yield* DateTime.now, memory: 0, disk: 0 })
       }),
       hand: (binding) => ({
         url: `http://127.0.0.1:${binding.handPort}`,

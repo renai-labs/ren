@@ -58,9 +58,6 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       description: "Machines in the test’s memory.",
       canEgress: false,
       canMount: false,
-      canSample: options.canSample ?? false,
-      canColocate: true,
-      canLimitHosts: true,
       systemImage: "system",
       config: Schema.Struct({
         packages: Schema.Array(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
@@ -97,7 +94,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       keepAlive: () =>
         switches.alive ? Effect.void : Effect.fail(new MachineProvider.Gone({ message: "the sandbox is gone" })),
       status: () => Effect.succeed("running" as const),
-      lastSample: () => Effect.sync(() => switches.sample),
+      ...(options.canSample && { lastSample: () => Effect.sync(() => switches.sample) }),
     })
     const read = (id: Environment.ID) =>
       Effect.sync(() => rows.get(id)).pipe(Effect.flatMap(Effect.fromNullishOr), Effect.orDie)

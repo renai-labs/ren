@@ -152,7 +152,7 @@ const checkMachines = Effect.fnUntraced(function* (
   if (!input.brain && !input.hand) return
   const hand = input.hand ?? current.hand
   const brainProvider = yield* checkBrain(registry, transaction, actor, input.brain ?? current.brain)
-  if (hand.placement === "colocated" && Option.exists(brainProvider, (provider) => !provider.canColocate))
+  if (hand.placement === "colocated" && Option.exists(brainProvider, (provider) => !provider.info.canColocate))
     return yield* new Primitive.Invalid({
       message: `The brain provider ${Option.getOrThrow(brainProvider).info.id} cannot run tools on the brain’s machine; pick a remote hand or none`,
       field: "hand",
