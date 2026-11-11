@@ -42,7 +42,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         viewer={chat.viewer}
         people={chat.people}
         more={chat.more}
-        loading={chat.loading && chat.rows.length === 0}
+        loading={chat.rows.length === 0 && (chat.loading || chat.more || chat.loadingHistory)}
         loadingHistory={chat.loadingHistory}
         onLoadMore={chat.loadMore}
         onOpenChild={(id) => chat.openChild(id)}

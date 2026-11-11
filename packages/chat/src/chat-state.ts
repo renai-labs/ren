@@ -32,6 +32,8 @@ export interface State {
   readonly outbox: ReadonlySet<string>
   readonly compacting: Readonly<Record<string, Compacting>>
   readonly history: ReadonlySet<string>
+  // oxlint-disable-next-line ren/no-comments -- Sessions that show a page of Ren's saved history with older messages behind it: the brain's read stops at its oldest message (#253).
+  readonly partial: ReadonlySet<string>
   readonly connection: number
   readonly activeOverlay: ReadonlyMap<string, Activity | undefined> | undefined
   readonly pendingOverlay: Readonly<Record<string, ReadonlyMap<string, PendingUpdate>>>
@@ -50,6 +52,7 @@ export const empty: State = {
   outbox: new Set(),
   compacting: {},
   history: new Set(),
+  partial: new Set(),
   connection: 0,
   activeOverlay: undefined,
   pendingOverlay: {},
