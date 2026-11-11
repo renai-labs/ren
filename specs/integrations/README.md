@@ -4,7 +4,7 @@ Not built. Linear REN-1540.
 
 An app can have two MCPs: the vendor's **official MCP**, which runs on the organization's own account, and a **managed MCP**, which runs on Ren's account and is paid with Ren credits. When a space has the app but no connected account for the official MCP, Ren gives the brain the managed MCP. When someone connects an account, the official MCP replaces the managed one in the running brain, without a restart.
 
-The managed MCPs run in the **integrations service** (integrations repository, `service/`, ECS service `mcp`), next to billing and the partner MCPs, at `https://mcp.useren.ai/managed/<server>/mcp`. The first managed MCP is Kernel (cloud browsers). It forwards to Kernel's own MCP server.
+The managed MCPs run in the **integrations service** (integrations repository, `service/`, ECS service `mcp`), next to billing and the partner MCPs, at `https://mcp.useren.ai/<server>`. The first managed MCP is Kernel (cloud browsers). It forwards to Kernel's own MCP server.
 
 References:
 
@@ -41,8 +41,8 @@ The agent calls the Kernel tool `manage_browsers` with `action: "create"`. The b
 ```
  ┌──────────────────────┐                          ┌──────────────────────┐                          ┌──────────────────────┐
  │                      │                          │                      │                          │                      │
- │  brain brn_7:3       │  POST /managed/          │  egress              │  Bearer <signed token>   │  /managed/kernel/mcp │
- │  OpenCode MCP client │  kernel/mcp              │  replaces both       │  ren-member: mem_A       │  1 renToken          │
+ │  brain brn_7:3       │  POST /kernel            │  egress              │  Bearer <signed token>   │  /kernel             │
+ │  OpenCode MCP client │                          │  replaces both       │  ren-member: mem_A       │  1 renToken          │
  │                      │  Bearer ren:INTEGRATIONS │  placeholders        │  _meta session: ses_4    │  2 credit check      │
  │                      │  ren-root-session: ses_4 │                      │  ──────────────────────> │  3 add tags          │
  │                      │  ren-member:             │                      │                          │                      │
@@ -53,7 +53,7 @@ The agent calls the Kernel tool `manage_browsers` with `action: "create"`. The b
 
  ┌──────────────────────┐                          ┌──────────────────────┐
  │                      │                          │                      │
- │  /managed/kernel/mcp │  same MCP request,       │  mcp.onkernel.com    │
+ │  /kernel             │  same MCP request,       │  mcp.onkernel.com    │
  │  passMcp             │  tags ren_session ...    │  Kernel's MCP server │
  │                      │  Bearer <spc_G's Kernel  │  project ren-spc_G   │
  │                      │  key>                    │                      │
@@ -131,7 +131,7 @@ The push exists for `credential`, `app_profile`, `app_profile_space` and `app_pr
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | 1   | The registry declares a managed MCP as a second MCP of the app: `transport: { type: managed, server, replaces? }`, `auth: none`. It has no URL. Only a registry app can declare one.                               | One registry release works on every Ren deployment. An organization cannot point Ren's token at its own server.                      |
 | 2   | Selection is one pure function, `select()`. `AppResolve` loads its input. It is not an Effect service.                                                                                                             | The strategy can change fast: a later switch is one input field and one rule. There is only one strategy now.                        |
-| 3   | The managed MCPs run in the integrations service, under `/managed/` of `mcp.useren.ai`. `REN_INTEGRATIONS_URL` is `https://mcp.useren.ai/managed`.                                                                 | One service and one deploy with billing and the partner MCPs.                                                                        |
+| 3   | The managed MCPs run in the integrations service, at `mcp.useren.ai/<server>`. `REN_INTEGRATIONS_URL` is `https://mcp.useren.ai`. The service also answers the old `/managed/<server>/mcp` for a transition.       | One service and one deploy with billing and the partner MCPs.                                                                        |
 | 4   | Ren signs a token of purpose `ren-integrations` for each brain: `org`, `space`, `brain`, `gen`, `exp`, 1 h. The egress injects it as the label `INTEGRATIONS`.                                                     | The receiver checks it offline and keeps no state. It works nowhere else.                                                            |
 | 5   | The brain sends `ren-root-session` and `ren-member` (a `PERSON` placeholder) on each managed MCP connection. OpenCode sends the session in `_meta`. `turn` and `agent` stay empty.                                 | The same claims as model calls, where an MCP call can carry them.                                                                    |
 | 6   | When the official credential needs a new sign-in, the official server stays.                                                                                                                                       | Ren does not change to Ren credits without a person's choice.                                                                        |
@@ -180,12 +180,12 @@ The push exists for `credential`, `app_profile`, `app_profile_space` and `app_pr
    }): { mcps: ReadonlyArray<AppCatalog.McpEntry>; unavailable: ReadonlyArray<AppCatalog.Unavailable> }
    ```
 
-   | Rule | Condition                                                     | Result                                                                                                     |
-   | ---- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-   | 1    | An entry of `resolved` has the candidate's app and `replaces` | Leave out the candidate.                                                                                   |
-   | 2    | Else, `integrationsUrl` is none                               | Leave it out. `unavailable`, reason `integrations`.                                                        |
-   | 3    | Else, `egress` is false (a cell host)                         | Leave it out. `unavailable`, reason `egress`.                                                              |
-   | 4    | Else                                                          | Add it: server = MCP slug, `profile` null, `label` `INTEGRATIONS`, `url` `<integrationsUrl>/<server>/mcp`. |
+   | Rule | Condition                                                     | Result                                                                                                 |
+   | ---- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+   | 1    | An entry of `resolved` has the candidate's app and `replaces` | Leave out the candidate.                                                                               |
+   | 2    | Else, `integrationsUrl` is none                               | Leave it out. `unavailable`, reason `integrations`.                                                    |
+   | 3    | Else, `egress` is false (a cell host)                         | Leave it out. `unavailable`, reason `egress`.                                                          |
+   | 4    | Else                                                          | Add it: server = MCP slug, `profile` null, `label` `INTEGRATIONS`, `url` `<integrationsUrl>/<server>`. |
 
    A candidate without `replaces` passes rule 1 always: it is on whenever a profile of its app reaches the space.
 

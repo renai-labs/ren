@@ -59,7 +59,7 @@ export const layer = Layer.mergeAll(
         ENVELOPE_KEYS: JSON.stringify([
           { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
         ]),
-        REN_INTEGRATIONS_URL: "https://mcp.ren.test/managed",
+        REN_INTEGRATIONS_URL: "https://mcp.ren.test",
       }),
     ),
   ),

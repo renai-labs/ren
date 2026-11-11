@@ -90,7 +90,7 @@ const it = testEffect(
           BRAIN_KEYS: encodeKey(key),
           REN_INTEGRATIONS_KEYS: encodeKey(integrationsKey),
           REN_URL: "https://api.ren.test",
-          REN_INTEGRATIONS_URL: "https://mcp.ren.test/managed",
+          REN_INTEGRATIONS_URL: "https://mcp.ren.test",
           ...TestDrives.config,
         }),
       ),
