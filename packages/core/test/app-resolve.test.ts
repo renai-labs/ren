@@ -358,9 +358,9 @@ it.live("a managed MCP is on until a credential connects its official MCP, and c
     yield* credentials.remove(root, credentialId, {})
     const removed = yield* servers
     expect([before.servers, connected.servers, removed.servers]).toEqual([
-      ["kernel-managed INTEGRATIONS https://mcp.ren.test/managed/kernel/mcp"],
+      ["kernel-managed INTEGRATIONS https://mcp.ren.test/kernel"],
       ["kernel__main MCP_KERNEL__MAIN"],
-      ["kernel-managed INTEGRATIONS https://mcp.ren.test/managed/kernel/mcp"],
+      ["kernel-managed INTEGRATIONS https://mcp.ren.test/kernel"],
     ])
     expect([connected.fingerprint === before.fingerprint, removed.fingerprint === connected.fingerprint]).toEqual([
       false,
