@@ -10,6 +10,12 @@ export const appOrigin = `http://127.0.0.1:${ports.app}`
 export const appURL = `${appOrigin}/app`
 const mailboxURL = `http://127.0.0.1:${ports.mailbox}`
 
+export async function scriptReply(request: APIRequestContext, reply: string) {
+  const response = await request.post(`${mailboxURL}/script`, { data: { reply } })
+  expect(response.ok()).toBe(true)
+  return Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await response.json()).marker
+}
+
 export const uniqueEmail = (label: string) => `${label}-${crypto.randomUUID()}@example.com`
 
 export async function lastEmail(request: APIRequestContext, to: string, includes: string) {

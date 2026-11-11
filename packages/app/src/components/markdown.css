@@ -1,0 +1,3 @@
+li:has(> [data-slot="checkbox"], > p > [data-slot="checkbox"]) {
+  list-style: none;
+}

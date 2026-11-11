@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, scriptReply, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -173,4 +173,23 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the party")).toBeVisible()
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
+})
+
+test("task list items in a reply render as read-only checkboxes", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  const marker = await scriptReply(page.request, "- [x] a\n- [ ] b\n- c\n")
+  await page.goto("/app/")
+  const start = page.getByRole("form", { name: "Start a chat" })
+  await start.getByRole("textbox", { name: "Message" }).fill(`List ${marker}`)
+  await start.getByRole("button", { name: "Send" }).click()
+
+  const done = page.getByRole("checkbox", { checked: true })
+  const open = page.getByRole("checkbox", { checked: false })
+  await expect(page.getByRole("checkbox")).toHaveCount(2, { timeout: brainStart })
+  await expect(done).toHaveCount(1)
+  await expect(open).toHaveCount(1)
+  await expect(done).toHaveAttribute("aria-readonly", "true")
+  await expect(open).toHaveAttribute("aria-readonly", "true")
+  await open.click()
+  await expect(open).not.toBeChecked()
 })

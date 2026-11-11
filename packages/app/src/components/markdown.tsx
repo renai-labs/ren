@@ -22,6 +22,7 @@ import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
+import { Checkbox } from "@ren/ui/checkbox"
 
 function MarkdownCodeBlock(props: { code: string; language: string }) {
   const incomplete = useIsCodeFenceIncomplete()
@@ -78,7 +79,12 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
   return <span {...props}>{children}</span>
 }
 
-const components = { code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
+function MarkdownInput({ node: _node, type, checked }: ComponentProps<"input"> & ExtraProps) {
+  if (type !== "checkbox") return null
+  return <Checkbox checked={checked === true} readOnly className="mr-2 inline-flex align-text-bottom" />
+}
+
+const components = { code: MarkdownCode, img: MarkdownImage, input: MarkdownInput, span: MarkdownSpan }
 
 interface MarkdownNode {
   type: string
