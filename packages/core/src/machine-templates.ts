@@ -195,26 +195,29 @@ export const layer = Layer.effect(
       yield* record(row, row.config_version, started)
     })
 
-    // oxlint-disable-next-line ren/no-comments -- At start, a template whose image was built on another system image than its provider's now builds again, as after a save; its machines move to it by a replace at their wake.
-    yield* Effect.forEach(
-      registry.providers.filter((provider) => Option.isSome(provider.build)),
-      (provider) => {
-        const system = provider.systemImage
-        return database.db
-          .update(table)
-          .set({ build_status: "queued", config_version: sql`${table.config_version} + 1` })
-          .where(
-            and(
-              eq(table.provider, provider.info.id),
-              isNull(table.archived_at),
-              isNotNull(table.image),
-              system ? or(isNull(table.image_system), ne(table.image_system, system)) : isNotNull(table.image_system),
-            ),
-          )
-          .pipe(Effect.orDie)
-      },
-      { discard: true },
-    )
+    // oxlint-disable-next-line ren/no-comments -- A template whose image was built on another system image than its provider's builds again, as after a save; its machines move to it by a replace at their wake. At start every such template; after that only ready ones, because in a rolling deploy the older Ren can still mark a template ready on its own system image.
+    const queueStale = (options: { readonly readyOnly: boolean }) =>
+      Effect.forEach(
+        registry.providers.filter((provider) => Option.isSome(provider.build)),
+        (provider) => {
+          const system = provider.systemImage
+          return database.db
+            .update(table)
+            .set({ build_status: "queued", config_version: sql`${table.config_version} + 1` })
+            .where(
+              and(
+                eq(table.provider, provider.info.id),
+                isNull(table.archived_at),
+                isNotNull(table.image),
+                options.readyOnly ? eq(table.build_status, "ready") : undefined,
+                system ? or(isNull(table.image_system), ne(table.image_system, system)) : isNotNull(table.image_system),
+              ),
+            )
+            .pipe(Effect.orDie)
+        },
+        { discard: true },
+      )
+    yield* queueStale({ readyOnly: false })
     const checkEvery = yield* Config.Duration("ENVIRONMENT_TEMPLATE_BUILD_CHECK").pipe(
       Config.withDefault(Duration.seconds(10)),
     )
@@ -241,18 +244,20 @@ export const layer = Layer.effect(
         }).pipe(Effect.repeat({ until: (finished) => finished, schedule: Schedule.spaced(checkEvery) }), Effect.asVoid),
       ),
     )
-    yield* database.db
-      .select({ id: table.id, epoch: table.build_epoch })
-      .from(table)
-      .where(and(isNull(table.archived_at), inArray(table.build_status, ["queued", "building"])))
-      .pipe(
-        Effect.orDie,
-        Effect.flatMap((rows) => Effect.forEach(rows, (row) => DurableRunner.ensure(BuildRun, row), { discard: true })),
-        Effect.repeat(Schedule.spaced(checkEvery)),
-        Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-        Effect.withErrorReporting,
-        Effect.forkScoped,
-      )
+    yield* queueStale({ readyOnly: true }).pipe(
+      Effect.andThen(
+        database.db
+          .select({ id: table.id, epoch: table.build_epoch })
+          .from(table)
+          .where(and(isNull(table.archived_at), inArray(table.build_status, ["queued", "building"]))),
+      ),
+      Effect.orDie,
+      Effect.flatMap((rows) => Effect.forEach(rows, (row) => DurableRunner.ensure(BuildRun, row), { discard: true })),
+      Effect.repeat(Schedule.spaced(checkEvery)),
+      Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+      Effect.withErrorReporting,
+      Effect.forkScoped,
+    )
 
     const findForUpdate = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
