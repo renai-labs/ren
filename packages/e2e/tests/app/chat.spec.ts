@@ -197,5 +197,5 @@ test("a member wraps a long code line with the toggle, and Copy still copies the
   await block.getByRole("button", { name: "Copy" }).click()
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.press("ControlOrMeta+V")
-  await expect(message).toHaveText(line)
+  await expect.poll(async () => (await message.inputValue()).trimEnd()).toBe(line)
 })
