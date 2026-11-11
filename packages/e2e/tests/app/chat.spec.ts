@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, scriptReply, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -173,4 +173,20 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the party")).toBeVisible()
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
+})
+
+test("a reply's markdown has headings close to body size and nested list markers", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  const marker = await scriptReply(page.request, "# Title\n\nBody text\n\n- Parent\n  - Child\n")
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill(`Format ${marker}`)
+  await page.getByRole("button", { name: "Send" }).click()
+
+  const reply = page.locator('[data-slot="markdown"]', { hasText: "Body text" })
+  const heading = reply.getByRole("heading", { name: "Title", level: 1 })
+  await expect(heading).toBeVisible({ timeout: brainStart })
+  const body = reply.getByText("Body text", { exact: true })
+  await expect(body).toHaveCSS("font-size", "16px")
+  await expect(heading).toHaveCSS("font-size", "20px")
+  await expect(reply.getByRole("listitem").filter({ hasText: "Child" }).last()).toHaveCSS("list-style-type", "circle")
 })

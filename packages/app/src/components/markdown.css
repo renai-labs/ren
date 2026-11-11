@@ -1,0 +1,134 @@
+[data-slot="markdown"] {
+  overflow-wrap: break-word;
+
+  > div > :first-child {
+    margin-block-start: 0;
+  }
+
+  > div > :last-child {
+    margin-block-end: 0;
+  }
+
+  :is(p, li, blockquote) {
+    text-wrap: pretty;
+  }
+
+  &[data-streaming] > div > :last-child :is(p, li, blockquote) {
+    text-wrap: wrap;
+  }
+
+  :is(h1, h2, h3, h4, h5, h6) {
+    margin-block: 1.5em 0.5em;
+    font-size: 1em;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--muted-foreground);
+  }
+
+  :is(h1, h2, h3) {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  h1 {
+    font-size: 1.25em;
+  }
+
+  h2 {
+    font-size: 1.125em;
+  }
+
+  :is(h1, h2, h3, h4, h5, h6) + * {
+    margin-block-start: 0;
+  }
+
+  p {
+    margin-block: 0 0.75em;
+  }
+
+  strong {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  :is(ul, ol) {
+    margin-block: 0 0.75em;
+    margin-inline-start: 0;
+    padding-inline-start: 1.5em;
+    list-style-position: outside;
+    white-space: normal;
+  }
+
+  ul {
+    list-style-type: disc;
+  }
+
+  ul ul {
+    list-style-type: circle;
+  }
+
+  ul ul ul {
+    list-style-type: square;
+  }
+
+  ol {
+    list-style-type: decimal;
+  }
+
+  ol ol {
+    list-style-type: lower-alpha;
+  }
+
+  ol ol ol {
+    list-style-type: lower-roman;
+  }
+
+  li {
+    margin-block: 0 0.25em;
+    padding: 0;
+  }
+
+  li::marker {
+    color: var(--muted-foreground);
+  }
+
+  li > p:first-child {
+    display: inline;
+    margin: 0;
+  }
+
+  li > p + p {
+    display: block;
+    margin-block-start: 0.75em;
+  }
+
+  li > :is(ul, ol) {
+    margin-block: 0.25em;
+    padding-inline-start: 1.5em;
+  }
+
+  blockquote {
+    margin-block: 0 0.75em;
+    border-inline-start: 2px solid var(--border);
+    padding-block: 0;
+    padding-inline: 0.75em 0;
+    color: var(--muted-foreground);
+    font-style: normal;
+  }
+
+  hr {
+    margin-block: 1.5em;
+    border: 0;
+    border-block-start: 1px solid var(--border);
+  }
+
+  :not(pre) > code {
+    padding-inline: 0.25em;
+    border-radius: var(--radius-sm);
+    background: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    box-decoration-break: clone;
+    unicode-bidi: isolate;
+  }
+}

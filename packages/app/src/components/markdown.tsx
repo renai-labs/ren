@@ -45,12 +45,7 @@ function MarkdownCodeBlock(props: { code: string; language: string }) {
 }
 
 function MarkdownCode({ node: _node, className, children, ...props }: ComponentProps<"code"> & ExtraProps) {
-  if (!("data-block" in props))
-    return (
-      <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[90%]" {...props}>
-        {children}
-      </code>
-    )
+  if (!("data-block" in props)) return <code {...props}>{children}</code>
   return (
     <MarkdownCodeBlock
       code={typeof children === "string" ? children : ""}
@@ -154,18 +149,23 @@ export function Markdown(props: {
         }
   return (
     <WorkspaceImages value={props.workspaceImage}>
-      <Streamdown
-        controls={false}
-        tableMaxHeight={0}
-        urlTransform={urlTransform}
-        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-        components={withApps}
-        isAnimating={props.streaming === true}
-        animated={streamAnimation}
+      <div
+        data-slot="markdown"
+        data-streaming={props.streaming ? "" : undefined}
         className={cn("min-w-0 text-sm/relaxed", props.className)}
       >
-        {mentionLinks(props.children, apps)}
-      </Streamdown>
+        <Streamdown
+          controls={false}
+          tableMaxHeight={0}
+          urlTransform={urlTransform}
+          rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+          components={withApps}
+          isAnimating={props.streaming === true}
+          animated={streamAnimation}
+        >
+          {mentionLinks(props.children, apps)}
+        </Streamdown>
+      </div>
     </WorkspaceImages>
   )
 }

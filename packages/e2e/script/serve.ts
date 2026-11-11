@@ -35,6 +35,8 @@ const mailbox = Bun.serve({
       Shared.stub().modelInfo.set(Schema.decodeUnknownSync(ModelEntries)(await request.json()))
       return new Response(null, { status: 204 })
     }
+    if (request.method === "POST" && new URL(request.url).pathname === "/script")
+      return new Response(Shared.stub().script({ reply: await request.text() }).marker)
     const to = new URL(request.url).searchParams.get("to") ?? ""
     const start = log.lastIndexOf(`Email to ${to}:`)
     if (to === "" || start === -1) return new Response(null, { status: 404 })
