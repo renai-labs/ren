@@ -671,7 +671,12 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
             })
             const next = { resolved: resolved.success, interactive: saved?.interactive ?? true }
             const previous = yield* Ref.getAndUpdate(known.latest, (all) => new Map([...all, [chat.id, next]]))
-            changes.push({ directory: session.value.location.directory, previous: previous.get(chat.id), next })
+            changes.push({
+              id: chat.id,
+              directory: session.value.location.directory,
+              previous: previous.get(chat.id),
+              next,
+            })
             if (Option.isSome(settings)) yield* settings.value.keep(chat.id, next)
           }),
         { discard: true },

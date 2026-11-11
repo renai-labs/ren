@@ -2,6 +2,7 @@ import { expect, setDefaultTimeout } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
+import { join } from "node:path"
 import { Effect, Layer, Predicate, Queue, Stream } from "effect"
 import { OpenCodeEvents } from "../src/harness/opencode/events.js"
 import { SettingsHarness } from "./lib/settings-harness.js"
@@ -18,7 +19,9 @@ const rules = (effect?: "ask" | "deny") =>
     agents: [
       TestSettings.agent(
         "ren",
-        { permissions: effect ? [{ action: "webfetch", resource: "https://example.invalid/*", effect }] : [] },
+        {
+          permissions: effect ? [{ action: "webfetch", resource: "https://example.invalid/*", effect }] : [],
+        },
         { isSubagent: false },
       ),
       TestSettings.agent("general"),
@@ -69,5 +72,31 @@ it.live("a rule change that denies a waiting request rejects it", () =>
     const { opened, until } = yield* waiting()
     yield* opened.pull(rules("deny"))
     expect((yield* until("permission.replied")).reply).toBe("reject")
+  }),
+)
+
+it.live("a rule change for one chat leaves another chat's waiting request alone", () =>
+  Effect.gen(function* () {
+    const { opened, until } = yield* waiting()
+    const other = RenSession.ID.create()
+    yield* opened.harness.start({ sessionId: other, harness: "opencode", interactive: true })
+    yield* opened.harness
+      .send({
+        sessionId: other,
+        messageId: RenSession.MessageID.create(),
+        prompt: {
+          text: `${stub.script({ tools: [{ name: "webfetch", input: { url: "https://example.invalid/b", format: "text" } }] }).marker} go`,
+        },
+        delivery: "steer",
+        sender: { userId: "user_1" },
+      })
+      .pipe(Effect.orDie)
+    yield* until("permission.asked")
+    yield* opened.pull(rules())
+    yield* until("permission.replied")
+    const left = (yield* opened.client.permission.request
+      .list({ location: { directory: join(opened.directory, other) } })
+      .pipe(Effect.orDie)).data
+    expect(left.map((request) => String(request.sessionID))).toEqual([other])
   }),
 )
