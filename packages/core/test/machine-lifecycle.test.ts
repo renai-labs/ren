@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Auth } from "@ren/schema/auth"
+import { Environment } from "@ren/schema/environment"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Space } from "@ren/schema/space"
 import { Clock, DateTime, Deferred, Duration, Effect, ErrorReporter, Fiber, Option, Schema } from "effect"
@@ -28,7 +29,7 @@ const templateId = EnvironmentTemplate.ID.create()
 // oxlint-disable-next-line ren/no-comments -- A kind of machine that lives in memory: its rows in a map, its provider a counter, its ready check and its probe two switches.
 const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSample?: boolean }) =>
   Effect.gen(function* () {
-    const rows = new Map<string, MachineLifecycle.Row<string>>()
+    const rows = new Map<Environment.ID, MachineLifecycle.Row<Environment.ID>>()
     const switches = {
       boots: false,
       answers: true,
@@ -44,7 +45,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       sample: Option.none<MachineProvider.Sample>(),
       held: Option.none<{ readonly entered: Deferred.Deferred<void>; readonly release: Deferred.Deferred<void> }>(),
     }
-    const running = new Set<string>()
+    const running = new Set<Environment.ID>()
     const images: Array<Option.Option<string>> = []
     const networks: Array<Option.Option<ReadonlyArray<string>>> = []
     const steps: Array<ReadonlyArray<string>> = []
@@ -98,12 +99,12 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       status: () => Effect.succeed("running" as const),
       lastSample: () => Effect.sync(() => switches.sample),
     })
-    const read = (id: string) =>
+    const read = (id: Environment.ID) =>
       Effect.sync(() => rows.get(id)).pipe(Effect.flatMap(Effect.fromNullishOr), Effect.orDie)
     const update = (
-      id: string,
-      values: Partial<MachineLifecycle.Row<string>>,
-      only?: Pick<MachineLifecycle.Row<string>, "phase" | "generation">,
+      id: Environment.ID,
+      values: Partial<MachineLifecycle.Row<Environment.ID>>,
+      only?: Pick<MachineLifecycle.Row<Environment.ID>, "phase" | "generation">,
     ) =>
       Effect.flatMap(read(id), (row) =>
         Effect.sync(() => {
@@ -111,14 +112,12 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
           rows.set(id, { ...row, ...values })
         }),
       )
-    const holder: { run?: (id: string) => Effect.Effect<void, unknown> } = {}
+    const holder: { run?: (id: Environment.ID) => Effect.Effect<void, unknown> } = {}
     const machines = MachineLifecycle.make({
-      name: "TestLifecycle",
-      noun: "Machine",
-      annotation: "machine",
       kind: "hand",
+      egress: { enabled: false, proxyFor: () => Effect.succeedNone, retire: () => Effect.void },
+      workload: (row) => ({ kind: "hand", id: row.id, generation: row.generation }),
       providerOf: () => Effect.sync(() => ({ ...provider, systemImage: switches.system })),
-      isBehindEgress: () => false,
       bootWithin: Duration.seconds(1),
       wakeWithin: Duration.seconds(1),
       find: (id) => Effect.sync(() => Option.fromNullishOr(rows.get(id))),
@@ -147,8 +146,6 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
               Effect.ignore,
               Effect.ensuring(Effect.sync(() => running.delete(row.id))),
             ),
-      proxyFor: () => Effect.succeedNone,
-      retire: () => Effect.void,
       startup: () => Effect.succeed({ variables: {}, created: Effect.void }),
       desiredSetup: () => Effect.sync(() => switches.wanted),
       appliedHosts: () => Effect.sync(() => switches.applied),
@@ -158,7 +155,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       changeAtWake: () => Effect.sync(() => switches.changeAtWake),
       ...(options.canUpdateInPlace && {
         updateInPlace: (
-          row: MachineLifecycle.Row<string>,
+          row: MachineLifecycle.Row<Environment.ID>,
           _target: string,
           applied: ReadonlyArray<MachineProvider.Step>,
         ) =>
@@ -181,8 +178,8 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       answers: () => Effect.sync(() => switches.answers),
     })
     holder.run = machines.run
-    const add = (values: Partial<MachineLifecycle.Row<string>> = {}) => {
-      const id = `machine-${rows.size + 1}`
+    const add = (values: Partial<MachineLifecycle.Row<Environment.ID>> = {}) => {
+      const id = Environment.ID.create()
       rows.set(id, {
         id,
         organization_id: Auth.OrganizationID.create(),
@@ -332,7 +329,7 @@ describe("MachineLifecycle", () => {
         expect([fresh.generation, fresh.phase]).toEqual([1, "ready"])
         expect(yield* memory.read(id)).toMatchObject({ phase: "ready", generation: 2 })
         expect(reports).toEqual([
-          "MachineLifecycle.Replaced: Machine machine-1: its machine stopped with its disk full",
+          `MachineLifecycle.Replaced: Environment ${id}: its machine stopped with its disk full`,
         ])
       }),
   )

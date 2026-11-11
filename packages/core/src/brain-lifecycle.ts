@@ -262,9 +262,6 @@ export const layer = Layer.effect(
       return (["dependencies", "brain", "executor"] as const).every((kind) => row.bundles?.[kind] === versions[kind])
     }
 
-    // oxlint-disable-next-line ren/no-comments -- A brain goes behind the egress when this Ren runs one and its provider can route a sandbox through it. The answer is kept on the row (egress); every later step reads the row, never the setting.
-    const isBehindEgress = (provider: MachineProvider.Provider) => egress.enabled && provider.canEgress
-
     // oxlint-disable-next-line ren/no-comments -- A new brain gets its space's brain provider, else the deployment's first (EN2); an existing one keeps its own. Ren does not start when a brain runs on one it does not register (EN24).
     const providerOf = Effect.fnUntraced(function* (row: Row) {
       const chosen =
@@ -352,12 +349,10 @@ export const layer = Layer.effect(
     })
 
     const machines = MachineLifecycle.make({
-      name: "BrainLifecycle",
-      noun: "Brain",
-      annotation: "brain",
       kind: "brain",
+      egress,
+      workload: (row) => ({ kind: "brain", id: row.id, generation: row.generation }),
       providerOf,
-      isBehindEgress,
       bootWithin,
       wakeWithin,
       find,
@@ -402,12 +397,6 @@ export const layer = Layer.effect(
         DurableRunner.ensure(BrainRun, { brainId: row.id, epoch: row.run_epoch }).pipe(
           Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
         ),
-      proxyFor: (row) =>
-        egress.proxyFor({
-          workload: { kind: "brain", id: row.id, generation: row.generation },
-          organizationId: row.organization_id,
-        }),
-      retire: (brainId) => egress.retire({ kind: "brain", id: brainId }),
       desiredSetup,
       appliedHosts,
       publish: (row) =>

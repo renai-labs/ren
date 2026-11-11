@@ -425,12 +425,10 @@ export const layer = Layer.effect(
 
     // oxlint-disable-next-line ren/no-comments -- A remote hand's machine (EN1): the state machine of a brain's, with the executor's answer as its ready check.
     const hands = MachineLifecycle.make<Environment.ID, Row, Target, never>({
-      name: "EnvironmentLifecycle",
-      noun: "Environment",
-      annotation: "environment",
       kind: "hand",
+      egress: sandboxEgress,
+      workload: (row) => ({ kind: "hand", id: row.id, generation: row.generation }),
       providerOf,
-      isBehindEgress,
       bootWithin: MachineLifecycle.timing.boot,
       wakeWithin: MachineLifecycle.timing.wake,
       find,
@@ -464,12 +462,6 @@ export const layer = Layer.effect(
         DurableRunner.ensure(HandRun, { environmentId: row.id, epoch: row.run_epoch }).pipe(
           Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
         ),
-      proxyFor: (row) =>
-        sandboxEgress.proxyFor({
-          workload: { kind: "hand", id: row.id, generation: row.generation },
-          organizationId: row.organization_id,
-        }),
-      retire: (environmentId) => sandboxEgress.retire({ kind: "hand", id: environmentId }),
       startup: Effect.fnUntraced(function* (row) {
         const keys = yield* signingKeys
         const bundles = yield* currentBundles

@@ -4,9 +4,11 @@ import type { Auth } from "@ren/schema/auth"
 import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import type { Machine } from "@ren/schema/machine"
 import type { Space } from "@ren/schema/space"
+import type { Workload } from "@ren/schema/workload"
 import { Cause, Clock, DateTime, Duration, Effect, ErrorReporter, Option, Schedule, Schema } from "effect"
 import type { MachineAccess } from "./machine-access.js"
 import { MachineProvider } from "./machine-provider.js"
+import type { SandboxEgress } from "./sandbox-egress.js"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("MachineLifecycle.Unavailable", {
   message: Schema.String,
@@ -91,14 +93,12 @@ export interface DesiredSetup {
 }
 
 export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
-  // oxlint-disable-next-line ren/no-comments -- Names the kind in spans (`BrainLifecycle.step`), in messages (`Brain brn_…`) and in log annotations (`ren.brain.id`).
-  readonly name: string
-  readonly noun: string
-  readonly annotation: string
   readonly kind: MachineProvider.Labels["kind"]
+  readonly egress: SandboxEgress.Interface
+  // oxlint-disable-next-line ren/no-comments -- The row as the egress and the provider labels know it.
+  readonly workload: (row: Pick<R, "id" | "generation">) => Workload.Info
   // oxlint-disable-next-line ren/no-comments -- The provider of the row's machine: the one that made it, or for a new machine the one its owner chose.
   readonly providerOf: (row: R) => Effect.Effect<MachineProvider.Provider>
-  readonly isBehindEgress: (provider: MachineProvider.Provider) => boolean
   readonly bootWithin: Duration.Duration
   readonly wakeWithin: Duration.Duration
   readonly find: (id: Id) => Effect.Effect<Option.Option<R>>
@@ -116,8 +116,6 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly isNeeded: (id: Id) => Effect.Effect<boolean>
   // oxlint-disable-next-line ren/no-comments -- Starts the kind's durable run for the row's run epoch, which calls `run`.
   readonly ensure: (row: R) => Effect.Effect<void>
-  readonly proxyFor: (row: R) => Effect.Effect<Option.Option<MachineProvider.Proxy>>
-  readonly retire: (id: Id) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- What a new machine starts with, and the write of the kind's own columns that records it. Both come from one read, so the row says what the machine got.
   readonly startup: (row: R) => Effect.Effect<{
     readonly variables: Readonly<Record<string, string>>
@@ -143,6 +141,15 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
     steps: ReadonlyArray<MachineProvider.Step>,
   ) => Effect.Effect<Option.Option<string>, E>
 }
+
+// oxlint-disable-next-line ren/no-comments -- How each kind is named in spans (`BrainLifecycle.step`), messages (`Brain brn_…`) and log annotations (`ren.brain.id`).
+const kindNames = {
+  brain: { name: "BrainLifecycle", noun: "Brain", annotation: "brain" },
+  hand: { name: "EnvironmentLifecycle", noun: "Environment", annotation: "environment" },
+} satisfies Record<
+  MachineProvider.Labels["kind"],
+  { readonly name: string; readonly noun: string; readonly annotation: string }
+>
 
 const reasonOf = (sample: MachineProvider.Sample | undefined) => {
   if (sample && sample.memory >= timing.fullShare) return "memory" as const
@@ -188,8 +195,12 @@ const stepsInPlace = <Id extends string>(row: Row<Id>, desired: DesiredSetup, pr
 }
 
 export const make = <Id extends string, R extends Row<Id>, Target, E>(definition: Definition<Id, R, Target, E>) => {
-  const name = definition.name
-  const noun = definition.noun
+  const names = kindNames[definition.kind]
+  const name = names.name
+  const noun = names.noun
+  const egress = definition.egress
+  const isBehindEgress = (provider: MachineProvider.Provider) => egress.enabled && provider.canEgress
+  const retire = (row: Pick<R, "id" | "generation">) => egress.retire(definition.workload(row))
   const read = (id: Id) =>
     Effect.flatMap(
       definition.find(id),
@@ -201,8 +212,8 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const update = definition.update
   const annotate = (row: Pick<R, "id" | "generation">) =>
     Effect.annotateLogs({
-      [`ren.${definition.annotation}.id`]: row.id,
-      [`ren.${definition.annotation}.generation`]: row.generation,
+      [`ren.${names.annotation}.id`]: row.id,
+      [`ren.${names.annotation}.generation`]: row.generation,
     })
 
   const keepAlive = Effect.fnUntraced(function* (row: R, window: Duration.Duration) {
@@ -270,8 +281,11 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   })
 
   const proxyOf = (row: R, provider: MachineProvider.Provider) =>
-    definition.isBehindEgress(provider)
-      ? definition.proxyFor(row)
+    isBehindEgress(provider)
+      ? egress.proxyFor({
+          workload: definition.workload(row),
+          organizationId: row.organization_id,
+        })
       : Effect.succeed(Option.none<MachineProvider.Proxy>())
 
   const create = Effect.fnUntraced(function* (row: R) {
@@ -346,7 +360,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
     }
     // oxlint-disable-next-line ren/no-comments -- A machine built for the other egress mode would get the wrong keys; it moves to the current one by a replace, as for a build (E120).
-    if (row.egress !== definition.isBehindEgress(provider)) {
+    if (row.egress !== isBehindEgress(provider)) {
       yield* Effect.logInfo(
         `${noun} ${row.id} was created ${row.egress ? "behind" : "without"} the egress; Ren replaces it`,
       )
@@ -428,7 +442,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
 
   const replace = Effect.fnUntraced(function* (row: R) {
     yield* definition.replace(row, yield* now)
-    yield* definition.retire(row.id)
+    yield* retire(row)
     const provider = yield* definition.providerOf(row)
     if (row.binding)
       yield* provider
@@ -527,7 +541,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   // oxlint-disable-next-line ren/no-comments -- Ends a machine that nothing uses: destroys it and leaves the row at the next generation, `creating`.
   const rest = Effect.fnUntraced(function* (row: R) {
     if (!row.binding) return
-    yield* definition.retire(row.id)
+    yield* retire(row)
     const provider = yield* definition.providerOf(row)
     yield* provider.destroy(row.binding)
     yield* update(row.id, {
@@ -577,7 +591,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       }
       if (worked)
         yield* Effect.annotateCurrentSpan(
-          `ren.${definition.annotation}.start_kind`,
+          `ren.${names.annotation}.start_kind`,
           startKinds[first.phase] ?? (first.binding ? "resume" : "new"),
         )
     }).pipe(
