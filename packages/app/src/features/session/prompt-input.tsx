@@ -32,7 +32,7 @@ import {
 import { Avatar, AvatarGroup, AvatarGroupCount } from "@ren/ui/avatar"
 import { Kbd } from "@ren/ui/kbd"
 import { Separator } from "@ren/ui/separator"
-import { Command, CommandGroup, CommandItem, CommandList } from "@ren/ui/command"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
 import { Spinner } from "@ren/ui/spinner"
 import { useUploads, type Target } from "../../lib/use-uploads.js"
 import { DropOverlay, UploadChips } from "./attachments.js"
@@ -197,45 +197,28 @@ function AppsStrip(props: { spaceId: string }) {
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
           <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
-          {profiles.map((profile) => (
-            <div key={profile.id} className="group/row relative flex items-center gap-3 rounded-md p-2 hover:bg-accent">
-              <Avatar // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
-                size="sm"
-                className="data-[size=sm]:size-5"
-              >
-                <AppAvatarImage src={profile.icon} />
-                <AppAvatarFallback name={profile.app} />
-              </Avatar>
-              <Button
-                variant="ghost"
-                className="h-auto min-w-0 flex-1 flex-col items-stretch gap-0 rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 after:rounded-md hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
-                onClick={() => {
-                  setOpen(false)
-                  setConnecting({ appId: profile.appId, profileId: profile.id, from, edit: true })
-                }}
-              >
-                <span className="truncate text-sm">{profile.app}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {profile.gaps.length ? "Not connected" : "Connected"}
-                </span>
-              </Button>
-              {profile.gaps.length ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="relative shrink-0"
-                  onClick={() => {
-                    setOpen(false)
-                    setConnecting({ appId: profile.appId, profileId: profile.id, from })
-                  }}
-                >
-                  Connect
-                </Button>
-              ) : (
-                <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
-              )}
-            </div>
-          ))}
+          <Command filter={matchesAppOrProfileName} className="h-auto rounded-none p-0">
+            <CommandInput placeholder="Search apps" aria-label="Search apps" />
+            <CommandList className="pt-1">
+              <CommandEmpty>No apps found</CommandEmpty>
+              <CommandGroup className="p-0">
+                {profiles.map((profile) => (
+                  <AppProfileItem
+                    key={profile.id}
+                    profile={profile}
+                    onEdit={() => {
+                      setOpen(false)
+                      setConnecting({ appId: profile.appId, profileId: profile.id, from, edit: true })
+                    }}
+                    onConnect={() => {
+                      setOpen(false)
+                      setConnecting({ appId: profile.appId, profileId: profile.id, from })
+                    }}
+                  />
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
           <Separator className="my-1" />
           <Button
             variant="ghost"
@@ -252,6 +235,56 @@ function AppsStrip(props: { spaceId: string }) {
       </Popover>
       {dialogs}
     </>
+  )
+}
+
+const matchesAppOrProfileName = (_profileId: string, search: string, names?: ReadonlyArray<string>) =>
+  names?.some((name) => name.toLowerCase().includes(search.trim().toLowerCase())) ? 1 : 0
+
+function AppProfileItem(props: {
+  profile: { id: string; name: string; app: string; icon: string | undefined; gaps: ReadonlyArray<unknown> }
+  onEdit: () => void
+  onConnect: () => void
+}) {
+  const profile = props.profile
+  return (
+    // ast-grep-ignore: require-item-group -- rows render inside the apps popover's CommandGroup
+    <CommandItem
+      value={profile.id}
+      keywords={[profile.app, profile.name]}
+      className="gap-3 rounded-md p-2 [&>svg:last-child]:hidden"
+      onSelect={props.onEdit}
+    >
+      <Avatar // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
+        size="sm"
+        className="data-[size=sm]:size-5"
+      >
+        <AppAvatarImage src={profile.icon} />
+        <AppAvatarFallback name={profile.app} />
+      </Avatar>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm">{profile.app}</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {profile.gaps.length ? "Not connected" : "Connected"}
+        </span>
+      </span>
+      {profile.gaps.length ? (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            props.onConnect()
+          }}
+        >
+          Connect
+        </Button>
+      ) : (
+        <IconChevronRight className="text-muted-foreground" />
+      )}
+    </CommandItem>
   )
 }
 
