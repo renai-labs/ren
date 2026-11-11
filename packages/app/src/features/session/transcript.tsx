@@ -256,8 +256,11 @@ function groupTurns(blocks: ReadonlyArray<Block>, runningTurn: string | undefine
       block.kind === "steps"
         ? block.steps
         : [{ kind: "text", key: block.key, text: block.text, streaming: block.streaming }]
-    const last = grouped.at(-1)
-    if (last?.kind === "steps" && last.turn === block.turn) last.steps.push(...items)
+    const group =
+      block.turn === runningTurn
+        ? grouped.find((each) => each.kind === "steps" && each.turn === block.turn)
+        : grouped.at(-1)
+    if (group?.kind === "steps" && group.turn === block.turn) group.steps.push(...items)
     else grouped.push({ kind: "steps", key: block.key, turn: block.turn, steps: [...items] })
     return grouped
   }, [])
