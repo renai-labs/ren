@@ -184,6 +184,31 @@ describe("Space", () => {
     }),
   )
 
+  it.live(
+    "a member who can edit a space marks it for one shutdown; a second request while it runs changes nothing",
+    () =>
+      Effect.gen(function* () {
+        const spaces = yield* Space.Service
+        const database = yield* Database.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* user(organizationId)
+        const grace = yield* user(organizationId)
+        const [general, personal] = (yield* spaces.list(ada, page)).items
+        if (!general || !personal) return yield* Effect.die(new Error("Ada has no spaces"))
+        const first = yield* spaces.shutdown(ada, general.id, {})
+        yield* spaces.shutdown(ada, general.id, {})
+        const epoch = (yield* database.db
+          .select({ epoch: Database.Schema.space.shutdown_epoch })
+          .from(Database.Schema.space)
+          .where(eq(Database.Schema.space.id, general.id))).at(0)?.epoch
+        expect({
+          shutdown: first.compute.shutdown,
+          epoch,
+          other: (yield* spaces.shutdown(grace, personal.id, {}).pipe(Effect.flip))._tag,
+        }).toEqual({ shutdown: "running", epoch: 1, other: "Primitive.NotFound" })
+      }),
+  )
+
   it.live("protects the first organization space from archiving and makes archive retries idempotent", () =>
     Effect.gen(function* () {
       const spaces = yield* Space.Service

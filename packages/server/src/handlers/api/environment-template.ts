@@ -16,6 +16,7 @@ export const EnvironmentTemplateHandler = HttpApiBuilder.group(Api, "environment
       .handle("environment-template.update", Primitive.update(templates.update))
       .handle("environment-template.archive", Primitive.archive(templates.archive))
       .handle("environment-template.retryBuild", Primitive.action(templates.retryBuild))
+      .handle("environment-template.affectedSpaces", Primitive.action(templates.affectedSpaces))
   }),
 )
 

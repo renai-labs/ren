@@ -207,6 +207,19 @@ it.live("each send and each chat prompt checks Ren for changes before its turn",
   }),
 )
 
+it.live("a stop during a turn refuses every later send", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start({ interactive: false })
+    const held = Shared.stub().script({ hold: true })
+    yield* brain.send(`long ${held.marker}`)
+    yield* Effect.promise(() => held.called())
+    yield* brain.client.brain["brain.stop"]()
+    held.release()
+    expect((yield* brain.send("after").pipe(Effect.flip))._tag).toBe("BrainRejectedError")
+  }),
+)
+
 it.live("send before start is a typed SessionNotStartedError", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service

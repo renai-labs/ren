@@ -158,6 +158,16 @@ const BrainGroup = HttpApiGroup.make("brain")
     ),
   )
   .add(
+    HttpApiEndpoint.post("brain.stop", "/ren/stop", { success: Synced }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "brain.stop",
+        summary: "Stop the brain for a shutdown",
+        description:
+          "Ren calls this when a person shuts down the brain’s space. The brain refuses new turns and Chat API changes, interrupts every turn, and syncs its sessions to Ren. `drained` is false when a session did not sync. Ren then destroys the machine. A brain that does not have this call answers 404.",
+      }),
+    ),
+  )
+  .add(
     HttpApiEndpoint.get("brain.state", "/ren/state", { success: State }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.state",

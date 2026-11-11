@@ -46,6 +46,10 @@ const refused = Effect.fnUntraced(function* () {
       authorization: `Bearer ${yield* TestServer.token({ environmentId: Environment.ID.create() })}`,
     },
     {
+      name: "a token for another generation of the machine",
+      authorization: `Bearer ${yield* TestServer.token({ generation: 2 })}`,
+    },
+    {
       name: "an expired token",
       authorization: `Bearer ${Redacted.value((yield* TestEnvironment.access({ url: yield* TestEnvironment.url, environmentId: TestServer.environmentId, brain: TestServer.brain, directory: TestServer.workspace, issuedAt: Date.now() - 3_600_000 })).token)}`,
     },

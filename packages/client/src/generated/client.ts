@@ -13,6 +13,8 @@ import type {
   SpaceUpdateOutput,
   SpaceArchiveInput,
   SpaceArchiveOutput,
+  SpaceShutdownInput,
+  SpaceShutdownOutput,
   SpaceMemberListInput,
   SpaceMemberListOutput,
   SpaceMemberCreateInput,
@@ -31,6 +33,8 @@ import type {
   EnvironmentTemplateArchiveOutput,
   EnvironmentTemplateRetryBuildInput,
   EnvironmentTemplateRetryBuildOutput,
+  EnvironmentTemplateAffectedSpacesInput,
+  EnvironmentTemplateAffectedSpacesOutput,
   EnvironmentProviderListOutput,
   EnvironmentProviderBrainsOutput,
   SpaceSettingsGetInput,
@@ -456,6 +460,18 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+      shutdown: (input: SpaceShutdownInput, requestOptions?: RequestOptions) =>
+        request<SpaceShutdownOutput>(
+          {
+            method: "POST",
+            path: `/spaces/${encodeURIComponent(input.id)}/shutdown`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
     "space-member": {
       list: (input: SpaceMemberListInput, requestOptions?: RequestOptions) =>
@@ -576,6 +592,18 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/environment-templates/${encodeURIComponent(input.id)}/retryBuild`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      affectedSpaces: (input: EnvironmentTemplateAffectedSpacesInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateAffectedSpacesOutput>(
+          {
+            method: "POST",
+            path: `/environment-templates/${encodeURIComponent(input.id)}/affectedSpaces`,
             body: {},
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],

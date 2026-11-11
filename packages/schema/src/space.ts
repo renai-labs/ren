@@ -65,6 +65,32 @@ export const AppliedHand = Schema.Union([
 })
 export type AppliedHand = typeof AppliedHand.Type
 
+export interface ShutdownReport extends Schema.Schema.Type<typeof ShutdownReport> {}
+export const ShutdownReport = Schema.Struct({
+  finishedAt: Schema.DateTimeUtc,
+  problems: Schema.Array(Schema.String).annotate({
+    description:
+      "What the shutdown could not confirm: a brain whose chats it could not sync, or a machine it could not destroy. Empty when all went as planned.",
+  }),
+}).annotate({ identifier: "Space.ShutdownReport" })
+
+export interface Compute extends Schema.Schema.Type<typeof Compute> {}
+export const Compute = Schema.Struct({
+  isPending: Schema.Boolean.annotate({
+    description:
+      "A brain of the space still runs an older brain or hand setting, or an older image of its template. It applies the new one when it wakes, or at a shutdown.",
+  }),
+  shutdown: Schema.NullOr(Schema.Literal("running")).annotate({ description: "A shutdown of the space runs now." }),
+  lastShutdown: Schema.NullOr(ShutdownReport),
+}).annotate({ identifier: "Space.Compute" })
+
+export interface ShutdownInput extends Schema.Schema.Type<typeof ShutdownInput> {}
+export const ShutdownInput = Schema.Struct({}).annotate({
+  identifier: "Space.ShutdownInput",
+  description:
+    "Stops all work of the space, deletes the files on its machines and may lose chat changes that were not synced. Its brains and hands start again with the space’s settings at the next new work.",
+})
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
@@ -81,6 +107,7 @@ export const Info = Schema.Struct({
   brainScope: Brain.Scope,
   brain: BrainMachine,
   hand: Hand,
+  compute: Compute,
   memberCount: Schema.Int,
   membershipId: Schema.NullOr(MembershipID),
   factory: Factory.Info,
@@ -131,4 +158,5 @@ export const definition = Primitive.define({
   create: { input: CreateInput, result: Info },
   update: { input: UpdateInput, result: Info },
   archive: true,
+  actions: { shutdown: { input: ShutdownInput, result: Info } },
 })

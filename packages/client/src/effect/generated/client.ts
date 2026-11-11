@@ -84,12 +84,18 @@ type SpaceArchiveInput = { readonly id: SpaceArchiveRequest["params"]["id"] }
 const EndpointSpaceArchive = (raw: RawClient["space"]) => (input: SpaceArchiveInput) =>
   raw["space.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+type SpaceShutdownRequest = Parameters<RawClient["space"]["space.shutdown"]>[0]
+type SpaceShutdownInput = { readonly id: SpaceShutdownRequest["params"]["id"] }
+const EndpointSpaceShutdown = (raw: RawClient["space"]) => (input: SpaceShutdownInput) =>
+  raw["space.shutdown"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
 const adaptGroupSpace = (raw: RawClient["space"]) => ({
   list: EndpointSpaceList(raw),
   get: EndpointSpaceGet(raw),
   create: EndpointSpaceCreate(raw),
   update: EndpointSpaceUpdate(raw),
   archive: EndpointSpaceArchive(raw),
+  shutdown: EndpointSpaceShutdown(raw),
 })
 
 type SpaceMemberListRequest = Parameters<RawClient["space-member"]["space-member.list"]>[0]
@@ -201,6 +207,16 @@ const EndpointEnvironmentTemplateRetryBuild =
       Effect.mapError(mapClientError),
     )
 
+type EnvironmentTemplateAffectedSpacesRequest = Parameters<
+  RawClient["environment-template"]["environment-template.affectedSpaces"]
+>[0]
+type EnvironmentTemplateAffectedSpacesInput = { readonly id: EnvironmentTemplateAffectedSpacesRequest["params"]["id"] }
+const EndpointEnvironmentTemplateAffectedSpaces =
+  (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateAffectedSpacesInput) =>
+    raw["environment-template.affectedSpaces"]({ params: { id: input["id"] }, payload: {} }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
 const adaptGroupEnvironmentTemplate = (raw: RawClient["environment-template"]) => ({
   list: EndpointEnvironmentTemplateList(raw),
   get: EndpointEnvironmentTemplateGet(raw),
@@ -208,6 +224,7 @@ const adaptGroupEnvironmentTemplate = (raw: RawClient["environment-template"]) =
   update: EndpointEnvironmentTemplateUpdate(raw),
   archive: EndpointEnvironmentTemplateArchive(raw),
   retryBuild: EndpointEnvironmentTemplateRetryBuild(raw),
+  affectedSpaces: EndpointEnvironmentTemplateAffectedSpaces(raw),
 })
 
 const EndpointEnvironmentProviderList = (raw: RawClient["environmentProvider"]) => () =>

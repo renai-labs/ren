@@ -517,6 +517,30 @@ describe("brain runs", () => {
     await current.dispose()
   })
 
+  test("a shutdown of an awake brain retires its generation, destroys its machine, and leaves it stopped until new work", async () => {
+    const found = await runs.seeded()
+    const current = await runs.ren()
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    await runs.reaches(found.brainId, "ready")
+    const problems = await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.stop(found.brainId)))
+    const listed = await current.runPromise(
+      BrainProvider.first.pipe(Effect.flatMap((provider) => provider.list.pipe(Effect.orDie))),
+    )
+    const access = await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.access(found.brainId)))
+    expect({
+      problems,
+      row: await runs.row(found.brainId),
+      listed: listed.filter((each) => each.id === found.brainId),
+      access: access._tag,
+    }).toMatchObject({
+      problems: [],
+      row: { generation: 2, phase: "failed", binding: null, stopped_at: expect.any(Date) },
+      listed: [],
+      access: "Failed",
+    })
+    await current.dispose()
+  })
+
   test("a brain whose space moved its hand to a remote machine is replaced at its resume, and the new one is for a remote hand (EN13)", async () => {
     const found = await runs.seeded()
     const current = await runs.ren()

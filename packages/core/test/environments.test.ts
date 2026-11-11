@@ -487,6 +487,36 @@ describe("Environments", () => {
       }),
   )
 
+  it.live(
+    "a shutdown destroys every hand machine of its space, also a held and awake one; the chats keep their bindings and get new machines",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* environmentsWith()
+        const organizationId = yield* Seed.organization()
+        const template = yield* Seed.environmentTemplate(organizationId, { sessionsPerEnvironment: 1 })
+        const spaceId = yield* Seed.team(organizationId)
+        const other = yield* Seed.space(organizationId)
+        const sessions = yield* Effect.all([
+          Seed.subject(organizationId, spaceId),
+          Seed.subject(organizationId, spaceId),
+          Seed.subject(organizationId, other),
+        ])
+        yield* Effect.forEach(sessions, (session) =>
+          subject.environments
+            .bind(session, Seed.version(template))
+            .pipe(Effect.andThen(subject.environments.access(session, Option.none()))),
+        )
+        const machines = yield* Ref.get(subject.probe.provisions)
+        const problems = yield* subject.environments.shutdown(spaceId)
+        yield* subject.environments.access(sessions[0], Option.none())
+        expect({
+          problems,
+          destroyed: (yield* Ref.get(subject.probe.destroyed)).toSorted(),
+          made: (yield* Ref.get(subject.probe.provisions)).length,
+        }).toEqual({ problems: [], destroyed: machines.slice(0, 2).toSorted(), made: 4 })
+      }),
+  )
+
   it.live("a chat that takes a place on a machine while the cleanup waits for its template keeps the machine", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service

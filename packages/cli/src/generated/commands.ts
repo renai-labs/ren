@@ -32,6 +32,11 @@ export const SpaceUpdate = {
 
 export const SpaceArchive = { id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
 
+export const SpaceShutdown = {
+  id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const SpaceMemberList = {
   spaceId: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
   status: Flag.Literals("status", ["active", "pending"]).pipe(Flag.optional),
@@ -670,6 +675,11 @@ export const EnvironmentTemplateRetryBuild = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
+export const EnvironmentTemplateAffectedSpaces = {
+  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const OauthAppList = {
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
@@ -924,6 +934,12 @@ export const commands = [
         Command.withDescription("Archive a space"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.SpaceArchive(input)),
+        ),
+      ),
+      Command.make("shutdown", SpaceShutdown).pipe(
+        Command.withDescription("Stop all work of a space and delete the files on its machines"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.SpaceShutdown(input)),
         ),
       ),
       Command.make("member").pipe(
@@ -1574,6 +1590,12 @@ export const commands = [
             Command.withDescription("Retry the saved configuration’s failed build"),
             Command.withHandler((input) =>
               Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentTemplateRetryBuild(input)),
+            ),
+          ),
+          Command.make("affected-spaces", EnvironmentTemplateAffectedSpaces).pipe(
+            Command.withDescription("List the spaces that use a machine or still run on it"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentTemplateAffectedSpaces(input)),
             ),
           ),
         ]),

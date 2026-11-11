@@ -506,6 +506,94 @@
         "summary": "Archive space"
       }
     },
+    "/spaces/{id}/shutdown": {
+      "post": {
+        "tags": ["space"],
+        "operationId": "space.shutdown",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Space.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Space.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the shutdown action on one space.",
+        "summary": "shutdown space",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Space.ShutdownInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/space-members": {
       "get": {
         "tags": ["space-member"],
@@ -1233,6 +1321,94 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/EnvironmentTemplate.RetryBuildInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/environment-templates/{id}/affectedSpaces": {
+      "post": {
+        "tags": ["environment-template"],
+        "operationId": "environment-template.affectedSpaces",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/EnvironmentTemplate.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The live spaces whose settings name the machine, or whose brains or chats still run on it. A shutdown of each applies a change of the machine now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentTemplate.AffectedSpaces"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the affectedSpaces action on one environment-template.",
+        "summary": "affectedSpaces environment-template",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentTemplate.AffectedSpacesInput"
               }
             }
           },
@@ -15287,6 +15463,36 @@
           "$ref": "#/components/schemas/EnvironmentProvider.Info"
         }
       },
+      "EnvironmentTemplate.AffectedSpaces": {
+        "type": "object",
+        "properties": {
+          "spaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The space’s id."
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": ["id", "name"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["spaces"],
+        "additionalProperties": false,
+        "description": "The live spaces whose settings name the machine, or whose brains or chats still run on it. A shutdown of each applies a change of the machine now."
+      },
+      "EnvironmentTemplate.AffectedSpacesInput": {
+        "not": {
+          "type": "null"
+        }
+      },
       "EnvironmentTemplate.BuildStatus": {
         "type": "string",
         "enum": ["queued", "building", "ready", "failed"],
@@ -21214,6 +21420,39 @@
         "additionalProperties": false,
         "description": "The machine of the space’s brains. A change reaches a brain when it wakes."
       },
+      "Space.Compute": {
+        "type": "object",
+        "properties": {
+          "isPending": {
+            "type": "boolean",
+            "description": "A brain of the space still runs an older brain or hand setting, or an older image of its template. It applies the new one when it wakes, or at a shutdown."
+          },
+          "shutdown": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["running"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A shutdown of the space runs now."
+          },
+          "lastShutdown": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ShutdownReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["isPending", "shutdown", "lastShutdown"],
+        "additionalProperties": false
+      },
       "Space.CreateInput": {
         "type": "object",
         "properties": {
@@ -21356,6 +21595,9 @@
           "hand": {
             "$ref": "#/components/schemas/Space.Hand"
           },
+          "compute": {
+            "$ref": "#/components/schemas/Space.Compute"
+          },
           "memberCount": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -21418,6 +21660,7 @@
           "brainScope",
           "brain",
           "hand",
+          "compute",
           "memberCount",
           "membershipId",
           "factory",
@@ -21467,6 +21710,29 @@
           }
         },
         "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "Space.ShutdownInput": {
+        "not": {
+          "type": "null"
+        },
+        "description": "Stops all work of the space, deletes the files on its machines and may lose chat changes that were not synced. Its brains and hands start again with the space’s settings at the next new work."
+      },
+      "Space.ShutdownReport": {
+        "type": "object",
+        "properties": {
+          "finishedAt": {
+            "type": "string"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the shutdown could not confirm: a brain whose chats it could not sync, or a machine it could not destroy. Empty when all went as planned."
+          }
+        },
+        "required": ["finishedAt", "problems"],
         "additionalProperties": false
       },
       "Space.UpdateInput": {

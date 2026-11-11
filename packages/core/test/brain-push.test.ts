@@ -184,6 +184,7 @@ describe("BrainPush (HR10, HR12)", () => {
           observe: () => Effect.void,
           hand: () => Effect.succeedNone,
           refreshNetwork: () => Effect.void,
+          stop: () => Effect.die(new Error("a push never stops a brain")),
           unavailable: () => Effect.void,
           retry: () => Effect.void,
           onInterrupted: () => Effect.void,

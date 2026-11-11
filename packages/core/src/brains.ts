@@ -222,6 +222,27 @@ export const layer = Layer.effect(
       return row
     })
 
+    // oxlint-disable-next-line ren/no-comments -- New work waits for no shutdown: it is refused while one runs, and it wakes a brain that a finished shutdown stopped. A reconnect or a file poll never comes here.
+    const admit = Effect.fnUntraced(function* (brainId: Brain.ID) {
+      const row = (yield* database.db
+        .select({ stoppedAt: Database.Schema.brain.stopped_at, shutdown: Database.Schema.space.shutdown_state })
+        .from(Database.Schema.brain)
+        .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.brain.space_id))
+        .where(eq(Database.Schema.brain.id, brainId))
+        .pipe(Effect.orDie)).at(0)
+      if (row?.shutdown)
+        return yield* new BrainRejectedError({
+          message: "The space is shutting down. Send the message again when it has finished.",
+        })
+      if (!row?.stoppedAt) return
+      yield* database.db
+        .update(Database.Schema.brain)
+        .set({ stopped_at: null })
+        .where(eq(Database.Schema.brain.id, brainId))
+        .pipe(Effect.orDie)
+      yield* brainHost.retry(brainId)
+    })
+
     const inBrain = Effect.fnUntraced(function* (host: CurrentHost["Service"], sessionId: Session.ID) {
       const found = yield* database.db
         .select({ id: Database.Schema.agent_session.id })
@@ -355,6 +376,7 @@ export const layer = Layer.effect(
     const send = Effect.fn("Brains.send")(function* (input: Session.SendInput) {
       yield* validatePrompt(input.prompt)
       const session = yield* brainOf(input.sessionId)
+      yield* admit(session.brainId)
       const target = yield* brainHost.target(session.brainId).pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
       const api = yield* client.brain(target)
       return yield* call(
@@ -463,6 +485,7 @@ export const layer = Layer.effect(
     return Service.of({
       start: Effect.fn("Brains.start")(function* (input: Session.StartInput, placement: Placement) {
         if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
+        yield* admit(placement.brainId)
         const row = yield* brainRow(placement.brainId)
         yield* DurableRunner.ensure(StartRun, { input, placement, epoch: row.runEpoch }).pipe(
           Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
@@ -511,6 +534,7 @@ export const layer = Layer.effect(
       }),
       retry: Effect.fn("Brains.retry")(function* (sessionId: Session.ID) {
         const session = yield* brainOf(sessionId)
+        yield* admit(session.brainId).pipe(Effect.ignore)
         yield* brainHost.retry(session.brainId)
       }),
       flush: Effect.fn("Brains.flush")(function* (sessionId: Session.ID) {

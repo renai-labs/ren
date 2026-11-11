@@ -20,6 +20,7 @@ import { BrainLifecycle } from "@ren/core/brain-lifecycle"
 import { Bundles } from "@ren/core/bundles"
 import { ProviderCheck } from "@ren/core/provider-check"
 import { Brains } from "@ren/core/brains"
+import { SpaceShutdown } from "@ren/core/space-shutdown"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelProvider } from "@ren/core/channel-provider"
@@ -185,7 +186,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide(IntakeOrigins.layer),
   Layer.provide([
     Layer.mergeAll(
-      Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(
+      Layer.mergeAll(Brains.layer, BrainPush.layer, SpaceShutdown.layer).pipe(
         Layer.provideMerge(host),
         Layer.provideMerge(environments),
         Layer.provide(CredentialEnv.layer),

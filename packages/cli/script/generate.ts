@@ -21,7 +21,15 @@ interface Resource {
 }
 
 const resources: ReadonlyArray<Resource> = [
-  { group: "space", about: "Manage spaces", path: ["space"], name: "space", one: "a space", many: "spaces" },
+  {
+    group: "space",
+    about: "Manage spaces",
+    path: ["space"],
+    name: "space",
+    one: "a space",
+    many: "spaces",
+    descriptions: { shutdown: "Stop all work of a space and delete the files on its machines" },
+  },
   {
     group: "space-member",
     about: "Manage space members",
@@ -197,7 +205,10 @@ const resources: ReadonlyArray<Resource> = [
     name: "template",
     one: "an environment template",
     many: "environment templates",
-    descriptions: { retryBuild: "Retry the saved configuration’s failed build" },
+    descriptions: {
+      retryBuild: "Retry the saved configuration’s failed build",
+      affectedSpaces: "List the spaces that use a machine or still run on it",
+    },
   },
   {
     group: "oauth-app",

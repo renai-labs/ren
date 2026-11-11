@@ -1,12 +1,13 @@
 export * as Brain from "./brain.js"
 
 import { BrainApi, hostTokenHeader } from "@ren/host-api/brain-api"
-import { ModelsNotConfiguredError, SyncUnavailableError } from "@ren/host-api/errors"
-import { DateTime, Effect, Layer, Option, type Scope } from "effect"
+import { BrainRejectedError, ModelsNotConfiguredError, SyncUnavailableError } from "@ren/host-api/errors"
+import { DateTime, Duration, Effect, Layer, Option, type Scope } from "effect"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
 import { CodeUpdate } from "./code-update.js"
+import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { HotReload } from "./hot-reload.js"
@@ -28,6 +29,7 @@ type Services =
   | HotReload.Service
   | Restore.Service
   | CodeUpdate.Service
+  | Fence.Service
 
 const prefix = "/ren"
 
@@ -73,6 +75,16 @@ const configured = Effect.gen(function* () {
   if (Option.isSome(again)) return yield* again.value
 })
 
+// oxlint-disable-next-line ren/no-comments -- A brain closed for a shutdown starts no new turn; Ren tells the person why.
+const admitted = Effect.gen(function* () {
+  const fence = yield* Fence.Service
+  const closed = yield* fence.closed
+  if (Option.isSome(closed)) return yield* new BrainRejectedError({ message: closed.value })
+})
+
+// oxlint-disable-next-line ren/no-comments -- Ren gives a shutdown 60 seconds per brain; the brain keeps 5 of them to answer.
+const stopWithin = Duration.seconds(55)
+
 const keepHostToken = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
   const token = request.headers[hostTokenHeader]
@@ -90,6 +102,7 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
       .handle("brain.start", (request) =>
         handle(
           Effect.gen(function* () {
+            yield* admitted
             const hotReload = yield* HotReload.Service
             yield* hotReload.pull
             yield* configured
@@ -111,6 +124,7 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
       .handle("brain.send", (request) =>
         handle(
           Effect.gen(function* () {
+            yield* admitted
             const hotReload = yield* HotReload.Service
             yield* hotReload.pull
             yield* configured
@@ -182,6 +196,29 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
           Effect.gen(function* () {
             const sync = yield* Sync.Service
             return { drained: yield* sync.flush }
+          }),
+        ),
+      )
+      .handle("brain.stop", () =>
+        handle(
+          Effect.gen(function* () {
+            const fence = yield* Fence.Service
+            const harness = yield* Harness.Service
+            const sync = yield* Sync.Service
+            yield* fence.close("The space is shutting down. Send the message again when it has finished.")
+            const opened = yield* harness.getIfOpen
+            if (Option.isSome(opened))
+              yield* Effect.forEach(
+                yield* opened.value.sessions,
+                (session) => (session.active ? session.interrupt : Effect.void),
+                { discard: true },
+              )
+            const drained = yield* sync.flush.pipe(
+              Effect.timeout(stopWithin),
+              Effect.orElseSucceed(() => false),
+            )
+            yield* fence.retire("The space was shut down")
+            return { drained }
           }),
         ),
       )

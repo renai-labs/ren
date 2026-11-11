@@ -12,7 +12,23 @@ import type { Session } from "@ren/schema/session"
 import type { Bundle } from "@ren/schema/bundle"
 import type { Machine } from "@ren/schema/machine"
 import type { Space } from "@ren/schema/space"
-import { and, asc, count, eq, exists, gt, inArray, isNull, lte, ne, notExists, notInArray, or, sql } from "drizzle-orm"
+import {
+  and,
+  asc,
+  count,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  notExists,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import {
@@ -105,7 +121,12 @@ export interface Interface {
   readonly handHosts: (environmentTemplateId: EnvironmentTemplate.ID) => Effect.Effect<ReadonlyArray<string>>
   // oxlint-disable-next-line ren/no-comments -- Daily: destroys each hand machine that no chat holds a place on and that runs no work, with its files. Then destroys the hand sandboxes that no row knows at their generation: a row that is gone or replaced, or a create that half worked.
   readonly cleanup: Effect.Effect<void>
-  readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
+  // oxlint-disable-next-line ren/no-comments -- A shutdown of the space: destroys each of its hand machines with their files. Its chats keep their bindings and get new machines at their next access. Returns what it could not destroy.
+  readonly shutdown: (spaceId: Space.ID) => Effect.Effect<ReadonlyArray<string>>
+  readonly executorVariables: (
+    environmentId: Environment.ID,
+    generation: number,
+  ) => Effect.Effect<Readonly<Record<string, string>>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Environments") {}
@@ -445,7 +466,7 @@ export const layer = Layer.effect(
         const keys = yield* signingKeys
         const bundles = yield* currentBundles
         const variables = {
-          ...ExecutorVariables.make(row.id, keys.publicKeys),
+          ...ExecutorVariables.make(row.id, keys.publicKeys, { generation: row.generation }),
           ...sandboxVariables({ "ren.organization.id": row.organization_id, "ren.space.id": row.space_id }),
           REN_HAND: "1",
           ...Option.match(renUrl, { onNone: () => ({}), onSome: (url) => ({ REN_URL: url }) }),
@@ -493,6 +514,47 @@ export const layer = Layer.effect(
       }),
     })
 
+    // oxlint-disable-next-line ren/no-comments -- Deletes each hand machine where `where` holds, under its template's lock as an assign takes it, so a chat that takes a place meanwhile keeps its machine. Then destroys it with its files. Returns what it could not destroy; the daily cleanup tries again.
+    const remove = Effect.fnUntraced(function* (where: SQL | undefined) {
+      const found = yield* database.db
+        .select({ id: environments.id, templateId: templates.id, provider: templates.provider })
+        .from(environments)
+        .innerJoin(templates, eq(templates.id, environments.environment_template_id))
+        .where(where)
+        .pipe(Effect.orDie)
+      const removed = yield* Effect.forEach(found, (machine) =>
+        database
+          .transaction((transaction) =>
+            Effect.gen(function* () {
+              yield* transaction
+                .select({ id: templates.id })
+                .from(templates)
+                .where(eq(templates.id, machine.templateId))
+                .for("update")
+              const deleted = yield* transaction
+                .delete(environments)
+                .where(and(eq(environments.id, machine.id), where))
+                .returning({ binding: environments.binding })
+              return deleted.map((row) => Object.assign(machine, { binding: row.binding }))
+            }),
+          )
+          .pipe(Effect.orDie),
+      )
+      return yield* Effect.forEach(
+        removed.flat(),
+        Effect.fnUntraced(function* (machine) {
+          yield* FiberMap.remove(runs, machine.id)
+          yield* sandboxEgress.retire({ kind: "hand", id: machine.id })
+          const provider = registry.get(machine.provider)
+          if (!machine.binding || Option.isNone(provider)) return []
+          return yield* provider.value.destroy(machine.binding).pipe(
+            Effect.as([]),
+            Effect.catch((error) => Effect.succeed([`Hand machine ${machine.id} was not destroyed: ${error.message}`])),
+          )
+        }),
+      ).pipe(Effect.map((problems) => problems.flat()))
+    })
+
     // oxlint-disable-next-line ren/no-comments -- An access waits up to startingAfter for the machine's run that it started, then reads the machine again.
     const ready = Effect.fnUntraced(function* (environmentId: Environment.ID) {
       const first = yield* hands.access(environmentId)
@@ -519,6 +581,7 @@ export const layer = Layer.effect(
             yield* signToken({
               environment: Environment.ofBrain(hand.value.brainId),
               brain: hand.value.brainId,
+              generation: hand.value.generation,
               exp,
             }),
           ),
@@ -559,6 +622,7 @@ export const layer = Layer.effect(
           yield* signToken({
             environment: assigned.environmentId,
             brain: assigned.brainId,
+            generation: target.generation,
             exp,
           }),
         ),
@@ -753,6 +817,9 @@ export const layer = Layer.effect(
           { discard: true },
         )
       }),
+      shutdown: Effect.fn("Environments.shutdown")(function* (spaceId: Space.ID) {
+        return yield* remove(eq(environments.space_id, spaceId))
+      }),
       cleanup: Effect.gen(function* () {
         const at = new Date(yield* Clock.currentTimeMillis)
         const isUnused = and(
@@ -764,43 +831,10 @@ export const layer = Layer.effect(
           ),
           or(isNull(environments.keep_alive_until), lte(environments.keep_alive_until, at)),
         )
-        const unused = yield* database.db
-          .select({ id: environments.id, templateId: templates.id, provider: templates.provider })
-          .from(environments)
-          .innerJoin(templates, eq(templates.id, environments.environment_template_id))
-          .where(isUnused)
-          .pipe(Effect.orDie)
-        // oxlint-disable-next-line ren/no-comments -- Under its template's lock, as an assign takes it: a chat that takes a place on the machine meanwhile keeps it.
-        const removed = yield* Effect.forEach(unused, (machine) =>
-          database
-            .transaction((transaction) =>
-              Effect.gen(function* () {
-                yield* transaction
-                  .select({ id: templates.id })
-                  .from(templates)
-                  .where(eq(templates.id, machine.templateId))
-                  .for("update")
-                const deleted = yield* transaction
-                  .delete(environments)
-                  .where(and(eq(environments.id, machine.id), isUnused))
-                  .returning({ binding: environments.binding })
-                return deleted.map((row) => Object.assign(machine, { binding: row.binding }))
-              }),
-            )
-            .pipe(Effect.orDie),
-        )
-        yield* Effect.forEach(
-          removed.flat(),
-          Effect.fnUntraced(function* (machine) {
-            yield* FiberMap.remove(runs, machine.id)
-            yield* sandboxEgress.retire({ kind: "hand", id: machine.id })
-            const provider = registry.get(machine.provider)
-            if (machine.binding && Option.isSome(provider))
-              yield* provider.value
-                .destroy(machine.binding)
-                .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of environment ${machine.id} failed`, error)))
-          }),
-          { discard: true },
+        yield* remove(isUnused).pipe(
+          Effect.flatMap((problems) =>
+            Effect.forEach(problems, (problem) => Effect.logWarning(problem), { discard: true }),
+          ),
         )
         const listed = (yield* Effect.forEach(registry.providers, (provider) =>
           provider.list.pipe(
@@ -841,9 +875,12 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         yield* Effect.forEach(awake, (row) => hands.refreshNetwork(row.id), { discard: true })
       }),
-      executorVariables: Effect.fn("Environments.executorVariables")(function* (environmentId: Environment.ID) {
+      executorVariables: Effect.fn("Environments.executorVariables")(function* (
+        environmentId: Environment.ID,
+        generation: number,
+      ) {
         const keys = yield* signingKeys
-        return ExecutorVariables.make(environmentId, keys.publicKeys)
+        return ExecutorVariables.make(environmentId, keys.publicKeys, { generation })
       }),
     })
   }),

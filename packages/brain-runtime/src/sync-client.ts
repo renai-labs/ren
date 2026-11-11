@@ -2,7 +2,7 @@ export * as SyncClient from "./sync-client.js"
 
 import { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
 import { SyncApi } from "@ren/host-api/sync-api"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 
@@ -35,7 +35,11 @@ export const make = Effect.fn("SyncClient.make")(function* (url: string, token: 
     restore: (sessionId) =>
       sync["sync.restore"]({ payload: { sessionId } }).pipe(
         Effect.map((body) => body.chats),
-        Effect.mapError(remoteError),
+        Effect.mapError((error) =>
+          Schema.isSchemaError(error)
+            ? new OpenCodeSync.RemoteError({ message: error.message, isIncompatible: true })
+            : remoteError(error),
+        ),
       ),
     messages: (id, after, limit) =>
       sync["sync.messages"]({

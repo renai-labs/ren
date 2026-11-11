@@ -41,6 +41,11 @@ export const space = pgTable(
     environment_template_id: text().$type<EnvironmentTemplate.ID>(),
     // oxlint-disable-next-line ren/no-comments -- The number of the brain and hand settings. Each change of them takes the next; a brain records the number it applied at its last start or wake.
     compute_revision: integer().notNull().default(0),
+    // oxlint-disable-next-line ren/no-comments -- "running" while a shutdown runs. Each shutdown takes the next epoch, the key of its durable run.
+    shutdown_state: text().$type<"running">(),
+    shutdown_epoch: integer().notNull().default(0),
+    // oxlint-disable-next-line ren/no-comments -- The last shutdown's Space.ShutdownReport, with its time as an ISO string.
+    shutdown_report: jsonb().$type<{ readonly finishedAt: string; readonly problems: ReadonlyArray<string> }>(),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),

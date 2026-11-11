@@ -20,6 +20,8 @@ export type EnvironmentProviderID = string
 
 export type EnvironmentTemplateID = string
 
+export type SpaceShutdownReport = { finishedAt: string; problems: Array<string> }
+
 export type SpaceMembershipID = string
 
 export type FactoryStartMode = "new" | "continue"
@@ -29,6 +31,8 @@ export type SpaceAssignmentID = string
 export type HostNamePattern = string
 
 export type EnvironmentTemplateBuildStatus = "queued" | "building" | "ready" | "failed"
+
+export type EnvironmentTemplateAffectedSpaces = { spaces: Array<{ id: string; name: string }> }
 
 export type SessionModel = { endpointId: string; modelId: string; variant?: string }
 
@@ -383,6 +387,8 @@ export type SpaceHand =
   | { placement: "colocated" }
   | { placement: "remote"; environmentTemplateId: EnvironmentTemplateID }
   | { placement: "none" }
+
+export type SpaceCompute = { isPending: boolean; shutdown: "running" | null; lastShutdown: SpaceShutdownReport | null }
 
 export type SpaceMemberActive = {
   id: SpaceMembershipID
@@ -1294,6 +1300,7 @@ export type SpaceInfo = {
   brainScope: BrainScope
   brain: SpaceBrainMachine
   hand: SpaceHand
+  compute: SpaceCompute
   memberCount: number
   membershipId: SpaceMembershipID | null
   factory: FactoryInfo
@@ -1771,6 +1778,10 @@ export type SpaceArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type SpaceArchiveOutput = SpaceInfo
 
+export type SpaceShutdownInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceShutdownOutput = SpaceInfo
+
 export type SpaceMemberListInput = {
   readonly spaceId: {
     readonly spaceId: string
@@ -2016,6 +2027,10 @@ export type EnvironmentTemplateArchiveOutput = EnvironmentTemplateInfo
 export type EnvironmentTemplateRetryBuildInput = { readonly id: { readonly id: string }["id"] }
 
 export type EnvironmentTemplateRetryBuildOutput = EnvironmentTemplateInfo
+
+export type EnvironmentTemplateAffectedSpacesInput = { readonly id: { readonly id: string }["id"] }
+
+export type EnvironmentTemplateAffectedSpacesOutput = EnvironmentTemplateAffectedSpaces
 
 export type EnvironmentProviderListOutput = EnvironmentProviderInfos
 

@@ -18,6 +18,8 @@ const unauthorized = new EnvironmentApi.UnauthorizedError({ message: "Authentica
 
 const authenticationCheck = Effect.gen(function* () {
   const publicKeys = yield* Config.schema(Signature.PublicKeys, ExecutorVariables.publicKeys)
+  // oxlint-disable-next-line ren/no-comments -- A machine that Ren started with its generation takes only tokens for that generation.
+  const generation = yield* Config.option(Config.Int(ExecutorVariables.generation))
   const executor = yield* Executor.Service
   return (authorizationHeader: string | undefined) => {
     const token = authorizationHeader?.toLowerCase().startsWith(bearerPrefix)
@@ -27,6 +29,7 @@ const authenticationCheck = Effect.gen(function* () {
       Effect.map((verifiedClaims) =>
         verifiedClaims.pipe(
           Option.filter((claims) => claims.environment === executor.hello.environmentId),
+          Option.filter((claims) => Option.isNone(generation) || claims.generation === generation.value),
           Option.map((claims) => ({ brain: claims.brain })),
         ),
       ),

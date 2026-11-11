@@ -17,7 +17,13 @@ export const documents = [
         when: [],
       },
       {
-        actions: Primitive.actions(EnvironmentTemplate.definition, ["create", "update", "archive", "retryBuild"]),
+        actions: Primitive.actions(EnvironmentTemplate.definition, [
+          "create",
+          "update",
+          "archive",
+          "retryBuild",
+          "affectedSpaces",
+        ]),
         effect: "allow",
         roles: SpacePolicy.administratorRoles,
         when: [],

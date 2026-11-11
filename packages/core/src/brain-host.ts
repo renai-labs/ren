@@ -27,6 +27,8 @@ export interface Interface {
   readonly unavailable: (brainId: Brain.ID) => Effect.Effect<void>
   readonly retry: (brainId: Brain.ID) => Effect.Effect<void>
   readonly notify: (brainId: Brain.ID) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- Shuts the brain down for its space's shutdown. Returns what it could not confirm.
+  readonly stop: (brainId: Brain.ID) => Effect.Effect<ReadonlyArray<string>>
   readonly onInterrupted: (
     listener: (interrupted: BrainLifecycle.Interrupted) => Effect.Effect<void>,
   ) => Effect.Effect<void>
@@ -94,6 +96,8 @@ export const layerCell = Layer.effect(
       unavailable: () => Effect.void,
       retry: () => Effect.void,
       notify: (brainId) => pushTo(client, brainId, Effect.map(target(brainId), Option.some)),
+      // oxlint-disable-next-line ren/no-comments -- A cell has no machine of its own that Ren can stop or destroy.
+      stop: (brainId) => Effect.succeed([`Brain ${brainId} runs in a cell, which Ren cannot shut down`]),
       onInterrupted: () => Effect.void,
     })
   }),
@@ -116,6 +120,7 @@ export const layerSandbox = Layer.effect(
       unavailable: lifecycle.check,
       retry: lifecycle.retry,
       notify: (brainId) => pushTo(client, brainId, lifecycle.awake(brainId)),
+      stop: lifecycle.stop,
       onInterrupted: lifecycle.onInterrupted,
     })
   }),

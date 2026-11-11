@@ -12,6 +12,7 @@ import { Signature } from "@ren/schema/signature"
 import type { Session } from "@ren/schema/session"
 import { and, eq, exists, gt, inArray, isNotNull, isNull, lt, notExists, notInArray, or, sql } from "drizzle-orm"
 import {
+  Cause,
   Clock,
   Config,
   Context,
@@ -49,6 +50,8 @@ export interface Interface extends MachineAccess.Interface<Brain.ID, BrainClient
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Hand>>
   readonly refreshNetwork: (brainId: Brain.ID) => Effect.Effect<void>
   readonly cleanup: Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- A shutdown of the brain: an awake brain refuses new work and syncs within stopWithin; then Ren retires its generation, stops it until new work and destroys its machine. Returns what it could not confirm.
+  readonly stop: (brainId: Brain.ID) => Effect.Effect<ReadonlyArray<string>>
   readonly onInterrupted: (listener: (interrupted: Interrupted) => Effect.Effect<void>) => Effect.Effect<void>
 }
 
@@ -60,6 +63,7 @@ export interface Interrupted {
 }
 
 export const timing = {
+  stop: Duration.seconds(60),
   pull: Duration.seconds(90),
   relapse: Duration.minutes(30),
 }
@@ -404,7 +408,7 @@ export const layer = Layer.effect(
             "ren.brain.id": row.id,
             "ren.brain.generation": String(row.generation),
           }),
-          ...(yield* environments.executorVariables(Environment.ofBrain(row.id))),
+          ...(yield* environments.executorVariables(Environment.ofBrain(row.id), row.generation)),
           ...(isRemote && { REN_HAND_PLACEMENT: "remote" }),
           ...(Option.isSome(bundles) && {
             REN_BUNDLES: (yield* withTokens(bundles.value))
@@ -740,6 +744,67 @@ export const layer = Layer.effect(
         if (lastProgress) yield* environments.keepAwake(background, lastProgress)
       }),
       cleanup,
+      stop: Effect.fn("BrainLifecycle.stop")(function* (brainId: Brain.ID) {
+        const awake = yield* machines.awake(brainId)
+        const synced = yield* Option.match(awake, {
+          onNone: () => Effect.succeed<ReadonlyArray<string>>([]),
+          onSome: (target) =>
+            client.brain(target).pipe(
+              Effect.flatMap((api) => api.brain["brain.stop"]()),
+              Effect.timeout(timing.stop),
+              Effect.map((answer): ReadonlyArray<string> =>
+                answer.drained ? [] : [`Brain ${brainId} did not sync all its chats before it stopped`],
+              ),
+              Effect.catchCause((cause) =>
+                Effect.succeed([
+                  `Brain ${brainId} did not confirm that it stopped and synced: ${Cause.pretty(cause).split("\n").at(0)}`,
+                ]),
+              ),
+            ),
+        })
+        // oxlint-disable-next-line ren/no-comments -- One transaction retires the generation, so the old machine's host token, pulls and late syncs fail from here, and stops the brain until new work or a person's Retry.
+        const old = yield* database
+          .transaction((transaction) =>
+            Effect.gen(function* () {
+              const row = (yield* transaction.select().from(brains).where(eq(brains.id, brainId)).for("update")).at(0)
+              if (!row) return Option.none<Row>()
+              yield* transaction
+                .update(brains)
+                .set({
+                  generation: sql`${brains.generation} + 1`,
+                  binding: null,
+                  url: null,
+                  keep_alive_until: null,
+                  hand: null,
+                  phase: "failed",
+                  failure: "The space was shut down. Send a message or press Retry to start it again.",
+                  failures: 0,
+                  retry_at: null,
+                  stopped_at: new Date(),
+                })
+                .where(eq(brains.id, brainId))
+              yield* transaction
+                .update(Database.Schema.agent_session)
+                .set({ continue_message_id: null })
+                .where(eq(Database.Schema.agent_session.brain_id, brainId))
+              return Option.some(row)
+            }),
+          )
+          .pipe(Effect.orDie)
+        if (Option.isNone(old) || !old.value.binding) return synced
+        const binding = old.value.binding
+        yield* egress.retire({ kind: "brain", id: brainId })
+        const destroyed = yield* providerOf(old.value).pipe(
+          Effect.flatMap((provider) => provider.destroy(binding)),
+          Effect.as<ReadonlyArray<string>>([]),
+          Effect.catchCause((cause) =>
+            Effect.succeed([
+              `The machine of brain ${brainId} was not destroyed; the daily cleanup tries again: ${Cause.pretty(cause).split("\n").at(0)}`,
+            ]),
+          ),
+        )
+        return [...synced, ...destroyed]
+      }),
       onInterrupted: Effect.fn("BrainLifecycle.onInterrupted")(function* (
         listener: (interrupted: Interrupted) => Effect.Effect<void>,
       ) {

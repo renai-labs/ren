@@ -8,4 +8,5 @@ export const EnvironmentTemplateGroup = Primitive.group(EnvironmentTemplate.defi
   Primitive.update(EnvironmentTemplate.definition),
   Primitive.archive(EnvironmentTemplate.definition),
   Primitive.action(EnvironmentTemplate.definition, "retryBuild"),
+  Primitive.action(EnvironmentTemplate.definition, "affectedSpaces"),
 ])

@@ -47,6 +47,7 @@ const actions = {
   update: Primitive.action(EnvironmentTemplate.definition, "update"),
   archive: Primitive.action(EnvironmentTemplate.definition, "archive"),
   retryBuild: Primitive.action(EnvironmentTemplate.definition, "retryBuild"),
+  affectedSpaces: Primitive.action(EnvironmentTemplate.definition, "affectedSpaces"),
 }
 
 const toInfo = (row: typeof table.$inferSelect): EnvironmentTemplate.Info => ({
@@ -65,6 +66,24 @@ const toInfo = (row: typeof table.$inferSelect): EnvironmentTemplate.Info => ({
   updatedAt: DateTime.fromDateUnsafe(row.updated_at),
   archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
 })
+
+// oxlint-disable-next-line ren/no-comments -- The live spaces whose settings name the template, or whose brains or chats still run on it.
+const spacesOf = (transaction: Database.Transaction, id: EnvironmentTemplate.ID) =>
+  transaction
+    .select({ id: Database.Schema.space.id, name: Database.Schema.space.name })
+    .from(Database.Schema.space)
+    .where(
+      and(
+        or(
+          eq(Database.Schema.space.brain_template_id, id),
+          eq(Database.Schema.space.environment_template_id, id),
+          sql`exists (select 1 from ${Database.Schema.brain} where ${Database.Schema.brain.space_id} = ${Database.Schema.space.id} and ${Database.Schema.brain.image_template}->>'environmentTemplateId' = ${id})`,
+          sql`exists (select 1 from ${Database.Schema.session_environment} where ${Database.Schema.session_environment.space_id} = ${Database.Schema.space.id} and ${Database.Schema.session_environment.environment_template_id} = ${id})`,
+        ),
+        isNull(Database.Schema.space.archived_at),
+      ),
+    )
+    .orderBy(asc(Database.Schema.space.name))
 
 export const layer = Layer.effect(
   Service,
@@ -408,6 +427,20 @@ export const layer = Layer.effect(
           }),
         )
       }),
+      affectedSpaces: Effect.fn("EnvironmentTemplates.affectedSpaces")(function* (
+        actor: Actor.Info,
+        id: EnvironmentTemplate.ID,
+      ) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const found = yield* findForUpdate(transaction, actor, id)
+            if (!found) return yield* notFound
+            if (!isAllowed(actor, actions.affectedSpaces))
+              return yield* new Primitive.Forbidden({ message: "You cannot list the spaces of this machine." })
+            return { spaces: yield* spacesOf(transaction, id) }
+          }),
+        )
+      }),
       archive: Effect.fn("EnvironmentTemplates.archive")(function* (actor: Actor.Info, id: EnvironmentTemplate.ID) {
         const archived = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
@@ -417,21 +450,7 @@ export const layer = Layer.effect(
             if (!isAllowed(actor, actions.archive))
               return yield* new Primitive.Forbidden({ message: "You cannot archive this environment template." })
             // oxlint-disable-next-line ren/no-comments -- EN24: a space never holds a brain or hand machine that cannot run. A space update reads the template with a share lock, so the two wait for each other.
-            const spacesUsing = yield* transaction
-              .select({ name: Database.Schema.space.name })
-              .from(Database.Schema.space)
-              .where(
-                and(
-                  or(
-                    eq(Database.Schema.space.brain_template_id, id),
-                    eq(Database.Schema.space.environment_template_id, id),
-                    sql`exists (select 1 from ${Database.Schema.brain} where ${Database.Schema.brain.space_id} = ${Database.Schema.space.id} and ${Database.Schema.brain.image_template}->>'environmentTemplateId' = ${id})`,
-                    sql`exists (select 1 from ${Database.Schema.session_environment} where ${Database.Schema.session_environment.space_id} = ${Database.Schema.space.id} and ${Database.Schema.session_environment.environment_template_id} = ${id})`,
-                  ),
-                  isNull(Database.Schema.space.archived_at),
-                ),
-              )
-              .orderBy(asc(Database.Schema.space.name))
+            const spacesUsing = yield* spacesOf(transaction, id)
             if (spacesUsing.length > 0)
               return yield* new Primitive.Conflict({
                 message: `Spaces use this environment template: ${spacesUsing.map((space) => space.name).join(", ")}. Pick another brain or hand for them first.`,

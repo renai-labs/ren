@@ -16,7 +16,20 @@ import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { Signature } from "@ren/schema/signature"
 import { eq, sql } from "drizzle-orm"
-import { Clock, ConfigProvider, Context, Duration, Effect, Fiber, Layer, Option, Queue, Redacted, Schema } from "effect"
+import {
+  Clock,
+  ConfigProvider,
+  Context,
+  Duration,
+  Effect,
+  Fiber,
+  Layer,
+  Option,
+  Queue,
+  Redacted,
+  Schedule,
+  Schema,
+} from "effect"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { Access } from "../src/access.js"
@@ -37,6 +50,7 @@ import { Host } from "./lib/host.js"
 import { TestSandboxEgress } from "./lib/sandbox-egress.js"
 import { Seed } from "./lib/seed.js"
 import { Signer } from "../src/signer.js"
+import { SpaceShutdown } from "../src/space-shutdown.js"
 
 setDefaultTimeout(60_000)
 
@@ -121,6 +135,49 @@ describe("BrainHost calls to a brain", () => {
       )
       expect(failure._tag).toBe("SessionNotStartedError")
     }),
+  )
+
+  it.live(
+    "a send while the space shuts down is refused before the brain is called; after it, a send wakes the stopped brain",
+    () =>
+      Effect.gen(function* () {
+        const requests: Array<string> = []
+        const answering = yield* serve((request) => {
+          requests.push(new URL(request.url).pathname)
+          return Response.json({ messageId: Session.MessageID.create() })
+        })
+        const subject = yield* seeded
+        const database = yield* Database.Service
+        const brainId = Brain.ofSession(subject.sessionId)
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ shutdown_state: "running" })
+          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+        const refused = yield* sendTo(subject.sessionId, "during").pipe(
+          Effect.flip,
+          Effect.provide(cell(answering.url.origin)),
+        )
+        const before = requests.length
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ shutdown_state: null })
+          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+        yield* database.db
+          .update(Database.Schema.brain)
+          .set({ stopped_at: new Date() })
+          .where(eq(Database.Schema.brain.id, brainId))
+        yield* sendTo(subject.sessionId, "after").pipe(Effect.provide(cell(answering.url.origin)))
+        const stoppedAt = (yield* database.db
+          .select({ stoppedAt: Database.Schema.brain.stopped_at })
+          .from(Database.Schema.brain)
+          .where(eq(Database.Schema.brain.id, brainId))).at(0)?.stoppedAt
+        expect({ refused: refused._tag, before, after: requests.length, stoppedAt }).toEqual({
+          refused: "BrainRejectedError",
+          before: 0,
+          after: 1,
+          stoppedAt: null,
+        })
+      }),
   )
 
   it.live("file limits are checked before the call, and the brain's body-size refusal is not retried", () =>
@@ -660,31 +717,31 @@ describe("BrainHost environments", () => {
   const hostWith = Effect.fnUntraced(function* (cellUrl: string) {
     const keys = yield* Signature.generate("env")
     const probe = yield* TestProvider.make()
-    const context = yield* Layer.build(
-      Host.cellLayer(
-        { CELL_URL: cellUrl },
-        fixed,
-        Layer.fresh(
-          Environments.layer.pipe(
-            Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
-            Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
-          ),
-        ).pipe(
-          Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
-          Layer.provide(
-            ConfigProvider.layer(
-              ConfigProvider.fromUnknown({
-                ENVIRONMENT_KEYS: JSON.stringify([
-                  {
-                    id: keys.privateKey.id,
-                    key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(keys.privateKey.key),
-                  },
-                ]),
-              }),
-            ),
+    const environments = yield* Layer.build(
+      Layer.fresh(
+        Environments.layer.pipe(
+          Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
+          Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
+        ),
+      ).pipe(
+        Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
+        Layer.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromUnknown({
+              ENVIRONMENT_KEYS: JSON.stringify([
+                {
+                  id: keys.privateKey.id,
+                  key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(keys.privateKey.key),
+                },
+              ]),
+            }),
           ),
         ),
       ),
+    )
+    const context = Context.merge(
+      environments,
+      yield* Layer.build(Host.cellLayer({ CELL_URL: cellUrl }, fixed, Layer.succeedContext(environments))),
     )
     return context
   })
@@ -759,5 +816,52 @@ describe("BrainHost environments", () => {
         .where(eq(Database.Schema.session_environment.session_id, subject.sessionId))
       expect([recording.starts.length, bound]).toEqual([2, [{ template: second }]])
     }),
+  )
+
+  it.live(
+    "a shutdown run stops each brain of the space, destroys its hands, and reports what it could not confirm",
+    () =>
+      Effect.gen(function* () {
+        const recording = yield* recordingCell()
+        const host = yield* hostWith(recording.url)
+        const subject = yield* seeded
+        const database = yield* Database.Service
+        const environments = Context.get(host, Environments.Service)
+        const template = yield* Seed.environmentTemplate(subject.owner.organizationId)
+        const chat = {
+          sessionId: subject.sessionId,
+          organizationId: subject.owner.organizationId,
+          spaceId: subject.owner.spaceId,
+        }
+        yield* environments.bind(chat, Seed.version(template))
+        yield* environments.access(chat, Option.none())
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ shutdown_state: "running", shutdown_epoch: 1 })
+          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+        yield* Layer.build(
+          SpaceShutdown.layer.pipe(
+            Layer.provide(Layer.succeedContext(host)),
+            Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ SPACE_SHUTDOWN_POLL: "20 millis" }))),
+          ),
+        )
+        const space = yield* database.db
+          .select({ state: Database.Schema.space.shutdown_state, report: Database.Schema.space.shutdown_report })
+          .from(Database.Schema.space)
+          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+          .pipe(
+            Effect.map((rows) => rows.at(0)),
+            Effect.repeat({ until: (row) => row?.state === null, schedule: Schedule.spaced("20 millis") }),
+            Effect.timeout("10 seconds"),
+          )
+        const binding = (yield* database.db
+          .select({ environmentId: Database.Schema.session_environment.environment_id })
+          .from(Database.Schema.session_environment)
+          .where(eq(Database.Schema.session_environment.session_id, subject.sessionId))).at(0)
+        expect({ problems: space?.report?.problems, binding }).toEqual({
+          problems: [`Brain ${Brain.ofSession(subject.sessionId)} runs in a cell, which Ren cannot shut down`],
+          binding: { environmentId: null },
+        })
+      }),
   )
 })

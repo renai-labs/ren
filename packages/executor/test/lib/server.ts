@@ -13,10 +13,12 @@ import { TestEnvironment } from "./test-environment.js"
 export const environmentId = Environment.ID.create()
 export const brain = Brain.ID.create()
 export const workspace = await mkdtemp(join(tmpdir(), "ren-executor-"))
-export const layer = TestEnvironment.layer({ environmentId, workspace }).pipe(Layer.provideMerge(FetchHttpClient.layer))
+export const layer = TestEnvironment.layer({ environmentId, workspace, generation: 1 }).pipe(
+  Layer.provideMerge(FetchHttpClient.layer),
+)
 
 export const token = Effect.fnUntraced(function* (
-  claims: { readonly environmentId?: Environment.ID; readonly brain?: Brain.ID } = {},
+  claims: { readonly environmentId?: Environment.ID; readonly brain?: Brain.ID; readonly generation?: number } = {},
 ) {
   return Redacted.value(
     (yield* TestEnvironment.access({

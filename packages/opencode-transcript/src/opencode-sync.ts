@@ -18,6 +18,8 @@ export class Refused extends Schema.TaggedError<Refused>()("OpenCodeSync.Refused
 
 export class RemoteError extends Schema.TaggedError<RemoteError>()("OpenCodeSync.RemoteError", {
   message: Schema.String,
+  // oxlint-disable-next-line ren/no-comments -- Ren answered, and this brain cannot read the answer: an older brain and a newer Ren. Asking again gives the same answer.
+  isIncompatible: Schema.optionalKey(Schema.Boolean),
 }) {}
 
 export interface Upload {
@@ -356,9 +358,15 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
           const restoring = yield* options.restoring
           if (!restoring.has(input.sessionId) && (yield* input.exists(input.sessionId))) return
           yield* Effect.gen(function* () {
-            const group = yield* remote
-              .restore(input.sessionId)
-              .pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
+            const group = yield* remote.restore(input.sessionId).pipe(
+              Effect.mapError(
+                (error) =>
+                  new SyncError({
+                    reason: error.isIncompatible ? "incompatible" : "unavailable",
+                    message: error.message,
+                  }),
+              ),
+            )
             const root = group.find((chat) => !chat.parentId)?.id ?? input.sessionId
             yield* options.mark(root, { isRestoring: true })
             yield* Effect.forEach(

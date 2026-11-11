@@ -49,6 +49,16 @@ const isFirstOrganizationSpace = sql<boolean>`${Database.Schema.space.id} = (
   limit 1
 )`
 
+// oxlint-disable-next-line ren/no-comments -- A brain with a machine that applied an older brain or hand setting, or that runs another image than its template's last build.
+const isComputePending = sql<boolean>`exists (
+  select 1 from ${Database.Schema.brain}
+  left join ${Database.Schema.environment_template} on ${Database.Schema.environment_template.id} = ${Database.Schema.space.brain_template_id}
+  where ${Database.Schema.brain.space_id} = ${Database.Schema.space.id}
+    and ${Database.Schema.brain.binding} is not null
+    and (${Database.Schema.brain.compute_revision} < ${Database.Schema.space.compute_revision}
+      or (${Database.Schema.environment_template.image} is not null and ${Database.Schema.brain.image} is distinct from ${Database.Schema.environment_template.image}))
+)`
+
 const select = (transaction: Database.Transaction, actor: Actor.Info) =>
   transaction
     .select({
@@ -56,6 +66,7 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
       membershipId: SpaceQueries.membership.id,
       isFirstOrganizationSpace,
       memberCount,
+      isComputePending,
       usable: AgentQueries.factoryOrder,
     })
     .from(Database.Schema.space)
@@ -191,6 +202,14 @@ export const layer = Layer.effect(
           brainScope: row.space.brain_scope,
           brain: SpaceQueries.brainMachine(row.space, deploymentProvider),
           hand: SpaceQueries.hand(row.space),
+          compute: {
+            isPending: row.isComputePending,
+            shutdown: row.space.shutdown_state,
+            lastShutdown: row.space.shutdown_report && {
+              finishedAt: DateTime.makeUnsafe(row.space.shutdown_report.finishedAt),
+              problems: row.space.shutdown_report.problems,
+            },
+          },
           memberCount: row.memberCount,
           membershipId: row.membershipId,
           factory: canRead ? TaskFactory.keep(row.space.factory, row.usable) : Factory.empty,
@@ -354,6 +373,27 @@ export const layer = Layer.effect(
                 .set({ slug, updated_at: sql`now()` })
                 .where(eq(Database.Schema.space.id, id))
             }
+            return yield* find(transaction, actor, eq(Database.Schema.space.id, id))
+          }),
+        )
+      }),
+      // oxlint-disable-next-line ren/no-comments -- Marks the space for a shutdown under the next epoch; SpaceShutdown runs it. Anyone who can edit the space can shut it down. A second request while one runs changes nothing.
+      shutdown: Effect.fn("Space.shutdown")(function* (actor: Actor.Info, id: Space.ID) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const visible = yield* findVisible(transaction, actor, id)
+            if (!visible || visible.row.space.archived_at) return yield* notFound
+            if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource }))
+              return yield* new Primitive.Forbidden({ message: "You cannot shut down this space." })
+            if (!visible.row.space.shutdown_state)
+              yield* transaction
+                .update(Database.Schema.space)
+                .set({
+                  shutdown_state: "running",
+                  shutdown_epoch: sql`${Database.Schema.space.shutdown_epoch} + 1`,
+                  updated_at: sql`now()`,
+                })
+                .where(eq(Database.Schema.space.id, id))
             return yield* find(transaction, actor, eq(Database.Schema.space.id, id))
           }),
         )

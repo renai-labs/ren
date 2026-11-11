@@ -11,6 +11,10 @@ export const Claims = Schema.Struct({
   kid: Schema.NonEmptyString,
   environment: Environment.ID,
   brain: Brain.ID,
+  generation: Schema.optionalKey(Schema.Int).annotate({
+    description:
+      "The generation of the machine the token is for. An executor that knows its generation refuses a token for another one, so a machine that a shutdown or a replace retired takes no calls from tokens Ren signs later.",
+  }),
   exp: Schema.Int,
 }).annotate({ identifier: "EnvironmentToken.Claims" })
 

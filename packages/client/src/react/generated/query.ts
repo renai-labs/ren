@@ -7,6 +7,7 @@ import type {
   SpaceCreateInput,
   SpaceUpdateInput,
   SpaceArchiveInput,
+  SpaceShutdownInput,
   SpaceMemberListInput,
   SpaceMemberCreateInput,
   SpaceMemberArchiveInput,
@@ -16,6 +17,7 @@ import type {
   EnvironmentTemplateUpdateInput,
   EnvironmentTemplateArchiveInput,
   EnvironmentTemplateRetryBuildInput,
+  EnvironmentTemplateAffectedSpacesInput,
   SpaceSettingsGetInput,
   SpaceSettingsUpdateInput,
   OrganizationSettingsGetInput,
@@ -215,6 +217,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationFn: (input: SpaceArchiveInput) => client["space"]["archive"](input),
           }),
       },
+      shutdown: {
+        mutationKey: () => ["space", "shutdown"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space", "shutdown"] as const,
+            mutationFn: (input: SpaceShutdownInput) => client["space"]["shutdown"](input),
+          }),
+      },
     },
     "space-member": {
       list: {
@@ -297,6 +307,15 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationKey: ["environment-template", "retryBuild"] as const,
             mutationFn: (input: EnvironmentTemplateRetryBuildInput) =>
               client["environment-template"]["retryBuild"](input),
+          }),
+      },
+      affectedSpaces: {
+        mutationKey: () => ["environment-template", "affectedSpaces"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["environment-template", "affectedSpaces"] as const,
+            mutationFn: (input: EnvironmentTemplateAffectedSpacesInput) =>
+              client["environment-template"]["affectedSpaces"](input),
           }),
       },
     },

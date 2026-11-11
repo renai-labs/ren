@@ -13,5 +13,6 @@ export const SpaceHandler = HttpApiBuilder.group(Api, "space", (handlers) =>
       .handle("space.create", Primitive.create(spaces.create))
       .handle("space.update", Primitive.update(spaces.update))
       .handle("space.archive", Primitive.archive(spaces.archive))
+      .handle("space.shutdown", Primitive.action(spaces.shutdown))
   }),
 )

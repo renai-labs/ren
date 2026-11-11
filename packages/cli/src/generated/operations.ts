@@ -61,6 +61,20 @@ export const SpaceArchive = (input: Command.Command.Config.Infer<typeof Commands
     (client, request) => client["space"]["archive"]({ ...request.params }),
   )
 
+export const SpaceShutdown = (input: Command.Command.Config.Infer<typeof Commands.SpaceShutdown>) =>
+  Operation.run(
+    ClientApi.groups["space"].endpoints["space.shutdown"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<space>" },
+      lookups: {
+        id: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space"]["shutdown"]({ ...request.params, ...request.payload }),
+  )
+
 export const SpaceMemberList = (input: Command.Command.Config.Infer<typeof Commands.SpaceMemberList>) =>
   Operation.run(
     ClientApi.groups["space-member"].endpoints["space-member.list"],
@@ -1418,6 +1432,23 @@ export const EnvironmentTemplateRetryBuild = (
       },
     },
     (client, request) => client["environment-template"]["retryBuild"]({ ...request.params, ...request.payload }),
+  )
+
+export const EnvironmentTemplateAffectedSpaces = (
+  input: Command.Command.Config.Infer<typeof Commands.EnvironmentTemplateAffectedSpaces>,
+) =>
+  Operation.run(
+    ClientApi.groups["environment-template"].endpoints["environment-template.affectedSpaces"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<template>" },
+      lookups: {
+        id: (client, value) =>
+          client["environment-template"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["environment-template"]["affectedSpaces"]({ ...request.params, ...request.payload }),
   )
 
 export const OauthAppList = (input: Command.Command.Config.Infer<typeof Commands.OauthAppList>) =>

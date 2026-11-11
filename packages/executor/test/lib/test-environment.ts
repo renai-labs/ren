@@ -48,6 +48,7 @@ export const layer = (options: {
   readonly workspace: string
   readonly executor?: typeof Sandbox.layer
   readonly publicKeys?: readonly [Signature.PublicKey, ...ReadonlyArray<Signature.PublicKey>]
+  readonly generation?: number
 }) =>
   HttpRouter.serve(Server.layer, { disableListenLog: true, disableLogger: true }).pipe(
     Layer.provide(HttpServer.layerServices),
@@ -59,6 +60,7 @@ export const layer = (options: {
           EXECUTOR_ENVIRONMENT_ID: options.environmentId,
           EXECUTOR_WORKSPACE: options.workspace,
           ENVIRONMENT_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(options.publicKeys ?? [keys.publicKey]),
+          ...(options.generation !== undefined && { EXECUTOR_ENVIRONMENT_GENERATION: String(options.generation) }),
         }),
       ),
     ),
@@ -85,6 +87,7 @@ export const access = Effect.fnUntraced(function* (options: {
       yield* EnvironmentToken.sign(keys.privateKey, {
         environment: options.environmentId,
         brain: options.brain,
+        generation: options.generation ?? 1,
         exp: Math.floor(DateTime.toEpochMillis(expiresAt) / 1000),
       }),
     ),

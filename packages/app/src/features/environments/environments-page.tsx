@@ -1,7 +1,7 @@
 import { useState } from "react"
 import type { EnvironmentProviderInfo, EnvironmentTemplateInfo, EnvironmentTemplateNetworking } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { IconArchive, IconPencil, IconPlus } from "@tabler/icons-react"
+import { IconArchive, IconPencil, IconPlayerStopFilled, IconPlus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
 import { Checkbox } from "@ren/ui/checkbox"
@@ -274,6 +274,66 @@ function BuildError(props: { template: EnvironmentTemplateInfo }) {
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- A change of a machine reaches a space's brains when they wake. This shuts down every space that uses the machine, so all of them apply it now, and names each space that it could not shut down.
+function ShutdownSpacesDialog(props: {
+  template: EnvironmentTemplateInfo
+  spaces: ReadonlyArray<{ readonly id: string; readonly name: string }>
+  onOpenChange: (open: boolean) => void
+}) {
+  const { api } = RouterContext.useRouterContext()
+  const shutdown = useMutation(api.space.shutdown.mutationOptions())
+  const [pending, setPending] = useState(false)
+  const spaces = props.spaces
+  const confirm = async () => {
+    setPending(true)
+    const failed = (
+      await Promise.all(
+        spaces.map((space) =>
+          shutdown.mutateAsync({ id: space.id }).then(
+            () => [],
+            (failure: unknown) => [`${space.name}: ${errorMessage(failure)}`],
+          ),
+        ),
+      )
+    ).flat()
+    setPending(false)
+    props.onOpenChange(false)
+    if (failed.length > 0)
+      toast.error("Couldn’t shut down some spaces", { description: failed.join(" "), duration: Infinity })
+    else toast.success(`Shutting down ${spaces.length === 1 ? "1 space" : `${spaces.length} spaces`}`)
+  }
+  return (
+    <Dialog open onOpenChange={(open) => (pending ? undefined : props.onOpenChange(open))}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{`Shut down the spaces of ${props.template.name}`}</DialogTitle>
+          <DialogDescription>
+            All work in these spaces stops. The files on their machines are deleted, and chat changes that were not
+            saved may be lost.
+          </DialogDescription>
+        </DialogHeader>
+        {spaces.length === 0 ? <p className="text-sm text-muted-foreground">No space uses this machine.</p> : null}
+        {spaces.length > 0 ? (
+          <ul className="flex flex-col gap-1 text-sm">
+            {spaces.map((space) => (
+              <li key={space.id}>{space.name}</li>
+            ))}
+          </ul>
+        ) : null}
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />} disabled={pending}>
+            Cancel
+          </DialogClose>
+          <Button variant="destructive" disabled={pending || spaces.length === 0} onClick={() => void confirm()}>
+            {pending ? <Spinner data-icon="inline-start" /> : null}
+            Shut down spaces
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function EnvironmentsSettingsPage() {
   const { api, client } = RouterContext.useRouterContext()
   const providers = useQuery(api.environmentProvider.list.queryOptions())
@@ -286,6 +346,11 @@ export function EnvironmentsSettingsPage() {
   })
   const archive = useMutation(api["environment-template"].archive.mutationOptions())
   const [editing, setEditing] = useState<{ readonly template: EnvironmentTemplateInfo | undefined }>()
+  const affected = useMutation(api["environment-template"].affectedSpaces.mutationOptions())
+  const [shuttingDown, setShuttingDown] = useState<{
+    readonly template: EnvironmentTemplateInfo
+    readonly spaces: ReadonlyArray<{ readonly id: string; readonly name: string }>
+  }>()
   const providerList = providers.data ?? []
   const titleOf = (id: string) => providerList.find((each) => each.id === id)?.title ?? id
   const items = templates.data ?? []
@@ -323,6 +388,21 @@ export function EnvironmentsSettingsPage() {
                 items={[
                   { label: "Edit", icon: IconPencil, onSelect: () => setEditing({ template }) },
                   {
+                    label: "Shut down spaces",
+                    icon: IconPlayerStopFilled,
+                    onSelect: () =>
+                      affected.mutateAsync(
+                        { id: template.id },
+                        {
+                          onSuccess: (found) => setShuttingDown({ template, spaces: found.spaces }),
+                          onError: (failure) =>
+                            toast.error("Couldn’t list the spaces of the machine", {
+                              description: errorMessage(failure),
+                            }),
+                        },
+                      ),
+                  },
+                  {
                     label: "Archive",
                     icon: IconArchive,
                     onSelect: () =>
@@ -344,6 +424,16 @@ export function EnvironmentsSettingsPage() {
             </Row>
           ))}
         </Rows>
+      ) : null}
+      {shuttingDown ? (
+        <ShutdownSpacesDialog
+          key={shuttingDown.template.id}
+          template={shuttingDown.template}
+          spaces={shuttingDown.spaces}
+          onOpenChange={(open) => {
+            if (!open) setShuttingDown(undefined)
+          }}
+        />
       ) : null}
       {editing ? (
         <TemplateDialog

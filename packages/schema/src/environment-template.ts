@@ -112,6 +112,20 @@ export const UpdateInput = Schema.Struct({
 export interface RetryBuildInput extends Schema.Schema.Type<typeof RetryBuildInput> {}
 export const RetryBuildInput = Schema.Struct({}).annotate({ identifier: "EnvironmentTemplate.RetryBuildInput" })
 
+export interface AffectedSpacesInput extends Schema.Schema.Type<typeof AffectedSpacesInput> {}
+export const AffectedSpacesInput = Schema.Struct({}).annotate({ identifier: "EnvironmentTemplate.AffectedSpacesInput" })
+
+export interface AffectedSpaces extends Schema.Schema.Type<typeof AffectedSpaces> {}
+export const AffectedSpaces = Schema.Struct({
+  spaces: Schema.Array(
+    Schema.Struct({ id: Schema.String.annotate({ description: "The space’s id." }), name: Schema.String }),
+  ),
+}).annotate({
+  identifier: "EnvironmentTemplate.AffectedSpaces",
+  description:
+    "The live spaces whose settings name the machine, or whose brains or chats still run on it. A shutdown of each applies a change of the machine now.",
+})
+
 export const definition = Primitive.define({
   name: "environment-template",
   plural: "environment-templates",
@@ -122,5 +136,8 @@ export const definition = Primitive.define({
   create: { input: CreateInput, result: Info },
   update: { input: UpdateInput, result: Info },
   archive: true,
-  actions: { retryBuild: { input: RetryBuildInput, result: Info } },
+  actions: {
+    retryBuild: { input: RetryBuildInput, result: Info },
+    affectedSpaces: { input: AffectedSpacesInput, result: AffectedSpaces },
+  },
 })
