@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, scriptedReply, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -136,6 +136,28 @@ test("a member opens the model picker with its shortcut and undoes the last mess
     .click()
   await expect(message).toHaveValue("Draft the memo")
   await expect(page.getByRole("button", { name: "Restore messages" })).toBeVisible()
+})
+
+test("a member copies a reply's list and bold text and gets Markdown with clean HTML", async ({ page }) => {
+  await createOrganization(page.request, { name: "Dorothy Vaughan" })
+  const marker = await scriptedReply(page.request, "Results:\n\n- **one** item\n- two items")
+  await page.goto("/app/")
+  const start = page.getByRole("form", { name: "Start a chat" })
+  await start.getByRole("textbox", { name: "Message" }).fill(`Summarise ${marker}`)
+  await start.getByRole("button", { name: "Send" }).click()
+  const list = page.getByRole("list").filter({ hasText: "two items" })
+  await expect(list).toBeVisible({ timeout: brainStart })
+
+  await page.evaluate(
+    'document.addEventListener("copy", (event) => { window.copied = { text: event.clipboardData.getData("text/plain"), html: event.clipboardData.getData("text/html") } })',
+  )
+  await list.evaluate('(element) => getSelection().selectAllChildren(element)')
+  await page.keyboard.press("ControlOrMeta+c")
+
+  const copied = await page.evaluate<{ text: string; html: string }>("window.copied")
+  expect(copied.text).toBe("- **one** item\n- two items")
+  expect(copied.html).toContain("<strong>one</strong>")
+  expect(copied.html).not.toMatch(/style=|<button/)
 })
 
 test("a member finds text in a chat and closes find with Escape", async ({ page }) => {

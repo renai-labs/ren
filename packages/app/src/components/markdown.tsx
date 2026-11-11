@@ -22,12 +22,13 @@ import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
+import { markdownClipboard } from "./markdown-clipboard.js"
 
 function MarkdownCodeBlock(props: { code: string; language: string }) {
   const incomplete = useIsCodeFenceIncomplete()
   const lines = useHighlightedCode(props.code, props.language)
   return (
-    <CodeBlock className="my-3">
+    <CodeBlock className="my-3" data-language={props.language}>
       <CodeBlockHeader>
         <CodeBlockTitle>{props.language || "text"}</CodeBlockTitle>
         <CodeBlockActions>
@@ -154,18 +155,33 @@ export function Markdown(props: {
         }
   return (
     <WorkspaceImages value={props.workspaceImage}>
-      <Streamdown
-        controls={false}
-        tableMaxHeight={0}
-        urlTransform={urlTransform}
-        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-        components={withApps}
-        isAnimating={props.streaming === true}
-        animated={streamAnimation}
-        className={cn("min-w-0 text-sm/relaxed", props.className)}
+      <div
+        className="contents"
+        onCopy={(event) => {
+          const selection = window.getSelection()
+          const copied =
+            selection && selection.rangeCount > 0
+              ? markdownClipboard(event.currentTarget, selection.getRangeAt(0))
+              : undefined
+          if (!copied) return
+          event.preventDefault()
+          event.clipboardData.setData("text/plain", copied.text)
+          event.clipboardData.setData("text/html", copied.html)
+        }}
       >
-        {mentionLinks(props.children, apps)}
-      </Streamdown>
+        <Streamdown
+          controls={false}
+          tableMaxHeight={0}
+          urlTransform={urlTransform}
+          rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+          components={withApps}
+          isAnimating={props.streaming === true}
+          animated={streamAnimation}
+          className={cn("min-w-0 text-sm/relaxed", props.className)}
+        >
+          {mentionLinks(props.children, apps)}
+        </Streamdown>
+      </div>
     </WorkspaceImages>
   )
 }
