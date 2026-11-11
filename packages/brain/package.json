@@ -16,7 +16,7 @@
     "test:all": "bun ../../script/signoff/record.ts bun test --only-failures"
   },
   "dependencies": {
-    "@ren/environment-api": "workspace:*",
+    "@ren/hand-api": "workspace:*",
     "@ren/schema": "workspace:*",
     "effect": "catalog:"
   },

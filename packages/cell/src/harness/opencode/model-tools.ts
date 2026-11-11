@@ -3,7 +3,7 @@ export * as OpenCodeModelTools from "./model-tools.js"
 import { NodeFileSystem } from "@effect/platform-node-shared"
 import type { ToolEditor } from "@opencode/plugin/effect/tool"
 import type { PermissionDomain } from "@opencode/plugin/effect/permission"
-import type { EnvironmentConnections } from "@ren/brain/environment/connections"
+import type { HandConnections } from "@ren/brain/hand/connections"
 import { Tool } from "@opencode/schema/tool"
 import { ModelTypes } from "@ren/schema/model-types"
 import { Session } from "@ren/schema/session"
@@ -21,7 +21,7 @@ export interface Input {
   readonly current: Ref.Ref<HarnessConfig.Snapshot>
   readonly sessionId: string
   readonly directory: string
-  readonly connections: Option.Option<EnvironmentConnections.Interface>
+  readonly connections: Option.Option<HandConnections.Interface>
   readonly keyFor: Harness.Refresh
   readonly permission: PermissionDomain
   readonly headers: (call: {

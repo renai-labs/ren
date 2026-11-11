@@ -47,3 +47,20 @@ test("saved history leaves out a row it cannot show, logs it, and keeps the othe
   expect<ReadonlyArray<string>>(history.map((message) => message.id)).toEqual([row.id])
   expect(logged).toHaveLength(1)
 })
+
+test("a stand-in for a message too large to sync decodes on restore, in the place of the message it stands for", () => {
+  const row = OpenCodeFixtures.recordings
+    .flatMap((recording) => recording.chats)
+    .flatMap((chat) => chat.messages)
+    .find((each) => each.type === "assistant")
+  if (!row) throw new Error("No recorded assistant message")
+  const standIn = OpenCodeRows.standIn(row)
+  const decoded = OpenCodeRows.message(standIn)
+  if (Exit.isFailure(decoded)) throw new Error(`The stand-in does not decode: ${Cause.pretty(decoded.cause)}`)
+  expect([standIn.id, standIn.seq, decoded.value.type, "text" in decoded.value && decoded.value.text]).toEqual([
+    row.id,
+    row.seq,
+    "synthetic",
+    OpenCodeRows.tooLarge,
+  ])
+})

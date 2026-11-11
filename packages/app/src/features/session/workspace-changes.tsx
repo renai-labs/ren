@@ -155,6 +155,15 @@ export function ChangesTab(props: { root: Session.ID; messages: ReadonlyArray<Se
   const edits = (
     <Changes changes={editsOf(props.messages)} empty="Files Ren creates or edits in this chat show up here as diffs." />
   )
+  if (AsyncResult.isInitial(vcs.result))
+    return (
+      <WorkspacePending
+        result={vcs.result}
+        icon={<IconFileDiff />}
+        title="Could not read the changes"
+        onRetry={vcs.refresh}
+      />
+    )
   if (!repository) return edits
   const source = chosen ?? "repository"
   const picker = (

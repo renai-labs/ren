@@ -1,10 +1,14 @@
+import { HandProvider } from "@ren/core/hand-provider"
 import { afterAll, describe, expect, test } from "bun:test"
+import { BrainProvider } from "@ren/core/brain-provider"
 import { BunCrypto } from "@effect/platform-bun"
 import { PgClient } from "@effect/sql-pg"
 import { Access } from "@ren/core/access"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
+import { Bundles } from "@ren/core/bundles"
+import { MachineNetwork } from "@ren/core/machine-network"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { Brains } from "@ren/core/brains"
 import { CredentialCallers } from "@ren/core/credential-callers"
@@ -12,20 +16,18 @@ import { CredentialEnv } from "@ren/core/credential-env"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EgressControl } from "@ren/core/egress-control"
 import { Envelope } from "@ren/core/envelope"
-import { EnvironmentProvider } from "@ren/core/environment-provider"
-import { Environments } from "@ren/core/environments"
+import { Hands } from "@ren/core/hands"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
-import { SandboxProvider } from "@ren/core/sandbox-provider"
-import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
+import { E2BSandbox } from "@ren/core/machine-provider/e2b"
 import { SessionRunner } from "@ren/core/session/runner"
 import { Settings } from "@ren/core/settings"
 import { Signer } from "@ren/core/signer"
 import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
-import { TestEnvironment } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
 import { EgressHarness } from "@ren/server/testing"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
@@ -128,7 +130,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
     const brainKey = await Effect.runPromise(Signature.generate("e2b-server"))
     const shared = {
       BRAIN_KEYS: encoded(brainKey.privateKey),
-      ENVIRONMENT_KEYS: encoded(TestEnvironment.keys.privateKey),
+      ENVIRONMENT_KEYS: encoded(TestHand.keys.privateKey),
       REN_URL: renTunnel,
       E2B_TEMPLATE: template,
       REN_INFERENCE_GATEWAY_URL: process.env.CHAOS_INFERENCE_URL ?? "",
@@ -203,6 +205,8 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provideMerge(BrainHost.layerSandbox),
             Layer.provideMerge(
               BrainLifecycle.layer.pipe(
+                Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal))),
+                Layer.provide(MachineNetwork.layerNone),
                 Layer.provide(
                   egress
                     ? SandboxEgress.layer.pipe(
@@ -213,15 +217,23 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
                 ),
               ),
             ),
-            Layer.provideMerge(E2BSandbox.layer),
+            Layer.provideMerge(BrainProvider.layer([E2BSandbox.provider])),
             Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
             Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
             Layer.provide(Settings.layer),
             Layer.provide(Models.layer([RenInferenceProvider.make]).pipe(Layer.provide(RenInference.layerNone))),
             Layer.provide(
-              Environments.layer
-                .pipe(Layer.provide(Signer.layerLocal))
-                .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([]))),
+              Hands.layer
+                .pipe(
+                  Layer.provide([
+                    SandboxEgress.layerNone,
+                    MachineNetwork.layerNone,
+                    Bundles.layer,
+                    DurableRunner.layerMemory,
+                  ]),
+                )
+                .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
+                .pipe(Layer.provide(HandProvider.layer<never, never>([]))),
             ),
             Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
             Layer.provide(FetchHttpClient.layer),
@@ -253,7 +265,8 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
     cleanups.push(async () => {
       const rows = await direct`SELECT binding FROM brain WHERE id = ${brainId}`
       const binding = rows.at(0)?.binding
-      if (binding) await core.runPromise(SandboxProvider.Service.use((provider) => provider.destroy(binding)))
+      if (binding)
+        await core.runPromise(BrainProvider.first.pipe(Effect.flatMap((provider) => provider.destroy(binding))))
     })
     await Wait.until(`the E2B brain of ${sessionId} to be ready`, 300_000, async () => {
       const found = await core.runPromise(

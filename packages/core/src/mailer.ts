@@ -1,6 +1,6 @@
 export * as Mailer from "./mailer.js"
 
-import { Environment } from "@ren/util/environment"
+import { Hand } from "@ren/util/environment"
 import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 
@@ -29,7 +29,7 @@ export const layer = Layer.effect(
       (value) => Redacted.value(value) !== "",
     )
     if (Option.isNone(token)) {
-      if (!(yield* Environment.local)) {
+      if (!(yield* Hand.local)) {
         return yield* Effect.die(new Error("POSTMARK_SERVER_TOKEN is required outside development/test"))
       }
       return Service.of({

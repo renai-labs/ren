@@ -5,7 +5,7 @@ import { Agent } from "./agent.js"
 import { App } from "./app.js"
 import { AppProfile } from "./app-profile.js"
 import { Channel } from "./channel.js"
-import { EnvironmentTemplate } from "./environment-template.js"
+import { MachineTemplate } from "./machine-template.js"
 import { Factory } from "./factory.js"
 import { FactoryCheck } from "./factory-check.js"
 import { Memory } from "./memory.js"
@@ -91,7 +91,7 @@ export const SpaceDeclaration = Schema.Struct({
   channels: Schema.Record(Primitive.Slug, Channel.Declaration).pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
   ),
-  environment: Schema.optionalKey(EnvironmentTemplate.Declaration),
+  environment: Schema.optionalKey(MachineTemplate.Declaration),
   memory: MemoryFiles,
   factory: Schema.optionalKey(
     FactoryDeclaration.check(Schema.makeFilter((factory) => FactoryCheck.issues(factory.agents, "agent"))),

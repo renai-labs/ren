@@ -1,15 +1,15 @@
 # @ren/brain
 
-Brain code that is the same on every host and harness. Today: how a brain reaches its environment (`src/environment/`), through the executor's `EnvironmentApi`.
+Brain code that is the same on every host and harness. Today: how a brain reaches its hand (`src/hand/`), through the executor's `HandApi`.
 
-A host (the cell in `packages/cell` today) supplies storage, alarms and an `EnvironmentAccess`; a harness adapter (the OpenCode workspace driver in `packages/cell/src/harness/opencode`) turns an `EnvironmentSession` into its tools.
+A host (the cell in `packages/cell` today) supplies storage, alarms and a `HandAccess`; a harness adapter (the OpenCode workspace driver in `packages/cell/src/harness/opencode`) turns an `EnvironmentSession` into its tools.
 
 ## What belongs here
 
-- `src/environment/access.ts`: `EnvironmentAccess`, how a brain gets a session's `Environment.Access` (`{ directory, url, token, expiresAt, generation }`). `open` fails with `NotFound` (Ren says the session has no access) or `Unavailable` (Ren does not answer, or cannot give an environment). The cell's Ren Host API layer is the production one; `@ren/brain/testing` has fixed and in-memory layers for tests.
-- `src/environment/connections.ts`: `EnvironmentConnections`, the executor connection of each session. `release` tells Ren the session is idle and drops the connection, so the next call asks Ren again. Nothing connects before the first file or shell call. The first contact checks the executor's protocol in `hello` and makes the session's directory. An executor of another environment refuses the token, so the call fails with "token refused".
-- `src/environment/session.ts`: `EnvironmentSession`, a session's processes and files on its environment, with no harness in them: `Files` reads and changes files through the Environment API, and `make` gives a session's spawner and files. A harness adapter maps `Files` errors to its own; it never sees the RPC client. `EnvironmentConnections.failureOf` names an environment failure inside any error, for a harness to show.
-- `src/environment/session/spawner.ts`: `EnvironmentSpawner`, a `ChildProcessSpawner` whose processes run on the environment through the Environment API.
+- `src/hand/access.ts`: `HandAccess`, how a brain gets a session's `Hand.Access` (`{ directory, url, token, expiresAt, generation }`). `open` fails with `NotFound` (Ren says the session has no access) or `Unavailable` (Ren does not answer, or cannot give an environment). The cell's Ren Host API layer is the production one; `@ren/brain/testing` has fixed and in-memory layers for tests.
+- `src/hand/connections.ts`: `HandConnections`, the executor connection of each session. `release` tells Ren the session is idle and drops the connection, so the next call asks Ren again. Nothing connects before the first file or shell call. The first contact checks the executor's protocol in `hello` and makes the session's directory. An executor of another environment refuses the token, so the call fails with "token refused".
+- `src/hand/session.ts`: `HandSession`, a session's processes and files on its hand, with no harness in them: `Files` reads and changes files through the Environment API, and `make` gives a session's spawner and files. A harness adapter maps `Files` errors to its own; it never sees the RPC client. `EnvironmentConnections.failureOf` names an environment failure inside any error, for a harness to show.
+- `src/hand/session/spawner.ts`: `HandSpawner`, a `ChildProcessSpawner` whose processes run on the hand through the Hand API.
 - `src/opencode-sync.ts`: `OpenCodeSync`, the sync step of `specs/session-sync-plan.md` §9.1 and §9.2. It reads the host database through a `Reader` and uploads each session that changed through a `Remote`, both of which the host gives it. The cell's `SyncClient` is the `Remote` on Ren's `SyncApi`. `exclusive` runs an effect, such as a restore, while no step runs.
 - `src/sqlite-reader.ts`: the `Reader` of a sandbox host: a read-only `bun:sqlite` connection that does each read in one read transaction. The cell bundle does not import it.
 
@@ -30,7 +30,7 @@ A host (the cell in `packages/cell` today) supplies storage, alarms and an `Envi
 
 ## Dependencies
 
-`@ren/schema`, `@ren/environment-api`, `effect`. No harness: `@opencode/*` stays out of this package. Tests start an executor from `@ren/executor`.
+`@ren/schema`, `@ren/hand-api`, `effect`. No harness: `@opencode/*` stays out of this package. Tests start an executor from `@ren/executor`.
 
 ## Commands
 

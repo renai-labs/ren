@@ -46,6 +46,10 @@ export const Vars = Schema.Struct({
   REN_EGRESS: Schema.optional(Schema.Literal("1")).annotate({
     description: "The brain runs behind Ren’s egress: it holds no host token and keeps REN_URL (C8, C49).",
   }),
+  REN_HAND_PLACEMENT: Schema.optional(Schema.Literal("remote")).annotate({
+    description:
+      "The space’s chats run their tools on another machine: OpenCode’s saved tool output, workspace panel files and git go to that machine.",
+  }),
   REN_BRAIN_VERSION: Schema.optional(Schema.String),
   REN_TOOLS_MEMORY_EVENTS: Schema.optional(Schema.String).annotate({
     description:

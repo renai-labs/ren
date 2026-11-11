@@ -1,0 +1,6 @@
+id: no-cause-pretty-split
+language: Tsx
+message: "`Cause.pretty` is for logs; its text can change. Use the error's own message, for example `String(Cause.squash(cause))`."
+severity: error
+rule:
+  pattern: Cause.pretty($CAUSE).split($$$ARGS)

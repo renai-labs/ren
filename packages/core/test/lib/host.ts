@@ -1,8 +1,10 @@
 export * as Host from "./host.js"
 
+import { HandProvider } from "../../src/hand-provider.js"
+import { BrainProvider } from "../../src/brain-provider.js"
 import { BunCrypto } from "@effect/platform-bun"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
-import { TestEnvironment } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
@@ -19,14 +21,14 @@ import { BrainClient } from "../../src/brain-client.js"
 import { BrainHost } from "../../src/brain-host.js"
 import { Brains } from "../../src/brains.js"
 import { BrainLifecycle } from "../../src/brain-lifecycle.js"
+import { Bundles } from "../../src/bundles.js"
 import { SandboxEgress } from "../../src/sandbox-egress.js"
 import { Drives } from "../../src/drives.js"
 import { DurableRunner } from "../../src/durable-runner.js"
-import { EnvironmentProvider } from "../../src/environment-provider.js"
-import { Environments } from "../../src/environments.js"
+import { MachineNetwork } from "../../src/machine-network.js"
+import { Hands } from "../../src/hands.js"
 import type { Models } from "../../src/models.js"
-import { SandboxProvider } from "../../src/sandbox-provider.js"
-import { LocalSandbox } from "../../src/sandbox-provider/local.js"
+import { LocalSandbox } from "../../src/machine-provider/local.js"
 import { Settings } from "../../src/settings.js"
 import { TestDrives } from "./drives.js"
 import { RenHostApiTest } from "./ren-host-api.js"
@@ -48,14 +50,17 @@ const brainKeys = JSON.stringify(
 
 const environmentKeys = JSON.stringify([
   {
-    id: TestEnvironment.keys.privateKey.id,
-    key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestEnvironment.keys.privateKey.key),
+    id: TestHand.keys.privateKey.id,
+    key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestHand.keys.privateKey.key),
   },
 ])
 
-export const noTemplates = Environments.layer
-  .pipe(Layer.provide(Signer.layerLocal))
-  .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([])))
+export const noTemplates = Hands.layer
+  .pipe(Layer.provide(DurableRunner.layerMemory))
+  .pipe(Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone]))
+  .pipe(Layer.provide(Bundles.layer))
+  .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
+  .pipe(Layer.provide(HandProvider.layer<never, never>([])))
 
 export const freePort = Effect.promise(async () => {
   const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
@@ -64,16 +69,33 @@ export const freePort = Effect.promise(async () => {
   return port
 })
 
+// oxlint-disable-next-line ren/no-comments -- The local brain provider of a stack, for a test that wraps it.
+export const local = (options: {
+  readonly root: string
+  readonly lostEvery?: Duration.Input
+  readonly maxRunning?: number
+  readonly systemImage?: string
+}) =>
+  LocalSandbox.provider({
+    entry,
+    executor,
+    root: options.root,
+    owner: process.pid,
+    ...(options.lostEvery && { lostEvery: options.lostEvery }),
+    ...(options.maxRunning && { maxRunning: options.maxRunning }),
+    ...(options.systemImage && { systemImage: options.systemImage }),
+  })
+
 interface StackOptions<E, R> {
   readonly port: number
   readonly root: string
   readonly config: Record<string, string>
   readonly models: Layer.Layer<Models.Service>
-  readonly environments: Layer.Layer<Environments.Service, E, R>
+  readonly environments: Layer.Layer<Hands.Service, E, R>
   readonly lostEvery?: Duration.Input
   readonly maxRunning?: number
-  readonly template?: string
-  readonly sandbox?: Layer.Layer<SandboxProvider.Service, unknown, HttpClient.HttpClient>
+  readonly systemImage?: string
+  readonly sandbox?: Layer.Layer<BrainProvider.Registry, unknown, HttpClient.HttpClient>
   readonly keepBrains?: boolean
 }
 
@@ -82,7 +104,12 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
   Brains.layer.pipe(
     Layer.provide(CredentialEnv.layerNone),
     Layer.provideMerge(BrainHost.layerSandbox),
-    Layer.provideMerge(BrainLifecycle.layer.pipe(Layer.provide(SandboxEgress.layerNone))),
+    Layer.provideMerge(
+      BrainLifecycle.layer.pipe(
+        Layer.provide(Layer.mergeAll(SandboxEgress.layerNone, MachineNetwork.layerNone)),
+        Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal))),
+      ),
+    ),
     Layer.provideMerge(
       ClusterWorkflowEngine.layer.pipe(
         Layer.provideMerge(SingleRunner.layer({ shardingConfig: { entityTerminationTimeout: "100 millis" } })),
@@ -91,18 +118,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
     ),
     Layer.provideMerge(
       (options.keepBrains ? Layer.empty : destroyBrains).pipe(
-        Layer.provideMerge(
-          options.sandbox ??
-            LocalSandbox.layer({
-              entry,
-              executor,
-              root: options.root,
-              owner: process.pid,
-              ...(options.lostEvery && { lostEvery: options.lostEvery }),
-              ...(options.maxRunning && { maxRunning: options.maxRunning }),
-              ...(options.template && { template: options.template }),
-            }),
-        ),
+        Layer.provideMerge(options.sandbox ?? BrainProvider.layer([local(options)])),
       ),
     ),
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
@@ -240,7 +256,7 @@ const serveSynced = (port: number) =>
 
 export const destroyBrains = Layer.effectDiscard(
   Effect.gen(function* () {
-    const provider = yield* SandboxProvider.Service
+    const provider = yield* BrainProvider.first
     yield* Effect.addFinalizer(() =>
       provider.list.pipe(
         Effect.flatMap((all) => Effect.forEach(all, (each) => provider.destroy(each.binding).pipe(Effect.ignore))),
@@ -258,7 +274,7 @@ const root = Effect.acquireRelease(
 export const layerWith = <E, R>(
   config: Record<string, string>,
   models: Layer.Layer<Models.Service>,
-  environments: Layer.Layer<Environments.Service, E, R>,
+  environments: Layer.Layer<Hands.Service, E, R>,
   around?: RenHostApiTest.Around,
   options: { readonly synced?: boolean } = {},
 ) =>
@@ -285,7 +301,7 @@ export const cellLayerWith =
   <E, R>(
     config: Record<string, string>,
     models: Layer.Layer<Models.Service>,
-    environments: Layer.Layer<Environments.Service, E, R>,
+    environments: Layer.Layer<Hands.Service, E, R>,
   ) =>
     Layer.fresh(Brains.layer).pipe(
       Layer.provide(CredentialEnv.layerNone),
@@ -295,6 +311,7 @@ export const cellLayerWith =
       Layer.provide(Settings.layer),
       Layer.provide(models),
       Layer.provide(environments),
+      Layer.provide(BrainProvider.layer([])),
       Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(
@@ -334,8 +351,8 @@ const LocalBinding = Schema.Struct({ pid: Schema.Int, home: Schema.String })
 
 // oxlint-disable-next-line ren/no-comments -- Stops a local brain, changes its disk while no brain process runs, and lets the restart loop boot it again.
 export const restart = Effect.fnUntraced(function* (brainId: Brain.ID, change: (home: string) => Promise<unknown>) {
-  const provider = yield* SandboxProvider.Service
-  const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === brainId)
+  const provider = yield* BrainProvider.first
+  const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === brainId)
   if (!found) return yield* Effect.die(new Error(`Brain ${brainId} has no sandbox`))
   const binding = Schema.decodeUnknownSync(LocalBinding)(found.binding)
   const brains = () =>

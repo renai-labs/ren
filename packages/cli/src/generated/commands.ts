@@ -32,6 +32,11 @@ export const SpaceUpdate = {
 
 export const SpaceArchive = { id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
 
+export const SpaceShutdown = {
+  id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const SpaceMemberList = {
   spaceId: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
   status: Flag.Literals("status", ["active", "pending"]).pipe(Flag.optional),
@@ -63,25 +68,6 @@ export const AgentMembershipCreate = {
 
 export const AgentMembershipArchive = {
   id: Argument.String("membership").pipe(Argument.withDescription("Membership ID")),
-}
-
-export const SpaceEnvironmentTemplateList = {
-  spaceId: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
-  page: Flag.Finite("page").pipe(Flag.optional),
-  pageSize: Flag.Finite("page-size").pipe(Flag.optional),
-}
-
-export const SpaceEnvironmentTemplateCreate = {
-  spaceId: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
-  environmentTemplateId: Flag.String("template").pipe(
-    Flag.optional,
-    Flag.withDescription("Environment template slug or ID"),
-  ),
-  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
-}
-
-export const SpaceEnvironmentTemplateArchive = {
-  id: Argument.String("environment").pipe(Argument.withDescription("Environment ID")),
 }
 
 export const SpaceSettingsGet = {
@@ -684,6 +670,16 @@ export const EnvironmentTemplateArchive = {
   id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
 }
 
+export const EnvironmentTemplateRetryBuild = {
+  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const EnvironmentTemplateAffectedSpaces = {
+  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const OauthAppList = {
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
@@ -880,6 +876,8 @@ export const CredentialConnect = {
 
 export const EnvironmentProviderList = {}
 
+export const EnvironmentProviderBrains = {}
+
 export const ChannelProviderList = {}
 
 export const ChannelPlaceList = {
@@ -938,6 +936,12 @@ export const commands = [
           Effect.flatMap(Effect.promise(operations), (module) => module.SpaceArchive(input)),
         ),
       ),
+      Command.make("shutdown", SpaceShutdown).pipe(
+        Command.withDescription("Stop all work of a space and delete the files on its machines"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.SpaceShutdown(input)),
+        ),
+      ),
       Command.make("member").pipe(
         Command.withDescription("Manage space members"),
         Command.withAlias("members"),
@@ -982,30 +986,6 @@ export const commands = [
             Command.withDescription("Remove an agent from a space"),
             Command.withHandler((input) =>
               Effect.flatMap(Effect.promise(operations), (module) => module.AgentMembershipArchive(input)),
-            ),
-          ),
-        ]),
-      ),
-      Command.make("environment").pipe(
-        Command.withDescription("Manage the environment templates of a space"),
-        Command.withAlias("environments"),
-        Command.withSubcommands([
-          Command.make("list", SpaceEnvironmentTemplateList).pipe(
-            Command.withDescription("List a space’s environment templates"),
-            Command.withHandler((input) =>
-              Effect.flatMap(Effect.promise(operations), (module) => module.SpaceEnvironmentTemplateList(input)),
-            ),
-          ),
-          Command.make("add", SpaceEnvironmentTemplateCreate).pipe(
-            Command.withDescription("Add an environment template to a space"),
-            Command.withHandler((input) =>
-              Effect.flatMap(Effect.promise(operations), (module) => module.SpaceEnvironmentTemplateCreate(input)),
-            ),
-          ),
-          Command.make("remove", SpaceEnvironmentTemplateArchive).pipe(
-            Command.withDescription("Remove an environment template from a space"),
-            Command.withHandler((input) =>
-              Effect.flatMap(Effect.promise(operations), (module) => module.SpaceEnvironmentTemplateArchive(input)),
             ),
           ),
         ]),
@@ -1606,6 +1586,18 @@ export const commands = [
               Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentTemplateArchive(input)),
             ),
           ),
+          Command.make("retry-build", EnvironmentTemplateRetryBuild).pipe(
+            Command.withDescription("Retry the saved configuration’s failed build"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentTemplateRetryBuild(input)),
+            ),
+          ),
+          Command.make("affected-spaces", EnvironmentTemplateAffectedSpaces).pipe(
+            Command.withDescription("List the spaces that use a machine or still run on it"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentTemplateAffectedSpaces(input)),
+            ),
+          ),
         ]),
       ),
       Command.make("provider").pipe(
@@ -1615,6 +1607,12 @@ export const commands = [
             Command.withDescription("List environment providers"),
             Command.withHandler(() =>
               Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentProviderList()),
+            ),
+          ),
+          Command.make("brains", EnvironmentProviderBrains).pipe(
+            Command.withDescription("List brain providers"),
+            Command.withHandler(() =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentProviderBrains()),
             ),
           ),
         ]),

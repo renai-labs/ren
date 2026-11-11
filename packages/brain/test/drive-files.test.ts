@@ -1,23 +1,23 @@
 import { expect } from "bun:test"
-import { TestEnvironment, testEffect } from "@ren/executor/testing"
+import { TestHand, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Option } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import type { EnvironmentClient } from "@ren/environment-api/environment-client"
-import { EnvironmentConnections } from "../src/environment/connections.js"
+import type { HandClient } from "@ren/hand-api/hand-client"
+import { HandConnections } from "../src/hand/connections.js"
 import { DriveFiles } from "../src/reference/drive-files.js"
 import { TestAccess } from "./lib/access.js"
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
-const it = testEffect(TestEnvironment.layer({ environmentId, workspace }))
+const it = testEffect(TestHand.layer({ environmentId, workspace }))
 
-const long = Array.from({ length: 900_000 }, (_, line) => `${String(line).padStart(9, "0")}\n`).join("")
+const long = Array.from({ length: 1_200_000 }, (_, line) => `${String(line).padStart(9, "0")}\n`).join("")
 
 const pdf = (bytes: number) => new Uint8Array([...new TextEncoder().encode("%PDF-1.7\n"), ...new Uint8Array(bytes)])
 
@@ -32,8 +32,8 @@ const driveOf = Effect.fnUntraced(function* (files: Readonly<Record<string, stri
       }),
     ),
   )
-  const access = yield* Effect.flatMap(TestEnvironment.url, (url) =>
-    TestEnvironment.access({
+  const access = yield* Effect.flatMap(TestHand.url, (url) =>
+    TestHand.access({
       url,
       environmentId,
       brain: Brain.ofSession(sessionId),
@@ -44,14 +44,11 @@ const driveOf = Effect.fnUntraced(function* (files: Readonly<Record<string, stri
   const context = yield* Layer.build(TestAccess.memory(new Map([[sessionId, access]])))
   const connections = Context.get(
     yield* Layer.build(
-      EnvironmentConnections.layer.pipe(
-        Layer.provide(Layer.succeedContext(context)),
-        Layer.provide(FetchHttpClient.layer),
-      ),
+      HandConnections.layer.pipe(Layer.provide(Layer.succeedContext(context)), Layer.provide(FetchHttpClient.layer)),
     ),
-    EnvironmentConnections.Service,
+    HandConnections.Service,
   )
-  const connected = <A, E>(use: (client: EnvironmentClient.Client) => Effect.Effect<A, E>) =>
+  const connected = <A, E>(use: (client: HandClient.Client) => Effect.Effect<A, E>) =>
     connections.connect(sessionId).pipe(
       Effect.flatMap((connection) => use(connection.client)),
       Effect.scoped,
@@ -66,7 +63,7 @@ const driveOf = Effect.fnUntraced(function* (files: Readonly<Record<string, stri
 })
 
 it.live(
-  "an image of at most 10 MB, and a text file or a PDF of at most 5 MB, come with their bytes; a larger file or a zip comes only with its path",
+  "an image of at most 20 MiB, and a PDF or a text file of at most 10 MiB, come with their bytes; a larger file or a zip comes only with its path",
   () =>
     Effect.gen(function* () {
       const folder = "chats/ses_1/uploads/msg_1"
@@ -76,7 +73,7 @@ it.live(
         [`${folder}/photo.png`]: photo,
         [`${folder}/page.html`]: "<p>hi</p>",
         [`${folder}/small.pdf`]: pdf(10),
-        [`${folder}/large.pdf`]: pdf(6_000_000),
+        [`${folder}/large.pdf`]: pdf(11_000_000),
         [`${folder}/report.zip`]: new Uint8Array([80, 75, 3, 4]),
         [`${folder}/big.txt`]: long,
       })
@@ -95,12 +92,25 @@ it.live(
         ["report.zip", "application/zip", false],
         ["big.txt", "text/plain", false],
       ])
-      expect(attached.map((each) => each.file.size)).toEqual([10, photo.length, 9, 19, 6_000_009, 4, long.length])
+      expect(attached.map((each) => each.file.size)).toEqual([10, photo.length, 9, 19, 11_000_009, 4, long.length])
       expect(attached.at(1)?.bytes).toEqual(Option.some(photo))
       expect(attached.at(2)?.bytes.pipe(Option.map((bytes) => new TextDecoder().decode(bytes)))).toEqual(
         Option.some("<p>hi</p>"),
       )
     }),
+)
+
+it.live("the files of one message come with their bytes up to 20 MiB in all; the rest come only with their path", () =>
+  Effect.gen(function* () {
+    const folder = "chats/ses_1/uploads/msg_2"
+    const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...new Uint8Array(12_000_000)])
+    const drive = yield* driveOf({ [`${folder}/one.png`]: image, [`${folder}/two.png`]: image })
+    const attached = yield* drive.attach(["one.png", "two.png"].map((name) => ({ path: `${folder}/${name}`, name })))
+    expect(attached.map((each) => [each.file.name, Option.isSome(each.bytes)])).toEqual([
+      ["one.png", true],
+      ["two.png", false],
+    ])
+  }),
 )
 
 it.live("a file that is not in the drive refuses the message, with its name", () =>

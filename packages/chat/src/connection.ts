@@ -26,6 +26,7 @@ export interface Options {
   readonly subscribe: Effect.Effect<Stream.Stream<SessionEvent.Frame, unknown>, unknown>
   readonly onFrames: (frames: ReadonlyArray<SessionEvent.Frame>) => Effect.Effect<void>
   readonly onStatus: (status: Status) => Effect.Effect<void>
+  readonly canReconnect?: Effect.Effect<boolean>
   readonly connectTimeout?: Duration.Input
   readonly idleTimeout?: Duration.Input
   readonly reconnectDelay?: number
@@ -124,7 +125,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       yield* Ref.set(attempt, 1)
       return yield* setStatus("reconnecting")
     }
-    if (Exit.isSuccess(exit)) {
+    if (Exit.isSuccess(exit) || (options.canReconnect && !(yield* options.canReconnect))) {
       yield* awake.close
       yield* Ref.set(attempt, 0)
       return yield* setStatus("parked")

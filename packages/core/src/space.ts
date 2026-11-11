@@ -2,6 +2,7 @@ export * as Space from "./space.js"
 
 import { Database } from "@ren/db/database"
 import { Agent } from "@ren/schema/agent"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import { Factory } from "@ren/schema/factory"
 import { FactoryCheck } from "@ren/schema/factory-check"
 import { Space } from "@ren/schema/space"
@@ -13,6 +14,7 @@ import { Access } from "./access.js"
 import { CredentialOffboarding } from "./credential/offboarding.js"
 import { EgressControl } from "./egress-control.js"
 import { AppQueries } from "./app/queries.js"
+import { BrainProvider } from "./brain-provider.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
@@ -47,6 +49,16 @@ const isFirstOrganizationSpace = sql<boolean>`${Database.Schema.space.id} = (
   limit 1
 )`
 
+// oxlint-disable-next-line ren/no-comments -- A brain with a machine that applied an older brain or hand setting, or that runs another image than its template's last build.
+const isComputePending = sql<boolean>`exists (
+  select 1 from ${Database.Schema.brain}
+  left join ${Database.Schema.environment_template} on ${Database.Schema.environment_template.id} = ${Database.Schema.space.brain_template_id}
+  where ${Database.Schema.brain.space_id} = ${Database.Schema.space.id}
+    and ${Database.Schema.brain.binding} is not null
+    and (${Database.Schema.brain.compute_revision} < ${Database.Schema.space.compute_revision}
+      or (${Database.Schema.environment_template.image} is not null and ${Database.Schema.brain.image} is distinct from ${Database.Schema.environment_template.image}))
+)`
+
 const select = (transaction: Database.Transaction, actor: Actor.Info) =>
   transaction
     .select({
@@ -54,6 +66,7 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
       membershipId: SpaceQueries.membership.id,
       isFirstOrganizationSpace,
       memberCount,
+      isComputePending,
       usable: AgentQueries.factoryOrder,
     })
     .from(Database.Schema.space)
@@ -67,9 +80,93 @@ const actions = {
   removeMember: Primitive.action(SpaceMember.definition, "archive"),
 }
 
+// oxlint-disable-next-line ren/no-comments -- A space runs only machines that can run: a built template of its organization, for its brain one of its brain provider. The template read waits for an archive of it.
+const checkTemplate = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  actor: Actor.Info,
+  templateId: MachineTemplate.ID,
+  field: "brain" | "hand",
+) {
+  const template = (yield* transaction
+    .select({
+      provider: Database.Schema.environment_template.provider,
+      image: Database.Schema.environment_template.image,
+      buildStatus: Database.Schema.environment_template.build_status,
+    })
+    .from(Database.Schema.environment_template)
+    .where(
+      and(
+        eq(Database.Schema.environment_template.id, templateId),
+        eq(Database.Schema.environment_template.organization_id, actor.organizationId),
+        isNull(Database.Schema.environment_template.archived_at),
+      ),
+    )
+    .for("share")).at(0)
+  if (!template)
+    return yield* new Primitive.Invalid({
+      message: `This organization has no environment template ${templateId}`,
+      field,
+    })
+  // oxlint-disable-next-line ren/no-comments -- A provider that builds no image is ready at once.
+  if (!template.image && template.buildStatus !== "ready")
+    return yield* new Primitive.Invalid({
+      message:
+        template.buildStatus === "failed"
+          ? `The environment template ${templateId} has no image: its build failed. Fix the template and save it again.`
+          : `The environment template ${templateId} has no image yet; wait until its build is ready`,
+      field,
+    })
+  return template.provider
+})
+
+// oxlint-disable-next-line ren/no-comments -- The brain's provider must be one this deployment registers, and its template one of that provider. Returns the provider.
+const checkBrain = Effect.fnUntraced(function* (
+  registry: BrainProvider.Registry["Service"],
+  transaction: Database.Transaction,
+  actor: Actor.Info,
+  brain: Space.BrainMachine,
+) {
+  const provider = Option.flatMap(Option.fromNullishOr(brain.provider), registry.get)
+  if (brain.provider && Option.isNone(provider))
+    return yield* new Primitive.Invalid({
+      message: `This deployment has no brain provider ${brain.provider}`,
+      field: "brain",
+    })
+  if (!brain.environmentTemplateId) return provider
+  const templateProvider = yield* checkTemplate(transaction, actor, brain.environmentTemplateId, "brain")
+  if (templateProvider !== brain.provider)
+    return yield* new Primitive.Invalid({
+      message: `The brain needs a template of its provider ${brain.provider ?? "(none)"}, not of ${templateProvider}`,
+      field: "brain",
+    })
+  return provider
+})
+
+const checkMachines = Effect.fnUntraced(function* (
+  registry: BrainProvider.Registry["Service"],
+  transaction: Database.Transaction,
+  actor: Actor.Info,
+  input: Pick<Space.UpdateInput, "brain" | "hand">,
+  current: { readonly brain: Space.BrainMachine; readonly hand: Space.Hand },
+) {
+  if (!input.brain && !input.hand) return
+  const hand = input.hand ?? current.hand
+  const brainProvider = yield* checkBrain(registry, transaction, actor, input.brain ?? current.brain)
+  if (hand.placement === "colocated" && Option.exists(brainProvider, (provider) => !provider.info.canColocate))
+    return yield* new Primitive.Invalid({
+      message: `The brain provider ${Option.getOrThrow(brainProvider).info.id} cannot run tools on the brain’s machine; pick a remote hand or none`,
+      field: "hand",
+    })
+  if (hand.placement === "remote") yield* checkTemplate(transaction, actor, hand.environmentTemplateId, "hand")
+})
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
+    const registry = yield* BrainProvider.Registry
+    const deploymentProvider = Option.getOrNull(
+      Option.map(BrainProvider.defaultOf(registry), (provider) => provider.info.id),
+    )
     const database = yield* Database.Service
     const access = yield* Access.Service
     const control = yield* EgressControl.Service
@@ -105,6 +202,16 @@ export const layer = Layer.effect(
           name: row.space.name,
           description: canRead ? row.space.description : null,
           brainScope: row.space.brain_scope,
+          brain: SpaceQueries.brainMachine(row.space, deploymentProvider),
+          hand: SpaceQueries.hand(row.space),
+          compute: {
+            isPending: row.isComputePending,
+            shutdown: row.space.shutdown_state,
+            lastShutdown: row.space.shutdown_report && {
+              finishedAt: DateTime.makeUnsafe(row.space.shutdown_report.finishedAt),
+              problems: row.space.shutdown_report.problems,
+            },
+          },
           memberCount: row.memberCount,
           membershipId: row.membershipId,
           factory: canRead ? TaskFactory.keep(row.space.factory, row.usable) : Factory.empty,
@@ -210,6 +317,8 @@ export const layer = Layer.effect(
             if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource })) {
               return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
             }
+            const current = SpaceQueries.machines(visible.row.space, deploymentProvider)
+            yield* checkMachines(registry, transaction, actor, input, current)
             if (input.factory) {
               const problem = FactoryCheck.problems(input.factory).at(0)
               if (problem) return yield* new Primitive.Invalid({ message: problem, field: "factory" })
@@ -235,6 +344,11 @@ export const layer = Layer.effect(
                 name: input.name,
                 description: input.description,
                 brain_scope: input.brainScope,
+                ...(input.brain && SpaceQueries.brainColumns(input.brain)),
+                ...(input.hand && SpaceQueries.handColumns(input.hand)),
+                ...(SpaceQueries.isComputeChanged(current, input) && {
+                  compute_revision: sql`${Database.Schema.space.compute_revision} + 1`,
+                }),
                 factory: input.factory,
                 updated_at: sql`now()`,
               })
@@ -261,6 +375,27 @@ export const layer = Layer.effect(
                 .set({ slug, updated_at: sql`now()` })
                 .where(eq(Database.Schema.space.id, id))
             }
+            return yield* find(transaction, actor, eq(Database.Schema.space.id, id))
+          }),
+        )
+      }),
+      // oxlint-disable-next-line ren/no-comments -- Marks the space for a shutdown under the next epoch; the API then starts its run (SpaceShutdown.start). Anyone who can edit the space can shut it down. A second request while one runs changes nothing.
+      shutdown: Effect.fn("Space.shutdown")(function* (actor: Actor.Info, id: Space.ID) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const visible = yield* findVisible(transaction, actor, id)
+            if (!visible || visible.row.space.archived_at) return yield* notFound
+            if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource }))
+              return yield* new Primitive.Forbidden({ message: "You cannot shut down this space." })
+            if (!visible.row.space.shutdown_state)
+              yield* transaction
+                .update(Database.Schema.space)
+                .set({
+                  shutdown_state: "running",
+                  shutdown_epoch: sql`${Database.Schema.space.shutdown_epoch} + 1`,
+                  updated_at: sql`now()`,
+                })
+                .where(eq(Database.Schema.space.id, id))
             return yield* find(transaction, actor, eq(Database.Schema.space.id, id))
           }),
         )

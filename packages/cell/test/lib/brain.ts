@@ -44,6 +44,7 @@ import { HotReload } from "../../src/hot-reload.js"
 import { ModelCatalog } from "../../src/model-catalog.js"
 import { ModelRefresh } from "../../src/model-refresh.js"
 import { ModelStore } from "../../src/model-store.js"
+import { CodeUpdate } from "../../src/code-update.js"
 import { Restore } from "../../src/restore.js"
 import { Sync } from "../../src/sync.js"
 import { ModelsTest } from "./models.js"
@@ -123,6 +124,7 @@ export const make = Effect.fnUntraced(function* (
           configuring: Semaphore.make(1),
           closedIdle: Ref.make(false),
           pulledAt: Ref.make(Option.none<DateTime.Utc>()),
+          touched: Ref.make<ReadonlySet<string>>(new Set()),
         }),
       ),
       Layer.effect(Sync.Service, Sync.make(Option.none())),
@@ -187,6 +189,7 @@ export const make = Effect.fnUntraced(function* (
     services,
     yield* Layer.build(
       Restore.layer.pipe(
+        Layer.provideMerge(CodeUpdate.layerNone),
         Layer.provideMerge(Layer.succeedContext(services)),
         Layer.provideMerge(
           Harness.layer(

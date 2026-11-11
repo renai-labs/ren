@@ -77,7 +77,8 @@ export const RestoredChat = Schema.Struct({
   }),
   inbox: Schema.Array(OpenCodeInboxRow).annotate({ description: "The chat’s queued messages, in order." }),
   directory: Schema.optionalKey(Schema.String).annotate({
-    description: "With `start`: the folder on the chat’s hand, as a start from Ren would give it.",
+    description:
+      "The top chat’s folder on the hand its brain applied. With `start`, as a start from Ren would give it; with `session`, the workspace the chat gets back, also when it had none before.",
   }),
 }).annotate({
   identifier: "Sync.RestoredChat",
@@ -100,7 +101,7 @@ export const OpenCodeMessageRow = Schema.Struct({
 })
 export interface OpenCodeMessageRow extends Schema.Schema.Type<typeof OpenCodeMessageRow> {}
 
-export const maxBodyBytes = 8 * 1024 * 1024
+export const maxBodyBytes = 32 * 1024 * 1024
 
 export interface Cursor extends Schema.Schema.Type<typeof Cursor> {}
 export const Cursor = Schema.Struct({ seq: Schema.Int, id: Schema.String }).annotate({

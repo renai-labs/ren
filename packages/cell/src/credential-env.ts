@@ -1,11 +1,11 @@
 export * as CredentialEnv from "./credential-env.js"
 
-import type { EnvironmentConnections } from "@ren/brain/environment/connections"
+import type { HandConnections } from "@ren/brain/hand/connections"
 import { Context, Effect, Layer, Ref } from "effect"
 
 export interface Interface {
-  readonly current: Effect.Effect<EnvironmentConnections.Env>
-  readonly apply: (env: EnvironmentConnections.Env) => Effect.Effect<void>
+  readonly current: Effect.Effect<HandConnections.Env>
+  readonly apply: (env: HandConnections.Env) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/cell/CredentialEnv") {}
@@ -14,7 +14,7 @@ export class Service extends Context.Service<Service, Interface>()("@ren/cell/Cr
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const state = yield* Ref.make<EnvironmentConnections.Env>({ variables: {}, placeholders: {} })
+    const state = yield* Ref.make<HandConnections.Env>({ variables: {}, placeholders: {} })
     return Service.of({ current: Ref.get(state), apply: (env) => Ref.set(state, env) })
   }),
 )

@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import type { EnvironmentApi } from "@ren/environment-api/environment-api"
+import type { HandApi } from "@ren/hand-api/hand-api"
 import { Brain } from "@ren/schema/brain"
 import { Effect, Exit, Stream } from "effect"
 import path from "node:path"
@@ -118,7 +118,7 @@ const twice = async (label: string) => {
   }
 }
 
-const resume = async (id: EnvironmentApi.ProcessID) => {
+const resume = async (id: HandApi.ProcessID) => {
   const parts: Array<Uint8Array> = []
   const state = { position: 0, gaps: 0, exit: false, connections: 0 }
   const connect = async (): Promise<void> => {

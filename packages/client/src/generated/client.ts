@@ -13,6 +13,8 @@ import type {
   SpaceUpdateOutput,
   SpaceArchiveInput,
   SpaceArchiveOutput,
+  SpaceShutdownInput,
+  SpaceShutdownOutput,
   SpaceMemberListInput,
   SpaceMemberListOutput,
   SpaceMemberCreateInput,
@@ -29,13 +31,12 @@ import type {
   EnvironmentTemplateUpdateOutput,
   EnvironmentTemplateArchiveInput,
   EnvironmentTemplateArchiveOutput,
+  EnvironmentTemplateRetryBuildInput,
+  EnvironmentTemplateRetryBuildOutput,
+  EnvironmentTemplateAffectedSpacesInput,
+  EnvironmentTemplateAffectedSpacesOutput,
   EnvironmentProviderListOutput,
-  SpaceEnvironmentTemplateListInput,
-  SpaceEnvironmentTemplateListOutput,
-  SpaceEnvironmentTemplateCreateInput,
-  SpaceEnvironmentTemplateCreateOutput,
-  SpaceEnvironmentTemplateArchiveInput,
-  SpaceEnvironmentTemplateArchiveOutput,
+  EnvironmentProviderBrainsOutput,
   SpaceSettingsGetInput,
   SpaceSettingsGetOutput,
   SpaceSettingsUpdateInput,
@@ -439,6 +440,8 @@ export function make(options: ClientOptions) {
               name: input["name"],
               description: input["description"],
               brainScope: input["brainScope"],
+              brain: input["brain"],
+              hand: input["hand"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
@@ -451,6 +454,18 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/spaces/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      shutdown: (input: SpaceShutdownInput, requestOptions?: RequestOptions) =>
+        request<SpaceShutdownOutput>(
+          {
+            method: "POST",
+            path: `/spaces/${encodeURIComponent(input.id)}/shutdown`,
+            body: {},
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,
@@ -535,6 +550,7 @@ export function make(options: ClientOptions) {
               provider: input["provider"],
               config: input["config"],
               sessionsPerEnvironment: input["sessionsPerEnvironment"],
+              networking: input["networking"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
@@ -552,6 +568,7 @@ export function make(options: ClientOptions) {
               description: input["description"],
               config: input["config"],
               sessionsPerEnvironment: input["sessionsPerEnvironment"],
+              networking: input["networking"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
@@ -564,6 +581,30 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/environment-templates/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      retryBuild: (input: EnvironmentTemplateRetryBuildInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateRetryBuildOutput>(
+          {
+            method: "POST",
+            path: `/environment-templates/${encodeURIComponent(input.id)}/retryBuild`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      affectedSpaces: (input: EnvironmentTemplateAffectedSpacesInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateAffectedSpacesOutput>(
+          {
+            method: "POST",
+            path: `/environment-templates/${encodeURIComponent(input.id)}/affectedSpaces`,
+            body: {},
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,
@@ -583,41 +624,9 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
-    },
-    "space-environment-template": {
-      list: (input: SpaceEnvironmentTemplateListInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentTemplateListOutput>(
-          {
-            method: "GET",
-            path: `/space-environment-templates`,
-            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-            successStatus: 200,
-            declaredStatuses: [401, 403],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      create: (input: SpaceEnvironmentTemplateCreateInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentTemplateCreateOutput>(
-          {
-            method: "POST",
-            path: `/space-environment-templates`,
-            body: { spaceId: input["spaceId"], environmentTemplateId: input["environmentTemplateId"] },
-            successStatus: 200,
-            declaredStatuses: [400, 401, 403, 404, 409],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      archive: (input: SpaceEnvironmentTemplateArchiveInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentTemplateArchiveOutput>(
-          {
-            method: "DELETE",
-            path: `/space-environment-templates/${encodeURIComponent(input.id)}`,
-            successStatus: 200,
-            declaredStatuses: [401, 403, 404, 409],
-            empty: false,
-          },
+      brains: (requestOptions?: RequestOptions) =>
+        request<EnvironmentProviderBrainsOutput>(
+          { method: "GET", path: `/brain-providers`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
           requestOptions,
         ),
     },

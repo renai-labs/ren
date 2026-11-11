@@ -9,7 +9,7 @@ import { HostMcp } from "@ren/host-api/host-mcp"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
 import { Models } from "@ren/schema/models"
-import { Clock, Duration, Effect, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
+import { Clock, Duration, Effect, Equal, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
 import { HostToken } from "../../host-token.js"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
@@ -152,14 +152,14 @@ export const make = Effect.fnUntraced(function* (input: {
   readonly context: Pick<Plugin.Context, "mcp" | "tool" | "session">
   readonly boundary: OpenCodeExecution.Boundary
   readonly isSession: boolean
-  readonly hasEnvironment: boolean
+  readonly hasWorkspace: boolean
   readonly apps: Option.Option<AppCatalog.Info>
   readonly channels: ReadonlyArray<Channel.Provider>
   readonly sessionId: string
   readonly ren: Option.Option<Ren>
 }) {
   if (!input.isSession) return { apply: () => Effect.void, reloading: Effect.succeed(false) }
-  const local = { local: input.hasEnvironment }
+  const local = { local: input.hasWorkspace }
   const latest = yield* Ref.make(input.apps)
   const channels = yield* Ref.make(input.channels)
   const speaker = yield* Ref.make(Option.none<OpenCodeChat.Speaker>())
@@ -313,7 +313,7 @@ export const make = Effect.fnUntraced(function* (input: {
   const changed = Effect.gen(function* () {
     const next = yield* desired(Ref.getUnsafe(latest))
     const before = yield* Ref.getAndSet(applied, next)
-    return JSON.stringify(before) === JSON.stringify(next) ? Option.none<ReadonlyArray<Server>>() : Option.some(before)
+    return Equal.equals(before, next) ? Option.none<ReadonlyArray<Server>>() : Option.some(before)
   })
 
   const reload = (before: ReadonlyArray<Server>, only?: ReadonlyArray<string>) =>

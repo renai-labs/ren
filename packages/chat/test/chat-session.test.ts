@@ -473,6 +473,32 @@ test("the chat parks when the brain ends an idle stream, and a prompt wakes it",
     }),
   ))
 
+test("a prompt to a chat whose space was shut down starts it again once, then is delivered", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const space = { stopped: true, restarts: 0 }
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () => (space.stopped ? Effect.succeed({ status: "stopped" as const }) : access()),
+        restart: Effect.sync(() => {
+          space.restarts += 1
+          space.stopped = false
+        }),
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(http(brain)))
+      yield* chat.open(brain.id).pipe(Effect.ignore)
+      expect((yield* SubscriptionRef.get(chat.boot))._tag).toBe("Stopped")
+      yield* chat.prompt({ text: stub.script({ reply: "started again" }).marker })
+      const done = yield* ChatTest.until(chat.state, settled(brain.id))
+      expect([
+        space.restarts,
+        ChatState.messages(done, brain.id).find((message) => message.type === "assistant"),
+      ]).toMatchObject([1, { content: [{ type: "text", text: "started again" }] }])
+    }),
+  ))
+
 test("a permission request arrives live and leaves once the member answers it", () =>
   ChatTest.live(
     Effect.gen(function* () {

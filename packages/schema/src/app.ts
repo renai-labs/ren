@@ -14,21 +14,27 @@ import { Webhook } from "./webhook.js"
 export const ID = AppIdentity.ID
 export type ID = typeof ID.Type
 
-const PackageList = Schema.optionalKey(Schema.Array(Schema.NonEmptyString))
+const packageList = (title: string, example: string) =>
+  Schema.optionalKey(Schema.Array(Schema.NonEmptyString).annotate({ title, examples: [[example]] }))
 
 export interface Packages extends Schema.Schema.Type<typeof Packages> {}
 export const Packages = Schema.Struct({
-  apt: PackageList,
-  npm: PackageList,
-  pip: PackageList,
-  go: PackageList,
-}).annotate({ identifier: "App.Packages" })
+  apt: packageList("APT packages", "ffmpeg"),
+  npm: packageList("npm packages", "typescript"),
+  pip: packageList("pip packages", "requests"),
+  go: packageList("Go modules", "golang.org/x/tools/gopls@latest"),
+}).annotate({ identifier: "App.Packages", title: "Packages", description: "One per line." })
 
 export interface Environment extends Schema.Schema.Type<typeof Environment> {}
 export const Environment = Schema.Struct({
   packages: Packages.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   buildCommands: Schema.Array(Schema.NonEmptyString.check(Schema.isMaxLength(4096)))
     .check(Schema.isMaxLength(50))
+    .annotate({
+      title: "Build commands",
+      description: "Run in order after the packages. One per line.",
+      examples: [["corepack enable"]],
+    })
     .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
 }).annotate({ identifier: "App.Environment" })
 

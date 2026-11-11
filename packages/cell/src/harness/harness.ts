@@ -25,6 +25,7 @@ interface SessionState extends Reconcile.Snapshot {
   readonly id: string
   readonly root: boolean
   readonly progress: string
+  readonly background: boolean
   readonly resend: (id: string) => Effect.Effect<void>
   readonly wait: (ms: number) => Effect.Effect<void>
   readonly interrupt: Effect.Effect<void>
@@ -157,7 +158,7 @@ export interface Chat {
 interface Transcript {
   readonly has: (chat: Session.ID) => Effect.Effect<boolean>
   readonly start: (
-    input: Session.StartInput & { readonly directory?: string },
+    input: Omit<Session.StartInput, "hand"> & { readonly directory?: string },
   ) => Effect.Effect<void, BrainRejectedError>
   readonly restore: (data: {
     readonly chat: Sync.RestoredChat

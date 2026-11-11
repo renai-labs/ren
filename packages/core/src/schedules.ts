@@ -60,7 +60,12 @@ const actions = {
 // oxlint-disable-next-line ren/no-comments -- S4: a delay is stored as one time.
 const storedOf = (when: Schedule.WhenInput, at: Date) => {
   if ("in" in when)
-    return { cron: null, time_zone: null, until_at: null, run_at: new Date(at.getTime() + Duration.toMillis(when.in)) }
+    return {
+      cron: null,
+      time_zone: null,
+      until_at: null,
+      run_at: DateTime.toDateUtc(DateTime.addDuration(DateTime.makeUnsafe(at), when.in)),
+    }
   if ("at" in when) return { cron: null, time_zone: null, until_at: null, run_at: DateTime.toDateUtc(when.at) }
   return {
     cron: when.cron.trim().split(/\s+/u).join(" "),

@@ -17,7 +17,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
 import { Credential } from "@ren/schema/credential"
-import type { Drive } from "@ren/schema/drive"
+import { Drive } from "@ren/schema/drive"
 import type { Space } from "@ren/schema/space"
 import type { WriteResult } from "@ren/schema/write-result"
 import { and, eq, isNull, lt } from "drizzle-orm"
@@ -125,7 +125,7 @@ export const layer = Layer.effect(
       roleArn: Config.String("DRIVE_ROLE_ARN"),
       accessKeyId: Config.option(Config.String("DRIVE_ACCESS_KEY_ID")),
       secretAccessKey: Config.option(Config.Redacted("DRIVE_SECRET_ACCESS_KEY")),
-      maxFileBytes: Config.ByteSize("DRIVE_MAX_FILE_SIZE").pipe(Config.withDefault(ByteSize.mebibytes(100))),
+      maxFileBytes: Config.ByteSize("DRIVE_MAX_FILE_SIZE").pipe(Config.withDefault(ByteSize.bytes(Drive.maxFileBytes))),
     })
     const database = yield* Database.Service
     const access = yield* Access.Service

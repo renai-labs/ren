@@ -2,6 +2,8 @@ import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { SessionID } from "@opencode/schema/session-id"
+import { HandAccess } from "@ren/brain/hand/access"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { GenerationRetiredError } from "@ren/host-api/errors"
 import { PullReply, PullRequest, type PullApps } from "@ren/host-api/ren-host-api"
 import { AppCatalog } from "@ren/schema/app-catalog"
@@ -9,7 +11,7 @@ import { App } from "@ren/schema/app"
 import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { Context, Effect, Fiber, Layer, Option, Schedule, Schema } from "effect"
+import { Context, Effect, Fiber, Layer, Option, Ref, Schedule, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -196,6 +198,28 @@ const open = Effect.fnUntraced(function* (
     }),
     storage: { getAlarm: () => Promise.resolve(null), setAlarm: () => Promise.resolve() },
   })
+  const resets = { count: 0 }
+  // oxlint-disable-next-line ren/no-comments -- The brain's real connections, which count their resets; no session reaches a hand in these tests.
+  const connections = Layer.effect(
+    HandConnections.Service,
+    Effect.map(HandConnections.Service, (real) =>
+      HandConnections.Service.of({
+        ...real,
+        reset: Effect.sync(() => void (resets.count += 1)).pipe(Effect.andThen(real.reset)),
+      }),
+    ),
+  ).pipe(
+    Layer.provide(HandConnections.layer),
+    Layer.provide(
+      Layer.succeed(
+        HandAccess.Service,
+        HandAccess.Service.of({
+          open: (sessionId) => Effect.fail(new HandAccess.NotFound({ sessionId, message: "no hand here" })),
+          release: () => Effect.void,
+        }),
+      ),
+    ),
+  )
   const services = yield* Layer.build(
     HotReload.layer.pipe(
       Layer.provideMerge(
@@ -263,6 +287,7 @@ const open = Effect.fnUntraced(function* (
           ModelCatalog.layer,
         ),
       ),
+      Layer.provideMerge(connections),
       Layer.provideMerge(Fence.layer),
       Layer.provideMerge(storage),
       Layer.provideMerge(info),
@@ -275,6 +300,8 @@ const open = Effect.fnUntraced(function* (
     path,
     requests,
     writes,
+    resets,
+    activity: Context.get(services, Cell.Activity),
     reload: Context.get(services, HotReload.Service),
     harness: Context.get(services, Harness.Service),
     holdNextPull: () => {
@@ -341,6 +368,31 @@ it.live("a pull saves registered providers, and a pull without them keeps the la
     opened.answer(undefined, { providers: Models.registrations(endpoints(["first", "second"])) })
     yield* opened.reload.pull
     expect(yield* opened.catalog.current).toEqual(Option.some(endpoints(["first", "second"])))
+  }),
+)
+
+it.live("a pull with another compute revision closes the brain's hand connections; the first and the same do not", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const resetsAt = Effect.fnUntraced(function* (computeRevision: number) {
+      opened.answer(undefined, { computeRevision })
+      yield* opened.reload.pull
+      return opened.resets.count
+    })
+    expect([yield* resetsAt(1), yield* resetsAt(1), yield* resetsAt(2)]).toEqual([0, 0, 1])
+  }),
+)
+
+it.live("a chat whose files a person asked for stays marked until a pull can name it", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const sessionId = Session.ID.create()
+    yield* Ref.set(opened.activity.touched, new Set([sessionId]))
+    yield* opened.reload.pull
+    expect([opened.requests.at(-1)?.sessions, yield* Ref.get(opened.activity.touched)]).toEqual([
+      [],
+      new Set([sessionId]),
+    ])
   }),
 )
 

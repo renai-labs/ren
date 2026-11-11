@@ -1,4 +1,5 @@
 import { afterAll, describe, expect } from "bun:test"
+import { BrainProviders } from "./lib/brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
@@ -6,7 +7,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { Credential } from "@ren/schema/credential"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Injection } from "@ren/schema/injection"
 import { Signature } from "@ren/schema/signature"
 import { eq } from "drizzle-orm"
@@ -140,7 +141,7 @@ const it = testEffect(
   Layer.mergeAll(
     Egress.layer,
     CredentialEnv.layer,
-    Space.layer,
+    Space.layer.pipe(Layer.provide(BrainProviders.none)),
     SpaceMember.layer,
     SpaceProvisioning.layer,
     App.layer,
@@ -311,6 +312,45 @@ describe("Egress.resolve", () => {
         reason: "host_not_allowed",
         label: "STRIPE_API_KEY",
       })
+    }),
+  )
+
+  it.live("a remote hand's placeholder becomes the key of its space, as its brain's does", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const credentials = yield* Credentials.Service
+      const callers = yield* CredentialCallers.Service
+      const database = yield* Database.Service
+      const found = yield* setup()
+      yield* credentials.create(found.ada, {
+        owner: { kind: "space", spaceId: found.space.id },
+        label: "STRIPE_API_KEY",
+        hosts: ["api.stripe.com"],
+        value: { type: "key", value: Redacted.make("sk_live_real") },
+      })
+      const environmentId = Hand.ID.create()
+      const environmentTemplateId = yield* Seed.environmentTemplate(found.organizationId)
+      yield* database.db.insert(Database.Schema.environment).values({
+        id: environmentId,
+        environment_template_id: environmentTemplateId,
+        space_id: found.space.id,
+        target: Seed.version(environmentTemplateId),
+      })
+      const hand = yield* callers.issue(
+        { workload: { kind: "hand", id: environmentId, generation: 1 }, organizationId: found.organizationId },
+        "ProxyLogin",
+      )
+      if (hand.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
+      const reply = yield* resolver.resolve(
+        all,
+        request({ kind: "ProxyLogin", username: hand.username, password: hand.password }, "api.stripe.com", [
+          "ren:STRIPE_API_KEY",
+        ]),
+      )
+      expect(reply).toMatchObject({ allow: true, workload: `hand:${environmentId}:1` })
+      expect(values(reply)).toEqual([
+        { op: "replace", placeholder: "ren:STRIPE_API_KEY", value: "sk_live_real", in: ["header"] },
+      ])
     }),
   )
 
@@ -966,7 +1006,7 @@ describe("GitHub through the egress", () => {
         expect(reply).toMatchObject({ expiresAt: Date.parse(github.options.tokenExpiresAt) / 1000 })
         const hand = yield* callers.issue(
           {
-            workload: { kind: "hand", id: Environment.ID.make(`env_${found.brainId.slice(4)}`), generation: 1 },
+            workload: { kind: "hand", id: Hand.ID.make(`env_${found.brainId.slice(4)}`), generation: 1 },
             organizationId: found.organizationId,
           },
           "ProxyLogin",

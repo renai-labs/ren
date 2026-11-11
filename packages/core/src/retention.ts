@@ -1,7 +1,8 @@
 export * as Retention from "./retention.js"
 
+import { OpenCodeStore } from "./session/opencode-store.js"
 import { Database } from "@ren/db/database"
-import { and, eq, isNotNull, isNull, lt, sql } from "drizzle-orm"
+import { and, eq, isNull, lt, sql } from "drizzle-orm"
 import { Clock, Context, DateTime, Duration, Effect, Layer, Schedule, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { Drives } from "./drives.js"
@@ -34,12 +35,12 @@ export const layer = Layer.effect(
       const stale = yield* database.db
         .select({ id: chats.id })
         .from(chats)
-        .leftJoin(Database.Schema.opencode_session, eq(Database.Schema.opencode_session.session_id, chats.id))
+        .leftJoin(OpenCodeStore.chat, OpenCodeStore.join)
         .where(
           and(
             isNull(chats.parent_id),
             lt(chats.created_at, cutoff),
-            sql`coalesce(${Database.Schema.opencode_session.time_updated}, 0) < ${cutoff.getTime()}`,
+            sql`coalesce(${OpenCodeStore.state.updatedAt}, 0) < ${cutoff.getTime()}`,
           ),
         )
         .pipe(Effect.orDie)
@@ -58,15 +59,7 @@ export const layer = Layer.effect(
             .pipe(Effect.orDie),
         { discard: true },
       )
-      yield* database.db
-        .delete(Database.Schema.opencode_message)
-        .where(
-          and(
-            isNotNull(Database.Schema.opencode_message.removed_at),
-            lt(Database.Schema.opencode_message.removed_at, cutoff),
-          ),
-        )
-        .pipe(Effect.orDie)
+      yield* OpenCodeStore.purgeRemoved(database.db, cutoff)
       yield* database.db
         .delete(Database.Schema.schedule_run)
         .where(lt(Database.Schema.schedule_run.scheduled_at, cutoff))

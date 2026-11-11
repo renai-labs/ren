@@ -194,9 +194,9 @@ export const latestSessions = (transaction: Database.Transaction, taskIds: Reado
     .selectDistinctOn([Database.Schema.task_session.task_id], {
       taskId: Database.Schema.task_session.task_id,
       id: Database.Schema.task_session.session_id,
-      synced: Database.Schema.opencode_session.session_id,
-      suspended: Database.Schema.opencode_session.time_suspended,
-      outcome: Database.Schema.opencode_session.idle_outcome,
+      synced: OpenCodeStore.state.synced,
+      suspended: OpenCodeStore.state.timeSuspended,
+      outcome: OpenCodeStore.state.outcome,
     })
     .from(Database.Schema.task_session)
     .innerJoin(Database.Schema.task, eq(Database.Schema.task.id, Database.Schema.task_session.task_id))
@@ -204,7 +204,7 @@ export const latestSessions = (transaction: Database.Transaction, taskIds: Reado
       Database.Schema.agent_session,
       eq(Database.Schema.agent_session.id, Database.Schema.task_session.session_id),
     )
-    .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
+    .leftJoin(OpenCodeStore.chat, OpenCodeStore.join)
     .where(
       and(
         inArray(Database.Schema.task_session.task_id, taskIds),

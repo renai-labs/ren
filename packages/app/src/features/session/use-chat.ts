@@ -95,8 +95,8 @@ function bootStatusOf(
   connection: string | undefined,
   boot: PromptInputBoot | { readonly _tag: "Ready" } | undefined,
 ): PromptInputBoot | undefined {
-  if (connection === "reconnecting") return { _tag: "Reconnecting" }
   if (boot && boot._tag !== "Ready") return boot
+  if (connection === "reconnecting") return { _tag: "Reconnecting" }
   return
 }
 

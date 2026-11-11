@@ -3,7 +3,7 @@ export * as WebhookReceiver from "./receiver.js"
 import { Database } from "@ren/db/database"
 import type { Envelope as EnvelopeSchema } from "@ren/schema/envelope"
 import { Webhook } from "@ren/schema/webhook"
-import { and, count, desc, eq, gt, inArray, isNull } from "drizzle-orm"
+import { and, count, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm"
 import { Clock, Effect, Option, Record, Redacted, Schema } from "effect"
 import { Envelope } from "../envelope.js"
 import type { Intake } from "../intake.js"
@@ -82,7 +82,7 @@ export const make = Effect.gen(function* () {
   const listen = (webhookId: Webhook.ID, reason: Webhook.ModeReason) =>
     database.db
       .update(webhook)
-      .set({ mode: "listening", mode_reason: reason, updated_at: new Date() })
+      .set({ mode: "listening", mode_reason: reason, updated_at: sql`now()` })
       .where(and(eq(webhook.id, webhookId), eq(webhook.mode, "live")))
       .returning({ updatedAt: webhook.updated_at })
       .pipe(

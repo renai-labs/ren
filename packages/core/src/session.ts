@@ -84,7 +84,7 @@ const notFound = new Primitive.NotFound({ message: "Session not found." })
 
 const spaceNotFound = new Primitive.NotFound({ message: "Space not found." })
 
-const updatedAt = sql<Date>`coalesce(to_timestamp(${Database.Schema.opencode_session.time_updated} / 1000.0), ${Database.Schema.agent_session.created_at})`
+const updatedAt = sql<Date>`coalesce(to_timestamp(${OpenCodeStore.state.updatedAt} / 1000.0), ${Database.Schema.agent_session.created_at})`
 
 const anyOf = <TColumn extends Column>(
   column: TColumn,
@@ -95,12 +95,12 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
   transaction
     .select({
       session: Database.Schema.agent_session,
-      opencode: OpenCodeStore.summary,
+      opencode: OpenCodeStore.state,
       membershipId: SpaceQueries.membership.id,
     })
     .from(Database.Schema.agent_session)
     .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_session.space_id))
-    .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
+    .leftJoin(OpenCodeStore.chat, OpenCodeStore.join)
     .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
 
 type Row = Effect.Success<ReturnType<typeof select>>[number]
@@ -378,8 +378,7 @@ export const layer = Layer.effect(
               ),
               anyOf(Database.Schema.agent_session.agent_id, input.agentId),
               anyOf(Database.Schema.agent_session.origin, input.origin),
-              input.status &&
-                (input.status === "busy" ? isNotNull : isNull)(Database.Schema.opencode_session.time_suspended),
+              input.status && (input.status === "busy" ? isNotNull : isNull)(OpenCodeStore.state.timeSuspended),
               OpenCodeStore.search(input.search),
               (input.archived ? isNotNull : isNull)(Database.Schema.agent_session.archived_at),
               input.from && gte(time, DateTime.toDateUtc(input.from)),
@@ -419,7 +418,7 @@ export const layer = Layer.effect(
           )
         )
           return yield* modelNotFound
-        const start: Session.StartInput = {
+        const start: Omit<Session.StartInput, "hand"> = {
           sessionId: input.id,
           harness: "opencode",
           interactive: true,
@@ -450,11 +449,17 @@ export const layer = Layer.effect(
                 const existing = yield* sessions.get(input.id).pipe(Effect.orDie)
                 if (existing.createdBy !== actor.userId || existing.spaceId !== input.spaceId)
                   return yield* new Primitive.Conflict({ message: "A session with this ID already exists." })
-                return yield* brain.start(start, {
-                  organizationId: actor.organizationId,
-                  spaceId: input.spaceId,
-                  brainId: existing.brainId,
-                })
+                const stored = yield* Schema.decodeUnknownEffect(Session.StartInput)(
+                  (yield* read(actor, input.id)).session.start_input ?? { sessionId: input.id, harness: "opencode" },
+                ).pipe(Effect.orDie)
+                return yield* brain.start(
+                  { ...start, hand: stored.hand },
+                  {
+                    organizationId: actor.organizationId,
+                    spaceId: input.spaceId,
+                    brainId: existing.brainId,
+                  },
+                )
               }),
             ),
             Effect.catchTags({
@@ -475,7 +480,7 @@ export const layer = Layer.effect(
             if (row.session.archived_at) return toInfo(row)
             yield* transaction
               .update(Database.Schema.agent_session)
-              .set({ archived_at: new Date() })
+              .set({ archived_at: sql`now()` })
               .where(eq(Database.Schema.agent_session.id, id))
             return toInfo(yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
           }),
@@ -535,20 +540,23 @@ export const layer = Layer.effect(
       ) {
         const row = yield* read(actor, id, actions.retry)
         yield* brain.retry(id)
-        if (!message || row.opencode) return
+        // oxlint-disable-next-line ren/no-comments -- A chat that never reached its brain starts again; without a message, with the first message it was created with.
+        if (row.opencode) return
         const start = yield* Schema.decodeUnknownEffect(Session.StartInput)(
           row.session.start_input ?? { sessionId: id, harness: row.session.harness },
         ).pipe(Effect.orDie)
         yield* brain
           .start(
-            {
-              ...start,
-              initialMessage: {
-                messageId: Session.MessageID.make(message.id),
-                prompt: { text: message.text, ...(message.files && { files: message.files }) },
-                sender: { userId: actor.userId, memberId: yield* memberOf(actor) },
-              },
-            },
+            message
+              ? {
+                  ...start,
+                  initialMessage: {
+                    messageId: Session.MessageID.make(message.id),
+                    prompt: { text: message.text, ...(message.files && { files: message.files }) },
+                    sender: { userId: actor.userId, memberId: yield* memberOf(actor) },
+                  },
+                }
+              : start,
             { organizationId: actor.organizationId, spaceId: row.session.space_id, brainId: row.session.brain_id },
           )
           .pipe(Effect.catchTag("BrainRejectedError", Effect.die))

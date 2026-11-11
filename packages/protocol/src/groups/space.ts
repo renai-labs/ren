@@ -7,4 +7,5 @@ export const SpaceGroup = Primitive.group(Space.definition, "sdk", [
   Primitive.create(Space.definition),
   Primitive.update(Space.definition),
   Primitive.archive(Space.definition),
+  Primitive.action(Space.definition, "shutdown"),
 ])

@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { BrainProviders } from "./lib/brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Agent as AgentSchema } from "@ren/schema/agent"
@@ -21,7 +22,7 @@ import { Seed } from "./lib/seed.js"
 
 const it = testEffect(
   Layer.mergeAll(Settings.layer, Agent.layer, AgentMembership.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer)),
+    Layer.provideMerge(Layer.mergeAll(Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceMember.layer)),
     Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, ReferenceCheck.layerNone)),
     Layer.provideMerge(Testing.layer),
   ),

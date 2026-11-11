@@ -20,17 +20,17 @@ import { GitHubServer, Seed, TestDrives, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { HostMcp } from "@ren/host-api/host-mcp"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { EnvironmentSession } from "@ren/brain/environment/session"
+import { HandConnections } from "@ren/brain/hand/connections"
+import { HandSession } from "@ren/brain/hand/session"
 import { GitHubHost } from "@ren/brain/git/github"
 import { GitHosts } from "@ren/brain/git/hosts"
 import { SkillSource } from "@ren/brain/skill/source"
 import { TestAccess, TestGitHub } from "@ren/brain/testing"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import { TestEnvironment } from "@ren/executor/testing"
+import { HandApi } from "@ren/hand-api/hand-api"
+import { TestHand } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { ChannelInstall } from "@ren/schema/channel-install"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
@@ -627,7 +627,7 @@ const behindEgress = Effect.fnUntraced(function* (github: TestGitHub.Instance) {
     { preconnect: fetch.preconnect },
   )
   const directory = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-executor-"))))
-  const environmentId = Environment.ID.create()
+  const environmentId = Hand.ID.create()
   const executorPort = EgressHarness.freePort()
   const executor = yield* Effect.acquireRelease(
     Effect.sync(() =>
@@ -638,7 +638,7 @@ const behindEgress = Effect.fnUntraced(function* (github: TestGitHub.Instance) {
           EXECUTOR_HOST: "127.0.0.1",
           EXECUTOR_ENVIRONMENT_ID: environmentId,
           EXECUTOR_WORKSPACE: directory,
-          ENVIRONMENT_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([TestEnvironment.keys.publicKey]),
+          ENVIRONMENT_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([TestHand.keys.publicKey]),
           HTTP_PROXY: proxy,
         },
         stdout: "ignore",
@@ -653,7 +653,7 @@ const behindEgress = Effect.fnUntraced(function* (github: TestGitHub.Instance) {
   )
   yield* Effect.promise(() => EgressHarness.waitForPort(executorPort, executor, () => "the executor did not start"))
   const sessionId = Session.ID.create()
-  const access = yield* TestEnvironment.access({
+  const access = yield* TestHand.access({
     url: `http://127.0.0.1:${executorPort}`,
     environmentId,
     brain: Brain.ofSession(sessionId),
@@ -661,19 +661,19 @@ const behindEgress = Effect.fnUntraced(function* (github: TestGitHub.Instance) {
   })
   const connections = Context.get(
     yield* Layer.build(
-      EnvironmentConnections.layer.pipe(
+      HandConnections.layer.pipe(
         Layer.provide(TestAccess.fixed(new Map([[sessionId, access]]))),
         Layer.provide(FetchHttpClient.layer),
       ),
     ),
-    EnvironmentConnections.Service,
+    HandConnections.Service,
   )
   return {
     reader,
     viaEgress: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       effect.pipe(Effect.provideService(FetchHttpClient.Fetch, proxied)),
     directory,
-    files: EnvironmentSession.make(connections, sessionId, (signal) => new Error(signal)).files,
+    files: HandSession.make(connections, sessionId, (signal) => new Error(signal)).files,
   }
 })
 
@@ -692,8 +692,8 @@ describe("GitHub through the egress", () => {
         ...archive,
         folder: ".",
         path,
-        maxBytes: EnvironmentApi.maxReferenceBytes,
-        maxFiles: EnvironmentApi.maxReferenceFiles,
+        maxBytes: HandApi.maxReferenceBytes,
+        maxFiles: HandApi.maxReferenceFiles,
         links: "skip",
       })
       expect(yield* Effect.promise(() => Bun.file(join(path, "guide.md")).text())).toBe("Use the docs.")

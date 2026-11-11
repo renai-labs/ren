@@ -7,6 +7,7 @@ import type {
   SpaceCreateInput,
   SpaceUpdateInput,
   SpaceArchiveInput,
+  SpaceShutdownInput,
   SpaceMemberListInput,
   SpaceMemberCreateInput,
   SpaceMemberArchiveInput,
@@ -15,9 +16,8 @@ import type {
   EnvironmentTemplateCreateInput,
   EnvironmentTemplateUpdateInput,
   EnvironmentTemplateArchiveInput,
-  SpaceEnvironmentTemplateListInput,
-  SpaceEnvironmentTemplateCreateInput,
-  SpaceEnvironmentTemplateArchiveInput,
+  EnvironmentTemplateRetryBuildInput,
+  EnvironmentTemplateAffectedSpacesInput,
   SpaceSettingsGetInput,
   SpaceSettingsUpdateInput,
   OrganizationSettingsGetInput,
@@ -217,6 +217,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationFn: (input: SpaceArchiveInput) => client["space"]["archive"](input),
           }),
       },
+      shutdown: {
+        mutationKey: () => ["space", "shutdown"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space", "shutdown"] as const,
+            mutationFn: (input: SpaceShutdownInput) => client["space"]["shutdown"](input),
+          }),
+      },
     },
     "space-member": {
       list: {
@@ -292,6 +300,24 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationFn: (input: EnvironmentTemplateArchiveInput) => client["environment-template"]["archive"](input),
           }),
       },
+      retryBuild: {
+        mutationKey: () => ["environment-template", "retryBuild"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["environment-template", "retryBuild"] as const,
+            mutationFn: (input: EnvironmentTemplateRetryBuildInput) =>
+              client["environment-template"]["retryBuild"](input),
+          }),
+      },
+      affectedSpaces: {
+        mutationKey: () => ["environment-template", "affectedSpaces"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["environment-template", "affectedSpaces"] as const,
+            mutationFn: (input: EnvironmentTemplateAffectedSpacesInput) =>
+              client["environment-template"]["affectedSpaces"](input),
+          }),
+      },
     },
     environmentProvider: {
       list: {
@@ -302,35 +328,12 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryFn: (context) => client["environmentProvider"]["list"]({ signal: context.signal }),
           }),
       },
-    },
-    "space-environment-template": {
-      list: {
-        queryKey: (input?: SpaceEnvironmentTemplateListInput) =>
-          input === undefined
-            ? (["space-environment-template", "list"] as const)
-            : (["space-environment-template", "list", input] as const),
-        queryOptions: (input: SpaceEnvironmentTemplateListInput) =>
+      brains: {
+        queryKey: () => ["environmentProvider", "brains"] as const,
+        queryOptions: () =>
           queryOptions({
-            queryKey: ["space-environment-template", "list", input] as const,
-            queryFn: (context) => client["space-environment-template"]["list"](input, { signal: context.signal }),
-          }),
-      },
-      create: {
-        mutationKey: () => ["space-environment-template", "create"] as const,
-        mutationOptions: () =>
-          mutationOptions({
-            mutationKey: ["space-environment-template", "create"] as const,
-            mutationFn: (input: SpaceEnvironmentTemplateCreateInput) =>
-              client["space-environment-template"]["create"](input),
-          }),
-      },
-      archive: {
-        mutationKey: () => ["space-environment-template", "archive"] as const,
-        mutationOptions: () =>
-          mutationOptions({
-            mutationKey: ["space-environment-template", "archive"] as const,
-            mutationFn: (input: SpaceEnvironmentTemplateArchiveInput) =>
-              client["space-environment-template"]["archive"](input),
+            queryKey: ["environmentProvider", "brains"] as const,
+            queryFn: (context) => client["environmentProvider"]["brains"]({ signal: context.signal }),
           }),
       },
     },

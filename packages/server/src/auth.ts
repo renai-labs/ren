@@ -12,7 +12,7 @@ import { SpaceProvisioning } from "@ren/core/space/provisioning"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { type AuthenticatedSession } from "@ren/protocol/middleware/authentication"
 import { Auth } from "@ren/schema/auth"
-import { Environment } from "@ren/util/environment"
+import { Hand } from "@ren/util/environment"
 import { verifyJwsAccessToken } from "better-auth/oauth2"
 import { Cause, Config, Context, Effect, FiberSet, Layer, Option, Redacted, Schema } from "effect"
 import { BetterAuth } from "./better-auth.js"
@@ -85,7 +85,7 @@ export const layer = Layer.effect(
       googleClientSecret: Config.Redacted("GOOGLE_CLIENT_SECRET"),
       appURL: Config.String("APP_URL"),
       skipEmailVerification: Config.Boolean("SKIP_EMAIL_VERIFICATION").pipe(Config.withDefault(false)),
-      local: Environment.local,
+      local: Hand.local,
     })
     if (config.skipEmailVerification && !config.local) {
       return yield* Effect.die(new Error("SKIP_EMAIL_VERIFICATION requires NODE_ENV=development or test"))

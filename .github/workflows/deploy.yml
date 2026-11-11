@@ -30,6 +30,7 @@ jobs:
       app: ${{ steps.diff.outputs.app }}
       site: ${{ steps.diff.outputs.site }}
       egress: ${{ steps.diff.outputs.egress }}
+      bundles: ${{ steps.diff.outputs.bundles }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -51,12 +52,16 @@ jobs:
           base=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
           if [ "$EVENT" != "push" ] || [ -z "$base" ] || ! git merge-base --is-ancestor "$base" "$GITHUB_SHA" \
             || ! git diff --quiet "$base" "$GITHUB_SHA" -- .github/workflows/deploy.yml; then
-            printf '%s=true\n' server app site egress >>"$GITHUB_OUTPUT"
+            printf '%s=true\n' server app site egress bundles >>"$GITHUB_OUTPUT"
             exit 0
           fi
           echo "Last successful deploy: $base"
-          for part in server app site; do
-            affected=$(bun turbo query affected --packages "@ren/$part" --base "$base" --head "$GITHUB_SHA" | jq '.data.affectedPackages.length > 0')
+          # The bundles are the brain's and the executor's code that machines download (cell/machine/bundle.ts).
+          for part in server app site bundles; do
+            packages="@ren/$part"
+            if [ "$part" = bundles ]; then packages="@ren/cell @ren/executor"; fi
+            # shellcheck disable=SC2086
+            affected=$(bun turbo query affected --packages $packages --base "$base" --head "$GITHUB_SHA" | jq '.data.affectedPackages.length > 0')
             echo "$part=$affected" | tee -a "$GITHUB_OUTPUT"
           done
           if git diff --quiet "$base" "$GITHUB_SHA" -- repos/iron-proxy; then
@@ -87,7 +92,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           mask-aws-account-id: true
 
-      # Builds only when no template with this hash exists, and then prints the existing tag.
+      # Builds only when no template with this hash exists, and then prints the existing tag. The image holds Ren's dependencies (EN26).
       - name: Build the brain template
         id: build
         env:
@@ -97,8 +102,10 @@ jobs:
           E2B_TEMPLATE_CPU: "8"
           E2B_TEMPLATE_MEMORY_MB: "8192"
           E2B_TEMPLATE_TOOLS: full
+          E2B_TEMPLATE_SEED: ${{ runner.temp }}/bundles
         run: |
           set -euo pipefail
+          bun packages/cell/machine/bundle.ts "$E2B_TEMPLATE_SEED" >/dev/null
           E2B_API_KEY=$(aws secretsmanager get-secret-value --secret-id "$DEPLOY/deploy" --query SecretString --output text | jq -r .E2B_API_KEY)
           echo "::add-mask::$E2B_API_KEY"
           export E2B_API_KEY
@@ -177,6 +184,43 @@ jobs:
           ' current.json >next.json
           revision=$(aws ecs register-task-definition --cli-input-json file://next.json --query taskDefinition.taskDefinitionArn --output text)
           aws ecs update-service --cluster "$DEPLOY" --service server --task-definition "$revision" --query service.serviceName --output text
+
+  # Ren's code for brains and hands, which machines download through links the server signs (EN26).
+  # The archives go up first; current.json moves only when the new server runs, so no machine gets
+  # code before the server that serves it.
+  bundles:
+    name: bundles
+    needs: [changes, server]
+    if: ${{ !cancelled() && needs.changes.outputs.bundles == 'true' && needs.server.result != 'failure' }}
+    runs-on: ubuntu-latest
+    environment: v2-prod
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Build the bundles
+        run: bun packages/cell/machine/bundle.ts "$RUNNER_TEMP/bundles" >/dev/null
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Upload and make current
+        env:
+          DEPLOY: ${{ vars.DEPLOY_NAME }}
+        run: |
+          set -euo pipefail
+          bucket="$DEPLOY-artifacts-$(aws sts get-caller-identity --query Account --output text)"
+          aws s3 sync "$RUNNER_TEMP/bundles/" "s3://$bucket/bundles/" --exclude current.json --only-show-errors
+          aws ecs wait services-stable --cluster "$DEPLOY" --services server
+          aws s3 cp "$RUNNER_TEMP/bundles/current.json" "s3://$bucket/bundles/current.json" --only-show-errors
 
   app:
     name: app

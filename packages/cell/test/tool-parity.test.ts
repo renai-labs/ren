@@ -7,8 +7,8 @@ import { RipgrepBinary } from "@opencode/core/ripgrep/binary"
 import { Session as OpenCodeSession } from "@opencode/core/session"
 import { SessionTransfer } from "@opencode/core/session/transfer"
 import { Workspace } from "@opencode/core/workspace"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import { TestEnvironment, Processes, testEffect } from "@ren/executor/testing"
+import { HandApi } from "@ren/hand-api/hand-api"
+import { TestHand, Processes, testEffect } from "@ren/executor/testing"
 import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { Context, Effect, Exit, Fiber, Layer, ManagedRuntime, Option, Queue, Scope, Stream } from "effect"
@@ -63,6 +63,7 @@ const localHarness = Effect.gen(function* () {
         transfer: Context.get(services, SessionTransfer.Service),
         workspaces: Context.get(services, Workspace.Service),
         hasEnvironmentConnections: false,
+        isRemoteHand: false,
         directoryOf: (sessionId) => join(root, sessionId),
         makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
         activate: () => Effect.void,
@@ -620,7 +621,7 @@ it.live("J34 a command with a NUL byte fails with a clear error, and the cell go
 const longLines = 32_768
 
 const pagesOf2MiB = Effect.fnUntraced(function* (offsets: ReadonlyArray<number>) {
-  const proxy = yield* counting(Number(new URL(yield* TestEnvironment.url).port))
+  const proxy = yield* counting(Number(new URL(yield* TestHand.url).port))
   const session = yield* RemoteHost.begin(yield* Remote, proxy.url)
   yield* Effect.promise(() =>
     Bun.write(
@@ -704,10 +705,7 @@ it.live(
     Effect.gen(function* () {
       const session = yield* RemoteHost.begin(yield* Remote)
       yield* Effect.promise(() =>
-        Bun.write(
-          join(RemoteHost.folder(session.sessionId), "huge.bin"),
-          Buffer.alloc(EnvironmentApi.maxFileBytes + 1, 97),
-        ),
+        Bun.write(join(RemoteHost.folder(session.sessionId), "huge.bin"), Buffer.alloc(HandApi.maxFileBytes + 1, 97)),
       )
       const answer = RemoteHost.lastToolResult(
         yield* session.turn(stub.script({ tool: { name: "read", input: { path: "huge.bin" } } })),
@@ -897,7 +895,7 @@ it.live(
     Effect.gen(function* () {
       const opened = yield* Remote
       const sessionId = Session.ID.create()
-      yield* opened.memory.set(sessionId, yield* RemoteHost.accessTo(yield* TestEnvironment.url, sessionId))
+      yield* opened.memory.set(sessionId, yield* RemoteHost.accessTo(yield* TestHand.url, sessionId))
       const driver = RenWorkspaceDriver.session(opened.environments, sessionId)
       const realLocal = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-files-"))))
       const subjects = {

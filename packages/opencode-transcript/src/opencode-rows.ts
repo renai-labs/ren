@@ -8,7 +8,7 @@ import { SessionLegacy } from "@opencode/schema/session-legacy"
 import { SessionMessage } from "@opencode/schema/session-message"
 import { WorkspaceID } from "@opencode/schema/workspace-id"
 import { Sync } from "@ren/schema/sync"
-import { Exit, Schema } from "effect"
+import { Exit, Option, Schema } from "effect"
 
 const JsonColumn = <S extends Schema.Top>(schema: S) => Schema.NullOr(Schema.fromJsonString(schema))
 
@@ -64,3 +64,24 @@ export const message = (row: typeof Sync.OpenCodeMessageRow.Type) =>
     onFailure: Exit.failCause,
     onSuccess: (data) => Schema.decodeUnknownExit(SessionMessage.Info)(input(row, data)),
   })
+
+export const tooLarge = "Output too large, not saved."
+
+const Created = Schema.fromJsonString(Schema.Struct({ time: Schema.Struct({ created: Schema.Number }) }))
+
+// oxlint-disable-next-line ren/no-comments -- A message larger than the sync limit syncs as a short synthetic message with its id and time, so the rest of its chat syncs and a restore still has the message's place.
+export const standIn = (row: Sync.OpenCodeMessageRow): Sync.OpenCodeMessageRow => ({
+  id: row.id,
+  session_id: row.session_id,
+  seq: row.seq,
+  type: "synthetic",
+  data: JSON.stringify({
+    time: {
+      created: Option.match(Schema.decodeUnknownOption(Created)(row.data), {
+        onNone: () => 0,
+        onSome: (found) => found.time.created,
+      }),
+    },
+    text: tooLarge,
+  }),
+})

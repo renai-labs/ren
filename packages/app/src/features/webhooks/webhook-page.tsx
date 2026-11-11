@@ -35,6 +35,7 @@ import { parserOf, useWebhookForm, type Draft } from "./use-webhook-form.js"
 import { WebhookFormProvider } from "./webhook-form.js"
 import { useWebhookActions } from "./use-webhook-actions.js"
 import { AgentSelect } from "./webhooks-tab.js"
+import { Equal } from "effect"
 
 const route = getRouteApi("/_authed/_shell/spaces/$spaceId/webhooks/$webhookId/")
 
@@ -83,7 +84,7 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
           ...(draft.message.trim() !== webhook.message && {
             message: draft.message.trim(),
           }),
-          ...(JSON.stringify(parser) !== JSON.stringify(webhook.parser) && {
+          ...(!Equal.equals(parser, webhook.parser) && {
             parser,
           }),
         }),

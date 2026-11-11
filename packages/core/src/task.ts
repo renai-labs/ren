@@ -1,5 +1,6 @@
 export * as Task from "./task.js"
 
+import { OpenCodeStore } from "./session/opencode-store.js"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
 import { Label } from "@ren/schema/label"
@@ -765,7 +766,6 @@ export const layer = Layer.effect(
       }),
       // oxlint-disable-next-line ren/no-comments -- A governed agent's run must end with a handoff or a review request. The first quiet end reminds the agent once; the next one, or an error, asks a person. Lock first, then read the trail, so the check sees what committed while it waited. OpenCode keeps a session's last idle, so only an idle after the run's start counts.
       runEnded: Effect.fn("Task.runEnded")(function* (sessionId: Session.ID) {
-        const opencode = Database.Schema.opencode_session
         const started = alias(Database.Schema.task_event, "started_event")
         const later = alias(Database.Schema.task_event, "later_event")
         yield* database
@@ -774,16 +774,16 @@ export const layer = Layer.effect(
               const ended = yield* transaction
                 .select({
                   task: Database.Schema.task,
-                  outcome: opencode.idle_outcome,
-                  idle: opencode.time_idle,
+                  outcome: OpenCodeStore.state.outcome,
+                  idle: OpenCodeStore.state.timeIdle,
                   agent: Database.Schema.agent.name,
                   createdBy: Database.Schema.agent_session.created_by,
                 })
-                .from(opencode)
-                .innerJoin(Database.Schema.agent_session, eq(Database.Schema.agent_session.id, opencode.session_id))
+                .from(Database.Schema.agent_session)
+                .innerJoin(OpenCodeStore.chat, OpenCodeStore.join)
                 .innerJoin(
                   Database.Schema.task_session,
-                  eq(Database.Schema.task_session.session_id, opencode.session_id),
+                  eq(Database.Schema.task_session.session_id, Database.Schema.agent_session.id),
                 )
                 .innerJoin(
                   Database.Schema.task,
@@ -795,9 +795,9 @@ export const layer = Layer.effect(
                 .innerJoin(Database.Schema.agent, eq(Database.Schema.agent.id, Database.Schema.task.agent_id))
                 .where(
                   and(
-                    eq(opencode.session_id, sessionId),
-                    inArray(opencode.idle_outcome, ["succeeded", "failed"]),
-                    isNull(opencode.time_suspended),
+                    eq(Database.Schema.agent_session.id, sessionId),
+                    inArray(OpenCodeStore.state.outcome, ["succeeded", "failed"]),
+                    isNull(OpenCodeStore.state.timeSuspended),
                     isNull(Database.Schema.agent_session.parent_id),
                     inArray(Database.Schema.task.status, Task.actionable),
                     eq(Database.Schema.task.human_review, false),

@@ -660,25 +660,40 @@ describe("OpenCodeSync", () => {
   )
 
   it.live(
-    "a row larger than O2 marks its chat as unable to sync until it changes. The other chats sync, and the step is not failed (E91)",
+    "a row larger than O2 syncs as a short stand-in, and the rest of its chat syncs",
     () =>
       Effect.gen(function* () {
         const host = yield* setup()
         const sync = yield* host.sync()
         const child = yield* host.create(host.root)
-        yield* host.turn(child, stub.script({ reply: "a".repeat(9 * 1024 * 1024) }))
+        yield* host.turn(child, stub.script({ reply: "done" }))
         const large = host.db
           .query<{ id: string }, [string]>(
-            "select id from session_message where session_id = ? order by length(data) desc limit 1",
+            "select id from session_message where session_id = ? and type = 'assistant' order by seq desc limit 1",
           )
           .get(child)
-        if (!large) return yield* Effect.die(new Error("The large message is missing"))
+        if (!large) return yield* Effect.die(new Error("The assistant message is missing"))
+        // oxlint-disable-next-line ren/no-comments -- OpenCode keeps no model reply this large, so the test makes one row larger than a sync request.
+        host.db.run("update session_message set data = json_set(data, '$.padding', ?) where id = ?", [
+          "a".repeat(Sync.maxBodyBytes + 1024 * 1024),
+          large.id,
+        ])
         const before = yield* Metric.value(OpenCodeSync.oversizedRows)
         const captured = logs()
         expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: true })
         expect((yield* Metric.value(OpenCodeSync.oversizedRows)).count).toBe(before.count + 1)
         expect(captured.annotations.filter((annotation) => annotation["ren.message.id"] === large.id)).toHaveLength(1)
-        expect((yield* SyncTest.remote(host.brain.id)).sessions.map((session) => session.id)).toEqual([host.brain.id])
+        const synced = yield* SyncTest.remote(host.brain.id)
+        expect(synced.sessions.map((session) => String(session.id)).toSorted()).toEqual(
+          [String(host.brain.id), String(child)].toSorted(),
+        )
+        const local = host.db
+          .query<{ id: string }, [string]>("select id from session_message where session_id = ? order by seq, id")
+          .all(child)
+        const remote = synced.messages.filter((message) => String(message.session_id) === String(child))
+        expect(remote.map((message) => message.id).toSorted()).toEqual(local.map((message) => message.id).toSorted())
+        expect(remote.find((message) => message.id === large.id)).toMatchObject({ type: "synthetic" })
+        expect(remote.find((message) => message.id === large.id)?.data).toContain(OpenCodeRows.tooLarge)
         host.proxy.clear()
         expect(yield* sync.step()).toEqual({ drained: true })
         expect(host.proxy.requests.filter(isStart(child))).toEqual([])

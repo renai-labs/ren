@@ -1,4 +1,4 @@
-export * as Environment from "./environment.js"
+export * as Hand from "./environment.js"
 
 import { Config } from "effect"
 

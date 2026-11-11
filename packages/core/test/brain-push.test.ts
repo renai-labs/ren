@@ -12,6 +12,7 @@ import { Effect, Layer, Queue, Ref, Schedule } from "effect"
 import { BrainHost } from "../src/brain-host.js"
 import { BrainPush } from "../src/brain-push.js"
 import { testEffect } from "./lib/effect.js"
+import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 
 const it = testEffect(Testing.layer)
@@ -119,6 +120,31 @@ describe("ren_notify_brains (HR10, HR23)", () => {
       }),
   )
 
+  it.live("a change to a template's networking notifies its organization; another change sends nothing", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const listener = yield* listening
+      const owner = yield* Seed.owner()
+      const templateId = yield* Seed.environmentTemplate(owner.organizationId)
+      yield* listener.collect
+      const templates = Database.Schema.environment_template
+      yield* database.db.update(templates).set({ name: "Renamed" }).where(eq(templates.id, templateId))
+      expect(yield* listener.collect).toEqual([])
+      yield* database.db
+        .update(templates)
+        .set({
+          networking: {
+            type: "limited",
+            allowPackageManagers: false,
+            allowMcpServers: false,
+            allowedHosts: ["a.test"],
+          },
+        })
+        .where(eq(templates.id, templateId))
+      expect(yield* listener.collect).toEqual([`org:${owner.organizationId}`])
+    }),
+  )
+
   it.live("one transaction that writes 1000 rows of one space sends one notification", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
@@ -142,61 +168,71 @@ describe("ren_notify_brains (HR10, HR23)", () => {
 })
 
 describe("BrainPush (HR10, HR12)", () => {
-  it.live("a notified scope reaches each of its brains, and the listener listens again after a lost connection", () =>
-    Effect.gen(function* () {
-      const database = yield* Database.Service
-      const notified = yield* Queue.unbounded<Brain.ID>()
-      const host = Layer.succeed(
-        BrainHost.Service,
-        BrainHost.Service.of({
-          notify: (brainId) => Queue.offer(notified, brainId).pipe(Effect.asVoid),
-          target: () => Effect.die(new Error("a push reads no target")),
-          access: () => Effect.die(new Error("a push never resumes a brain")),
-          ensure: () => Effect.die(new Error("a push never resumes a brain")),
-          observe: () => Effect.void,
-          hand: () => Effect.succeedNone,
-          unavailable: () => Effect.void,
-          retry: () => Effect.void,
-          onInterrupted: () => Effect.void,
-        }),
-      )
-      const owner = yield* Seed.owner()
-      const space = Brain.ID.create()
-      yield* Seed.session({ ...owner, brainId: space })
-      const brains = [space, Brain.ofSession(yield* Seed.session(owner))]
-      const other = yield* Seed.owner()
-      yield* Seed.session(other)
-      yield* Layer.build(BrainPush.layer.pipe(Layer.provide(host)))
-      const write = (instructions: string) =>
-        database.db
-          .insert(Database.Schema.settings)
-          .values({ space_id: owner.spaceId, settings: { instructions } })
-          .onConflictDoUpdate({ target: Database.Schema.settings.owner_id, set: { settings: { instructions } } })
-      const pushedAll = Effect.gen(function* () {
-        const seen = new Set<Brain.ID>()
-        while (seen.size < brains.length) seen.add(yield* Queue.take(notified))
-        return [...seen].toSorted()
-      })
-      const pg = yield* PgClient.PgClient
-      // oxlint-disable-next-line ren/no-comments -- pg_stat_activity lists every database on the server; other test runs and servers listen there too, so the test sees and ends only its own database's listener.
-      const listeners =
-        pg`select pid from pg_stat_activity where query like 'LISTEN %' and datname = current_database()`.pipe(
-          Effect.orDie,
+  it.live(
+    "a notified scope reaches each of its brains and sends their machines their host lists, and the listener listens again after a lost connection",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const notified = yield* Queue.unbounded<Brain.ID>()
+        const refreshed = yield* Queue.unbounded<Brain.ID>()
+        const host = Layer.succeed(
+          BrainHost.Service,
+          BrainHost.Service.of({
+            isManaged: false,
+            notify: (brainId) => Queue.offer(notified, brainId).pipe(Effect.asVoid),
+            target: () => Effect.die(new Error("a push reads no target")),
+            access: () => Effect.die(new Error("a push never resumes a brain")),
+            ensure: () => Effect.die(new Error("a push never resumes a brain")),
+            observe: () => Effect.void,
+            hand: () => Effect.succeedNone,
+            refreshNetwork: (brainId) => Queue.offer(refreshed, brainId).pipe(Effect.asVoid),
+            stop: () => Effect.die(new Error("a push never stops a brain")),
+            unavailable: () => Effect.void,
+            retry: () => Effect.void,
+            onInterrupted: () => Effect.void,
+          }),
         )
-      yield* listeners.pipe(Effect.repeat({ until: (rows) => rows.length > 0, schedule: Schedule.spaced("20 millis") }))
-      yield* write("first")
-      expect(yield* pushedAll).toEqual(brains.toSorted())
-      const terminated = yield* Ref.make(0)
-      yield* pg`select pg_terminate_backend(pid) from pg_stat_activity where query like 'LISTEN %' and datname = current_database()`.pipe(
-        Effect.orDie,
-        Effect.tap((rows) => Ref.set(terminated, rows.length)),
-      )
-      expect(yield* Ref.get(terminated)).toBeGreaterThan(0)
-      yield* write("second").pipe(
-        Effect.andThen(Queue.take(notified).pipe(Effect.timeoutOption("200 millis"))),
-        Effect.repeat({ until: (pushed) => pushed._tag === "Some", schedule: Schedule.spaced("100 millis") }),
-        Effect.timeout("10 seconds"),
-      )
-    }),
+        const owner = yield* Seed.owner()
+        const space = Brain.ID.create()
+        yield* Seed.session({ ...owner, brainId: space })
+        const brains = [space, Brain.ofSession(yield* Seed.session(owner))]
+        const other = yield* Seed.owner()
+        yield* Seed.session(other)
+        yield* Layer.build(BrainPush.layer.pipe(Layer.provide([host, Host.noTemplates])))
+        const write = (instructions: string) =>
+          database.db
+            .insert(Database.Schema.settings)
+            .values({ space_id: owner.spaceId, settings: { instructions } })
+            .onConflictDoUpdate({ target: Database.Schema.settings.owner_id, set: { settings: { instructions } } })
+        const allOf = (queue: Queue.Queue<Brain.ID>) =>
+          Effect.gen(function* () {
+            const seen = new Set<Brain.ID>()
+            while (seen.size < brains.length) seen.add(yield* Queue.take(queue))
+            return [...seen].toSorted()
+          })
+        const pg = yield* PgClient.PgClient
+        // oxlint-disable-next-line ren/no-comments -- pg_stat_activity lists every database on the server; other test runs and servers listen there too, so the test sees and ends only its own database's listener.
+        const listeners =
+          pg`select pid from pg_stat_activity where query like 'LISTEN %' and datname = current_database()`.pipe(
+            Effect.orDie,
+          )
+        yield* listeners.pipe(
+          Effect.repeat({ until: (rows) => rows.length > 0, schedule: Schedule.spaced("20 millis") }),
+        )
+        yield* write("first")
+        expect(yield* allOf(notified)).toEqual(brains.toSorted())
+        expect(yield* allOf(refreshed)).toEqual(brains.toSorted())
+        const terminated = yield* Ref.make(0)
+        yield* pg`select pg_terminate_backend(pid) from pg_stat_activity where query like 'LISTEN %' and datname = current_database()`.pipe(
+          Effect.orDie,
+          Effect.tap((rows) => Ref.set(terminated, rows.length)),
+        )
+        expect(yield* Ref.get(terminated)).toBeGreaterThan(0)
+        yield* write("second").pipe(
+          Effect.andThen(Queue.take(notified).pipe(Effect.timeoutOption("200 millis"))),
+          Effect.repeat({ until: (pushed) => pushed._tag === "Some", schedule: Schedule.spaced("100 millis") }),
+          Effect.timeout("10 seconds"),
+        )
+      }),
   )
 })

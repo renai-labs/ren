@@ -1,8 +1,14 @@
+import { HandProvider } from "@ren/core/hand-provider"
 import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
+import { BrainProvider } from "@ren/core/brain-provider"
+import { SandboxEgress } from "@ren/core/sandbox-egress"
+import { MachineNetwork } from "@ren/core/machine-network"
+import { Bundles } from "@ren/core/bundles"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
 import { BrainPush } from "@ren/core/brain-push"
+import { SpaceShutdown } from "@ren/core/space-shutdown"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelProvider } from "@ren/core/channel-provider"
 import { Intake } from "@ren/core/intake"
@@ -14,8 +20,7 @@ import { Integrations } from "@ren/core/integrations"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
-import { EnvironmentProvider } from "@ren/core/environment-provider"
-import { Environments } from "@ren/core/environments"
+import { Hands } from "@ren/core/hands"
 import { Mailer } from "@ren/core/mailer"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
@@ -30,7 +35,7 @@ import { Routes } from "@ren/server/routes"
 import { Config, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { PersistedQueue } from "effect/persistence"
-import { ChaosEnvironments } from "./provider/environments.js"
+import { ChaosHands } from "./provider/hands.js"
 import { ChaosModels } from "./provider/models.js"
 import { Signer } from "@ren/core/signer"
 import { EgressControl } from "@ren/core/egress-control"
@@ -71,7 +76,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
 
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
-    Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(
+    Layer.mergeAll(Brains.layer, BrainPush.layer, SpaceShutdown.layer).pipe(
       Layer.provideMerge(BrainHost.layerCell),
       Layer.provide(DurableRunner.layerEffect),
       Layer.provide(CredentialEnv.layerNone),
@@ -98,11 +103,15 @@ HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
     ChaosModels.layer,
     RenInference.layerConfig.pipe(Layer.provide([Signer.layerLocal, Access.layer])),
-    Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
+    Hands.layer.pipe(
+      Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer, DurableRunner.layerMemory]),
+      Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
+    ),
+    BrainProvider.layer([]),
     Integrations.layer.pipe(Layer.provide(Signer.layerLocal)),
   ]),
   Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal, GitHubApp.layerNone, SlackApp.layerNone)),
-  Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),
+  Layer.provide(HandProvider.layer(ChaosHands.providers)),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
   Layer.provide(

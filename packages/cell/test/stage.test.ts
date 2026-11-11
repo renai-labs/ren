@@ -1,38 +1,26 @@
-import { afterAll, expect, test } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { expect, test } from "bun:test"
 import { Stage } from "../e2b/stage.js"
 
-const tree = await mkdtemp(join(tmpdir(), "ren-stage-test-"))
-afterAll(() => rm(tree, { recursive: true, force: true }))
-
-test("the install tree contains the dependency patch referenced by its root manifest", async () => {
-  await Stage.stage(Stage.root, tree)
-  const patch = "patches/@modelcontextprotocol%2Fclient@2.3.1.patch"
-  expect(await Bun.file(join(tree, patch)).text()).toBe(await Bun.file(join(Stage.root, patch)).text())
+test("start.js builds into the bytes the image copies", async () => {
+  const start = new TextDecoder().decode(await Stage.startProgram())
+  expect([start.length > 0, start.includes("ca-bundle.pem")]).toEqual([true, true])
 })
 
-test("the staged sources are the workspace files the brain and its hand import, at any depth, and no others", async () => {
-  const sources = await Stage.sources(Stage.root)
-  expect([
-    sources.includes("packages/environment-api/src/environment-token.ts"),
-    sources.includes("packages/schema/src/signature.ts"),
-    sources.includes("packages/schema/src/infra.ts"),
-    sources.every((file) => /^packages\/[^/]+\/src\//.test(file)),
-  ]).toEqual([true, true, false, true])
-})
-
-test("a changed staged file changes the hash, and the same files give the same hash", () => {
-  const files = [
-    { path: "packages/cell/src/a.ts", content: new TextEncoder().encode("one") },
-    { path: "packages/cell/src/b.ts", content: new TextEncoder().encode("two") },
-  ]
-  const changed = [files[0], { path: "packages/cell/src/b.ts", content: new TextEncoder().encode("three") }].flatMap(
-    (file) => (file ? [file] : []),
+test("each COPY in the E2B Dockerfiles names one source: the E2B SDK copies only the first", async () => {
+  const lines = await Promise.all(
+    ["e2b.Dockerfile", "e2b.tools.Dockerfile"].map(async (file) =>
+      (await Bun.file(`${import.meta.dir}/../e2b/${file}`).text())
+        .split("\n")
+        .filter((line) => /^(COPY|ADD) /.test(line)),
+    ),
   )
-  expect([Stage.hash(files) === Stage.hash(files.toReversed()), Stage.hash(files) === Stage.hash(changed)]).toEqual([
-    true,
-    false,
-  ])
+  expect(
+    lines.flat().filter(
+      (line) =>
+        line
+          .replaceAll(/--\S+\s+/g, "")
+          .trim()
+          .split(/\s+/).length > 3,
+    ),
+  ).toEqual([])
 })

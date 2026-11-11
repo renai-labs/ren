@@ -1,5 +1,5 @@
-export { TestEnvironment } from "./test-environment.js"
-export { DriveEnvironment } from "./drive-environment.js"
+export { TestHand } from "./test-hand.js"
+export { DriveHand } from "./drive-hand.js"
 export { Image } from "./image.js"
 export { Processes } from "./process.js"
 export { Relay } from "./relay.js"

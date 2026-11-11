@@ -3,7 +3,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Channel } from "@ren/schema/channel"
 import { Drive } from "@ren/schema/drive"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Memory } from "@ren/schema/memory"
 import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
@@ -15,6 +15,7 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecur
 import { Host } from "./host.js"
 import {
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   GenerationRetiredError,
@@ -50,6 +51,14 @@ export const PullSession = Schema.Struct({
   busy: Schema.Boolean,
   progress: Schema.String.annotate({
     description: "An opaque counter from the harness. It changes when a turn makes progress.",
+  }),
+  background: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "A process that the chat started still runs, such as a background shell. Ren keeps the machine awake for it. An older brain leaves it out.",
+  }),
+  touched: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "A person asked for the chat’s files or diff since the last pull. Ren keeps the chat’s place on its hand, as for a turn. An older brain leaves it out.",
   }),
 }).annotate({ identifier: "Host.PullSession" })
 
@@ -101,6 +110,14 @@ export const PullChat = Schema.Struct({
   drives: Schema.optionalKey(Drive.Availability).annotate({
     description: "Omitted for a chat without an environment, and by a Ren without drives.",
   }),
+  hasHand: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "False when the brain’s applied hand gives the chat no file and shell tools. It changes only at the brain’s start or wake. Omitted by an older Ren: true.",
+  }),
+  directory: Schema.optionalKey(Hand.Directory).annotate({
+    description:
+      "The chat’s folder on its applied hand. A chat with tools and no workspace gets one there. Omitted when the chat has no tools, and by an older Ren.",
+  }),
 }).annotate({ identifier: "Host.PullChat" })
 
 export interface PullReply extends Schema.Schema.Type<typeof PullReply> {}
@@ -122,6 +139,10 @@ export const PullReply = Schema.Struct({
   layers: SessionSettings.Layers,
   memory: Schema.optionalKey(PullMemory).annotate({ description: "Omitted by a Ren that has no memory yet." }),
   chats: Schema.Array(PullChat),
+  computeRevision: Schema.optionalKey(Schema.Int).annotate({
+    description:
+      "The space setting that the brain applied at its last start or wake. When it changes, the brain drops its connections to its hands, so no call reaches the hand it used before. Omitted by an older Ren.",
+  }),
   deleted: Schema.Array(Session.ID).annotate({
     description: "Root chats of the request that Ren no longer has. The brain drops them (E109, HR22).",
   }),
@@ -160,18 +181,26 @@ const ModelsGroup = HttpApiGroup.make("models")
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "models" }))
 
-const EnvironmentsGroup = HttpApiGroup.make("environments")
+const HandsGroup = HttpApiGroup.make("environments")
   .add(
     HttpApiEndpoint.post("environments.access", "/host/sessions/:id/environment/access", {
       params: SessionParams,
-      success: Environment.Access,
-      error: [EnvironmentNotFoundError, EnvironmentUnavailableError],
+      query: Schema.Struct({
+        unreachable: Schema.optional(
+          Schema.Literals(["true", "false"]).annotate({
+            description:
+              "`true` when the brain could not reach the session’s environment at its last URL; Ren checks its machine first.",
+          }),
+        ),
+      }),
+      success: Hand.Access,
+      error: [EnvironmentNotFoundError, EnvironmentUnavailableError, EnvironmentStartingError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "environments.access",
         summary: "Get access to a session's environment",
         description:
-          "Name the environment and directory of a session of the brain, with a fresh environment token. Ren checks that the session belongs to the brain of the host token.",
+          "Name the environment and directory of a session of the brain, with a fresh environment token. Ren checks that the session belongs to the brain of the host token. `EnvironmentStartingError` means the session’s machine is still starting: ask again in 2 s.",
       }),
     ),
   )
@@ -206,7 +235,7 @@ const HostGroup = HttpApiGroup.make("host")
 export const RenHostApi = HttpApi.make("host")
   .add(PullGroup)
   .add(ModelsGroup)
-  .add(EnvironmentsGroup)
+  .add(HandsGroup)
   .add(HostGroup)
   .annotateMerge(
     OpenApi.annotations({

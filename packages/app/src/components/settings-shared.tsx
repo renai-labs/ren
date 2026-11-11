@@ -57,7 +57,7 @@ export function Choice(props: {
       >
         <SelectValue />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent align="end" className="w-auto min-w-(--anchor-width)">
         <SelectGroup>
           {props.options.map((option) => (
             <SelectItem key={option.value} value={option.value}>

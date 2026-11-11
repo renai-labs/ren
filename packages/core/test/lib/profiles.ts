@@ -1,5 +1,6 @@
 export * as ProfilesFixture from "./profiles.js"
 
+import { BrainProviders } from "./brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { AppProfile } from "@ren/schema/app-profile"
@@ -34,7 +35,7 @@ export const layer = Layer.mergeAll(
   CredentialRequirements.layer.pipe(Layer.provideMerge(AppProfiles.layer)),
   AppResolve.layer,
   AppRegistry.layer,
-  Space.layer,
+  Space.layer.pipe(Layer.provide(BrainProviders.none)),
   SpaceMember.layer,
   SpaceProvisioning.layer,
 ).pipe(

@@ -1,5 +1,5 @@
 import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { PostHog } from "@ren/telemetry/posthog"
 import { Config, Layer } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
@@ -15,7 +15,7 @@ HttpRouter.serve(Server.layer).pipe(
   Layer.provide(BunServices.layer),
   Layer.provide(
     BunHttpServer.layerConfig({
-      port: Config.Port("PORT").pipe(Config.withDefault(EnvironmentApi.port)),
+      port: Config.Port("PORT").pipe(Config.withDefault(HandApi.port)),
       hostname: Config.String("EXECUTOR_HOST").pipe(Config.withDefault("0.0.0.0")),
       idleTimeout: Config.succeed(Server.idleTimeoutSeconds),
     }),

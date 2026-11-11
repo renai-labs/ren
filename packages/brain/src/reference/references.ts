@@ -1,14 +1,14 @@
 export * as References from "./references.js"
 
 import type { Effect } from "effect"
-import type { EnvironmentCopies } from "../environment/copies.js"
+import type { HandCopies } from "../hand/copies.js"
 
 export interface Ready {
   readonly type: "ready"
   readonly alias: string
   readonly description: string
   readonly path: string
-  readonly copy: EnvironmentCopies.Copy
+  readonly copy: HandCopies.Copy
 }
 
 export interface Unavailable {

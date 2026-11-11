@@ -1,0 +1,18 @@
+id: no-effect-run-in-effect
+language: Tsx
+message: "A second runtime inside an Effect generator loses tracing, interruption and the test clock. Yield the effect instead."
+severity: error
+files:
+  - "packages/*/src/**"
+rule:
+  any:
+    - pattern: Effect.runSync($$$ARGS)
+    - pattern: Effect.runSyncExit($$$ARGS)
+    - pattern: Effect.runPromise($$$ARGS)
+    - pattern: Effect.runPromiseExit($$$ARGS)
+    - pattern: Effect.runFork($$$ARGS)
+  inside:
+    stopBy: end
+    any:
+      - kind: generator_function
+      - kind: generator_function_declaration

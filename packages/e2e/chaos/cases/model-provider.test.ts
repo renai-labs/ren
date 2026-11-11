@@ -11,7 +11,7 @@ const retries = 10
 const windowMs = 5 * 60_000
 
 describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () => {
-  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Hand } = {}
 
   const current = () => {
     if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
