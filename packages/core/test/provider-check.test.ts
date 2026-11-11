@@ -20,28 +20,26 @@ const it = testEffect(
 )
 
 describe("ProviderCheck", () => {
-  it.live(
-    "Ren does not start when a brain runs on a provider it does not register, and says which it has (EN24, chaos row 40)",
-    () =>
-      Effect.gen(function* () {
-        const database = yield* Database.Service
-        const organizationId = yield* Seed.organization()
-        const brainId = Brain.ID.create()
-        yield* database.db.insert(Database.Schema.brain).values({
-          id: brainId,
-          organization_id: organizationId,
-          space_id: yield* Seed.space(organizationId),
-          scope: "space",
-          provider: "brains",
-        })
-        yield* ProviderCheck.run
-        yield* database.db
-          .update(Database.Schema.brain)
-          .set({ provider: "gone" })
-          .where(eq(Database.Schema.brain.id, brainId))
-        expect((yield* Effect.flip(ProviderCheck.run)).message).toBe(
-          "Brains run on the providers gone, which this Ren does not register; it has brains",
-        )
-      }),
+  it.live("Ren does not start when a brain runs on a provider it does not register, and says which it has", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const organizationId = yield* Seed.organization()
+      const brainId = Brain.ID.create()
+      yield* database.db.insert(Database.Schema.brain).values({
+        id: brainId,
+        organization_id: organizationId,
+        space_id: yield* Seed.space(organizationId),
+        scope: "space",
+        provider: "brains",
+      })
+      yield* ProviderCheck.run
+      yield* database.db
+        .update(Database.Schema.brain)
+        .set({ provider: "gone" })
+        .where(eq(Database.Schema.brain.id, brainId))
+      expect((yield* Effect.flip(ProviderCheck.run)).message).toBe(
+        "Brains run on the providers gone, which this Ren does not register; it has brains",
+      )
+    }),
   )
 })

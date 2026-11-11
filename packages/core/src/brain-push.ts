@@ -14,7 +14,7 @@ export const channel = "ren_brains"
 // oxlint-disable-next-line ren/no-comments -- HR12: a push storm reaches at most this many brains at a time.
 const parallel = 16
 
-// oxlint-disable-next-line ren/no-comments -- HR10, HR11, HR25: each server instance listens on ren_brains and tells every brain of a notified scope to pull, and sends the awake machines of its spaces their host lists (networking rule 4). Notifications that arrive together are handled once per scope. A lost connection listens again; a notification during the gap is lost, and the brain's timed pull brings the change (HR8).
+// oxlint-disable-next-line ren/no-comments -- HR10, HR11, HR25: each server instance listens on ren_brains and tells every brain of a notified scope to pull, and sends the awake machines of its spaces their host lists. Notifications that arrive together are handled once per scope. A lost connection listens again; a notification during the gap is lost, and the brain's timed pull brings the change (HR8).
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const pg = yield* PgClient.PgClient

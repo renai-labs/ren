@@ -210,7 +210,7 @@ const kind = kindWith({ canUpdateInPlace: true })
 
 describe("MachineLifecycle", () => {
   it.effect(
-    "a machine that fails 3 times waits 10 min, then 30 min, then every hour; the next access after that starts it again (EN19, chaos row 1)",
+    "a machine that fails 3 times waits 10 min, then 30 min, then every hour; the next access after that starts it again",
     () =>
       Effect.gen(function* () {
         reports.length = 0
@@ -237,7 +237,7 @@ describe("MachineLifecycle", () => {
       }),
   )
 
-  it.effect("a machine whose provider fails 3 times at its wake fails, and is reported (EN18)", () =>
+  it.effect("a machine whose provider fails 3 times at its wake fails, and is reported", () =>
     Effect.gen(function* () {
       reports.length = 0
       const memory = yield* kind
@@ -282,7 +282,7 @@ describe("MachineLifecycle", () => {
   )
 
   it.effect(
-    "a machine whose brain gives no answer for 5 min while it runs is replaced; an answer in between starts the count again (EN17)",
+    "a machine whose brain gives no answer for 5 min while it runs is replaced; an answer in between starts the count again",
     () =>
       Effect.gen(function* () {
         reports.length = 0
@@ -309,7 +309,7 @@ describe("MachineLifecycle", () => {
   )
 
   it.effect(
-    "a running machine that does not answer is kept while its samples are fresh, and replaced once they stop, with the full resource named (B5.5, EN17)",
+    "a running machine that does not answer is kept while its samples are fresh, and replaced once they stop, with the full resource named (B5.5)",
     () =>
       Effect.gen(function* () {
         reports.length = 0
@@ -331,7 +331,7 @@ describe("MachineLifecycle", () => {
       }),
   )
 
-  it.effect("waiting for capacity is reported once, with the provider's reason (EN38)", () =>
+  it.effect("waiting for capacity is reported once, with the provider's reason", () =>
     Effect.gen(function* () {
       reports.length = 0
       const memory = yield* kind
@@ -393,7 +393,7 @@ describe("MachineLifecycle", () => {
 
 describe("MachineLifecycle keep-awake", () => {
   it.effect(
-    "a turn that runs one 40-min command with no progress keeps its machine awake to the end, with a cron's access every 2 min (chaos row 45)",
+    "a turn that runs one 40-min command with no progress keeps its machine awake to the end, with a cron's access every 2 min",
     () =>
       Effect.gen(function* () {
         const memory = yield* kind
@@ -419,7 +419,7 @@ describe("MachineLifecycle keep-awake", () => {
   )
 
   it.effect(
-    "a background process keeps an idle machine awake up to 2 h after the last turn's progress, and no longer (EN25)",
+    "a background process keeps an idle machine awake up to 2 h after the last turn's progress, and no longer",
     () =>
       Effect.gen(function* () {
         const memory = yield* kind
@@ -455,20 +455,18 @@ describe("MachineLifecycle updates", () => {
     return { memory, id }
   })
 
-  it.effect(
-    "an outdated machine updates in place when it wakes, and keeps its generation (EN22, EN27, chaos row 12)",
-    () =>
-      Effect.gen(function* () {
-        const found = yield* asleep()
-        found.memory.switches.changeAtWake = "update"
-        expect((yield* found.memory.machines.access(found.id))._tag).toBe("Starting")
-        expect(found.memory.updated).toEqual([found.id])
-        expect(yield* found.memory.read(found.id)).toMatchObject({ phase: "ready", generation: 1 })
-      }),
+  it.effect("an outdated machine updates in place when it wakes, and keeps its generation", () =>
+    Effect.gen(function* () {
+      const found = yield* asleep()
+      found.memory.switches.changeAtWake = "update"
+      expect((yield* found.memory.machines.access(found.id))._tag).toBe("Starting")
+      expect(found.memory.updated).toEqual([found.id])
+      expect(yield* found.memory.read(found.id)).toMatchObject({ phase: "ready", generation: 1 })
+    }),
   )
 
   it.effect(
-    "an access during an update in place answers Starting, never the old url, and the machine is ready once, on its generation, when the update ends (chaos row 49)",
+    "an access during an update in place answers Starting, never the old url, and the machine is ready once, on its generation, when the update ends",
     () =>
       Effect.gen(function* () {
         const found = yield* asleep()
@@ -492,7 +490,7 @@ describe("MachineLifecycle updates", () => {
       }),
   )
 
-  it.effect("an update that fails 3 times replaces the machine (EN27, chaos row 14)", () =>
+  it.effect("an update that fails 3 times replaces the machine", () =>
     Effect.gen(function* () {
       const found = yield* asleep()
       found.memory.switches.changeAtWake = "update"
@@ -525,7 +523,7 @@ describe("MachineLifecycle updates", () => {
   })
 
   it.effect(
-    "a template that only adds a package reaches an asleep machine in place at its wake, also a change made while it was created (templates rule 2, chaos rows 23, 29)",
+    "a template that only adds a package reaches an asleep machine in place at its wake, also a change made while it was created",
     () =>
       Effect.gen(function* () {
         const memory = yield* kind
@@ -573,7 +571,7 @@ describe("MachineLifecycle updates", () => {
   )
 
   it.effect(
-    "a template built again on a new system image replaces an asleep machine at its wake, with no steps in place (templates rule 1)",
+    "a template built again on a new system image replaces an asleep machine at its wake, with no steps in place",
     () =>
       Effect.gen(function* () {
         const memory = yield* kind
@@ -589,37 +587,35 @@ describe("MachineLifecycle updates", () => {
       }),
   )
 
-  it.effect(
-    "a removed package, another template or no template replaces the machine at its wake (templates rule 3)",
-    () =>
-      Effect.gen(function* () {
-        const memory = yield* kind
-        memory.switches.boots = true
-        memory.switches.wanted = templateImage("image-a", ["ffmpeg", "requests"])
-        const id = memory.add()
-        yield* memory.machines.access(id)
-        const wakeWith = (wanted: MachineLifecycle.DesiredSetup) =>
-          Effect.gen(function* () {
-            memory.switches.wanted = wanted
-            yield* TestClock.adjust(Duration.minutes(11))
-            yield* memory.machines.access(id)
-            return (yield* memory.read(id)).generation
-          })
-        expect(yield* wakeWith(templateImage("image-b", ["ffmpeg"]))).toBe(2)
-        expect(yield* wakeWith(templateImage("image-c", ["ffmpeg", "git"], EnvironmentTemplate.ID.create()))).toBe(3)
-        expect(yield* wakeWith({ config: {}, image: Option.none(), hosts: Option.none() })).toBe(4)
-        expect(memory.images).toEqual([
-          Option.some("image-a"),
-          Option.some("image-b"),
-          Option.some("image-c"),
-          Option.none(),
-        ])
-        expect(memory.steps).toEqual([])
-      }),
+  it.effect("a removed package, another template or no template replaces the machine at its wake", () =>
+    Effect.gen(function* () {
+      const memory = yield* kind
+      memory.switches.boots = true
+      memory.switches.wanted = templateImage("image-a", ["ffmpeg", "requests"])
+      const id = memory.add()
+      yield* memory.machines.access(id)
+      const wakeWith = (wanted: MachineLifecycle.DesiredSetup) =>
+        Effect.gen(function* () {
+          memory.switches.wanted = wanted
+          yield* TestClock.adjust(Duration.minutes(11))
+          yield* memory.machines.access(id)
+          return (yield* memory.read(id)).generation
+        })
+      expect(yield* wakeWith(templateImage("image-b", ["ffmpeg"]))).toBe(2)
+      expect(yield* wakeWith(templateImage("image-c", ["ffmpeg", "git"], EnvironmentTemplate.ID.create()))).toBe(3)
+      expect(yield* wakeWith({ config: {}, image: Option.none(), hosts: Option.none() })).toBe(4)
+      expect(memory.images).toEqual([
+        Option.some("image-a"),
+        Option.some("image-b"),
+        Option.some("image-c"),
+        Option.none(),
+      ])
+      expect(memory.steps).toEqual([])
+    }),
   )
 
   it.effect(
-    "an awake machine gets its applied template's changed host list at once, never a newer template's, and the provider hears nothing when it did not change (networking rule 4)",
+    "an awake machine gets its applied template's changed host list at once, never a newer template's, and the provider hears nothing when it did not change",
     () =>
       Effect.gen(function* () {
         const memory = yield* kind
@@ -643,7 +639,7 @@ describe("MachineLifecycle updates", () => {
   )
 
   it.effect(
-    "a kind that cannot update in place is replaced at its wake for a package its template adds, with no failed update (EN22)",
+    "a kind that cannot update in place is replaced at its wake for a package its template adds, with no failed update",
     () =>
       Effect.gen(function* () {
         const memory = yield* kindWith({ canUpdateInPlace: false })

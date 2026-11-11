@@ -12,7 +12,7 @@ import { Credentials } from "./credentials.js"
 import { Deployment } from "./deployment.js"
 import { Models } from "./models.js"
 
-// oxlint-disable-next-line ren/no-comments -- Networking rule 1: npm, PyPI and its file host, the Debian and Ubuntu mirrors, and the Go module proxy with its checksum database.
+// oxlint-disable-next-line ren/no-comments -- Npm, PyPI and its file host, the Debian and Ubuntu mirrors, and the Go module proxy with its checksum database.
 export const packageManagerHosts = [
   "registry.npmjs.org",
   "pypi.org",
@@ -26,7 +26,7 @@ export const packageManagerHosts = [
 ]
 
 export interface Interface {
-  // oxlint-disable-next-line ren/no-comments -- None for unrestricted networking; for limited, every host the machine of the workload may reach, Ren's own included, sorted so that two lists compare (networking rule 1).
+  // oxlint-disable-next-line ren/no-comments -- None for unrestricted networking; for limited, every host the machine of the workload may reach, Ren's own included, sorted so that two lists compare.
   readonly hostsOf: (
     workload: Workload.Info,
     networking: EnvironmentTemplate.Networking,
@@ -42,7 +42,7 @@ const ofTemplate = (networking: Extract<EnvironmentTemplate.Networking, { readon
   ...(networking.allowPackageManagers ? packageManagerHosts : []),
 ]
 
-// oxlint-disable-next-line ren/no-comments -- Every machine reaches Ren's server: a brain pulls from it (EN40).
+// oxlint-disable-next-line ren/no-comments -- Every machine reaches Ren's server: a brain pulls from it.
 const renServer = Deployment.renUrl.pipe(
   Effect.map((url) => Option.toArray(Option.flatMap(url, hostOf))),
   Effect.orDie,
@@ -72,9 +72,9 @@ export const layer = Layer.effect(
     const sources = yield* CredentialSource.Service
     const profiles = yield* AppProfiles.Service
     const resolve = yield* AppResolve.Service
-    // oxlint-disable-next-line ren/no-comments -- Every machine reaches the host of Ren's bundles: start.js downloads Ren's code there (EN26).
+    // oxlint-disable-next-line ren/no-comments -- Every machine reaches the host of Ren's bundles: start.js downloads Ren's code there.
     const server = [...(yield* renServer), ...Option.toArray((yield* Bundles.Service).host)]
-    // oxlint-disable-next-line ren/no-comments -- EN40: a brain also reaches the inference address it is given, which can differ from Ren's own.
+    // oxlint-disable-next-line ren/no-comments -- A brain also reaches the inference address it is given, which can differ from Ren's own.
     const inference = Option.toArray(
       Option.flatMap(yield* (yield* Models.Service).inference, (found) => hostOf(found.baseUrl)),
     )

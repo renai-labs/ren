@@ -26,7 +26,7 @@ export class Capacity extends Schema.TaggedError<Capacity>()("MachineProvider.Ca
 
 export type Status = "running" | "paused" | "gone"
 
-// oxlint-disable-next-line ren/no-comments -- The labels every machine carries (EN34). A provider finds the machine an earlier create made by its id and generation, so two creates make one machine.
+// oxlint-disable-next-line ren/no-comments -- The labels every machine carries. A provider finds the machine an earlier create made by its id and generation, so two creates make one machine.
 export interface Labels {
   readonly kind: "brain" | "hand"
   readonly id: string
@@ -59,7 +59,7 @@ interface BuildInput<Config> {
   readonly config: Config
 }
 
-// oxlint-disable-next-line ren/no-comments -- EN30: the provider owns each image build. Ren keeps the id of a build in progress and asks for its state; it never waits on one.
+// oxlint-disable-next-line ren/no-comments -- The provider owns each image build. Ren keeps the id of a build in progress and asks for its state; it never waits on one.
 export type BuildState =
   | { readonly _tag: "Building"; readonly id: string }
   | { readonly _tag: "Ready"; readonly image: string }
@@ -82,7 +82,7 @@ export interface Hand {
   readonly workspace: Environment.Directory
 }
 
-// oxlint-disable-next-line ren/no-comments -- A machine that a provider found gone, named by the labels it was made with (EN34).
+// oxlint-disable-next-line ren/no-comments -- A machine that a provider found gone, named by the labels it was made with.
 export type Lost = Workload.Info
 
 export type Listed = Workload.Info & { readonly binding: Schema.Json }
@@ -124,7 +124,7 @@ interface Definition<Config, Binding> {
   // oxlint-disable-next-line ren/no-comments -- The hosts its machines answer on, such as `*.e2b.app`: a brain with a host list reaches its remote hands there.
   readonly machineHosts?: ReadonlyArray<string>
   readonly systemImage?: string
-  // oxlint-disable-next-line ren/no-comments -- The folder where a remote hand of this provider keeps one folder per chat (EN42).
+  // oxlint-disable-next-line ren/no-comments -- The folder where a remote hand of this provider keeps one folder per chat.
   readonly workspace?: string
   readonly config: Schema.Codec<Config, unknown>
   readonly binding: Schema.Codec<Binding, unknown>
@@ -136,15 +136,15 @@ interface Definition<Config, Binding> {
     network: Network,
   ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly destroy: (binding: Binding) => Effect.Effect<void, Failed>
-  // oxlint-disable-next-line ren/no-comments -- Sends a running machine its new host list (networking rule 4). A provider with it can keep a machine to a list of hosts (a template's `limited` networking).
+  // oxlint-disable-next-line ren/no-comments -- Sends a running machine its new host list. A provider with it can keep a machine to a list of hosts (a template's `limited` networking).
   readonly updateNetwork?: (binding: Binding, network: Network) => Effect.Effect<void, Gone | Failed>
   readonly build?: Build<Config>
-  // oxlint-disable-next-line ren/no-comments -- The steps that bring a machine made from one config to another in place, or none when only a new machine can (EN22).
+  // oxlint-disable-next-line ren/no-comments -- The steps that bring a machine made from one config to another in place, or none when only a new machine can.
   readonly stepsBetween?: (from: Config, to: Config) => Option.Option<ReadonlyArray<Step>>
   readonly keepAlive?: (binding: Binding, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly status?: (binding: Binding) => Effect.Effect<Status, Failed>
   readonly lastSample?: (binding: Binding) => Effect.Effect<Option.Option<Sample>, Failed>
-  // oxlint-disable-next-line ren/no-comments -- The brain's own machine as its tools' hand. A provider with it can run a brain and its tools on one machine (EN3).
+  // oxlint-disable-next-line ren/no-comments -- The brain's own machine as its tools' hand. A provider with it can run a brain and its tools on one machine.
   readonly hand?: (binding: Binding) => Hand
   readonly list?: Effect.Effect<ReadonlyArray<Lost & { readonly binding: Binding }>, Failed>
   readonly lost?: Stream.Stream<Lost>

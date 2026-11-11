@@ -94,7 +94,7 @@ export interface Interface {
     brainId: Brain.ID,
     hand: Space.AppliedHand,
   ) => Effect.Effect<void, EffectDrizzleQueryError>
-  // oxlint-disable-next-line ren/no-comments -- The folder where a remote hand of the provider keeps its chats' folders (EN42).
+  // oxlint-disable-next-line ren/no-comments -- The folder where a remote hand of the provider keeps its chats' folders.
   readonly workspaceOf: (provider: EnvironmentProvider.ID) => string
   // oxlint-disable-next-line ren/no-comments -- EN15: `unreachable` when the brain could not reach the session's hand at its last URL; Ren checks that machine first.
   readonly access: (
@@ -105,7 +105,7 @@ export interface Interface {
   // oxlint-disable-next-line ren/no-comments -- A turn, or a file or diff request, of each chat: a chat that holds a place on its machine keeps it for 3 more days. An expired place is taken again only at the chat's next access, when the machine has room.
   readonly renew: (sessionIds: ReadonlyArray<Session.ID>) => Effect.Effect<void>
   readonly keepAwake: (sessionIds: ReadonlyArray<Session.ID>, lastProgressAt: Date) => Effect.Effect<void>
-  // oxlint-disable-next-line ren/no-comments -- Sends the awake remote hands of a space their new host list (networking rule 4).
+  // oxlint-disable-next-line ren/no-comments -- Sends the awake remote hands of a space their new host list.
   readonly refreshNetworks: (spaceId: Space.ID) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- The hosts the machines of a remote hand's template answer on. A brain with a host list must reach them.
   readonly handHosts: (environmentTemplateId: EnvironmentTemplate.ID) => Effect.Effect<ReadonlyArray<string>>
@@ -182,7 +182,7 @@ export const layer = Layer.effect(
     const sandboxEgress = yield* SandboxEgress.Service
     const isBehindEgress = (provider: MachineProvider.Provider) => sandboxEgress.enabled && provider.canEgress
     const sandboxVariables = yield* Deployment.sandboxVariables
-    // oxlint-disable-next-line ren/no-comments -- EN42: a chat's folder on a remote hand is fixed when the chat starts, from the provider's workspace.
+    // oxlint-disable-next-line ren/no-comments -- A chat's folder on a remote hand is fixed when the chat starts, from the provider's workspace.
     const workspaceIn = (provider: Option.Option<MachineProvider.Provider>) =>
       Option.getOrElse(
         Option.flatMap(provider, (found) => found.workspace),
@@ -423,7 +423,7 @@ export const layer = Layer.effect(
 
     const engine = yield* WorkflowEngine.WorkflowEngine
 
-    // oxlint-disable-next-line ren/no-comments -- A remote hand's machine (EN1): the state machine of a brain's, with the executor's answer as its ready check.
+    // oxlint-disable-next-line ren/no-comments -- A remote hand's machine: the state machine of a brain's, with the executor's answer as its ready check.
     const hands = MachineLifecycle.make<Environment.ID, Row, Target, never>({
       kind: "hand",
       egress: sandboxEgress,
@@ -509,7 +509,7 @@ export const layer = Layer.effect(
           Effect.option,
           Effect.map((answered) => Option.isSome(answered) && Option.isSome(answered.value)),
         ),
-      // oxlint-disable-next-line ren/no-comments -- A hand has no brain to update its code in place, so newer bundles replace it (EN27, EN33).
+      // oxlint-disable-next-line ren/no-comments -- A hand has no brain to update its code in place, so newer bundles replace it.
       changeAtWake: Effect.fnUntraced(function* (row) {
         const bundles = yield* currentBundles
         if (Option.isNone(bundles)) return "current" as const
@@ -635,7 +635,7 @@ export const layer = Layer.effect(
           message: `Session ${subject.sessionId} has no environment template this Ren can run`,
         })
       const assigned = yield* assign(subject)
-      // oxlint-disable-next-line ren/no-comments -- EN15: the brain could not reach this hand; a gone or frozen machine is replaced, a running one kept.
+      // oxlint-disable-next-line ren/no-comments -- The brain could not reach this hand; a gone or frozen machine is replaced, a running one kept.
       if (options.unreachable) yield* hands.check(assigned.environmentId)
       const target = yield* ready(assigned.environmentId).pipe(
         Effect.catchTag("Environments.Unavailable", (error) =>
@@ -815,7 +815,7 @@ export const layer = Layer.effect(
           .where(and(inArray(sessions.session_id, [...sessionIds]), gt(sessions.reserved_until, at)))
           .pipe(Effect.orDie)
       }),
-      // oxlint-disable-next-line ren/no-comments -- EN25: a chat's background process runs on its remote hand, so the hand stays awake for it as the brain does, up to 2 h after the chat's last progress. A hand that is asleep stays asleep.
+      // oxlint-disable-next-line ren/no-comments -- A chat's background process runs on its remote hand, so the hand stays awake for it as the brain does, up to 2 h after the chat's last progress. A hand that is asleep stays asleep.
       keepAwake: Effect.fn("Environments.keepAwake")(function* (
         sessionIds: ReadonlyArray<Session.ID>,
         lastProgressAt: Date,
@@ -866,7 +866,12 @@ export const layer = Layer.effect(
           database.db
             .select({ id: environments.id, generation: environments.generation })
             .from(environments)
-            .where(inArray(environments.id, ids.map((id) => Environment.ID.make(id))))
+            .where(
+              inArray(
+                environments.id,
+                ids.map((id) => Environment.ID.make(id)),
+              ),
+            )
             .pipe(
               Effect.orDie,
               Effect.map((rows) => new Map(rows.map((row) => [row.id, row.generation]))),

@@ -49,16 +49,16 @@ export const timing = {
   idle: Duration.minutes(10),
   busy: Duration.minutes(30),
   stuck: Duration.minutes(30),
-  // oxlint-disable-next-line ren/no-comments -- EN25: a background process keeps a machine awake until this long after its last turn's progress.
+  // oxlint-disable-next-line ren/no-comments -- A background process keeps a machine awake until this long after its last turn's progress.
   background: Duration.hours(2),
   poll: Duration.seconds(1),
   probeTimeout: Duration.seconds(3),
   sampleMaxAge: Duration.seconds(60),
   fullShare: 0.95,
   failures: 3,
-  // oxlint-disable-next-line ren/no-comments -- EN19: the waits before a failed machine starts again at its next access: 10 min, 30 min, then every hour.
+  // oxlint-disable-next-line ren/no-comments -- The waits before a failed machine starts again at its next access: 10 min, 30 min, then every hour.
   retries: [Duration.minutes(10), Duration.minutes(30), Duration.hours(1)],
-  // oxlint-disable-next-line ren/no-comments -- EN17: a machine that runs but whose brain gives no answer for this long is replaced. A check later than `silentCount` after the first one starts the count again, because the brain may have answered in between.
+  // oxlint-disable-next-line ren/no-comments -- A machine that runs but whose brain gives no answer for this long is replaced. A check later than `silentCount` after the first one starts the count again, because the brain may have answered in between.
   silent: Duration.minutes(5),
   silentCount: Duration.minutes(10),
 }
@@ -124,7 +124,7 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly replace: (row: R, at: Date) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- Marks the machine of this generation `replacing`, unless it is already creating or replacing, and does the kind's own work in the same transaction. True when it marked it.
   readonly forceReplace: (id: Id, generation: number, at: Date) => Effect.Effect<boolean>
-  // oxlint-disable-next-line ren/no-comments -- Whether work waits for the machine after a forced replace, such as a chat to continue (EN35). Then the replace starts at once.
+  // oxlint-disable-next-line ren/no-comments -- Whether work waits for the machine after a forced replace, such as a chat to continue. Then the replace starts at once.
   readonly isNeeded: (id: Id) => Effect.Effect<boolean>
   // oxlint-disable-next-line ren/no-comments -- Starts the kind's durable run for the row's run epoch, which calls `run`.
   readonly ensure: (row: R) => Effect.Effect<void>
@@ -144,7 +144,7 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   // oxlint-disable-next-line ren/no-comments -- The kind's wake call after a resume. It ends within the time with true, or with whether the machine still answers.
   readonly wake: (target: Target, within: Duration.Duration) => Effect.Effect<boolean, E>
   readonly answers: (target: Target) => Effect.Effect<boolean>
-  // oxlint-disable-next-line ren/no-comments -- Whether the machine's code is current when it wakes: `update` in place, or `replace` when it cannot be updated in place (EN22, EN27).
+  // oxlint-disable-next-line ren/no-comments -- Whether the machine's code is current when it wakes: `update` in place, or `replace` when it cannot be updated in place.
   readonly changeAtWake: (row: R) => Effect.Effect<"current" | "update" | "replace">
   // oxlint-disable-next-line ren/no-comments -- The in-place update of a woken machine: Ren's code when it is out of date, then the steps to its template's new config. None when it worked, or the reason it did not. A kind without it is replaced for any change.
   readonly updateInPlace?: (
@@ -175,7 +175,7 @@ const startKinds: Readonly<Partial<Record<Machine.Phase, string>>> = {
   replacing: "replace",
 }
 
-// oxlint-disable-next-line ren/no-comments -- What a woken machine does next: wake as it is, update in place, or, for a change that its kind cannot make in place, be replaced (EN22, EN27).
+// oxlint-disable-next-line ren/no-comments -- What a woken machine does next: wake as it is, update in place, or, for a change that its kind cannot make in place, be replaced.
 const phaseAfterResume = (
   code: "current" | "update" | "replace",
   options: { readonly hasSteps: boolean; readonly canUpdateInPlace: boolean },
@@ -200,7 +200,7 @@ const isAwake = (row: Pick<Row<string>, "phase" | "keep_alive_until">, at: Date)
 const desiredImage = (desired: DesiredSetup, provider: MachineProvider.Provider) =>
   Option.match(desired.image, { onNone: () => provider.systemImage, onSome: (image) => image.name })
 
-// oxlint-disable-next-line ren/no-comments -- EN22: the steps that bring a machine to the image its owner wants, in place: none needed, the steps between two configs of its template on one system image, or none possible (a replace; templates rules 1, 3).
+// oxlint-disable-next-line ren/no-comments -- The steps that bring a machine to the image its owner wants, in place: none needed, the steps between two configs of its template on one system image, or none possible (a replace).
 const stepsInPlace = <Id extends string>(row: Row<Id>, desired: DesiredSetup, provider: MachineProvider.Provider) => {
   const image = desiredImage(desired, provider)
   if (!image || !row.image || row.image === image) return Option.some<ReadonlyArray<MachineProvider.Step>>([])
@@ -247,11 +247,11 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     yield* update(row.id, { keep_alive_until: later(at, window) })
   })
 
-  // oxlint-disable-next-line ren/no-comments -- EN38: Ren sends an error report when a machine fails, waits for capacity, or is replaced by force.
+  // oxlint-disable-next-line ren/no-comments -- Ren sends an error report when a machine fails, waits for capacity, or is replaced by force.
   const report = (row: Pick<R, "id" | "generation">, error: Failed | Replaced | MachineProvider.Capacity) =>
     ErrorReporter.report(Cause.fail(error)).pipe(annotate(row))
 
-  // oxlint-disable-next-line ren/no-comments -- The keep-alive from what runs on the machine: a turn with progress in the last 30 min keeps it 30 min more; a background process keeps it until 2 h after the last turn's progress (EN25).
+  // oxlint-disable-next-line ren/no-comments -- The keep-alive from what runs on the machine: a turn with progress in the last 30 min keeps it 30 min more; a background process keeps it until 2 h after the last turn's progress.
   const keepAwake = Effect.fnUntraced(function* (
     row: R,
     activity: { readonly isBusy: boolean; readonly hasBackground: boolean },
@@ -371,7 +371,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const resume = Effect.fnUntraced(function* (row: R) {
     if (!row.binding) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
     const provider = yield* definition.providerOf(row)
-    // oxlint-disable-next-line ren/no-comments -- An asleep machine on another image moves to the desired one at its wake: in place when its template's steps can, or by a replace (E120, EN21). Only this step checks, so a running machine is never changed for its image.
+    // oxlint-disable-next-line ren/no-comments -- An asleep machine on another image moves to the desired one at its wake: in place when its template's steps can, or by a replace (E120). Only this step checks, so a running machine is never changed for its image.
     const desired = yield* definition.desiredSetup(row)
     const steps = stepsInPlace(row, desired, provider)
     if (Option.isNone(steps)) {
@@ -418,7 +418,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     return false
   })
 
-  // oxlint-disable-next-line ren/no-comments -- EN27: three failed updates replace the machine; its failures count from zero again on the new one.
+  // oxlint-disable-next-line ren/no-comments -- Three failed updates replace the machine; its failures count from zero again on the new one.
   const updating = Effect.fnUntraced(function* (row: R) {
     const target = Option.getOrUndefined(definition.target(row))
     const provider = yield* definition.providerOf(row)
@@ -475,7 +475,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const forceReplace = Effect.fnUntraced(function* (row: Pick<R, "id" | "generation">, reason: string) {
     if (!(yield* definition.forceReplace(row.id, row.generation, yield* now))) return
     yield* report(row, new Replaced({ message: `${noun} ${row.id}: ${reason}` }))
-    // oxlint-disable-next-line ren/no-comments -- A forced replace starts at once when work waits, so the chats it interrupted continue without anyone asking (EN35).
+    // oxlint-disable-next-line ren/no-comments -- A forced replace starts at once when work waits, so the chats it interrupted continue without anyone asking.
     if (yield* definition.isNeeded(row.id)) yield* ensure(row.id)
   })
 
@@ -526,7 +526,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     )
   })
 
-  // oxlint-disable-next-line ren/no-comments -- Counts how long a running machine's brain has given no answer, from the first check that found it silent (EN17).
+  // oxlint-disable-next-line ren/no-comments -- Counts how long a running machine's brain has given no answer, from the first check that found it silent.
   const isSilent = Effect.fnUntraced(function* (row: R) {
     const at = yield* now
     const since =
@@ -613,7 +613,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
         startKinds[first.phase] ?? (first.binding ? "resume" : "new"),
       )
     }).pipe(
-      // oxlint-disable-next-line ren/no-comments -- EN18: every provider failure counts, so an outage ends in failed and its report, not in endless retries. The run tries again until the machine is failed, then ends.
+      // oxlint-disable-next-line ren/no-comments -- Every provider failure counts, so an outage ends in failed and its report, not in endless retries. The run tries again until the machine is failed, then ends.
       Effect.catchIf(Schema.is(MachineProvider.Failed), (error) =>
         read(id).pipe(
           Effect.flatMap((row) => fail(row, error.message, row.phase)),
@@ -660,7 +660,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     return { _tag: "Starting", phase: shown[row.phase] ?? row.phase } as const
   })
 
-  // oxlint-disable-next-line ren/no-comments -- Networking rule 4: an awake machine gets its owner's new host list at once, and the provider hears nothing while the list is the same. A paused one gets it at its wake.
+  // oxlint-disable-next-line ren/no-comments -- An awake machine gets its owner's new host list at once, and the provider hears nothing while the list is the same. A paused one gets it at its wake.
   const refreshNetwork = Effect.fn(`${name}.refreshNetwork`)(function* (id: Id) {
     const row = yield* read(id)
     const at = yield* now

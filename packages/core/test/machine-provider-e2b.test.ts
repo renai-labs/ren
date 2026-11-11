@@ -23,7 +23,7 @@ const seen: Array<Seen> = []
 // oxlint-disable-next-line ren/no-comments -- The tags of the E2B templates that the fake has built, and the status its next build ends with.
 const built = new Map<string, Array<string>>()
 const builds = { status: "ready" as "ready" | "error" }
-// oxlint-disable-next-line ren/no-comments -- The next create answers 429, as E2B does when the team has no room (chaos row 42).
+// oxlint-disable-next-line ren/no-comments -- The next create answers 429, as E2B does when the team has no room.
 const full = { next: false }
 // oxlint-disable-next-line ren/no-comments -- As E2B answers: a failed status has the reason's message only, and its log's first page; the logs endpoint gives the last lines.
 const buildLog = [
@@ -273,7 +273,7 @@ describe("E2BSandbox with an egress", () => {
 
 describe("E2BSandbox capacity", () => {
   it.live(
-    "a create that E2B answers 429 is Capacity with E2B's Retry-After, so the machine waits instead of failing (chaos row 42)",
+    "a create that E2B answers 429 is Capacity with E2B's Retry-After, so the machine waits instead of failing",
     () =>
       Effect.gen(function* () {
         const provider = yield* BrainProvider.first
@@ -297,7 +297,7 @@ describe("E2BSandbox template builds", () => {
   const buildOf = Effect.map(BrainProvider.first, (provider) => Option.getOrThrow(provider.build))
 
   it.live(
-    "a build starts from the system image with one RUN per package manager and per build command and returns at once; its status gives the image; the same config again is ready at once (templates rule 4, EN30)",
+    "a build starts from the system image with one RUN per package manager and per build command and returns at once; its status gives the image; the same config again is ready at once",
     () =>
       Effect.gen(function* () {
         const build = yield* buildOf
@@ -338,7 +338,7 @@ describe("E2BSandbox template builds", () => {
       }),
   )
 
-  it.live("a failed build's status gives E2B's reason and the last lines of its log (templates rule 3)", () =>
+  it.live("a failed build's status gives E2B's reason and the last lines of its log", () =>
     Effect.gen(function* () {
       const build = yield* buildOf
       builds.status = "error"
@@ -359,33 +359,31 @@ describe("E2BSandbox template builds", () => {
 })
 
 describe("E2BSandbox templates on a machine", () => {
-  it.live(
-    "a machine of a template starts from its image and gets its host list, with the apex of each wildcard (networking rules 3, 4)",
-    () =>
-      Effect.gen(function* () {
-        const provider = yield* BrainProvider.first
-        seen.length = 0
-        const created = yield* provider.create({
-          labels: { kind: "brain", id: Brain.ID.make("brn_04"), generation: 1, ...owner },
-          config: {},
-          image: Option.some("ren-template-x:abc"),
-          variables: {},
-          network: { proxy: Option.some(proxy), hosts: Option.some(["api.example.com", "*.example.org"]) },
-        })
-        const create = JSON.parse(
-          seen.find((request) => request.path === "/sandboxes" && request.method === "POST")?.body ?? "{}",
-        )
-        const limited = { ...network, allowOut: ["api.example.com", "*.example.org", "example.org"] }
-        expect(create).toMatchObject({ templateID: "ren-template-x:abc", network: limited })
-        seen.length = 0
-        yield* provider.connect(created.binding, { proxy: Option.some(proxy), hosts: Option.some(["api.example.com"]) })
-        const update = seen.find((request) => request.path === "/sandboxes/sbx_1/network")
-        expect(JSON.parse(update?.body ?? "{}")).toEqual({ ...network, allowOut: ["api.example.com"] })
-      }),
+  it.live("a machine of a template starts from its image and gets its host list, with the apex of each wildcard", () =>
+    Effect.gen(function* () {
+      const provider = yield* BrainProvider.first
+      seen.length = 0
+      const created = yield* provider.create({
+        labels: { kind: "brain", id: Brain.ID.make("brn_04"), generation: 1, ...owner },
+        config: {},
+        image: Option.some("ren-template-x:abc"),
+        variables: {},
+        network: { proxy: Option.some(proxy), hosts: Option.some(["api.example.com", "*.example.org"]) },
+      })
+      const create = JSON.parse(
+        seen.find((request) => request.path === "/sandboxes" && request.method === "POST")?.body ?? "{}",
+      )
+      const limited = { ...network, allowOut: ["api.example.com", "*.example.org", "example.org"] }
+      expect(create).toMatchObject({ templateID: "ren-template-x:abc", network: limited })
+      seen.length = 0
+      yield* provider.connect(created.binding, { proxy: Option.some(proxy), hosts: Option.some(["api.example.com"]) })
+      const update = seen.find((request) => request.path === "/sandboxes/sbx_1/network")
+      expect(JSON.parse(update?.body ?? "{}")).toEqual({ ...network, allowOut: ["api.example.com"] })
+    }),
   )
 
   it.effect(
-    "a config that only adds packages or build commands gives their steps; a removed package, a changed command or a new size gives none (templates rules 2, 3)",
+    "a config that only adds packages or build commands gives their steps; a removed package, a changed command or a new size gives none",
     () =>
       Effect.gen(function* () {
         const provider = yield* BrainProvider.first

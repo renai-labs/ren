@@ -28,14 +28,14 @@ export const environment_template = pgTable(
     networking: jsonb().$type<EnvironmentTemplate.Networking>().notNull().default({ type: "unrestricted" }),
     build_status: text().$type<EnvironmentTemplate.BuildStatus>().notNull().default("ready"),
     image: text(),
-    // oxlint-disable-next-line ren/no-comments -- The config that built `image`; a machine updates in place from the config of its image (EN22).
+    // oxlint-disable-next-line ren/no-comments -- The config that built `image`; a machine updates in place from the config of its image.
     image_config: jsonb().$type<Schema.Json>(),
-    // oxlint-disable-next-line ren/no-comments -- The provider's system image that `image` was built on, without its dependencies (templates rule 1).
+    // oxlint-disable-next-line ren/no-comments -- The provider's system image that `image` was built on, without its dependencies.
     image_system: text(),
     build_error: text(),
-    // oxlint-disable-next-line ren/no-comments -- Each saved config gets the next number; a build counts only while the template still has the config of its number (EN30).
+    // oxlint-disable-next-line ren/no-comments -- Each saved config gets the next number; a build counts only while the template still has the config of its number.
     config_version: integer().notNull().default(0),
-    // oxlint-disable-next-line ren/no-comments -- The provider's id of the build in progress, and the config_version it builds (EN30). Null when none runs.
+    // oxlint-disable-next-line ren/no-comments -- The provider's id of the build in progress, and the config_version it builds. Null when none runs.
     build_id: text(),
     build_version: integer(),
     build_epoch: integer().notNull().default(0),
@@ -77,7 +77,7 @@ export const environment = pgTable(
       .$type<Space.ID>()
       .references(() => space.id, { onDelete: "cascade" }),
     binding: jsonb().$type<Schema.Json>(),
-    // oxlint-disable-next-line ren/no-comments -- The columns of MachineLifecycle.Row: a remote hand's machine has the same state machine as a brain's (EN1).
+    // oxlint-disable-next-line ren/no-comments -- The columns of MachineLifecycle.Row: a remote hand's machine has the same state machine as a brain's.
     image: text(),
     image_template: jsonb().$type<{
       readonly environmentTemplateId: EnvironmentTemplate.ID
@@ -98,7 +98,7 @@ export const environment = pgTable(
     retries: integer().notNull().default(0),
     unanswered_since: timestamp(),
     network_hosts: jsonb().$type<ReadonlyArray<string>>(),
-    // oxlint-disable-next-line ren/no-comments -- The versions of Ren's bundles the machine started with; a newer one replaces it at its wake (EN27).
+    // oxlint-disable-next-line ren/no-comments -- The versions of Ren's bundles the machine started with; a newer one replaces it at its wake.
     bundles: jsonb().$type<Readonly<Record<"dependencies" | "executor", string>>>(),
     // oxlint-disable-next-line ren/no-comments -- The template version the machine was made for. Only chats bound to this version share it, and a replace makes this version again.
     target: jsonb().$type<Machine.Version>().notNull(),

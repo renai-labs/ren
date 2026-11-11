@@ -20,7 +20,7 @@ const envFile = "/home/user/.ren/brain.env"
 
 export const caFile = "/home/user/.ren/egress-ca.pem"
 
-// oxlint-disable-next-line ren/no-comments -- E2B sends host names to the proxy only when a domain entry allows the connection; `*` with a deny of all IP ranges sends every connection to the proxy by name (README §11a rows 1 and 2). A host list allows only its hosts, and `*.x.com` also allows `x.com` (networking rule 3). An update replaces the whole config, so each one repeats the proxy. None: E2B's default, any host.
+// oxlint-disable-next-line ren/no-comments -- E2B sends host names to the proxy only when a domain entry allows the connection; `*` with a deny of all IP ranges sends every connection to the proxy by name (README §11a rows 1 and 2). A host list allows only its hosts, and `*.x.com` also allows `x.com`. An update replaces the whole config, so each one repeats the proxy. None: E2B's default, any host.
 const networkOf = (network: MachineProvider.Network) => {
   if (Option.isNone(network.proxy) && Option.isNone(network.hosts)) return Option.none()
   const allowOut = Option.match(network.hosts, {
@@ -41,7 +41,7 @@ const networkOf = (network: MachineProvider.Network) => {
 
 const createTimeout = Duration.minutes(10)
 
-// oxlint-disable-next-line ren/no-comments -- EN42: every hand on E2B, co-located or remote, keeps its chats' folders here.
+// oxlint-disable-next-line ren/no-comments -- Every hand on E2B, co-located or remote, keeps its chats' folders here.
 const workspace = "/home/user/workspace"
 
 const Binding = Schema.Struct({
@@ -108,7 +108,7 @@ const Measured = Schema.Struct({
 
 const pageSize = 100
 
-// oxlint-disable-next-line ren/no-comments -- A template's config (templates rule 1). E2B fixes CPU and memory when it builds an image, so they are build settings. A brain without a template decodes {} to the defaults.
+// oxlint-disable-next-line ren/no-comments -- A template's config. E2B fixes CPU and memory when it builds an image, so they are build settings. A brain without a template decodes {} to the defaults.
 const TemplateConfig = Schema.Struct({
   cpuCount: Schema.Literals([1, 2, 4, 6, 8])
     .annotate({ title: "CPUs" })
@@ -140,7 +140,7 @@ const startCommand = "/opt/ren/start.sh"
 
 const quoteAll = (names: ReadonlyArray<string> | undefined) => (names ?? []).map(quote).join(" ")
 
-// oxlint-disable-next-line ren/no-comments -- Templates rule 4: one RUN per package manager, as root, which installs the manager when the system image lacks it; then one RUN per build command, as the sandbox user.
+// oxlint-disable-next-line ren/no-comments -- One RUN per package manager, as root, which installs the manager when the system image lacks it; then one RUN per build command, as the sandbox user.
 const stepsOf = (config: Pick<typeof TemplateConfig.Type, "packages" | "buildCommands">) => {
   const root = (command: string): MachineProvider.Step => ({ command, user: "root" })
   const apt = "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y"
@@ -166,7 +166,7 @@ const stepsOf = (config: Pick<typeof TemplateConfig.Type, "packages" | "buildCom
 
 const managers = ["apt", "npm", "pip", "go"] as const
 
-// oxlint-disable-next-line ren/no-comments -- Templates rules 2 and 3: a config that keeps the size, keeps every package and only appends build commands changes a machine in place, with the steps of what it adds.
+// oxlint-disable-next-line ren/no-comments -- A config that keeps the size, keeps every package and only appends build commands changes a machine in place, with the steps of what it adds.
 const stepsBetween = (from: typeof TemplateConfig.Type, to: typeof TemplateConfig.Type) => {
   const added = (manager: (typeof managers)[number]) =>
     (to.packages[manager] ?? []).filter((name) => !(from.packages[manager] ?? []).includes(name))
@@ -306,7 +306,7 @@ export const provider = Effect.gen(function* () {
       .join("\n")
     yield* upload(binding, accessToken, envFile, `${content}\n`)
   })
-  // oxlint-disable-next-line ren/no-comments -- Networking rule 4: every connect sends the current host list. E2B refuses a network update of a paused sandbox, so it comes after connect.
+  // oxlint-disable-next-line ren/no-comments -- Every connect sends the current host list. E2B refuses a network update of a paused sandbox, so it comes after connect.
   const updateNetwork = Effect.fn("E2BSandbox.updateNetwork")(function* (
     binding: Binding,
     network: MachineProvider.Network,
@@ -337,13 +337,13 @@ export const provider = Effect.gen(function* () {
     stepsBetween,
     updateNetwork,
     create: Effect.fn("E2BSandbox.create")(function* (input) {
-      // oxlint-disable-next-line ren/no-comments -- EN34: the kind label keeps hands apart from brains; Ren reaches a brain at its port and a remote hand at its executor's.
+      // oxlint-disable-next-line ren/no-comments -- The kind label keeps hands apart from brains; Ren reaches a brain at its port and a remote hand at its executor's.
       const metadata = { brain: input.labels.id, generation: String(input.labels.generation), kind: input.labels.kind }
       const port = input.labels.kind === "hand" ? EnvironmentApi.port : config.port
       const existing = (yield* list(metadata, "running,paused")).at(0)
       if (existing) {
         const binding = { sandboxId: existing.sandboxID, domain: config.domain, port }
-        // oxlint-disable-next-line ren/no-comments -- E2B refuses a network update of a paused sandbox (networking rule 6), so a sandbox that paused after an earlier create resumes first.
+        // oxlint-disable-next-line ren/no-comments -- E2B refuses a network update of a paused sandbox, so a sandbox that paused after an earlier create resumes first.
         if (existing.state === "paused")
           yield* body(
             "connect",
@@ -533,7 +533,7 @@ export const provider = Effect.gen(function* () {
         const measured = Schema.decodeUnknownOption(Measured)(run.eventData)
         if (older(run) || Option.isNone(measured) || measured.value.sandbox_metadata.owner !== owner) return []
         const tags = measured.value.sandbox_metadata
-        // oxlint-disable-next-line ren/no-comments -- The `brain` label holds the id of any machine, and `kind` says which (EN34); a sandbox from before `kind` is a brain's.
+        // oxlint-disable-next-line ren/no-comments -- The `brain` label holds the id of any machine, and `kind` says which; a sandbox from before `kind` is a brain's.
         const workload = Schema.decodeUnknownOption(Workload.Info)({
           kind: tags.kind ?? "brain",
           id: tags.brain,

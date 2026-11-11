@@ -9,7 +9,7 @@ import type { MachineProvider } from "./machine-provider.js"
 
 export class Missing extends Schema.TaggedError<Missing>()("ProviderCheck.Missing", { message: Schema.String }) {}
 
-// oxlint-disable-next-line ren/no-comments -- EN24, chaos row 40: Ren does not start when a brain runs on a provider, or a template names one, that this deployment does not register; the error lists the ones it has.
+// oxlint-disable-next-line ren/no-comments -- Ren does not start when a brain runs on a provider, or a template names one, that this deployment does not register; the error lists the ones it has.
 export const run = Effect.gen(function* () {
   const database = yield* Database.Service
   const brainProviders = yield* BrainProvider.Registry

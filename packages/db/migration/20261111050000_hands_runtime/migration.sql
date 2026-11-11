@@ -39,7 +39,7 @@ ALTER TABLE "space" ADD COLUMN "environment_template_id" text;--> statement-brea
 CREATE INDEX "space_environment_template_id_idx" ON "space" ("environment_template_id");--> statement-breakpoint
 ALTER TABLE "environment_template" ADD CONSTRAINT "environment_template_build_status_check" CHECK ("build_status" in ('queued', 'building', 'ready', 'failed'));--> statement-breakpoint
 ALTER TABLE "space" ADD CONSTRAINT "space_hand_check" CHECK (case "hand_placement" when 'colocated' then true when 'remote' then "environment_template_id" is not null when 'none' then "environment_template_id" is null else false end);--> statement-breakpoint
--- Networking rule 4: a change to a template's networking reaches the awake machines of its organization at once. Written by hand: regenerating this migration drops it, so add it again.
+-- A change to a template's networking reaches the awake machines of its organization at once. Written by hand: regenerating this migration drops it, so add it again.
 CREATE OR REPLACE FUNCTION ren_notify_brains() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
   r record;

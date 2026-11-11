@@ -14,7 +14,7 @@ const it = testEffect(Layer.empty)
 
 const stub = Shared.stub()
 
-// oxlint-disable-next-line ren/no-comments -- The restore fixture of chaos row 9: the shape of a large chat group, with made-up content.
+// oxlint-disable-next-line ren/no-comments -- The restore fixture: the shape of a large chat group, with made-up content.
 const fixture = { chats: 52, messages: 1_783, bytes: 24 * 1024 * 1024, largestBytes: Math.round(2.8 * 1024 * 1024) }
 
 const restoreWithin = 60_000
@@ -22,7 +22,7 @@ const restoreWithin = 60_000
 const Count = Schema.Array(Schema.Struct({ count: Schema.Int }))
 
 it.live(
-  `a restore of ${fixture.chats} chats, ${fixture.messages} messages and 24 MB imports within 60 s; the import time and the longest stall are reported (chaos row 9)`,
+  `a restore of ${fixture.chats} chats, ${fixture.messages} messages and 24 MB imports within 60 s; the import time and the longest stall are reported`,
   () =>
     Effect.gen(function* () {
       const source = yield* OpenCodeImport.open()

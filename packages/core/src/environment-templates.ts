@@ -125,7 +125,7 @@ export const layer = Layer.effect(
 
     const buildOf = (provider: EnvironmentProvider.ID) => Option.flatMap(registry.get(provider), (found) => found.build)
 
-    // oxlint-disable-next-line ren/no-comments -- A build's end counts only while the template still has the config it built (EN30); otherwise Ren forgets the build, and the newest config builds next.
+    // oxlint-disable-next-line ren/no-comments -- A build's end counts only while the template still has the config it built; otherwise Ren forgets the build, and the newest config builds next.
     const finish = Effect.fnUntraced(function* (
       row: typeof table.$inferSelect,
       version: number,
@@ -174,7 +174,7 @@ export const layer = Layer.effect(
         return
       }
       yield* finish(row, version, { build_status: "failed", build_error: state.reason })
-      // oxlint-disable-next-line ren/no-comments -- EN38: a failed build reaches PostHog with its reason.
+      // oxlint-disable-next-line ren/no-comments -- A failed build reaches PostHog with its reason.
       yield* ErrorReporter.report(Cause.fail(new MachineProvider.Failed({ message: state.reason }))).pipe(
         Effect.annotateLogs({ "ren.environment_template.id": row.id, "ren.organization.id": row.organization_id }),
       )
@@ -195,7 +195,7 @@ export const layer = Layer.effect(
       yield* record(row, row.config_version, started)
     })
 
-    // oxlint-disable-next-line ren/no-comments -- Templates rule 1: at start, a template whose image was built on another system image than its provider's now builds again, as after a save; its machines move to it by a replace at their wake.
+    // oxlint-disable-next-line ren/no-comments -- At start, a template whose image was built on another system image than its provider's now builds again, as after a save; its machines move to it by a replace at their wake.
     yield* Effect.forEach(
       registry.providers.filter((provider) => Option.isSome(provider.build)),
       (provider) => {
@@ -381,7 +381,7 @@ export const layer = Layer.effect(
               ? undefined
               : yield* checkConfig(found.provider, input.config)
             yield* checkNetworking(found.provider, input.networking)
-            // oxlint-disable-next-line ren/no-comments -- Templates rule 2: a changed config queues a build.
+            // oxlint-disable-next-line ren/no-comments -- A changed config queues a build.
             const isRebuilt =
               Option.isSome(buildOf(found.provider)) &&
               Predicate.isNotUndefined(config) &&
@@ -449,7 +449,7 @@ export const layer = Layer.effect(
             if (found.archived_at) return { info: toInfo(found), isNew: false }
             if (!isAllowed(actor, actions.archive))
               return yield* new Primitive.Forbidden({ message: "You cannot archive this environment template." })
-            // oxlint-disable-next-line ren/no-comments -- EN24: a space never holds a brain or hand machine that cannot run. A space update reads the template with a share lock, so the two wait for each other.
+            // oxlint-disable-next-line ren/no-comments -- A space never holds a brain or hand machine that cannot run. A space update reads the template with a share lock, so the two wait for each other.
             const spacesUsing = yield* spacesOf(transaction, id)
             if (spacesUsing.length > 0)
               return yield* new Primitive.Conflict({

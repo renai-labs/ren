@@ -660,7 +660,7 @@ describe("OpenCodeSync", () => {
   )
 
   it.live(
-    "a row larger than O2 syncs as a short stand-in, and the rest of its chat syncs (EN37, chaos row 10)",
+    "a row larger than O2 syncs as a short stand-in, and the rest of its chat syncs",
     () =>
       Effect.gen(function* () {
         const host = yield* setup()

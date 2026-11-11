@@ -226,7 +226,7 @@ describe("EnvironmentTemplates", () => {
   )
 
   it.live(
-    "a space's brain runs a built template of its brain provider with any hand; an unknown provider or another provider's template is refused (EN3, chaos row 28)",
+    "a space's brain runs a built template of its brain provider with any hand; an unknown provider or another provider's template is refused",
     () =>
       Effect.gen(function* () {
         const templates = yield* EnvironmentTemplates.Service
@@ -252,7 +252,7 @@ describe("EnvironmentTemplates", () => {
       }),
   )
 
-  it.live("archiving a template that a space uses is refused, with the spaces (EN24, chaos row 22)", () =>
+  it.live("archiving a template that a space uses is refused, with the spaces", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
       const spaces = yield* Space.Service
@@ -436,7 +436,7 @@ describe("EnvironmentTemplates", () => {
       }),
     )
 
-  it.live("a save during a build waits for it, and the newest config builds next (EN30, chaos row 18)", () =>
+  it.live("a save during a build waits for it, and the newest config builds next", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
       const setup = yield* team()
@@ -453,7 +453,7 @@ describe("EnvironmentTemplates", () => {
     }),
   )
 
-  it.live("save A, then B, then A during A's build: the image is A (EN30, chaos row 19)", () =>
+  it.live("save A, then B, then A during A's build: the image is A", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
       const setup = yield* team()
@@ -537,7 +537,7 @@ describe("EnvironmentTemplates", () => {
     }),
   )
 
-  it.live("limited networking needs a provider that can limit hosts (networking rule 2)", () =>
+  it.live("limited networking needs a provider that can limit hosts", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
       const setup = yield* team()
@@ -593,7 +593,7 @@ describe("EnvironmentTemplates", () => {
     }),
   )
 
-  it.live("a Ren restart during a build asks about that build, and starts no second one (EN30)", () =>
+  it.live("a Ren restart during a build asks about that build, and starts no second one", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const setup = yield* team()
@@ -623,7 +623,7 @@ describe("EnvironmentTemplates", () => {
   )
 
   it.live(
-    "at start, a template built on another system image builds again on the provider's, and keeps its old image until then (templates rule 1)",
+    "at start, a template built on another system image builds again on the provider's, and keeps its old image until then",
     () =>
       Effect.gen(function* () {
         const database = yield* Database.Service
@@ -658,7 +658,7 @@ describe("EnvironmentTemplates", () => {
       }),
   )
 
-  it.live("at start, Ren builds again a template left queued without a build (templates rule 3)", () =>
+  it.live("at start, Ren builds again a template left queued without a build", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const setup = yield* team()

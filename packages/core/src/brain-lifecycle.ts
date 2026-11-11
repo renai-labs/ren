@@ -85,7 +85,7 @@ const BrainRun = DurableRunner.make("BrainRun", {
 
 const brains = Database.Schema.brain
 
-// oxlint-disable-next-line ren/no-comments -- Package installs at a wake can take minutes; a build that runs longer fails (templates rule 3).
+// oxlint-disable-next-line ren/no-comments -- Package installs at a wake can take minutes; a build that runs longer fails.
 const stepsWithin = Duration.minutes(10)
 
 export const layer = Layer.effect(
@@ -163,7 +163,7 @@ export const layer = Layer.effect(
 
     const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
-    // oxlint-disable-next-line ren/no-comments -- EN35, EN36: unless the loss repeats, each top chat of the brain that was busy or had waiting messages is marked to get one message that continues it on the new machine; then its busy chats end with the outcome.
+    // oxlint-disable-next-line ren/no-comments -- Unless the loss repeats, each top chat of the brain that was busy or had waiting messages is marked to get one message that continues it on the new machine; then its busy chats end with the outcome.
     const interruptBusy = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       brainId: Brain.ID,
@@ -243,7 +243,7 @@ export const layer = Layer.effect(
       return Bundle.kinds.every((kind) => row.bundles?.[kind] === versions[kind])
     }
 
-    // oxlint-disable-next-line ren/no-comments -- A new brain gets its space's brain provider, else the deployment's first (EN2); an existing one keeps its own. Ren does not start when a brain runs on one it does not register (EN24).
+    // oxlint-disable-next-line ren/no-comments -- A new brain gets its space's brain provider, else the deployment's first; an existing one keeps its own. Ren does not start when a brain runs on one it does not register.
     const providerOf = Effect.fnUntraced(function* (row: Row) {
       const chosen =
         row.provider ??
@@ -269,7 +269,7 @@ export const layer = Layer.effect(
       return Option.some([...new Set([...limited.value, ...handHosts])].toSorted())
     })
 
-    // oxlint-disable-next-line ren/no-comments -- A space's brain template, whatever its hand: the brain's machine runs the template's last image that built, and keeps to its host list (EN3, networking rules 1, 2). Read only at a start or wake.
+    // oxlint-disable-next-line ren/no-comments -- A space's brain template, whatever its hand: the brain's machine runs the template's last image that built, and keeps to its host list. Read only at a start or wake.
     const desiredSetup = Effect.fnUntraced(function* (row: Row) {
       const templates = Database.Schema.environment_template
       const found = (yield* database.db
@@ -384,7 +384,7 @@ export const layer = Layer.effect(
         compute.applySettings(row.id, { machine: "running" }).pipe(Effect.map((plan) => plan._tag === "Apply")),
       startup: Effect.fnUntraced(function* (row) {
         const bundles = yield* code.current
-        // oxlint-disable-next-line ren/no-comments -- A new machine applies the space's hand before it starts, so its first pull already has it. A brain for a remote hand runs OpenCode's tool output, files and git on the hand for the life of its process (EN13).
+        // oxlint-disable-next-line ren/no-comments -- A new machine applies the space's hand before it starts, so its first pull already has it. A brain for a remote hand runs OpenCode's tool output, files and git on the hand for the life of its process.
         const plan = yield* compute.applySettings(row.id, { machine: "new" })
         const isRemote = plan._tag === "Apply" && plan.hand.placement === "remote"
         const variables = {
@@ -468,7 +468,7 @@ export const layer = Layer.effect(
         if (!row.bundles) return "replace" as const
         return isCurrent(row, bundles.value) ? ("current" as const) : ("update" as const)
       }),
-      // oxlint-disable-next-line ren/no-comments -- One call: the brain runs its template's new steps (EN22), unpacks the bundles and restarts what changed. New code counts when the brain answers with its version within the boot time (EN27).
+      // oxlint-disable-next-line ren/no-comments -- One call: the brain runs its template's new steps, unpacks the bundles and restarts what changed. New code counts when the brain answers with its version within the boot time.
       updateInPlace: Effect.fnUntraced(function* (row, target, steps) {
         const bundles = Option.getOrElse(yield* code.current, () => [])
         const api = yield* client.brain(target)
@@ -494,7 +494,7 @@ export const layer = Layer.effect(
         yield* update(row.id, { bundles: Bundle.versionsOf(bundles) })
         return Option.none()
       }),
-      // oxlint-disable-next-line ren/no-comments -- EN17: a brain answers only while it also reaches Ren. One that answers Ren but has not pulled within pullWithin counts as silent, so it is replaced after `silent` like one that does not answer. An older brain leaves pulledAt out.
+      // oxlint-disable-next-line ren/no-comments -- A brain answers only while it also reaches Ren. One that answers Ren but has not pulled within pullWithin counts as silent, so it is replaced after `silent` like one that does not answer. An older brain leaves pulledAt out.
       answers: (target) =>
         client.brain(target).pipe(
           Effect.flatMap((api) => api.brain["brain.state"]()),
@@ -526,7 +526,7 @@ export const layer = Layer.effect(
       Effect.forkScoped,
     )
 
-    // oxlint-disable-next-line ren/no-comments -- An awake brain pulls every 30 s, also when no person or call uses it. A ready brain whose keep-alive runs and that has not pulled within pullWithin is checked, so a frozen sandbox or a silent brain is found without an access (EN16, EN17). Right after Ren starts, no pull has reached it yet, so it waits one pullWithin first.
+    // oxlint-disable-next-line ren/no-comments -- An awake brain pulls every 30 s, also when no person or call uses it. A ready brain whose keep-alive runs and that has not pulled within pullWithin is checked, so a frozen sandbox or a silent brain is found without an access. Right after Ren starts, no pull has reached it yet, so it waits one pullWithin first.
     yield* Effect.gen(function* () {
       const at = yield* now
       const silent = yield* database.db
@@ -547,7 +547,7 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.orDie)
       yield* Effect.forEach(silent, (row) => machines.check(row.id), { concurrency: 8, discard: true })
-      // oxlint-disable-next-line ren/no-comments -- EN19, EN35: a failed brain whose retry time passed starts again with no access when a chat waits to continue on it; access does the restart.
+      // oxlint-disable-next-line ren/no-comments -- A failed brain whose retry time passed starts again with no access when a chat waits to continue on it; access does the restart.
       const due = yield* database.db
         .select({ id: brains.id })
         .from(brains)
@@ -570,7 +570,7 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.orDie)
       yield* Effect.forEach(due, (row) => machines.access(row.id), { concurrency: 8, discard: true })
-      // oxlint-disable-next-line ren/no-comments -- EN35, EN36: an awake brain whose chats still wait for their note after a replace, because the first try failed or Ren restarted, is told again. The brain takes each message id once.
+      // oxlint-disable-next-line ren/no-comments -- An awake brain whose chats still wait for their note after a replace, because the first try failed or Ren restarted, is told again. The brain takes each message id once.
       const marked = yield* database.db
         .select({ brainId: brains.id, sessionId: Database.Schema.agent_session.id })
         .from(Database.Schema.agent_session)
@@ -654,7 +654,12 @@ export const layer = Layer.effect(
         database.db
           .select({ id: brains.id, generation: brains.generation })
           .from(brains)
-          .where(inArray(brains.id, ids.map((id) => Brain.ID.make(id))))
+          .where(
+            inArray(
+              brains.id,
+              ids.map((id) => Brain.ID.make(id)),
+            ),
+          )
           .pipe(
             Effect.orDie,
             Effect.map((rows) => new Map(rows.map((row) => [row.id, row.generation]))),

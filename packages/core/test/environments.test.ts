@@ -265,7 +265,7 @@ describe("Environments", () => {
     }),
   )
 
-  it.live("a chat's background process keeps its remote hand awake, as it keeps the brain (EN25)", () =>
+  it.live("a chat's background process keeps its remote hand awake, as it keeps the brain", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const subject = yield* environmentsWith()
@@ -288,7 +288,7 @@ describe("Environments", () => {
     }),
   )
 
-  it.live("a remote hand on older Ren code is replaced at its wake, so it never lags its brains (EN27, EN33)", () =>
+  it.live("a remote hand on older Ren code is replaced at its wake, so it never lags its brains", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const bucket = yield* TestBundles.bucket
@@ -646,7 +646,7 @@ describe("Environments", () => {
   )
 
   it.live(
-    "a hand that the brain cannot reach and whose machine is gone is replaced once; the sessions on it get the next generation (EN15)",
+    "a hand that the brain cannot reach and whose machine is gone is replaced once; the sessions on it get the next generation",
     () =>
       Effect.gen(function* () {
         const subject = yield* environmentsWith()
@@ -674,7 +674,7 @@ describe("Environments", () => {
   )
 
   it.live(
-    "a provider that fails 3 times gives Unavailable to a caller that asks again while it is Starting, and the timed retry starts it again (EN19, chaos row 33)",
+    "a provider that fails 3 times gives Unavailable to a caller that asks again while it is Starting, and the timed retry starts it again",
     () =>
       Effect.gen(function* () {
         const database = yield* Database.Service

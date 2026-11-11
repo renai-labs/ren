@@ -103,7 +103,7 @@ test("sending the same message id again sends nothing new", () =>
     }),
   ))
 
-test("a message whose id comes from a client clock 1 s ahead gets exactly one reply (chaos row 54)", () =>
+test("a message whose id comes from a client clock 1 s ahead gets exactly one reply", () =>
   live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()

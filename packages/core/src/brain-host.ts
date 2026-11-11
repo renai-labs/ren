@@ -23,7 +23,7 @@ export interface Interface {
   readonly ensure: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: PullRequest["sessions"]) => Effect.Effect<void>
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Environments.Hand>>
-  // oxlint-disable-next-line ren/no-comments -- Sends an awake brain's machine its new host list (networking rule 4). A cell has none.
+  // oxlint-disable-next-line ren/no-comments -- Sends an awake brain's machine its new host list. A cell has none.
   readonly refreshNetwork: (brainId: Brain.ID) => Effect.Effect<void>
   readonly unavailable: (brainId: Brain.ID) => Effect.Effect<void>
   readonly retry: (brainId: Brain.ID) => Effect.Effect<void>

@@ -51,7 +51,7 @@ const docsOf = (github: TestGitHub.Instance): Reference.Info => ({
 })
 
 it.live(
-  "a chat whose space has no hand now loses its file and shell tools at the next pull, and is told so; they come back with the hand (EN23, chaos row 26)",
+  "a chat whose space has no hand now loses its file and shell tools at the next pull, and is told so; they come back with the hand",
   () =>
     Effect.gen(function* () {
       const chat = yield* open(yield* fresh(), [])
@@ -78,7 +78,7 @@ it.live(
 )
 
 it.live(
-  "a chat that started with no tools gets a workspace at the pull that gives it a folder, and keeps its history (EN23)",
+  "a chat that started with no tools gets a workspace at the pull that gives it a folder, and keeps its history",
   () =>
     Effect.gen(function* () {
       const chat = yield* open(yield* fresh(), [], undefined, { hasWorkspace: false })
