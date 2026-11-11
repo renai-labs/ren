@@ -30,6 +30,7 @@
     "@ren/schema": "workspace:*",
     "@ren/server": "workspace:*",
     "@ren/util": "workspace:*",
+    "@slack/bolt": "catalog:",
     "@effect/platform-bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",

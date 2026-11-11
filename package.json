@@ -73,6 +73,7 @@
       "@opencode/server": "2.2.6",
       "@opencode/util": "2.2.6",
       "@playwright/test": "1.63.0",
+      "@slack/bolt": "5.1.0",
       "@rolldown/plugin-babel": "0.2.4",
       "@shadcn/react": "0.3.1",
       "@tabler/icons-react": "3.49.0",
