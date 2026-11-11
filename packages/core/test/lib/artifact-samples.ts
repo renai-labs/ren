@@ -1,7 +1,7 @@
 export * as ArtifactSamples from "./artifact-samples.js"
 
 import { expect } from "bun:test"
-import { Effect, Schema } from "effect"
+import { Effect, Schedule, Schema } from "effect"
 import { Database } from "@ren/db/database"
 import { Artifact } from "@ren/schema/artifact"
 import { SqlClient } from "effect/sql"
@@ -115,4 +115,96 @@ export const edit = (origin: string) =>
     expect(yield* Effect.promise(() => fetch(`${origin}/api/messages`).then((response) => response.text()))).toContain(
       "Durable hello",
     )
+  })
+
+export const schemaUpgrade = <R, R2>(input: {
+  readonly publish: (files: Artifact.Files) => Effect.Effect<Artifact.Deployment, unknown, R>
+  readonly restart: (files: Artifact.Files) => Effect.Effect<string, unknown, R2>
+  readonly files: Artifact.Files
+  readonly origin: string
+}) =>
+  Effect.gen(function* () {
+    let origin = input.origin
+    expect(
+      (yield* Effect.promise(() =>
+        fetch(`${origin}/api/entries/welcome`, { method: "PUT", body: JSON.stringify({ text: "Persistent" }) }),
+      )).status,
+    ).toBe(200)
+    const schema = () =>
+      Effect.promise(async () => {
+        const response = await fetch(`${origin}/api/schema`, { cache: "no-store" })
+        return { status: response.status, body: await response.text() }
+      }).pipe(
+        Effect.repeat({ schedule: Schedule.spaced("250 millis"), until: (response) => response.status !== 404 }),
+        Effect.timeout("10 seconds"),
+      )
+    const version = (id: number) =>
+      schema().pipe(
+        Effect.repeat({
+          schedule: Schedule.spaced("250 millis"),
+          until: (response) => response.body.includes(`"version":${id}`),
+        }),
+        Effect.timeout("20 seconds"),
+        Effect.map((response) => response.body),
+      )
+    const rejected = () =>
+      schema().pipe(
+        Effect.repeat({ schedule: Schedule.spaced("250 millis"), until: (response) => response.status === 500 }),
+        Effect.timeout("20 seconds"),
+      )
+    const source = new TextDecoder().decode(input.files["_worker.js"])
+    expect(yield* version(1)).toContain('"version":1')
+    const sql =
+      'ALTER TABLE entries ADD COLUMN label TEXT NOT NULL DEFAULT "initial"; UPDATE entries SET label = "migrated";'
+    const updated = {
+      ...input.files,
+      "_worker.js": new TextEncoder().encode(
+        source.replace("\n]\n", `\n  { id: 2, sql: ${JSON.stringify(sql)} },\n]\n`),
+      ),
+    }
+    expect((yield* input.publish(updated)).status).toBe("ready")
+    const after = yield* version(2)
+    expect(after).toContain('"version":2')
+    expect(after).toContain('"label":"migrated"')
+    origin = yield* input.restart(updated)
+    expect(yield* version(2)).toBe(after)
+    const brokenSql = "ALTER TABLE entries ADD COLUMN rejected TEXT; INSERT INTO nonexistent_table VALUES (1);"
+    const broken = {
+      ...updated,
+      "_worker.js": new TextEncoder().encode(
+        new TextDecoder()
+          .decode(updated["_worker.js"])
+          .replace("\n]\n", `\n  { id: 3, sql: ${JSON.stringify(brokenSql)} },\n]\n`),
+      ),
+    }
+    expect((yield* input.publish(broken)).status).toBe("ready")
+    expect((yield* rejected()).status).toBe(500)
+    const correctedSql = 'ALTER TABLE entries ADD COLUMN rejected TEXT NOT NULL DEFAULT "corrected";'
+    const corrected = {
+      ...updated,
+      "_worker.js": new TextEncoder().encode(
+        new TextDecoder()
+          .decode(updated["_worker.js"])
+          .replace("\n]\n", `\n  { id: 3, sql: ${JSON.stringify(correctedSql)} },\n]\n`),
+      ),
+    }
+    expect((yield* input.publish(corrected)).status).toBe("ready")
+    const repaired = yield* version(3)
+    expect(repaired).toContain('"version":3')
+    expect(repaired).toContain('"rejected":"corrected"')
+    expect(repaired).toContain("Persistent")
+    const changed = {
+      ...corrected,
+      "_worker.js": new TextEncoder().encode(
+        new TextDecoder()
+          .decode(corrected["_worker.js"])
+          .replace("CREATE TABLE IF NOT EXISTS entries", "CREATE TABLE IF NOT EXISTS entries "),
+      ),
+    }
+    expect((yield* input.publish(changed)).status).toBe("ready")
+    expect((yield* rejected()).status).toBe(500)
+    expect((yield* input.publish(updated)).status).toBe("ready")
+    expect((yield* rejected()).status).toBe(500)
+    expect((yield* input.publish(corrected)).status).toBe("ready")
+    expect(yield* version(3)).toBe(repaired)
   })

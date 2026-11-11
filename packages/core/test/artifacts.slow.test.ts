@@ -56,6 +56,38 @@ const stop = (artifacts: Artifacts.Interface, owner: Artifacts.Owner, id: Artifa
 
 describe("Artifacts with durable workflows and workerd", () => {
   it.live(
+    "applies per-object SQL migrations atomically and rejects incompatible old code",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const owner = yield* Seed.owner()
+        const id = artifactId()
+        const files = yield* Effect.promise(() => ArtifactSamples.files("state-candidate"))
+        const config = { entry: "index.html", durableObjects: { STATE: "SampleState" } }
+        const publish = (files: Artifact.Files) =>
+          Effect.gen(function* () {
+            const attempt = deployment()
+            yield* artifacts.deploy(owner, id, { title: "SQL migrations", deploymentId: attempt, config, files })
+            return yield* settle(artifacts, owner, id, attempt)
+          })
+        yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
+        const ready = yield* publish(files)
+        expect(ready.status).toBe("ready")
+        const origin = new URL(ready.url ?? "").origin
+        yield* ArtifactSamples.schemaUpgrade({
+          publish,
+          files,
+          origin,
+          restart: (files) =>
+            stop(artifacts, owner, id).pipe(
+              Effect.andThen(publish(files)),
+              Effect.map((result) => new URL(result.url ?? "").origin),
+            ),
+        })
+      }),
+    180_000,
+  )
+  it.live(
     "publishes the report and server-code dashboard through Ren",
     () =>
       Effect.gen(function* () {
