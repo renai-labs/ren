@@ -191,6 +191,18 @@ export const layer = Layer.effect(
       return yield* OpenCodeStore.endBusyTurns(transaction, brainId, at, outcome)
     })
 
+    const tellInterrupted = (interrupted: Interrupted) =>
+      Effect.flatMap(Ref.get(interruptedListeners), (listeners) =>
+        Effect.forEach(
+          listeners,
+          (listener) =>
+            listener(interrupted).pipe(
+              Effect.catchCause((cause) => Effect.logError("A lost sandbox's chats could not be handled", cause)),
+            ),
+          { discard: true },
+        ),
+      ).pipe(Effect.withErrorReporting, Effect.forkIn(scope), Effect.asVoid)
+
     const forceReplace = Effect.fn("BrainLifecycle.forceReplace")(function* (
       brainId: Brain.ID,
       generation: number,
@@ -227,14 +239,7 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.orDie)
       if (Option.isNone(interrupted)) return false
-      yield* Effect.forEach(
-        yield* Ref.get(interruptedListeners),
-        (listener) =>
-          listener(interrupted.value).pipe(
-            Effect.catchCause((cause) => Effect.logError("A lost sandbox's chats could not be handled", cause)),
-          ),
-        { discard: true },
-      ).pipe(Effect.withErrorReporting, Effect.forkIn(scope))
+      yield* tellInterrupted(interrupted.value)
       return true
     })
 
@@ -592,6 +597,25 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.orDie)
       yield* Effect.forEach(due, (row) => machines.access(row.id), { concurrency: 8, discard: true })
+      // oxlint-disable-next-line ren/no-comments -- EN35, EN36: an awake brain whose chats still wait for their note after a replace, because the first try failed or Ren restarted, is told again. The brain takes each message id once.
+      const marked = yield* database.db
+        .select({ brainId: brains.id, sessionId: Database.Schema.agent_session.id })
+        .from(Database.Schema.agent_session)
+        .innerJoin(brains, eq(brains.id, Database.Schema.agent_session.brain_id))
+        .where(
+          and(
+            isNotNull(Database.Schema.agent_session.continue_message_id),
+            eq(brains.phase, "ready"),
+            gt(brains.keep_alive_until, at),
+          ),
+        )
+        .pipe(Effect.orDie)
+      yield* Effect.forEach(
+        Map.groupBy(marked, (row) => row.brainId),
+        ([brainId, rows]) =>
+          tellInterrupted({ brainId, sessionIds: rows.map((row) => row.sessionId), repeated: false }),
+        { discard: true },
+      )
     }).pipe(
       Effect.repeat(Schedule.spaced(Duration.divideUnsafe(pullWithin, 3))),
       Effect.delay(pullWithin),

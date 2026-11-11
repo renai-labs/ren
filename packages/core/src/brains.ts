@@ -29,7 +29,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm"
 import { Cause, Clock, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schedule, Schema, Struct } from "effect"
 import { HttpClientError } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
@@ -601,22 +601,6 @@ export const layer = Layer.effect(
         yield* environments.renew(
           request.sessions.flatMap((session) => (session.busy || session.touched ? [session.id] : [])),
         )
-        // oxlint-disable-next-line ren/no-comments -- A pull is the first sign that a new machine is up: the chats that a forced replace marked continue now (EN35, EN36).
-        yield* continueMarked(host.brainId)
-        // oxlint-disable-next-line ren/no-comments -- Networking rule 4: a push makes the brain pull at once after a change, so a new connection or allowed host reaches its machines within seconds. One query first: a space with no limited template now, and no machine that still has a host list, has nothing to send.
-        const hasHostLists = (yield* database.db
-          .select({
-            has: sql<boolean>`exists (select 1 from ${Database.Schema.environment_template} t where t.id in (${Database.Schema.space.brain_template_id}, ${Database.Schema.space.environment_template_id}) and t.networking->>'type' = 'limited')
-              or exists (select 1 from ${Database.Schema.brain} b where b.id = ${host.brainId} and b.network_hosts is not null)
-              or exists (select 1 from ${Database.Schema.environment} e where e.space_id = ${host.spaceId} and e.network_hosts is not null)`,
-          })
-          .from(Database.Schema.space)
-          .where(eq(Database.Schema.space.id, host.spaceId))
-          .pipe(Effect.orDie)).at(0)?.has
-        if (hasHostLists) {
-          yield* brainHost.refreshNetwork(host.brainId)
-          yield* environments.refreshNetworks(host.spaceId)
-        }
         const roots = request.roots ?? []
         const kept =
           roots.length === 0

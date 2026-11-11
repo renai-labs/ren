@@ -7,21 +7,23 @@ import { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { Duration, Effect, Layer, Queue, Schedule } from "effect"
 import { BrainHost } from "./brain-host.js"
+import { Environments } from "./environments.js"
 
 export const channel = "ren_brains"
 
 // oxlint-disable-next-line ren/no-comments -- HR12: a push storm reaches at most this many brains at a time.
 const parallel = 16
 
-// oxlint-disable-next-line ren/no-comments -- HR10, HR11, HR25: each server instance listens on ren_brains and tells every brain of a notified scope to pull. Notifications that arrive together are handled once per scope. A lost connection listens again; a notification during the gap is lost, and the brain's timed pull brings the change (HR8).
+// oxlint-disable-next-line ren/no-comments -- HR10, HR11, HR25: each server instance listens on ren_brains and tells every brain of a notified scope to pull, and sends the awake machines of its spaces their host lists (networking rule 4). Notifications that arrive together are handled once per scope. A lost connection listens again; a notification during the gap is lost, and the brain's timed pull brings the change (HR8).
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const pg = yield* PgClient.PgClient
     const database = yield* Database.Service
     const host = yield* BrainHost.Service
+    const environments = yield* Environments.Service
     const brains = Database.Schema.brain
     const idsOf = (scope: string) => {
-      const query = database.db.select({ id: brains.id }).from(brains)
+      const query = database.db.select({ id: brains.id, spaceId: brains.space_id }).from(brains)
       if (scope === "all") return query
       const separator = scope.indexOf(":")
       const kind = scope.slice(0, separator)
@@ -31,10 +33,16 @@ export const layer = Layer.effectDiscard(
       return Effect.succeed([])
     }
     const push = Effect.fnUntraced(function* (scopes: ReadonlySet<string>) {
-      const ids = new Set(
-        (yield* Effect.forEach(scopes, (scope) => idsOf(scope).pipe(Effect.orDie))).flat().map((row) => row.id),
+      const rows = (yield* Effect.forEach(scopes, (scope) => idsOf(scope).pipe(Effect.orDie))).flat()
+      yield* Effect.forEach(
+        new Set(rows.map((row) => row.id)),
+        (brainId) => Effect.andThen(host.notify(brainId), host.refreshNetwork(brainId)),
+        { concurrency: parallel, discard: true },
       )
-      yield* Effect.forEach(ids, host.notify, { concurrency: parallel, discard: true })
+      yield* Effect.forEach(new Set(rows.map((row) => row.spaceId)), environments.refreshNetworks, {
+        concurrency: parallel,
+        discard: true,
+      })
     })
     yield* Effect.scoped(
       Effect.gen(function* () {
