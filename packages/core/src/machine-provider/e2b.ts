@@ -287,7 +287,7 @@ export const provider = Effect.gen(function* () {
       .pipe(Effect.mapError(failed("configure")))
     yield* strict("configure", response)
   })
-  // oxlint-disable-next-line ren/no-comments -- The CA goes before brain.env, because start.sh installs it into the system store once brain.env exists (C44).
+  // oxlint-disable-next-line ren/no-comments -- The machine gets its variables only from brain.env: E2B runs a template's start command at build time, so the variables of a create never reach it. The CA goes before brain.env, because start.sh installs it once brain.env exists.
   const configure = Effect.fn("E2BSandbox.configure")(function* (
     binding: Binding,
     accessToken: Option.Option<string>,
@@ -363,7 +363,6 @@ export const provider = Effect.gen(function* () {
             autoPause: true,
             secure: true,
             metadata: { owner, ...metadata, organization: input.labels.organizationId, space: input.labels.spaceId },
-            envVars: input.variables,
             ...Option.match(networkOf(input.network), { onNone: () => ({}), onSome: (network) => ({ network }) }),
           }),
         ),
