@@ -25,6 +25,7 @@ import { useAttentionNotification } from "../../lib/notify.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Drafts } from "../../lib/drafts.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { Browser } from "../../lib/browser.js"
 
 const statusesOf = (state: ChatState.State, sessionID: Session.ID): ReadonlyMap<string, ChatState.PendingStatus> =>
   new Map(
@@ -176,6 +177,8 @@ export function useChat(
   const [reverting, setReverting] = useState(false)
   const boot = AsyncResult.getOrElse(view.session.boot, () => undefined)
   const connection = AsyncResult.getOrElse(view.session.status, () => undefined)
+  const browserIds = Browser.idsOf(ChatState.messages(state, root))
+  const browser = Browser.useLatest(root, { ids: browserIds, running, connected: connection === "connected" })
   const prompt = ChatReact.useAction(root, (opened, request: ChatSession.PromptInput) =>
     opened.prompt(request).pipe(
       Effect.retry({ times: 1 }),
@@ -245,6 +248,9 @@ export function useChat(
       formExpired: view.formExpired,
     },
     tasks: visibleTasks(tasks, { running, unfinished: SessionTasks.unfinished(tasks) }),
+    browser,
+    browserIds,
+    connected: connection === "connected",
     running,
     reverted,
     reverting,
