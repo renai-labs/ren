@@ -149,10 +149,6 @@ export const keepInbox = Effect.fnUntraced(function* (
 export const isBusy = (sessionId: AnyPgColumn) =>
   sql<boolean>`exists (select 1 from ${chat} where ${chat.session_id} = ${sessionId} and ${chat.time_suspended} is not null)`
 
-// oxlint-disable-next-line ren/no-comments -- A chat has messages waiting in its harness's inbox.
-export const hasWaiting = (sessionId: AnyPgColumn) =>
-  sql<boolean>`exists (select 1 from ${Database.Schema.opencode_inbox} where ${Database.Schema.opencode_inbox.session_id} = ${sessionId})`
-
 // oxlint-disable-next-line ren/no-comments -- Ends the busy turns of a brain's chats with an outcome, as when its machine is replaced; returns their ids.
 export const endBusyTurns = (
   transaction: Database.Transaction,
