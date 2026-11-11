@@ -1,21 +1,25 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
+import { Schema } from "effect"
 import { AppsPage } from "../../../../features/apps/apps-page.js"
-import { pageSize, currentPage } from "../../../../lib/pagination.js"
+import { AppRegistryPages } from "../../../../lib/app-registry.js"
 import { Loader } from "../../../../lib/loader.js"
-import { Routing } from "../../../../lib/routing.js"
 
 export const Route = createFileRoute("/_authed/_shell/apps/")({
   head: () => ({ meta: [{ title: "Apps · Ren" }] }),
-  validateSearch: Routing.AppSearch,
+  validateSearch: Schema.toStandardSchemaV1(
+    Schema.Struct({ app: Schema.optional(Schema.String), category: Schema.optional(Schema.String) }),
+  ),
   beforeLoad: (options) => {
     if (options.search.app) throw redirect({ to: "/apps/$appId", params: { appId: options.search.app }, replace: true })
   },
-  loaderDeps: (options) => ({ page: currentPage(options.search) }),
+  loaderDeps: (options) => ({ category: options.search.category }),
   loader: (options) => {
+    const client = options.context.client
     Loader.start(
-      options.context.queryClient.query(
-        options.context.api["app-registry"].list.queryOptions({ page: options.deps.page, pageSize }),
-      ),
+      options.context.queryClient.infiniteQuery(AppRegistryPages.options(client, "")),
+      ...(options.deps.category
+        ? [options.context.queryClient.infiniteQuery(AppRegistryPages.options(client, "", options.deps.category))]
+        : []),
     )
   },
   component: AppsPage,
