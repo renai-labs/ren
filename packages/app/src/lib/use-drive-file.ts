@@ -20,12 +20,14 @@ export function useDriveFile(spaceId: string | undefined, file: SessionMessage.D
   const [gone, setGone] = useState(false)
   const [reloaded, setReloaded] = useState(false)
   const image = file.mime.startsWith("image/")
+  const playable = file.mime.startsWith("video/") || file.mime.startsWith("audio/")
   const link = (disposition: "inline" | "attachment") => ({
     ...api.drive.download.queryOptions({ ...(spaceId && { spaceId }), path: file.path, disposition }),
     staleTime: linkLifetime,
     retry: (count: number, error: unknown) => errorStatus(error) !== 404 && count < 1,
   })
   const thumbnail = useQuery({ ...link("inline"), enabled: Boolean(spaceId) && image && !gone })
+  const media = useQuery({ ...link("inline"), enabled: Boolean(spaceId) && playable && !gone })
   const fail = (error: unknown) => {
     if (errorStatus(error) === 404) setGone(true)
     else toast.error(`Could not open ${file.name}`, { description: errorMessage(error) })
@@ -38,7 +40,9 @@ export function useDriveFile(spaceId: string | undefined, file: SessionMessage.D
   return {
     image,
     thumbnail: thumbnail.data?.url,
-    deleted: gone || errorStatus(thumbnail.error) === 404,
+    media: media.data?.url,
+    refresh: () => media.refetch().then((next) => next.data?.url),
+    deleted: gone || errorStatus(thumbnail.error) === 404 || errorStatus(media.error) === 404,
     reload: () => {
       if (reloaded) return
       setReloaded(true)

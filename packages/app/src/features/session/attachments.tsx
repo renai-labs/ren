@@ -29,6 +29,7 @@ import {
 import { Spinner } from "@ren/ui/spinner"
 import { cn } from "cn"
 import { ImageLightbox } from "../../components/image-lightbox.js"
+import { MediaPlayer } from "../../components/media-player.js"
 import { formatBytes } from "../../lib/format.js"
 import { useDriveFile } from "../../lib/use-drive-file.js"
 import { maxFileBytes, type Upload } from "../../lib/use-uploads.js"
@@ -93,6 +94,21 @@ function DriveFileCard(props: {
   )
 }
 
+function DrivePlayer(props: { spaceId: string | undefined; file: SessionMessage.DriveFile }) {
+  const drive = useDriveFile(props.spaceId, props.file)
+  return (
+    <MediaPlayer
+      kind={props.file.mime.startsWith("video/") ? "video" : "audio"}
+      src={drive.media}
+      name={props.file.name}
+      size={props.file.size}
+      deleted={drive.deleted}
+      refresh={drive.refresh}
+      onDownload={drive.download}
+    />
+  )
+}
+
 export function DriveFileCards(props: {
   spaceId: string | undefined
   files: ReadonlyArray<SessionMessage.DriveFile>
@@ -100,9 +116,13 @@ export function DriveFileCards(props: {
 }) {
   return (
     <AttachmentGroup className={props.className}>
-      {props.files.map((file) => (
-        <DriveFileCard key={file.path} spaceId={props.spaceId} file={file} />
-      ))}
+      {props.files.map((file) =>
+        file.mime.startsWith("video/") || file.mime.startsWith("audio/") ? (
+          <DrivePlayer key={file.path} spaceId={props.spaceId} file={file} />
+        ) : (
+          <DriveFileCard key={file.path} spaceId={props.spaceId} file={file} />
+        ),
+      )}
     </AttachmentGroup>
   )
 }
