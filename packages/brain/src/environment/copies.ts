@@ -4,7 +4,7 @@ import type { EnvironmentApi } from "@ren/environment-api/environment-api"
 import type { Drive } from "@ren/schema/drive"
 import type { Session } from "@ren/schema/session"
 import { Skill } from "@ren/schema/skill"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Option, Schema, Semaphore } from "effect"
 import type { EnvironmentConnections } from "./connections.js"
 
 export interface File {
@@ -29,7 +29,7 @@ export interface Failure<I extends Item = Item> {
 }
 
 export interface Interface {
-  // oxlint-disable-next-line ren/no-comments -- R5, R17, R38: copies each item that the current generation does not have, 4 at a time, and returns the items that failed. The next call tries them again.
+  // oxlint-disable-next-line ren/no-comments -- Failed mounts retain their explanation until the next turn or destination; other failed copies can retry immediately.
   readonly ensure: <I extends Item>(items: ReadonlyArray<I>) => Effect.Effect<ReadonlyArray<Failure<I>>>
   // oxlint-disable-next-line ren/no-comments -- R44: the next call copies every item again; the executor answers at once for a folder that exists.
   readonly turnStarted: Effect.Effect<void>
@@ -66,38 +66,48 @@ const copyWith = (connection: EnvironmentConnections.Connection, item: Item) => 
   })
 }
 
-// oxlint-disable-next-line ren/no-comments -- R53: the record of copies for references and skills. The generation and the copies come from one connection, so a copy never counts for another environment.
+// oxlint-disable-next-line ren/no-comments -- Destination identity and generation come from one connection. Serialize callers so a failed mount is attempted only once per turn.
 export const make = (connections: EnvironmentConnections.Interface, sessionId: Session.ID): Interface => {
-  const copied = { generation: Number.NaN, paths: new Set<string>() }
+  const lock = Semaphore.makeUnsafe(1)
+  const copied = { destination: "", generation: Number.NaN, paths: new Map<string, Option.Option<string>>() }
   return {
     ensure: <I extends Item>(items: ReadonlyArray<I>) =>
       connections.connect(sessionId).pipe(
         Effect.flatMap((connection) => {
-          if (connection.generation !== copied.generation) {
+          if (connection.hello.environmentId !== copied.destination || connection.generation !== copied.generation) {
+            copied.destination = connection.hello.environmentId
             copied.generation = connection.generation
             copied.paths.clear()
           }
           return Effect.forEach(
-            items.filter((item) => !copied.paths.has(item.path)),
-            (item) =>
-              copyWith(connection, item).pipe(
+            items,
+            (item) => {
+              const cached = copied.paths.get(item.path)
+              if (cached) return Effect.succeed(Option.map(cached, (message) => ({ item, message })))
+              return copyWith(connection, item).pipe(
                 Effect.as(Option.none<Failure<I>>()),
                 Effect.catch((error: { readonly message: string }) =>
                   Effect.succeed(Option.some({ item, message: error.message })),
                 ),
                 Effect.tap((failure) =>
                   Effect.sync(() => {
-                    if (Option.isNone(failure) || item.copy.type === "mount") copied.paths.add(item.path)
+                    if (Option.isNone(failure) || item.copy.type === "mount")
+                      copied.paths.set(
+                        item.path,
+                        Option.map(failure, (failed) => failed.message),
+                      )
                   }),
                 ),
-              ),
+              )
+            },
             { concurrency: 4 },
           )
         }),
         Effect.scoped,
         Effect.map((results) => results.filter(Option.isSome).map((result) => result.value)),
         Effect.catch((error) => Effect.succeed(items.map((item) => ({ item, message: error.message })))),
+        lock.withPermits(1),
       ),
-    turnStarted: Effect.sync(() => copied.paths.clear()),
+    turnStarted: Effect.sync(() => copied.paths.clear()).pipe(lock.withPermits(1)),
   }
 }

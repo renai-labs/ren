@@ -138,6 +138,72 @@ describe("SessionSync", () => {
     }),
   )
 
+  it.live("retiring a generation rejects late uploads and commits even after host authentication succeeded", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const sync = yield* SessionSync.Service
+      const { host, rootId } = yield* tree()
+      const upload = yield* sync.startUpload(host, rootId, { harness: "opencode", parentId: null })
+      const kept = SyncFixture.message(rootId, "msg_kept", 2)
+      yield* sync.uploadMessages(host, rootId, upload, [kept])
+      yield* database.db
+        .update(Database.Schema.brain)
+        .set({ generation: host.generation + 1 })
+        .where(eq(Database.Schema.brain.id, host.brainId))
+      const late = SyncFixture.message(rootId, "msg_late", 3)
+      expect(yield* sync.uploadMessages(host, rootId, upload, [late]).pipe(Effect.flip)).toBeInstanceOf(ForbiddenError)
+      expect(
+        yield* sync
+          .commit(host, rootId, upload, {
+            session: SyncFixture.session(rootId),
+            seq: 3,
+            ids: [late.id],
+          })
+          .pipe(Effect.flip),
+      ).toBeInstanceOf(ForbiddenError)
+      expect(
+        yield* sync.startUpload(host, rootId, { harness: "opencode", parentId: null }).pipe(Effect.flip),
+      ).toBeInstanceOf(ForbiddenError)
+      expect((yield* stored(rootId)).messages).toEqual([kept])
+      const current = { ...host, generation: host.generation + 1 }
+      yield* SyncFixture.pass(current, SyncFixture.session(rootId), 4, [kept])
+    }),
+  )
+
+  it.live("retirement waits for a sync commit already in its database transaction", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const sync = yield* SessionSync.Service
+      const { host, rootId } = yield* tree()
+      const upload = yield* sync.startUpload(host, rootId, { harness: "opencode", parentId: null })
+      const release = yield* hold("opencode_session", "share")
+      const commit = yield* sync
+        .commit(host, rootId, upload, {
+          session: SyncFixture.session(rootId),
+          seq: 2,
+          ids: [],
+        })
+        .pipe(Effect.forkChild)
+      yield* blocked(1)
+      const retire = yield* database.db
+        .update(Database.Schema.brain)
+        .set({ generation: host.generation + 1 })
+        .where(eq(Database.Schema.brain.id, host.brainId))
+        .pipe(Effect.forkChild)
+      const result = yield* Effect.raceFirst(
+        blocked(2).pipe(Effect.as("waiting")),
+        Fiber.join(retire).pipe(Effect.as("retired")),
+      )
+      yield* release
+      yield* Fiber.join(commit)
+      yield* Fiber.join(retire)
+      expect(result).toBe("waiting")
+      expect(
+        yield* sync.startUpload(host, rootId, { harness: "opencode", parentId: null }).pipe(Effect.flip),
+      ).toBeInstanceOf(ForbiddenError)
+    }),
+  )
+
   it.live("a commit closes its upload, so a late batch or a second copy of the commit is stale", () =>
     Effect.gen(function* () {
       const sync = yield* SessionSync.Service

@@ -2013,6 +2013,10 @@ export type EnvironmentTemplateArchiveInput = { readonly id: { readonly id: stri
 
 export type EnvironmentTemplateArchiveOutput = EnvironmentTemplateInfo
 
+export type EnvironmentTemplateRetryBuildInput = { readonly id: { readonly id: string }["id"] }
+
+export type EnvironmentTemplateRetryBuildOutput = EnvironmentTemplateInfo
+
 export type EnvironmentProviderListOutput = EnvironmentProviderInfos
 
 export type EnvironmentProviderBrainsOutput = EnvironmentProviderInfos

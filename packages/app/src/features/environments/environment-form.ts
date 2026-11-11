@@ -11,8 +11,6 @@ export type Config = { [key: string]: JsonValue }
 
 export type Node = { readonly [key: string]: JsonValue }
 
-export const listInput = { page: 1, pageSize: 50 }
-
 export const unrestricted: EnvironmentTemplateNetworking = { type: "unrestricted" }
 
 export const isNode = (value: JsonValue | undefined): value is Node =>

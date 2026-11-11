@@ -29,6 +29,8 @@ import type {
   EnvironmentTemplateUpdateOutput,
   EnvironmentTemplateArchiveInput,
   EnvironmentTemplateArchiveOutput,
+  EnvironmentTemplateRetryBuildInput,
+  EnvironmentTemplateRetryBuildOutput,
   EnvironmentProviderListOutput,
   EnvironmentProviderBrainsOutput,
   SpaceSettingsGetInput,
@@ -563,6 +565,18 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/environment-templates/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      retryBuild: (input: EnvironmentTemplateRetryBuildInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateRetryBuildOutput>(
+          {
+            method: "POST",
+            path: `/environment-templates/${encodeURIComponent(input.id)}/retryBuild`,
+            body: {},
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,

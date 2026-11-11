@@ -28,6 +28,7 @@ import { Choice } from "../../components/settings-shared.js"
 import { StatusBadge, type StatusTone } from "../../components/status-badge.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { Machines } from "../../lib/machines.js"
 import { ConfigFields } from "./config-fields.js"
 import { type Draft, EnvironmentForm } from "./environment-form.js"
 
@@ -230,35 +231,56 @@ function TemplateDialog(props: {
 }
 
 function BuildError(props: { template: EnvironmentTemplateInfo }) {
+  const { api } = RouterContext.useRouterContext()
+  const retry = useMutation(api["environment-template"].retryBuild.mutationOptions())
   if (!props.template.buildError) return null
   return (
-    <Dialog>
-      <DialogTrigger render={<Button variant="ghost" size="sm" />}>Details</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Build failed</DialogTitle>
-          <DialogDescription>{props.template.name}</DialogDescription>
-        </DialogHeader>
-        <CodeBlock variant="destructive" size="sm">
-          <CodeBlockContent wrap className="max-h-80">
-            {props.template.buildError}
-          </CodeBlockContent>
-        </CodeBlock>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={retry.isPending}
+        onClick={() =>
+          retry.mutate(
+            { id: props.template.id },
+            {
+              onError: (failure) =>
+                toast.error("Couldn’t retry the build", { description: errorMessage(failure), duration: Infinity }),
+            },
+          )
+        }
+      >
+        {retry.isPending ? <Spinner data-icon="inline-start" /> : null}
+        Retry build
+      </Button>
+      <Dialog>
+        <DialogTrigger render={<Button variant="ghost" size="sm" />}>Details</DialogTrigger>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Build failed</DialogTitle>
+            <DialogDescription>{props.template.name}</DialogDescription>
+          </DialogHeader>
+          <CodeBlock variant="destructive" size="sm">
+            <CodeBlockContent wrap className="max-h-80">
+              {props.template.buildError}
+            </CodeBlockContent>
+          </CodeBlock>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 
 export function EnvironmentsSettingsPage() {
-  const { api } = RouterContext.useRouterContext()
+  const { api, client } = RouterContext.useRouterContext()
   const providers = useQuery(api.environmentProvider.list.queryOptions())
   const templates = useQuery({
-    ...api["environment-template"].list.queryOptions(EnvironmentForm.listInput),
+    ...Machines.options(client),
     refetchInterval: (query) =>
-      query.state.data?.items.some((each) => each.buildStatus === "queued" || each.buildStatus === "building")
+      query.state.data?.some((each) => each.buildStatus === "queued" || each.buildStatus === "building")
         ? refreshEvery
         : false,
   })
@@ -266,7 +288,7 @@ export function EnvironmentsSettingsPage() {
   const [editing, setEditing] = useState<{ readonly template: EnvironmentTemplateInfo | undefined }>()
   const providerList = providers.data ?? []
   const titleOf = (id: string) => providerList.find((each) => each.id === id)?.title ?? id
-  const items = templates.data?.items ?? []
+  const items = templates.data ?? []
   const createButton = (
     <Button onClick={() => setEditing({ template: undefined })} disabled={providerList.length === 0}>
       <IconPlus />

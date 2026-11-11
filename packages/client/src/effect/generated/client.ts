@@ -191,12 +191,23 @@ const EndpointEnvironmentTemplateArchive =
   (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateArchiveInput) =>
     raw["environment-template.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+type EnvironmentTemplateRetryBuildRequest = Parameters<
+  RawClient["environment-template"]["environment-template.retryBuild"]
+>[0]
+type EnvironmentTemplateRetryBuildInput = { readonly id: EnvironmentTemplateRetryBuildRequest["params"]["id"] }
+const EndpointEnvironmentTemplateRetryBuild =
+  (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateRetryBuildInput) =>
+    raw["environment-template.retryBuild"]({ params: { id: input["id"] }, payload: {} }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
 const adaptGroupEnvironmentTemplate = (raw: RawClient["environment-template"]) => ({
   list: EndpointEnvironmentTemplateList(raw),
   get: EndpointEnvironmentTemplateGet(raw),
   create: EndpointEnvironmentTemplateCreate(raw),
   update: EndpointEnvironmentTemplateUpdate(raw),
   archive: EndpointEnvironmentTemplateArchive(raw),
+  retryBuild: EndpointEnvironmentTemplateRetryBuild(raw),
 })
 
 const EndpointEnvironmentProviderList = (raw: RawClient["environmentProvider"]) => () =>

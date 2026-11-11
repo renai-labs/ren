@@ -9,8 +9,10 @@ import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
 import type { Auth } from "@ren/schema/auth"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
+import { Brain } from "@ren/schema/brain"
 import type { Actor } from "../src/actor.js"
-import { ConfigProvider, Deferred, Effect, Layer, Option, Queue, Ref, Schedule, Schema } from "effect"
+import { ConfigProvider, Deferred, Effect, Fiber, Layer, Option, Queue, Ref, Schedule, Schema } from "effect"
+import { SqlClient } from "effect/sql"
 import { Access } from "../src/access.js"
 import { EgressControl } from "../src/egress-control.js"
 import { EnvironmentTemplates } from "../src/environment-templates.js"
@@ -30,6 +32,8 @@ const probe = await Effect.runPromise(TestProvider.make())
 
 // oxlint-disable-next-line ren/no-comments -- A build of the "built" provider runs until the test opens the gate of its label; a label that starts with "broken" fails.
 const started = await Effect.runPromise(Queue.unbounded<string>())
+const checked = await Effect.runPromise(Queue.unbounded<string>())
+const starting = new Map<string, Deferred.Deferred<void>>()
 const gates = new Map<string, Deferred.Deferred<void>>()
 const gate = (label: string) => {
   const found = gates.get(label) ?? Deferred.makeUnsafe<void>()
@@ -43,13 +47,22 @@ const built = await Effect.runPromise(
     systemImage: "ren-brain:sys2-d1",
     build: {
       start: (config) =>
-        Queue.offer(started, config.label).pipe(Effect.as({ _tag: "Building", id: config.label } as const)),
+        Queue.offer(started, config.label).pipe(
+          Effect.andThen(() => {
+            const held = starting.get(config.label)
+            return held ? Deferred.await(held) : Effect.void
+          }),
+          Effect.as({ _tag: "Building", id: config.label } as const),
+        ),
       status: (label) =>
-        Effect.map(Deferred.isDone(gate(label)), (isDone): MachineProvider.BuildState => {
-          if (!isDone) return { _tag: "Building", id: label }
-          if (label.startsWith("broken")) return { _tag: "Failed", reason: `${label} does not build` }
-          return { _tag: "Ready", image: `image-${label}` }
-        }),
+        Queue.offer(checked, label).pipe(
+          Effect.andThen(Deferred.isDone(gate(label))),
+          Effect.map((isDone): MachineProvider.BuildState => {
+            if (!isDone) return { _tag: "Building", id: label }
+            if (label.startsWith("broken")) return { _tag: "Failed", reason: `${label} does not build` }
+            return { _tag: "Ready", image: `image-${label}` }
+          }),
+        ),
     },
   }),
 )
@@ -58,9 +71,13 @@ const brains = [Effect.map(TestProvider.make({ canColocate: true }), (each) => e
 
 const key = await Effect.runPromise(Signature.generate("environments"))
 
+const builds = EnvironmentTemplates.layer.pipe(
+  Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ ENVIRONMENT_TEMPLATE_BUILD_CHECK: "20 millis" }))),
+)
+
 const it = testEffect(
   Layer.mergeAll(
-    EnvironmentTemplates.layer,
+    builds,
     Environments.layer.pipe(
       Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone]),
       Layer.provide(Bundles.layer),
@@ -247,7 +264,55 @@ describe("EnvironmentTemplates", () => {
     }),
   )
 
-  it.live("archiving hides an environment template, ends its sessions' access and destroys its environments", () =>
+  it.live("archiving refuses a template still applied to a brain after the space selects another", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const templates = yield* EnvironmentTemplates.Service
+      const setup = yield* team()
+      const old = yield* templates.create(setup.admin, input)
+      const next = yield* templates.create(setup.admin, { ...input, name: "Next" })
+      yield* database.db.insert(Database.Schema.brain).values({
+        id: Brain.ID.create(),
+        organization_id: setup.organizationId,
+        space_id: setup.space.id,
+        scope: "session",
+        image_template: { environmentTemplateId: old.id, config: {}, system: null },
+      })
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ brain_template_id: next.id })
+        .where(eq(Database.Schema.space.id, setup.space.id))
+      expect(yield* templates.archive(setup.admin, old.id).pipe(Effect.flip)).toMatchObject({
+        _tag: "Primitive.Conflict",
+        message: "Spaces use this environment template: Team. Pick another brain or hand for them first.",
+      })
+    }),
+  )
+
+  it.live("archiving refuses a template still applied to a remote hand after the space selects another", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const templates = yield* EnvironmentTemplates.Service
+      const environments = yield* Environments.Service
+      const setup = yield* team()
+      const old = yield* templates.create(setup.admin, input)
+      const next = yield* templates.create(setup.admin, { ...input, name: "Next" })
+      const session = yield* Seed.subject(setup.organizationId, setup.space.id)
+      yield* environments.bind(session, old.id)
+      const applied = yield* environments.access(session, Option.none())
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ hand_placement: "remote", environment_template_id: next.id })
+        .where(eq(Database.Schema.space.id, setup.space.id))
+      expect(yield* templates.archive(setup.admin, old.id).pipe(Effect.flip)).toMatchObject({
+        _tag: "Primitive.Conflict",
+        message: "Spaces use this environment template: Team. Pick another brain or hand for them first.",
+      })
+      expect((yield* environments.access(session, Option.none())).url.href).toBe(applied.url.href)
+    }),
+  )
+
+  it.live("archiving hides an unused environment template and destroys its unbound machines", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
       const environments = yield* Environments.Service
@@ -257,12 +322,57 @@ describe("EnvironmentTemplates", () => {
       yield* environments.bind(session, made.id)
       yield* environments.access(session, Option.none())
       const environmentId = (yield* Ref.get(probe.provisions)).at(-1)
+      yield* environments.unbind(session)
       const archived = yield* templates.archive(setup.admin, made.id)
       expect(archived.archivedAt).not.toBeNull()
       expect(yield* templates.archive(setup.admin, made.id)).toEqual(archived)
       expect((yield* templates.get(setup.admin, made.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
       expect((yield* environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
       expect((yield* Ref.get(probe.destroyed)).at(-1)).toBe(environmentId)
+    }),
+  )
+
+  it.live("archival waits for a concurrent hand binding and then refuses the applied template", () =>
+    Effect.gen(function* () {
+      const templates = yield* EnvironmentTemplates.Service
+      const environments = yield* Environments.Service
+      const sql = yield* SqlClient.SqlClient
+      const setup = yield* team()
+      const made = yield* templates.create(setup.admin, input)
+      const session = yield* Seed.subject(setup.organizationId, setup.space.id)
+      const locked = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      const holder = yield* sql
+        .withTransaction(
+          sql`lock table session_environment in share mode`.pipe(
+            Effect.andThen(Deferred.succeed(locked, undefined)),
+            Effect.andThen(Deferred.await(release)),
+          ),
+        )
+        .pipe(Effect.forkChild)
+      yield* Deferred.await(locked)
+      const binding = yield* environments.bind(session, made.id).pipe(Effect.forkChild)
+      const waiting = (count: number) =>
+        sql<{ readonly waiting: number }>`
+        select count(*)::int as waiting from pg_stat_activity
+        where datname = current_database() and wait_event_type = 'Lock'
+      `.pipe(
+          Effect.repeat({
+            until: (rows) => (rows.at(0)?.waiting ?? 0) >= count,
+            schedule: Schedule.spaced("5 millis"),
+          }),
+        )
+      yield* waiting(1)
+      const archival = yield* templates.archive(setup.admin, made.id).pipe(Effect.flip, Effect.forkChild)
+      const observed = yield* Effect.raceFirst(
+        waiting(2).pipe(Effect.as("waiting")),
+        Fiber.await(archival).pipe(Effect.as("finished")),
+      )
+      yield* Deferred.succeed(release, undefined)
+      yield* Fiber.join(holder)
+      yield* Fiber.join(binding)
+      expect(observed).toBe("waiting")
+      expect(yield* Fiber.join(archival)).toMatchObject({ _tag: "Primitive.Conflict" })
     }),
   )
 
@@ -347,6 +457,32 @@ describe("EnvironmentTemplates", () => {
     }),
   )
 
+  it.live("two build owners and a save during build start wait for that build before starting the new config", () =>
+    Effect.gen(function* () {
+      const templates = yield* EnvironmentTemplates.Service
+      const setup = yield* team()
+      const a = `starting-${crypto.randomUUID()}`
+      const b = `next-${crypto.randomUUID()}`
+      const held = yield* Deferred.make<void>()
+      starting.set(a, held)
+      yield* Queue.clear(checked)
+      const made = yield* templates.create(setup.admin, builtInput(a))
+      expect(yield* Queue.take(started)).toBe(a)
+      yield* Layer.build(Layer.fresh(builds))
+      yield* templates.update(setup.admin, made.id, { config: { label: b } })
+      yield* Deferred.succeed(held, undefined)
+      const next = yield* Effect.raceFirst(
+        Queue.take(started).pipe(Effect.map((label) => ({ type: "start", label }))),
+        Queue.take(checked).pipe(Effect.map((label) => ({ type: "status", label }))),
+      )
+      expect(next).toEqual({ type: "status", label: a })
+      yield* Deferred.succeed(gate(a), undefined)
+      expect(yield* Queue.take(started)).toBe(b)
+      yield* Deferred.succeed(gate(b), undefined)
+      expect((yield* settled(made.id, setup.admin)).image).toBe(`image-${b}`)
+    }),
+  )
+
   it.live("a failed build keeps the last image and shows its error; a space cannot pick a template never built", () =>
     Effect.gen(function* () {
       const templates = yield* EnvironmentTemplates.Service
@@ -410,6 +546,40 @@ describe("EnvironmentTemplates", () => {
     }),
   )
 
+  it.live("Retry build uses unchanged config, preserves the ready image and coalesces duplicate requests", () =>
+    Effect.gen(function* () {
+      const templates = yield* EnvironmentTemplates.Service
+      const setup = yield* team()
+      const good = `good-${crypto.randomUUID()}`
+      const broken = `broken-${crypto.randomUUID()}`
+      const made = yield* templates.create(setup.admin, builtInput(good))
+      expect(yield* Queue.take(started)).toBe(good)
+      yield* Deferred.succeed(gate(good), undefined)
+      yield* settled(made.id, setup.admin)
+      yield* templates.update(setup.admin, made.id, { config: { label: broken } })
+      expect(yield* Queue.take(started)).toBe(broken)
+      yield* Deferred.succeed(gate(broken), undefined)
+      yield* settled(made.id, setup.admin)
+      gates.set(broken, Deferred.makeUnsafe<void>())
+      expect(yield* templates.retryBuild(setup.ada, made.id, {}).pipe(Effect.flip)).toMatchObject({
+        _tag: "Primitive.Forbidden",
+      })
+      const retried = yield* Effect.all(
+        Array.from({ length: 4 }, () => templates.retryBuild(setup.admin, made.id, {})),
+        { concurrency: "unbounded" },
+      )
+      expect(retried.every((template) => template.image === `image-${good}`)).toBe(true)
+      expect(yield* Queue.take(started)).toBe(broken)
+      yield* Deferred.succeed(gate(broken), undefined)
+      expect(yield* settled(made.id, setup.admin)).toMatchObject({
+        config: { label: broken },
+        buildStatus: "failed",
+        image: `image-${good}`,
+      })
+      expect(yield* Queue.clear(started)).not.toContain(broken)
+    }),
+  )
+
   it.live("a Ren restart during a build asks about that build, and starts no second one (EN30)", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
@@ -430,7 +600,7 @@ describe("EnvironmentTemplates", () => {
       })
       yield* Effect.scoped(
         Effect.gen(function* () {
-          yield* Layer.build(Layer.fresh(EnvironmentTemplates.layer))
+          yield* Layer.build(Layer.fresh(builds))
           yield* Deferred.succeed(gate(label), undefined)
           expect(yield* settled(id, setup.admin)).toMatchObject({ buildStatus: "ready", image: `image-${label}` })
         }),
@@ -461,7 +631,7 @@ describe("EnvironmentTemplates", () => {
         })
         yield* Effect.scoped(
           Effect.gen(function* () {
-            yield* Layer.build(Layer.fresh(EnvironmentTemplates.layer))
+            yield* Layer.build(Layer.fresh(builds))
             expect(yield* Queue.take(started)).toBe(label)
             yield* Deferred.succeed(gate(label), undefined)
             expect(yield* settled(id, setup.admin)).toMatchObject({ buildStatus: "ready", image: `image-${label}` })
@@ -494,7 +664,7 @@ describe("EnvironmentTemplates", () => {
       yield* Deferred.succeed(gate(label), undefined)
       yield* Effect.scoped(
         Effect.gen(function* () {
-          yield* Layer.build(Layer.fresh(EnvironmentTemplates.layer))
+          yield* Layer.build(Layer.fresh(builds))
           expect(yield* Queue.take(started)).toBe(label)
           expect(yield* settled(id, setup.admin)).toMatchObject({ buildStatus: "ready", image: `image-${label}` })
         }),

@@ -1,12 +1,11 @@
 import type { EnvironmentTemplateInfo, SpaceBrainMachine, SpaceHand, SpaceInfo } from "@ren/client"
 import { toast } from "@ren/ui/sonner"
-import { Switch } from "@ren/ui/switch"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Row, Rows, Section } from "../../components/page.js"
 import { Choice } from "../../components/settings-shared.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { EnvironmentForm } from "./environment-form.js"
+import { Machines } from "../../lib/machines.js"
 
 type Save = (change: {
   brainScope?: SpaceInfo["brainScope"]
@@ -46,27 +45,42 @@ const summaryOf = (machine: EnvironmentTemplateInfo | undefined) => {
   ].join(" · ")
 }
 
-const useMachines = () => {
-  const { api } = RouterContext.useRouterContext()
-  const machines = useQuery(api["environment-template"].list.queryOptions(EnvironmentForm.listInput))
-  return (machines.data?.items ?? []).filter((each) => Boolean(each.image) || each.buildStatus === "ready")
+const useMachines = (selected: string | null) => {
+  const { api, client } = RouterContext.useRouterContext()
+  const machines = useQuery(Machines.options(client))
+  const current = useQuery({
+    ...api["environment-template"].get.queryOptions({ idOrSlug: selected ?? "" }),
+    enabled: Boolean(selected),
+  })
+  return [
+    ...(machines.data ?? []),
+    ...(current.data && !machines.data?.some((each) => each.id === current.data.id) ? [current.data] : []),
+  ].filter((each) => Boolean(each.image) || each.buildStatus === "ready")
 }
 
 function BrainSection(props: { space: SpaceInfo; save: Save }) {
   const { api } = RouterContext.useRouterContext()
   const providers = useQuery(api.environmentProvider.brains.queryOptions())
   const brain = props.space.brain
-  const machines = useMachines().filter((each) => each.provider === brain.provider)
+  const machines = useMachines(brain.environmentTemplateId).filter((each) => each.provider === brain.provider)
   return (
     <Section title="Brain" description="Where the agent runs.">
       <Rows>
         {[
-          <Row key="scope" title="Isolate chats" description="Each chat gets its own brain.">
-            <Switch
-              checked={props.space.brainScope === "session"}
+          <Row
+            key="scope"
+            title="Brain scope"
+            description="Applies to new chats only. Existing chats keep their brain."
+          >
+            <Choice
+              label="Brain scope"
+              options={[
+                { value: "space", label: "Per space" },
+                { value: "session", label: "Per chat" },
+              ]}
+              value={props.space.brainScope}
               disabled={!props.space.canUpdate}
-              onCheckedChange={(on) => void props.save({ brainScope: on ? "session" : "space" })}
-              aria-label="Isolate chats"
+              onChange={(scope) => void props.save({ brainScope: scope === "session" ? "session" : "space" })}
             />
           </Row>,
           <Row key="provider" title="Provider">
@@ -107,8 +121,8 @@ function BrainSection(props: { space: SpaceInfo; save: Save }) {
 function HandSection(props: { space: SpaceInfo; save: Save }) {
   const { api } = RouterContext.useRouterContext()
   const brainProviders = useQuery(api.environmentProvider.brains.queryOptions())
-  const machines = useMachines()
   const hand = props.space.hand
+  const machines = useMachines(hand.placement === "remote" ? hand.environmentTemplateId : null)
   const canColocate = (brainProviders.data ?? []).some(
     (each) => each.id === props.space.brain.provider && each.canColocate,
   )

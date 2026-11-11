@@ -197,6 +197,7 @@ const resources: ReadonlyArray<Resource> = [
     name: "template",
     one: "an environment template",
     many: "environment templates",
+    descriptions: { retryBuild: "Retry the saved configuration’s failed build" },
   },
   {
     group: "oauth-app",

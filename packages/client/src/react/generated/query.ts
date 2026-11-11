@@ -15,6 +15,7 @@ import type {
   EnvironmentTemplateCreateInput,
   EnvironmentTemplateUpdateInput,
   EnvironmentTemplateArchiveInput,
+  EnvironmentTemplateRetryBuildInput,
   SpaceSettingsGetInput,
   SpaceSettingsUpdateInput,
   OrganizationSettingsGetInput,
@@ -287,6 +288,15 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["environment-template", "archive"] as const,
             mutationFn: (input: EnvironmentTemplateArchiveInput) => client["environment-template"]["archive"](input),
+          }),
+      },
+      retryBuild: {
+        mutationKey: () => ["environment-template", "retryBuild"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["environment-template", "retryBuild"] as const,
+            mutationFn: (input: EnvironmentTemplateRetryBuildInput) =>
+              client["environment-template"]["retryBuild"](input),
           }),
       },
     },

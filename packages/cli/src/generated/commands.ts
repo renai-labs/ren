@@ -665,6 +665,11 @@ export const EnvironmentTemplateArchive = {
   id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
 }
 
+export const EnvironmentTemplateRetryBuild = {
+  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const OauthAppList = {
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
@@ -1563,6 +1568,12 @@ export const commands = [
             Command.withDescription("Archive an environment template"),
             Command.withHandler((input) =>
               Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentTemplateArchive(input)),
+            ),
+          ),
+          Command.make("retry-build", EnvironmentTemplateRetryBuild).pipe(
+            Command.withDescription("Retry the saved configuration’s failed build"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.EnvironmentTemplateRetryBuild(input)),
             ),
           ),
         ]),

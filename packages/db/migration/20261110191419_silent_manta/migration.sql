@@ -1,0 +1,1 @@
+ALTER TABLE "environment_template" ADD COLUMN "build_epoch" integer DEFAULT 0 NOT NULL;

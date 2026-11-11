@@ -17,11 +17,13 @@ import {
   Schedule,
   Schema,
 } from "effect"
+import { WorkflowEngine } from "effect/workflow"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { EnvironmentProvider } from "./environment-provider.js"
 import { MachineProvider } from "./machine-provider.js"
 import { Primitive } from "./primitive.js"
+import { DurableRunner } from "./durable-runner.js"
 
 export type Interface = Primitive.Interface<typeof EnvironmentTemplate.definition>
 
@@ -31,6 +33,11 @@ const notFound = new Primitive.NotFound({ message: "Environment template not fou
 
 const table = Database.Schema.environment_template
 
+const BuildRun = DurableRunner.make("MachineTemplateBuild", {
+  payload: { id: EnvironmentTemplate.ID, epoch: Schema.Int },
+  idempotencyKey: (payload) => `machine-template-build:${payload.id}:${payload.epoch}`,
+})
+
 const sameConfig = Schema.toEquivalence(Schema.Json)
 
 const actions = {
@@ -39,6 +46,7 @@ const actions = {
   create: Primitive.action(EnvironmentTemplate.definition, "create"),
   update: Primitive.action(EnvironmentTemplate.definition, "update"),
   archive: Primitive.action(EnvironmentTemplate.definition, "archive"),
+  retryBuild: Primitive.action(EnvironmentTemplate.definition, "retryBuild"),
 }
 
 const toInfo = (row: typeof table.$inferSelect): EnvironmentTemplate.Info => ({
@@ -64,6 +72,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const registry = yield* EnvironmentProvider.Registry
+    const engine = yield* WorkflowEngine.WorkflowEngine
 
     const isAllowed = (actor: Actor.Info, action: string) =>
       access.isAllowed({ actor, action, resource: Access.organization })
@@ -106,14 +115,14 @@ export const layer = Layer.effect(
       const counted = yield* database.db
         .update(table)
         .set({ ...values, build_id: null, build_version: null })
-        .where(and(eq(table.id, row.id), eq(table.config_version, version)))
+        .where(and(eq(table.id, row.id), eq(table.build_epoch, row.build_epoch), eq(table.config_version, version)))
         .returning({ id: table.id })
         .pipe(Effect.orDie)
       if (counted.length === 0)
         yield* database.db
           .update(table)
           .set({ build_id: null, build_version: null })
-          .where(eq(table.id, row.id))
+          .where(and(eq(table.id, row.id), eq(table.build_epoch, row.build_epoch)))
           .pipe(Effect.orDie)
     })
 
@@ -125,8 +134,12 @@ export const layer = Layer.effect(
       if (state._tag === "Building") {
         yield* database.db
           .update(table)
-          .set({ build_status: "building", build_id: state.id, build_version: version })
-          .where(and(eq(table.id, row.id), eq(table.config_version, version), isNull(table.build_id)))
+          .set({
+            build_status: sql`case when ${table.config_version} = ${version} then 'building' else ${table.build_status} end`,
+            build_id: state.id,
+            build_version: version,
+          })
+          .where(and(eq(table.id, row.id), eq(table.build_epoch, row.build_epoch), isNull(table.build_id)))
           .pipe(Effect.orDie)
         return
       }
@@ -148,7 +161,7 @@ export const layer = Layer.effect(
       )
     })
 
-    // oxlint-disable-next-line ren/no-comments -- EN30: the provider owns each build; Ren keeps its id and asks. One build at a time per template: a template with a build in progress asks about it; one queued without one starts its newest config. A Ren restart finds the build it started. One Ren server runs this (EN31).
+    // oxlint-disable-next-line ren/no-comments -- The durable owner serializes start, status and completion across replicas. Saves keep an in-progress build's id until that build ends.
     const checkBuild = Effect.fnUntraced(function* (row: typeof table.$inferSelect) {
       const builder = buildOf(row.provider)
       if (Option.isNone(builder)) return
@@ -186,23 +199,38 @@ export const layer = Layer.effect(
     const checkEvery = yield* Config.Duration("ENVIRONMENT_TEMPLATE_BUILD_CHECK").pipe(
       Config.withDefault(Duration.seconds(10)),
     )
+    yield* DurableRunner.register(BuildRun, (payload) =>
+      DurableRunner.supervise(
+        `machine-template-build:${payload.id}`,
+        Effect.gen(function* () {
+          const row = (yield* database.db
+            .select()
+            .from(table)
+            .where(and(eq(table.id, payload.id), eq(table.build_epoch, payload.epoch)))
+            .pipe(Effect.orDie)).at(0)
+          if (!row) return true
+          if (row.archived_at || row.build_status === "ready" || row.build_status === "failed") {
+            yield* database.db
+              .update(table)
+              .set({ build_epoch: payload.epoch + 1 })
+              .where(and(eq(table.id, payload.id), eq(table.build_epoch, payload.epoch)))
+              .pipe(Effect.orDie)
+            return true
+          }
+          yield* checkBuild(row)
+          return false
+        }).pipe(Effect.repeat({ until: (finished) => finished, schedule: Schedule.spaced(checkEvery) }), Effect.asVoid),
+      ),
+    )
     yield* database.db
-      .select()
+      .select({ id: table.id, epoch: table.build_epoch })
       .from(table)
       .where(and(isNull(table.archived_at), inArray(table.build_status, ["queued", "building"])))
       .pipe(
         Effect.orDie,
-        Effect.flatMap((rows) =>
-          Effect.forEach(
-            rows,
-            (row) =>
-              checkBuild(row).pipe(
-                Effect.catch((error) => Effect.logWarning(`The build of template ${row.id} is unknown`, error)),
-              ),
-            { discard: true },
-          ),
-        ),
+        Effect.flatMap((rows) => Effect.forEach(rows, (row) => DurableRunner.ensure(BuildRun, row), { discard: true })),
         Effect.repeat(Schedule.spaced(checkEvery)),
+        Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
         Effect.withErrorReporting,
         Effect.forkScoped,
       )
@@ -354,10 +382,31 @@ export const layer = Layer.effect(
               .returning()
             const row = updated.at(0)
             if (!row) return yield* notFound
-            return { row, isRebuilt }
+            return row
           }),
         )
-        return toInfo(saved.row)
+        return toInfo(saved)
+      }),
+      retryBuild: Effect.fn("EnvironmentTemplates.retryBuild")(function* (
+        actor: Actor.Info,
+        id: EnvironmentTemplate.ID,
+      ) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const found = yield* findForUpdate(transaction, actor, id)
+            if (!found || found.archived_at) return yield* notFound
+            if (!isAllowed(actor, actions.retryBuild))
+              return yield* new Primitive.Forbidden({ message: "You cannot retry this machine’s build." })
+            if (found.build_status !== "failed") return toInfo(found)
+            const updated = (yield* transaction
+              .update(table)
+              .set({ build_status: "queued", build_error: null, updated_at: sql`now()` })
+              .where(eq(table.id, id))
+              .returning()).at(0)
+            if (!updated) return yield* notFound
+            return toInfo(updated)
+          }),
+        )
       }),
       archive: Effect.fn("EnvironmentTemplates.archive")(function* (actor: Actor.Info, id: EnvironmentTemplate.ID) {
         const archived = yield* database.transaction((transaction) =>
@@ -376,6 +425,8 @@ export const layer = Layer.effect(
                   or(
                     eq(Database.Schema.space.brain_template_id, id),
                     eq(Database.Schema.space.environment_template_id, id),
+                    sql`exists (select 1 from ${Database.Schema.brain} where ${Database.Schema.brain.space_id} = ${Database.Schema.space.id} and ${Database.Schema.brain.image_template}->>'environmentTemplateId' = ${id})`,
+                    sql`exists (select 1 from ${Database.Schema.session_environment} where ${Database.Schema.session_environment.space_id} = ${Database.Schema.space.id} and ${Database.Schema.session_environment.environment_template_id} = ${id})`,
                   ),
                   isNull(Database.Schema.space.archived_at),
                 ),

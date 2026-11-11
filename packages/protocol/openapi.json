@@ -1152,6 +1152,94 @@
         "summary": "Archive environment-template"
       }
     },
+    "/environment-templates/{id}/retryBuild": {
+      "post": {
+        "tags": ["environment-template"],
+        "operationId": "environment-template.retryBuild",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/EnvironmentTemplate.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EnvironmentTemplate.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentTemplate.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the retryBuild action on one environment-template.",
+        "summary": "retryBuild environment-template",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentTemplate.RetryBuildInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/environment-providers": {
       "get": {
         "tags": ["environmentProvider"],
@@ -15474,6 +15562,11 @@
         },
         "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
+      },
+      "EnvironmentTemplate.RetryBuildInput": {
+        "not": {
+          "type": "null"
+        }
       },
       "EnvironmentTemplate.UpdateInput": {
         "type": "object",

@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@effect/ai-openai": "catalog:",
+    "@effect/platform-bun": "catalog:",
     "@effect/platform-node-shared": "catalog:",
     "@opencode/ai": "catalog:",
     "@opencode/client": "catalog:",

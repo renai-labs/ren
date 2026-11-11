@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite"
+import { BunServices } from "@effect/platform-bun"
 import type { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
 import { Observability } from "@ren/schema/observability"
 import { Session } from "@ren/schema/session"
 import { PostHog } from "@ren/telemetry/posthog"
-import { BrainRejectedError } from "@ren/host-api/errors"
 import {
   Deferred,
   Duration,
@@ -107,63 +107,6 @@ const info = Layer.succeed(
   }),
 )
 
-const restartAfter = "500 millis"
-
-// oxlint-disable-next-line ren/no-comments -- start.sh unpacks the bundles and restarts the executor when its version changed. The brain stops itself after it answered when its own version changed; start.sh starts the new one, and the brain's SIGTERM handler flushes sync first.
-const codeUpdate = (options: { readonly home: string; readonly script: string; readonly version: string }) =>
-  Layer.succeed(
-    CodeUpdate.Service,
-    CodeUpdate.Service.of({
-      update: Effect.fn("CodeUpdate.update")(function* (
-        bundles: ReadonlyArray<CodeUpdate.Download>,
-        steps: ReadonlyArray<CodeUpdate.Step>,
-      ) {
-        const run = (command: ReadonlyArray<string>, failed: string) =>
-          Effect.promise(async () => {
-            const child = Bun.spawn([...command], {
-              env: { ...process.env, HOME: options.home },
-              stdout: "ignore",
-              stderr: "pipe",
-            })
-            return { code: await child.exited, error: await new Response(child.stderr).text() }
-          }).pipe(
-            Effect.flatMap((ran) =>
-              ran.code === 0
-                ? Effect.void
-                : Effect.fail(new BrainRejectedError({ message: `${failed}: ${ran.error.slice(-500)}` })),
-            ),
-          )
-        // oxlint-disable-next-line ren/no-comments -- Each step runs in order and stops the update at its first failure; a root step runs with sudo, which the system image gives the machine's user.
-        yield* Effect.forEach(
-          steps,
-          (step) =>
-            run(
-              step.user === "root" ? ["sudo", "-n", "sh", "-c", step.command] : ["sh", "-c", step.command],
-              `The step ${step.command} failed`,
-            ),
-          { discard: true },
-        )
-        yield* run(
-          [
-            "sh",
-            options.script,
-            "prepare",
-            bundles.map((bundle) => [bundle.kind, bundle.version, bundle.sha256, bundle.token].join(":")).join(" "),
-          ],
-          "The bundles did not unpack",
-        )
-        const current: string = yield* Effect.promise(() =>
-          Bun.file(join(options.home, ".ren", "brain.version")).text(),
-        )
-        if (current.trim() !== options.version)
-          yield* Effect.sleep(restartAfter).pipe(
-            Effect.andThen(Effect.sync(() => process.kill(process.pid, "SIGTERM"))),
-            Effect.forkDetach,
-          )
-      }),
-    }),
-  )
-
 const base = Layer.mergeAll(Cell.activityLayer, Cell.hostLayer).pipe(
   Layer.provideMerge(Layer.succeed(BrainStorage.Service, storage)),
   Layer.provideMerge(info),
@@ -173,11 +116,16 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(Brain.layer, Chat.layer, Scheduler.layer).pipe(
     Layer.provideMerge(Restore.layer),
     Layer.provideMerge(
-      codeUpdate({
+      CodeUpdate.layerProcess({
         home,
         script: process.env.REN_START_SCRIPT ?? "/opt/ren/start.sh",
         version: vars.REN_BRAIN_VERSION ?? manifest.version,
-      }),
+        restart: Effect.sleep("500 millis").pipe(
+          Effect.andThen(Effect.sync(() => process.kill(process.pid, "SIGTERM"))),
+          Effect.forkDetach,
+          Effect.asVoid,
+        ),
+      }).pipe(Layer.provide(BunServices.layer)),
     ),
     Layer.provideMerge(HotReload.layer),
     Layer.provideMerge(

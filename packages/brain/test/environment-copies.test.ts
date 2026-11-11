@@ -44,6 +44,19 @@ const copiesOf = Effect.fnUntraced(function* () {
       Effect.flatMap(accessOf(generation), (access) =>
         Context.get(context, TestAccess.Memory).set(sessionId, access),
       ).pipe(Effect.andThen(connections.release(sessionId))),
+    move: Effect.gen(function* () {
+      const nextId = Environment.ID.create()
+      const next = yield* Layer.build(Layer.fresh(TestEnvironment.layer({ environmentId: nextId, workspace })))
+      const access = yield* TestEnvironment.access({
+        url: yield* TestEnvironment.url.pipe(Effect.provide(next)),
+        environmentId: nextId,
+        brain: Brain.ofSession(sessionId),
+        directory,
+        generation: 1,
+      })
+      yield* Context.get(context, TestAccess.Memory).set(sessionId, access)
+      yield* connections.release(sessionId)
+    }),
   }
 })
 
@@ -155,7 +168,7 @@ it.live("a mount on an environment that cannot mount fails at once, and is tried
     }
     const failure = { item, message: "its environment has no rclone or no usable /dev/fuse" }
     expect(yield* session.copies.ensure([item])).toEqual([failure])
-    expect(yield* session.copies.ensure([item])).toEqual([])
+    expect(yield* session.copies.ensure([item])).toEqual([failure])
     yield* session.copies.turnStarted
     expect(yield* session.copies.ensure([item])).toEqual([failure])
   }),
@@ -178,5 +191,18 @@ it.live("a copy that a chat deletes comes back after turnStarted and for a new g
     yield* session.replace(2)
     yield* session.copies.ensure([item])
     expect(yield* read(join(target, "notes.md"))).toBe("notes")
+  }),
+)
+
+it.live("moving to another environment at generation 1 copies required files again", () =>
+  Effect.gen(function* () {
+    const session = yield* copiesOf()
+    const target = join(session.directory, ".ren", "skills", "move", "r1")
+    const item = inline(target, { "notes.md": "required on the destination" })
+    expect(yield* session.copies.ensure([item])).toEqual([])
+    yield* Effect.promise(() => rm(target, { recursive: true, force: true }))
+    yield* session.move
+    expect(yield* session.copies.ensure([item])).toEqual([])
+    expect(yield* exists(join(target, "notes.md"))).toBe(true)
   }),
 )

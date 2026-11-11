@@ -109,6 +109,9 @@ export const UpdateInput = Schema.Struct({
   networking: Schema.optional(Networking),
 }).annotate({ identifier: "EnvironmentTemplate.UpdateInput" })
 
+export interface RetryBuildInput extends Schema.Schema.Type<typeof RetryBuildInput> {}
+export const RetryBuildInput = Schema.Struct({}).annotate({ identifier: "EnvironmentTemplate.RetryBuildInput" })
+
 export const definition = Primitive.define({
   name: "environment-template",
   plural: "environment-templates",
@@ -119,4 +122,5 @@ export const definition = Primitive.define({
   create: { input: CreateInput, result: Info },
   update: { input: UpdateInput, result: Info },
   archive: true,
+  actions: { retryBuild: { input: RetryBuildInput, result: Info } },
 })

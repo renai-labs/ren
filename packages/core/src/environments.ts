@@ -188,14 +188,15 @@ export const layer = Layer.effect(
     const handDirectory = (hand: Hand, sessionId: Session.ID) => `${hand.workspace}/${sessionId}`
 
     const checkAvailable = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
       placement: Subject & Placement,
       environmentTemplateId: EnvironmentTemplate.ID,
     ) {
-      const rows = yield* database.db
+      const rows = yield* transaction
         .select({ provider: templates.provider })
         .from(templates)
         .where(and(eq(templates.id, environmentTemplateId), isAvailable(placement.organizationId)))
-        .pipe(Effect.orDie)
+        .for("share")
       const provider = Option.flatMap(Option.fromNullishOr(rows.at(0)), (row) => registry.get(row.provider))
       if (Option.isNone(provider))
         return yield* new NotFound({
@@ -338,7 +339,6 @@ export const layer = Layer.effect(
       })
 
     const runs = yield* FiberMap.make<Environment.ID>()
-    const holder: { run?: (id: Environment.ID) => Effect.Effect<void, unknown> } = {}
 
     // oxlint-disable-next-line ren/no-comments -- A remote hand's machine (EN1): the state machine of a brain's, with the executor's answer as its ready check. Its provider answers only when the executor does (MachineProvider.waitForExecutor). One server runs it (EN31); an access after a restart starts it again from its row.
     const hands = MachineLifecycle.make<Environment.ID, Row, Target, never>({
@@ -377,11 +377,11 @@ export const layer = Layer.effect(
             Effect.map((rows) => rows.length > 0),
           ),
       isNeeded: () => Effect.succeed(false),
-      ensure: (row) =>
+      ensure: (row): Effect.Effect<void> =>
         FiberMap.run(
           runs,
           row.id,
-          (holder.run ? holder.run(row.id) : Effect.void).pipe(
+          Effect.suspend(() => hands.run(row.id)).pipe(
             Effect.catchCause((cause) => Effect.logWarning(`A step of environment ${row.id} failed`, cause)),
           ),
           { onlyIfMissing: true },
@@ -474,7 +474,6 @@ export const layer = Layer.effect(
           : ("replace" as const)
       }),
     })
-    holder.run = hands.run
 
     // oxlint-disable-next-line ren/no-comments -- An access waits up to startingAfter for the machine's run that it started, then reads the machine again.
     const ready = Effect.fnUntraced(function* (environmentId: Environment.ID) {
@@ -557,29 +556,33 @@ export const layer = Layer.effect(
       placement: Subject & Placement,
       environmentTemplateId: EnvironmentTemplate.ID,
     ) {
-      const provider = yield* checkAvailable(placement, environmentTemplateId)
-      const inserted = yield* database.db
-        .insert(sessions)
-        .values({
-          session_id: placement.sessionId,
-          space_id: placement.spaceId,
-          environment_template_id: environmentTemplateId,
-        })
-        .onConflictDoNothing()
-        .returning({ session_id: sessions.session_id })
-        .pipe(Effect.orDie)
-      if (inserted.length > 0) return { directory: directoryOf(provider, placement.sessionId), isNew: true }
-      const existing = yield* database.db
-        .select({ environment_template_id: sessions.environment_template_id, space_id: sessions.space_id })
-        .from(sessions)
-        .where(eq(sessions.session_id, placement.sessionId))
-        .pipe(Effect.orDie)
-      const found = existing.at(0)
-      if (found?.environment_template_id === environmentTemplateId && found.space_id === placement.spaceId)
-        return { directory: directoryOf(provider, placement.sessionId), isNew: false }
-      return yield* new Changed({
-        message: `Session ${placement.sessionId} cannot change its environment template or space: not supported yet`,
-      })
+      return yield* database.transaction((transaction) =>
+        Effect.gen(function* () {
+          const provider = yield* checkAvailable(transaction, placement, environmentTemplateId)
+          const inserted = yield* transaction
+            .insert(sessions)
+            .values({
+              session_id: placement.sessionId,
+              space_id: placement.spaceId,
+              environment_template_id: environmentTemplateId,
+            })
+            .onConflictDoNothing()
+            .returning({ session_id: sessions.session_id })
+            .pipe(Effect.orDie)
+          if (inserted.length > 0) return { directory: directoryOf(provider, placement.sessionId), isNew: true }
+          const existing = yield* transaction
+            .select({ environment_template_id: sessions.environment_template_id, space_id: sessions.space_id })
+            .from(sessions)
+            .where(eq(sessions.session_id, placement.sessionId))
+            .pipe(Effect.orDie)
+          const found = existing.at(0)
+          if (found?.environment_template_id === environmentTemplateId && found.space_id === placement.spaceId)
+            return { directory: directoryOf(provider, placement.sessionId), isNew: false }
+          return yield* new Changed({
+            message: `Session ${placement.sessionId} cannot change its environment template or space: not supported yet`,
+          })
+        }),
+      )
     })
 
     return Service.of({

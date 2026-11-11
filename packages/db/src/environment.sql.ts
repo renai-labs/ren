@@ -38,6 +38,7 @@ export const environment_template = pgTable(
     // oxlint-disable-next-line ren/no-comments -- The provider's id of the build in progress, and the config_version it builds (EN30). Null when none runs.
     build_id: text(),
     build_version: integer(),
+    build_epoch: integer().notNull().default(0),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),

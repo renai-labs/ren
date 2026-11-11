@@ -1403,6 +1403,23 @@ export const EnvironmentTemplateArchive = (
     (client, request) => client["environment-template"]["archive"]({ ...request.params }),
   )
 
+export const EnvironmentTemplateRetryBuild = (
+  input: Command.Command.Config.Infer<typeof Commands.EnvironmentTemplateRetryBuild>,
+) =>
+  Operation.run(
+    ClientApi.groups["environment-template"].endpoints["environment-template.retryBuild"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<template>" },
+      lookups: {
+        id: (client, value) =>
+          client["environment-template"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["environment-template"]["retryBuild"]({ ...request.params, ...request.payload }),
+  )
+
 export const OauthAppList = (input: Command.Command.Config.Infer<typeof Commands.OauthAppList>) =>
   Operation.run(
     ClientApi.groups["oauth-app"].endpoints["oauth-app.list"],

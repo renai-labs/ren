@@ -7,4 +7,5 @@ export const EnvironmentTemplateGroup = Primitive.group(EnvironmentTemplate.defi
   Primitive.create(EnvironmentTemplate.definition),
   Primitive.update(EnvironmentTemplate.definition),
   Primitive.archive(EnvironmentTemplate.definition),
+  Primitive.action(EnvironmentTemplate.definition, "retryBuild"),
 ])

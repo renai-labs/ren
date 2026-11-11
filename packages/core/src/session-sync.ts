@@ -78,7 +78,24 @@ const inScope = (host: Host) =>
     eq(Database.Schema.agent_session.organization_id, host.organizationId),
   )
 
+// oxlint-disable-next-line ren/no-comments -- Host authentication precedes this transaction. Hold the generation's row until the write commits, so retirement cannot race a late old-generation upload.
+const lockGeneration = Effect.fnUntraced(function* (transaction: Database.Transaction, host: Host) {
+  const current = yield* transaction
+    .select({ id: Database.Schema.brain.id })
+    .from(Database.Schema.brain)
+    .where(
+      and(
+        eq(Database.Schema.brain.id, host.brainId),
+        eq(Database.Schema.brain.organization_id, host.organizationId),
+        eq(Database.Schema.brain.generation, host.generation),
+      ),
+    )
+    .for("share")
+  if (current.length === 0) return yield* forbidden
+})
+
 const lock = Effect.fnUntraced(function* (transaction: Database.Transaction, host: Host, sessionId: Session.ID) {
+  yield* lockGeneration(transaction, host)
   const row = (yield* transaction
     .select()
     .from(Database.Schema.agent_session)
@@ -125,6 +142,7 @@ export const layer = Layer.effect(
       ) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
+            yield* lockGeneration(transaction, host)
             const existing = yield* transaction
               .select({ id: Database.Schema.agent_session.id })
               .from(Database.Schema.agent_session)
