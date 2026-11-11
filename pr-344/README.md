@@ -11,5 +11,6 @@ One folder per commit:
 | ecedd4fe | #254 open chats from a device cache |
 | 951e4541 | one "Working" group per running turn |
 | b647e20b | chat layout shifts, jumps and jitter |
+| d43c239c | every scroll, resize and reconnect steady |
 
 Each folder has NOTES.md with the numbers, screenshots, and each video as .mp4 and a sped-up .gif.
