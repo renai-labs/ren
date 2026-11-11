@@ -6,12 +6,12 @@ import { Context, Effect, FileSystem, Layer, Path, Semaphore, Stream } from "eff
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 
 // oxlint-disable-next-line ren/no-comments -- A bundle, and the token with which the machine downloads it from Ren.
-export interface Download extends Bundle.Info {
+interface Download extends Bundle.Info {
   readonly token: string
 }
 
 // oxlint-disable-next-line ren/no-comments -- A command of the machine's template, as root or as the machine's user (EN22).
-export interface Step {
+interface Step {
   readonly command: string
   readonly user: "root" | "user"
 }
