@@ -43,7 +43,7 @@ test("changes the password", async ({ page, request }) => {
 test("the timeline width sets the chat column and leaves the home composer alone", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
+  const start = page.locator("[data-slot=input-group]").filter({ has: page.getByRole("textbox", { name: "Message" }) })
   const homeWidth = (await start.boundingBox())?.width
   await start.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
   await start.getByRole("button", { name: "Send" }).click()
@@ -67,5 +67,5 @@ test("the timeline width sets the chat column and leaves the home composer alone
   expect(await width()).toBeLessThanOrEqual(1000)
 
   await page.goto("/app/")
-  expect((await page.getByRole("form", { name: "Start a chat" }).boundingBox())?.width).toBe(homeWidth)
+  expect((await start.boundingBox())?.width).toBe(homeWidth)
 })
