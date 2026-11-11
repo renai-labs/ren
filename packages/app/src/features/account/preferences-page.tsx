@@ -11,7 +11,14 @@ import { useMe } from "../../lib/use-me.js"
 import { errorMessage } from "../../lib/errors.js"
 import { resetSession } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
-import { Choice, deliveries, details, PasswordDialog, timelineWidths, ThemePicker } from "../../components/settings-shared.js"
+import {
+  Choice,
+  deliveries,
+  details,
+  PasswordDialog,
+  ThemePicker,
+  timelineWidths,
+} from "../../components/settings-shared.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
