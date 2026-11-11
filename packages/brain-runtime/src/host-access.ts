@@ -11,7 +11,7 @@ import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
 import { RenAddress } from "./ren-address.js"
 
-// oxlint-disable-next-line ren/no-comments -- Ren answers EnvironmentStartingError while the chat's hand starts; a new remote hand takes about 2 minutes (E2B gives its executor 2 minutes, `handBootWithin`). The brain asks again every 2 seconds.
+// oxlint-disable-next-line ren/no-comments -- Ren answers EnvironmentStartingError while the chat's hand starts; a new remote hand takes about 2 minutes (E2B gives its executor 2 minutes, `handBootWithin`). The brain asks again every 2 seconds, also after a lost connection during that wait.
 export const handStartsWithin = Duration.minutes(3)
 
 export const layer = Layer.effect(
@@ -31,14 +31,22 @@ export const layer = Layer.effect(
     return EnvironmentAccess.Service.of({
       open: Effect.fn("HostAccess.open")(function* (sessionId, options) {
         const presented = yield* withHostToken(sessionId)
+        const wait = { starting: false }
         return yield* host.environments["environments.access"]({
           params: { id: sessionId },
           query: { ...(options.unreachable && { unreachable: "true" as const }) },
         }).pipe(
           HostToken.withToken(presented.token),
           Effect.timeout(HostToken.renAnswersWithin),
+          Effect.tapError((error) =>
+            Effect.sync(() => {
+              if (error._tag === "EnvironmentStartingError") wait.starting = true
+            }),
+          ),
           Effect.retry({
-            while: (error) => error._tag === "EnvironmentStartingError",
+            while: (error) =>
+              error._tag === "EnvironmentStartingError" ||
+              (wait.starting && error._tag === "HttpClientError" && error.reason._tag === "TransportError"),
             schedule: Schedule.spaced("2 seconds"),
           }),
           Effect.timeoutOrElse({

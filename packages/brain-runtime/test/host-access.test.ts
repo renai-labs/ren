@@ -193,6 +193,30 @@ it.effect("while Ren answers that the hand is starting, the access asks again ev
   }),
 )
 
+it.effect("a connection lost after Ren said the hand is starting is asked again, not a Ren that does not answer", () =>
+  Effect.gen(function* () {
+    const relay = yield* Relay.make(Relay.portOf(ren.url))
+    const subject = yield* build(relay.url)
+    const access = yield* accessFor(subject.sessionId)
+    const answers: Array<() => FakeRen.Answer> = [
+      () => ({ type: "starting" }),
+      () => {
+        Effect.runSync(relay.cut)
+        return { type: "hold" }
+      },
+    ]
+    ren.answer(subject.sessionId, () => (answers.shift() ?? (() => ({ type: "access", access }) as const))())
+    yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
+    const opening = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.forkScoped)
+    yield* Probe.advanceUntil(
+      Effect.sync(() => opening.pollUnsafe() !== undefined),
+      Duration.seconds(30),
+    )
+    expect((yield* Fiber.join(opening)).url.href).toBe(access.url.href)
+    expect(ren.accessCalls(subject.sessionId)).toBe(3)
+  }),
+)
+
 it.effect("a hand that is still starting after 3 minutes fails the access as unavailable", () =>
   Effect.gen(function* () {
     const subject = yield* build()
