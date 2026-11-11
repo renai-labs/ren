@@ -9,5 +9,6 @@ One folder per commit:
 | 53493fd3 | #253 a long chat opens slowly / blank |
 | b30e720a | #255 a running chat jumps |
 | ecedd4fe | #254 open chats from a device cache |
+| 951e4541 | one "Working" group per running turn |
 
 Each folder has NOTES.md with the numbers, screenshots, and each video as .mp4 and a sped-up .gif.
