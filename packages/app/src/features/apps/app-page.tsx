@@ -1,8 +1,9 @@
 import { useState } from "react"
-import { IconPlus } from "@tabler/icons-react"
+import { IconMessagePlus, IconPlus } from "@tabler/icons-react"
+import { Composer, Mentions } from "@ren/chat"
 import { Button } from "@ren/ui/button"
 import { useQuery } from "@tanstack/react-query"
-import { getRouteApi, Link } from "@tanstack/react-router"
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -11,19 +12,32 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@ren/ui/breadcrumb"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { AddToSpace, type Added } from "../../components/add-to-space.js"
 import { AppIcon } from "../../components/app-icon.js"
 import { AccountList, AppSections } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { PageSkeleton } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
+import { Drafts } from "../../lib/drafts.js"
 import { useApp } from "../../lib/use-app.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
-import { audience, connectLabel, fromRegistry, type CatalogApp } from "../../lib/apps.js"
+import { audience, connectLabel, fromRegistry, gaps, listsSpace, type CatalogApp } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 const route = getRouteApi("/_authed/_shell/apps/$appId/")
+
+type Space = ReturnType<typeof useSpaces>["joined"][number]
+
+const withoutMention = (prompt: string) => prompt.replace(/^@\S+\s*/u, "")
 
 function AppAccounts(props: { appId: string; onProfile: (target: ProfileTarget) => void }) {
   const profiles = useAppProfiles([props.appId]).of(props.appId)
@@ -56,6 +70,94 @@ function AppAccounts(props: { appId: string; onProfile: (target: ProfileTarget) 
   )
 }
 
+function useConnectedSpaces(app: CatalogApp) {
+  const joined = useSpaces().joined
+  const ready = useAppProfiles([app.id])
+    .of(app.id)
+    .filter((profile) => gaps(profile).length === 0)
+  return joined.filter((space) =>
+    ready.some((profile) => (profile.kind === "private" ? space.kind === "private" : listsSpace(profile, space.id))),
+  )
+}
+
+function useStartChat(app: CatalogApp) {
+  const navigate = useNavigate()
+  const write = Drafts.useWrite()
+  return (spaceId: string, prompt = "") => {
+    const mention: Composer.MentionedApp = {
+      id: app.id,
+      slug: app.slug,
+      name: app.name,
+      description: app.description,
+      icon: app.icon,
+      brandColor: app.brandColor,
+    }
+    const text = `${Mentions.text({ label: app.name })} ${withoutMention(prompt)}`
+    write(Drafts.space(spaceId), Composer.withMention(Composer.withText(Composer.empty, text), mention))
+    void navigate({ to: "/", search: { spaceId } })
+  }
+}
+
+function StartChat(props: { spaces: ReadonlyArray<Space>; onStart: (spaceId: string) => void }) {
+  const only = props.spaces.length === 1 ? props.spaces[0] : undefined
+  if (only)
+    return (
+      <Button onClick={() => props.onStart(only.id)}>
+        <IconMessagePlus data-icon="inline-start" />
+        Start chat
+      </Button>
+    )
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button />}>
+        <IconMessagePlus data-icon="inline-start" />
+        Start chat
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Start a chat in</DropdownMenuLabel>
+          {props.spaces.map((space) => (
+            <DropdownMenuItem key={space.id} onClick={() => props.onStart(space.id)}>
+              {space.name}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function ExamplePrompts(props: { app: CatalogApp; onStart: ((prompt: string) => void) | undefined }) {
+  const prompts = props.app.listing?.examplePrompts ?? []
+  if (prompts.length === 0) return null
+  const start = props.onStart
+  return (
+    <section aria-label="Example prompts" className="grid gap-3 sm:grid-cols-3">
+      {prompts.slice(0, 3).map((prompt) => {
+        const body = (
+          <>
+            <span className="font-medium text-foreground">@{props.app.name}</span> {withoutMention(prompt)}
+          </>
+        )
+        return start ? (
+          <Button
+            key={prompt}
+            variant="ghost"
+            onClick={() => start(prompt)}
+            className="h-auto justify-start rounded-xl bg-muted/60 p-4 text-left text-sm/5 font-normal whitespace-normal text-muted-foreground hover:bg-muted active:not-aria-[haspopup]:scale-none"
+          >
+            {body}
+          </Button>
+        ) : (
+          <p key={prompt} className="rounded-xl bg-muted/60 p-4 text-sm/5 text-muted-foreground">
+            {body}
+          </p>
+        )
+      })}
+    </section>
+  )
+}
+
 function AppsBreadcrumb(props: { name: string }) {
   return (
     <Breadcrumb>
@@ -75,6 +177,8 @@ function AppsBreadcrumb(props: { name: string }) {
 function AppDetail(props: { app: CatalogApp }) {
   const app = props.app
   const spaces = useSpaces()
+  const connected = useConnectedSpaces(app)
+  const start = useStartChat(app)
   const [profile, setProfile] = useState<ProfileTarget>()
   const added: Added = (added) =>
     setProfile({
@@ -86,6 +190,7 @@ function AppDetail(props: { app: CatalogApp }) {
         members: spaces.space(added.space.id)?.memberCount ?? 1,
       },
     })
+  const first = connected.at(0)
   const body = app.listing?.body
   return (
     <div className="mx-auto flex w-full max-w-200 flex-1 flex-col gap-10 px-6 pt-8 pb-12">
@@ -103,10 +208,18 @@ function AppDetail(props: { app: CatalogApp }) {
             <p className="text-muted-foreground">{app.description}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <AddToSpace app={app} primary onAdded={added} />
+            {connected.length > 0 ? (
+              <>
+                <StartChat spaces={connected} onStart={(spaceId) => start(spaceId)} />
+                <AddToSpace app={app} onAdded={added} />
+              </>
+            ) : (
+              <AddToSpace app={app} primary onAdded={added} />
+            )}
           </div>
         </div>
       </header>
+      <ExamplePrompts app={app} onStart={first ? (prompt) => start(first.id, prompt) : undefined} />
       {body && body !== app.description ? (
         <p className="text-sm/6 whitespace-pre-line text-muted-foreground">{body}</p>
       ) : null}
